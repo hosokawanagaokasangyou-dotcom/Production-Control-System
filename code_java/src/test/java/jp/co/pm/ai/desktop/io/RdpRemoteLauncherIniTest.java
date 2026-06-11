@@ -323,16 +323,69 @@ class RdpRemoteLauncherIniTest {
     }
 
     @Test
-    void normalizeScenarioArguments_preservesScenarioFlagFormat() {
+    void normalizeScenarioArguments_preservesDoubleSpaceInUnquotedPath() {
         String path = "\\\\192.168.0.101\\share\\002  加工G\\a.ardrpa";
-        String normalizedPath = "\\\\192.168.0.101\\share\\002 加工G\\a.ardrpa";
         assertEquals(
-                "--scenario \"" + normalizedPath + "\"",
+                "--scenario \"" + path + "\"",
                 RdpRemoteLauncherIni.normalizeScenarioArguments("--scenario " + path));
         assertEquals(
                 "--scenario \"" + path + "\"",
                 RdpRemoteLauncherIni.normalizeScenarioArguments(
                         "--scenario \"" + path + "\""));
+    }
+
+    @Test
+    void normalizeScenarioArguments_repairsCollapsed002Segment() {
+        String wrong = "\\\\192.168.0.101\\share\\002 加工G\\a.ardrpa";
+        String correct = "\\\\192.168.0.101\\share\\002  加工G\\a.ardrpa";
+        assertEquals(
+                "--scenario \"" + correct + "\"",
+                RdpRemoteLauncherIni.normalizeScenarioArguments("--scenario " + wrong));
+    }
+
+    @Test
+    void writeLaunchContextBeforeConnect_repairsScenarioPathInIni(@TempDir Path tmp) throws Exception {
+        Path iniPath = tmp.resolve("RAP設定.ini");
+        Files.writeString(
+                iniPath,
+                """
+                起動プログラム番号=1
+                2="Z:\\portable\\Aladdin_RPA_Studio.exe" --scenario \\\\192.168.0.101\\share\\002 加工G\\工程別.ardrpa
+                """,
+                StandardCharsets.UTF_8);
+
+        String repairedArgs =
+                RdpRemoteLauncherIni.mergeEternalFlag(
+                        RdpRemoteLauncherIni.normalizeScenarioArguments(
+                                "--scenario \\\\192.168.0.101\\share\\002 加工G\\工程別.ardrpa"),
+                        false);
+        RdpRemoteLauncherIni.writeLaunchContextBeforeConnect(
+                iniPath,
+                2,
+                "Z:\\portable\\Aladdin_RPA_Studio.exe",
+                repairedArgs,
+                RdpSessionEndAction.SIGN_OUT);
+
+        String text = Files.readString(iniPath, StandardCharsets.UTF_8);
+        assertTrue(text.contains("起動プログラム番号=2"));
+        assertTrue(text.contains("002  加工G"), "saved ini=" + text);
+    }
+
+    @Test
+    void load_repairsCollapsedScenarioPathOnRead(@TempDir Path tmp) throws Exception {
+        Path iniPath = tmp.resolve("RAP設定.ini");
+        Files.writeString(
+                iniPath,
+                """
+                起動プログラム番号=2
+                2="Z:\\portable\\Aladdin_RPA_Studio.exe" --scenario \\\\192.168.0.101\\share\\002 加工G\\工程別.ardrpa
+                """,
+                StandardCharsets.UTF_8);
+
+        RdpRemoteLauncherIni loaded = RdpRemoteLauncherIni.load(iniPath);
+        assertTrue(
+                loaded.getSlotCommand(2).arguments().contains("002  加工G"),
+                "arguments=" + loaded.getSlotCommand(2).arguments());
     }
 
     @Test

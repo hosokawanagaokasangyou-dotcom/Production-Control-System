@@ -6,10 +6,19 @@ param(
 $ErrorActionPreference = 'Stop'
 $launcherDir = Join-Path $RepoRoot 'tools/pm-ai-rdp-remote-launcher'
 $resourceDir = Join-Path $RepoRoot 'code_java/src/main/resources/jp/co/pm/ai/desktop/rdp-launcher'
-$launcherVersionTxt = Join-Path $launcherDir 'PmAiRdpRemoteLauncher.version.txt'
+$repoVersionTxt = Join-Path $RepoRoot 'version.txt'
+$launcherVersionBasename = 'PmAiRdpRemoteLauncher.version.txt'
 
 Push-Location $launcherDir
 try {
+    if (-not (Test-Path -LiteralPath $repoVersionTxt)) {
+        throw "Repository version file not found: $repoVersionTxt"
+    }
+    $version = (Get-Content -LiteralPath $repoVersionTxt -TotalCount 1).Trim()
+    if ([string]::IsNullOrWhiteSpace($version)) {
+        throw "Repository version is empty: $repoVersionTxt"
+    }
+
     dotnet publish -c Release -r win-x64 --self-contained true /p:PublishSingleFile=true
     $publishDir = Join-Path $launcherDir 'bin/Release/net8.0-windows/win-x64/publish'
     $exe = Join-Path $publishDir 'PmAiRdpRemoteLauncher.exe'
@@ -20,17 +29,12 @@ try {
     New-Item -ItemType Directory -Force -Path $resourceDir | Out-Null
     Copy-Item -LiteralPath $exe -Destination (Join-Path $resourceDir 'PmAiRdpRemoteLauncher.exe') -Force
 
-    if (-not (Test-Path -LiteralPath $launcherVersionTxt)) {
-        throw "Launcher version file not found: $launcherVersionTxt"
-    }
-    $version = (Get-Content -LiteralPath $launcherVersionTxt -TotalCount 1).Trim()
-    if ([string]::IsNullOrWhiteSpace($version)) {
-        throw "Launcher version is empty: $launcherVersionTxt"
-    }
-    $versionPath = Join-Path $resourceDir 'PmAiRdpRemoteLauncher.version.txt'
     $utf8NoBom = New-Object System.Text.UTF8Encoding $false
-    [System.IO.File]::WriteAllText($versionPath, $version + [Environment]::NewLine, $utf8NoBom)
-    Write-Host "Bundled RDP launcher $version (from $launcherVersionTxt) -> $resourceDir"
+    $versionLine = $version + [Environment]::NewLine
+    $resourceVersionPath = Join-Path $resourceDir $launcherVersionBasename
+    [System.IO.File]::WriteAllText($resourceVersionPath, $versionLine, $utf8NoBom)
+    [System.IO.File]::WriteAllText((Join-Path $publishDir $launcherVersionBasename), $versionLine, $utf8NoBom)
+    Write-Host "Bundled RDP launcher $version (from $repoVersionTxt) -> $resourceDir"
 }
 finally {
     Pop-Location

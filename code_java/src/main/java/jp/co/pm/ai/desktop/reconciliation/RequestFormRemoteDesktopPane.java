@@ -65,6 +65,7 @@ import jp.co.pm.ai.desktop.io.RdpLaunchProfileCatalog;
 import jp.co.pm.ai.desktop.io.RdpLaunchDisplaySettings;
 import jp.co.pm.ai.desktop.io.RdpMstscSessionMonitor;
 import jp.co.pm.ai.desktop.io.RdpRemoteLauncherDeployer;
+import jp.co.pm.ai.desktop.io.RdpLaunchSharedPathValidator;
 import jp.co.pm.ai.desktop.io.RdpRemoteLauncherIni;
 import jp.co.pm.ai.desktop.io.RdpSessionEndAction;
 import jp.co.pm.ai.desktop.io.RemoteDesktopLauncher;
@@ -384,7 +385,22 @@ public final class RequestFormRemoteDesktopPane {
                                 }
                             });
 
-                    HBox argsRow = new HBox(8, argsField, browseArgs);
+                    Button checkArgs = new Button("存在確認");
+                    styleSecondaryButton(checkArgs);
+                    checkArgs.setTooltip(
+                            new Tooltip(
+                                    "RPA 引数内の .ardrpa シナリオパスを確認します。"
+                                            + " 002  加工G の空白潰れは修復してから UNC を参照します。"));
+                    checkArgs.setOnAction(
+                            e ->
+                                    showExistenceCheckResult(
+                                            "RPA シナリオ",
+                                            RdpLaunchSharedPathValidator.validateScenarioArguments(
+                                                    argsField.getText()),
+                                            rapStatusLabel,
+                                            status));
+
+                    HBox argsRow = new HBox(8, argsField, browseArgs, checkArgs);
                     argsRow.setAlignment(Pos.CENTER_LEFT);
                     argsRow.setMaxWidth(CARD_WIDTH);
                     HBox.setHgrow(argsField, Priority.ALWAYS);
@@ -396,6 +412,21 @@ public final class RequestFormRemoteDesktopPane {
                                     "オンにすると RPA 起動引数へ --eternal を追加します。"
                                             + " シナリオが無い場合や、シナリオ終了後もプロセスを終了させたくないときに使います。"
                                             + " 接続先ランチャーは --id / --password を先に付与し、--eternal は末尾に付けます。"));
+
+                    Button checkProgram = new Button("存在確認");
+                    styleSecondaryButton(checkProgram);
+                    checkProgram.setTooltip(
+                            new Tooltip(
+                                    "入力した RPA プログラムのパスを確認します。"
+                                            + " 002  加工G の空白潰れは修復してから UNC を参照します。"));
+                    checkProgram.setOnAction(
+                            e ->
+                                    showExistenceCheckResult(
+                                            "RPA プログラム",
+                                            RdpLaunchSharedPathValidator.validateProgramPath(
+                                                    programField.getText()),
+                                            rapStatusLabel,
+                                            status));
 
                     Button browse = new Button("参照");
                     styleSecondaryButton(browse);
@@ -417,7 +448,7 @@ public final class RequestFormRemoteDesktopPane {
                                 }
                             });
 
-                    HBox programRow = new HBox(8, programField, browse);
+                    HBox programRow = new HBox(8, programField, browse, checkProgram);
                     programRow.setAlignment(Pos.CENTER_LEFT);
                     programRow.setMaxWidth(CARD_WIDTH);
                     HBox.setHgrow(programField, Priority.ALWAYS);
@@ -856,11 +887,25 @@ public final class RequestFormRemoteDesktopPane {
                                         + " RAP設定で exe パスを登録して保存してください。");
                         return;
                     }
+                    Map<String, String> ui = new HashMap<>(uiEnv.get());
+                    RdpLaunchSharedPathValidator.Result sharedPathCheck =
+                            RdpLaunchSharedPathValidator.validateBeforeConnect(
+                                    launchRow.programField().getText(),
+                                    launchRow.argsField().getText(),
+                                    AppPaths.resolveRdpLauncherExe(ui));
+                    if (!sharedPathCheck.ok()) {
+                        showAlert(
+                                Alert.AlertType.WARNING,
+                                "共有ファイルが見つかりません",
+                                sharedPathCheck.formatBlockingMessage());
+                        rapStatusLabel.setText("接続を中止しました（共有フォルダ上のファイル未確認）");
+                        status.accept(sharedPathCheck.formatBlockingMessage());
+                        return;
+                    }
                     RdpLaunchProfile launchProfileMeta =
                             profileMetadataByNumber.getOrDefault(
                                     selectedLaunchProfile,
                                     buildProfileFromRow(launchRow));
-                    Map<String, String> ui = new HashMap<>(uiEnv.get());
                     ui.put(
                             AppPaths.KEY_PM_AI_RDP_COMPANION_PROGRAM,
                             companionProgramField.getText().trim());
@@ -913,17 +958,21 @@ public final class RequestFormRemoteDesktopPane {
                     }
                     String launchProfileLabel = profileComboLabel(launchRow, launchProfileMeta);
                     Path launcherIniPath = AppPaths.resolveRdpLauncherIni(ui);
+                    RdpSessionEndAction profileEndAction =
+                            launchProfileMeta.resolvedSessionEndAction();
                     try {
-                        RdpSessionEndAction profileEndAction =
-                                launchProfileMeta.resolvedSessionEndAction();
-                        if (profileEndAction != null) {
-                            RdpRemoteLauncherIni preIni = RdpRemoteLauncherIni.load(launcherIniPath);
-                            preIni.setSessionEndAction(profileEndAction);
-                            preIni.save(launcherIniPath);
-                        }
+                        String launchArgs =
+                                RdpRemoteLauncherIni.mergeEternalFlag(
+                                        RdpRemoteLauncherIni.normalizeScenarioArguments(
+                                                launchRow.argsField().getText().trim()),
+                                        launchRow.chkRpaEternal().isSelected());
+                        RdpRemoteLauncherIni.writeLaunchContextBeforeConnect(
+                                launcherIniPath,
+                                launchSlot,
+                                launchRow.programField().getText().trim(),
+                                launchArgs,
+                                profileEndAction);
                         FactoryOperatorUserStore.syncLauncherCredentialsJsonToDeployDir(ui);
-                        RdpRemoteLauncherIni.writeTaskSchedulerSlotBeforeConnect(
-                                launcherIniPath, launchSlot, ui);
                         RdpRemoteLauncherIni.writeOperatorContext(
                                 launcherIniPath, sessionOperator);
                         refreshRightPanePreviews(refreshIniFilePreview[0], refreshLauncherLog[0]);
@@ -2479,6 +2528,32 @@ public final class RequestFormRemoteDesktopPane {
         ClipboardContent content = new ClipboardContent();
         content.putString(text);
         Clipboard.getSystemClipboard().setContent(content);
+    }
+
+    private static void showExistenceCheckResult(
+            String subject,
+            RdpLaunchSharedPathValidator.Result result,
+            Label rapStatusLabel,
+            Consumer<String> status) {
+        if (result.ok()) {
+            String message = result.formatExistenceOkMessage();
+            showAlert(Alert.AlertType.INFORMATION, subject + " 存在確認 OK", message);
+            if (rapStatusLabel != null) {
+                rapStatusLabel.setText(subject + " の存在を確認しました。");
+            }
+            if (status != null) {
+                status.accept(subject + " 存在確認 OK\n" + message);
+            }
+            return;
+        }
+        String message = result.formatExistenceNgMessage();
+        showAlert(Alert.AlertType.WARNING, subject + " 存在確認 NG", message);
+        if (rapStatusLabel != null) {
+            rapStatusLabel.setText(subject + " が見つかりません。");
+        }
+        if (status != null) {
+            status.accept(subject + " 存在確認 NG\n" + message);
+        }
     }
 
     private static void showAlert(Alert.AlertType type, String title, String message) {

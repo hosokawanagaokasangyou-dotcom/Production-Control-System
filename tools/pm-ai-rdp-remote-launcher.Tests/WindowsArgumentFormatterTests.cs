@@ -31,6 +31,18 @@ public class WindowsArgumentFormatterTests
     }
 
     [Fact]
+    public void FormatArgumentTokens_doesNotResplitScenarioPathSpaces()
+    {
+        var path = @"\\192.168.0.101\share\002  加工G\scenarios\a.ardrpa";
+        var formatted = WindowsArgumentFormatter.FormatArgumentTokens(
+            new[] { AladdinRpaLaunchArgs.ScenarioFlag, path });
+        Assert.Contains("002  加工G", formatted);
+        var tokens = WindowsArgumentFormatter.TokenizeForProcess(formatted);
+        Assert.Equal(2, tokens.Count);
+        Assert.Equal(path, tokens[1]);
+    }
+
+    [Fact]
     public void FormatArgumentString_leavesSimplePathUnquoted()
     {
         var arg = @"C:\Users\test\file.ardrpa";

@@ -61,6 +61,33 @@ internal static class WindowsArgumentFormatter
         return builder.ToString();
     }
 
+    /** 既にトークン分割済みの引数を再分割せず引用符付き文字列へ。 */
+    internal static string FormatArgumentTokens(IReadOnlyList<string> tokens)
+    {
+        if (tokens.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        var builder = new StringBuilder();
+        foreach (var token in tokens)
+        {
+            if (string.IsNullOrEmpty(token))
+            {
+                continue;
+            }
+
+            if (builder.Length > 0)
+            {
+                builder.Append(' ');
+            }
+
+            builder.Append(QuoteIfNeeded(token));
+        }
+
+        return builder.ToString();
+    }
+
     internal static List<string> Tokenize(string arguments)
     {
         var tokens = new List<string>();

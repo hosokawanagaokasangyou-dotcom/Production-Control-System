@@ -18,6 +18,8 @@ import jp.co.pm.ai.desktop.config.AppPaths;
 
 /**
  * 同梱 {@link AppPaths#RDP_LAUNCHER_EXE_BASENAME} をサマリ Excel 同階層 UNC へ自動再配備する。
+ * <p>同梱 {@link AppPaths#RDP_LAUNCHER_VERSION_BASENAME} の版数はリポジトリ直下 {@code version.txt} と同一。
+ * 正本は {@code version.txt}。{@code scripts/build-rdp-remote-launcher.ps1} および pre-commit で同期する。
  */
 public final class RdpRemoteLauncherDeployer {
 

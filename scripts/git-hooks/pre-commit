@@ -14,4 +14,10 @@ if [[ ! -f "$VT" ]]; then
   exit 0
 fi
 "$RUN_PY" "$ROOT/scripts/bump_version_txt.py" "$VT"
-git add -- "$VT"
+LAUNCHER_VT="$ROOT/code_java/src/main/resources/jp/co/pm/ai/desktop/rdp-launcher/PmAiRdpRemoteLauncher.version.txt"
+if [[ -f "$LAUNCHER_VT" ]]; then
+  cp "$VT" "$LAUNCHER_VT"
+  git add -- "$VT" "$LAUNCHER_VT"
+else
+  git add -- "$VT"
+fi

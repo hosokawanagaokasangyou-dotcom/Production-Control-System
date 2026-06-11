@@ -86,8 +86,13 @@ public final class RdpRemoteLauncherIni {
         if (slot < 1 || slot > MAX_SLOTS) {
             throw new IllegalArgumentException("スロット番号は 1～" + MAX_SLOTS + " です: " + slot);
         }
-        String programTrimmed = stripSurroundingQuotes(program != null ? program.trim() : "");
-        String argsTrimmed = arguments != null ? arguments.trim() : "";
+        String programTrimmed =
+                UncPathSegmentRepair.repair(
+                        stripSurroundingQuotes(program != null ? program.trim() : ""));
+        String argsTrimmed =
+                arguments != null && !arguments.isBlank()
+                        ? RpaScenarioArgumentSupport.repairScenarioArguments(arguments.trim())
+                        : "";
         if (programTrimmed.isEmpty()) {
             slots.remove(slot);
         } else {
@@ -203,9 +208,36 @@ public final class RdpRemoteLauncherIni {
     }
 
     /**
+     * RDP 接続直前: 起動番号と指定スロットの RPA コマンド行を修復して ini に保存する。
+     * タスクスケジューラ／{@link AppPaths#RDP_LAUNCHER_EXE_BASENAME} が参照する正本をここで揃える。
+     */
+    public static void writeLaunchContextBeforeConnect(
+            Path path,
+            int slot,
+            String program,
+            String arguments,
+            RdpSessionEndAction sessionEndAction)
+            throws IOException {
+        Objects.requireNonNull(path, "path");
+        if (slot < 1 || slot > MAX_SLOTS) {
+            throw new IllegalArgumentException("起動プログラム番号は 1～" + MAX_SLOTS + " です: " + slot);
+        }
+        RdpRemoteLauncherIni ini = load(path);
+        ini.setSelectedSlot(slot);
+        ini.setSlotCommand(slot, program, arguments);
+        if (sessionEndAction != null) {
+            ini.setSessionEndAction(sessionEndAction);
+        }
+        ini.save(path);
+    }
+
+    /**
      * RDP 接続プロセス（mstsc）開始前に、タスクスケジューラが参照する起動番号を確定する。
      * 接続直後にタスクスケジューラが ini を読むため、{@link RemoteDesktopLauncher#launch} より先に呼ぶ。
+     *
+     * @deprecated 接続前は {@link #writeLaunchContextBeforeConnect} でスロット行も含めて保存すること。
      */
+    @Deprecated
     public static void writeTaskSchedulerSlotBeforeConnect(Path path, int slot) throws IOException {
         restoreTaskSchedulerSlot(path, slot);
     }
@@ -382,7 +414,9 @@ public final class RdpRemoteLauncherIni {
             return "";
         }
         return formatTokensForIniArguments(
-                List.of(AladdinRpaLaunchArgs.SCENARIO_FLAG, scenarioPath.strip()));
+                List.of(
+                        AladdinRpaLaunchArgs.SCENARIO_FLAG,
+                        UncPathSegmentRepair.repair(scenarioPath.strip())));
     }
 
     /**
@@ -390,40 +424,7 @@ public final class RdpRemoteLauncherIni {
      * 旧形式（.ardrpa パスのみ）も受け付ける。
      */
     public static String normalizeScenarioArguments(String arguments) {
-        if (arguments == null || arguments.isBlank()) {
-            return "";
-        }
-        List<String> tokens = new ArrayList<>(tokenizeArguments(arguments.trim()));
-        stripCredentialFlags(tokens);
-        tokens.removeIf(token -> AladdinRpaLaunchArgs.ETERNAL_FLAG.equalsIgnoreCase(token));
-
-        List<String> scenarioPaths = new ArrayList<>();
-        List<String> others = new ArrayList<>();
-        for (int i = 0; i < tokens.size(); i++) {
-            String token = tokens.get(i);
-            if (AladdinRpaLaunchArgs.SCENARIO_FLAG.equalsIgnoreCase(token)) {
-                if (i + 1 < tokens.size()) {
-                    scenarioPaths.add(collectScenarioPathAfterFlag(tokens, i + 1));
-                    i = skipScenarioPathTokensAfterFlag(tokens, i + 1);
-                }
-                continue;
-            }
-            if (looksLikeScenarioPath(token)) {
-                scenarioPaths.add(token);
-            } else if (!token.isBlank()) {
-                others.add(token);
-            }
-        }
-
-        List<String> normalized = new ArrayList<>(others);
-        for (String path : scenarioPaths) {
-            normalized.add(AladdinRpaLaunchArgs.SCENARIO_FLAG);
-            normalized.add(path);
-        }
-        if (normalized.isEmpty()) {
-            return "";
-        }
-        return formatTokensForIniArguments(normalized);
+        return RpaScenarioArgumentSupport.normalizeScenarioArguments(arguments);
     }
 
     /**
@@ -471,31 +472,6 @@ public final class RdpRemoteLauncherIni {
             }
             return;
         }
-    }
-
-    private static String collectScenarioPathAfterFlag(List<String> tokens, int startIndex) {
-        StringBuilder scenarioPath = new StringBuilder(tokens.get(startIndex));
-        int index = startIndex;
-        while (index + 1 < tokens.size() && !looksLikeScenarioPath(scenarioPath.toString())) {
-            index++;
-            scenarioPath.append(' ').append(tokens.get(index));
-        }
-        return scenarioPath.toString();
-    }
-
-    private static int skipScenarioPathTokensAfterFlag(List<String> tokens, int startIndex) {
-        int index = startIndex;
-        StringBuilder scenarioPath = new StringBuilder(tokens.get(index));
-        while (index + 1 < tokens.size() && !looksLikeScenarioPath(scenarioPath.toString())) {
-            index++;
-            scenarioPath.append(' ').append(tokens.get(index));
-        }
-        return index;
-    }
-
-    private static boolean looksLikeScenarioPath(String token) {
-        return token != null
-                && token.toLowerCase(java.util.Locale.ROOT).endsWith(".ardrpa");
     }
 
     static String stripSurroundingQuotes(String value) {

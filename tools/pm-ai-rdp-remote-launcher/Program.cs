@@ -72,6 +72,33 @@ internal static class Program
                 return ExitWithLog(ExitError, "コマンド行解析失敗");
             }
 
+            var rawExecutable = parsed.Executable;
+            var rawArguments = parsed.Arguments;
+            parsed = new ParsedCommand(
+                UncPathSegmentRepair.Repair(parsed.Executable),
+                RpaScenarioArgumentSupport.RepairScenarioArguments(parsed.Arguments));
+            if (!string.Equals(rawExecutable, parsed.Executable, StringComparison.Ordinal)
+                || !string.Equals(rawArguments, parsed.Arguments, StringComparison.Ordinal))
+            {
+                LauncherLog.Info(
+                    "UNC パスを修復しました: exe="
+                        + parsed.Executable
+                        + " | args="
+                        + parsed.Arguments);
+            }
+
+            foreach (var scenarioPath in RpaScenarioArgumentSupport.ExtractScenarioPaths(parsed.Arguments))
+            {
+                var repairedScenario = UncPathSegmentRepair.Repair(scenarioPath);
+                if (File.Exists(repairedScenario))
+                {
+                    continue;
+                }
+
+                LauncherLog.Error("シナリオファイルが見つかりません: " + repairedScenario);
+                return ExitWithLog(ExitError, "シナリオ不在");
+            }
+
             var sessionEndAction = ini.ResolveSessionEndAction();
             LauncherLog.Info("終了時セッション操作: " + FormatSessionEndAction(sessionEndAction));
             LauncherLog.Info(
