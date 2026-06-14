@@ -1,5 +1,6 @@
 package jp.co.pm.ai.desktop;
 
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -58,7 +59,6 @@ public final class RemoteDesktopShellController implements DesktopShellHost, Env
     @FXML private ComboBox<DesktopTheme> themeCombo;
     @FXML private Label sessionOperatorToolbarLabel;
     @FXML private Button changeSessionOperatorToolbarButton;
-    @FXML private Button changeSessionDepartmentToolbarButton;
     @FXML private TabPane tabPane;
     @FXML private Tab remoteDesktopTab;
     @FXML private Tab envSettingsTab;
@@ -80,6 +80,11 @@ public final class RemoteDesktopShellController implements DesktopShellHost, Env
         RemoteDesktopEnvRows.bootstrap(envRows, session);
         FactoryOperatorUserStore.configureForCurrentApp(
                 RemoteDesktopEnvRows.collectMap(envRows), FactorySite.RDP_LAUNCHER);
+        try {
+            FactoryOperatorUserStore.ensureStoreFileOnDisk();
+        } catch (IOException ignored) {
+            // 起動直後は共有 bin 未到達のことがある。操作者選択フローで再試行する。
+        }
 
         if (remoteDesktopTabContentController != null) {
             remoteDesktopTabContentController.bindShell(this);
@@ -213,14 +218,6 @@ public final class RemoteDesktopShellController implements DesktopShellHost, Env
         refreshOperatorUserPresentation();
     }
 
-    @FXML
-    private void onChangeSessionDepartmentToolbarAction() {
-        FactoryOperatorUserStore.clearSessionOperatorName();
-        FactoryOperatorUserStore.clearSessionRdpDepartmentKey();
-        requireOperatorSelectionForFactory(FactorySite.RDP_LAUNCHER, false);
-        refreshOperatorUserPresentation();
-    }
-
     private void emitTabNavigationGuard(Tab prev, Tab now) {
         if (now == operatorUserManagementTab
                 && !operatorUserAdminTabUnlocked
@@ -244,43 +241,12 @@ public final class RemoteDesktopShellController implements DesktopShellHost, Env
     }
 
     private boolean promptOperatorUserAdminTabUnlock() {
-        if (primaryStage == null) {
-            return false;
-        }
-        Dialog<ButtonType> dialog = new Dialog<>();
-        prepareDialogForMainTheme(dialog);
-        dialog.setTitle("ユーザー管理者");
-        dialog.setHeaderText(null);
-        Label hint =
-                new Label(
-                        "ユーザー管理者タブを開くには、ユーザー名 "
-                                + FactoryOperatorUserStore.ADMIN_TAB_USERNAME
-                                + " と管理者パスワードを入力してください。");
-        hint.setWrapText(true);
-        TextField userField = new TextField();
-        userField.setPromptText(FactoryOperatorUserStore.ADMIN_TAB_USERNAME);
-        PasswordField pf = new PasswordField();
-        pf.setPromptText("管理者パスワード");
-        VBox box =
-                new VBox(
-                        8,
-                        hint,
-                        new Label("ユーザー名:"),
-                        userField,
-                        new Label("パスワード:"),
-                        pf);
-        dialog.getDialogPane().setContent(box);
-        dialog.getDialogPane().getButtonTypes().setAll(ButtonType.OK, ButtonType.CANCEL);
-        return dialog.showAndWait()
-                .filter(bt -> bt == ButtonType.OK)
-                .filter(
-                        bt ->
-                                FactoryOperatorUserStore.verifyAdminTabAccess(
-                                        userField.getText(), pf.getText()))
-                .isPresent();
+        return AdminTabUnlockSupport.ensureUnlocked(primaryStage, this::prepareDialogForMainTheme);
     }
 
     private void persistSessionQuietly() {
+        RemoteDesktopEnvRows.pruneIrrelevantRows(envRows);
+        RemoteDesktopEnvRows.ensureEditablePlaceholderRow(envRows);
         String themeId =
                 themeCombo != null && themeCombo.getValue() != null
                         ? themeCombo.getValue().storedId()
@@ -308,8 +274,8 @@ public final class RemoteDesktopShellController implements DesktopShellHost, Env
         alert.setTitle("環境変数を初期値に戻す");
         alert.setHeaderText(null);
         alert.setContentText(
-                "ui_ref_env_defaults.json の既定行に戻します。"
-                        + " RDP ランチャー向けの掲示板共有既定も空欄へ再適用します。"
+                "RDP ランチャー向けの環境変数のみ ui_ref_env_defaults.json の既定行に戻します。"
+                        + " 掲示板共有の既定も空欄へ再適用します。"
                         + " 続行しますか？");
         if (alert.showAndWait().orElse(ButtonType.CANCEL) != ButtonType.OK) {
             return;
@@ -318,6 +284,8 @@ public final class RemoteDesktopShellController implements DesktopShellHost, Env
         try {
             RemoteDesktopEnvRows.populateFromUiRef(envRows);
             RemoteDesktopEnvRows.applyRdpLauncherEmptyDefaults(envRows);
+            RemoteDesktopEnvRows.pruneIrrelevantRows(envRows);
+            RemoteDesktopEnvRows.ensureEditablePlaceholderRow(envRows);
         } finally {
             suppressEnvSessionPersistence.set(false);
         }
@@ -329,6 +297,23 @@ public final class RemoteDesktopShellController implements DesktopShellHost, Env
     @Override
     public void addMissingReferenceEnvRows() {
         RemoteDesktopEnvRows.mergeMissingFromUiRef(envRows);
+    }
+
+    @Override
+    public boolean showsDispatchGeminiEnvSubTab() {
+        return false;
+    }
+
+    @Override
+    public boolean showsGeminiCredentialsEncryptButton() {
+        return false;
+    }
+
+    @Override
+    public String envTabHintText() {
+        return "OS 環境変数は参照しません。このタブで集約。"
+                + " RDP 接続・ランチャー配備・操作者共有・ポータブル版アップ（rpa_luncher_release）向けの設定のみ表示します。"
+                + " フォルダ型は「フォルダ...」、ファイル型は変数名に応じた拡張子で選択できます。";
     }
 
     @Override

@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.BiFunction;
 
 import javafx.application.Platform;
 import javafx.scene.control.Alert;
@@ -29,6 +30,30 @@ public final class OperatorUserSelectionSupport {
         return startup ? "[startup]" : "[operator]";
     }
 
+    static String operatorSelectionScopeLabel(FactorySite factory) {
+        if (RemoteDesktopStandaloneBootstrap.isActivated() || factory == FactorySite.RDP_LAUNCHER) {
+            return "";
+        }
+        return factory.displayLabelJa();
+    }
+
+    static String operatorSelectionScopeSuffix(FactorySite factory, String dept) {
+        if (RemoteDesktopStandaloneBootstrap.isActivated() || factory == FactorySite.RDP_LAUNCHER) {
+            return dept.isBlank() ? "" : "部署 " + dept;
+        }
+        return factory.displayLabelJa() + (dept.isBlank() ? "" : "・部署 " + dept);
+    }
+
+    private static String operatorSelectionLogContext(
+            FactorySite factory, String dept, String detailSuffix) {
+        String scope = operatorSelectionScopeSuffix(factory, dept);
+        String body =
+                scope.isBlank()
+                        ? (detailSuffix != null ? detailSuffix : "")
+                        : scope + (detailSuffix != null ? detailSuffix : "");
+        return body.isBlank() ? "" : " （" + body + "）";
+    }
+
     public static void requireOperatorSelectionForFactory(
             DesktopShellHost host, FactorySite site, boolean startup) {
         if (host == null) {
@@ -45,10 +70,24 @@ public final class OperatorUserSelectionSupport {
                                 ? site
                                 : GlobalInitSettingTarget.loadEffective(host.snapshotUiEnv()));
         FactoryOperatorUserStore.configureForCurrentApp(host.snapshotUiEnv(), factory);
+        try {
+            FactoryOperatorUserStore.ensureStoreFileOnDisk();
+        } catch (IOException ex) {
+            host.appendLog(
+                    operatorEventLogPrefix(startup)
+                            + " 操作者一覧の読込に失敗: "
+                            + (ex.getMessage() != null ? ex.getMessage() : ex.toString()));
+        }
         boolean rdpActive = RemoteDesktopStandaloneBootstrap.isActivated();
-        String previousOperator =
-                rdpActive && !startup ? FactoryOperatorUserStore.sessionOperatorName() : "";
-        FactoryOperatorUserStore.clearSessionOperatorName();
+        if (rdpActive && !startup) {
+            performRdpOperatorChange(
+                    host,
+                    factory,
+                    FactoryOperatorUserStore.sessionOperatorName(),
+                    FactoryOperatorUserStore.sessionRdpDepartmentKey());
+            host.refreshOperatorUserPresentation();
+            return;
+        }
         if (rdpActive) {
             while (FactoryOperatorUserStore.sessionRdpDepartmentKey().isBlank()) {
                 if (startup) {
@@ -63,27 +102,10 @@ public final class OperatorUserSelectionSupport {
                     }
                 }
                 if (!ensureRdpDepartmentSelected(host, startup)) {
-                    restoreSessionOperatorQuietly(host, factory, previousOperator);
                     host.refreshOperatorUserPresentation();
                     return;
                 }
                 break;
-            }
-            if (!startup) {
-                try {
-                    if (FactoryOperatorUserStore.listRdpDepartmentKeys().size() > 1
-                            && !ensureRdpDepartmentReselected(host)) {
-                        restoreSessionOperatorQuietly(host, factory, previousOperator);
-                        host.refreshOperatorUserPresentation();
-                        return;
-                    }
-                } catch (IOException ex) {
-                    host.showWarningDialog(
-                            "部署", ex.getMessage() != null ? ex.getMessage() : ex.toString());
-                    restoreSessionOperatorQuietly(host, factory, previousOperator);
-                    host.refreshOperatorUserPresentation();
-                    return;
-                }
             }
         }
         if (startup) {
@@ -95,10 +117,7 @@ public final class OperatorUserSelectionSupport {
                             operatorEventLogPrefix(startup)
                                     + " 操作者: "
                                     + restored
-                                    + " （"
-                                    + factory.displayLabelJa()
-                                    + (dept.isBlank() ? "" : "・部署 " + dept)
-                                    + "・前回選択を復元）"
+                                    + operatorSelectionLogContext(factory, dept, "・前回選択を復元")
                                     + (FactoryOperatorUserStore.isGuestOperator(restored)
                                             ? " ※ゲスト"
                                             : ""));
@@ -114,47 +133,26 @@ public final class OperatorUserSelectionSupport {
         while (FactoryOperatorUserStore.sessionOperatorName().isBlank()) {
             Optional<String> chosen = promptOperatorUserChoice(host, factory, startup);
             if (chosen.isEmpty()) {
+                String scope = operatorSelectionScopeLabel(factory);
                 host.showWarningDialog(
                         "操作者名（必須）",
-                        factory.displayLabelJa()
-                                + " の操作者名を選択してください。\n"
+                        (scope.isBlank() ? "" : scope + " の")
+                                + "操作者名を選択してください。\n"
                                 + "一覧の編集は「ユーザー管理者」タブから行えます。");
                 continue;
             }
             String name = chosen.get();
+            if (!confirmSelectedOperatorWithPin(host, factory, name)) {
+                continue;
+            }
             try {
-                if (FactoryOperatorUserStore.hasPin(factory, name)) {
-                    if (FactoryOperatorUserStore.isPinLocked(factory, name)) {
-                        host.showWarningDialog(
-                                "PIN ロック",
-                                "操作者「"
-                                        + name
-                                        + "」は PIN を "
-                                        + FactoryOperatorUserStore.MAX_CONSECUTIVE_PIN_FAILURES
-                                        + " 回連続で間違えたためロックされています。\n"
-                                        + "ユーザー管理者タブでロック解除または PIN 再発行してください。");
-                        continue;
-                    }
-                    Optional<String> verifiedPin = promptAndVerifyOperatorPin(host, factory, name);
-                    if (verifiedPin.isEmpty()) {
-                        continue;
-                    }
-                    if (FactoryOperatorUserStore.mustChangePin(factory, name)) {
-                        if (!promptRequiredInitialPinChange(host, factory, name, verifiedPin.get())) {
-                            continue;
-                        }
-                    }
-                }
                 FactoryOperatorUserStore.selectSessionOperator(factory, name);
                 String dept = FactoryOperatorUserStore.sessionRdpDepartmentKey();
                 host.appendLog(
                         operatorEventLogPrefix(startup)
                                 + " 操作者: "
                                 + name
-                                + " （"
-                                + factory.displayLabelJa()
-                                + (dept.isBlank() ? "" : "・部署 " + dept)
-                                + "）"
+                                + operatorSelectionLogContext(factory, dept, "")
                                 + (FactoryOperatorUserStore.isGuestOperator(name) ? " ※ゲスト" : ""));
             } catch (Exception ex) {
                 host.showWarningDialog(
@@ -164,7 +162,99 @@ public final class OperatorUserSelectionSupport {
         host.refreshOperatorUserPresentation();
     }
 
-    private static boolean ensureRdpDepartmentReselected(DesktopShellHost host) {
+    private static void restoreSessionOperatorQuietly(
+            DesktopShellHost host, FactorySite factory, String previousOperator) {
+        if (previousOperator == null || previousOperator.isBlank()) {
+            return;
+        }
+        try {
+            FactoryOperatorUserStore.selectSessionOperator(factory, previousOperator);
+        } catch (Exception ex) {
+            host.appendLog(
+                    "[operator] 操作者の復元に失敗: "
+                            + (ex.getMessage() != null ? ex.getMessage() : ex.toString()));
+        }
+    }
+
+    private static void restoreSessionOperatorAndDepartmentQuietly(
+            DesktopShellHost host,
+            FactorySite factory,
+            String previousOperator,
+            String previousDepartment) {
+        if (previousDepartment != null && !previousDepartment.isBlank()) {
+            try {
+                FactoryOperatorUserStore.selectSessionRdpDepartment(previousDepartment);
+            } catch (Exception ex) {
+                host.appendLog(
+                        "[operator] 部署の復元に失敗: "
+                                + (ex.getMessage() != null ? ex.getMessage() : ex.toString()));
+            }
+        }
+        restoreSessionOperatorQuietly(host, factory, previousOperator);
+    }
+
+    /**
+     * リモートデスクトップ RPA ランチャーの「操作者を変更」専用フロー。
+     * 部署選択 → 当該部署の操作者選択。いずれかで取消したら前回の操作者・部署を復元して終了する。
+     */
+    private static void performRdpOperatorChange(
+            DesktopShellHost host,
+            FactorySite factory,
+            String previousOperator,
+            String previousDepartment) {
+        performRdpOperatorChange(host, factory, previousOperator, previousDepartment, null, null);
+    }
+
+    /** テスト用: ダイアログ差し替え可能な操作者変更フロー。 */
+    static void performRdpOperatorChange(
+            DesktopShellHost host,
+            FactorySite factory,
+            String previousOperator,
+            String previousDepartment,
+            BiFunction<DesktopShellHost, List<String>, Optional<String>> departmentPromptOverride,
+            BiFunction<DesktopShellHost, FactorySite, Optional<String>> operatorPromptOverride) {
+        FactoryOperatorUserStore.clearSessionOperatorName();
+        FactoryOperatorUserStore.clearSessionRdpDepartmentKey();
+        if (!selectRdpDepartmentForOperatorChange(host, departmentPromptOverride)) {
+            restoreSessionOperatorAndDepartmentQuietly(
+                    host, factory, previousOperator, previousDepartment);
+            return;
+        }
+        Optional<String> chosen =
+                operatorPromptOverride != null
+                        ? operatorPromptOverride.apply(host, factory)
+                        : promptOperatorUserChoice(host, factory, false);
+        if (chosen.isEmpty()) {
+            restoreSessionOperatorAndDepartmentQuietly(
+                    host, factory, previousOperator, previousDepartment);
+            return;
+        }
+        String name = chosen.get();
+        if (!confirmSelectedOperatorWithPin(host, factory, name)) {
+            restoreSessionOperatorAndDepartmentQuietly(
+                    host, factory, previousOperator, previousDepartment);
+            return;
+        }
+        try {
+            FactoryOperatorUserStore.selectSessionOperator(factory, name);
+            String dept = FactoryOperatorUserStore.sessionRdpDepartmentKey();
+            host.appendLog(
+                    operatorEventLogPrefix(false)
+                            + " 操作者: "
+                            + name
+                            + operatorSelectionLogContext(factory, dept, "")
+                            + (FactoryOperatorUserStore.isGuestOperator(name) ? " ※ゲスト" : ""));
+        } catch (Exception ex) {
+            host.showWarningDialog(
+                    "操作者名", ex.getMessage() != null ? ex.getMessage() : ex.toString());
+            restoreSessionOperatorAndDepartmentQuietly(
+                    host, factory, previousOperator, previousDepartment);
+        }
+    }
+
+    private static boolean selectRdpDepartmentForOperatorChange(
+            DesktopShellHost host,
+            BiFunction<DesktopShellHost, List<String>, Optional<String>> departmentPromptOverride) {
         List<String> departments;
         try {
             departments = FactoryOperatorUserStore.listRdpDepartmentKeys();
@@ -189,7 +279,10 @@ public final class OperatorUserSelectionSupport {
                 return false;
             }
         }
-        Optional<String> chosen = promptRdpDepartmentChoice(host, departments, false);
+        Optional<String> chosen =
+                departmentPromptOverride != null
+                        ? departmentPromptOverride.apply(host, departments)
+                        : promptRdpDepartmentChoice(host, departments, false);
         if (chosen.isEmpty()) {
             return false;
         }
@@ -203,17 +296,36 @@ public final class OperatorUserSelectionSupport {
         }
     }
 
-    private static void restoreSessionOperatorQuietly(
-            DesktopShellHost host, FactorySite factory, String previousOperator) {
-        if (previousOperator == null || previousOperator.isBlank()) {
-            return;
-        }
+    private static boolean confirmSelectedOperatorWithPin(
+            DesktopShellHost host, FactorySite factory, String name) {
         try {
-            FactoryOperatorUserStore.selectSessionOperator(factory, previousOperator);
+            if (FactoryOperatorUserStore.hasPin(factory, name)) {
+                if (FactoryOperatorUserStore.isPinLocked(factory, name)) {
+                    host.showWarningDialog(
+                            "PIN ロック",
+                            "操作者「"
+                                    + name
+                                    + "」は PIN を "
+                                    + FactoryOperatorUserStore.MAX_CONSECUTIVE_PIN_FAILURES
+                                    + " 回連続で間違えたためロックされています。\n"
+                                    + "ユーザー管理者タブでロック解除または PIN 再発行してください。");
+                    return false;
+                }
+                Optional<String> verifiedPin = promptAndVerifyOperatorPin(host, factory, name);
+                if (verifiedPin.isEmpty()) {
+                    return false;
+                }
+                if (FactoryOperatorUserStore.mustChangePin(factory, name)) {
+                    if (!promptRequiredInitialPinChange(host, factory, name, verifiedPin.get())) {
+                        return false;
+                    }
+                }
+            }
+            return true;
         } catch (Exception ex) {
-            host.appendLog(
-                    "[operator] 操作者の復元に失敗: "
-                            + (ex.getMessage() != null ? ex.getMessage() : ex.toString()));
+            host.showWarningDialog(
+                    "操作者名", ex.getMessage() != null ? ex.getMessage() : ex.toString());
+            return false;
         }
     }
 

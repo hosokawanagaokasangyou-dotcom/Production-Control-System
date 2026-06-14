@@ -130,7 +130,7 @@ public final class AppPaths {
 
     /**
      * RDP ランチャー exe / ini / 起動プロファイル JSON の配備先フォルダ（UNC 可）。
-     * 空のときは ini 親 → exe 親 → サマリ Excel 親の順で解決する。
+     * 空のときは {@link #DEFAULT_PM_AI_RDP_LAUNCHER_DEPLOY_DIR}（配台 PMD・RDP 配布アプリ共通）。
      */
     public static final String KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR = "PM_AI_RDP_LAUNCHER_DEPLOY_DIR";
 
@@ -157,9 +157,9 @@ public final class AppPaths {
     public static final String RDP_LAUNCHER_EXE_BASENAME = "PmAiRdpRemoteLauncher.exe";
     public static final String RDP_LAUNCHER_VERSION_BASENAME = "PmAiRdpRemoteLauncher.version.txt";
     /**
-     * デスクトップ RPA ランチャー本体（{@code PmAiRpaLuncher.exe}）。<strong>廃止</strong> — 配台 {@code PMD.exe} のリモートデスクトップタブを使用する。
+     * リモートデスクトップ専用ポータブル（{@code rpa_luncher_release} の {@code PmAiRpaLuncher.exe}）。
+     * 配台 {@code PMD.exe}（{@code pm-ai-package-release}）とは別製品。
      */
-    @Deprecated
     public static final String RDP_DESKTOP_LAUNCHER_EXE_BASENAME = "PmAiRpaLuncher.exe";
     /** デスクトップ RPA ランチャー用バージョンアップ ZIP（{@link #DEFAULT_PM_AI_RDP_PORTABLE_BUNDLE_RELEASE_DIR} 直下）。 */
     public static final String RDP_DESKTOP_LAUNCHER_VERSION_UPGRADE_ZIP =
@@ -431,6 +431,13 @@ public final class AppPaths {
      */
     public static final String DEFAULT_PM_AI_RDP_PORTABLE_BUNDLE_RELEASE_DIR =
             "\\\\192.168.0.101\\共有フォルダ\\掲示板\\rpa_luncher";
+
+    /**
+     * {@link #KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR} 未設定時の配備先（UNC）。
+     * {@link #DEFAULT_PM_AI_RDP_PORTABLE_BUNDLE_RELEASE_DIR} と同一。
+     */
+    public static final String DEFAULT_PM_AI_RDP_LAUNCHER_DEPLOY_DIR =
+            DEFAULT_PM_AI_RDP_PORTABLE_BUNDLE_RELEASE_DIR;
 
     /**
      * 湖南工場共有の {@code pm-ai-package-release} フォルダ（UNC）。{@link #KEY_PM_AI_PORTABLE_BUNDLE_SOURCE_DIR} の湖南既定。
@@ -1452,8 +1459,8 @@ public final class AppPaths {
     /**
      * RDP ランチャー exe（{@link #RDP_LAUNCHER_EXE_BASENAME}）の配備先。
      *
-     * <p>優先: {@link #KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR} → exe 親 → サマリ Excel 親（PMD）。
-     * RDP 配布アプリでは {@link #DEFAULT_PM_AI_RDP_PORTABLE_BUNDLE_RELEASE_DIR} を既定にする。
+     * <p>優先: {@link #KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR} → {@link #DEFAULT_PM_AI_RDP_LAUNCHER_DEPLOY_DIR}。
+     * 配台 PMD・RDP 配布アプリで共通。
      */
     public static Path resolveRdpLauncherDeployDir(Map<String, String> ui) {
         Map<String, String> u = ui != null ? ui : Map.of();
@@ -1461,23 +1468,7 @@ public final class AppPaths {
         if (!deployOverride.isEmpty()) {
             return Path.of(deployOverride).toAbsolutePath().normalize();
         }
-        if (usesRemoteDesktopAppHome()) {
-            return Path.of(DEFAULT_PM_AI_RDP_PORTABLE_BUNDLE_RELEASE_DIR).toAbsolutePath().normalize();
-        }
-        String exeOverride = trim(u.get(KEY_PM_AI_RDP_LAUNCHER_EXE));
-        if (!exeOverride.isEmpty()) {
-            Path exePath = Path.of(exeOverride);
-            Path exeParent = exePath.getParent();
-            if (exeParent != null) {
-                return exeParent.toAbsolutePath().normalize();
-            }
-        }
-        Path summary = summaryAiDispatchXlsxPath(u);
-        Path parent = summary.getParent();
-        if (parent == null) {
-            return summary.toAbsolutePath().normalize();
-        }
-        return parent.toAbsolutePath().normalize();
+        return Path.of(DEFAULT_PM_AI_RDP_LAUNCHER_DEPLOY_DIR).toAbsolutePath().normalize();
     }
 
     /** {@link #setDesktopAppHomeDirName} で切り替え可能な PC ローカル設定ルート。 */
@@ -1490,6 +1481,11 @@ public final class AppPaths {
     /** セッション永続化 JSON（{@code session-state.json}）。 */
     public static Path resolveSessionStateStorePath() {
         return resolveDesktopAppHomeDir().resolve("session-state.json");
+    }
+
+    /** ユーザー管理者タブ解錠の PC ローカル資格情報（{@code admin-tab-unlock.json}）。 */
+    public static Path resolveAdminTabCredentialsStorePath() {
+        return resolveDesktopAppHomeDir().resolve("admin-tab-unlock.json");
     }
 
     /**

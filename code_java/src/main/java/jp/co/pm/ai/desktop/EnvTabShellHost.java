@@ -14,6 +14,18 @@ public interface EnvTabShellHost extends DesktopShellHost {
 
     void addMissingReferenceEnvRows();
 
+    default boolean showsDispatchGeminiEnvSubTab() {
+        return true;
+    }
+
+    default boolean showsGeminiCredentialsEncryptButton() {
+        return true;
+    }
+
+    default String envTabHintText() {
+        return null;
+    }
+
     default void requestGeminiFreeTierModelsForceRefresh() {}
 
     default void refreshApiModelBenchmarkDerivedLabels() {}

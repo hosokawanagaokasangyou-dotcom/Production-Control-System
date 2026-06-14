@@ -23,8 +23,6 @@
             <Label fx:id="sessionOperatorToolbarLabel" styleClass="pm-muted-label" wrapText="true"/>
             <Button fx:id="changeSessionOperatorToolbarButton" mnemonicParsing="false"
                     onAction="#onChangeSessionOperatorToolbarAction" text="操作者を変更"/>
-            <Button fx:id="changeSessionDepartmentToolbarButton" mnemonicParsing="false"
-                    onAction="#onChangeSessionDepartmentToolbarAction" text="部署を変更"/>
         </ToolBar>
     </top>
     <center>

@@ -397,7 +397,7 @@
   }, {
     "key" : "PM_AI_RDP_PORTABLE_BUNDLE_SOURCE_DIR",
     "value" : "",
-    "description" : "廃止: PmAiRpaLuncher.exe ポータブル配布の正本。配台 PMD のリモートデスクトップタブを使用する。"
+    "description" : "リモートデスクトップ専用ポータブル（PmAiRpaLuncher）の版アップ正本。ローカル出力 rpa_luncher_release。配台 PMD は pm-ai-package-release。"
   }, {
     "key" : "PM_AI_RDP_OPERATOR_USERS_STORE_DIR",
     "value" : "\\\\192.168.0.101\\共有フォルダ\\掲示板\\rpa_luncher\\DATA",

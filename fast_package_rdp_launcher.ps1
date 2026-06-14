@@ -1,15 +1,15 @@
 # Remote Desktop RPA Launcher - portable Windows bundle (repo root entry).
 #
-# Prerequisites: Windows, Maven, network for JDK/JavaFX cache on first run.
-# Optional: dotnet SDK for PmAiRdpRemoteLauncher.exe in launcher-deploy-seed.
+# Output (repo root):
+#   rpa_luncher_release\PmAiRpaLuncher\PmAiRpaLuncher.exe
+#   rpa_luncher_release\PmAiRpaLuncher_portable.zip
 #
-# Output: rpa_luncher_release\PmAiRpaLuncher\PmAiRpaLuncher.exe (double-click)
-#         rpa_luncher_release\PmAiRpaLuncher_portable.zip
+# Dispatch PMD portable is separate: fast_package_app.ps1 -> pm-ai-package-release\
 #
 # Usage:
 #   .\fast_package_rdp_launcher.ps1
-#   .\fast_package_rdp_launcher.ps1 -PackageType app-image
-#   .\fast_package_rdp_launcher.ps1 -SkipCanonicalDeploy   # offline / WSL without corp network
+#   .\fast_package_rdp_launcher.ps1 -SkipJdkPrepare -SkipJavaFxPrepare -SkipCsLauncherBuild
+#   .\fast_package_rdp_launcher.ps1 -SkipCanonicalDeploy
 
 # UTF-8 BOM: Windows PowerShell 5.1
 [CmdletBinding()]
@@ -37,11 +37,6 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-Write-Host 'DEPRECATED: PmAiRpaLuncher.exe の単体配布は廃止しました。' -ForegroundColor Yellow
-Write-Host '  操作者 PC: 配台 PMD.exe → リモートデスクトップタブ' -ForegroundColor Yellow
-Write-Host '  接続先 PC: PmAiRdpRemoteLauncher.exe（scripts/build-rdp-remote-launcher.ps1）' -ForegroundColor Yellow
-exit 1
-
 $ScriptRoot = if ($PSScriptRoot) { $PSScriptRoot } else { Get-Location }
 $CodeJava = Join-Path $ScriptRoot 'code_java'
 $pack = Join-Path $CodeJava 'package_rdp_launcher_app.ps1'

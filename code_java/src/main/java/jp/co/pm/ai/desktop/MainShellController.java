@@ -2134,37 +2134,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
     }
 
     private boolean promptOperatorUserAdminTabUnlock() {
-        if (primaryStage == null) {
-            return false;
-        }
-        Dialog<ButtonType> dialog = new Dialog<>();
-        prepareDialogForMainTheme(dialog);
-        dialog.setTitle("ユーザー管理者");
-        dialog.setHeaderText(null);
-        Label hint =
-                new Label(
-                        "ユーザー管理者タブを開くには、ユーザー名 "
-                                + FactoryOperatorUserStore.ADMIN_TAB_USERNAME
-                                + " と管理者パスワードを入力してください。");
-        hint.setWrapText(true);
-        TextField userField = new TextField();
-        userField.setPromptText(FactoryOperatorUserStore.ADMIN_TAB_USERNAME);
-        PasswordField pf = new PasswordField();
-        pf.setPromptText("管理者パスワード");
-        VBox box =
-                new VBox(
-                        8,
-                        hint,
-                        new Label("ユーザー名:"),
-                        userField,
-                        new Label("パスワード:"),
-                        pf);
-        dialog.getDialogPane().setContent(box);
-        dialog.getDialogPane().getButtonTypes().setAll(ButtonType.OK, ButtonType.CANCEL);
-        Optional<ButtonType> ans = dialog.showAndWait();
-        return ans.isPresent()
-                && ans.get() == ButtonType.OK
-                && FactoryOperatorUserStore.verifyAdminTabAccess(userField.getText(), pf.getText());
+        return AdminTabUnlockSupport.ensureUnlocked(primaryStage, this::prepareDialogForMainTheme);
     }
 
     /**

@@ -162,24 +162,196 @@
     -fx-padding: 0 8px 0 17;
 }
 
-/* リモートデスクトップRPAランチャー（配布用） */
+/* リモートデスクトップ RPA ランチャー（工場名なし・部署別オペレータ向け） */
 .splash-root.splash-app-rdp-launcher {
-    -fx-border-color: rgba(56, 189, 248, 0.45);
+    -fx-background-color: linear-gradient(
+        135deg,
+        #041e33 0%,
+        #0c4a6e 38%,
+        #082f49 72%,
+        #0f172a 100%
+    );
+    -fx-border-color: rgba(56, 189, 248, 0.42);
+    -fx-effect: dropshadow(gaussian, rgba(2, 132, 199, 0.45), 32, 0.32, 0, 10);
 }
 
 .splash-root.splash-app-rdp-launcher .splash-overlay {
     -fx-background-color: linear-gradient(
         to right,
-        rgba(8, 47, 73, 0.94) 0%,
-        rgba(12, 74, 110, 0.78) 42%,
-        rgba(15, 23, 42, 0.52) 100%
+        rgba(4, 30, 51, 0.94) 0%,
+        rgba(8, 47, 73, 0.72) 48%,
+        rgba(8, 47, 73, 0.18) 100%
     );
 }
 
-.splash-root.splash-app-rdp-launcher .splash-accent-bar {
-    -fx-background-color: linear-gradient(to bottom, #38bdf8, #0284c7);
+.splash-root.splash-app-rdp-launcher .splash-company-name {
+    -fx-font-size: 11px;
+    -fx-text-fill: rgba(186, 230, 253, 0.88);
+    -fx-letter-spacing: 0.2em;
 }
 
 .splash-root.splash-app-rdp-launcher .splash-title {
-    -fx-text-fill: #e0f2fe;
+    -fx-font-size: 26px;
+    -fx-text-fill: #f0f9ff;
+}
+
+.splash-root.splash-app-rdp-launcher .splash-subtitle-ja {
+    -fx-font-size: 13px;
+    -fx-font-weight: normal;
+    -fx-text-fill: #bae6fd;
+}
+
+.splash-root.splash-app-rdp-launcher .splash-subtitle-en {
+    -fx-text-fill: rgba(125, 211, 252, 0.78);
+    -fx-letter-spacing: 0.14em;
+}
+
+.splash-root.splash-app-rdp-launcher .splash-status {
+    -fx-text-fill: #94a3b8;
+}
+
+.splash-root.splash-app-rdp-launcher .splash-progress {
+    -fx-accent: #38bdf8;
+    -fx-progress-color: #38bdf8;
+}
+
+.splash-root.splash-app-rdp-launcher .splash-version {
+    -fx-text-fill: rgba(125, 211, 252, 0.72);
+}
+
+/* RDP ブランドアイコン（左列） */
+.splash-rdp-brand-icon {
+    -fx-background-color: rgba(14, 116, 144, 0.22);
+    -fx-background-radius: 10px;
+    -fx-border-color: rgba(56, 189, 248, 0.38);
+    -fx-border-width: 1px;
+    -fx-border-radius: 10px;
+    -fx-effect: dropshadow(gaussian, rgba(14, 165, 233, 0.35), 12, 0.25, 0, 2);
+}
+
+.splash-rdp-brand-link {
+    -fx-stroke: #7dd3fc;
+    -fx-stroke-width: 1.6;
+    -fx-fill: transparent;
+}
+
+.splash-rdp-brand-node {
+    -fx-fill: #38bdf8;
+    -fx-stroke: #e0f2fe;
+    -fx-stroke-width: 1;
+}
+
+.splash-rdp-brand-monitor-left .splash-rdp-monitor-bezel {
+    -fx-fill: rgba(186, 230, 253, 0.55);
+    -fx-stroke: rgba(125, 211, 252, 0.7);
+    -fx-stroke-width: 0.6;
+}
+
+.splash-rdp-brand-monitor-left .splash-rdp-monitor-screen {
+    -fx-fill: rgba(8, 47, 73, 0.85);
+}
+
+.splash-rdp-brand-monitor-left .splash-rdp-monitor-stand {
+    -fx-fill: rgba(186, 230, 253, 0.5);
+}
+
+.splash-rdp-brand-monitor-right .splash-rdp-monitor-bezel {
+    -fx-fill: rgba(224, 242, 254, 0.92);
+    -fx-stroke: rgba(56, 189, 248, 0.85);
+    -fx-stroke-width: 0.8;
+}
+
+.splash-rdp-brand-monitor-right .splash-rdp-monitor-screen {
+    -fx-fill: linear-gradient(to bottom, #0ea5e9, #0369a1);
+}
+
+.splash-rdp-brand-monitor-right .splash-rdp-monitor-stand {
+    -fx-fill: rgba(224, 242, 254, 0.85);
+}
+
+/* RDP 背景装飾（右側モニター・接続線） */
+.splash-rdp-decor {
+    -fx-pref-width: 520px;
+    -fx-pref-height: 320px;
+}
+
+.splash-rdp-grid {
+    -fx-fill: transparent;
+    -fx-stroke: rgba(56, 189, 248, 0.08);
+    -fx-stroke-width: 1;
+    -fx-stroke-dash-array: 4 8;
+    -fx-opacity: 0.9;
+}
+
+.splash-rdp-monitor-bezel {
+    -fx-fill: rgba(15, 23, 42, 0.55);
+    -fx-stroke: rgba(125, 211, 252, 0.55);
+    -fx-stroke-width: 1.2;
+    -fx-arc-width: 6;
+    -fx-arc-height: 6;
+}
+
+.splash-rdp-monitor-screen {
+    -fx-fill: linear-gradient(to bottom, rgba(14, 165, 233, 0.55), rgba(3, 105, 161, 0.82));
+    -fx-stroke: rgba(186, 230, 253, 0.35);
+    -fx-stroke-width: 0.8;
+    -fx-arc-width: 3;
+    -fx-arc-height: 3;
+}
+
+.splash-rdp-monitor-stand {
+    -fx-fill: rgba(148, 163, 184, 0.65);
+    -fx-arc-width: 2;
+    -fx-arc-height: 2;
+}
+
+.splash-rdp-monitor-local .splash-rdp-monitor-bezel {
+    -fx-stroke: rgba(148, 163, 184, 0.65);
+}
+
+.splash-rdp-monitor-local .splash-rdp-monitor-screen {
+    -fx-fill: linear-gradient(to bottom, rgba(51, 65, 85, 0.75), rgba(30, 41, 59, 0.9));
+}
+
+.splash-rdp-monitor-remote .splash-rdp-monitor-bezel {
+    -fx-stroke: rgba(56, 189, 248, 0.75);
+    -fx-effect: dropshadow(gaussian, rgba(14, 165, 233, 0.45), 14, 0.3, 0, 2);
+}
+
+.splash-rdp-monitor-remote .splash-rdp-monitor-screen {
+    -fx-fill: linear-gradient(to bottom, rgba(56, 189, 248, 0.72), rgba(2, 132, 199, 0.95));
+}
+
+.splash-rdp-link {
+    -fx-fill: transparent;
+}
+
+.splash-rdp-link-main {
+    -fx-stroke: #38bdf8;
+    -fx-stroke-width: 2.2;
+}
+
+.splash-rdp-link-glow {
+    -fx-stroke: rgba(56, 189, 248, 0.28);
+    -fx-stroke-width: 6;
+}
+
+.splash-rdp-node {
+    -fx-stroke-width: 1.2;
+}
+
+.splash-rdp-node-local {
+    -fx-fill: #64748b;
+    -fx-stroke: #cbd5e1;
+}
+
+.splash-rdp-node-remote {
+    -fx-fill: #0ea5e9;
+    -fx-stroke: #e0f2fe;
+}
+
+.splash-rdp-pulse {
+    -fx-fill: rgba(56, 189, 248, 0.35);
+    -fx-stroke: rgba(186, 230, 253, 0.65);
+    -fx-stroke-width: 1;
 }

@@ -1301,16 +1301,24 @@ public final class OperatorUserManagementTabController {
                             : "環境変数の利用工場（"
                                     + site.displayLabelJa()
                                     + "）のユーザー一覧・PIN のみ編集できます。");
+            factoryLabel.setVisible(!rdpLauncherAppMode());
+            factoryLabel.setManaged(!rdpLauncherAppMode());
         }
         if (sessionOperatorLabel != null) {
             String op = FactoryOperatorUserStore.sessionOperatorName();
             String dept = FactoryOperatorUserStore.sessionRdpDepartmentKey();
-            String deptPart =
-                    rdpLauncherAppMode() && !dept.isBlank() ? " 部署: " + dept : "";
-            sessionOperatorLabel.setText(
-                    op.isBlank()
-                            ? "現在の操作者: （未選択）" + deptPart
-                            : "現在の操作者: " + op + " （" + site.displayLabelJa() + "）" + deptPart);
+            if (rdpLauncherAppMode()) {
+                String deptPart = dept.isBlank() ? "" : "　部署: " + dept;
+                sessionOperatorLabel.setText(
+                        op.isBlank()
+                                ? "現在の操作者: （未選択）" + deptPart
+                                : "現在の操作者: " + op + deptPart);
+            } else {
+                sessionOperatorLabel.setText(
+                        op.isBlank()
+                                ? "現在の操作者: （未選択）"
+                                : "現在の操作者: " + op + " （" + site.displayLabelJa() + "）");
+            }
         }
         if (changeSessionOperatorButton != null) {
             changeSessionOperatorButton.setDisable(false);

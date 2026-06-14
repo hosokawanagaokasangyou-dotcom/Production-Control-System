@@ -40,6 +40,10 @@ public final class DesktopUiEnvMapLoader {
         if (map.getOrDefault(AppPaths.KEY_PM_AI_REPO_ROOT, "").isBlank()) {
             map.put(AppPaths.KEY_PM_AI_REPO_ROOT, AppPaths.resolveRepoRoot(map).toString());
         }
+        String deployKey = AppPaths.KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR;
+        if (map.getOrDefault(deployKey, "").isBlank()) {
+            map.put(deployKey, AppPaths.DEFAULT_PM_AI_RDP_LAUNCHER_DEPLOY_DIR);
+        }
         if (AppPaths.usesRemoteDesktopAppHome()) {
             String portableKey = AppPaths.KEY_PM_AI_RDP_PORTABLE_BUNDLE_SOURCE_DIR;
             if (map.getOrDefault(portableKey, "").isBlank()) {
@@ -48,10 +52,6 @@ public final class DesktopUiEnvMapLoader {
             String operatorStoreKey = AppPaths.KEY_PM_AI_RDP_OPERATOR_USERS_STORE_DIR;
             if (map.getOrDefault(operatorStoreKey, "").isBlank()) {
                 map.put(operatorStoreKey, AppPaths.defaultRdpLauncherSharedDataDir().toString());
-            }
-            String deployKey = AppPaths.KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR;
-            if (map.getOrDefault(deployKey, "").isBlank()) {
-                map.put(deployKey, AppPaths.DEFAULT_PM_AI_RDP_PORTABLE_BUNDLE_RELEASE_DIR);
             }
             // PM_AI_RDP_LAUNCHER_INI は空のまま（操作者別 {操作者名}_RPA設定.ini を resolveRdpLauncherIni が解決）
         }

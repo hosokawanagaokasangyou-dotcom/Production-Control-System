@@ -7,7 +7,8 @@ public record StartupSplashBranding(
         String subtitleEn,
         String statusText,
         String rootStyleClass,
-        String backgroundResource) {
+        String backgroundResource,
+        boolean showFactorySite) {
 
     private static final String DEFAULT_BACKGROUND =
             "/jp/co/pm/ai/desktop/images/splash-background.png";
@@ -19,14 +20,16 @@ public record StartupSplashBranding(
                     "PEF FOAM · ROLL SLICE SLIT PACK",
                     "発泡樹脂のロール加工・配台システムを起動しています…",
                     "",
-                    DEFAULT_BACKGROUND);
+                    DEFAULT_BACKGROUND,
+                    true);
 
     public static final StartupSplashBranding REMOTE_DESKTOP_LAUNCHER =
             new StartupSplashBranding(
                     RemoteDesktopLauncherAppIdentity.DISPLAY_TITLE,
-                    "RDP 接続 · Aladdin RPA · 共有フォルダランチャー",
-                    "REMOTE DESKTOP · RPA LAUNCHER",
-                    "リモートデスクトップ環境を準備しています…",
+                    "部署別オペレータ · RDP 接続 · Aladdin RPA",
+                    "DEPARTMENT · REMOTE DESKTOP · RPA",
+                    "リモートデスクトップ RPA ランチャーを起動しています…",
                     "splash-app-rdp-launcher",
-                    DEFAULT_BACKGROUND);
+                    "",
+                    false);
 }

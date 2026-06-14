@@ -42,8 +42,10 @@ public final class EnvVarDocs {
                         + "空のときは自動更新しない（情報表示のみ）。");
         put(
                 "PM_AI_RDP_PORTABLE_BUNDLE_SOURCE_DIR",
-                "廃止: PmAiRpaLuncher.exe ポータブル配布の正本。配台 PMD のリモートデスクトップタブを使用する。"
-                        + " 設定が残っている場合は無視される。");
+                "リモートデスクトップ専用ポータブル（PmAiRpaLuncher.exe）の版アップ正本。"
+                        + " ローカルビルド出力はリポジトリ直下 rpa_luncher_release。"
+                        + " 共有 UNC 既定: 掲示板 rpa_luncher（version.txt + PmAiRpaLuncher_version_upgrade.zip）。"
+                        + " 配台 PMD の正本は PM_AI_PORTABLE_BUNDLE_SOURCE_DIR（pm-ai-package-release）。");
         put(
                 "PM_AI_OUTPUT_DIR",
                 "段階1/2 の出力先（plan_input_tasks.xlsx 等、従来 code/output"
@@ -243,7 +245,9 @@ public final class EnvVarDocs {
         put(
                 "PM_AI_RDP_LAUNCHER_EXE",
                 "接続先 RDP ランチャー（PmAiRdpRemoteLauncher.exe）のフルパス。"
-                        + "空のときは配備先フォルダ（PM_AI_RDP_LAUNCHER_DEPLOY_DIR またはサマリ Excel 同階層）の PmAiRdpRemoteLauncher.exe。");
+                        + "空のときは配備先フォルダ（PM_AI_RDP_LAUNCHER_DEPLOY_DIR、未設定時は "
+                        + AppPaths.DEFAULT_PM_AI_RDP_LAUNCHER_DEPLOY_DIR
+                        + "）の PmAiRdpRemoteLauncher.exe。");
         put(
                 "PM_AI_RDP_LAUNCHER_INI",
                 "接続先 RDP ランチャー設定 ini のフルパス上書き。"
@@ -255,7 +259,9 @@ public final class EnvVarDocs {
                 "PM_AI_RDP_LAUNCHER_DEPLOY_DIR",
                 "接続先 RDP ランチャー exe（PmAiRdpRemoteLauncher.exe）と RDP起動プロファイル.json、"
                         + "RPA設定.ini の配備先共有フォルダ（UNC 可）。"
-                        + " RDP 配布アプリの既定は掲示板 rpa_luncher。PMD はサマリ Excel 親。"
+                        + " 空のときは "
+                        + AppPaths.DEFAULT_PM_AI_RDP_LAUNCHER_DEPLOY_DIR
+                        + "（配台 PMD・RDP 配布アプリ共通）。"
                         + " リモートデスクトップRPAランチャー（配布用）では参照…で明示指定が必要。");
         put(
                 "PM_AI_RDP_OPERATOR_USERS_STORE_DIR",

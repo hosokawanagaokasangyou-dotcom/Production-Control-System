@@ -161,7 +161,9 @@ final class StartupSplashStage {
             AtomicLong outVisibleSinceNanos,
             Consumer<Stage> afterSplashFullyDisplayed) {
         StartupSplashBranding b = branding != null ? branding : StartupSplashBranding.PMD;
-        FactorySite factorySite = GlobalInitSettingTarget.load();
+        boolean rdpLauncher = isRemoteDesktopLauncher(b);
+        FactorySite factorySite =
+                b.showFactorySite() ? GlobalInitSettingTarget.load() : null;
 
         Stage stage = new Stage();
         stage.initStyle(StageStyle.TRANSPARENT);
@@ -169,22 +171,23 @@ final class StartupSplashStage {
         stage.setAlwaysOnTop(true);
         stage.setTitle("起動中");
 
-        ImageView background = new ImageView(loadSplashBackgroundImage(b.backgroundResource()));
-        background.setPreserveRatio(false);
-        background.setSmooth(true);
-        background.getStyleClass().add("splash-background-image");
+        ImageView background = null;
+        if (hasBackgroundResource(b.backgroundResource())) {
+            background = new ImageView(loadSplashBackgroundImage(b.backgroundResource()));
+            background.setPreserveRatio(false);
+            background.setSmooth(true);
+            background.getStyleClass().add("splash-background-image");
+        }
 
         Region overlay = new Region();
         overlay.getStyleClass().add("splash-overlay");
 
         Region accentBar = new Region();
         accentBar.getStyleClass().add("splash-accent-bar");
+        javafx.scene.Node brandMark = rdpLauncher ? StartupSplashRdpGraphics.createBrandIcon() : accentBar;
 
         Label company = new Label("NAGAOKA SANGYOU");
         company.getStyleClass().add("splash-company-name");
-
-        Label factoryBadge = new Label(factorySite.displayLabelJa());
-        factoryBadge.getStyleClass().add("splash-factory-badge");
 
         Label title = new Label(b.title());
         title.getStyleClass().add("splash-title");
@@ -195,9 +198,16 @@ final class StartupSplashStage {
         Label subtitleEn = new Label(b.subtitleEn());
         subtitleEn.getStyleClass().add("splash-subtitle-en");
 
-        VBox titleBlock = new VBox(4, company, factoryBadge, title, subtitleJa, subtitleEn);
+        VBox titleBlock;
+        if (factorySite != null) {
+            Label factoryBadge = new Label(factorySite.displayLabelJa());
+            factoryBadge.getStyleClass().add("splash-factory-badge");
+            titleBlock = new VBox(4, company, factoryBadge, title, subtitleJa, subtitleEn);
+        } else {
+            titleBlock = new VBox(6, company, title, subtitleJa, subtitleEn);
+        }
 
-        HBox brandRow = new HBox(12, accentBar, titleBlock);
+        HBox brandRow = new HBox(12, brandMark, titleBlock);
         brandRow.getStyleClass().add("splash-brand-row");
         brandRow.setAlignment(Pos.CENTER_LEFT);
 
@@ -228,9 +238,19 @@ final class StartupSplashStage {
         content.setAlignment(Pos.CENTER_LEFT);
         VBox.setMargin(busy, new Insets(2, 0, 0, 17));
 
-        StackPane root = new StackPane(background, overlay, content);
+        StackPane root = new StackPane();
+        if (background != null) {
+            root.getChildren().add(background);
+        }
+        root.getChildren().add(overlay);
+        if (rdpLauncher) {
+            root.getChildren().add(StartupSplashRdpGraphics.createBackgroundDecor());
+        }
+        root.getChildren().add(content);
         root.getStyleClass().add("splash-root");
-        root.getStyleClass().add(factoryStyleClass(factorySite));
+        if (factorySite != null) {
+            root.getStyleClass().add(factoryStyleClass(factorySite));
+        }
         if (b.rootStyleClass() != null && !b.rootStyleClass().isBlank()) {
             root.getStyleClass().add(b.rootStyleClass().strip());
         }
@@ -242,8 +262,10 @@ final class StartupSplashStage {
         scene.setFill(null);
         scene.getStylesheets().add(requireClasspathResourceUrl(SPLASH_CSS_RESOURCE));
 
-        background.fitWidthProperty().bind(root.widthProperty());
-        background.fitHeightProperty().bind(root.heightProperty());
+        if (background != null) {
+            background.fitWidthProperty().bind(root.widthProperty());
+            background.fitHeightProperty().bind(root.heightProperty());
+        }
 
         Rectangle clip = new Rectangle();
         clip.widthProperty().bind(root.widthProperty());
@@ -311,6 +333,14 @@ final class StartupSplashStage {
             Platform.runLater(() -> Platform.runLater(startNextLogic));
         }
         return stage;
+    }
+
+    private static boolean isRemoteDesktopLauncher(StartupSplashBranding branding) {
+        return "splash-app-rdp-launcher".equals(branding.rootStyleClass());
+    }
+
+    private static boolean hasBackgroundResource(String resourcePath) {
+        return resourcePath != null && !resourcePath.isBlank();
     }
 
     private static String factoryStyleClass(FactorySite site) {

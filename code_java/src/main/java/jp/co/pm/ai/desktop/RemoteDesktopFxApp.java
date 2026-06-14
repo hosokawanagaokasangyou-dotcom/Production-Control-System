@@ -19,8 +19,7 @@ import jp.co.pm.ai.desktop.config.StartupCrashLog;
 import jp.co.pm.ai.desktop.runtime.JvmMemoryMonitor;
 import jp.co.pm.ai.desktop.runtime.WindowsLauncherUserDir;
 
-/** リモートデスクトップ配布用 JavaFX エントリ（{@link #RDP_DESKTOP_LAUNCHER_EXE_BASENAME} 廃止・配台 PMD タブを使用）。 */
-@Deprecated
+/** リモートデスクトップ専用ポータブル（{@code rpa_luncher_release} の PmAiRpaLuncher.exe）の JavaFX エントリ。 */
 public final class RemoteDesktopFxApp extends Application {
 
     static {

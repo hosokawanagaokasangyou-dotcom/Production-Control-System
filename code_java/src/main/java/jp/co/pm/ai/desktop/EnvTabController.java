@@ -209,7 +209,8 @@ public final class EnvTabController {
         if (userDirLabel != null) {
             userDirLabel.setText(System.getProperty("user.dir", "."));
         }
-        hintLabel.setText(ENV_HINT_TEXT);
+        String hint = shell.envTabHintText();
+        hintLabel.setText(hint != null && !hint.isBlank() ? hint : ENV_HINT_TEXT);
         if (envSearchLabel != null) {
             envSearchLabel.setText("検索");
         }
@@ -223,11 +224,27 @@ public final class EnvTabController {
         if (encryptGeminiCredentialsButton != null) {
             encryptGeminiCredentialsButton.setText("Gemini API キーを暗号化保存");
         }
+        applyShellSpecificEnvTabFeatures();
         wireTable();
         wireDispatchGeminiModelEditorOnce();
         reloadDispatchGeminiModelsFromEnv();
         refreshDispatchGeminiPinnedWarning();
         refreshDispatchGeminiFreeTierStatusFromCache();
+    }
+
+    private void applyShellSpecificEnvTabFeatures() {
+        if (shell == null) {
+            return;
+        }
+        if (!shell.showsDispatchGeminiEnvSubTab()
+                && envMainTabPane != null
+                && dispatchGeminiModelsTab != null) {
+            envMainTabPane.getTabs().remove(dispatchGeminiModelsTab);
+        }
+        if (!shell.showsGeminiCredentialsEncryptButton() && encryptGeminiCredentialsButton != null) {
+            encryptGeminiCredentialsButton.setVisible(false);
+            encryptGeminiCredentialsButton.setManaged(false);
+        }
     }
 
     @FXML

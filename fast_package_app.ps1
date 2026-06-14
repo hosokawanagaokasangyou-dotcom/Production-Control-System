@@ -1,5 +1,8 @@
 # Production desktop (JavaFX) - Windows app bundle builder (jpackage + bundled runtime).
 #
+# Output: repo-root pm-ai-package-release\ (PMD portable).
+# Remote-desktop-only portable: fast_package_rdp_launcher.ps1 -> rpa_luncher_release\
+#
 # Prerequisites:
 #   - Run build on Windows (OpenJFX win classifier required).
 #   - Maven uses JAVA_HOME on PATH (compile must match maven.compiler.release).

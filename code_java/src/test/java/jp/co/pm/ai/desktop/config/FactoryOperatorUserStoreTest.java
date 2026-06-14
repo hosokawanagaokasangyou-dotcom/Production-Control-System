@@ -598,15 +598,55 @@ class FactoryOperatorUserStoreTest {
             AppPaths.setDesktopAppHomeDirName(AppPaths.REMOTE_DESKTOP_APP_HOME_DIR_NAME);
             FactoryOperatorUserStore.configureForStandaloneLocalOnly(ui, FactorySite.RDP_LAUNCHER);
             FactoryOperatorUserStore.addRdpDepartment("製造1課");
+            FactoryOperatorUserStore.selectSessionRdpDepartment("製造1課");
             FactoryOperatorUserStore.setAdminRdpDepartmentContext("製造1課");
             FactoryOperatorUserStore.addName(FactorySite.RDP_LAUNCHER, "山田");
             FactoryOperatorUserStore.setAdminRdpDepartmentContext(
                     FactoryOperatorUserStore.DEFAULT_RDP_DEPARTMENT_LABEL);
             assertTrue(
-                    !FactoryOperatorUserStore.namesForFactory(FactorySite.RDP_LAUNCHER).contains("山田"));
+                    FactoryOperatorUserStore.namesForFactory(FactorySite.RDP_LAUNCHER).contains("山田"),
+                    "操作者変更ダイアログはセッション部署（製造1課）のユーザーを使う");
+            assertTrue(
+                    !FactoryOperatorUserStore.namesForAdminTable(FactorySite.RDP_LAUNCHER).contains("山田"),
+                    "ユーザー管理者タブは編集中部署（既定）のユーザーを使う");
             FactoryOperatorUserStore.setAdminRdpDepartmentContext("製造1課");
-            assertTrue(FactoryOperatorUserStore.namesForFactory(FactorySite.RDP_LAUNCHER).contains("山田"));
+            assertTrue(
+                    FactoryOperatorUserStore.namesForAdminTable(FactorySite.RDP_LAUNCHER).contains("山田"));
             assertEquals(List.of("既定", "製造1課"), FactoryOperatorUserStore.listRdpDepartmentKeys());
+        } finally {
+            AppPaths.setDesktopAppHomeDirName(priorHome);
+            if (priorTestStore != null) {
+                System.setProperty("pm.ai.test.factoryOperatorUserStore", priorTestStore);
+            } else {
+                System.clearProperty("pm.ai.test.factoryOperatorUserStore");
+            }
+        }
+    }
+
+    @Test
+    void loginChoicesForFactory_rdpFollowsSessionDepartmentWhenAdminContextDiffers(@TempDir Path tmp)
+            throws Exception {
+        String priorHome = AppPaths.desktopAppHomeDirName();
+        String priorTestStore = System.getProperty("pm.ai.test.factoryOperatorUserStore");
+        Path customDir = tmp.resolve("rdp-user-store");
+        Map<String, String> ui =
+                Map.of(AppPaths.KEY_PM_AI_RDP_OPERATOR_USERS_STORE_DIR, customDir.toString());
+        try {
+            if (priorTestStore != null) {
+                System.clearProperty("pm.ai.test.factoryOperatorUserStore");
+            }
+            AppPaths.setDesktopAppHomeDirName(AppPaths.REMOTE_DESKTOP_APP_HOME_DIR_NAME);
+            FactoryOperatorUserStore.configureForStandaloneLocalOnly(ui, FactorySite.RDP_LAUNCHER);
+            FactoryOperatorUserStore.addRdpDepartment("湖南工場");
+            FactoryOperatorUserStore.selectSessionRdpDepartment("湖南工場");
+            FactoryOperatorUserStore.setAdminRdpDepartmentContext("湖南工場");
+            FactoryOperatorUserStore.addName(FactorySite.RDP_LAUNCHER, "細川");
+            FactoryOperatorUserStore.setAdminRdpDepartmentContext(
+                    FactoryOperatorUserStore.DEFAULT_RDP_DEPARTMENT_LABEL);
+            List<String> choices =
+                    FactoryOperatorUserStore.loginChoicesForFactory(FactorySite.RDP_LAUNCHER);
+            assertTrue(choices.contains("細川"));
+            assertTrue(choices.contains(FactoryOperatorUserStore.GUEST_OPERATOR_NAME));
         } finally {
             AppPaths.setDesktopAppHomeDirName(priorHome);
             if (priorTestStore != null) {

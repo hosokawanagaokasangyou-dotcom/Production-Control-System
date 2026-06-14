@@ -1,10 +1,10 @@
-$ErrorActionPreference = 'Stop'
-Write-Host 'DEPRECATED: PmAiRpaLuncher.exe の単体配布は廃止しました。' -ForegroundColor Yellow
-Write-Host '  操作者 PC: 配台 PMD.exe → リモートデスクトップタブ' -ForegroundColor Yellow
-Write-Host '  接続先 PC: PmAiRdpRemoteLauncher.exe（scripts/build-rdp-remote-launcher.ps1）' -ForegroundColor Yellow
-exit 1
-
 # Remote Desktop RPA Launcher - Windows portable bundle (jpackage + bundled JVM).
+#
+# Output (repo root):
+#   rpa_luncher_release\PmAiRpaLuncher\PmAiRpaLuncher.exe
+#   rpa_luncher_release\PmAiRpaLuncher_portable.zip
+#
+# Dispatch PMD portable: fast_package_app.ps1 -> pm-ai-package-release\
 #
 # Prerequisites:
 #   - Run on Windows (OpenJFX win classifier).
@@ -499,7 +499,7 @@ $canonicalDeployUncForDocs = Resolve-RdpCanonicalDeployDir -Override $CanonicalD
     '',
     'Per-user settings (PC local): %USERPROFILE%\.pm-ai-desktop-rdp\ (session-state, last operator)',
     'Shared DATA (default): \\\\192.168.0.101\\共有フォルダ\\掲示板\\rpa_luncher\\DATA',
-    '  RAP設定.ini, operator users bin — see User Administrator tab.',
+    '  RPA設定.ini, operator users bin — see User Administrator tab.',
     'Launcher deploy folder (remote exe): PM_AI_RDP_LAUNCHER_DEPLOY_DIR = rpa_luncher (not DATA).',
     'Auto-update canonical (default PM_AI_RDP_PORTABLE_BUNDLE_SOURCE_DIR):',
     "  $canonicalDeployUncForDocs",

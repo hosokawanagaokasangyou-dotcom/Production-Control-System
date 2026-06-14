@@ -217,6 +217,14 @@ class AppPathsTest {
     }
 
     @Test
+    void resolveRdpLauncherDeployDir_usesDefaultUncWhenKeyEmpty() {
+        Path deployDir = AppPaths.resolveRdpLauncherDeployDir(Map.of()).normalize();
+        String s = deployDir.toString();
+        assertTrue(s.contains("192.168.0.101"), "host: " + s);
+        assertTrue(s.contains("rpa_luncher"), "leaf: " + s);
+    }
+
+    @Test
     void resolveRdpLauncherDeployDir_prefersExplicitKey(@TempDir Path tmp) {
         Path deploy = tmp.resolve("shared-deploy");
         Map<String, String> ui =
@@ -238,25 +246,22 @@ class AppPathsTest {
     @Test
     void resolveRdpLauncherIni_usesDeployDirBesideRemoteLauncherExe(@TempDir Path fakeRepo)
             throws IOException {
-        Path summary = fakeRepo.resolve("code").resolve(AppPaths.SUMMARY_AI_DISPATCH_XLSX);
-        Files.createDirectories(summary.getParent());
-        Files.writeString(summary, "x");
-        Map<String, String> ui = Map.of(AppPaths.KEY_PM_AI_REPO_ROOT, fakeRepo.toString());
-        Path deployDir = AppPaths.resolveRdpLauncherDeployDir(ui);
-        Path expectedIni =
-                deployDir.resolve("山田_RPA設定.ini").normalize();
+        Path deploy = fakeRepo.resolve("deploy");
+        Files.createDirectories(deploy);
+        Map<String, String> ui =
+                Map.of(AppPaths.KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR, deploy.toString());
+        Path expectedIni = deploy.resolve("山田_RPA設定.ini").normalize();
         assertEquals(expectedIni, AppPaths.resolveRdpLauncherIni(ui, "山田").normalize());
     }
 
     @Test
     void resolveExistingRdpLauncherIni_fallsBackToLegacyRapInDeployDir(@TempDir Path fakeRepo)
             throws IOException {
-        Path summary = fakeRepo.resolve("code").resolve(AppPaths.SUMMARY_AI_DISPATCH_XLSX);
-        Files.createDirectories(summary.getParent());
-        Files.writeString(summary, "x");
-        Map<String, String> ui = Map.of(AppPaths.KEY_PM_AI_REPO_ROOT, fakeRepo.toString());
-        Path deployDir = AppPaths.resolveRdpLauncherDeployDir(ui);
-        Path legacy = deployDir.resolve(AppPaths.RDP_LAUNCHER_INI_BASENAME_LEGACY);
+        Path deploy = fakeRepo.resolve("deploy");
+        Files.createDirectories(deploy);
+        Map<String, String> ui =
+                Map.of(AppPaths.KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR, deploy.toString());
+        Path legacy = deploy.resolve(AppPaths.RDP_LAUNCHER_INI_BASENAME_LEGACY);
         Files.writeString(legacy, "起動プログラム番号=1", StandardCharsets.UTF_8);
         assertEquals(
                 legacy.normalize(),
@@ -264,27 +269,24 @@ class AppPathsTest {
     }
 
     @Test
-    void resolveRdpLauncherPaths_iniInSharedData_deployExeWithSummary(@TempDir Path fakeRepo)
-            throws IOException {
-        Path summary = fakeRepo.resolve("code").resolve(AppPaths.SUMMARY_AI_DISPATCH_XLSX);
-        Files.createDirectories(summary.getParent());
-        Files.writeString(summary, "x");
-        Map<String, String> ui = Map.of(AppPaths.KEY_PM_AI_REPO_ROOT, fakeRepo.toString());
-        Path deployDir = AppPaths.resolveRdpLauncherDeployDir(ui);
-        assertEquals(summary.getParent().normalize(), deployDir.normalize());
+    void resolveRdpLauncherPaths_usesDefaultDeployDirWhenKeyEmpty() {
+        Path deployDir = AppPaths.resolveRdpLauncherDeployDir(Map.of()).normalize();
+        String s = deployDir.toString();
+        assertTrue(s.contains("192.168.0.101"), "host: " + s);
+        assertTrue(s.contains("rpa_luncher"), "leaf: " + s);
         Path expectedIni =
                 deployDir.resolve(AppPaths.RDP_LAUNCHER_INI_BASENAME).normalize();
-        assertEquals(expectedIni, AppPaths.resolveRdpLauncherIni(ui).normalize());
+        assertEquals(expectedIni, AppPaths.resolveRdpLauncherIni(Map.of()).normalize());
         assertEquals(
                 deployDir.resolve(AppPaths.RDP_LAUNCHER_EXE_BASENAME).normalize(),
-                AppPaths.resolveRdpLauncherExe(ui).normalize());
+                AppPaths.resolveRdpLauncherExe(Map.of()).normalize());
         assertTrue(
-                AppPaths.resolveRdpLauncherSharedLogPath(ui)
+                AppPaths.resolveRdpLauncherSharedLogPath(Map.of())
                         .getFileName()
                         .toString()
                         .startsWith("launcher-"));
         assertTrue(
-                AppPaths.resolveRdpLauncherSharedLogPath(ui)
+                AppPaths.resolveRdpLauncherSharedLogPath(Map.of())
                         .normalize()
                         .startsWith(deployDir.normalize()));
     }

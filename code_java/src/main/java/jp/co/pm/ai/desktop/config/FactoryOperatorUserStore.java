@@ -332,6 +332,7 @@ public final class FactoryOperatorUserStore {
             throw new IllegalArgumentException("部署が一覧にありません: " + key);
         }
         sessionRdpDepartmentKey = key;
+        adminRdpDepartmentContextKey = "";
         saveLastSelectedRdpDepartmentLocal(key);
     }
 
@@ -412,11 +413,15 @@ public final class FactoryOperatorUserStore {
         return choices;
     }
 
-    /** ユーザー管理者タブの一覧表示用（RDP は {@link #loginChoicesForFactory}＝ゲスト含む）。 */
+    /** ユーザー管理者タブの一覧表示用（RDP は編集中部署＝{@link #adminRdpDepartmentContextKey()}、ゲスト含む）。 */
     public static List<String> namesForAdminTable(FactorySite site) throws IOException {
         FactorySite factory = site != null ? site : FactorySite.KONAN;
         if (usesRdpDepartmentScope(factory)) {
-            return loginChoicesForFactory(factory);
+            List<String> choices = new ArrayList<>(loadFactoryForAdmin(factory).names());
+            if (!choices.contains(GUEST_OPERATOR_NAME)) {
+                choices.add(GUEST_OPERATOR_NAME);
+            }
+            return choices;
         }
         return namesForFactory(factory);
     }
@@ -1051,9 +1056,23 @@ public final class FactoryOperatorUserStore {
                 parent.resolve(OperatorAladdinCredentialsLauncherJson.FILE_NAME), doc);
     }
 
+    /** 起動時ログイン・PIN 認証・操作者変更ダイアログ向け（RDP はセッション部署のみ）。 */
     private static FactoryOperatorUsers loadFactory(FactorySite site) throws IOException {
         FactorySite effective = site != null ? site : FactorySite.KONAN;
-        if (effective == FactorySite.RDP_LAUNCHER && AppPaths.usesRemoteDesktopAppHome()) {
+        if (usesRdpDepartmentScope(effective)) {
+            String dept = sessionRdpDepartmentKey();
+            if (dept.isBlank()) {
+                return new FactoryOperatorUsers(RDP_LAUNCHER_DEFAULT_NAMES, "");
+            }
+            return ensureRdpDepartment(loadDocument(), dept);
+        }
+        return ensureFactory(loadDocument(), effective);
+    }
+
+    /** ユーザー管理者タブの編集中部署向け（RDP は {@link #adminRdpDepartmentContextKey()} を優先）。 */
+    private static FactoryOperatorUsers loadFactoryForAdmin(FactorySite site) throws IOException {
+        FactorySite effective = site != null ? site : FactorySite.KONAN;
+        if (usesRdpDepartmentScope(effective)) {
             String dept = effectiveRdpDepartmentKey();
             if (dept.isBlank()) {
                 return new FactoryOperatorUsers(RDP_LAUNCHER_DEFAULT_NAMES, "");
@@ -1903,7 +1922,7 @@ public final class FactoryOperatorUserStore {
                     .normalize();
         }
         if (AppPaths.usesRemoteDesktopAppHome() && site == FactorySite.RDP_LAUNCHER) {
-            String dept = effectiveRdpDepartmentKey();
+            String dept = sessionRdpDepartmentKey();
             if (!dept.isBlank()) {
                 return AppPaths.rdpLauncherOperatorLastSelectedPathForDepartment(dept);
             }
