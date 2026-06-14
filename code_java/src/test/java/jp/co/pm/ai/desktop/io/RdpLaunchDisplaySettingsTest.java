@@ -33,8 +33,7 @@ class RdpLaunchDisplaySettingsTest {
                 RdpLaunchDisplaySettings.resolveLaunchDisplay(
                         new RdpLaunchProfile(
                                 1, "", "", "", null, null, false, 100, 100, null),
-                        Map.of(),
-                        false);
+                        Map.of());
         assertEquals(270, display.width());
         assertEquals(200, display.height());
     }
@@ -50,18 +49,18 @@ class RdpLaunchDisplaySettingsTest {
                         AppPaths.KEY_PM_AI_RDP_DESKTOP_HEIGHT,
                         "800");
         LaunchDisplay display =
-                RdpLaunchDisplaySettings.resolveLaunchDisplay(profile, ui, false);
+                RdpLaunchDisplaySettings.resolveLaunchDisplay(profile, ui);
         assertEquals(640, display.width());
         assertEquals(480, display.height());
     }
 
     @Test
-    void resolveLaunchDisplay_embedForcesWindowed() {
+    void resolveLaunchDisplay_profileFullScreen() {
         RdpLaunchProfile profile =
                 new RdpLaunchProfile(1, "", "", "", null, null, true, 1280, 800, null);
         LaunchDisplay display =
-                RdpLaunchDisplaySettings.resolveLaunchDisplay(profile, Map.of(), true);
-        assertFalse(display.fullScreen());
+                RdpLaunchDisplaySettings.resolveLaunchDisplay(profile, Map.of());
+        assertTrue(display.fullScreen());
     }
 
     @Test

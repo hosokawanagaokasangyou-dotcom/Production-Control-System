@@ -8,7 +8,8 @@ internal sealed class LauncherIni
     internal const string OperatorKey = "操作者";
     internal const string DisconnectOnChildExitKey = "終了時RDP切断";
     internal const string SessionEndActionKey = "終了時セッション操作";
-    internal const string DefaultIniFileName = "RAP設定.ini";
+    internal const string DefaultIniFileName = "RPA設定.ini";
+    internal const string LegacyIniFileName = "RAP設定.ini";
     internal const string IniPathEnvVar = "PM_AI_RDP_LAUNCHER_INI";
     internal const string DisconnectOnChildExitEnvVar = "PM_AI_RDP_DISCONNECT_ON_CHILD_EXIT";
     internal const string SessionEndActionEnvVar = "PM_AI_RDP_SESSION_END_ACTION";
@@ -28,6 +29,151 @@ internal sealed class LauncherIni
     internal SessionEndAction SessionEndAction { get; set; } = SessionEndAction.SignOut;
 
     internal Dictionary<int, string> Slots { get; } = new();
+
+    internal static string BuildIniFileNameForOperator(string? operatorName)
+    {
+        var trimmed = operatorName?.Trim() ?? "";
+        if (string.IsNullOrEmpty(trimmed))
+        {
+            return DefaultIniFileName;
+        }
+
+        return SanitizeOperatorForIniFilename(trimmed) + "_" + DefaultIniFileName;
+    }
+
+    internal static string BuildLegacyIniFileNameForOperator(string? operatorName)
+    {
+        var trimmed = operatorName?.Trim() ?? "";
+        if (string.IsNullOrEmpty(trimmed))
+        {
+            return LegacyIniFileName;
+        }
+
+        return SanitizeOperatorForIniFilename(trimmed) + "_" + LegacyIniFileName;
+    }
+
+    internal static string SanitizeOperatorForIniFilename(string operatorName)
+    {
+        if (string.IsNullOrWhiteSpace(operatorName))
+        {
+            return "operator";
+        }
+
+        var s = operatorName.Trim();
+        foreach (var ch in new[] { '\\', '/', ':', '*', '?', '"', '<', '>', '|' })
+        {
+            s = s.Replace(ch, '_');
+        }
+
+        while (s.EndsWith('.') || s.EndsWith(' '))
+        {
+            s = s[..^1].TrimEnd();
+        }
+
+        return string.IsNullOrEmpty(s) ? "operator" : s;
+    }
+
+    /// exe と同階層の ini を解決する（操作者名あり: {操作者}_RPA設定.ini、なし: RPA設定.ini。レガシー RAP設定.ini / DATA も試行）。
+    internal static string ResolveIniPathInDeployLayout(string? exeDir, string? operatorName)
+    {
+        var directory = exeDir;
+        if (string.IsNullOrWhiteSpace(directory))
+        {
+            directory = AppContext.BaseDirectory;
+        }
+
+        if (string.IsNullOrWhiteSpace(directory))
+        {
+            directory = Environment.CurrentDirectory;
+        }
+
+        var op = operatorName?.Trim() ?? "";
+        if (!string.IsNullOrEmpty(op))
+        {
+            var perUser = Path.Combine(directory, BuildIniFileNameForOperator(op));
+            if (File.Exists(perUser))
+            {
+                return perUser;
+            }
+
+            var perUserLegacy = Path.Combine(directory, BuildLegacyIniFileNameForOperator(op));
+            if (File.Exists(perUserLegacy))
+            {
+                return perUserLegacy;
+            }
+
+            var dataPerUser = Path.Combine(directory, "DATA", BuildIniFileNameForOperator(op));
+            if (File.Exists(dataPerUser))
+            {
+                return dataPerUser;
+            }
+
+            var dataPerUserLegacy =
+                Path.Combine(directory, "DATA", BuildLegacyIniFileNameForOperator(op));
+            if (File.Exists(dataPerUserLegacy))
+            {
+                return dataPerUserLegacy;
+            }
+
+            return perUser;
+        }
+
+        var sameDirRpa = Path.Combine(directory, DefaultIniFileName);
+        if (File.Exists(sameDirRpa))
+        {
+            return sameDirRpa;
+        }
+
+        var sameDirRap = Path.Combine(directory, LegacyIniFileName);
+        if (File.Exists(sameDirRap))
+        {
+            return sameDirRap;
+        }
+
+        var dataRpa = Path.Combine(directory, "DATA", DefaultIniFileName);
+        if (File.Exists(dataRpa))
+        {
+            return dataRpa;
+        }
+
+        var dataRap = Path.Combine(directory, "DATA", LegacyIniFileName);
+        if (File.Exists(dataRap))
+        {
+            return dataRap;
+        }
+
+        return sameDirRpa;
+    }
+
+    internal static string? TryParseOperatorArgument(string[] args)
+    {
+        for (var i = 0; i < args.Length; i++)
+        {
+            var arg = args[i];
+            if (arg == "--ini" && i + 1 < args.Length)
+            {
+                i++;
+                continue;
+            }
+
+            if (arg.StartsWith("--ini=", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (arg.StartsWith("--", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            if (!string.IsNullOrWhiteSpace(arg))
+            {
+                return arg.Trim();
+            }
+        }
+
+        return null;
+    }
 
     internal static LauncherIni Load(string path)
     {

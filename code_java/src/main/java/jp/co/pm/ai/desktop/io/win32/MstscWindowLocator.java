@@ -1,97 +1,174 @@
 package jp.co.pm.ai.desktop.io.win32;
 
-import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Locale;
 import java.util.OptionalLong;
-import java.util.concurrent.atomic.AtomicReference;
 
+import com.sun.jna.Pointer;
 import com.sun.jna.platform.win32.User32;
 import com.sun.jna.platform.win32.WinDef.HWND;
-import com.sun.jna.platform.win32.WinUser;
 import com.sun.jna.ptr.IntByReference;
 
 import jp.co.pm.ai.desktop.io.RemoteDesktopLauncher;
 
-/** {@code mstsc.exe} のクライアント HWND を PID から特定する。 */
+/** {@code mstsc.exe} セッションウィンドウ HWND の探索。 */
 public final class MstscWindowLocator {
 
-    private static final String CLIENT_CLASS = "TscShellContainerClass";
-    private static final Duration DEFAULT_TIMEOUT = Duration.ofSeconds(90);
-    private static final Duration POLL = Duration.ofMillis(500);
+    private static final int SCORE_PID_MATCH = 100;
+    private static final int SCORE_RDP_TITLE = 40;
+    private static final int SCORE_CLIENT_SURFACE = 50;
 
     private MstscWindowLocator() {}
 
-    public static OptionalLong findClientWindow(long processId) {
-        return findClientWindow(processId, DEFAULT_TIMEOUT);
-    }
-
-    public static OptionalLong findClientWindow(long processId, Duration timeout) {
-        if (!RemoteDesktopLauncher.isSupportedPlatform() || processId <= 0) {
+    public static OptionalLong findSessionWindow(long processIdHint) {
+        java.util.Optional<MstscCaptureTarget> target = findCaptureTarget(processIdHint);
+        if (target.isEmpty()) {
             return OptionalLong.empty();
         }
-        long deadline = System.nanoTime() + timeout.toNanos();
-        while (System.nanoTime() < deadline) {
-            OptionalLong found = scanOnce(processId);
-            if (found.isPresent()) {
-                return found;
-            }
-            try {
-                Thread.sleep(POLL.toMillis());
-            } catch (InterruptedException ex) {
-                Thread.currentThread().interrupt();
-                return OptionalLong.empty();
-            }
+        MstscCaptureTarget t = target.get();
+        long hwnd = t.frameHwnd() > 0L ? t.frameHwnd() : t.clientHwnd();
+        return hwnd > 0L ? OptionalLong.of(hwnd) : OptionalLong.empty();
+    }
+
+    /** プレビュー用: 外枠 HWND を正とし、クライアントはフォールバック。 */
+    public static java.util.Optional<MstscCaptureTarget> findCaptureTarget(long processIdHint) {
+        if (!RemoteDesktopLauncher.isSupportedPlatform()) {
+            return java.util.Optional.empty();
         }
-        return OptionalLong.empty();
+        List<Candidate> candidates = collectTopLevelCandidates();
+        Candidate best = pickBest(candidates, processIdHint);
+        if (best == null) {
+            return java.util.Optional.empty();
+        }
+        long frame = best.handle();
+        long client = findClientDeep(new HWND(Pointer.createConstant(frame)));
+        if (isClientSurfaceClass(best.className())) {
+            return java.util.Optional.of(new MstscCaptureTarget(frame, frame));
+        }
+        return java.util.Optional.of(
+                new MstscCaptureTarget(frame, client > 0L ? client : frame));
     }
 
-    private static OptionalLong scanOnce(long processId) {
-        AtomicReference<Long> best = new AtomicReference<>();
-        WinUser.WNDENUMPROC callback =
-                (hWnd, lParam) -> {
-                    if (!User32.INSTANCE.IsWindowVisible(hWnd)) {
+    static boolean isClientSurfaceClass(String className) {
+        return className != null && className.equalsIgnoreCase("TscShellContainerClass");
+    }
+
+    static boolean looksLikeRdpSessionTitle(String title) {
+        if (title == null || title.isBlank()) {
+            return false;
+        }
+        String t = title.toLowerCase(Locale.ROOT);
+        if (t.contains("セキュリティ") || t.contains("security")) {
+            return false;
+        }
+        return t.contains("remote desktop")
+                || t.contains("リモート デスクトップ")
+                || t.contains("リモートデスクトップ");
+    }
+
+    private static List<Candidate> collectTopLevelCandidates() {
+        List<Candidate> out = new ArrayList<>();
+        User32 user32 = User32.INSTANCE;
+        user32.EnumWindows(
+                (hWnd, data) -> {
+                    if (isNullHwnd(hWnd) || !user32.IsWindowVisible(hWnd)) {
                         return true;
                     }
-                    char[] className = new char[256];
-                    User32.INSTANCE.GetClassName(hWnd, className, className.length);
-                    String cls = NativeString.fromCharArray(className);
-                    if (!CLIENT_CLASS.equalsIgnoreCase(cls)) {
-                        return true;
-                    }
+                    char[] classBuf = new char[256];
+                    user32.GetClassName(hWnd, classBuf, classBuf.length);
+                    String className = NativeString.fromCharArray(classBuf);
+                    char[] titleBuf = new char[512];
+                    user32.GetWindowText(hWnd, titleBuf, titleBuf.length);
+                    String title = NativeString.fromCharArray(titleBuf);
                     IntByReference pidRef = new IntByReference();
-                    User32.INSTANCE.GetWindowThreadProcessId(hWnd, pidRef);
-                    if (pidRef.getValue() != (int) processId) {
-                        return true;
+                    user32.GetWindowThreadProcessId(hWnd, pidRef);
+                    long handle = Pointer.nativeValue(hWnd.getPointer());
+                    int score =
+                            scoreCandidate(title, className, isClientSurfaceClass(className));
+                    if (score > 0) {
+                        out.add(new Candidate(handle, pidRef.getValue(), className, title, score));
                     }
-                    best.set(PointerUtil.handleToLong(hWnd));
-                    return false;
-                };
-        User32.INSTANCE.EnumWindows(callback, null);
-        Long handle = best.get();
-        return handle != null && handle > 0 ? OptionalLong.of(handle) : OptionalLong.empty();
+                    return true;
+                },
+                null);
+        return out;
     }
 
-    /** Win32 文字列ユーティリティ。 */
-    static final class NativeString {
+    static int scoreCandidate(String title, String className, boolean clientSurface) {
+        int score = 0;
+        if (clientSurface || "TscShellContainerClass".equalsIgnoreCase(className)) {
+            score += SCORE_CLIENT_SURFACE;
+        }
+        if (looksLikeRdpSessionTitle(title)) {
+            score += SCORE_RDP_TITLE;
+        }
+        if ("#32770".equalsIgnoreCase(className) && looksLikeRdpSessionTitle(title)) {
+            score += 20;
+        }
+        return score;
+    }
+
+    private static Candidate pickBest(List<Candidate> candidates, long processIdHint) {
+        return candidates.stream()
+                .map(
+                        c -> {
+                            int score = c.score();
+                            if (processIdHint > 0 && c.processId() == processIdHint) {
+                                score += SCORE_PID_MATCH;
+                            }
+                            return new Candidate(
+                                    c.handle(), c.processId(), c.className(), c.title(), score);
+                        })
+                .filter(c -> c.score() > 0)
+                .max(Comparator.comparingInt(Candidate::score))
+                .orElse(null);
+    }
+
+    private static long findClientDeep(HWND parent) {
+        if (isNullHwnd(parent)) {
+            return 0L;
+        }
+        IntByReference found = new IntByReference();
+        User32.INSTANCE.EnumChildWindows(
+                parent,
+                (child, data) -> {
+                    char[] classBuf = new char[256];
+                    User32.INSTANCE.GetClassName(child, classBuf, classBuf.length);
+                    String className = NativeString.fromCharArray(classBuf);
+                    if (isClientSurfaceClass(className)) {
+                        found.setValue((int) Pointer.nativeValue(child.getPointer()));
+                        return false;
+                    }
+                    long nested = findClientDeep(child);
+                    if (nested > 0L) {
+                        found.setValue((int) nested);
+                        return false;
+                    }
+                    return true;
+                },
+                null);
+        return found.getValue() & 0xFFFFFFFFL;
+    }
+
+    private static boolean isNullHwnd(HWND hwnd) {
+        return hwnd == null || hwnd.getPointer() == null || Pointer.nativeValue(hwnd.getPointer()) == 0L;
+    }
+
+    private record Candidate(
+            long handle, int processId, String className, String title, int score) {}
+
+    /** char[] → String（UTF-16 先頭 NUL まで）。 */
+    private static final class NativeString {
         private NativeString() {}
 
-        static String fromCharArray(char[] chars) {
+        static String fromCharArray(char[] buf) {
             int len = 0;
-            while (len < chars.length && chars[len] != 0) {
+            while (len < buf.length && buf[len] != 0) {
                 len++;
             }
-            return new String(chars, 0, len);
-        }
-    }
-
-    /** HWND → long。 */
-    static final class PointerUtil {
-        private PointerUtil() {}
-
-        static long handleToLong(HWND hWnd) {
-            if (hWnd == null || hWnd.getPointer() == null) {
-                return 0L;
-            }
-            return com.sun.jna.Pointer.nativeValue(hWnd.getPointer());
+            return new String(buf, 0, len);
         }
     }
 }

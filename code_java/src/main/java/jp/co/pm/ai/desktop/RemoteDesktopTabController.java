@@ -12,6 +12,7 @@ import javafx.scene.layout.VBox;
 import javafx.stage.Window;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
+import jp.co.pm.ai.desktop.io.RdpPreviewSettings;
 import jp.co.pm.ai.desktop.reconciliation.RequestFormRemoteDesktopPane;
 
 /** メインシェル「リモートデスクトップ」タブ。 */
@@ -19,7 +20,7 @@ public final class RemoteDesktopTabController {
 
     private static final String TAB_LOADING_STYLE_CLASS = "request-form-tab-loading";
 
-    private MainShellController shell;
+    private DesktopShellHost shell;
     private boolean contentBuilt;
 
     @FXML
@@ -30,7 +31,7 @@ public final class RemoteDesktopTabController {
         // 初回選択まで遅延構築
     }
 
-    void bindShell(MainShellController shell) {
+    void bindShell(DesktopShellHost shell) {
         this.shell = shell;
     }
 
@@ -106,9 +107,11 @@ public final class RemoteDesktopTabController {
                                                 AppPaths.KEY_PM_AI_RDP_COMPANION_PROGRAM_ARGS, args);
                                     }
                                 },
-                                values -> {
-                                    if (shell != null && values != null) {
-                                        values.forEach(shell::updateEnvTabValue);
+                                previewFlag -> {
+                                    if (shell != null) {
+                                        shell.updateEnvTabValue(
+                                                RdpPreviewSettings.KEY_PM_AI_RDP_PREVIEW_IN_TAB,
+                                                previewFlag);
                                     }
                                 },
                                 profileNumber -> {
@@ -116,6 +119,12 @@ public final class RemoteDesktopTabController {
                                         shell.updateEnvTabValue(
                                                 AppPaths.KEY_PM_AI_RDP_LAUNCH_PROFILE_NUMBER,
                                                 String.valueOf(profileNumber));
+                                    }
+                                },
+                                path -> {
+                                    if (shell != null) {
+                                        shell.updateEnvTabValue(
+                                                AppPaths.KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR, path);
                                     }
                                 },
                                 msg -> {

@@ -36,6 +36,9 @@ public final class FactoryOperatorUserPdfExporter {
     private FactoryOperatorUserPdfExporter() {}
 
     public static Path resolveOutputPath(Map<String, String> ui, FactorySite site) {
+        if (AppPaths.usesRemoteDesktopAppHome()) {
+            return AppPaths.resolveRdpLauncherOperatorUsersPdfPath(ui);
+        }
         return AppPaths.factoryOperatorUsersPdfPath(ui, site);
     }
 

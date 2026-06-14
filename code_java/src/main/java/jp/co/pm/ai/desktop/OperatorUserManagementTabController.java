@@ -1,5 +1,6 @@
 package jp.co.pm.ai.desktop;
 
+import java.awt.Desktop;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -8,6 +9,7 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import javafx.beans.property.SimpleStringProperty;
@@ -27,7 +29,11 @@ import javafx.scene.control.PasswordField;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextField;
+import javafx.scene.control.SplitPane;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
+import javafx.stage.DirectoryChooser;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.config.FactoryOperatorUserStore;
@@ -80,14 +86,93 @@ public final class OperatorUserManagementTabController {
         }
     }
 
-    private MainShellController shell;
+    private DesktopShellHost shell;
     private boolean suppressManagedFactoryListener;
+    private boolean suppressManagedDepartmentListener;
+
+    @FXML
+    private Label introDescriptionLabel;
+
+    @FXML
+    private HBox managedFactoryRow;
+
+    @FXML
+    private SplitPane departmentUserSplitPane;
+
+    @FXML
+    private VBox departmentPane;
+
+    @FXML
+    private VBox userListPane;
+
+    @FXML
+    private ListView<String> departmentListView;
+
+    @FXML
+    private Label departmentUsersSectionLabel;
+
+    @FXML
+    private Label backupSectionTitleLabel;
+
+    @FXML
+    private Label backupDescriptionLabel;
 
     @FXML
     private ComboBox<FactorySite> managedFactoryCombo;
 
     @FXML
+    private TextField newDepartmentField;
+
+    @FXML
+    private Button addDepartmentButton;
+
+    @FXML
+    private Button removeDepartmentButton;
+
+    @FXML
     private Label factoryLabel;
+
+    @FXML
+    private VBox operatorStoreSection;
+
+    @FXML
+    private TextField operatorStoreDirField;
+
+    @FXML
+    private Button browseOperatorStoreDirButton;
+
+    @FXML
+    private Button applyOperatorStoreDirButton;
+
+    @FXML
+    private Button openOperatorStoreDirButton;
+
+    @FXML
+    private Button resetOperatorStoreDirButton;
+
+    @FXML
+    private Label operatorStorePathLabel;
+
+    @FXML
+    private TextField launcherDeployDirField;
+
+    @FXML
+    private Button browseLauncherDeployDirButton;
+
+    @FXML
+    private Button applyLauncherDeployDirButton;
+
+    @FXML
+    private Button openLauncherDeployDirButton;
+
+    @FXML
+    private Button resetLauncherDeployDirButton;
+
+    @FXML
+    private Label launcherDeployWarningLabel;
+
+    @FXML
+    private Label launcherDeployPathLabel;
 
     @FXML
     private Label sessionOperatorLabel;
@@ -155,6 +240,8 @@ public final class OperatorUserManagementTabController {
     @FXML
     private void initialize() {
         if (operatorTableView != null) {
+            // VBox.vgrow=ALWAYS 時に fixedCellSize 未設定だと行がテーブル高さまで伸び、1 行しか見えない。
+            operatorTableView.setFixedCellSize(28.0);
             TableColumn<OperatorRow, String> nameCol = new TableColumn<>("名前");
             nameCol.setCellValueFactory(row -> row.getValue().nameProperty());
             nameCol.setPrefWidth(180);
@@ -189,6 +276,10 @@ public final class OperatorUserManagementTabController {
                             });
         }
         wireManagedFactoryCombo();
+        wireDepartmentListView();
+        if (departmentListView != null) {
+            departmentListView.setFixedCellSize(28.0);
+        }
         refreshPresentation();
     }
 
@@ -200,10 +291,154 @@ public final class OperatorUserManagementTabController {
         syncManagedFactoryComboToAppFactory();
     }
 
+    private void wireDepartmentListView() {
+        if (departmentListView == null) {
+            return;
+        }
+        departmentListView.getSelectionModel()
+                .selectedItemProperty()
+                .addListener(
+                        (obs, oldVal, newVal) -> {
+                            if (suppressManagedDepartmentListener || newVal == null || newVal.isBlank()) {
+                                return;
+                            }
+                            FactoryOperatorUserStore.setAdminRdpDepartmentContext(newVal);
+                            updateDepartmentUsersSectionLabel(newVal);
+                            refreshOperatorTableOnly();
+                        });
+    }
+
+    private void syncDepartmentListView() {
+        if (departmentListView == null || !rdpLauncherAppMode()) {
+            return;
+        }
+        try {
+            List<String> keys = FactoryOperatorUserStore.listRdpDepartmentKeys();
+            String editing = FactoryOperatorUserStore.adminRdpDepartmentContextKey();
+            if (editing.isBlank()) {
+                editing = FactoryOperatorUserStore.sessionRdpDepartmentKey();
+            }
+            if (editing.isBlank() && !keys.isEmpty()) {
+                editing = keys.get(0);
+                FactoryOperatorUserStore.setAdminRdpDepartmentContext(editing);
+            }
+            suppressManagedDepartmentListener = true;
+            try {
+                departmentListView.getItems().setAll(keys);
+                if (!editing.isBlank() && keys.contains(editing)) {
+                    departmentListView.getSelectionModel().select(editing);
+                } else if (!keys.isEmpty()) {
+                    departmentListView.getSelectionModel().select(0);
+                    editing = keys.get(0);
+                }
+            } finally {
+                suppressManagedDepartmentListener = false;
+            }
+            updateDepartmentUsersSectionLabel(editing);
+        } catch (IOException ex) {
+            departmentListView.getItems().clear();
+            if (shell != null) {
+                shell.appendLog(
+                        "[operator-user] 部署一覧読込失敗: "
+                                + (ex.getMessage() != null ? ex.getMessage() : ex.toString()));
+            }
+        }
+        refreshOperatorTableOnly();
+    }
+
+    private void ensureOperatorStoreConfigured(FactorySite site) {
+        if (shell != null) {
+            FactoryOperatorUserStore.configureForCurrentApp(shell.snapshotUiEnv(), site);
+        } else if (rdpLauncherAppMode()) {
+            FactoryOperatorUserStore.configureForStandaloneLocalOnly(Map.of(), FactorySite.RDP_LAUNCHER);
+        } else {
+            FactoryOperatorUserStore.configureForCurrentApp(Map.of(), site);
+        }
+    }
+
+    private void updateDepartmentUsersSectionLabel(String departmentKey) {
+        if (departmentUsersSectionLabel == null) {
+            return;
+        }
+        if (!rdpLauncherAppMode() || departmentKey == null || departmentKey.isBlank()) {
+            departmentUsersSectionLabel.setText("ユーザー一覧（起動時の選択肢）");
+            return;
+        }
+        departmentUsersSectionLabel.setText("ユーザー一覧（部署: " + departmentKey + "）");
+    }
+
     private FactorySite effectiveAppFactory() {
-        return shell != null
-                ? GlobalInitSettingTarget.loadEffective(shell.snapshotUiEnv())
+        if (shell != null) {
+            return FactoryOperatorUserStore.operatorScopeForCurrentApp(shell.snapshotUiEnv(), null);
+        }
+        return AppPaths.usesRemoteDesktopAppHome()
+                ? FactorySite.RDP_LAUNCHER
                 : GlobalInitSettingTarget.load();
+    }
+
+    private boolean rdpLauncherAppMode() {
+        return AppPaths.usesRemoteDesktopAppHome();
+    }
+
+    private void applyRdpLauncherPresentationHints() {
+        boolean rdp = rdpLauncherAppMode();
+        if (managedFactoryRow != null) {
+            managedFactoryRow.setVisible(!rdp);
+            managedFactoryRow.setManaged(!rdp);
+        }
+        if (departmentPane != null) {
+            departmentPane.setVisible(rdp);
+            departmentPane.setManaged(rdp);
+        }
+        if (departmentUserSplitPane != null) {
+            departmentUserSplitPane.setDividerPositions(rdp ? 0.18 : 0.0);
+        }
+        if (departmentUserSplitPane != null) {
+            VBox.setVgrow(departmentUserSplitPane, Priority.ALWAYS);
+        }
+        if (userListPane != null) {
+            VBox.setVgrow(userListPane, Priority.ALWAYS);
+        }
+        if (departmentListView != null) {
+            VBox.setVgrow(departmentListView, Priority.ALWAYS);
+        }
+        if (operatorStoreSection != null) {
+            operatorStoreSection.setVisible(rdp);
+            operatorStoreSection.setManaged(rdp);
+        }
+        if (introDescriptionLabel != null) {
+            introDescriptionLabel.setText(
+                    rdp
+                            ? "リモートデスクトップRPAランチャー専用の操作者名と PIN（4～10 桁）を管理します。"
+                                    + "配台システム（工程管理 AI 配台）のユーザー一覧・UNC 正本とは完全に分離されます。"
+                                    + "保存フォルダは下で変更できます（UNC 可）。"
+                                    + "左ペインで部署を選び、右ペインでユーザー・保存先・バックアップを管理します。"
+                                    + "初期状態はゲストのみ（PIN 不要）。"
+                                    + "ランチャー exe の転送先は下で設定できます（UNC 可）。"
+                            : "工場ごとに配台システム起動時の名前選択肢と PIN（4～10 桁）を管理します。"
+                                    + "管理者は一覧の「PIN（管理者閲覧）」列で各ユーザーの PIN を確認でき、"
+                                    + "PDF 出力で工場別のユーザー情報を保存できます。"
+                                    + "編集対象は環境変数で設定された利用工場（湖南／国分）に固定されます。");
+        }
+        if (backupSectionTitleLabel != null) {
+            backupSectionTitleLabel.setText(
+                    rdp
+                            ? "ユーザー管理バイナリのバックアップ（世代管理・RDP ランチャー専用）"
+                            : "ユーザー管理バイナリのバックアップ（世代管理・全工場共通）");
+        }
+        if (backupDescriptionLabel != null) {
+            backupDescriptionLabel.setText(
+                    rdp
+                            ? "手動で "
+                                    + AppPaths.RDP_LAUNCHER_OPERATOR_USERS_BIN
+                                    + " のバックアップを取り、一覧から選択して復元できます（管理者向け）。"
+                                    + "配台システムの factory-operator-users.bin とは別ファイルです。"
+                            : "手動で factory-operator-users.bin（湖南・国分のユーザー情報を含む）のバックアップを取り、"
+                                    + "一覧から選択して復元できます（管理者向け）。");
+        }
+        if (resetDefaultsButton != null) {
+            resetDefaultsButton.setText(rdp ? "ゲストのみに戻す" : "既定4名に戻す");
+        }
     }
 
     private void syncManagedFactoryComboToAppFactory() {
@@ -224,13 +459,285 @@ public final class OperatorUserManagementTabController {
         return effectiveAppFactory();
     }
 
-    void bindShell(MainShellController shell) {
+    void bindShell(DesktopShellHost shell) {
         this.shell = shell;
         refreshPresentation();
     }
 
     void refreshPresentationQuietly() {
         refreshPresentation();
+    }
+
+    @FXML
+    private void onBrowseOperatorStoreDirAction() {
+        if (shell == null || shell.primaryStageForDialogs() == null) {
+            return;
+        }
+        DirectoryChooser chooser = new DirectoryChooser();
+        chooser.setTitle("ユーザー管理ファイルの保存フォルダ");
+        Path current = AppPaths.resolveRdpLauncherOperatorUsersStoreDir(shell.snapshotUiEnv());
+        if (Files.isDirectory(current)) {
+            chooser.setInitialDirectory(current.toFile());
+        }
+        java.io.File chosen = chooser.showDialog(shell.primaryStageForDialogs());
+        if (chosen == null) {
+            return;
+        }
+        if (operatorStoreDirField != null) {
+            operatorStoreDirField.setText(chosen.getAbsolutePath());
+        }
+        applyOperatorStoreDir(chosen.getAbsolutePath());
+    }
+
+    @FXML
+    private void onApplyOperatorStoreDirAction() {
+        if (operatorStoreDirField == null) {
+            return;
+        }
+        applyOperatorStoreDir(operatorStoreDirField.getText());
+    }
+
+    @FXML
+    private void onOpenOperatorStoreDirAction() {
+        if (shell == null) {
+            return;
+        }
+        Path dir = AppPaths.resolveRdpLauncherOperatorUsersStoreDir(shell.snapshotUiEnv());
+        if (!Files.isDirectory(dir)) {
+            warn("フォルダを開く", "フォルダが存在しません: " + dir);
+            return;
+        }
+        try {
+            if (Desktop.isDesktopSupported()) {
+                Desktop.getDesktop().open(dir.toFile());
+            }
+        } catch (IOException ex) {
+            warn("フォルダを開く", ex.getMessage() != null ? ex.getMessage() : ex.toString());
+        }
+    }
+
+    @FXML
+    private void onResetOperatorStoreDirAction() {
+        if (shell == null) {
+            return;
+        }
+        shell.updateEnvTabValue(AppPaths.KEY_PM_AI_RDP_OPERATOR_USERS_STORE_DIR, "");
+        syncOperatorStoreDirFields();
+        ensureOperatorStoreConfigured(effectiveAppFactory());
+        refreshPresentation();
+        shell.appendLog(
+                "[operator-user] ユーザー管理の保存フォルダを既定（"
+                        + AppPaths.resolveDesktopAppHomeDir()
+                        + "）に戻しました。");
+    }
+
+    private void applyOperatorStoreDir(String rawPath) {
+        if (shell == null) {
+            return;
+        }
+        String path = rawPath != null ? rawPath.strip() : "";
+        shell.updateEnvTabValue(AppPaths.KEY_PM_AI_RDP_OPERATOR_USERS_STORE_DIR, path);
+        syncOperatorStoreDirFields();
+        ensureOperatorStoreConfigured(effectiveAppFactory());
+        refreshPresentation();
+        shell.appendLog(
+                "[operator-user] ユーザー管理の保存先を更新: "
+                        + FactoryOperatorUserStore.storePath());
+    }
+
+    private void syncOperatorStoreDirFields() {
+        if (shell == null) {
+            return;
+        }
+        Map<String, String> ui = shell.snapshotUiEnv();
+        String configured =
+                ui.getOrDefault(AppPaths.KEY_PM_AI_RDP_OPERATOR_USERS_STORE_DIR, "").strip();
+        if (operatorStoreDirField != null) {
+            operatorStoreDirField.setText(
+                    configured.isEmpty()
+                            ? AppPaths.resolveDesktopAppHomeDir().toString()
+                            : configured);
+        }
+        if (operatorStorePathLabel != null) {
+            String dept = FactoryOperatorUserStore.sessionRdpDepartmentKey();
+            String lastOpPath =
+                    dept.isBlank()
+                            ? AppPaths.rdpLauncherOperatorLastSelectedPath().toString()
+                            : AppPaths.rdpLauncherOperatorLastSelectedPathForDepartment(dept).toString();
+            operatorStorePathLabel.setText(
+                    "正本ファイル: "
+                            + AppPaths.resolveRdpLauncherOperatorUsersStorePath(ui)
+                            + "　前回部署（ローカル）: "
+                            + AppPaths.rdpLauncherOperatorLastDepartmentPath()
+                            + "　前回操作者（ローカル）: "
+                            + lastOpPath);
+        }
+    }
+
+    @FXML
+    private void onBrowseLauncherDeployDirAction() {
+        if (shell == null || shell.primaryStageForDialogs() == null) {
+            return;
+        }
+        DirectoryChooser chooser = new DirectoryChooser();
+        chooser.setTitle("ランチャープログラム転送先（配備先フォルダ）");
+        Map<String, String> ui = shell.snapshotUiEnv();
+        Path current = AppPaths.resolveRdpLauncherDeployDir(ui);
+        if (Files.isDirectory(current)) {
+            chooser.setInitialDirectory(current.toFile());
+        }
+        java.io.File chosen = chooser.showDialog(shell.primaryStageForDialogs());
+        if (chosen == null) {
+            return;
+        }
+        if (launcherDeployDirField != null) {
+            launcherDeployDirField.setText(chosen.getAbsolutePath());
+        }
+        applyLauncherDeployDir(chosen.getAbsolutePath());
+    }
+
+    @FXML
+    private void onApplyLauncherDeployDirAction() {
+        if (launcherDeployDirField == null) {
+            return;
+        }
+        applyLauncherDeployDir(launcherDeployDirField.getText());
+    }
+
+    @FXML
+    private void onOpenLauncherDeployDirAction() {
+        if (shell == null) {
+            return;
+        }
+        Path dir = AppPaths.resolveRdpLauncherDeployDir(shell.snapshotUiEnv());
+        if (!Files.isDirectory(dir)) {
+            warn("フォルダを開く", "フォルダが存在しません: " + dir);
+            return;
+        }
+        try {
+            if (Desktop.isDesktopSupported()) {
+                Desktop.getDesktop().open(dir.toFile());
+            }
+        } catch (IOException ex) {
+            warn("フォルダを開く", ex.getMessage() != null ? ex.getMessage() : ex.toString());
+        }
+    }
+
+    @FXML
+    private void onResetLauncherDeployDirAction() {
+        if (shell == null) {
+            return;
+        }
+        shell.updateEnvTabValue(AppPaths.KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR, "");
+        syncLauncherDeployDirFields();
+        shell.appendLog(
+                "[operator-user] ランチャー転送先を環境変数未設定（自動解決）に戻しました。");
+    }
+
+    private void applyLauncherDeployDir(String rawPath) {
+        if (shell == null) {
+            return;
+        }
+        String path = rawPath != null ? rawPath.strip() : "";
+        shell.updateEnvTabValue(AppPaths.KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR, path);
+        syncLauncherDeployDirFields();
+        shell.appendLog(
+                "[operator-user] ランチャー転送先を更新: "
+                        + AppPaths.resolveRdpLauncherDeployDir(shell.snapshotUiEnv()));
+    }
+
+    private void syncLauncherDeployDirFields() {
+        if (shell == null) {
+            return;
+        }
+        Map<String, String> ui = shell.snapshotUiEnv();
+        String configured =
+                ui.getOrDefault(AppPaths.KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR, "").strip();
+        Path resolved = AppPaths.resolveRdpLauncherDeployDir(ui);
+        if (launcherDeployDirField != null) {
+            launcherDeployDirField.setText(
+                    configured.isEmpty() ? resolved.toString() : configured);
+        }
+        if (launcherDeployWarningLabel != null) {
+            if (RemoteDesktopStandaloneBootstrap.isActivated() && configured.isEmpty()) {
+                launcherDeployWarningLabel.setText(
+                        "配布用ランチャーでは転送先フォルダの明示指定が必要です。参照…から共有フォルダを選んで適用してください。");
+            } else {
+                launcherDeployWarningLabel.setText("");
+            }
+        }
+        if (launcherDeployPathLabel != null) {
+            launcherDeployPathLabel.setText(
+                    "転送先: "
+                            + resolved
+                            + "　ランチャー exe: "
+                            + AppPaths.resolveRdpLauncherExe(ui)
+                            + "　RPA設定.ini: "
+                            + AppPaths.resolveRdpLauncherIni(
+                                    ui, FactoryOperatorUserStore.sessionOperatorName()));
+        }
+    }
+
+    @FXML
+    private void onAddDepartmentAction() {
+        if (shell == null) {
+            return;
+        }
+        String label =
+                newDepartmentField != null && newDepartmentField.getText() != null
+                        ? newDepartmentField.getText().strip()
+                        : "";
+        if (label.isBlank()) {
+            warn("部署追加", "部署名を入力してください。");
+            return;
+        }
+        try {
+            FactoryOperatorUserStore.addRdpDepartment(label);
+            if (newDepartmentField != null) {
+                newDepartmentField.clear();
+            }
+            FactoryOperatorUserStore.setAdminRdpDepartmentContext(label);
+            refreshPresentation();
+            shell.appendLog("[operator-user] 部署を追加: " + label);
+        } catch (Exception ex) {
+            warn("部署追加", ex.getMessage() != null ? ex.getMessage() : ex.toString());
+        }
+    }
+
+    @FXML
+    private void onRemoveDepartmentAction() {
+        if (shell == null || departmentListView == null) {
+            return;
+        }
+        String key = departmentListView.getSelectionModel().getSelectedItem();
+        if (key == null || key.isBlank()) {
+            warn("部署削除", "削除する部署を選んでください。");
+            return;
+        }
+        Alert confirm = new Alert(AlertType.CONFIRMATION);
+        confirm.setTitle("部署削除の確認");
+        confirm.setHeaderText(null);
+        confirm.setContentText(
+                "部署「" + key + "」とそのユーザー一覧を削除しますか？\nこの部署の操作者は次回起動時に再選択が必要です。");
+        if (shell.primaryStageForDialogs() != null) {
+            confirm.initOwner(shell.primaryStageForDialogs());
+        }
+        Optional<ButtonType> ans = confirm.showAndWait();
+        if (ans.isEmpty() || ans.get() != ButtonType.OK) {
+            return;
+        }
+        try {
+            FactoryOperatorUserStore.removeRdpDepartment(key);
+            FactoryOperatorUserStore.setAdminRdpDepartmentContext("");
+            refreshPresentation();
+            shell.appendLog("[operator-user] 部署を削除: " + key);
+            if (FactoryOperatorUserStore.sessionRdpDepartmentKey().isBlank()
+                    && FactoryOperatorUserStore.sessionOperatorName().isBlank()) {
+                shell.requireOperatorSelectionForFactory(FactorySite.RDP_LAUNCHER, false);
+            }
+        } catch (Exception ex) {
+            warn("部署削除", ex.getMessage() != null ? ex.getMessage() : ex.toString());
+        }
     }
 
     @FXML
@@ -306,9 +813,9 @@ public final class OperatorUserManagementTabController {
             FactoryOperatorUserStore.removeName(site, name);
             refreshPresentation();
             shell.appendLog("[operator-user] 名前を削除: " + name + " （" + site.displayLabelJa() + "）");
-            if (site == GlobalInitSettingTarget.load()
+            if (site == effectiveAppFactory()
                     && FactoryOperatorUserStore.sessionOperatorName().isBlank()) {
-                shell.requireOperatorSelectionForFactory(GlobalInitSettingTarget.load(), false);
+                shell.requireOperatorSelectionForFactory(effectiveAppFactory(), false);
             }
         } catch (Exception ex) {
             warn("削除", ex.getMessage() != null ? ex.getMessage() : ex.toString());
@@ -324,7 +831,9 @@ public final class OperatorUserManagementTabController {
         confirm.setTitle("既定へ戻す");
         confirm.setHeaderText(null);
         confirm.setContentText(
-                "この工場の名前一覧を既定（砂田・古家・図司・細川）に戻します。よろしいですか？");
+                rdpLauncherAppMode()
+                        ? "この部署の登録ユーザーをすべて削除し、起動時の選択肢をゲストのみに戻します。よろしいですか？"
+                        : "この工場の名前一覧を既定（砂田・古家・図司・細川）に戻します。よろしいですか？");
         if (shell.primaryStageForDialogs() != null) {
             confirm.initOwner(shell.primaryStageForDialogs());
         }
@@ -337,9 +846,9 @@ public final class OperatorUserManagementTabController {
             FactoryOperatorUserStore.resetNamesToDefaults(site);
             refreshPresentation();
             shell.appendLog("[operator-user] 名前一覧を既定に戻しました（" + site.displayLabelJa() + "）");
-            if (site == GlobalInitSettingTarget.load()
+            if (site == effectiveAppFactory()
                     && FactoryOperatorUserStore.sessionOperatorName().isBlank()) {
-                shell.requireOperatorSelectionForFactory(GlobalInitSettingTarget.load(), false);
+                shell.requireOperatorSelectionForFactory(effectiveAppFactory(), false);
             }
         } catch (Exception ex) {
             warn("既定へ戻す", ex.getMessage() != null ? ex.getMessage() : ex.toString());
@@ -578,7 +1087,7 @@ public final class OperatorUserManagementTabController {
         if (shell == null) {
             return;
         }
-        shell.requireOperatorSelectionForFactory(GlobalInitSettingTarget.load(), false);
+        shell.requireOperatorSelectionForFactory(effectiveAppFactory(), false);
         refreshPresentation();
     }
 
@@ -770,52 +1279,74 @@ public final class OperatorUserManagementTabController {
     }
 
     private void refreshPresentation() {
-        syncManagedFactoryComboToAppFactory();
+        applyRdpLauncherPresentationHints();
         FactorySite site = effectiveAppFactory();
-        if (shell != null) {
-            FactoryOperatorUserStore.configureFromUi(shell.snapshotUiEnv(), site);
+        ensureOperatorStoreConfigured(site);
+        if (rdpLauncherAppMode()) {
+            syncOperatorStoreDirFields();
+            syncLauncherDeployDirFields();
+        }
+        syncManagedFactoryComboToAppFactory();
+        if (rdpLauncherAppMode()) {
+            syncDepartmentListView();
+        } else {
+            updateDepartmentUsersSectionLabel("");
         }
         if (factoryLabel != null) {
             factoryLabel.setText(
-                    "環境変数の利用工場（"
-                            + site.displayLabelJa()
-                            + "）のユーザー一覧・PIN のみ編集できます。");
+                    rdpLauncherAppMode()
+                            ? "このアプリ専用のユーザー一覧（"
+                                    + FactoryOperatorUserStore.storePath()
+                                    + "）。配台システムの工場別ユーザー管理とは共有しません。"
+                            : "環境変数の利用工場（"
+                                    + site.displayLabelJa()
+                                    + "）のユーザー一覧・PIN のみ編集できます。");
         }
         if (sessionOperatorLabel != null) {
             String op = FactoryOperatorUserStore.sessionOperatorName();
+            String dept = FactoryOperatorUserStore.sessionRdpDepartmentKey();
+            String deptPart =
+                    rdpLauncherAppMode() && !dept.isBlank() ? " 部署: " + dept : "";
             sessionOperatorLabel.setText(
                     op.isBlank()
-                            ? "現在の操作者: （未選択）"
-                            : "現在の操作者: " + op + " （" + site.displayLabelJa() + "）");
+                            ? "現在の操作者: （未選択）" + deptPart
+                            : "現在の操作者: " + op + " （" + site.displayLabelJa() + "）" + deptPart);
         }
         if (changeSessionOperatorButton != null) {
             changeSessionOperatorButton.setDisable(false);
         }
-        if (operatorTableView != null) {
-            try {
-                FactoryOperatorUserStore.ensureStoreFileOnDisk();
-                List<String> names = FactoryOperatorUserStore.namesForFactory(site);
-                List<OperatorRow> rows = new ArrayList<>();
-                for (String name : names) {
-                    rows.add(
-                            new OperatorRow(
-                                    name,
-                                    FactoryOperatorUserStore.pinStatusLabel(site, name),
-                                    FactoryOperatorUserStore.adminPinDisplayLabel(site, name)));
-                }
-                operatorTableView.setItems(FXCollections.observableArrayList(rows));
-            } catch (IOException ex) {
-                operatorTableView.setItems(FXCollections.observableArrayList());
-                String msg = ex.getMessage() != null ? ex.getMessage() : ex.toString();
-                if (shell != null) {
-                    shell.appendLog("[operator-user] 一覧読込失敗: " + msg);
-                }
-                warn("ユーザー一覧", "操作者名設定の読込に失敗しました。\n" + msg);
-            }
-        }
+        refreshOperatorTableOnly();
         if (shell != null) {
             refreshBackupList(shell.snapshotUiEnv());
             refreshUsersPdfControls(shell.snapshotUiEnv(), site);
+        }
+    }
+
+    private void refreshOperatorTableOnly() {
+        if (operatorTableView == null) {
+            return;
+        }
+        FactorySite site = effectiveAppFactory();
+        ensureOperatorStoreConfigured(site);
+        try {
+            FactoryOperatorUserStore.ensureStoreFileOnDisk();
+            List<String> names = FactoryOperatorUserStore.namesForAdminTable(site);
+            List<OperatorRow> rows = new ArrayList<>();
+            for (String name : names) {
+                rows.add(
+                        new OperatorRow(
+                                name,
+                                FactoryOperatorUserStore.pinStatusLabel(site, name),
+                                FactoryOperatorUserStore.adminPinDisplayLabel(site, name)));
+            }
+            operatorTableView.setItems(FXCollections.observableArrayList(rows));
+        } catch (IOException ex) {
+            operatorTableView.setItems(FXCollections.observableArrayList());
+            String msg = ex.getMessage() != null ? ex.getMessage() : ex.toString();
+            if (shell != null) {
+                shell.appendLog("[operator-user] 一覧読込失敗: " + msg);
+            }
+            warn("ユーザー一覧", "操作者名設定の読込に失敗しました。\n" + msg);
         }
     }
 

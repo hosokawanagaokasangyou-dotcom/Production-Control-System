@@ -512,15 +512,145 @@ class FactoryOperatorUserStoreTest {
         Map<String, String> ui = Map.of(AppPaths.KEY_PM_AI_REPO_ROOT, fakeRepo.toString());
 
         FactoryOperatorUserStore.setAladdinCredentials(FactorySite.KONAN, "砂田", "000585", "000585585");
+        FactoryOperatorUserStore.selectSessionOperator(FactorySite.KONAN, "砂田");
         FactoryOperatorUserStore.syncLauncherCredentialsJsonToDeployDir(ui);
 
         Path jsonPath =
-                AppPaths.resolveRdpLauncherIni(ui)
+                AppPaths.resolveRdpLauncherIni(ui, "砂田")
                         .getParent()
                         .resolve(OperatorAladdinCredentialsLauncherJson.FILE_NAME);
         assertTrue(Files.isRegularFile(jsonPath));
         String text = Files.readString(jsonPath, StandardCharsets.UTF_8);
         assertTrue(text.contains("000585"));
         assertTrue(text.contains("砂田"));
+    }
+
+    @Test
+    void configureForStandaloneLocalOnly_usesRdpLauncherStorePath() {
+        String priorHome = AppPaths.desktopAppHomeDirName();
+        String priorTestStore = System.getProperty("pm.ai.test.factoryOperatorUserStore");
+        try {
+            if (priorTestStore != null) {
+                System.clearProperty("pm.ai.test.factoryOperatorUserStore");
+            }
+            AppPaths.setDesktopAppHomeDirName(AppPaths.REMOTE_DESKTOP_APP_HOME_DIR_NAME);
+            FactoryOperatorUserStore.configureForStandaloneLocalOnly(Map.of(), FactorySite.RDP_LAUNCHER);
+            assertEquals(
+                    AppPaths.resolveRdpLauncherOperatorUsersStorePath(Map.of()),
+                    FactoryOperatorUserStore.storePath());
+            assertEquals(
+                    AppPaths.resolveRdpLauncherOperatorUsersStorePath(Map.of()),
+                    FactoryOperatorUserStore.networkStorePath());
+        } finally {
+            AppPaths.setDesktopAppHomeDirName(priorHome);
+            if (priorTestStore != null) {
+                System.setProperty("pm.ai.test.factoryOperatorUserStore", priorTestStore);
+            } else {
+                System.clearProperty("pm.ai.test.factoryOperatorUserStore");
+            }
+        }
+    }
+
+    @Test
+    void tryRestoreSessionFromLocalLastSelected_rdpLauncherApp(@TempDir Path tmp) throws Exception {
+        String priorHome = AppPaths.desktopAppHomeDirName();
+        String priorTestStore = System.getProperty("pm.ai.test.factoryOperatorUserStore");
+        Path customDir = tmp.resolve("rdp-user-store");
+        Map<String, String> ui =
+                Map.of(AppPaths.KEY_PM_AI_RDP_OPERATOR_USERS_STORE_DIR, customDir.toString());
+        try {
+            if (priorTestStore != null) {
+                System.clearProperty("pm.ai.test.factoryOperatorUserStore");
+            }
+            AppPaths.setDesktopAppHomeDirName(AppPaths.REMOTE_DESKTOP_APP_HOME_DIR_NAME);
+            FactoryOperatorUserStore.configureForStandaloneLocalOnly(ui, FactorySite.RDP_LAUNCHER);
+            FactoryOperatorUserStore.selectSessionRdpDepartment(
+                    FactoryOperatorUserStore.DEFAULT_RDP_DEPARTMENT_LABEL);
+            FactoryOperatorUserStore.addName(FactorySite.RDP_LAUNCHER, "山田");
+            FactoryOperatorUserStore.assignPinByAdmin(FactorySite.RDP_LAUNCHER, "山田", "1234");
+            FactoryOperatorUserStore.selectSessionOperator(FactorySite.RDP_LAUNCHER, "山田");
+            FactoryOperatorUserStore.clearSessionOperatorName();
+            assertTrue(
+                    FactoryOperatorUserStore.tryRestoreSessionFromLocalLastSelected(
+                            FactorySite.RDP_LAUNCHER));
+            assertEquals("山田", FactoryOperatorUserStore.sessionOperatorName());
+        } finally {
+            AppPaths.setDesktopAppHomeDirName(priorHome);
+            if (priorTestStore != null) {
+                System.setProperty("pm.ai.test.factoryOperatorUserStore", priorTestStore);
+            } else {
+                System.clearProperty("pm.ai.test.factoryOperatorUserStore");
+            }
+        }
+    }
+
+    @Test
+    void rdpLauncherDepartments_areScopedPerDepartment(@TempDir Path tmp) throws Exception {
+        String priorHome = AppPaths.desktopAppHomeDirName();
+        String priorTestStore = System.getProperty("pm.ai.test.factoryOperatorUserStore");
+        Path customDir = tmp.resolve("rdp-user-store");
+        Map<String, String> ui =
+                Map.of(AppPaths.KEY_PM_AI_RDP_OPERATOR_USERS_STORE_DIR, customDir.toString());
+        try {
+            if (priorTestStore != null) {
+                System.clearProperty("pm.ai.test.factoryOperatorUserStore");
+            }
+            AppPaths.setDesktopAppHomeDirName(AppPaths.REMOTE_DESKTOP_APP_HOME_DIR_NAME);
+            FactoryOperatorUserStore.configureForStandaloneLocalOnly(ui, FactorySite.RDP_LAUNCHER);
+            FactoryOperatorUserStore.addRdpDepartment("製造1課");
+            FactoryOperatorUserStore.setAdminRdpDepartmentContext("製造1課");
+            FactoryOperatorUserStore.addName(FactorySite.RDP_LAUNCHER, "山田");
+            FactoryOperatorUserStore.setAdminRdpDepartmentContext(
+                    FactoryOperatorUserStore.DEFAULT_RDP_DEPARTMENT_LABEL);
+            assertTrue(
+                    !FactoryOperatorUserStore.namesForFactory(FactorySite.RDP_LAUNCHER).contains("山田"));
+            FactoryOperatorUserStore.setAdminRdpDepartmentContext("製造1課");
+            assertTrue(FactoryOperatorUserStore.namesForFactory(FactorySite.RDP_LAUNCHER).contains("山田"));
+            assertEquals(List.of("既定", "製造1課"), FactoryOperatorUserStore.listRdpDepartmentKeys());
+        } finally {
+            AppPaths.setDesktopAppHomeDirName(priorHome);
+            if (priorTestStore != null) {
+                System.setProperty("pm.ai.test.factoryOperatorUserStore", priorTestStore);
+            } else {
+                System.clearProperty("pm.ai.test.factoryOperatorUserStore");
+            }
+        }
+    }
+
+    @Test
+    void tryRestoreSession_rdpLauncherRestoresDepartmentAndOperator(@TempDir Path tmp) throws Exception {
+        String priorHome = AppPaths.desktopAppHomeDirName();
+        String priorTestStore = System.getProperty("pm.ai.test.factoryOperatorUserStore");
+        Path customDir = tmp.resolve("rdp-user-store");
+        Map<String, String> ui =
+                Map.of(AppPaths.KEY_PM_AI_RDP_OPERATOR_USERS_STORE_DIR, customDir.toString());
+        try {
+            if (priorTestStore != null) {
+                System.clearProperty("pm.ai.test.factoryOperatorUserStore");
+            }
+            AppPaths.setDesktopAppHomeDirName(AppPaths.REMOTE_DESKTOP_APP_HOME_DIR_NAME);
+            FactoryOperatorUserStore.configureForStandaloneLocalOnly(ui, FactorySite.RDP_LAUNCHER);
+            FactoryOperatorUserStore.addRdpDepartment("製造1課");
+            FactoryOperatorUserStore.selectSessionRdpDepartment("製造1課");
+            FactoryOperatorUserStore.setAdminRdpDepartmentContext("製造1課");
+            FactoryOperatorUserStore.addName(FactorySite.RDP_LAUNCHER, "山田");
+            FactoryOperatorUserStore.assignPinByAdmin(FactorySite.RDP_LAUNCHER, "山田", "1234");
+            FactoryOperatorUserStore.selectSessionOperator(FactorySite.RDP_LAUNCHER, "山田");
+            FactoryOperatorUserStore.clearSessionOperatorName();
+            FactoryOperatorUserStore.clearSessionRdpDepartmentKey();
+            assertTrue(FactoryOperatorUserStore.tryRestoreSessionRdpDepartmentFromLocal());
+            assertEquals("製造1課", FactoryOperatorUserStore.sessionRdpDepartmentKey());
+            assertTrue(
+                    FactoryOperatorUserStore.tryRestoreSessionFromLocalLastSelected(
+                            FactorySite.RDP_LAUNCHER));
+            assertEquals("山田", FactoryOperatorUserStore.sessionOperatorName());
+        } finally {
+            AppPaths.setDesktopAppHomeDirName(priorHome);
+            if (priorTestStore != null) {
+                System.setProperty("pm.ai.test.factoryOperatorUserStore", priorTestStore);
+            } else {
+                System.clearProperty("pm.ai.test.factoryOperatorUserStore");
+            }
+        }
     }
 }

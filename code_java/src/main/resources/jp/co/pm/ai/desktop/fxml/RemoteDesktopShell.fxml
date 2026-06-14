@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.ComboBox?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.Separator?>
+<?import javafx.scene.control.Tab?>
+<?import javafx.scene.control.TabPane?>
+<?import javafx.scene.control.TextArea?>
+<?import javafx.scene.control.ToolBar?>
+<?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.layout.VBox?>
+
+<BorderPane xmlns="http://javafx.com/javafx/26" xmlns:fx="http://javafx.com/fxml/1"
+            styleClass="pm-shell pm-rdp-launcher-shell"
+            prefWidth="1280.0" prefHeight="820.0"
+            fx:controller="jp.co.pm.ai.desktop.RemoteDesktopShellController">
+    <top>
+        <ToolBar styleClass="pm-app-toolbar">
+            <Label text="テーマ"/>
+            <ComboBox fx:id="themeCombo" prefWidth="196.0"/>
+            <Separator orientation="VERTICAL"/>
+            <Label fx:id="sessionOperatorToolbarLabel" styleClass="pm-muted-label" wrapText="true"/>
+            <Button fx:id="changeSessionOperatorToolbarButton" mnemonicParsing="false"
+                    onAction="#onChangeSessionOperatorToolbarAction" text="操作者を変更"/>
+            <Button fx:id="changeSessionDepartmentToolbarButton" mnemonicParsing="false"
+                    onAction="#onChangeSessionDepartmentToolbarAction" text="部署を変更"/>
+        </ToolBar>
+    </top>
+    <center>
+        <TabPane fx:id="tabPane" tabClosingPolicy="UNAVAILABLE">
+            <tabs>
+                <Tab fx:id="remoteDesktopTab" closable="false" text="リモートデスクトップ">
+                    <content>
+                        <fx:include fx:id="remoteDesktopTabContent" source="RemoteDesktopTab.fxml"/>
+                    </content>
+                </Tab>
+                <Tab fx:id="envSettingsTab" closable="false" text="環境変数">
+                    <content>
+                        <fx:include fx:id="envTab" source="EnvTab.fxml"/>
+                    </content>
+                </Tab>
+                <Tab fx:id="operatorUserManagementTab" closable="false" text="ユーザー管理者">
+                    <content>
+                        <fx:include fx:id="operatorUserManagementTabContent"
+                                    source="OperatorUserManagementTab.fxml"/>
+                    </content>
+                </Tab>
+            </tabs>
+        </TabPane>
+    </center>
+    <bottom>
+        <VBox spacing="4.0" styleClass="pm-rdp-launcher-log-pane">
+            <Label text="ログ" styleClass="pm-section-title"/>
+            <TextArea fx:id="logTextArea" editable="false" prefRowCount="5" wrapText="true"/>
+        </VBox>
+    </bottom>
+</BorderPane>

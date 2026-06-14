@@ -50,294 +50,8 @@ Set-Location $Root
 $WorkspaceRoot = (Resolve-Path -LiteralPath (Join-Path $Root '..')).Path
 
 . (Join-Path $PSScriptRoot 'package_workspace_copy.ps1')
+. (Join-Path $PSScriptRoot 'package_jpackage_common.ps1')
 
-function Read-MavenPomProperties {
-    param([string]$PomPath)
-    [xml]$xml = Get-Content -LiteralPath $PomPath -Encoding UTF8
-    $ns = New-Object System.Xml.XmlNamespaceManager($xml.NameTable)
-    $ns.AddNamespace('m', 'http://maven.apache.org/POM/4.0.0')
-    $props = @{}
-    foreach ($n in $xml.SelectNodes('/m:project/m:properties/*', $ns)) {
-        $props[$n.LocalName] = $n.InnerText.Trim()
-    }
-    return $props
-}
-
-function Expand-PomPropertyPlaceholder {
-    param(
-        [string]$Raw,
-        [hashtable]$Props
-    )
-    if ($null -eq $Raw -or [string]::IsNullOrWhiteSpace($Raw)) {
-        return ''
-    }
-    $current = $Raw.Trim()
-    for ($iter = 0; $iter -lt 4; $iter++) {
-        $m = [regex]::Match($current, '^\$\{([^}]+)\}$')
-        if (-not $m.Success) {
-            break
-        }
-        $innerKey = $m.Groups[1].Value
-        if (-not $Props.ContainsKey($innerKey)) {
-            break
-        }
-        $next = [string]$Props[$innerKey]
-        if ([string]::IsNullOrWhiteSpace($next)) {
-            break
-        }
-        $current = $next.Trim()
-    }
-    return $current
-}
-
-function Get-MavenProjectInfo {
-    param([string]$PomPath)
-    [xml]$xml = Get-Content -LiteralPath $PomPath -Encoding UTF8
-    $ns = New-Object System.Xml.XmlNamespaceManager($xml.NameTable)
-    $ns.AddNamespace('m', 'http://maven.apache.org/POM/4.0.0')
-    $artifact = $xml.SelectSingleNode('/m:project/m:artifactId', $ns).InnerText.Trim()
-    $versionNode = $xml.SelectSingleNode('/m:project/m:version', $ns)
-    if (-not $versionNode -or [string]::IsNullOrWhiteSpace($versionNode.InnerText)) {
-        $parentVer = $xml.SelectSingleNode('/m:project/m:parent/m:version', $ns)
-        if ($parentVer) {
-            $version = $parentVer.InnerText.Trim()
-        }
-        else {
-            throw 'Could not read version from pom.xml.'
-        }
-    }
-    else {
-        $version = $versionNode.InnerText.Trim()
-    }
-    if (-not $artifact -or -not $version) {
-        throw 'Could not read artifactId / version from pom.xml.'
-    }
-    $mainJar = "$artifact-$version.jar"
-    @{
-        ArtifactId = $artifact
-        Version    = $version
-        MainJar    = $mainJar
-    }
-}
-
-function Copy-JpackageInputDirectory {
-    param(
-        [string]$RootPath,
-        [string]$MainJarName,
-        [string]$DestPath
-    )
-    if (Test-Path -LiteralPath $DestPath) {
-        Remove-Item -Recurse -Force $DestPath
-    }
-    New-Item -ItemType Directory -Path $DestPath | Out-Null
-
-    $mainSrc = Join-Path (Join-Path $RootPath 'target') $MainJarName
-    if (-not (Test-Path -LiteralPath $mainSrc)) {
-        throw "Main JAR not found: $mainSrc"
-    }
-    Copy-Item -LiteralPath $mainSrc -Destination $DestPath
-
-    $depDir = Join-Path (Join-Path $RootPath 'target') 'dependency'
-    if (-not (Test-Path -LiteralPath $depDir)) {
-        throw "dependency folder not found: $depDir"
-    }
-    Copy-Item -Path (Join-Path $depDir '*') -Destination $DestPath -Force
-}
-
-function Ensure-JdkWindowsEmbedCache {
-    param(
-        [string]$CacheRoot,
-        [string]$JdkRelease,
-        [string]$ZipUrlOverride,
-        [bool]$Skip
-    )
-
-    $dest = Join-Path $CacheRoot ('jdk-embed-' + $JdkRelease + '-windows-amd64')
-    $javaExe = Join-Path $dest 'bin\java.exe'
-    $jpkgExe = Join-Path $dest 'bin\jpackage.exe'
-
-    if ($Skip -and (Test-Path -LiteralPath $javaExe) -and (Test-Path -LiteralPath $jpkgExe)) {
-        Write-Host "SkipJdkPrepare: using cache: $dest" -ForegroundColor DarkGray
-        return [string]$dest
-    }
-
-    if (Test-Path -LiteralPath $dest) {
-        Remove-Item -Recurse -Force -LiteralPath $dest
-    }
-    New-Item -ItemType Directory -Path $dest -Force | Out-Null
-
-    $zipPath = Join-Path $dest 'jdk-bundle.zip'
-    if (-not [string]::IsNullOrWhiteSpace($ZipUrlOverride)) {
-        $url = $ZipUrlOverride.Trim()
-        Write-Host "--- Download JDK zip (pom pm.ai.bundle.jdk.windows.zip.url): $url ---" -ForegroundColor Cyan
-    }
-    else {
-        $url = "https://api.adoptium.net/v3/binary/latest/$JdkRelease/ga/windows/x64/jdk/hotspot/normal/eclipse"
-        Write-Host "--- Download JDK zip (Adoptium API, Windows x64 release $JdkRelease): $url ---" -ForegroundColor Cyan
-    }
-
-    Invoke-WebRequest -Uri $url -OutFile $zipPath -UseBasicParsing
-
-    $extractTmp = Join-Path $dest '_ext'
-    New-Item -ItemType Directory -Path $extractTmp -Force | Out-Null
-    try {
-        Expand-Archive -LiteralPath $zipPath -DestinationPath $extractTmp -Force
-    }
-    finally {
-        Remove-Item -LiteralPath $zipPath -Force -ErrorAction SilentlyContinue
-    }
-
-    $javaFound = Get-ChildItem -Path $extractTmp -Recurse -Filter 'java.exe' -File -ErrorAction SilentlyContinue |
-        Where-Object { $_.Directory.Name -ieq 'bin' } |
-        Select-Object -First 1
-    if (-not $javaFound) {
-        throw "JDK zip did not contain bin\java.exe under: $extractTmp"
-    }
-
-    $jdkHome = $javaFound.Directory.Parent.FullName
-    Get-ChildItem -LiteralPath $jdkHome -ErrorAction SilentlyContinue | ForEach-Object {
-        Move-Item -LiteralPath $_.FullName -Destination $dest -Force
-    }
-    Remove-Item -LiteralPath $extractTmp -Recurse -Force -ErrorAction SilentlyContinue
-
-    if (-not (Test-Path -LiteralPath $javaExe)) {
-        throw "JDK layout error: missing $javaExe"
-    }
-    if (-not (Test-Path -LiteralPath $jpkgExe)) {
-        throw "JDK layout error: missing $jpkgExe"
-    }
-
-    return [string]$dest
-}
-
-function Ensure-PythonEmbedCache {
-    param(
-        [string]$WorkspaceRootPath,
-        [string]$PythonVersion,
-        [string]$CacheRoot,
-        [bool]$Skip
-    )
-
-    $req = Join-Path $WorkspaceRootPath 'code\python\requirements.txt'
-    if (-not (Test-Path -LiteralPath $req)) {
-        throw "requirements.txt not found: $req"
-    }
-    $reqFp = Get-PmAiRequirementsFingerprint -RequirementsPath $req
-    $dest = Join-Path $CacheRoot ("python-embed-{0}-amd64-req{1}" -f $PythonVersion, $reqFp)
-    $pyExe = Join-Path $dest 'python.exe'
-
-    if ($Skip -and (Test-Path -LiteralPath $pyExe)) {
-        Write-Host "SkipPythonPrepare: using cache: $dest" -ForegroundColor DarkGray
-        return [string]$dest
-    }
-
-    New-Item -ItemType Directory -Path $CacheRoot -Force | Out-Null
-    if (Test-Path -LiteralPath $dest) {
-        Remove-Item -Recurse -Force $dest
-    }
-    New-Item -ItemType Directory -Path $dest | Out-Null
-
-    $zipUrl = "https://www.python.org/ftp/python/$PythonVersion/python-$PythonVersion-embed-amd64.zip"
-    $zipPath = Join-Path $dest 'python-embed.zip'
-    Write-Host "--- Download Python embed: $zipUrl ---" -ForegroundColor Cyan
-    Invoke-WebRequest -Uri $zipUrl -OutFile $zipPath -UseBasicParsing
-    Expand-Archive -LiteralPath $zipPath -DestinationPath $dest -Force
-    Remove-Item -LiteralPath $zipPath -Force
-
-    Get-ChildItem -LiteralPath $dest -Filter '*._pth' | ForEach-Object {
-        $t = Get-Content -LiteralPath $_.FullName -Raw
-        if ($t -notmatch '(?m)^import site\s*$') {
-            Add-Content -LiteralPath $_.FullName -Value "`r`nimport site`r`n" -Encoding UTF8
-        }
-    }
-
-    $getPip = Join-Path $dest 'get-pip.py'
-    Write-Host "--- Download get-pip.py ---" -ForegroundColor Cyan
-    Invoke-WebRequest -Uri 'https://bootstrap.pypa.io/get-pip.py' -OutFile $getPip -UseBasicParsing
-
-    Push-Location $dest
-    $prevEa = $ErrorActionPreference
-    try {
-        $ErrorActionPreference = 'SilentlyContinue'
-        $env:PIP_NO_WARN_SCRIPT_LOCATION = '1'
-        & .\python.exe $getPip 2>&1 | Out-Null
-        if ($LASTEXITCODE -ne 0) {
-            throw 'get-pip failed.'
-        }
-        & .\python.exe -m pip install -q --upgrade pip --no-warn-script-location 2>&1 | Out-Null
-        if ($LASTEXITCODE -ne 0) {
-            throw 'pip upgrade failed.'
-        }
-        & .\python.exe -m pip install -q -r $req --no-warn-script-location 2>&1 | Out-Null
-        if ($LASTEXITCODE -ne 0) {
-            throw 'pip install -r requirements.txt failed.'
-        }
-    }
-    finally {
-        $ErrorActionPreference = $prevEa
-        Remove-Item Env:PIP_NO_WARN_SCRIPT_LOCATION -ErrorAction SilentlyContinue
-        Pop-Location
-    }
-
-    return [string]$dest
-}
-
-function Normalize-JvmHeapToken {
-    param([string]$Raw)
-    $t = ($Raw -replace '[\r\n\t]', '').Trim()
-    if ([string]::IsNullOrWhiteSpace($t)) {
-        return '512m'
-    }
-    return $t
-}
-
-function Build-PmAiDesktopLauncherBatContent {
-    param(
-        [string]$JavafxVersion,
-        [string]$JvmInitial,
-        [string]$JvmMax,
-        [string]$LauncherExeBaseName = 'PMD'
-    )
-    $jv = ($JavafxVersion -replace '[\r\n\t]', '').Trim()
-    if ([string]::IsNullOrWhiteSpace($jv)) {
-        $jv = '26.0.1'
-    }
-    $xms = Normalize-JvmHeapToken $JvmInitial
-    $xmx = Normalize-JvmHeapToken $JvmMax
-
-    # javafx.web は javafx.media に requires するため、media の win.jar と add-modules が必須
-    $javaFxWinJarNames = @(
-        'javafx-base', 'javafx-controls', 'javafx-fxml', 'javafx-graphics', 'javafx-media',
-        'javafx-swing', 'javafx-web', 'jdk-jsobject'
-    )
-    $lines = [System.Collections.Generic.List[string]]::new()
-    $lines.Add('@echo off')
-    $lines.Add('rem ASCII-only. Generated by package_app.ps1 from pom javafx.version / jvm heap.')
-    $lines.Add('rem Do not paste into PowerShell; run: .\launch-pm-ai-desktop.bat')
-    $lines.Add('setlocal EnableExtensions EnableDelayedExpansion')
-    $lines.Add('')
-    $lines.Add('set "ROOT=%~dp0"')
-    $lines.Add('if "%ROOT:~-1%"=="\" set "ROOT=%ROOT:~0,-1%"')
-    $lines.Add('cd /d "%ROOT%"')
-    $lines.Add('')
-    $lines.Add('if not exist "%ROOT%\app" (')
-    $lines.Add('    echo [ERROR] Missing app folder. Put this bat next to ' + $LauncherExeBaseName + '.exe / app / runtime.')
-    $lines.Add('    echo Current: "%ROOT%"')
-    $lines.Add('    pause')
-    $lines.Add('    exit /b 1')
-    $lines.Add(')')
-    $lines.Add('')
-    $lines.Add('set "JAVA_EXE=%ROOT%\runtime\bin\java.exe"')
-    $lines.Add('if exist "%JAVA_EXE%" goto :have_java')
-    $lines.Add('')
-    $lines.Add('if defined JAVA_HOME (')
-    $lines.Add('    if exist "%JAVA_HOME%\bin\java.exe" (')
-    $lines.Add('        set "JAVA_EXE=%JAVA_HOME%\bin\java.exe"')
-    $lines.Add('        echo [WARN] Using JAVA_HOME java.exe (bundled runtime missing).')
-    $lines.Add('        goto :have_java')
-    $lines.Add('    )')
-    $lines.Add(')')
-    $lines.Add('')
     $lines.Add('echo [ERROR] Java not found: "%ROOT%\runtime\bin\java.exe"')
     $lines.Add('pause')
     $lines.Add('exit /b 1')
@@ -674,25 +388,9 @@ if ($usedStagingForJpackage) {
 }
 
 # Native exe launch uses only jpackage --java-options (see dist\<APP_NAME>\app\<APP_NAME>.cfg).
-# Match launch-pm-ai-desktop.bat: JavaFX modular jars on --module-path + --add-modules.
-# jpackage cfg understands $APPDIR (bundle root); jars land under app\ next to the launcher.
-# Oracle: custom --module-path in --java-options is appended to any default module path.
+# jpackage cfg splits java-options on ';' — use per-jar --module-path lines (see New-JavaFxJpackageModulePathJavaOptions).
 $jvForJpkgOpts = ($javafxVer -replace '[\r\n\t]', '').Trim()
-$jfxModsForJpkg = @('javafx-base', 'javafx-controls', 'javafx-fxml', 'javafx-graphics', 'javafx-media', 'javafx-swing', 'javafx-web', 'jdk-jsobject')
-$modPathJpkgSb = [System.Text.StringBuilder]::new()
-$mi = 0
-foreach ($modJarPrefix in $jfxModsForJpkg) {
-    if ($mi -gt 0) {
-        [void]$modPathJpkgSb.Append(';')
-    }
-    [void]$modPathJpkgSb.Append('$APPDIR/app/')
-    [void]$modPathJpkgSb.Append($modJarPrefix)
-    [void]$modPathJpkgSb.Append('-')
-    [void]$modPathJpkgSb.Append($jvForJpkgOpts)
-    [void]$modPathJpkgSb.Append('-win.jar')
-    $mi++
-}
-$jpackageModulePathJavaOpt = '--module-path=' + $modPathJpkgSb.ToString()
+$javaFxModulePathOpts = New-JavaFxJpackageModulePathJavaOptions -JavafxVersion $jvForJpkgOpts
 
 $javaOpts = @(
     '-Dfile.encoding=UTF-8',
@@ -700,8 +398,8 @@ $javaOpts = @(
     "-Xmx$jvmMax",
     '-XX:+HeapDumpOnOutOfMemoryError',
     '-XX:+UseStringDeduplication',
-    "-Dprism.order=$prismOrder",
-    $jpackageModulePathJavaOpt,
+    "-Dprism.order=$prismOrder"
+) + $javaFxModulePathOpts + @(
     '--add-modules=javafx.controls,javafx.fxml,javafx.graphics,javafx.base,javafx.media,javafx.swing',
     '--add-opens=javafx.base/com.sun.javafx.event=ALL-UNNAMED',
     '--add-opens=javafx.controls/javafx.scene.control.skin=ALL-UNNAMED',
@@ -789,6 +487,13 @@ if ($usedStagingForJpackage) {
 }
 else {
     $publishedBundleRoot = Join-Path $distFinal $APP_NAME
+}
+
+if ($PackageType -eq 'app-image' -and (Test-Path -LiteralPath $publishedBundleRoot)) {
+    $appCfgPath = Join-Path $publishedBundleRoot "app\$APP_NAME.cfg"
+    if (Repair-JpackageAppCfgModulePath -CfgFilePath $appCfgPath) {
+        Write-Host "Repaired jpackage cfg module-path: $appCfgPath" -ForegroundColor DarkGray
+    }
 }
 
 $dist = $distFinal

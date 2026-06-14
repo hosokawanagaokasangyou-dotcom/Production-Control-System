@@ -50,7 +50,7 @@ public final class FactoryOperatorUserBackupStore {
         }
 
         public Path resolveBackupFile(Path backupsRoot) {
-            return resolveDirectory(backupsRoot).resolve(AppPaths.FACTORY_OPERATOR_USERS_BIN);
+            return resolveDirectory(backupsRoot).resolve(AppPaths.operatorUsersStoreBinBasename());
         }
 
         public String displayLabel() {
@@ -71,6 +71,10 @@ public final class FactoryOperatorUserBackupStore {
         String testRoot = System.getProperty("pm.ai.test.factoryOperatorUserBackupRoot");
         if (testRoot != null && !testRoot.isBlank()) {
             return Path.of(testRoot).toAbsolutePath().normalize();
+        }
+        if (AppPaths.usesRemoteDesktopAppHome()) {
+            Map<String, String> u = ui != null ? ui : Map.of();
+            return AppPaths.resolveRdpLauncherOperatorUsersBackupsRoot(u);
         }
         Map<String, String> u = ui != null ? ui : Map.of();
         FactorySite effective = site != null ? site : GlobalInitSettingTarget.loadEffective(u);
@@ -125,8 +129,8 @@ public final class FactoryOperatorUserBackupStore {
     public static void createAutomaticSchemaUpgradeBackup(
             Map<String, String> ui, int priorSchemaVersion, String label) throws IOException {
         Map<String, String> u = ui != null ? ui : Map.of();
-        FactorySite effective = GlobalInitSettingTarget.loadEffective(u);
-        FactoryOperatorUserStore.configureFromUi(u, effective);
+        FactorySite effective = FactoryOperatorUserStore.operatorScopeForCurrentApp(u, null);
+        FactoryOperatorUserStore.configureForCurrentApp(u, effective);
         Path current = FactoryOperatorUserStore.storePath();
         if (!Files.isRegularFile(current)) {
             return;
@@ -142,8 +146,8 @@ public final class FactoryOperatorUserBackupStore {
     public static FactoryOperatorUserBackupEntry createManualBackup(Map<String, String> ui, String label)
             throws IOException {
         Map<String, String> u = ui != null ? ui : Map.of();
-        FactorySite effective = GlobalInitSettingTarget.loadEffective(u);
-        FactoryOperatorUserStore.configureFromUi(u, effective);
+        FactorySite effective = FactoryOperatorUserStore.operatorScopeForCurrentApp(u, null);
+        FactoryOperatorUserStore.configureForCurrentApp(u, effective);
         FactoryOperatorUserStore.ensureStoreFileOnDisk();
         Path current = FactoryOperatorUserStore.storePath();
         if (!Files.isRegularFile(current)) {
@@ -156,7 +160,7 @@ public final class FactoryOperatorUserBackupStore {
         String folder = "backup-" + id;
         Path dir = backupsRoot.resolve(folder);
         Files.createDirectories(dir);
-        Files.copy(current, dir.resolve(AppPaths.FACTORY_OPERATOR_USERS_BIN), StandardCopyOption.REPLACE_EXISTING);
+        Files.copy(current, dir.resolve(AppPaths.operatorUsersStoreBinBasename()), StandardCopyOption.REPLACE_EXISTING);
 
         long now = Instant.now().toEpochMilli();
         String autoLabel =

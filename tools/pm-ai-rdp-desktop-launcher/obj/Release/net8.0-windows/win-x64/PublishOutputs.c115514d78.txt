@@ -1,0 +1,2 @@
+C:\工程管理AIプロジェクト_JAVA\tools\pm-ai-rdp-desktop-launcher\bin\Release\net8.0-windows\win-x64\publish\PmAiRdpDesktopLauncher.pdb
+C:\工程管理AIプロジェクト_JAVA\tools\pm-ai-rdp-desktop-launcher\bin\Release\net8.0-windows\win-x64\publish\PmAiRdpDesktopLauncher.exe

@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
@@ -216,16 +217,64 @@ class AppPathsTest {
     }
 
     @Test
-    void resolveRdpLauncherPaths_sameDirAsSummary(@TempDir Path fakeRepo) throws IOException {
+    void resolveRdpLauncherDeployDir_prefersExplicitKey(@TempDir Path tmp) {
+        Path deploy = tmp.resolve("shared-deploy");
+        Map<String, String> ui =
+                Map.of(AppPaths.KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR, deploy.toString());
+        assertEquals(deploy.normalize(), AppPaths.resolveRdpLauncherDeployDir(ui).normalize());
+    }
+
+    @Test
+    void rdpLauncherIniBasenameForOperator_buildsPerOperatorName() {
+        assertEquals(
+                "細川_RPA設定.ini",
+                AppPaths.rdpLauncherIniBasenameForOperator("細川"));
+        assertEquals(AppPaths.RDP_LAUNCHER_INI_BASENAME, AppPaths.rdpLauncherIniBasenameForOperator(""));
+        assertEquals(
+                "bad_name_RPA設定.ini",
+                AppPaths.rdpLauncherIniBasenameForOperator("bad/name"));
+    }
+
+    @Test
+    void resolveRdpLauncherIni_usesDeployDirBesideRemoteLauncherExe(@TempDir Path fakeRepo)
+            throws IOException {
+        Path summary = fakeRepo.resolve("code").resolve(AppPaths.SUMMARY_AI_DISPATCH_XLSX);
+        Files.createDirectories(summary.getParent());
+        Files.writeString(summary, "x");
+        Map<String, String> ui = Map.of(AppPaths.KEY_PM_AI_REPO_ROOT, fakeRepo.toString());
+        Path deployDir = AppPaths.resolveRdpLauncherDeployDir(ui);
+        Path expectedIni =
+                deployDir.resolve("山田_RPA設定.ini").normalize();
+        assertEquals(expectedIni, AppPaths.resolveRdpLauncherIni(ui, "山田").normalize());
+    }
+
+    @Test
+    void resolveExistingRdpLauncherIni_fallsBackToLegacyRapInDeployDir(@TempDir Path fakeRepo)
+            throws IOException {
+        Path summary = fakeRepo.resolve("code").resolve(AppPaths.SUMMARY_AI_DISPATCH_XLSX);
+        Files.createDirectories(summary.getParent());
+        Files.writeString(summary, "x");
+        Map<String, String> ui = Map.of(AppPaths.KEY_PM_AI_REPO_ROOT, fakeRepo.toString());
+        Path deployDir = AppPaths.resolveRdpLauncherDeployDir(ui);
+        Path legacy = deployDir.resolve(AppPaths.RDP_LAUNCHER_INI_BASENAME_LEGACY);
+        Files.writeString(legacy, "起動プログラム番号=1", StandardCharsets.UTF_8);
+        assertEquals(
+                legacy.normalize(),
+                AppPaths.resolveExistingRdpLauncherIni(ui, "").normalize());
+    }
+
+    @Test
+    void resolveRdpLauncherPaths_iniInSharedData_deployExeWithSummary(@TempDir Path fakeRepo)
+            throws IOException {
         Path summary = fakeRepo.resolve("code").resolve(AppPaths.SUMMARY_AI_DISPATCH_XLSX);
         Files.createDirectories(summary.getParent());
         Files.writeString(summary, "x");
         Map<String, String> ui = Map.of(AppPaths.KEY_PM_AI_REPO_ROOT, fakeRepo.toString());
         Path deployDir = AppPaths.resolveRdpLauncherDeployDir(ui);
         assertEquals(summary.getParent().normalize(), deployDir.normalize());
-        assertEquals(
-                deployDir.resolve(AppPaths.RDP_LAUNCHER_INI_BASENAME).normalize(),
-                AppPaths.resolveRdpLauncherIni(ui).normalize());
+        Path expectedIni =
+                deployDir.resolve(AppPaths.RDP_LAUNCHER_INI_BASENAME).normalize();
+        assertEquals(expectedIni, AppPaths.resolveRdpLauncherIni(ui).normalize());
         assertEquals(
                 deployDir.resolve(AppPaths.RDP_LAUNCHER_EXE_BASENAME).normalize(),
                 AppPaths.resolveRdpLauncherExe(ui).normalize());
@@ -983,5 +1032,40 @@ class AppPathsTest {
                 AppPaths.resolveRequestFormPreviewPdfCjkScale(
                         Map.of(AppPaths.KEY_PM_AI_REQUEST_FORM_PREVIEW_PDF_CJK_SCALE, "1.5")),
                 0.001f);
+    }
+
+    @Test
+    void rdpLauncherOperatorPaths_useRemoteDesktopAppHome() {
+        String prior = AppPaths.desktopAppHomeDirName();
+        try {
+            AppPaths.setDesktopAppHomeDirName(AppPaths.REMOTE_DESKTOP_APP_HOME_DIR_NAME);
+            assertTrue(AppPaths.usesRemoteDesktopAppHome());
+            Path store = AppPaths.resolveRdpLauncherOperatorUsersStorePath(Map.of());
+            assertTrue(store.toString().contains("rpa_luncher"));
+            assertTrue(store.toString().contains(AppPaths.RDP_LAUNCHER_SHARED_DATA_DIR_LEAF));
+            assertEquals(AppPaths.RDP_LAUNCHER_OPERATOR_USERS_BIN, store.getFileName().toString());
+            assertEquals(AppPaths.RDP_LAUNCHER_OPERATOR_USERS_BIN, AppPaths.operatorUsersStoreBinBasename());
+            Path backups = AppPaths.resolveRdpLauncherOperatorUsersBackupsRoot(Map.of());
+            assertTrue(backups.toString().contains(AppPaths.RDP_LAUNCHER_OPERATOR_USERS_BACKUPS_DIR));
+        } finally {
+            AppPaths.setDesktopAppHomeDirName(prior);
+        }
+    }
+
+    @Test
+    void resolveRdpLauncherOperatorUsersStorePath_usesConfiguredDir(@TempDir Path tmp) {
+        String prior = AppPaths.desktopAppHomeDirName();
+        try {
+            AppPaths.setDesktopAppHomeDirName(AppPaths.REMOTE_DESKTOP_APP_HOME_DIR_NAME);
+            Path customDir = tmp.resolve("shared-users");
+            Map<String, String> ui =
+                    Map.of(AppPaths.KEY_PM_AI_RDP_OPERATOR_USERS_STORE_DIR, customDir.toString());
+            Path expected =
+                    customDir.resolve(AppPaths.RDP_LAUNCHER_OPERATOR_USERS_BIN).toAbsolutePath().normalize();
+            assertEquals(expected, AppPaths.resolveRdpLauncherOperatorUsersStorePath(ui));
+            assertEquals(customDir.toAbsolutePath().normalize(), AppPaths.resolveRdpLauncherOperatorUsersStoreDir(ui));
+        } finally {
+            AppPaths.setDesktopAppHomeDirName(prior);
+        }
     }
 }

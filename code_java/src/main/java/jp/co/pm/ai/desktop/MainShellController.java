@@ -149,7 +149,7 @@ import jp.co.pm.ai.desktop.ipc.IpcStdoutTap;
  * Main window controller（従来は {@link PmAiFxApp} 内蔵だった業務ロジックを分離）。
  * Layout: {@code MainShell.fxml} and tab FXML files.
  */
-public final class MainShellController {
+public final class MainShellController implements DesktopShellHost, EnvTabShellHost {
 
     /**
      * {@link Tab#getProperties()} に登録済みかどうか。選択変更時に見出し chrome を再適用するリスナーを二重登録しない。
@@ -1655,7 +1655,8 @@ public final class MainShellController {
         DesktopSessionStateStore.save(collectDesktopSession());
     }
 
-    Stage primaryStageForDialogs() {
+    @Override
+    public Stage primaryStageForDialogs() {
         return primaryStage;
     }
 
@@ -3719,7 +3720,7 @@ public final class MainShellController {
     /**
      * ui_ref_env_defaults.json と {@link #BOOTSTRAP_ORDER} にあるが、表に行が無い変数を同じ並びで追加する（既存行の値は保持）。
      */
-    void addMissingReferenceEnvRows() {
+    public void addMissingReferenceEnvRows() {
         mergeMissingUiRefEnvRows();
     }
 
@@ -3865,11 +3866,11 @@ public final class MainShellController {
         return s != null ? s.trim() : "";
     }
 
-    Stage getPrimaryStage() {
+    public Stage getPrimaryStage() {
         return primaryStage;
     }
 
-    ObservableList<EnvVarRow> getEnvRows() {
+    public ObservableList<EnvVarRow> getEnvRows() {
         return envRows;
     }
 
@@ -3877,7 +3878,7 @@ public final class MainShellController {
      * Resets the env-var table to bundled defaults ({@link UiRefEnvDefaults}) and reapplies bootstrap fills.
      * Shows a confirmation dialog first.
      */
-    void confirmAndResetEnvRowsToDefaults() {
+    public void confirmAndResetEnvRowsToDefaults() {
         Alert alert = new Alert(AlertType.CONFIRMATION);
         initDialogOwnerIfSceneReady(alert);
         applyAlertStylesheetsFromOwner(alert);
@@ -5716,7 +5717,8 @@ public final class MainShellController {
     }
 
     /** Same-package tab controllers append run-tab log lines here. */
-    void appendLog(String line) {
+    @Override
+    public void appendLog(String line) {
         mainRunTabController.appendLog(line);
     }
 
@@ -5739,7 +5741,8 @@ public final class MainShellController {
         }
     }
 
-    Map<String, String> snapshotUiEnv() {
+    @Override
+    public Map<String, String> snapshotUiEnv() {
         Map<String, String> base = collectUiEnv();
         String operator = FactoryOperatorUserStore.sessionOperatorName();
         if (operator.isBlank()) {
@@ -5748,6 +5751,11 @@ public final class MainShellController {
         Map<String, String> merged = new HashMap<>(base);
         merged.put(AppPaths.KEY_PM_AI_OPERATOR_USER, operator);
         return Map.copyOf(merged);
+    }
+
+    @Override
+    public void refreshOperatorUserPresentation() {
+        refreshMainRunTabOperatorLabel();
     }
 
     /** 実行・ログタブの操作者表示を更新する。 */
@@ -5771,87 +5779,9 @@ public final class MainShellController {
      *
      * @param startup true のとき起動直後の案内文
      */
-    void requireOperatorSelectionForFactory(FactorySite site, boolean startup) {
-        if (primaryStage == null || primaryStage.getScene() == null) {
-            return;
-        }
-        FactorySite factory =
-                site != null ? site : GlobalInitSettingTarget.loadEffective(collectUiEnv());
-        FactoryOperatorUserStore.configureFromUi(collectUiEnv(), factory);
-        FactoryOperatorUserStore.clearSessionOperatorName();
-        if (startup) {
-            try {
-                if (FactoryOperatorUserStore.tryRestoreSessionFromLocalLastSelected(factory)) {
-                    String restored = FactoryOperatorUserStore.sessionOperatorName();
-                    appendLog(
-                            "[startup] 操作者: "
-                                    + restored
-                                    + " （"
-                                    + factory.displayLabelJa()
-                                    + "・前回選択を復元）"
-                                    + (FactoryOperatorUserStore.isGuestOperator(restored)
-                                            ? " ※サマリ Excel 生成不可"
-                                            : ""));
-                    refreshMainRunTabOperatorLabel();
-                    return;
-                }
-            } catch (IOException ex) {
-                appendLog(
-                        "[startup] 操作者の前回選択を復元できませんでした: "
-                                + (ex.getMessage() != null ? ex.getMessage() : ex.toString()));
-            }
-        }
-        while (FactoryOperatorUserStore.sessionOperatorName().isBlank()) {
-            Optional<String> chosen = promptOperatorUserChoice(factory, startup);
-            if (chosen.isEmpty()) {
-                showWarningDialog(
-                        "操作者名（必須）",
-                        factory.displayLabelJa()
-                                + " の操作者名を選択してください。\n"
-                                + "一覧の編集は「ユーザー管理者」タブから行えます。");
-                continue;
-            }
-            String name = chosen.get();
-            try {
-                if (FactoryOperatorUserStore.hasPin(factory, name)) {
-                    if (FactoryOperatorUserStore.isPinLocked(factory, name)) {
-                        showWarningDialog(
-                                "PIN ロック",
-                                "操作者「"
-                                        + name
-                                        + "」は PIN を "
-                                        + FactoryOperatorUserStore.MAX_CONSECUTIVE_PIN_FAILURES
-                                        + " 回連続で間違えたためロックされています。\n"
-                                        + "ユーザー管理者タブでロック解除または PIN 再発行してください。");
-                        continue;
-                    }
-                    Optional<String> verifiedPin = promptAndVerifyOperatorPin(factory, name);
-                    if (verifiedPin.isEmpty()) {
-                        continue;
-                    }
-                    if (FactoryOperatorUserStore.mustChangePin(factory, name)) {
-                        if (!promptRequiredInitialPinChange(factory, name, verifiedPin.get())) {
-                            continue;
-                        }
-                    }
-                }
-                FactoryOperatorUserStore.selectSessionOperator(factory, name);
-                appendLog(
-                        "[startup] 操作者: "
-                                + name
-                                + " （"
-                                + factory.displayLabelJa()
-                                + "）"
-                                + (FactoryOperatorUserStore.isGuestOperator(name)
-                                        ? " ※サマリ Excel 生成不可"
-                                        : ""));
-            } catch (Exception ex) {
-                showWarningDialog(
-                        "操作者名",
-                        ex.getMessage() != null ? ex.getMessage() : ex.toString());
-            }
-        }
-        refreshMainRunTabOperatorLabel();
+    @Override
+    public void requireOperatorSelectionForFactory(FactorySite site, boolean startup) {
+        OperatorUserSelectionSupport.requireOperatorSelectionForFactory(this, site, startup);
     }
 
     private Optional<String> promptAndVerifyOperatorPin(FactorySite factory, String operatorName) {
@@ -6161,7 +6091,7 @@ public final class MainShellController {
     }
 
     /** 環境変数の GEMINI_MODEL / TRY_ORDER 変更を API モデルベンチマークタブへ反映する。 */
-    void refreshApiModelBenchmarkDerivedLabels() {
+    public void refreshApiModelBenchmarkDerivedLabels() {
         if (apiModelBenchmarkTabController != null) {
             apiModelBenchmarkTabController.refreshShellDerivedLabels();
         }
@@ -7120,7 +7050,8 @@ public PlanInputTabController planInputTabControllerForDispatchRollUnit() {
     }
 
     /** 環境変数タブの行を更新する（session-state 保存は行リスナーで debounce される）。 */
-    void updateEnvTabValue(String envKey, String value) {
+    @Override
+    public void updateEnvTabValue(String envKey, String value) {
         syncEnvTabValue(envKey, value);
     }
 

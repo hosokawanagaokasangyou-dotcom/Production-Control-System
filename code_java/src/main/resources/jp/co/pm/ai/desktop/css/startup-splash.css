@@ -161,3 +161,25 @@
 .splash-footer {
     -fx-padding: 0 8px 0 17;
 }
+
+/* リモートデスクトップRPAランチャー（配布用） */
+.splash-root.splash-app-rdp-launcher {
+    -fx-border-color: rgba(56, 189, 248, 0.45);
+}
+
+.splash-root.splash-app-rdp-launcher .splash-overlay {
+    -fx-background-color: linear-gradient(
+        to right,
+        rgba(8, 47, 73, 0.94) 0%,
+        rgba(12, 74, 110, 0.78) 42%,
+        rgba(15, 23, 42, 0.52) 100%
+    );
+}
+
+.splash-root.splash-app-rdp-launcher .splash-accent-bar {
+    -fx-background-color: linear-gradient(to bottom, #38bdf8, #0284c7);
+}
+
+.splash-root.splash-app-rdp-launcher .splash-title {
+    -fx-text-fill: #e0f2fe;
+}

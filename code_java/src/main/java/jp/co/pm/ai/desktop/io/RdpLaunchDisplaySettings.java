@@ -62,10 +62,9 @@ public final class RdpLaunchDisplaySettings {
      *
      * @param profile 選択中プロファイル（行 UI 由来を推奨）
      * @param ui 環境変数タブ由来のマップ（プロファイル未設定フィールドのフォールバック）
-     * @param embedInTab 埋め込みモードでは全画面を強制 OFF
      */
     public static LaunchDisplay resolveLaunchDisplay(
-            RdpLaunchProfile profile, Map<String, String> ui, boolean embedInTab) {
+            RdpLaunchProfile profile, Map<String, String> ui) {
         Map<String, String> env = ui != null ? ui : Map.of();
         RdpLaunchProfile p = profile != null ? profile : RdpLaunchProfile.empty(1);
 
@@ -74,9 +73,6 @@ public final class RdpLaunchDisplaySettings {
             fullScreen = p.fullScreen();
         } else {
             fullScreen = resolveFullScreen(env);
-        }
-        if (embedInTab) {
-            fullScreen = false;
         }
 
         int width;
@@ -112,8 +108,7 @@ public final class RdpLaunchDisplaySettings {
      * @return 署名行を削除した場合 {@code true}
      */
     public static boolean applyToProfile(Path rdpProfile, Map<String, String> ui) throws IOException {
-        LaunchDisplay display =
-                resolveLaunchDisplay(null, ui, RdpEmbedSettings.isEmbedInTabEnabled(ui));
+        LaunchDisplay display = resolveLaunchDisplay(null, ui);
         return applyToProfile(rdpProfile, display);
     }
 
@@ -123,7 +118,7 @@ public final class RdpLaunchDisplaySettings {
     }
 
     public static String formatSummary(Map<String, String> ui) {
-        return resolveLaunchDisplay(null, ui, RdpEmbedSettings.isEmbedInTabEnabled(ui)).summaryText();
+        return resolveLaunchDisplay(null, ui).summaryText();
     }
 
     public static String formatSummary(LaunchDisplay display) {

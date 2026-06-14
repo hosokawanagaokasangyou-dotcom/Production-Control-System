@@ -59,7 +59,7 @@ public final class FactoryOperatorUserStore {
     private static volatile boolean storeConfigured;
     private static volatile boolean usingLocalStoreFallback;
 
-    public static final int SCHEMA_VERSION = 6;
+    public static final int SCHEMA_VERSION = 7;
 
     private static final int LEGACY_SCHEMA_BEFORE_ALADDIN = 5;
 
@@ -88,6 +88,18 @@ public final class FactoryOperatorUserStore {
 
     public static final List<String> DEFAULT_NAMES =
             List.of("砂田", "古家", "図司", "細川");
+
+    /** RDP ランチャー専用の初期ユーザー（登録ユーザーなし。起動時はゲストのみ選択可能）。 */
+    public static final List<String> RDP_LAUNCHER_DEFAULT_NAMES = List.of();
+
+    public static final int MAX_RDP_DEPARTMENTS = 30;
+
+    public static final String DEFAULT_RDP_DEPARTMENT_LABEL = "既定";
+
+    private static volatile String sessionRdpDepartmentKey = "";
+
+    /** ユーザー管理者タブで編集中の部署（セッション操作者の部署とは別）。 */
+    private static volatile String adminRdpDepartmentContextKey = "";
 
     private static volatile String sessionOperatorName = "";
 
@@ -200,6 +212,149 @@ public final class FactoryOperatorUserStore {
         }
     }
 
+    /**
+     * リモートデスクトップ配布用アプリ: 操作者 bin は掲示板共有 DATA（{@link AppPaths#defaultRdpLauncherSharedDataDir}）が既定。
+     *
+     * <p>ユーザー正本は {@link AppPaths#resolveRdpLauncherOperatorUsersStorePath}（配台システムの工場別 bin とは別）。
+     */
+    public static synchronized void configureForStandaloneLocalOnly(Map<String, String> ui, FactorySite site) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        Path local = AppPaths.resolveRdpLauncherOperatorUsersStorePath(u);
+        if (storeConfigured && local.equals(configuredStorePath) && local.equals(configuredNetworkStorePath)) {
+            return;
+        }
+        configuredStorePath = local;
+        configuredNetworkStorePath = local;
+        usingLocalStoreFallback = true;
+        storeConfigured = true;
+    }
+
+    /**
+     * 起動中アプリに応じて操作者ストアを解決する（PMD＝工場別 UNC／RDP ランチャー＝専用ローカル bin）。
+     */
+    public static synchronized void configureForCurrentApp(Map<String, String> ui, FactorySite site) {
+        if (AppPaths.usesRemoteDesktopAppHome()) {
+            configureForStandaloneLocalOnly(ui, FactorySite.RDP_LAUNCHER);
+        } else {
+            configureFromUi(ui, site);
+        }
+    }
+
+    /**
+     * 起動中アプリに応じた操作者スコープ（RDP ランチャーは常に {@link FactorySite#RDP_LAUNCHER}）。
+     */
+    public static FactorySite operatorScopeForCurrentApp(Map<String, String> ui, FactorySite site) {
+        if (AppPaths.usesRemoteDesktopAppHome()) {
+            return FactorySite.RDP_LAUNCHER;
+        }
+        if (site != null) {
+            return site;
+        }
+        return GlobalInitSettingTarget.loadEffective(ui != null ? ui : Map.of());
+    }
+
+    public static String sessionRdpDepartmentKey() {
+        return sessionRdpDepartmentKey != null ? sessionRdpDepartmentKey.strip() : "";
+    }
+
+    public static void clearSessionRdpDepartmentKey() {
+        sessionRdpDepartmentKey = "";
+    }
+
+    public static void setAdminRdpDepartmentContext(String departmentKey) {
+        adminRdpDepartmentContextKey =
+                departmentKey != null ? normalizeRdpDepartmentKey(departmentKey) : "";
+    }
+
+    public static String adminRdpDepartmentContextKey() {
+        return adminRdpDepartmentContextKey != null ? adminRdpDepartmentContextKey.strip() : "";
+    }
+
+    public static String normalizeRdpDepartmentKey(String raw) {
+        return normalizeName(raw);
+    }
+
+    public static List<String> listRdpDepartmentKeys() throws IOException {
+        return new ArrayList<>(loadDocument().rdpDepartmentOrder());
+    }
+
+    public static void addRdpDepartment(String label) throws IOException {
+        String key = normalizeRdpDepartmentKey(label);
+        if (key.isEmpty()) {
+            throw new IllegalArgumentException("部署名が空です。");
+        }
+        if (isGuestOperator(key)) {
+            throw new IllegalArgumentException("「" + GUEST_OPERATOR_NAME + "」は部署名に使えません。");
+        }
+        Document doc = loadDocument();
+        if (doc.rdpDepartments().containsKey(key)) {
+            throw new IllegalArgumentException("同じ部署名が既にあります: " + key);
+        }
+        if (doc.rdpDepartmentOrder().size() >= MAX_RDP_DEPARTMENTS) {
+            throw new IllegalArgumentException("部署は最大 " + MAX_RDP_DEPARTMENTS + " 件です。");
+        }
+        doc.rdpDepartments().put(key, new FactoryOperatorUsers(RDP_LAUNCHER_DEFAULT_NAMES, ""));
+        doc.rdpDepartmentOrder().add(key);
+        saveDocument(doc);
+    }
+
+    public static void removeRdpDepartment(String departmentKey) throws IOException {
+        String key = normalizeRdpDepartmentKey(departmentKey);
+        if (key.isEmpty()) {
+            throw new IllegalArgumentException("部署が未選択です。");
+        }
+        Document doc = loadDocument();
+        if (!doc.rdpDepartments().containsKey(key)) {
+            return;
+        }
+        if (doc.rdpDepartmentOrder().size() <= 1) {
+            throw new IllegalStateException("最後の部署は削除できません。");
+        }
+        doc.rdpDepartmentOrder().remove(key);
+        doc.rdpDepartments().remove(key);
+        saveDocument(doc);
+        Files.deleteIfExists(AppPaths.rdpLauncherOperatorLastSelectedPathForDepartment(key));
+        if (sessionRdpDepartmentKey().equals(key)) {
+            sessionRdpDepartmentKey = "";
+            sessionOperatorName = "";
+        }
+        if (adminRdpDepartmentContextKey.equals(key)) {
+            adminRdpDepartmentContextKey = "";
+        }
+    }
+
+    public static void selectSessionRdpDepartment(String departmentKey) throws IOException {
+        String key = normalizeRdpDepartmentKey(departmentKey);
+        if (key.isEmpty()) {
+            throw new IllegalArgumentException("部署名が空です。");
+        }
+        if (!loadDocument().rdpDepartments().containsKey(key)) {
+            throw new IllegalArgumentException("部署が一覧にありません: " + key);
+        }
+        sessionRdpDepartmentKey = key;
+        saveLastSelectedRdpDepartmentLocal(key);
+    }
+
+    public static String lastSelectedRdpDepartmentLocal() throws IOException {
+        Path path = AppPaths.rdpLauncherOperatorLastDepartmentPath();
+        if (!Files.isRegularFile(path)) {
+            return "";
+        }
+        return normalizeRdpDepartmentKey(Files.readString(path, StandardCharsets.UTF_8));
+    }
+
+    /**
+     * PC ローカルに保存した最終部署でセッションを復元する。
+     */
+    public static boolean tryRestoreSessionRdpDepartmentFromLocal() throws IOException {
+        String last = lastSelectedRdpDepartmentLocal();
+        if (last.isEmpty() || !listRdpDepartmentKeys().contains(last)) {
+            return false;
+        }
+        selectSessionRdpDepartment(last);
+        return true;
+    }
+
     /** ネットワーク共有ではなくローカル退避を使っているとき true。 */
     public static boolean usingLocalStoreFallback() {
         return usingLocalStoreFallback;
@@ -255,6 +410,15 @@ public final class FactoryOperatorUserStore {
             choices.add(GUEST_OPERATOR_NAME);
         }
         return choices;
+    }
+
+    /** ユーザー管理者タブの一覧表示用（RDP は {@link #loginChoicesForFactory}＝ゲスト含む）。 */
+    public static List<String> namesForAdminTable(FactorySite site) throws IOException {
+        FactorySite factory = site != null ? site : FactorySite.KONAN;
+        if (usesRdpDepartmentScope(factory)) {
+            return loginChoicesForFactory(factory);
+        }
+        return namesForFactory(factory);
     }
 
     public static List<String> namesForFactory(FactorySite site) throws IOException {
@@ -380,7 +544,7 @@ public final class FactoryOperatorUserStore {
             return PinVerificationResult.INVALID_PIN;
         }
         Document doc = loadDocument();
-        FactoryOperatorUsers current = ensureFactory(doc, factory);
+        FactoryOperatorUsers current = ensureFactoryUsersInDocument(doc, factory);
         if (!current.names().contains(normalized)) {
             return PinVerificationResult.INVALID_PIN;
         }
@@ -406,16 +570,16 @@ public final class FactoryOperatorUserStore {
         int nextFailures = failures + 1;
         Map<String, Integer> attempts = new LinkedHashMap<>(current.pinFailedAttempts());
         attempts.put(normalized, nextFailures);
-        doc.factories()
-                .put(
-                        factory,
-                        forSharedStore(
-                                current,
-                                current.names(),
-                                current.pinHashes(),
-                                attempts,
-                                current.pinMustChange(),
-                                current.pinPlaintextAdmin()));
+        putFactoryUsersInDocument(
+                doc,
+                factory,
+                forSharedStore(
+                        current,
+                        current.names(),
+                        current.pinHashes(),
+                        attempts,
+                        current.pinMustChange(),
+                        current.pinPlaintextAdmin()));
         saveDocument(doc);
         return nextFailures >= MAX_CONSECUTIVE_PIN_FAILURES
                 ? PinVerificationResult.LOCKED
@@ -430,7 +594,7 @@ public final class FactoryOperatorUserStore {
             throw new IllegalArgumentException("名前が空です。");
         }
         Document doc = loadDocument();
-        FactoryOperatorUsers current = ensureFactory(doc, factory);
+        FactoryOperatorUsers current = ensureFactoryUsersInDocument(doc, factory);
         if (!current.names().contains(normalized)) {
             throw new IllegalArgumentException("操作者名が一覧にありません: " + normalized);
         }
@@ -555,7 +719,7 @@ public final class FactoryOperatorUserStore {
             throw new IllegalArgumentException("PIN は " + pinLengthRangeDescriptionJa() + " です。");
         }
         Document doc = loadDocument();
-        FactoryOperatorUsers current = ensureFactory(doc, factory);
+        FactoryOperatorUsers current = ensureFactoryUsersInDocument(doc, factory);
         if (!current.names().contains(normalized)) {
             throw new IllegalArgumentException("操作者名が一覧にありません: " + normalized);
         }
@@ -571,10 +735,8 @@ public final class FactoryOperatorUserStore {
         }
         Map<String, String> plaintextAdmin = new LinkedHashMap<>(current.pinPlaintextAdmin());
         plaintextAdmin.put(normalized, pinNorm);
-        doc.factories()
-                .put(
-                        factory,
-                        forSharedStore(current, current.names(), pins, attempts, mustChange, plaintextAdmin));
+        putFactoryUsersInDocument(
+                doc, factory, forSharedStore(current, current.names(), pins, attempts, mustChange, plaintextAdmin));
         saveDocument(doc);
         return pinNorm;
     }
@@ -591,7 +753,7 @@ public final class FactoryOperatorUserStore {
             throw new IllegalArgumentException("操作者名が空です。");
         }
         Document doc = loadDocument();
-        FactoryOperatorUsers current = ensureFactory(doc, factory);
+        FactoryOperatorUsers current = ensureFactoryUsersInDocument(doc, factory);
         if (isGuestOperator(normalized)) {
             sessionOperatorName = normalized;
             saveLastSelectedLocal(factory, normalized);
@@ -619,7 +781,7 @@ public final class FactoryOperatorUserStore {
             throw new IllegalArgumentException("「" + GUEST_OPERATOR_NAME + "」は予約された操作者名です。");
         }
         Document doc = loadDocument();
-        FactoryOperatorUsers current = ensureFactory(doc, factory);
+        FactoryOperatorUsers current = ensureFactoryUsersInDocument(doc, factory);
         if (current.names().contains(normalized)) {
             throw new IllegalArgumentException("同じ名前が既にあります: " + normalized);
         }
@@ -635,16 +797,16 @@ public final class FactoryOperatorUserStore {
         mustChange.add(normalized);
         Map<String, String> plaintextAdmin = new LinkedHashMap<>(current.pinPlaintextAdmin());
         plaintextAdmin.put(normalized, pin);
-        doc.factories()
-                .put(
-                        factory,
-                        forSharedStore(
-                                current,
-                                next,
-                                pins,
-                                current.pinFailedAttempts(),
-                                mustChange,
-                                plaintextAdmin));
+        putFactoryUsersInDocument(
+                doc,
+                factory,
+                forSharedStore(
+                        current,
+                        next,
+                        pins,
+                        current.pinFailedAttempts(),
+                        mustChange,
+                        plaintextAdmin));
         saveDocument(doc);
         return pin;
     }
@@ -653,7 +815,7 @@ public final class FactoryOperatorUserStore {
         FactorySite factory = site != null ? site : FactorySite.KONAN;
         String normalized = normalizeName(name);
         Document doc = loadDocument();
-        FactoryOperatorUsers current = ensureFactory(doc, factory);
+        FactoryOperatorUsers current = ensureFactoryUsersInDocument(doc, factory);
         if (current.names().size() <= 1) {
             throw new IllegalStateException("最後の1件は削除できません。");
         }
@@ -677,18 +839,19 @@ public final class FactoryOperatorUserStore {
         aladdinIds.remove(normalized);
         Map<String, String> aladdinPasswords = new LinkedHashMap<>(current.aladdinPasswordCiphertext());
         aladdinPasswords.remove(normalized);
-        doc.factories()
-                .put(
-                        factory,
-                        forSharedStore(
-                                next,
-                                pins,
-                                attempts,
-                                mustChange,
-                                plaintextAdmin,
-                                aladdinIds,
-                                aladdinPasswords));
-        if (normalized.equals(sessionOperatorName) && factory == GlobalInitSettingTarget.load()) {
+        putFactoryUsersInDocument(
+                doc,
+                factory,
+                forSharedStore(
+                        next,
+                        pins,
+                        attempts,
+                        mustChange,
+                        plaintextAdmin,
+                        aladdinIds,
+                        aladdinPasswords));
+        if (normalized.equals(sessionOperatorName)
+                && (factory == GlobalInitSettingTarget.load() || usesRdpDepartmentScope(factory))) {
             sessionOperatorName = "";
         }
         saveDocument(doc);
@@ -697,10 +860,10 @@ public final class FactoryOperatorUserStore {
     public static void resetNamesToDefaults(FactorySite site) throws IOException {
         FactorySite factory = site != null ? site : FactorySite.KONAN;
         Document doc = loadDocument();
-        FactoryOperatorUsers current = ensureFactory(doc, factory);
+        FactoryOperatorUsers current = ensureFactoryUsersInDocument(doc, factory);
         String localLast = loadLastSelectedLocal(factory);
         if (!localLast.isEmpty()
-                && !DEFAULT_NAMES.contains(localLast)
+                && !defaultNamesForSite(factory).contains(localLast)
                 && !isGuestOperator(localLast)) {
             clearLastSelectedLocal(factory);
         }
@@ -710,7 +873,7 @@ public final class FactoryOperatorUserStore {
         Map<String, String> plaintextAdmin = new LinkedHashMap<>();
         Map<String, String> aladdinIds = new LinkedHashMap<>();
         Map<String, String> aladdinPasswords = new LinkedHashMap<>();
-        for (String n : DEFAULT_NAMES) {
+        for (String n : defaultNamesForSite(factory)) {
             String h = current.pinHashes().get(n);
             if (h != null && !h.isBlank()) {
                 pins.put(n, h);
@@ -735,18 +898,19 @@ public final class FactoryOperatorUserStore {
                 aladdinPasswords.put(n, aladdinCipher);
             }
         }
-        doc.factories()
-                .put(
-                        factory,
-                        forSharedStore(
-                                DEFAULT_NAMES,
-                                pins,
-                                attempts,
-                                mustChange,
-                                plaintextAdmin,
-                                aladdinIds,
-                                aladdinPasswords));
-        if (!DEFAULT_NAMES.contains(sessionOperatorName) && factory == GlobalInitSettingTarget.load()) {
+        putFactoryUsersInDocument(
+                doc,
+                factory,
+                forSharedStore(
+                        defaultNamesForSite(factory),
+                        pins,
+                        attempts,
+                        mustChange,
+                        plaintextAdmin,
+                        aladdinIds,
+                        aladdinPasswords));
+        if (!defaultNamesForSite(factory).contains(sessionOperatorName)
+                && (factory == GlobalInitSettingTarget.load() || usesRdpDepartmentScope(factory))) {
             sessionOperatorName = "";
         }
         saveDocument(doc);
@@ -762,6 +926,9 @@ public final class FactoryOperatorUserStore {
 
     /** 一覧表示用: PIN / ロック状態。 */
     public static String pinStatusLabel(FactorySite site, String name) throws IOException {
+        if (isGuestOperator(name)) {
+            return "PIN不要";
+        }
         if (isPinLocked(site, name)) {
             return "ロック";
         }
@@ -837,7 +1004,7 @@ public final class FactoryOperatorUserStore {
             throw new IllegalArgumentException("アラジン パスワードが空です。");
         }
         Document doc = loadDocument();
-        FactoryOperatorUsers current = ensureFactory(doc, factory);
+        FactoryOperatorUsers current = ensureFactoryUsersInDocument(doc, factory);
         if (!current.names().contains(normalized)) {
             throw new IllegalArgumentException("操作者名が一覧にありません: " + normalized);
         }
@@ -851,17 +1018,17 @@ public final class FactoryOperatorUserStore {
         Map<String, String> passwords = new LinkedHashMap<>(current.aladdinPasswordCiphertext());
         loginIds.put(normalized, id);
         passwords.put(normalized, JSON.writeValueAsString(payload));
-        doc.factories()
-                .put(
-                        factory,
-                        forSharedStore(
-                                current.names(),
-                                current.pinHashes(),
-                                current.pinFailedAttempts(),
-                                current.pinMustChange(),
-                                current.pinPlaintextAdmin(),
-                                loginIds,
-                                passwords));
+        putFactoryUsersInDocument(
+                doc,
+                factory,
+                forSharedStore(
+                        current.names(),
+                        current.pinHashes(),
+                        current.pinFailedAttempts(),
+                        current.pinMustChange(),
+                        current.pinPlaintextAdmin(),
+                        loginIds,
+                        passwords));
         saveDocument(doc);
     }
 
@@ -872,42 +1039,152 @@ public final class FactoryOperatorUserStore {
     public static synchronized void syncLauncherCredentialsJsonToDeployDir(Map<String, String> ui)
             throws IOException {
         Map<String, String> env = ui != null ? ui : Map.of();
-        configureFromUi(env, GlobalInitSettingTarget.loadEffective(env));
+        FactorySite scope = operatorScopeForCurrentApp(env, null);
+        configureForCurrentApp(env, scope);
         Document doc = loadDocument();
-        Path iniPath = AppPaths.resolveRdpLauncherIni(env);
+        Path iniPath = AppPaths.resolveRdpLauncherIni(env, sessionOperatorName());
         Path parent = iniPath.getParent();
         if (parent == null) {
-            throw new IOException("RAP設定.ini の親ディレクトリが解決できません: " + iniPath);
+            throw new IOException("RPA設定.ini の親ディレクトリが解決できません: " + iniPath);
         }
         writeLauncherCredentialsJson(
                 parent.resolve(OperatorAladdinCredentialsLauncherJson.FILE_NAME), doc);
     }
 
     private static FactoryOperatorUsers loadFactory(FactorySite site) throws IOException {
-        return ensureFactory(loadDocument(), site != null ? site : FactorySite.KONAN);
+        FactorySite effective = site != null ? site : FactorySite.KONAN;
+        if (effective == FactorySite.RDP_LAUNCHER && AppPaths.usesRemoteDesktopAppHome()) {
+            String dept = effectiveRdpDepartmentKey();
+            if (dept.isBlank()) {
+                return new FactoryOperatorUsers(RDP_LAUNCHER_DEFAULT_NAMES, "");
+            }
+            return ensureRdpDepartment(loadDocument(), dept);
+        }
+        return ensureFactory(loadDocument(), effective);
+    }
+
+    private static String effectiveRdpDepartmentKey() {
+        String admin = adminRdpDepartmentContextKey != null ? adminRdpDepartmentContextKey.strip() : "";
+        if (!admin.isEmpty()) {
+            return admin;
+        }
+        return sessionRdpDepartmentKey();
+    }
+
+    private static FactoryOperatorUsers ensureRdpDepartment(Document doc, String departmentKey) {
+        String key = normalizeRdpDepartmentKey(departmentKey);
+        FactoryOperatorUsers current = doc.rdpDepartments().get(key);
+        if (current != null) {
+            return current;
+        }
+        FactoryOperatorUsers created = new FactoryOperatorUsers(RDP_LAUNCHER_DEFAULT_NAMES, "");
+        doc.rdpDepartments().put(key, created);
+        if (!doc.rdpDepartmentOrder().contains(key)) {
+            doc.rdpDepartmentOrder().add(key);
+        }
+        return created;
+    }
+
+    private static boolean usesRdpDepartmentScope(FactorySite factory) {
+        return factory == FactorySite.RDP_LAUNCHER && AppPaths.usesRemoteDesktopAppHome();
+    }
+
+    private static FactoryOperatorUsers ensureFactoryUsersInDocument(Document doc, FactorySite site) {
+        FactorySite factory = site != null ? site : FactorySite.KONAN;
+        if (usesRdpDepartmentScope(factory)) {
+            String dept = effectiveRdpDepartmentKey();
+            if (dept.isBlank()) {
+                throw new IllegalStateException(
+                        "部署が未選択です。ユーザー管理者タブで部署を選ぶか、起動時に部署を選択してください。");
+            }
+            return ensureRdpDepartment(doc, dept);
+        }
+        return ensureFactory(doc, factory);
+    }
+
+    private static void putFactoryUsersInDocument(
+            Document doc, FactorySite site, FactoryOperatorUsers users) {
+        FactorySite factory = site != null ? site : FactorySite.KONAN;
+        if (usesRdpDepartmentScope(factory)) {
+            String dept = effectiveRdpDepartmentKey();
+            if (dept.isBlank()) {
+                throw new IllegalStateException(
+                        "部署が未選択です。ユーザー管理者タブで部署を選ぶか、起動時に部署を選択してください。");
+            }
+            String key = normalizeRdpDepartmentKey(dept);
+            doc.rdpDepartments().put(key, users);
+            if (!doc.rdpDepartmentOrder().contains(key)) {
+                doc.rdpDepartmentOrder().add(key);
+            }
+        } else {
+            doc.factories().put(factory, users);
+        }
+    }
+
+    private static void migrateRdpLauncherLegacyToDepartments(Document doc) {
+        if (doc.rdpDepartments().isEmpty()) {
+            FactoryOperatorUsers legacy = doc.factories().get(FactorySite.RDP_LAUNCHER);
+            if (legacy != null && !legacy.names().isEmpty()) {
+                String key = normalizeRdpDepartmentKey(DEFAULT_RDP_DEPARTMENT_LABEL);
+                doc.rdpDepartments().put(key, legacy);
+                doc.rdpDepartmentOrder().add(key);
+                doc.factories()
+                        .put(
+                                FactorySite.RDP_LAUNCHER,
+                                new FactoryOperatorUsers(RDP_LAUNCHER_DEFAULT_NAMES, ""));
+            }
+        }
+    }
+
+    private static void saveLastSelectedRdpDepartmentLocal(String departmentKey) throws IOException {
+        String key = normalizeRdpDepartmentKey(departmentKey);
+        if (key.isEmpty()) {
+            Files.deleteIfExists(AppPaths.rdpLauncherOperatorLastDepartmentPath());
+            return;
+        }
+        Path path = AppPaths.rdpLauncherOperatorLastDepartmentPath();
+        if (path.getParent() != null) {
+            Files.createDirectories(path.getParent());
+        }
+        Files.writeString(
+                path,
+                key + System.lineSeparator(),
+                StandardCharsets.UTF_8,
+                StandardOpenOption.CREATE,
+                StandardOpenOption.TRUNCATE_EXISTING);
     }
 
     private static Document loadDocument() throws IOException {
         Path path = storePath();
         migrateLegacyStoreIfNeeded(path);
         if (!Files.isRegularFile(path)) {
-            Path network = configuredNetworkStorePath;
-            if (network != null
-                    && !network.equals(path)
-                    && Files.isRegularFile(network)
-                    && Files.isReadable(network)) {
-                JsonNode root = readStoreRoot(network);
-                if (root != null && root.isObject()) {
-                    Document doc = parseDocumentRoot(root);
-                    saveDocumentToPath(path, doc);
-                    return doc;
+            if (!AppPaths.usesRemoteDesktopAppHome()) {
+                Path network = configuredNetworkStorePath;
+                if (network != null
+                        && !network.equals(path)
+                        && Files.isRegularFile(network)
+                        && Files.isReadable(network)) {
+                    JsonNode root = readStoreRoot(network);
+                    if (root != null && root.isObject()) {
+                        Document doc = parseDocumentRoot(root);
+                        saveDocumentToPath(path, doc);
+                        return doc;
+                    }
                 }
             }
-            return defaultDocument();
+            Document empty = defaultDocument();
+            if (AppPaths.usesRemoteDesktopAppHome()) {
+                ensureAtLeastOneRdpDepartment(empty);
+            }
+            return empty;
         }
         JsonNode root = readStoreRoot(path);
         if (root == null || !root.isObject()) {
-            return defaultDocument();
+            Document empty = defaultDocument();
+            if (AppPaths.usesRemoteDesktopAppHome()) {
+                ensureAtLeastOneRdpDepartment(empty);
+            }
+            return empty;
         }
         return parseDocumentRoot(root);
     }
@@ -939,19 +1216,64 @@ public final class FactoryOperatorUserStore {
                 }
             }
         }
-        Document doc = new Document(ver, factories);
+        List<String> rdpOrder = new ArrayList<>();
+        Map<String, FactoryOperatorUsers> rdpDepartments = new LinkedHashMap<>();
+        JsonNode orderNode = root.get("rdpDepartmentOrder");
+        if (orderNode != null && orderNode.isArray()) {
+            for (JsonNode n : orderNode) {
+                if (n == null || n.isNull()) {
+                    continue;
+                }
+                String key = normalizeRdpDepartmentKey(n.asText(""));
+                if (!key.isEmpty() && !rdpOrder.contains(key)) {
+                    rdpOrder.add(key);
+                }
+            }
+        }
+        JsonNode rdpNode = root.get("rdpDepartments");
+        if (rdpNode != null && rdpNode.isObject()) {
+            rdpNode
+                    .fields()
+                    .forEachRemaining(
+                            e -> {
+                                String key = normalizeRdpDepartmentKey(e.getKey());
+                                if (key.isEmpty() || e.getValue() == null || !e.getValue().isObject()) {
+                                    return;
+                                }
+                                rdpDepartments.put(key, parseFactory(e.getValue(), RDP_LAUNCHER_DEFAULT_NAMES));
+                                if (!rdpOrder.contains(key)) {
+                                    rdpOrder.add(key);
+                                }
+                            });
+        }
+        Document doc = new Document(ver, factories, rdpOrder, rdpDepartments);
         for (FactorySite site : FactorySite.values()) {
             ensureFactory(doc, site);
         }
+        migrateRdpLauncherLegacyToDepartments(doc);
+        ensureAtLeastOneRdpDepartment(doc);
         return doc;
+    }
+
+    private static void ensureAtLeastOneRdpDepartment(Document doc) {
+        if (!doc.rdpDepartments().isEmpty()) {
+            return;
+        }
+        String key = normalizeRdpDepartmentKey(DEFAULT_RDP_DEPARTMENT_LABEL);
+        doc.rdpDepartments().put(key, new FactoryOperatorUsers(RDP_LAUNCHER_DEFAULT_NAMES, ""));
+        doc.rdpDepartmentOrder().add(key);
     }
 
     private static void migrateLegacyStoreIfNeeded(Path targetBin) throws IOException {
         if (Files.isRegularFile(targetBin)) {
             return;
         }
-        Path legacySibling = targetBin.resolveSibling("factory-operator-users.json");
-        for (Path legacy : List.of(resolveLegacyJsonStorePath(), legacySibling)) {
+        List<Path> legacyCandidates = new ArrayList<>();
+        if (!AppPaths.usesRemoteDesktopAppHome()) {
+            legacyCandidates.add(resolveLegacyJsonStorePath());
+        }
+        legacyCandidates.add(targetBin.resolveSibling("factory-operator-users.json"));
+        for (Path legacy : legacyCandidates) {
             if (!Files.isRegularFile(legacy)) {
                 continue;
             }
@@ -1028,53 +1350,71 @@ public final class FactoryOperatorUserStore {
         root.put("schemaVersion", SCHEMA_VERSION);
         ObjectNode factories = root.putObject("factories");
         for (Map.Entry<FactorySite, FactoryOperatorUsers> e : doc.factories().entrySet()) {
-            ObjectNode fo = factories.putObject(e.getKey().name());
-            ArrayNode arr = fo.putArray("names");
-            for (String name : e.getValue().names()) {
-                arr.add(name);
-            }
-            fo.put("lastSelected", "");
-            ObjectNode pins = fo.putObject("pinHashes");
-            for (Map.Entry<String, String> pe : e.getValue().pinHashes().entrySet()) {
-                if (e.getValue().names().contains(pe.getKey())) {
-                    pins.put(pe.getKey(), pe.getValue());
-                }
-            }
-            ObjectNode attempts = fo.putObject("pinFailedAttempts");
-            for (Map.Entry<String, Integer> ae : e.getValue().pinFailedAttempts().entrySet()) {
-                if (e.getValue().names().contains(ae.getKey()) && ae.getValue() != null && ae.getValue() > 0) {
-                    attempts.put(ae.getKey(), ae.getValue());
-                }
-            }
-            ArrayNode mustChange = fo.putArray("pinMustChange");
-            for (String name : e.getValue().pinMustChange()) {
-                if (e.getValue().names().contains(name)) {
-                    mustChange.add(name);
-                }
-            }
-            ObjectNode plaintextAdmin = fo.putObject("pinPlaintextAdmin");
-            for (Map.Entry<String, String> pe : e.getValue().pinPlaintextAdmin().entrySet()) {
-                if (e.getValue().names().contains(pe.getKey())) {
-                    plaintextAdmin.put(pe.getKey(), pe.getValue());
-                }
-            }
-            ObjectNode aladdinLoginIds = fo.putObject("aladdinLoginIds");
-            for (Map.Entry<String, String> ae : e.getValue().aladdinLoginIds().entrySet()) {
-                if (e.getValue().names().contains(ae.getKey())) {
-                    aladdinLoginIds.put(ae.getKey(), ae.getValue());
-                }
-            }
-            ObjectNode aladdinPasswordCiphertext = fo.putObject("aladdinPasswordCiphertext");
-            for (Map.Entry<String, String> ae : e.getValue().aladdinPasswordCiphertext().entrySet()) {
-                if (e.getValue().names().contains(ae.getKey())) {
-                    aladdinPasswordCiphertext.put(ae.getKey(), ae.getValue());
-                }
+            serializeFactoryUsers(factories.putObject(e.getKey().name()), e.getValue());
+        }
+        ArrayNode orderArr = root.putArray("rdpDepartmentOrder");
+        for (String key : doc.rdpDepartmentOrder()) {
+            orderArr.add(key);
+        }
+        ObjectNode rdpDepartments = root.putObject("rdpDepartments");
+        for (String key : doc.rdpDepartmentOrder()) {
+            FactoryOperatorUsers users = doc.rdpDepartments().get(key);
+            if (users != null) {
+                serializeFactoryUsers(rdpDepartments.putObject(key), users);
             }
         }
         return root;
     }
 
+    private static void serializeFactoryUsers(ObjectNode fo, FactoryOperatorUsers users) {
+        ArrayNode arr = fo.putArray("names");
+        for (String name : users.names()) {
+            arr.add(name);
+        }
+        fo.put("lastSelected", "");
+        ObjectNode pins = fo.putObject("pinHashes");
+        for (Map.Entry<String, String> pe : users.pinHashes().entrySet()) {
+            if (users.names().contains(pe.getKey())) {
+                pins.put(pe.getKey(), pe.getValue());
+            }
+        }
+        ObjectNode attempts = fo.putObject("pinFailedAttempts");
+        for (Map.Entry<String, Integer> ae : users.pinFailedAttempts().entrySet()) {
+            if (users.names().contains(ae.getKey()) && ae.getValue() != null && ae.getValue() > 0) {
+                attempts.put(ae.getKey(), ae.getValue());
+            }
+        }
+        ArrayNode mustChange = fo.putArray("pinMustChange");
+        for (String name : users.pinMustChange()) {
+            if (users.names().contains(name)) {
+                mustChange.add(name);
+            }
+        }
+        ObjectNode plaintextAdmin = fo.putObject("pinPlaintextAdmin");
+        for (Map.Entry<String, String> pe : users.pinPlaintextAdmin().entrySet()) {
+            if (users.names().contains(pe.getKey())) {
+                plaintextAdmin.put(pe.getKey(), pe.getValue());
+            }
+        }
+        ObjectNode aladdinLoginIds = fo.putObject("aladdinLoginIds");
+        for (Map.Entry<String, String> ae : users.aladdinLoginIds().entrySet()) {
+            if (users.names().contains(ae.getKey())) {
+                aladdinLoginIds.put(ae.getKey(), ae.getValue());
+            }
+        }
+        ObjectNode aladdinPasswordCiphertext = fo.putObject("aladdinPasswordCiphertext");
+        for (Map.Entry<String, String> ae : users.aladdinPasswordCiphertext().entrySet()) {
+            if (users.names().contains(ae.getKey())) {
+                aladdinPasswordCiphertext.put(ae.getKey(), ae.getValue());
+            }
+        }
+    }
+
     private static FactoryOperatorUsers parseFactory(JsonNode node) {
+        return parseFactory(node, DEFAULT_NAMES);
+    }
+
+    private static FactoryOperatorUsers parseFactory(JsonNode node, List<String> namesIfEmpty) {
         List<String> names = new ArrayList<>();
         JsonNode arr = node.get("names");
         if (arr != null && arr.isArray()) {
@@ -1091,7 +1431,7 @@ public final class FactoryOperatorUserStore {
             names.addAll(dedupe);
         }
         if (names.isEmpty()) {
-            names.addAll(DEFAULT_NAMES);
+            names.addAll(namesIfEmpty != null ? namesIfEmpty : DEFAULT_NAMES);
         }
         String last = normalizeName(node.path("lastSelected").asText(""));
         if (!last.isEmpty() && !names.contains(last) && !isGuestOperator(last)) {
@@ -1370,17 +1710,44 @@ public final class FactoryOperatorUserStore {
                 byFactory = new LinkedHashMap<>();
         for (Map.Entry<FactorySite, FactoryOperatorUsers> e : doc.factories().entrySet()) {
             Map<String, OperatorAladdinCredentialsLauncherJson.OperatorEntry> operators =
-                    new LinkedHashMap<>();
-            FactoryOperatorUsers factoryUsers = e.getValue();
-            for (String name : factoryUsers.names()) {
-                String loginId = factoryUsers.aladdinLoginIds().get(name);
-                String cipher = factoryUsers.aladdinPasswordCiphertext().get(name);
-                if (loginId == null
-                        || loginId.isBlank()
-                        || cipher == null
-                        || cipher.isBlank()) {
-                    continue;
+                    launcherOperatorsFromFactoryUsers(e.getValue());
+            if (!operators.isEmpty()) {
+                byFactory.put(e.getKey(), operators);
+            }
+        }
+        if (AppPaths.usesRemoteDesktopAppHome()) {
+            String dept = sessionRdpDepartmentKey();
+            if (!dept.isBlank()) {
+                FactoryOperatorUsers deptUsers = doc.rdpDepartments().get(dept);
+                if (deptUsers != null) {
+                    Map<String, OperatorAladdinCredentialsLauncherJson.OperatorEntry> operators =
+                            launcherOperatorsFromFactoryUsers(deptUsers);
+                    if (!operators.isEmpty()) {
+                        byFactory.put(FactorySite.RDP_LAUNCHER, operators);
+                    }
                 }
+            }
+        }
+        OperatorAladdinCredentialsLauncherJson.writeAllFactories(jsonPath, byFactory);
+    }
+
+    private static Map<String, OperatorAladdinCredentialsLauncherJson.OperatorEntry>
+            launcherOperatorsFromFactoryUsers(FactoryOperatorUsers factoryUsers) {
+        Map<String, OperatorAladdinCredentialsLauncherJson.OperatorEntry> operators =
+                new LinkedHashMap<>();
+        if (factoryUsers == null) {
+            return operators;
+        }
+        for (String name : factoryUsers.names()) {
+            String loginId = factoryUsers.aladdinLoginIds().get(name);
+            String cipher = factoryUsers.aladdinPasswordCiphertext().get(name);
+            if (loginId == null
+                    || loginId.isBlank()
+                    || cipher == null
+                    || cipher.isBlank()) {
+                continue;
+            }
+            try {
                 JsonNode payload = JSON.readTree(cipher);
                 if (payload != null && payload.isObject()) {
                     operators.put(
@@ -1388,18 +1755,26 @@ public final class FactoryOperatorUserStore {
                             new OperatorAladdinCredentialsLauncherJson.OperatorEntry(
                                     loginId, (ObjectNode) payload));
                 }
+            } catch (IOException ignored) {
+                // skip broken cipher
             }
-            byFactory.put(e.getKey(), operators);
         }
-        OperatorAladdinCredentialsLauncherJson.writeAllFactories(jsonPath, byFactory);
+        return operators;
     }
 
     private static Document defaultDocument() {
         Map<FactorySite, FactoryOperatorUsers> factories = new LinkedHashMap<>();
         for (FactorySite site : FactorySite.values()) {
-            factories.put(site, new FactoryOperatorUsers(DEFAULT_NAMES, ""));
+            factories.put(site, new FactoryOperatorUsers(defaultNamesForSite(site), ""));
         }
-        return new Document(SCHEMA_VERSION, factories);
+        return new Document(SCHEMA_VERSION, factories, new ArrayList<>(), new LinkedHashMap<>());
+    }
+
+    private static List<String> defaultNamesForSite(FactorySite site) {
+        if (site == FactorySite.RDP_LAUNCHER) {
+            return RDP_LAUNCHER_DEFAULT_NAMES;
+        }
+        return DEFAULT_NAMES;
     }
 
     private static FactoryOperatorUsers ensureFactory(Document doc, FactorySite site) {
@@ -1407,7 +1782,7 @@ public final class FactoryOperatorUserStore {
         if (current != null && !current.names().isEmpty()) {
             return current;
         }
-        FactoryOperatorUsers created = new FactoryOperatorUsers(DEFAULT_NAMES, "");
+        FactoryOperatorUsers created = new FactoryOperatorUsers(defaultNamesForSite(site), "");
         doc.factories().put(site, created);
         return created;
     }
@@ -1448,22 +1823,22 @@ public final class FactoryOperatorUserStore {
     }
 
     private static void clearPinFailures(Document doc, FactorySite factory, String normalized) {
-        FactoryOperatorUsers current = doc.factories().get(factory);
-        if (current == null || !current.pinFailedAttempts().containsKey(normalized)) {
+        FactoryOperatorUsers current = ensureFactoryUsersInDocument(doc, factory);
+        if (!current.pinFailedAttempts().containsKey(normalized)) {
             return;
         }
         Map<String, Integer> attempts = new LinkedHashMap<>(current.pinFailedAttempts());
         attempts.remove(normalized);
-        doc.factories()
-                .put(
-                        factory,
-                        forSharedStore(
-                                current,
-                                current.names(),
-                                current.pinHashes(),
-                                attempts,
-                                current.pinMustChange(),
-                                current.pinPlaintextAdmin()));
+        putFactoryUsersInDocument(
+                doc,
+                factory,
+                forSharedStore(
+                        current,
+                        current.names(),
+                        current.pinHashes(),
+                        attempts,
+                        current.pinMustChange(),
+                        current.pinPlaintextAdmin()));
     }
 
     private static FactoryOperatorUsers forSharedStore(
@@ -1527,6 +1902,16 @@ public final class FactoryOperatorUserStore {
                     .toAbsolutePath()
                     .normalize();
         }
+        if (AppPaths.usesRemoteDesktopAppHome() && site == FactorySite.RDP_LAUNCHER) {
+            String dept = effectiveRdpDepartmentKey();
+            if (!dept.isBlank()) {
+                return AppPaths.rdpLauncherOperatorLastSelectedPathForDepartment(dept);
+            }
+            Path legacy = AppPaths.rdpLauncherOperatorLastSelectedPath();
+            if (Files.isRegularFile(legacy)) {
+                return legacy;
+            }
+        }
         return AppPaths.localFactoryOperatorLastSelectedPath(site);
     }
 
@@ -1576,17 +1961,17 @@ public final class FactoryOperatorUserStore {
         saveLastSelectedLocal(factory, legacy);
         if (!legacy.isEmpty()) {
             Document doc = loadDocument();
-            FactoryOperatorUsers current = ensureFactory(doc, factory);
-            doc.factories()
-                    .put(
-                            factory,
-                            forSharedStore(
-                                    current,
-                                    current.names(),
-                                    current.pinHashes(),
-                                    current.pinFailedAttempts(),
-                                    current.pinMustChange(),
-                                    current.pinPlaintextAdmin()));
+            FactoryOperatorUsers current = ensureFactoryUsersInDocument(doc, factory);
+            putFactoryUsersInDocument(
+                    doc,
+                    factory,
+                    forSharedStore(
+                            current,
+                            current.names(),
+                            current.pinHashes(),
+                            current.pinFailedAttempts(),
+                            current.pinMustChange(),
+                            current.pinPlaintextAdmin()));
             saveDocument(doc);
         }
     }
@@ -1603,16 +1988,26 @@ public final class FactoryOperatorUserStore {
         }
     }
 
-    private record Document(int schemaVersion, Map<FactorySite, FactoryOperatorUsers> factories) {
+    private record Document(
+            int schemaVersion,
+            Map<FactorySite, FactoryOperatorUsers> factories,
+            List<String> rdpDepartmentOrder,
+            Map<String, FactoryOperatorUsers> rdpDepartments) {
 
         Document {
             factories = factories != null ? new LinkedHashMap<>(factories) : new LinkedHashMap<>();
+            rdpDepartmentOrder =
+                    rdpDepartmentOrder != null ? new ArrayList<>(rdpDepartmentOrder) : new ArrayList<>();
+            rdpDepartments =
+                    rdpDepartments != null ? new LinkedHashMap<>(rdpDepartments) : new LinkedHashMap<>();
         }
     }
 
     /** テスト用: ストアを既定状態へ戻す。 */
     public static void resetStoreForTests() throws IOException {
         sessionOperatorName = "";
+        sessionRdpDepartmentKey = "";
+        adminRdpDepartmentContextKey = "";
         configuredStorePath = null;
         configuredNetworkStorePath = null;
         usingLocalStoreFallback = false;
@@ -1623,6 +2018,7 @@ public final class FactoryOperatorUserStore {
         for (FactorySite site : FactorySite.values()) {
             Files.deleteIfExists(localLastSelectedPath(site));
         }
+        Files.deleteIfExists(AppPaths.rdpLauncherOperatorLastDepartmentPath());
     }
 
     /** テスト用: ファイルを直接書き込む。 */

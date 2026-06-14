@@ -189,7 +189,7 @@ public final class EnvTabController {
     private Button encryptGeminiCredentialsButton;
 
     private Stage ownerStage;
-    private MainShellController shell;
+    private EnvTabShellHost shell;
     private ObservableList<EnvVarRow> envRows;
 
     private final AtomicInteger headerColumnCount = new AtomicInteger(0);
@@ -202,7 +202,7 @@ public final class EnvTabController {
 
     private boolean dispatchGeminiEditorWired;
 
-    void bindShell(MainShellController shell) {
+    void bindShell(EnvTabShellHost shell) {
         this.shell = shell;
         this.ownerStage = shell.getPrimaryStage();
         this.envRows = shell.getEnvRows();

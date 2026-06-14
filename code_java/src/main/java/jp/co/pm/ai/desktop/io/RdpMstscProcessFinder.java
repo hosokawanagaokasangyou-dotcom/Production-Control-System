@@ -16,6 +16,8 @@ import java.util.concurrent.TimeUnit;
 /** Windows 上で {@code mstsc.exe} プロセスを .rdp パスから特定する。 */
 final class RdpMstscProcessFinder {
 
+    private static final Duration POLL = Duration.ofMillis(500);
+
     private RdpMstscProcessFinder() {}
 
     static OptionalLong readPidMarkerFile(Path markerFile) {
@@ -51,6 +53,71 @@ final class RdpMstscProcessFinder {
             Thread.sleep(200);
         }
         return OptionalLong.empty();
+    }
+
+    /**
+     * 起動直後の mstsc PID を解決する（マーカーファイル待ち・プロセススキャンを含む）。
+     *
+     * <p>セキュリティダイアログ自動操作経由起動では PID マーカー書き込みまで遅延するため、
+     * {@link RemoteDesktopLauncher#launch} 直後は空になり得る。
+     */
+    static long resolveMstscPid(
+            Path rdpProfile,
+            OptionalLong knownPid,
+            Path markerFile,
+            Duration markerTimeout,
+            Duration scanTimeout)
+            throws InterruptedException {
+        if (knownPid.isPresent()) {
+            long pid = knownPid.getAsLong();
+            if (isAlive(pid)) {
+                return pid;
+            }
+        }
+        if (markerFile != null) {
+            OptionalLong fromMarker = pollPidMarkerFile(markerFile, markerTimeout);
+            if (fromMarker.isPresent()) {
+                return fromMarker.getAsLong();
+            }
+        }
+        Path abs = rdpProfile != null ? rdpProfile.toAbsolutePath().normalize() : null;
+        if (abs == null) {
+            return -1L;
+        }
+        long deadline = System.nanoTime() + scanTimeout.toNanos();
+        while (System.nanoTime() < deadline) {
+            if (Thread.currentThread().isInterrupted()) {
+                throw new InterruptedException();
+            }
+            OptionalLong pid = scanForMstscProcessId(abs);
+            if (pid.isPresent()) {
+                return pid.getAsLong();
+            }
+            Thread.sleep(POLL.toMillis());
+        }
+        return -1L;
+    }
+
+    /** 1 回だけ PID 解決を試みる（ポーリングループ内用）。 */
+    static long tryResolveMstscPid(
+            Path rdpProfile, OptionalLong knownPid, Path markerFile) {
+        if (knownPid.isPresent()) {
+            long pid = knownPid.getAsLong();
+            if (isAlive(pid)) {
+                return pid;
+            }
+        }
+        OptionalLong fromMarker = readPidMarkerFile(markerFile);
+        if (fromMarker.isPresent()) {
+            return fromMarker.getAsLong();
+        }
+        if (rdpProfile != null) {
+            OptionalLong scanned = scanForMstscProcessId(rdpProfile.toAbsolutePath().normalize());
+            if (scanned.isPresent()) {
+                return scanned.getAsLong();
+            }
+        }
+        return -1L;
     }
 
     static OptionalLong scanForMstscProcessId(Path rdpProfile) {
@@ -90,6 +157,13 @@ final class RdpMstscProcessFinder {
         return cmdLower.endsWith(fileLower)
                 || cmdLower.contains(" " + fileLower)
                 || cmdLower.contains("\t" + fileLower);
+    }
+
+    private static boolean isAlive(long pid) {
+        if (pid <= 0) {
+            return false;
+        }
+        return ProcessHandle.of(pid).map(ProcessHandle::isAlive).orElse(false);
     }
 
     private static OptionalLong scanViaProcessHandle(Path rdpProfile) {

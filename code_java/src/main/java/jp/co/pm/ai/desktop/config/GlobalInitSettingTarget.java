@@ -3,7 +3,6 @@ package jp.co.pm.ai.desktop.config;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.Map;
 import java.util.Optional;
 
@@ -18,7 +17,7 @@ public final class GlobalInitSettingTarget {
     private GlobalInitSettingTarget() {}
 
     private static Path storePath() {
-        return Paths.get(System.getProperty("user.home"), ".pm-ai-desktop", "global-init-setting-target-factory.txt");
+        return AppPaths.resolveDesktopAppHomeDir().resolve("global-init-setting-target-factory.txt");
     }
 
     public static Path storePathForTests() {

@@ -54,18 +54,18 @@ import javafx.util.StringConverter;
 import javafx.stage.FileChooser;
 import javafx.stage.Window;
 
+import jp.co.pm.ai.desktop.RemoteDesktopStandaloneBootstrap;
 import jp.co.pm.ai.desktop.config.AladdinRpaLaunchArgs;
 import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.config.FactoryOperatorUserStore;
 import jp.co.pm.ai.desktop.config.FactorySite;
-import jp.co.pm.ai.desktop.config.GlobalInitSettingTarget;
-import jp.co.pm.ai.desktop.io.RdpEmbedSettings;
 import jp.co.pm.ai.desktop.io.RdpFileSigner;
 import jp.co.pm.ai.desktop.io.RdpLaunchDisplaySettings;
 import jp.co.pm.ai.desktop.io.RdpLaunchDisplaySettings.LaunchDisplay;
 import jp.co.pm.ai.desktop.io.RdpLaunchProfile;
 import jp.co.pm.ai.desktop.io.RdpLaunchProfileCatalog;
 import jp.co.pm.ai.desktop.io.RdpMstscSessionMonitor;
+import jp.co.pm.ai.desktop.io.RdpPreviewSettings;
 import jp.co.pm.ai.desktop.io.RdpRemoteLauncherDeployer;
 import jp.co.pm.ai.desktop.io.RdpLaunchSharedPathValidator;
 import jp.co.pm.ai.desktop.io.RdpRemoteLauncherIni;
@@ -94,8 +94,9 @@ public final class RequestFormRemoteDesktopPane {
             Consumer<String> profileChangeHandler,
             Consumer<String> companionProgramChangeHandler,
             Consumer<String> companionProgramArgsChangeHandler,
-            Consumer<Map<String, String>> displayEnvChangeHandler,
+            Consumer<String> previewInTabChangeHandler,
             IntConsumer launchProfileNumberChangeHandler,
+            Consumer<String> launcherDeployDirChangeHandler,
             Consumer<String> statusConsumer) {}
 
     private static final double CARD_WIDTH = 720;
@@ -120,8 +121,9 @@ public final class RequestFormRemoteDesktopPane {
         Consumer<String> profileChangeHandler = ctx.profileChangeHandler();
         Consumer<String> companionProgramChangeHandler = ctx.companionProgramChangeHandler();
         Consumer<String> companionProgramArgsChangeHandler = ctx.companionProgramArgsChangeHandler();
-        Consumer<Map<String, String>> displayEnvChangeHandler = ctx.displayEnvChangeHandler();
+        Consumer<String> previewInTabChangeHandler = ctx.previewInTabChangeHandler();
         IntConsumer launchProfileNumberChangeHandler = ctx.launchProfileNumberChangeHandler();
+        Consumer<String> launcherDeployDirChangeHandler = ctx.launcherDeployDirChangeHandler();
         Consumer<String> status = ctx.statusConsumer() != null ? ctx.statusConsumer() : s -> {};
         AtomicReference<Thread> rdpSessionWatchThread = new AtomicReference<>();
         AtomicBoolean launcherDeployInProgress = new AtomicBoolean(false);
@@ -129,7 +131,7 @@ public final class RequestFormRemoteDesktopPane {
         AtomicReference<Runnable> pendingLaunchAfterDeploy = new AtomicReference<>();
         AtomicBoolean rdpSessionActive = new AtomicBoolean(false);
         Runnable[] refreshDisplayPreview = new Runnable[1];
-        final RdpRightPaneEmbedController[] rightPaneEmbedHolder = new RdpRightPaneEmbedController[1];
+        final RdpRightPanePreviewController[] rightPanePreviewHolder = new RdpRightPanePreviewController[1];
 
         Label title = new Label("リモートデスクトップ");
         title.getStyleClass().add("pm-rdp-page-title");
@@ -183,7 +185,7 @@ public final class RequestFormRemoteDesktopPane {
                 new Tooltip(
                         "版比較に関係なく、同梱 "
                                 + AppPaths.RDP_LAUNCHER_EXE_BASENAME
-                                + " をサマリ Excel 同階層へ上書きコピーします。"));
+                                + " を配備先フォルダへ上書きコピーします。"));
 
         Label launcherLogPathLabel = new Label();
         launcherLogPathLabel.getStyleClass().add("pm-rdp-meta-label");
@@ -281,7 +283,7 @@ public final class RequestFormRemoteDesktopPane {
                         "接続先ランチャーが起動したプログラムの終了を待ち、終了後の RDP セッション操作を選びます。"
                                 + " 「なし」は操作しません。「切断」はセッションを残して接続のみ終了します。"
                                 + " 「サインアウト」はセッションを終了します。"
-                                + " RAP設定.ini の「"
+                                + " RPA設定.ini の「"
                                 + RdpRemoteLauncherIni.SESSION_END_ACTION_KEY
                                 + "」に保存されます。"));
         Label sessionEndActionLabel = new Label("子プロセス終了時のセッション操作");
@@ -289,12 +291,33 @@ public final class RequestFormRemoteDesktopPane {
                 new HBox(8, sessionEndActionLabel, cmbSessionEndAction);
         sessionEndActionRow.setAlignment(Pos.CENTER_LEFT);
 
+        Label deployDirSectionTitle = new Label("ランチャー配備先フォルダ");
+        deployDirSectionTitle.getStyleClass().add("pm-rdp-section-title");
+
+        Label deployDirWarningLabel = new Label();
+        deployDirWarningLabel.getStyleClass().add("pm-rdp-status-label");
+        deployDirWarningLabel.setWrapText(true);
+        deployDirWarningLabel.setMaxWidth(CARD_WIDTH);
+
+        TextField deployDirField = new TextField();
+        deployDirField.setPromptText("共有フォルダ（UNC 可）");
+        deployDirField.setMaxWidth(CARD_WIDTH);
+
         Runnable refreshPaths =
                 () -> {
                     Map<String, String> ui = uiEnv.get();
                     Path launcherExe = AppPaths.resolveRdpLauncherExe(ui);
+                    Path deployDir = AppPaths.resolveRdpLauncherDeployDir(ui);
+                    deployDirField.setText(
+                            ui.getOrDefault(AppPaths.KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR, deployDir.toString()));
+                    if (RemoteDesktopStandaloneBootstrap.isActivated()
+                            && ui.getOrDefault(AppPaths.KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR, "").isBlank()) {
+                        deployDirWarningLabel.setText("配備先フォルダを指定してください（参照…から共有フォルダを選ぶ）。");
+                    } else {
+                        deployDirWarningLabel.setText("");
+                    }
                     iniPathLabel.setText(
-                            "RAP設定.ini: " + AppPaths.resolveRdpLauncherIni(ui).toString());
+                            "RPA設定.ini: " + AppPaths.resolveRdpLauncherIni(ui, FactoryOperatorUserStore.sessionOperatorName()).toString());
                     launcherPathLabel.setText("ランチャー exe: " + launcherExe.toString());
                     Path sharedLog = AppPaths.resolveRdpLauncherSharedLogPath(ui);
                     launcherLogPathLabel.setText(
@@ -307,6 +330,62 @@ public final class RequestFormRemoteDesktopPane {
                                                             .BASIC_ISO_DATE)
                                     + ".log");
                 };
+
+        Button btnBrowseDeployDir = new Button("参照…");
+        styleSecondaryButton(btnBrowseDeployDir);
+        btnBrowseDeployDir.setOnAction(
+                e -> {
+                    DirectoryChooser chooser = new DirectoryChooser();
+                    chooser.setTitle("ランチャー配備先フォルダ");
+                    Map<String, String> ui = uiEnv.get();
+                    Path current = AppPaths.resolveRdpLauncherDeployDir(ui);
+                    if (Files.isDirectory(current)) {
+                        chooser.setInitialDirectory(current.toFile());
+                    }
+                    java.io.File chosen =
+                            chooser.showDialog(
+                                    owner != null ? owner : btnBrowseDeployDir.getScene().getWindow());
+                    if (chosen != null) {
+                        String path = chosen.toPath().toAbsolutePath().normalize().toString();
+                        deployDirField.setText(path);
+                        if (launcherDeployDirChangeHandler != null) {
+                            launcherDeployDirChangeHandler.accept(path);
+                        }
+                        refreshPaths.run();
+                        status.accept("ランチャー配備先を更新: " + path);
+                    }
+                });
+
+        Button btnOpenDeployDir = new Button("配備先を開く");
+        styleSecondaryButton(btnOpenDeployDir);
+        btnOpenDeployDir.setOnAction(
+                e -> {
+                    Map<String, String> ui = uiEnv.get();
+                    Path dir = AppPaths.resolveRdpLauncherDeployDir(ui);
+                    if (!Files.isDirectory(dir)) {
+                        Alert alert = new Alert(Alert.AlertType.WARNING);
+                        alert.setTitle("配備先フォルダ");
+                        alert.setHeaderText(null);
+                        alert.setContentText("フォルダが存在しません: " + dir);
+                        alert.showAndWait();
+                        return;
+                    }
+                    openFolder(dir);
+                });
+
+        HBox deployDirActionRow = new HBox(8, btnBrowseDeployDir, btnOpenDeployDir);
+        deployDirActionRow.setAlignment(Pos.CENTER_LEFT);
+        deployDirActionRow.setMaxWidth(CARD_WIDTH);
+
+        VBox deployDirBlock =
+                new VBox(
+                        4,
+                        deployDirSectionTitle,
+                        deployDirField,
+                        deployDirActionRow,
+                        deployDirWarningLabel);
+        deployDirBlock.setFillWidth(true);
+        deployDirBlock.setMaxWidth(CARD_WIDTH);
         refreshPaths.run();
 
         java.util.function.IntConsumer appendProfileRow =
@@ -365,7 +444,7 @@ public final class RequestFormRemoteDesktopPane {
                     categoryField.setPrefWidth(180);
 
                     TextField programField = new TextField();
-                    programField.setPromptText("接続先の RPA exe パス（RAP設定.ini スロット " + profileNumber + "）");
+                    programField.setPromptText("接続先の RPA exe パス（RPA設定.ini スロット " + profileNumber + "）");
                     HBox.setHgrow(programField, Priority.ALWAYS);
 
                     TextField argsField = new TextField();
@@ -425,7 +504,7 @@ public final class RequestFormRemoteDesktopPane {
 
                     CheckBox chkProfileFullScreen = new CheckBox("全画面で接続");
                     chkProfileFullScreen.setTooltip(
-                            new Tooltip("オフのときは下記の幅・高さでウィンドウ表示。タブ埋め込み時は全画面は使えません。"));
+                            new Tooltip("オフのときは下記の幅・高さでウィンドウ表示します。"));
                     Spinner<Integer> profileWidthSpinner = createDesktopWidthSpinner(RdpLaunchDisplaySettings.DEFAULT_WIDTH);
                     Spinner<Integer> profileHeightSpinner = createDesktopHeightSpinner(RdpLaunchDisplaySettings.DEFAULT_HEIGHT);
                     chkProfileFullScreen
@@ -563,7 +642,9 @@ public final class RequestFormRemoteDesktopPane {
         Runnable saveIniToShareBody =
                 () -> {
                     Map<String, String> ui = uiEnv.get();
-                    Path iniPath = AppPaths.resolveRdpLauncherIni(ui);
+                    Path iniPath =
+                            AppPaths.resolveRdpLauncherIni(
+                                    ui, FactoryOperatorUserStore.sessionOperatorName());
                     Path profilesPath = AppPaths.resolveRdpLaunchProfilesFile(ui);
                     RdpRemoteLauncherIni ini = new RdpRemoteLauncherIni();
                     Integer selectedProfile = launchProfileCombo.getValue();
@@ -604,7 +685,7 @@ public final class RequestFormRemoteDesktopPane {
                                         + " / "
                                         + profilesPath);
                         status.accept(
-                                "RAP設定.ini と起動プロファイル JSON を保存しました: "
+                                "RPA設定.ini と起動プロファイル JSON を保存しました: "
                                         + iniPath);
                         refreshRightPanePreviews(refreshIniFilePreview[0], refreshLauncherLog[0]);
                     } catch (IOException ex) {
@@ -624,7 +705,7 @@ public final class RequestFormRemoteDesktopPane {
                     Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
                     confirm.setTitle("再読込");
                     confirm.setHeaderText(null);
-                    confirm.setContentText("共有フォルダから RAP設定.ini を再読込します。未保存の変更は失われます。");
+                    confirm.setContentText("共有フォルダから RPA設定.ini を再読込します。未保存の変更は失われます。");
                     confirm.showAndWait().ifPresent(
                             choice -> {
                                 if (choice == ButtonType.OK) {
@@ -650,31 +731,11 @@ public final class RequestFormRemoteDesktopPane {
                     refreshLaunchProfileCombo[0].run();
                 });
 
-        Button btnOpenFolder = new Button("フォルダを開く");
-        styleSecondaryButton(btnOpenFolder);
-        btnOpenFolder.setOnAction(
-                e -> {
-                    Map<String, String> ui = uiEnv.get();
-                    Path dir = AppPaths.resolveRdpLauncherDeployDir(ui);
-                    if (!Files.isDirectory(dir)) {
-                        DirectoryChooser chooser = new DirectoryChooser();
-                        chooser.setTitle("RAP設定.ini のフォルダ");
-                        java.io.File chosen =
-                                chooser.showDialog(
-                                        owner != null ? owner : btnOpenFolder.getScene().getWindow());
-                        if (chosen != null) {
-                            openFolder(chosen.toPath());
-                        }
-                        return;
-                    }
-                    openFolder(dir);
-                });
-
         Button btnSuppressLaunchSlot = new Button("起動番号を 0 に");
         styleSecondaryButton(btnSuppressLaunchSlot);
         btnSuppressLaunchSlot.setTooltip(
                 new Tooltip(
-                        "RAP設定.ini の「"
+                        "RPA設定.ini の「"
                                 + RdpRemoteLauncherIni.SELECTED_SLOT_KEY
                                 + "」を 0 に書き込み、接続先タスクスケジューラによる RPA 自動起動を抑止します。"
                                 + " プロファイル定義（スロット行）は保持されます。"));
@@ -684,7 +745,7 @@ public final class RequestFormRemoteDesktopPane {
                     confirm.setTitle("起動番号 0（抑止）");
                     confirm.setHeaderText(null);
                     confirm.setContentText(
-                            "共有フォルダの RAP設定.ini に "
+                            "共有フォルダの RPA設定.ini に "
                                     + RdpRemoteLauncherIni.SELECTED_SLOT_KEY
                                     + "=0 を書き込みます。"
                                     + " タスクスケジューラ経由の RPA 起動が抑止されます。続行しますか？");
@@ -707,7 +768,6 @@ public final class RequestFormRemoteDesktopPane {
                         btnReloadIni,
                         btnSaveIni,
                         btnSuppressLaunchSlot,
-                        btnOpenFolder,
                         btnAddProfile);
         rapActionRow.setAlignment(Pos.CENTER_LEFT);
 
@@ -715,6 +775,7 @@ public final class RequestFormRemoteDesktopPane {
                 new VBox(
                         8,
                         iniPathLabel,
+                        deployDirBlock,
                         launcherPathBlock,
                         deployStatusLabel,
                         profileBox,
@@ -723,7 +784,7 @@ public final class RequestFormRemoteDesktopPane {
                         rapStatusLabel);
         rapContent.setFillWidth(true);
 
-        TitledPane rapPane = new TitledPane("RAP設定（起動プロファイルと RPA コマンド）", rapContent);
+        TitledPane rapPane = new TitledPane("RPA設定（起動プロファイルと RPA コマンド）", rapContent);
         rapPane.setExpanded(true);
         rapPane.setMaxWidth(CARD_WIDTH);
         rapPane.getStyleClass().add("pm-rdp-section-pane");
@@ -747,25 +808,18 @@ public final class RequestFormRemoteDesktopPane {
         statusLabel.setMaxWidth(CARD_WIDTH);
         statusLabel.getStyleClass().add("pm-rdp-status-label");
 
-        CheckBox chkEmbedInTab = new CheckBox("接続中は右ペイン上部にリモートデスクトップを表示");
-        chkEmbedInTab.setSelected(RdpEmbedSettings.isEmbedInTabEnabled(uiEnv.get()));
-        chkEmbedInTab.setTooltip(
+        CheckBox chkPreviewInTab = new CheckBox("接続中は右ペイン上部にプレビュー表示（読み取り専用）");
+        chkPreviewInTab.setSelected(RdpPreviewSettings.isPreviewInTabEnabled(uiEnv.get()));
+        chkPreviewInTab.setTooltip(
                 new Tooltip(
-                        "オン: mstsc を右ペイン最上部へ埋め込み。"
-                                + " オフ: 従来どおり別ウィンドウで起動。"));
-        chkEmbedInTab
+                        "低 fps で mstsc ウィンドウをキャプチャして右ペインに表示します。"
+                                + " 操作は別ウィンドウで行います。取得不可のときはプレビューを自動中止します。"));
+        chkPreviewInTab
                 .selectedProperty()
                 .addListener(
                         (obs, was, selected) -> {
-                            if (displayEnvChangeHandler != null) {
-                                Map<String, String> values = new HashMap<>();
-                                values.put(
-                                        RdpEmbedSettings.KEY_PM_AI_RDP_EMBED_IN_TAB,
-                                        selected ? "1" : "0");
-                                displayEnvChangeHandler.accept(values);
-                            }
-                            if (refreshDisplayPreview[0] != null) {
-                                refreshDisplayPreview[0].run();
+                            if (previewInTabChangeHandler != null) {
+                                previewInTabChangeHandler.accept(selected ? "1" : "0");
                             }
                         });
 
@@ -788,22 +842,21 @@ public final class RequestFormRemoteDesktopPane {
                                                     selected, RdpLaunchProfile.empty(selected))
                                             : RdpLaunchProfile.empty(1));
                     Map<String, String> ui = uiEnv.get();
-                    boolean embed = chkEmbedInTab.isSelected();
                     LaunchDisplay display =
-                            RdpLaunchDisplaySettings.resolveLaunchDisplay(profile, ui, embed);
+                            RdpLaunchDisplaySettings.resolveLaunchDisplay(profile, ui);
                     displayPreviewLabel.setText(
                             "表示: "
                                     + display.summaryText()
                                     + "（起動プロファイル "
                                     + profile.number()
-                                    + " の RAP設定で変更）");
+                                    + " の RPA設定で変更）");
                 };
         refreshDisplayPreviewHolder[0].run();
 
-        Runnable refreshEmbedAndDisplayUi =
+        Runnable refreshDisplayUi =
                 () -> {
-                    Map<String, String> ui = uiEnv.get();
-                    chkEmbedInTab.setSelected(RdpEmbedSettings.isEmbedInTabEnabled(ui));
+                    chkPreviewInTab.setSelected(
+                            RdpPreviewSettings.isPreviewInTabEnabled(uiEnv.get()));
                     if (refreshDisplayPreviewHolder[0] != null) {
                         refreshDisplayPreviewHolder[0].run();
                     }
@@ -840,7 +893,7 @@ public final class RequestFormRemoteDesktopPane {
         btnLaunch.setTooltip(
                 new Tooltip(
                         "指定 .rdp で mstsc.exe を起動します。"
-                                + " 接続先の起動プログラムは RAP設定.ini + タスクスケジューラが参照します。"));
+                                + " 接続先の起動プログラムは RPA設定.ini + タスクスケジューラが参照します。"));
         btnLaunch.setOnAction(
                 e -> {
                     if (launcherDeployInProgress.get()) {
@@ -859,7 +912,8 @@ public final class RequestFormRemoteDesktopPane {
                     }
                     persistCompanionFields.run();
                     Map<String, String> uiGate = uiEnv.get();
-                    FactorySite siteGate = GlobalInitSettingTarget.loadEffective(uiGate);
+                    FactorySite siteGate =
+                            FactoryOperatorUserStore.operatorScopeForCurrentApp(uiGate, null);
                     String sessionOperator = FactoryOperatorUserStore.sessionOperatorName();
                     if (sessionOperator.isBlank()) {
                         showAlert(
@@ -876,7 +930,7 @@ public final class RequestFormRemoteDesktopPane {
                         return;
                     }
                     try {
-                        FactoryOperatorUserStore.configureFromUi(uiGate, siteGate);
+                        FactoryOperatorUserStore.configureForCurrentApp(uiGate, siteGate);
                         if (!FactoryOperatorUserStore.hasAladdinCredentials(
                                 siteGate, sessionOperator)) {
                             showAlert(
@@ -917,7 +971,7 @@ public final class RequestFormRemoteDesktopPane {
                                 "プロファイル "
                                         + selectedLaunchProfile
                                         + " の RPA プログラムが空です。"
-                                        + " RAP設定で exe パスを登録して保存してください。");
+                                        + " RPA設定で exe パスを登録して保存してください。");
                         return;
                     }
                     Map<String, String> ui = new HashMap<>(uiEnv.get());
@@ -943,15 +997,15 @@ public final class RequestFormRemoteDesktopPane {
                             AppPaths.KEY_PM_AI_RDP_COMPANION_PROGRAM_ARGS,
                             companionArgsField.getText().trim());
                     ui.put(
-                            RdpEmbedSettings.KEY_PM_AI_RDP_EMBED_IN_TAB,
-                            chkEmbedInTab.isSelected() ? "1" : "0");
-                    boolean embedInTab = chkEmbedInTab.isSelected();
+                            RdpPreviewSettings.KEY_PM_AI_RDP_PREVIEW_IN_TAB,
+                            chkPreviewInTab.isSelected() ? "1" : "0");
+                    boolean previewSession = chkPreviewInTab.isSelected();
                     LaunchDisplay launchDisplay =
                             RdpLaunchDisplaySettings.resolveLaunchDisplay(
-                                    launchProfileMeta, ui, embedInTab);
+                                    launchProfileMeta, ui);
                     ui = new HashMap<>(RdpLaunchDisplaySettings.applyLaunchDisplayToUi(ui, launchDisplay));
                     final LaunchDisplay resolvedDisplay = launchDisplay;
-                    final boolean embedSession = embedInTab;
+                    final boolean previewEnabled = previewSession;
                     final Map<String, String> launchUi = ui;
                     Optional<Path> profile = AppPaths.resolveRequestFormRdpProfile(launchUi);
                     if (profile.isEmpty()) {
@@ -988,7 +1042,9 @@ public final class RequestFormRemoteDesktopPane {
                         launchProfileNumberChangeHandler.accept(launchSlot);
                     }
                     String launchProfileLabel = profileComboLabel(launchRow, launchProfileMeta);
-                    Path launcherIniPath = AppPaths.resolveRdpLauncherIni(launchUi);
+                    Path launcherIniPath =
+                            AppPaths.resolveRdpLauncherIni(
+                                    launchUi, FactoryOperatorUserStore.sessionOperatorName());
                     RdpSessionEndAction profileEndAction =
                             launchProfileMeta.resolvedSessionEndAction();
                     try {
@@ -1010,7 +1066,7 @@ public final class RequestFormRemoteDesktopPane {
                     } catch (IOException iniEx) {
                         showAlert(
                                 Alert.AlertType.ERROR,
-                                "RAP設定.ini の更新に失敗",
+                                "RPA設定.ini の更新に失敗",
                                 "接続前に起動プログラム番号を書き込めませんでした: "
                                         + iniEx.getMessage());
                         return;
@@ -1031,17 +1087,10 @@ public final class RequestFormRemoteDesktopPane {
                                         return;
                                     }
                                     updateLaunchButtonState[0].run();
-                                    Window embedOwner =
-                                            owner != null
-                                                    ? owner
-                                                    : (btnLaunch.getScene() != null
-                                                            ? btnLaunch.getScene().getWindow()
-                                                            : null);
-                                    if (embedSession
-                                            && rightPaneEmbedHolder[0] != null
-                                            && rightPaneEmbedHolder[0].isSupported()) {
-                                        rightPaneEmbedHolder[0].showEmbedPane(
-                                                resolvedDisplay.width(), resolvedDisplay.height());
+                                    if (previewEnabled
+                                            && rightPanePreviewHolder[0] != null
+                                            && rightPanePreviewHolder[0].isSupported()) {
+                                        rightPanePreviewHolder[0].showPreviewPane();
                                     }
                                     RemoteDesktopLauncher.LaunchOutcome outcome =
                                             RemoteDesktopLauncher.launch(preferred, launchUi);
@@ -1074,37 +1123,22 @@ public final class RequestFormRemoteDesktopPane {
                                         msg +=
                                                 "\n（.rdp 編集により署名が無効化されました。必要なら署名ウィザードを実行してください）";
                                     }
-                                    if (embedSession && rightPaneEmbedHolder[0] != null) {
-                                        msg += "\n右ペインへ埋め込み中…";
+                                    if (previewEnabled && rightPanePreviewHolder[0] != null) {
+                                        msg += "\n右ペインへプレビュー表示中…（操作は別ウィンドウ）";
                                     } else {
                                         msg += "\n接続終了を監視中…";
                                     }
                                     status.accept(msg);
                                     statusLabel.setText(msg);
-                                    final String launchStatusMessage = msg;
-                                    long mstscPid =
-                                            outcome.mstscProcessId().isPresent()
-                                                    ? outcome.mstscProcessId().getAsLong()
-                                                    : -1L;
-                                    if (embedSession
-                                            && rightPaneEmbedHolder[0] != null
-                                            && mstscPid > 0
-                                            && embedOwner != null) {
-                                        rightPaneEmbedHolder[0].attachWhenReady(
-                                                embedOwner,
-                                                mstscPid,
-                                                attachError -> {
-                                                    if (attachError != null
-                                                            && !attachError.isBlank()) {
-                                                        status.accept(
-                                                                "埋め込み失敗: "
-                                                                        + attachError
-                                                                        + "（別ウィンドウで表示中）");
-                                                        statusLabel.setText(
-                                                                "埋め込み失敗（別ウィンドウで表示中）");
-                                                        rightPaneEmbedHolder[0].removeEmbedPane();
-                                                    } else {
-                                                        status.accept(launchStatusMessage + "\n右ペインへ埋め込みました。");
+                                    if (previewEnabled && rightPanePreviewHolder[0] != null) {
+                                        rightPanePreviewHolder[0].previewWhenReady(
+                                                outcome.mstscProcessId(),
+                                                outcome.mstscPidMarkerFile(),
+                                                outcome.rdpProfile(),
+                                                previewMsg -> {
+                                                    if (previewMsg != null && !previewMsg.isBlank()) {
+                                                        status.accept(previewMsg);
+                                                        statusLabel.setText(previewMsg);
                                                     }
                                                 });
                                     }
@@ -1118,18 +1152,20 @@ public final class RequestFormRemoteDesktopPane {
                                                             () -> {
                                                     rdpSessionActive.set(false);
                                                     updateLaunchButtonState[0].run();
-                                                    if (rightPaneEmbedHolder[0] != null) {
-                                                        rightPaneEmbedHolder[0].removeEmbedPane();
+                                                    if (rightPanePreviewHolder[0] != null) {
+                                                        rightPanePreviewHolder[0].removePreviewPane();
                                                     }
                                                     try {
                                                         Path iniPath =
                                                                 AppPaths.resolveRdpLauncherIni(
-                                                                        launchUi);
+                                                                        launchUi,
+                                                                        FactoryOperatorUserStore
+                                                                                .sessionOperatorName());
                                                         RdpRemoteLauncherIni
                                                                 .writeTaskSchedulerSuppress(
                                                                         iniPath, launchUi);
                                                         status.accept(
-                                                                "RAP設定.ini の起動プログラム番号を "
+                                                                "RPA設定.ini の起動プログラム番号を "
                                                                         + RdpRemoteLauncherIni
                                                                                 .SLOT_DISABLED
                                                                         + " に設定しました（タスクスケジューラ抑止・保険）。");
@@ -1151,8 +1187,8 @@ public final class RequestFormRemoteDesktopPane {
                                 } catch (IOException ex) {
                                     rdpSessionActive.set(false);
                                     updateLaunchButtonState[0].run();
-                                    if (rightPaneEmbedHolder[0] != null) {
-                                        rightPaneEmbedHolder[0].removeEmbedPane();
+                                    if (rightPanePreviewHolder[0] != null) {
+                                        rightPanePreviewHolder[0].removePreviewPane();
                                     }
                                     showAlert(
                                             Alert.AlertType.ERROR, "起動失敗", ex.getMessage());
@@ -1314,7 +1350,7 @@ public final class RequestFormRemoteDesktopPane {
         btnSaveAladdinCredentials.setOnAction(
                 e -> {
                     Map<String, String> ui = uiEnv.get();
-                    FactorySite site = GlobalInitSettingTarget.loadEffective(ui);
+                    FactorySite site = FactoryOperatorUserStore.operatorScopeForCurrentApp(ui, null);
                     String operator = FactoryOperatorUserStore.sessionOperatorName();
                     if (operator.isBlank()) {
                         showAlert(
@@ -1340,7 +1376,7 @@ public final class RequestFormRemoteDesktopPane {
                         return;
                     }
                     try {
-                        FactoryOperatorUserStore.configureFromUi(ui, site);
+                        FactoryOperatorUserStore.configureForCurrentApp(ui, site);
                         FactoryOperatorUserStore.setAladdinCredentials(
                                 site, operator, loginId, password);
                         FactoryOperatorUserStore.syncLauncherCredentialsJsonToDeployDir(ui);
@@ -1362,22 +1398,22 @@ public final class RequestFormRemoteDesktopPane {
                         12,
                         connectSectionTitle,
                         operatorNameLabel,
+                        fieldCaption("起動プロファイル"),
+                        launchProfileCombo,
+                        launchProfileDetail,
+                        fieldCaption("RDP プロファイル (.rdp)"),
+                        profileRow,
+                        chkPreviewInTab,
+                        displayPreviewLabel,
+                        launchBlock,
+                        statusLabel,
                         fieldCaption("アラジン ログイン ID"),
                         aladdinLoginIdField,
                         fieldCaption("アラジン パスワード"),
                         aladdinPasswordField,
                         credentialsSaveRow,
                         credentialsStatusLabel,
-                        rpaInjectedArgsHint,
-                        fieldCaption("起動プロファイル"),
-                        launchProfileCombo,
-                        launchProfileDetail,
-                        fieldCaption("RDP プロファイル (.rdp)"),
-                        profileRow,
-                        chkEmbedInTab,
-                        displayPreviewLabel,
-                        launchBlock,
-                        statusLabel);
+                        rpaInjectedArgsHint);
         connectHero.getStyleClass().add("pm-rdp-connect-hero");
         connectHero.setFillWidth(true);
         connectHero.setMaxWidth(CARD_WIDTH);
@@ -1385,9 +1421,9 @@ public final class RequestFormRemoteDesktopPane {
         refreshAladdinCredentialsUi[0] =
                 () -> {
                     Map<String, String> ui = uiEnv.get();
-                    FactorySite site = GlobalInitSettingTarget.loadEffective(ui);
+                    FactorySite site = FactoryOperatorUserStore.operatorScopeForCurrentApp(ui, null);
                     try {
-                        FactoryOperatorUserStore.configureFromUi(ui, site);
+                        FactoryOperatorUserStore.configureForCurrentApp(ui, site);
                         String operator = FactoryOperatorUserStore.sessionOperatorName();
                         if (operator.isBlank()) {
                             operatorNameLabel.setText("操作者: （起動時に操作者を選んでください）");
@@ -1459,7 +1495,7 @@ public final class RequestFormRemoteDesktopPane {
         card.setPrefWidth(CARD_WIDTH);
         card.setFillWidth(true);
 
-        Label iniPreviewTitle = new Label("RAP設定.ini（共有ファイル）");
+        Label iniPreviewTitle = new Label("RPA設定.ini（共有ファイル）");
         iniPreviewTitle.getStyleClass().add("pm-rdp-ini-panel-title");
 
         Label iniPreviewMetaLabel = new Label("読込待ち…");
@@ -1469,7 +1505,7 @@ public final class RequestFormRemoteDesktopPane {
         TextArea iniPreviewArea = new TextArea();
         iniPreviewArea.setEditable(false);
         iniPreviewArea.setWrapText(false);
-        iniPreviewArea.setPromptText("共有 UNC 上の RAP設定.ini の生テキストがここに表示されます。");
+        iniPreviewArea.setPromptText("共有 UNC 上の RPA設定.ini の生テキストがここに表示されます。");
         iniPreviewArea.getStyleClass().add("pm-remote-desktop-ini-preview");
         VBox.setVgrow(iniPreviewArea, Priority.ALWAYS);
 
@@ -1631,7 +1667,7 @@ public final class RequestFormRemoteDesktopPane {
         SplitPane.setResizableWithParent(iniPreviewPane, Boolean.TRUE);
         SplitPane.setResizableWithParent(launcherLogPane, Boolean.TRUE);
         rightPaneSplit.getStyleClass().add("pm-remote-desktop-right-split");
-        rightPaneEmbedHolder[0] = new RdpRightPaneEmbedController(rightPaneSplit);
+        rightPanePreviewHolder[0] = new RdpRightPanePreviewController(rightPaneSplit);
 
         ScrollPane leftScroll = new ScrollPane(card);
         leftScroll.setFitToWidth(true);
@@ -1659,7 +1695,7 @@ public final class RequestFormRemoteDesktopPane {
                                 profileMetadataByNumber,
                                 appendProfileRow,
                                 rapStatusLabel,
-                                refreshEmbedAndDisplayUi,
+                                refreshDisplayUi,
                                 cmbSessionEndAction,
                                 btnForceDeployLauncher,
                                 btnLaunch,
@@ -1689,7 +1725,7 @@ public final class RequestFormRemoteDesktopPane {
             Map<Integer, RdpLaunchProfile> profileMetadataByNumber,
             IntConsumer appendProfileRow,
             Label rapStatusLabel,
-            Runnable refreshEmbedAndDisplayUi,
+            Runnable refreshDisplayUi,
             ComboBox<RdpSessionEndAction> cmbSessionEndAction,
             Button btnForceDeployLauncher,
             Button btnLaunch,
@@ -1712,9 +1748,24 @@ public final class RequestFormRemoteDesktopPane {
         runBackgroundThenFx(
                 () -> {
                     Map<String, String> ui = uiEnv.get();
+                    if (!isExplicitLauncherDeployDirConfigured(ui)) {
+                        Platform.runLater(
+                                () -> {
+                                    launcherDeployInProgress.set(false);
+                                    launcherDeployReady.set(false);
+                                    btnForceDeployLauncher.setDisable(false);
+                                    updateLaunchButtonState.run();
+                                    refreshPaths.run();
+                                    deployStatusLabel.setText("配備先フォルダを指定してください。");
+                                    status.accept("ランチャー配備先が未設定のため転送をスキップしました。");
+                                });
+                        return;
+                    }
                     RdpRemoteLauncherDeployer.DeployOutcome deploy =
                             RdpRemoteLauncherDeployer.ensureDeployed(ui, null);
-                    Path iniPath = AppPaths.resolveRdpLauncherIni(ui);
+                    Path iniPath =
+                            AppPaths.resolveExistingRdpLauncherIni(
+                                    ui, FactoryOperatorUserStore.sessionOperatorName());
                     Path profilesPath = AppPaths.resolveRdpLaunchProfilesFile(ui);
                     List<RdpLaunchProfile> catalogProfiles =
                             RdpLaunchProfileCatalog.loadOrDefaults(profilesPath);
@@ -1770,7 +1821,7 @@ public final class RequestFormRemoteDesktopPane {
                                 companionArgsField.setText(
                                         ui.getOrDefault(
                                                 AppPaths.KEY_PM_AI_RDP_COMPANION_PROGRAM_ARGS, ""));
-                                refreshEmbedAndDisplayUi.run();
+                                refreshDisplayUi.run();
                                 if (loadError != null) {
                                     rapStatusLabel.setText("読込失敗: " + loadError.getMessage());
                                     showAlert(Alert.AlertType.ERROR, "読込失敗", loadError.getMessage());
@@ -1819,7 +1870,9 @@ public final class RequestFormRemoteDesktopPane {
         runBackgroundThenFx(
                 () -> {
                     Map<String, String> ui = uiEnv.get();
-                    Path iniPath = AppPaths.resolveRdpLauncherIni(ui);
+                    Path iniPath =
+                            AppPaths.resolveExistingRdpLauncherIni(
+                                    ui, FactoryOperatorUserStore.sessionOperatorName());
                     Path profilesPath = AppPaths.resolveRdpLaunchProfilesFile(ui);
                     RdpRemoteLauncherIni ini = null;
                     IOException iniError = null;
@@ -1872,7 +1925,9 @@ public final class RequestFormRemoteDesktopPane {
         runBackgroundThenFx(
                 () -> {
                     Map<String, String> ui = uiEnv.get();
-                    Path iniPath = AppPaths.resolveRdpLauncherIni(ui);
+                    Path iniPath =
+                            AppPaths.resolveExistingRdpLauncherIni(
+                                    ui, FactoryOperatorUserStore.sessionOperatorName());
                     String body;
                     String meta;
                     try {
@@ -2212,7 +2267,9 @@ public final class RequestFormRemoteDesktopPane {
         runBackgroundThenFx(
                 () -> {
                     Map<String, String> ui = uiEnv.get();
-                    Path iniPath = AppPaths.resolveRdpLauncherIni(ui);
+                    Path iniPath =
+                            AppPaths.resolveRdpLauncherIni(
+                                    ui, FactoryOperatorUserStore.sessionOperatorName());
                     IOException error = null;
                     try {
                         RdpRemoteLauncherIni.writeTaskSchedulerSuppress(iniPath, ui);
@@ -2337,13 +2394,13 @@ public final class RequestFormRemoteDesktopPane {
 
     private static boolean rdpLaunchCredentialsReady(Supplier<Map<String, String>> uiEnv) {
         Map<String, String> ui = uiEnv != null ? uiEnv.get() : Map.of();
-        FactorySite site = GlobalInitSettingTarget.loadEffective(ui);
+        FactorySite site = FactoryOperatorUserStore.operatorScopeForCurrentApp(ui, null);
         String operator = FactoryOperatorUserStore.sessionOperatorName();
         if (operator.isBlank() || FactoryOperatorUserStore.isGuestOperator(operator)) {
             return false;
         }
         try {
-            FactoryOperatorUserStore.configureFromUi(ui, site);
+            FactoryOperatorUserStore.configureForCurrentApp(ui, site);
             return FactoryOperatorUserStore.hasAladdinCredentials(site, operator);
         } catch (IOException ex) {
             return false;
@@ -2616,8 +2673,7 @@ public final class RequestFormRemoteDesktopPane {
     private static void applyProfileLaunchOverrides(
             Map<String, String> ui, RdpLaunchProfile profile) {
         LaunchDisplay display =
-                RdpLaunchDisplaySettings.resolveLaunchDisplay(
-                        profile, ui, RdpEmbedSettings.isEmbedInTabEnabled(ui));
+                RdpLaunchDisplaySettings.resolveLaunchDisplay(profile, ui);
         ui.putAll(RdpLaunchDisplaySettings.applyLaunchDisplayToUi(ui, display));
     }
 
@@ -2769,5 +2825,14 @@ public final class RequestFormRemoteDesktopPane {
         status.accept("Default.rdp のためリモートデスクトップを起動しませんでした。");
         statusLabel.setText("Default.rdp は使用できません。署名済みプロファイルを作成してください。");
         return true;
+    }
+
+    /** 配布用アプリでは {@link AppPaths#KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR} の明示指定が必須。 */
+    private static boolean isExplicitLauncherDeployDirConfigured(Map<String, String> ui) {
+        if (!RemoteDesktopStandaloneBootstrap.isActivated()) {
+            return true;
+        }
+        Map<String, String> u = ui != null ? ui : Map.of();
+        return !u.getOrDefault(AppPaths.KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR, "").isBlank();
     }
 }

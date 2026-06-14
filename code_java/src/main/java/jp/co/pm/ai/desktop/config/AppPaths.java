@@ -29,6 +29,14 @@ import java.util.stream.Stream;
  */
 public final class AppPaths {
 
+    /** 既定の PC ローカル設定ルート（{@code user.home} 配下）。 */
+    public static final String DEFAULT_DESKTOP_APP_HOME_DIR_NAME = ".pm-ai-desktop";
+
+    /** リモートデスクトップ配布用アプリ専用の PC ローカル設定ルート。 */
+    public static final String REMOTE_DESKTOP_APP_HOME_DIR_NAME = ".pm-ai-desktop-rdp";
+
+    private static volatile String desktopAppHomeDirName = DEFAULT_DESKTOP_APP_HOME_DIR_NAME;
+
     public static final String KEY_PM_AI_PYTHON = "PM_AI_PYTHON";
     public static final String KEY_PM_AI_CODE_PYTHON_DIR = "PM_AI_CODE_PYTHON_DIR";
 
@@ -120,6 +128,17 @@ public final class AppPaths {
     /** 接続先 RDP ランチャー設定 ini（{@link #RDP_LAUNCHER_INI_BASENAME}）のフルパス上書き。 */
     public static final String KEY_PM_AI_RDP_LAUNCHER_INI = "PM_AI_RDP_LAUNCHER_INI";
 
+    /**
+     * RDP ランチャー exe / ini / 起動プロファイル JSON の配備先フォルダ（UNC 可）。
+     * 空のときは ini 親 → exe 親 → サマリ Excel 親の順で解決する。
+     */
+    public static final String KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR = "PM_AI_RDP_LAUNCHER_DEPLOY_DIR";
+
+    /**
+     * RDP ランチャー専用の操作者 bin 保存フォルダ（UNC 可）。空のとき {@link #resolveDesktopAppHomeDir}。
+     */
+    public static final String KEY_PM_AI_RDP_OPERATOR_USERS_STORE_DIR = "PM_AI_RDP_OPERATOR_USERS_STORE_DIR";
+
     /** {@code 1} のときのみ .rdp へ alternate shell（リモート起動プログラム）を書込。 */
     public static final String KEY_PM_AI_RDP_EMBED_STARTUP_IN_PROFILE = "PM_AI_RDP_EMBED_STARTUP_IN_PROFILE";
 
@@ -137,7 +156,17 @@ public final class AppPaths {
 
     public static final String RDP_LAUNCHER_EXE_BASENAME = "PmAiRdpRemoteLauncher.exe";
     public static final String RDP_LAUNCHER_VERSION_BASENAME = "PmAiRdpRemoteLauncher.version.txt";
-    public static final String RDP_LAUNCHER_INI_BASENAME = "RAP設定.ini";
+    /**
+     * デスクトップ RPA ランチャー本体（{@code PmAiRpaLuncher.exe}）。<strong>廃止</strong> — 配台 {@code PMD.exe} のリモートデスクトップタブを使用する。
+     */
+    @Deprecated
+    public static final String RDP_DESKTOP_LAUNCHER_EXE_BASENAME = "PmAiRpaLuncher.exe";
+    /** デスクトップ RPA ランチャー用バージョンアップ ZIP（{@link #DEFAULT_PM_AI_RDP_PORTABLE_BUNDLE_RELEASE_DIR} 直下）。 */
+    public static final String RDP_DESKTOP_LAUNCHER_VERSION_UPGRADE_ZIP =
+            "PmAiRpaLuncher_version_upgrade.zip";
+    public static final String RDP_LAUNCHER_INI_BASENAME = "RPA設定.ini";
+    /** 後方互換の ini 名（読取フォールバックのみ。新規は {@link #RDP_LAUNCHER_INI_BASENAME}）。 */
+    public static final String RDP_LAUNCHER_INI_BASENAME_LEGACY = "RAP設定.ini";
     /** 起動プロファイル（名称・説明等）の JSON。{@link #RDP_LAUNCHER_INI_BASENAME} と同階層。 */
     public static final String RDP_LAUNCH_PROFILES_BASENAME = "RDP起動プロファイル.json";
     /** リモートデスクトップタブで最後に選んだ起動プロファイル番号（1～9）。 */
@@ -388,6 +417,22 @@ public final class AppPaths {
     public static final String KEY_PM_AI_PORTABLE_BUNDLE_SOURCE_DIR = "PM_AI_PORTABLE_BUNDLE_SOURCE_DIR";
 
     /**
+     * RDP ランチャー（{@code PmAiRpaLuncher.exe}）ポータブル配布の正本。
+     * 掲示板共有フォルダ UNC または {@code PmAiRpaLuncher_version_upgrade.zip} のフルパス。
+     * 既定正本: {@link #DEFAULT_PM_AI_RDP_PORTABLE_BUNDLE_RELEASE_DIR}。
+     * 直下の外付け {@link #VERSION_TXT_FILE_NAME} と ZIP で版比較する（配台 PMD と同方式）。
+     */
+    public static final String KEY_PM_AI_RDP_PORTABLE_BUNDLE_SOURCE_DIR =
+            "PM_AI_RDP_PORTABLE_BUNDLE_SOURCE_DIR";
+
+    /**
+     * RDP ランチャー（{@code PmAiRpaLuncher.exe}）ポータブル配布の正本フォルダ（UNC）。
+     * 直下に外付け {@link #VERSION_TXT_FILE_NAME} と {@code PmAiRpaLuncher_version_upgrade.zip} を置く。
+     */
+    public static final String DEFAULT_PM_AI_RDP_PORTABLE_BUNDLE_RELEASE_DIR =
+            "\\\\192.168.0.101\\共有フォルダ\\掲示板\\rpa_luncher";
+
+    /**
      * 湖南工場共有の {@code pm-ai-package-release} フォルダ（UNC）。{@link #KEY_PM_AI_PORTABLE_BUNDLE_SOURCE_DIR} の湖南既定。
      * 直下に外付け {@code version.txt} と {@code PMD_version_upgrade.zip} を置く。
      */
@@ -406,6 +451,19 @@ public final class AppPaths {
      */
     public static final String DEFAULT_PM_AI_PORTABLE_BUNDLE_SOURCE_DIR =
             DEFAULT_PM_AI_PORTABLE_BUNDLE_RELEASE_DIR_KONAN;
+
+    /** RDP ランチャー向けバージョンアップ正本（掲示板共有）。 */
+    public static final String DEFAULT_PM_AI_RDP_PORTABLE_BUNDLE_SOURCE_DIR =
+            DEFAULT_PM_AI_RDP_PORTABLE_BUNDLE_RELEASE_DIR;
+
+    /**
+     * 掲示板共有 {@code rpa_luncher\DATA}（ユーザー管理 bin・バックアップ等の共通格納）。
+     * {@link #KEY_PM_AI_RDP_OPERATOR_USERS_STORE_DIR} 未設定時の既定フォルダ。
+     */
+    public static final String RDP_LAUNCHER_SHARED_DATA_DIR_LEAF = "DATA";
+
+    public static final String DEFAULT_PM_AI_RDP_SHARED_DATA_DIR =
+            DEFAULT_PM_AI_RDP_PORTABLE_BUNDLE_RELEASE_DIR + "\\" + RDP_LAUNCHER_SHARED_DATA_DIR_LEAF;
 
     /**
      * {@link #KEY_PM_AI_TASK_INPUT_SOURCE_DIR} が空のときの既定（工場共有・生産計画問合せフォルダ）。{@code plan/01_*.m} のパスと揃える。
@@ -458,7 +516,8 @@ public final class AppPaths {
             KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR,
             KEY_PM_AI_OUTPUT_DIR,
             KEY_PM_AI_RESULT_DISPATCH_TABLE_DIR,
-            KEY_COMPARE_GANTT_SNAPSHOT_DIR);
+            KEY_COMPARE_GANTT_SNAPSHOT_DIR,
+            KEY_PM_AI_RDP_OPERATOR_USERS_STORE_DIR);
 
     /**
      * {@link #normalizedFolderEnvOverrides(Map)} の処理順（{@link #KEY_PM_AI_REPO_ROOT} を先に確定）。
@@ -499,6 +558,7 @@ public final class AppPaths {
         s.add(KEY_PM_AI_CURSOR_DEBUG_LOG);
         s.add(KEY_PM_AI_DEBUG_LOG_MIRROR);
         s.add(KEY_PM_AI_PORTABLE_BUNDLE_SOURCE_DIR);
+        s.add(KEY_PM_AI_RDP_PORTABLE_BUNDLE_SOURCE_DIR);
         s.addAll(TABULAR_DATA_TABLE_PATH_KEYS);
         return Set.copyOf(s);
     }
@@ -1389,14 +1449,187 @@ public final class AppPaths {
         return p.toAbsolutePath().normalize();
     }
 
-    /** RDP ランチャー／{@link #RDP_LAUNCHER_INI_BASENAME} の配備先（サマリ Excel と同階層）。 */
+    /**
+     * RDP ランチャー exe（{@link #RDP_LAUNCHER_EXE_BASENAME}）の配備先。
+     *
+     * <p>優先: {@link #KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR} → exe 親 → サマリ Excel 親（PMD）。
+     * RDP 配布アプリでは {@link #DEFAULT_PM_AI_RDP_PORTABLE_BUNDLE_RELEASE_DIR} を既定にする。
+     */
     public static Path resolveRdpLauncherDeployDir(Map<String, String> ui) {
-        Path summary = summaryAiDispatchXlsxPath(ui);
+        Map<String, String> u = ui != null ? ui : Map.of();
+        String deployOverride = trim(u.get(KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR));
+        if (!deployOverride.isEmpty()) {
+            return Path.of(deployOverride).toAbsolutePath().normalize();
+        }
+        if (usesRemoteDesktopAppHome()) {
+            return Path.of(DEFAULT_PM_AI_RDP_PORTABLE_BUNDLE_RELEASE_DIR).toAbsolutePath().normalize();
+        }
+        String exeOverride = trim(u.get(KEY_PM_AI_RDP_LAUNCHER_EXE));
+        if (!exeOverride.isEmpty()) {
+            Path exePath = Path.of(exeOverride);
+            Path exeParent = exePath.getParent();
+            if (exeParent != null) {
+                return exeParent.toAbsolutePath().normalize();
+            }
+        }
+        Path summary = summaryAiDispatchXlsxPath(u);
         Path parent = summary.getParent();
         if (parent == null) {
             return summary.toAbsolutePath().normalize();
         }
         return parent.toAbsolutePath().normalize();
+    }
+
+    /** {@link #setDesktopAppHomeDirName} で切り替え可能な PC ローカル設定ルート。 */
+    public static Path resolveDesktopAppHomeDir() {
+        return Paths.get(System.getProperty("user.home"), desktopAppHomeDirName)
+                .toAbsolutePath()
+                .normalize();
+    }
+
+    /** セッション永続化 JSON（{@code session-state.json}）。 */
+    public static Path resolveSessionStateStorePath() {
+        return resolveDesktopAppHomeDir().resolve("session-state.json");
+    }
+
+    /**
+     * 配布用リモートデスクトップアプリ向けに {@code user.home} 配下の設定ルートを切り替える。
+     * PMD 本体は呼ばない。
+     */
+    public static void setDesktopAppHomeDirName(String dirName) {
+        if (dirName == null || dirName.isBlank()) {
+            desktopAppHomeDirName = DEFAULT_DESKTOP_APP_HOME_DIR_NAME;
+            return;
+        }
+        desktopAppHomeDirName = dirName.strip();
+    }
+
+    public static String desktopAppHomeDirName() {
+        return desktopAppHomeDirName;
+    }
+
+    /** {@link #REMOTE_DESKTOP_APP_HOME_DIR_NAME} が有効なとき true（RDP 配布用アプリ）。 */
+    public static boolean usesRemoteDesktopAppHome() {
+        return REMOTE_DESKTOP_APP_HOME_DIR_NAME.equals(desktopAppHomeDirName);
+    }
+
+    /** RDP ランチャー専用の操作者 bin（配台システムの工場別 bin とは別ファイル）。 */
+    public static final String RDP_LAUNCHER_OPERATOR_USERS_BIN = "rdp-launcher-operator-users.bin";
+
+    /** RDP ランチャー専用の操作者バックアップルート（{@link #defaultRdpLauncherSharedDataDir} 配下）。 */
+    public static final String RDP_LAUNCHER_OPERATOR_USERS_BACKUPS_DIR = "rdp-launcher-operator-users-backups";
+
+    /** 掲示板共有の RDP 管理データフォルダ（{@link #DEFAULT_PM_AI_RDP_SHARED_DATA_DIR}）。 */
+    public static Path defaultRdpLauncherSharedDataDir() {
+        return Path.of(DEFAULT_PM_AI_RDP_SHARED_DATA_DIR).toAbsolutePath().normalize();
+    }
+
+    public static Path rdpLauncherOperatorUsersStorePath() {
+        return defaultRdpLauncherSharedDataDir()
+                .resolve(RDP_LAUNCHER_OPERATOR_USERS_BIN)
+                .toAbsolutePath()
+                .normalize();
+    }
+
+    /**
+     * RDP ランチャー専用の操作者 bin 絶対パス。
+     *
+     * <p>{@link #KEY_PM_AI_RDP_OPERATOR_USERS_STORE_DIR} がフォルダのときその配下の
+     * {@link #RDP_LAUNCHER_OPERATOR_USERS_BIN}。値が {@code *.bin} で終わるときはファイルパスとして解釈。
+     */
+    public static Path resolveRdpLauncherOperatorUsersStorePath(Map<String, String> ui) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        String override = trim(u.get(KEY_PM_AI_RDP_OPERATOR_USERS_STORE_DIR));
+        if (override.isEmpty()) {
+            return rdpLauncherOperatorUsersStorePath();
+        }
+        Path raw = Path.of(override);
+        String lower = override.toLowerCase(Locale.ROOT);
+        if (lower.endsWith(".bin")) {
+            return raw.toAbsolutePath().normalize();
+        }
+        return raw.resolve(RDP_LAUNCHER_OPERATOR_USERS_BIN).toAbsolutePath().normalize();
+    }
+
+    /** {@link #resolveRdpLauncherOperatorUsersStorePath} の親フォルダ（UI 表示・フォルダを開く用）。 */
+    public static Path resolveRdpLauncherOperatorUsersStoreDir(Map<String, String> ui) {
+        Path store = resolveRdpLauncherOperatorUsersStorePath(ui);
+        Path parent = store.getParent();
+        return parent != null ? parent.toAbsolutePath().normalize() : resolveDesktopAppHomeDir();
+    }
+
+    public static Path rdpLauncherOperatorLastSelectedPath() {
+        return resolveDesktopAppHomeDir()
+                .resolve("last-rdp-launcher-operator.txt")
+                .toAbsolutePath()
+                .normalize();
+    }
+
+    /** 起動時に最後に選んだ部署（RDP ランチャー専用・PC ローカル）。 */
+    public static Path rdpLauncherOperatorLastDepartmentPath() {
+        return resolveDesktopAppHomeDir()
+                .resolve("last-rdp-launcher-department.txt")
+                .toAbsolutePath()
+                .normalize();
+    }
+
+    /**
+     * 部署別の最終操作者名（RDP ランチャー専用・PC ローカル）。
+     *
+     * @param departmentKey {@link jp.co.pm.ai.desktop.config.FactoryOperatorUserStore#normalizeRdpDepartmentKey} 後のキー
+     */
+    public static Path rdpLauncherOperatorLastSelectedPathForDepartment(String departmentKey) {
+        String safe =
+                departmentKey != null
+                        ? departmentKey.strip().replaceAll("[\\\\/:*?\"<>|]", "_")
+                        : "";
+        if (safe.isEmpty()) {
+            return rdpLauncherOperatorLastSelectedPath();
+        }
+        return resolveDesktopAppHomeDir()
+                .resolve("last-rdp-operator-" + safe + ".txt")
+                .toAbsolutePath()
+                .normalize();
+    }
+
+    public static Path rdpLauncherOperatorUsersPdfPath() {
+        return defaultRdpLauncherSharedDataDir()
+                .resolve("rdp-launcher-operator-users.pdf")
+                .toAbsolutePath()
+                .normalize();
+    }
+
+    public static Path resolveRdpLauncherOperatorUsersPdfPath(Map<String, String> ui) {
+        Path store = resolveRdpLauncherOperatorUsersStorePath(ui);
+        Path parent = store.getParent();
+        if (parent != null) {
+            return parent.resolve("rdp-launcher-operator-users.pdf").toAbsolutePath().normalize();
+        }
+        return rdpLauncherOperatorUsersPdfPath();
+    }
+
+    public static Path resolveRdpLauncherOperatorUsersBackupsRoot(Map<String, String> ui) {
+        Path store = resolveRdpLauncherOperatorUsersStorePath(ui);
+        Path parent = store.getParent();
+        if (parent != null) {
+            return parent.resolve(RDP_LAUNCHER_OPERATOR_USERS_BACKUPS_DIR).toAbsolutePath().normalize();
+        }
+        return rdpLauncherOperatorUsersBackupsRoot();
+    }
+
+    public static Path rdpLauncherOperatorUsersBackupsRoot() {
+        return defaultRdpLauncherSharedDataDir()
+                .resolve(RDP_LAUNCHER_OPERATOR_USERS_BACKUPS_DIR)
+                .toAbsolutePath()
+                .normalize();
+    }
+
+    /** 起動中アプリの操作者 bin ファイル名（PMD＝factory-operator-users.bin、RDP＝rdp-launcher-operator-users.bin）。 */
+    public static String operatorUsersStoreBinBasename() {
+        if (usesRemoteDesktopAppHome()) {
+            return RDP_LAUNCHER_OPERATOR_USERS_BIN;
+        }
+        return FACTORY_OPERATOR_USERS_BIN;
     }
 
     public static Path resolveRdpLauncherExe(Map<String, String> ui) {
@@ -1408,13 +1641,99 @@ public final class AppPaths {
         return resolveRdpLauncherDeployDir(u).resolve(RDP_LAUNCHER_EXE_BASENAME);
     }
 
+    /**
+     * 操作者名から ini ファイル名を生成する（例: {@code 細川_RPA設定.ini}）。
+     * 操作者名が空のときは {@link #RDP_LAUNCHER_INI_BASENAME}。
+     */
+    public static String rdpLauncherIniBasenameForOperator(String operatorName) {
+        return rdpLauncherIniBasenameForOperator(operatorName, RDP_LAUNCHER_INI_BASENAME);
+    }
+
+    static String rdpLauncherIniBasenameForOperatorLegacy(String operatorName) {
+        return rdpLauncherIniBasenameForOperator(operatorName, RDP_LAUNCHER_INI_BASENAME_LEGACY);
+    }
+
+    private static String rdpLauncherIniBasenameForOperator(String operatorName, String iniBasename) {
+        String trimmed = operatorName != null ? operatorName.strip() : "";
+        if (trimmed.isEmpty()) {
+            return iniBasename;
+        }
+        return sanitizeOperatorForIniFilename(trimmed) + "_" + iniBasename;
+    }
+
+    /**
+     * ini ファイル名に使う操作者名のサニタイズ（Windows 禁止文字を {@code _} に置換）。
+     */
+    public static String sanitizeOperatorForIniFilename(String operatorName) {
+        if (operatorName == null || operatorName.isBlank()) {
+            return "operator";
+        }
+        String s = operatorName.strip().replaceAll("[\\\\/:*?\"<>|]", "_");
+        while (s.endsWith(".") || s.endsWith(" ")) {
+            s = s.substring(0, s.length() - 1).strip();
+        }
+        return s.isEmpty() ? "operator" : s;
+    }
+
+    /**
+     * {@link #KEY_PM_AI_OPERATOR_USER} が ui にあればそれを操作者名として ini を解決する。
+     */
     public static Path resolveRdpLauncherIni(Map<String, String> ui) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        return resolveRdpLauncherIni(u, trim(u.get(KEY_PM_AI_OPERATOR_USER)));
+    }
+
+    /**
+     * 接続先 RDP ランチャー向け ini のフルパス（書込・表示の正本）。
+     * {@link #resolveRdpLauncherDeployDir} と同階層の {@code RPA設定.ini} または {@code {操作者}_RPA設定.ini}。
+     * 既存ファイルの読取は {@link #resolveExistingRdpLauncherIni}。
+     */
+    public static Path resolveRdpLauncherIni(Map<String, String> ui, String operatorName) {
         Map<String, String> u = ui != null ? ui : Map.of();
         String override = trim(u.get(KEY_PM_AI_RDP_LAUNCHER_INI));
         if (!override.isEmpty()) {
             return Path.of(override).toAbsolutePath().normalize();
         }
-        return resolveRdpLauncherDeployDir(u).resolve(RDP_LAUNCHER_INI_BASENAME);
+        Path deployDir = resolveRdpLauncherDeployDir(u);
+        String op = operatorName != null ? operatorName.strip() : "";
+        String basename =
+                op.isEmpty() ? RDP_LAUNCHER_INI_BASENAME : rdpLauncherIniBasenameForOperator(op);
+        return deployDir.resolve(basename).toAbsolutePath().normalize();
+    }
+
+    /**
+     * 接続先 ini の既存ファイルを探す（レガシー {@code RAP設定.ini} / {@code DATA\} 配下も試行）。
+     * 無ければ {@link #resolveRdpLauncherIni} と同じ正本パスを返す。
+     */
+    public static Path resolveExistingRdpLauncherIni(Map<String, String> ui, String operatorName) {
+        Path canonical = resolveRdpLauncherIni(ui, operatorName);
+        if (Files.isRegularFile(canonical)) {
+            return canonical;
+        }
+        Map<String, String> u = ui != null ? ui : Map.of();
+        Path deployDir = resolveRdpLauncherDeployDir(u);
+        String op = operatorName != null ? operatorName.strip() : "";
+        List<Path> candidates = new ArrayList<>();
+        if (!op.isEmpty()) {
+            candidates.add(deployDir.resolve(rdpLauncherIniBasenameForOperatorLegacy(op)));
+            candidates.add(
+                    defaultRdpLauncherSharedDataDir()
+                            .resolve(rdpLauncherIniBasenameForOperator(op)));
+            candidates.add(
+                    defaultRdpLauncherSharedDataDir()
+                            .resolve(rdpLauncherIniBasenameForOperatorLegacy(op)));
+        } else {
+            candidates.add(deployDir.resolve(RDP_LAUNCHER_INI_BASENAME_LEGACY));
+            candidates.add(defaultRdpLauncherSharedDataDir().resolve(RDP_LAUNCHER_INI_BASENAME));
+            candidates.add(
+                    defaultRdpLauncherSharedDataDir().resolve(RDP_LAUNCHER_INI_BASENAME_LEGACY));
+        }
+        for (Path candidate : candidates) {
+            if (Files.isRegularFile(candidate)) {
+                return candidate.toAbsolutePath().normalize();
+            }
+        }
+        return canonical;
     }
 
     public static Path resolveRdpLauncherVersionFile(Map<String, String> ui) {
@@ -1574,10 +1893,8 @@ public final class AppPaths {
     public static Path localFactoryOperatorUsersStorePath(FactorySite site) {
         FactorySite effective = site != null ? site : FactorySite.KONAN;
         String suffix = effective.name().toLowerCase(Locale.ROOT);
-        return Paths.get(
-                        System.getProperty("user.home"),
-                        ".pm-ai-desktop",
-                        "factory-operator-users-" + suffix + ".bin")
+        return resolveDesktopAppHomeDir()
+                .resolve("factory-operator-users-" + suffix + ".bin")
                 .toAbsolutePath()
                 .normalize();
     }
@@ -1589,10 +1906,8 @@ public final class AppPaths {
     public static Path localFactoryOperatorLastSelectedPath(FactorySite site) {
         FactorySite effective = site != null ? site : FactorySite.KONAN;
         String suffix = effective.name().toLowerCase(Locale.ROOT);
-        return Paths.get(
-                        System.getProperty("user.home"),
-                        ".pm-ai-desktop",
-                        "last-factory-operator-" + suffix + ".txt")
+        return resolveDesktopAppHomeDir()
+                .resolve("last-factory-operator-" + suffix + ".txt")
                 .toAbsolutePath()
                 .normalize();
     }
@@ -1627,11 +1942,9 @@ public final class AppPaths {
     public static Path requestFormJuchuFileBackupsRoot(Map<String, String> ui) {
         FactorySite site = GlobalInitSettingTarget.loadEffective(ui != null ? ui : Map.of());
         String suffix = site.name().toLowerCase(Locale.ROOT);
-        return Paths.get(
-                        System.getProperty("user.home"),
-                        ".pm-ai-desktop",
-                        REQUEST_FORM_JUCHU_FILE_BACKUPS_DIR,
-                        suffix)
+        return resolveDesktopAppHomeDir()
+                .resolve(REQUEST_FORM_JUCHU_FILE_BACKUPS_DIR)
+                .resolve(suffix)
                 .toAbsolutePath()
                 .normalize();
     }

@@ -28,7 +28,10 @@ internal static class Program
             var iniPath = ResolveIniPath(args, exeDir);
             if (string.IsNullOrWhiteSpace(iniPath))
             {
-                LauncherLog.Error("ini パスが未指定です。--ini または PM_AI_RDP_LAUNCHER_INI、または exe 同階層の RAP設定.ini を指定してください。");
+                LauncherLog.Error(
+                    "ini パスが未指定です。--ini、PM_AI_RDP_LAUNCHER_INI、"
+                        + "操作者名を第1引数（例: PmAiRdpRemoteLauncher.exe 細川 → 細川_RPA設定.ini）、"
+                        + "または exe 同階層の RPA設定.ini を指定してください。");
                 return ExitWithLog(ExitMissingIni, "ini パス未指定");
             }
 
@@ -369,17 +372,13 @@ internal static class Program
             return fromEnv.Trim();
         }
 
-        var directory = exeDir;
-        if (string.IsNullOrWhiteSpace(directory))
+        var operatorFromArgs = LauncherIni.TryParseOperatorArgument(args);
+        if (!string.IsNullOrWhiteSpace(operatorFromArgs))
         {
-            directory = AppContext.BaseDirectory;
+            LauncherLog.Info("操作者名引数: " + operatorFromArgs);
+            return LauncherIni.ResolveIniPathInDeployLayout(exeDir, operatorFromArgs);
         }
 
-        if (string.IsNullOrWhiteSpace(directory))
-        {
-            directory = Environment.CurrentDirectory;
-        }
-
-        return Path.Combine(directory, LauncherIni.DefaultIniFileName);
+        return LauncherIni.ResolveIniPathInDeployLayout(exeDir, null);
     }
 }

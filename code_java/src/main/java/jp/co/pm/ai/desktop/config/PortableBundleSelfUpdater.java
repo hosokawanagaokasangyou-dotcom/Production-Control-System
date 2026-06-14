@@ -52,16 +52,18 @@ public final class PortableBundleSelfUpdater {
 
     /** True when {@code pm-ai-data/code/python/task_extract_stage1.py} exists under {@code cwd}. */
     public static boolean isPortableBundleLayout(Path cwd) {
-        Path marker =
-                cwd.resolve("pm-ai-data").resolve("code").resolve("python").resolve("task_extract_stage1.py");
-        return Files.isRegularFile(marker);
+        return PortableBundleProfile.PMD.isPortableBundleLayout(cwd);
     }
 
-    /**
-     * Upgrade ZIP for sync: {@code canonical} when it is a {@code .zip}, or {@code canonical}/{@link
-     * #PORTABLE_UPGRADE_ZIP_NAME} when that file exists under a release folder.
-     */
+    public static boolean isPortableBundleLayout(PortableBundleProfile profile, Path cwd) {
+        return profile != null && profile.isPortableBundleLayout(cwd);
+    }
+
     public static Optional<Path> resolveEffectiveUpgradeZip(Path canonical) {
+        return resolveEffectiveUpgradeZip(PortableBundleProfile.PMD, canonical);
+    }
+
+    public static Optional<Path> resolveEffectiveUpgradeZip(PortableBundleProfile profile, Path canonical) {
         if (canonical == null) {
             return Optional.empty();
         }
@@ -72,23 +74,19 @@ public final class PortableBundleSelfUpdater {
         if (!isReadableDirectory(abs)) {
             return Optional.empty();
         }
-        Path nested = abs.resolve(PORTABLE_UPGRADE_ZIP_NAME);
+        Path nested = abs.resolve(profile.upgradeZipName());
         if (isPortableBundleZipPath(nested)) {
             return Optional.of(nested);
         }
         return Optional.empty();
     }
 
-    /**
-     * Outer {@link AppPaths#VERSION_TXT_FILE_NAME} used for version compare and post-sync copy (beside upgrade ZIP or
-     * directory root).
-     */
-    public static Optional<Path> resolveOuterVersionTxt(Path canonical) {
+    public static Optional<Path> resolveOuterVersionTxt(PortableBundleProfile profile, Path canonical) {
         if (canonical == null) {
             return Optional.empty();
         }
         Path abs = canonical.toAbsolutePath().normalize();
-        Optional<Path> zip = resolveEffectiveUpgradeZip(abs);
+        Optional<Path> zip = resolveEffectiveUpgradeZip(profile, abs);
         if (zip.isPresent()) {
             Path parent = zip.get().getParent();
             if (parent == null) {
@@ -103,10 +101,23 @@ public final class PortableBundleSelfUpdater {
         return Optional.empty();
     }
 
+    /**
+     * Outer {@link AppPaths#VERSION_TXT_FILE_NAME} used for version compare and post-sync copy (beside upgrade ZIP or
+     * directory root).
+     */
+    public static Optional<Path> resolveOuterVersionTxt(Path canonical) {
+        return resolveOuterVersionTxt(PortableBundleProfile.PMD, canonical);
+    }
+
+    public static Optional<BigDecimal> readCanonicalPortableBundleVersion(
+            PortableBundleProfile profile, Path canonicalPath) {
+        Objects.requireNonNull(canonicalPath, "canonicalPath");
+        return resolveOuterVersionTxt(profile, canonicalPath).flatMap(PortableBundleSelfUpdater::parseVersionFile);
+    }
+
     /** Reads canonical version beside upgrade ZIP or at directory root. */
     public static Optional<BigDecimal> readCanonicalPortableBundleVersion(Path canonicalPath) {
-        Objects.requireNonNull(canonicalPath, "canonicalPath");
-        return resolveOuterVersionTxt(canonicalPath).flatMap(PortableBundleSelfUpdater::parseVersionFile);
+        return readCanonicalPortableBundleVersion(PortableBundleProfile.PMD, canonicalPath);
     }
 
     /**
@@ -623,11 +634,23 @@ public final class PortableBundleSelfUpdater {
      * 版数が新しい、または {@link PortableBundleBuildManifest} 上でデスクトップ JAR がローカルと異なるときに更新する。
      */
     public static boolean shouldUpdateBundle(Path canonical, Path installRoot, Path pmAiDataRoot) {
+        return shouldUpdateBundle(PortableBundleProfile.PMD, canonical, installRoot, pmAiDataRoot);
+    }
+
+    public static boolean shouldUpdateBundle(
+            PortableBundleProfile profile,
+            Path canonical,
+            Path installRoot,
+            Path pmAiDataRoot) {
+        Objects.requireNonNull(profile, "profile");
         Objects.requireNonNull(canonical, "canonical");
         Objects.requireNonNull(installRoot, "installRoot");
-        Objects.requireNonNull(pmAiDataRoot, "pmAiDataRoot");
-        Optional<BigDecimal> cv = readCanonicalPortableBundleVersion(canonical);
-        Optional<BigDecimal> lv = readLocalBundleVersion(installRoot, pmAiDataRoot);
+        Optional<BigDecimal> cv = readCanonicalPortableBundleVersion(profile, canonical);
+        Optional<BigDecimal> lv =
+                profile.syncsPmAiData()
+                        ? readLocalBundleVersion(
+                                installRoot, pmAiDataRoot != null ? pmAiDataRoot : installRoot.resolve("pm-ai-data"))
+                        : readLocalBundleVersion(installRoot, installRoot);
         if (shouldUpdate(cv, lv)) {
             return true;
         }
@@ -648,35 +671,60 @@ public final class PortableBundleSelfUpdater {
 
     /** {@code PMD.exe} と {@code app/} がある jpackage ルートか。 */
     public static boolean hasDesktopInstallLayout(Path root) {
-        if (root == null) {
+        return hasDesktopInstallLayout(PortableBundleProfile.PMD, root);
+    }
+
+    public static boolean hasDesktopInstallLayout(PortableBundleProfile profile, Path root) {
+        if (profile == null || root == null) {
             return false;
         }
         Path abs = root.toAbsolutePath().normalize();
-        return Files.isRegularFile(abs.resolve(PORTABLE_DESKTOP_EXE_NAME))
+        return Files.isRegularFile(abs.resolve(profile.desktopExeName()))
                 && Files.isDirectory(abs.resolve("app"));
     }
 
     /**
-     * ZIP 展開先などから pm-ai-data ではなくデスクトップ本体ルートを得る。フルレイアウトでなければ empty。
+     * ZIP 展開先などからデスクトップ本体ルートを得る。フルレイアウトでなければ empty。
      */
     public static Optional<Path> resolveDesktopBundleRoot(Path extractedOrCanonicalRoot) {
-        if (extractedOrCanonicalRoot == null) {
+        return resolveDesktopBundleRoot(PortableBundleProfile.PMD, extractedOrCanonicalRoot);
+    }
+
+    public static Optional<Path> resolveDesktopBundleRoot(
+            PortableBundleProfile profile, Path extractedOrCanonicalRoot) {
+        if (profile == null || extractedOrCanonicalRoot == null) {
             return Optional.empty();
         }
         Path abs = extractedOrCanonicalRoot.toAbsolutePath().normalize();
-        if (hasDesktopInstallLayout(abs)) {
+        if (hasDesktopInstallLayout(profile, abs)) {
             return Optional.of(abs);
+        }
+        try (java.util.stream.Stream<Path> children = Files.list(abs)) {
+            List<Path> dirs = children.filter(Files::isDirectory).toList();
+            if (dirs.size() == 1 && hasDesktopInstallLayout(profile, dirs.get(0))) {
+                return Optional.of(dirs.get(0));
+            }
+        } catch (IOException ignored) {
+            return Optional.empty();
         }
         return Optional.empty();
     }
 
     /**
-     * {@code bundleRoot} のデスクトップ本体（{@code PMD.exe}, {@code app}, {@code runtime} 等）を {@code installRoot} へコピー。
-     * {@code pm-ai-data} は対象外。
+     * {@code bundleRoot} のデスクトップ本体（exe / app / runtime 等）を {@code installRoot} へコピー。
      */
     public static SyncOutcome syncDesktopInstallFromBundleRoot(
             Path bundleRoot, Path installRoot, Consumer<String> log) throws IOException {
-        return syncDesktopInstallFromBundleRoot(bundleRoot, installRoot, log, null);
+        return syncDesktopInstallFromBundleRoot(PortableBundleProfile.PMD, bundleRoot, installRoot, log);
+    }
+
+    public static SyncOutcome syncDesktopInstallFromBundleRoot(
+            PortableBundleProfile profile,
+            Path bundleRoot,
+            Path installRoot,
+            Consumer<String> log)
+            throws IOException {
+        return syncDesktopInstallFromBundleRoot(profile, bundleRoot, installRoot, log, null);
     }
 
     /**
@@ -688,16 +736,28 @@ public final class PortableBundleSelfUpdater {
             Consumer<String> log,
             PortableBundleUpgradeProgress.Listener progress)
             throws IOException {
+        return syncDesktopInstallFromBundleRoot(
+                PortableBundleProfile.PMD, bundleRoot, installRoot, log, progress);
+    }
+
+    public static SyncOutcome syncDesktopInstallFromBundleRoot(
+            PortableBundleProfile profile,
+            Path bundleRoot,
+            Path installRoot,
+            Consumer<String> log,
+            PortableBundleUpgradeProgress.Listener progress)
+            throws IOException {
+        Objects.requireNonNull(profile, "profile");
         Objects.requireNonNull(bundleRoot, "bundleRoot");
         Objects.requireNonNull(installRoot, "installRoot");
         Path src = bundleRoot.toAbsolutePath().normalize();
         Path dest = installRoot.toAbsolutePath().normalize();
-        if (!hasDesktopInstallLayout(src)) {
+        if (!hasDesktopInstallLayout(profile, src)) {
             throw new IOException("Bundle root is not a desktop install layout: " + src);
         }
         Files.createDirectories(dest);
 
-        int totalFiles = countDesktopInstallFiles(src);
+        int totalFiles = countDesktopInstallFiles(profile, src);
         if (progress != null) {
             progress.onPhaseStarted(PortableBundleUpgradeProgress.Phase.SYNC_DESKTOP, totalFiles);
         }
@@ -708,12 +768,10 @@ public final class PortableBundleSelfUpdater {
         int[] copied = {0};
         copyDesktopTree(src.resolve("app"), dest.resolve("app"), log, progress, copied, totalFiles);
         copyDesktopTree(src.resolve("runtime"), dest.resolve("runtime"), log, progress, copied, totalFiles);
-        for (String leaf :
-                List.of(
-                        PORTABLE_DESKTOP_EXE_NAME,
-                        PORTABLE_LAUNCHER_BAT_NAME,
-                        PORTABLE_UPDATE_SCRIPT_NAME,
-                        AppPaths.VERSION_TXT_FILE_NAME)) {
+        for (String dirName : profile.extraDesktopDirectories()) {
+            copyDesktopTree(src.resolve(dirName), dest.resolve(dirName), log, progress, copied, totalFiles);
+        }
+        for (String leaf : profile.desktopLeafFilesToSync()) {
             Path f = src.resolve(leaf);
             if (Files.isRegularFile(f)) {
                 Path target = dest.resolve(leaf);
@@ -742,11 +800,21 @@ public final class PortableBundleSelfUpdater {
      */
     public static void stageDesktopBundleForRelaunch(Path bundleRoot, Path stagingRoot, Consumer<String> log)
             throws IOException {
+        stageDesktopBundleForRelaunch(PortableBundleProfile.PMD, bundleRoot, stagingRoot, log);
+    }
+
+    public static void stageDesktopBundleForRelaunch(
+            PortableBundleProfile profile,
+            Path bundleRoot,
+            Path stagingRoot,
+            Consumer<String> log)
+            throws IOException {
+        Objects.requireNonNull(profile, "profile");
         Objects.requireNonNull(bundleRoot, "bundleRoot");
         Objects.requireNonNull(stagingRoot, "stagingRoot");
         deleteDirectoryRecursive(stagingRoot, log);
         Files.createDirectories(stagingRoot);
-        syncDesktopInstallFromBundleRoot(bundleRoot, stagingRoot, log, null);
+        syncDesktopInstallFromBundleRoot(profile, bundleRoot, stagingRoot, log, null);
     }
 
     static void copyDesktopTree(
@@ -812,6 +880,10 @@ public final class PortableBundleSelfUpdater {
     }
 
     static int countDesktopInstallFiles(Path bundleRoot) throws IOException {
+        return countDesktopInstallFiles(PortableBundleProfile.PMD, bundleRoot);
+    }
+
+    static int countDesktopInstallFiles(PortableBundleProfile profile, Path bundleRoot) throws IOException {
         int[] n = {0};
         Path app = bundleRoot.resolve("app");
         if (Files.isDirectory(app)) {
@@ -821,12 +893,13 @@ public final class PortableBundleSelfUpdater {
         if (Files.isDirectory(runtime)) {
             n[0] += countFilesUnder(runtime);
         }
-        for (String leaf :
-                List.of(
-                        PORTABLE_DESKTOP_EXE_NAME,
-                        PORTABLE_LAUNCHER_BAT_NAME,
-                        PORTABLE_UPDATE_SCRIPT_NAME,
-                        AppPaths.VERSION_TXT_FILE_NAME)) {
+        for (String dirName : profile.extraDesktopDirectories()) {
+            Path extra = bundleRoot.resolve(dirName);
+            if (Files.isDirectory(extra)) {
+                n[0] += countFilesUnder(extra);
+            }
+        }
+        for (String leaf : profile.desktopLeafFilesToSync()) {
             if (Files.isRegularFile(bundleRoot.resolve(leaf))) {
                 n[0]++;
             }

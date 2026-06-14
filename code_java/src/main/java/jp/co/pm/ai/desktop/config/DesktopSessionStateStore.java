@@ -34,8 +34,10 @@ import jp.co.pm.ai.desktop.reconciliation.RequestFormComboChoices;
 public final class DesktopSessionStateStore {
 
     private static final ObjectMapper JSON = new ObjectMapper();
-    private static final Path STORE =
-            Paths.get(System.getProperty("user.home"), ".pm-ai-desktop", "session-state.json");
+
+    private static Path storePath() {
+        return AppPaths.resolveSessionStateStorePath();
+    }
 
     private static final String BUNDLED_SESSION_UI_DEFAULTS_RESOURCE =
             "/jp/co/pm/ai/desktop/config/bundled_session_ui_defaults.json";
@@ -48,8 +50,8 @@ public final class DesktopSessionStateStore {
     public static DesktopSessionState load() {
         try {
             JsonNode root;
-            if (Files.isRegularFile(STORE)) {
-                root = JSON.readTree(STORE.toFile());
+            if (Files.isRegularFile(storePath())) {
+                root = JSON.readTree(storePath().toFile());
                 if (root == null || !root.isObject()) {
                     return DesktopSessionState.empty();
                 }
@@ -267,7 +269,7 @@ public final class DesktopSessionStateStore {
 
     /**
      * ポータブル自動バージョンアップ（正本→ローカル {@code pm-ai-data} 同期）のあと、同梱された
-     * {@code bundled_session_ui_defaults.json} の各キーを {@link #STORE} に上書きし、
+     * {@code bundled_session_ui_defaults.json} の各キーを {@link #storePath()} に上書きし、
      * {@code pm-ai-data/code/exclude_rules.json} があれば {@code excludeRulesPath} と環境タブ相当の
      * {@link AppPaths#KEY_PM_AI_EXCLUDE_RULES_JSON} 行も最新の絶対パスへ更新する。
      *
@@ -285,8 +287,8 @@ public final class DesktopSessionStateStore {
     public static void applyPortableUpgradeBundledPolicyToSessionStore(Map<String, String> ui) throws IOException {
         JsonNode bundled = readMergedSessionUiDefaultsNode(ui);
         ObjectNode root;
-        if (Files.isRegularFile(STORE)) {
-            JsonNode cur = JSON.readTree(STORE.toFile());
+        if (Files.isRegularFile(storePath())) {
+            JsonNode cur = JSON.readTree(storePath().toFile());
             root = cur != null && cur.isObject() ? (ObjectNode) cur : JSON.createObjectNode();
         } else {
             root = JSON.createObjectNode();
@@ -312,8 +314,8 @@ public final class DesktopSessionStateStore {
             root.put("excludeRulesPath", abs);
             putOrUpdateUiEnvRowValueInSessionRoot(root, AppPaths.KEY_PM_AI_EXCLUDE_RULES_JSON, abs);
         }
-        Files.createDirectories(STORE.getParent());
-        JSON.writerWithDefaultPrettyPrinter().writeValue(STORE.toFile(), root);
+        Files.createDirectories(storePath().getParent());
+        JSON.writerWithDefaultPrettyPrinter().writeValue(storePath().toFile(), root);
     }
 
     private static void putOrUpdateUiEnvRowValueInSessionRoot(ObjectNode root, String key, String value) {
@@ -469,8 +471,117 @@ public final class DesktopSessionStateStore {
 
     public static void save(DesktopSessionState state) {
         try {
-            Files.createDirectories(STORE.getParent());
-            JSON.writerWithDefaultPrettyPrinter().writeValue(STORE.toFile(), toJsonObject(state));
+            Files.createDirectories(storePath().getParent());
+            JSON.writerWithDefaultPrettyPrinter().writeValue(storePath().toFile(), toJsonObject(state));
+        } catch (IOException ignored) {
+        }
+    }
+
+    /**
+     * リモートデスクトップ配布用シェル等、環境変数タブ無し UI から env 行とテーマだけ session JSON を部分更新する。
+     */
+    public static void patchUiEnvMapAndTheme(Map<String, String> envMap, String uiThemeId) {
+        if (envMap == null && (uiThemeId == null || uiThemeId.isBlank())) {
+            return;
+        }
+        try {
+            ObjectNode root;
+            if (Files.isRegularFile(storePath())) {
+                JsonNode existing = JSON.readTree(storePath().toFile());
+                root =
+                        existing != null && existing.isObject()
+                                ? ((ObjectNode) existing).deepCopy()
+                                : JSON.createObjectNode();
+            } else {
+                JsonNode defaults = readMergedSessionUiDefaultsNode();
+                root =
+                        defaults != null && defaults.isObject()
+                                ? ((ObjectNode) defaults).deepCopy()
+                                : JSON.createObjectNode();
+            }
+            if (uiThemeId != null && !uiThemeId.isBlank()) {
+                root.put("uiTheme", uiThemeId.strip());
+            }
+            if (envMap != null && !envMap.isEmpty()) {
+                ArrayNode rows =
+                        root.has("uiEnvRows") && root.get("uiEnvRows").isArray()
+                                ? (ArrayNode) root.get("uiEnvRows").deepCopy()
+                                : JSON.createArrayNode();
+                LinkedHashMap<String, ObjectNode> byKey = new LinkedHashMap<>();
+                for (JsonNode row : rows) {
+                    if (row != null && row.isObject() && row.has("name")) {
+                        byKey.put(row.get("name").asText(""), (ObjectNode) row.deepCopy());
+                    }
+                }
+                for (Map.Entry<String, String> e : envMap.entrySet()) {
+                    String key = e.getKey() != null ? e.getKey().trim() : "";
+                    if (key.isEmpty()) {
+                        continue;
+                    }
+                    ObjectNode row = byKey.computeIfAbsent(key, k -> JSON.createObjectNode());
+                    row.put("name", key);
+                    row.put("value", e.getValue() != null ? e.getValue() : "");
+                    if (!row.has("description")) {
+                        row.put("description", "");
+                    }
+                }
+                ArrayNode merged = JSON.createArrayNode();
+                byKey.values().forEach(merged::add);
+                root.set("uiEnvRows", merged);
+            }
+            Files.createDirectories(storePath().getParent());
+            JSON.writerWithDefaultPrettyPrinter().writeValue(storePath().toFile(), root);
+        } catch (IOException ignored) {
+        }
+    }
+
+    /**
+     * 環境変数タブの行スナップショットとテーマだけ session JSON を部分更新する（説明列を保持）。
+     */
+    public static void patchUiEnvRowsAndTheme(List<UiEnvRowSnapshot> rows, String uiThemeId) {
+        if ((rows == null || rows.isEmpty()) && (uiThemeId == null || uiThemeId.isBlank())) {
+            return;
+        }
+        try {
+            ObjectNode root;
+            if (Files.isRegularFile(storePath())) {
+                JsonNode existing = JSON.readTree(storePath().toFile());
+                root =
+                        existing != null && existing.isObject()
+                                ? ((ObjectNode) existing).deepCopy()
+                                : JSON.createObjectNode();
+            } else {
+                JsonNode defaults = readMergedSessionUiDefaultsNode();
+                root =
+                        defaults != null && defaults.isObject()
+                                ? ((ObjectNode) defaults).deepCopy()
+                                : JSON.createObjectNode();
+            }
+            if (uiThemeId != null && !uiThemeId.isBlank()) {
+                root.put("uiTheme", uiThemeId.strip());
+            }
+            if (rows != null && !rows.isEmpty()) {
+                ArrayNode array = JSON.createArrayNode();
+                for (UiEnvRowSnapshot snap : rows) {
+                    if (snap == null) {
+                        continue;
+                    }
+                    String name = snap.name() != null ? snap.name().trim() : "";
+                    if (name.isEmpty()) {
+                        continue;
+                    }
+                    ObjectNode row = JSON.createObjectNode();
+                    row.put("name", name);
+                    row.put("value", snap.value() != null ? snap.value() : "");
+                    row.put(
+                            "description",
+                            snap.description() != null ? snap.description() : "");
+                    array.add(row);
+                }
+                root.set("uiEnvRows", array);
+            }
+            Files.createDirectories(storePath().getParent());
+            JSON.writerWithDefaultPrettyPrinter().writeValue(storePath().toFile(), root);
         } catch (IOException ignored) {
         }
     }

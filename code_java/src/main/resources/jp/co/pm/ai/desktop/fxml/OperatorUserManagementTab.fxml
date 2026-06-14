@@ -6,6 +6,7 @@
 <?import javafx.scene.control.Label?>
 <?import javafx.scene.control.ListView?>
 <?import javafx.scene.control.Separator?>
+<?import javafx.scene.control.SplitPane?>
 <?import javafx.scene.control.TableView?>
 <?import javafx.scene.control.TextField?>
 <?import javafx.scene.layout.HBox?>
@@ -19,51 +20,109 @@
     </padding>
     <Label styleClass="pm-section-title" text="ユーザー管理者（操作者名・PIN）"
            wrapText="true"/>
-    <Label text="工場ごとに配台システム起動時の名前選択肢と PIN（4～10 桁）を管理します。管理者は一覧の「PIN（管理者閲覧）」列で各ユーザーの PIN を確認でき、PDF 出力で工場別のユーザー情報を保存できます。編集対象は環境変数で設定された利用工場（湖南／国分）に固定されます。"
+    <Label fx:id="introDescriptionLabel" text="工場ごとに配台システム起動時の名前選択肢と PIN（4～10 桁）を管理します。管理者は一覧の「PIN（管理者閲覧）」列で各ユーザーの PIN を確認でき、PDF 出力で工場別のユーザー情報を保存できます。編集対象は環境変数で設定された利用工場（湖南／国分）に固定されます。"
            wrapText="true"/>
-    <Separator/>
-    <HBox spacing="8.0" alignment="CENTER_LEFT">
+    <HBox fx:id="managedFactoryRow" spacing="8.0" alignment="CENTER_LEFT">
         <Label text="管理対象工場"/>
         <ComboBox fx:id="managedFactoryCombo" prefWidth="220.0"/>
+        <Label fx:id="factoryLabel" styleClass="pm-muted-label" wrapText="true"/>
     </HBox>
-    <Label fx:id="factoryLabel" styleClass="pm-muted-label" wrapText="true"/>
-    <Label fx:id="sessionOperatorLabel" wrapText="true"/>
-    <HBox spacing="8.0" alignment="CENTER_LEFT">
-        <Button fx:id="changeSessionOperatorButton" mnemonicParsing="false"
-                onAction="#onChangeSessionOperatorAction" text="現在の操作者を変更"/>
-    </HBox>
-    <Separator/>
-    <HBox spacing="8.0" alignment="CENTER_LEFT">
-        <Label text="追加する名前"/>
-        <TextField fx:id="newNameField" prefWidth="240.0" promptText="例: 山田"/>
-        <Button fx:id="addNameButton" mnemonicParsing="false" onAction="#onAddNameAction" text="追加"/>
-        <Button fx:id="removeNameButton" mnemonicParsing="false" onAction="#onRemoveNameAction" text="選択を削除"/>
-        <Button fx:id="resetDefaultsButton" mnemonicParsing="false" onAction="#onResetDefaultsAction" text="既定4名に戻す"/>
-        <Button fx:id="issuePinButton" mnemonicParsing="false" onAction="#onIssuePinAction" text="PIN 発行／再発行"/>
-        <Button fx:id="assignPinButton" mnemonicParsing="false" onAction="#onAssignPinManuallyAction" text="PIN 手動設定"/>
-        <Button fx:id="viewPinButton" mnemonicParsing="false" onAction="#onViewPinAction" text="選択ユーザーの PIN"/>
-        <Button fx:id="unlockPinButton" mnemonicParsing="false" onAction="#onUnlockPinAction" text="PIN ロック解除"/>
-    </HBox>
-    <Label text="ユーザー一覧（起動時の選択肢）"/>
-    <TableView fx:id="operatorTableView" prefHeight="220.0" VBox.vgrow="ALWAYS"/>
-    <HBox spacing="8.0" alignment="CENTER_LEFT">
-        <Button fx:id="refreshButton" mnemonicParsing="false" onAction="#onRefreshAction" text="一覧更新"/>
-        <Button fx:id="exportUsersPdfButton" mnemonicParsing="false" onAction="#onExportUsersPdfAction" text="PDF 出力"/>
-        <Button fx:id="openUsersPdfButton" mnemonicParsing="false" onAction="#onOpenUsersPdfAction" text="PDF を開く"/>
-    </HBox>
-    <Label fx:id="usersPdfPathLabel" styleClass="pm-muted-label" wrapText="true"/>
-    <Separator/>
-    <Label styleClass="pm-section-title" text="ユーザー管理バイナリのバックアップ（世代管理・全工場共通）"/>
-    <Label text="手動で factory-operator-users.bin（湖南・国分のユーザー情報を含む）のバックアップを取り、一覧から選択して復元できます（管理者向け）。"
-           wrapText="true"/>
-    <HBox spacing="8.0" alignment="CENTER_LEFT">
-        <Label text="メモ"/>
-        <TextField fx:id="backupLabelField" prefWidth="320.0" promptText="任意（手動バックアップ時）"/>
-        <Button fx:id="createBackupButton" mnemonicParsing="false" onAction="#onCreateBackupAction" text="手動バックアップ"/>
-        <Button fx:id="restoreBackupButton" mnemonicParsing="false" onAction="#onRestoreBackupAction" text="選択を復元"/>
-        <Button fx:id="refreshBackupButton" mnemonicParsing="false" onAction="#onRefreshBackupAction" text="バックアップ一覧更新"/>
-    </HBox>
-    <Label fx:id="backupStorePathLabel" styleClass="pm-muted-label" wrapText="true"/>
-    <Label text="バックアップ一覧（新しい順）"/>
-    <ListView fx:id="backupListView" prefHeight="160.0"/>
+    <SplitPane fx:id="departmentUserSplitPane" dividerPositions="0.18" minHeight="320.0"
+               VBox.vgrow="ALWAYS">
+        <VBox fx:id="departmentPane" spacing="6.0" minWidth="140.0" prefWidth="180.0" maxWidth="220.0">
+            <padding>
+                <Insets right="4.0"/>
+            </padding>
+            <Label styleClass="pm-section-title" text="部署"/>
+            <ListView fx:id="departmentListView" fixedCellSize="28.0" minHeight="120.0" VBox.vgrow="ALWAYS"/>
+            <TextField fx:id="newDepartmentField" promptText="新しい部署名"/>
+            <HBox spacing="6.0" alignment="CENTER_LEFT">
+                <Button fx:id="addDepartmentButton" mnemonicParsing="false"
+                        onAction="#onAddDepartmentAction" text="追加"/>
+                <Button fx:id="removeDepartmentButton" mnemonicParsing="false"
+                        onAction="#onRemoveDepartmentAction" text="削除"/>
+            </HBox>
+        </VBox>
+        <VBox fx:id="userListPane" spacing="8.0" minWidth="360.0">
+            <padding>
+                <Insets left="4.0"/>
+            </padding>
+            <Label styleClass="pm-section-title" text="ユーザー管理"/>
+            <VBox fx:id="operatorStoreSection" spacing="4.0" visible="false" managed="false">
+                <Label text="ユーザー管理ファイルの保存フォルダ"/>
+                <TextField fx:id="operatorStoreDirField" promptText="既定: 掲示板共有\rpa_luncher\DATA"/>
+                <HBox spacing="8.0" alignment="CENTER_LEFT">
+                    <Button fx:id="browseOperatorStoreDirButton" mnemonicParsing="false"
+                            onAction="#onBrowseOperatorStoreDirAction" text="参照…"/>
+                    <Button fx:id="applyOperatorStoreDirButton" mnemonicParsing="false"
+                            onAction="#onApplyOperatorStoreDirAction" text="適用"/>
+                    <Button fx:id="openOperatorStoreDirButton" mnemonicParsing="false"
+                            onAction="#onOpenOperatorStoreDirAction" text="フォルダを開く"/>
+                    <Button fx:id="resetOperatorStoreDirButton" mnemonicParsing="false"
+                            onAction="#onResetOperatorStoreDirAction" text="既定に戻す"/>
+                </HBox>
+                <Label fx:id="operatorStorePathLabel" styleClass="pm-muted-label" wrapText="true"/>
+                <Label text="前回選択した部署・操作者名は PC ローカル（~/.pm-ai-desktop-rdp/）に保存し、次回起動時は選択を省略します。"
+                       wrapText="true" styleClass="pm-muted-label"/>
+                <Separator/>
+                <Label text="ランチャープログラム転送先（配備先フォルダ）"/>
+                <TextField fx:id="launcherDeployDirField" promptText="共有フォルダ（UNC 可）"/>
+                <HBox spacing="8.0" alignment="CENTER_LEFT">
+                    <Button fx:id="browseLauncherDeployDirButton" mnemonicParsing="false"
+                            onAction="#onBrowseLauncherDeployDirAction" text="参照…"/>
+                    <Button fx:id="applyLauncherDeployDirButton" mnemonicParsing="false"
+                            onAction="#onApplyLauncherDeployDirAction" text="適用"/>
+                    <Button fx:id="openLauncherDeployDirButton" mnemonicParsing="false"
+                            onAction="#onOpenLauncherDeployDirAction" text="フォルダを開く"/>
+                    <Button fx:id="resetLauncherDeployDirButton" mnemonicParsing="false"
+                            onAction="#onResetLauncherDeployDirAction" text="既定に戻す"/>
+                </HBox>
+                <Label fx:id="launcherDeployWarningLabel" styleClass="pm-muted-label" wrapText="true"/>
+                <Label fx:id="launcherDeployPathLabel" styleClass="pm-muted-label" wrapText="true"/>
+            </VBox>
+            <Label fx:id="sessionOperatorLabel" wrapText="true"/>
+            <HBox spacing="8.0" alignment="CENTER_LEFT">
+                <Button fx:id="changeSessionOperatorButton" mnemonicParsing="false"
+                        onAction="#onChangeSessionOperatorAction" text="現在の操作者を変更"/>
+            </HBox>
+            <Separator/>
+            <Label fx:id="departmentUsersSectionLabel" styleClass="pm-section-title"
+                   text="ユーザー一覧（起動時の選択肢）" wrapText="true"/>
+            <HBox spacing="6.0" alignment="CENTER_LEFT">
+                <Label text="名前"/>
+                <TextField fx:id="newNameField" prefWidth="140.0" promptText="例: 山田"/>
+                <Button fx:id="addNameButton" mnemonicParsing="false" onAction="#onAddNameAction" text="追加"/>
+                <Button fx:id="removeNameButton" mnemonicParsing="false" onAction="#onRemoveNameAction" text="削除"/>
+                <Button fx:id="resetDefaultsButton" mnemonicParsing="false" onAction="#onResetDefaultsAction" text="ゲストのみに戻す"/>
+            </HBox>
+            <HBox spacing="6.0" alignment="CENTER_LEFT">
+                <Button fx:id="issuePinButton" mnemonicParsing="false" onAction="#onIssuePinAction" text="PIN 発行"/>
+                <Button fx:id="assignPinButton" mnemonicParsing="false" onAction="#onAssignPinManuallyAction" text="PIN 手動"/>
+                <Button fx:id="viewPinButton" mnemonicParsing="false" onAction="#onViewPinAction" text="PIN 表示"/>
+                <Button fx:id="unlockPinButton" mnemonicParsing="false" onAction="#onUnlockPinAction" text="ロック解除"/>
+            </HBox>
+            <TableView fx:id="operatorTableView" fixedCellSize="28.0" minHeight="120.0" prefHeight="200.0"
+                       maxHeight="320.0" VBox.vgrow="NEVER"/>
+            <HBox spacing="6.0" alignment="CENTER_LEFT">
+                <Button fx:id="refreshButton" mnemonicParsing="false" onAction="#onRefreshAction" text="更新"/>
+                <Button fx:id="exportUsersPdfButton" mnemonicParsing="false" onAction="#onExportUsersPdfAction" text="PDF"/>
+                <Button fx:id="openUsersPdfButton" mnemonicParsing="false" onAction="#onOpenUsersPdfAction" text="PDF を開く"/>
+            </HBox>
+            <Label fx:id="usersPdfPathLabel" styleClass="pm-muted-label" wrapText="true"/>
+            <Separator/>
+            <Label fx:id="backupSectionTitleLabel" styleClass="pm-section-title" text="ユーザー管理バイナリのバックアップ（世代管理・全工場共通）"/>
+            <Label fx:id="backupDescriptionLabel" text="手動で factory-operator-users.bin（湖南・国分のユーザー情報を含む）のバックアップを取り、一覧から選択して復元できます（管理者向け）。"
+                   wrapText="true"/>
+            <HBox spacing="8.0" alignment="CENTER_LEFT">
+                <Label text="メモ"/>
+                <TextField fx:id="backupLabelField" prefWidth="320.0" promptText="任意（手動バックアップ時）"/>
+                <Button fx:id="createBackupButton" mnemonicParsing="false" onAction="#onCreateBackupAction" text="手動バックアップ"/>
+                <Button fx:id="restoreBackupButton" mnemonicParsing="false" onAction="#onRestoreBackupAction" text="選択を復元"/>
+                <Button fx:id="refreshBackupButton" mnemonicParsing="false" onAction="#onRefreshBackupAction" text="バックアップ一覧更新"/>
+            </HBox>
+            <Label fx:id="backupStorePathLabel" styleClass="pm-muted-label" wrapText="true"/>
+            <Label text="バックアップ一覧（新しい順）"/>
+            <ListView fx:id="backupListView" prefHeight="100.0" maxHeight="120.0"/>
+        </VBox>
+    </SplitPane>
 </VBox>

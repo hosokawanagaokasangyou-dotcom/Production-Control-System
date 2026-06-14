@@ -158,4 +158,56 @@ public class LauncherIniTests
             File.Delete(path);
         }
     }
+
+    [Fact]
+    public void BuildIniFileNameForOperator_appendsBasename()
+    {
+        Assert.Equal("細川_RPA設定.ini", LauncherIni.BuildIniFileNameForOperator("細川"));
+        Assert.Equal(LauncherIni.DefaultIniFileName, LauncherIni.BuildIniFileNameForOperator(""));
+        Assert.Equal("bad_name_RPA設定.ini", LauncherIni.BuildIniFileNameForOperator("bad/name"));
+    }
+
+    [Fact]
+    public void ResolveIniPathInDeployLayout_usesExeDirForOperatorIni()
+    {
+        var exeDir = Path.Combine(Path.GetTempPath(), "rdp-launcher-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(exeDir);
+        try
+        {
+            var resolved = LauncherIni.ResolveIniPathInDeployLayout(exeDir, "細川");
+            Assert.Equal(
+                Path.Combine(exeDir, "細川_RPA設定.ini"),
+                resolved);
+        }
+        finally
+        {
+            Directory.Delete(exeDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void ResolveIniPathInDeployLayout_defaultsToExeDirRpaIni()
+    {
+        var exeDir = Path.Combine(Path.GetTempPath(), "rdp-launcher-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(exeDir);
+        try
+        {
+            var resolved = LauncherIni.ResolveIniPathInDeployLayout(exeDir, null);
+            Assert.Equal(
+                Path.Combine(exeDir, LauncherIni.DefaultIniFileName),
+                resolved);
+        }
+        finally
+        {
+            Directory.Delete(exeDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void TryParseOperatorArgument_readsFirstPositional()
+    {
+        Assert.Equal("細川", LauncherIni.TryParseOperatorArgument(["細川"]));
+        Assert.Equal("細川", LauncherIni.TryParseOperatorArgument(["--ini", "C:\\x.ini", "細川"]));
+        Assert.Null(LauncherIni.TryParseOperatorArgument(["--ini", "C:\\x.ini"]));
+    }
 }

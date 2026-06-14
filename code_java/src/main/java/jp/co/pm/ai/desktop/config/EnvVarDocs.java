@@ -41,6 +41,10 @@ public final class EnvVarDocs {
                         + "（2）PMD_version_upgrade.zip のフルパス（ZIP 隣の version.txt で版比較）。"
                         + "空のときは自動更新しない（情報表示のみ）。");
         put(
+                "PM_AI_RDP_PORTABLE_BUNDLE_SOURCE_DIR",
+                "廃止: PmAiRpaLuncher.exe ポータブル配布の正本。配台 PMD のリモートデスクトップタブを使用する。"
+                        + " 設定が残っている場合は無視される。");
+        put(
                 "PM_AI_OUTPUT_DIR",
                 "段階1/2 の出力先（plan_input_tasks.xlsx 等、従来 code/output"
                         + " に相当）。未設定時は PM_AI_REPO_ROOT"
@@ -239,17 +243,34 @@ public final class EnvVarDocs {
         put(
                 "PM_AI_RDP_LAUNCHER_EXE",
                 "接続先 RDP ランチャー（PmAiRdpRemoteLauncher.exe）のフルパス。"
-                        + "空のときは PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK と同階層の PmAiRdpRemoteLauncher.exe。");
+                        + "空のときは配備先フォルダ（PM_AI_RDP_LAUNCHER_DEPLOY_DIR またはサマリ Excel 同階層）の PmAiRdpRemoteLauncher.exe。");
         put(
                 "PM_AI_RDP_LAUNCHER_INI",
-                "接続先 RDP ランチャー設定（RAP設定.ini）のフルパス。"
-                        + "空のときはサマリ Excel と同階層の RAP設定.ini。"
-                        + " 接続直前に PM-AI が 起動プログラム番号 と 操作者=セッション操作者名 を部分更新する。"
-                        + " スロット行は exe + --scenario .ardrpa（--id / --password は含めない）。");
+                "接続先 RDP ランチャー設定 ini のフルパス上書き。"
+                        + "空のときは配備先フォルダ（PmAiRdpRemoteLauncher.exe と同階層）の {操作者名}_RPA設定.ini"
+                        + "（PM_AI_OPERATOR_USER / セッション操作者）。操作者未設定時は RPA設定.ini。"
+                        + " レガシー RAP設定.ini / DATA 配下は読取フォールバックのみ。"
+                        + " PmAiRdpRemoteLauncher.exe に操作者名を引数で渡すと同じ ini を参照する。");
+        put(
+                "PM_AI_RDP_LAUNCHER_DEPLOY_DIR",
+                "接続先 RDP ランチャー exe（PmAiRdpRemoteLauncher.exe）と RDP起動プロファイル.json、"
+                        + "RPA設定.ini の配備先共有フォルダ（UNC 可）。"
+                        + " RDP 配布アプリの既定は掲示板 rpa_luncher。PMD はサマリ Excel 親。"
+                        + " リモートデスクトップRPAランチャー（配布用）では参照…で明示指定が必要。");
+        put(
+                "PM_AI_RDP_OPERATOR_USERS_STORE_DIR",
+                "リモートデスクトップRPAランチャー専用の操作者 bin 保存フォルダ（UNC 可）。"
+                        + " 空のときは掲示板共有 "
+                        + AppPaths.DEFAULT_PM_AI_RDP_SHARED_DATA_DIR
+                        + "（"
+                        + AppPaths.RDP_LAUNCHER_OPERATOR_USERS_BIN
+                        + " とバックアップ）。"
+                        + " 前回選択した操作者名は PC ローカルの last-rdp-launcher-operator.txt に保存し次回起動時に復元する。"
+                        + " 配台システムの factory-operator-users.bin とは別。");
         put(
                 "PM_AI_OPERATOR_USER",
                 "起動時に選択した操作者名。子プロセス env に載せる。"
-                        + " RAP設定.ini の 操作者= 行と operator-aladdin-credentials.launcher.json と組み合わせ、"
+                        + " RPA設定.ini の 操作者= 行と operator-aladdin-credentials.launcher.json と組み合わせ、"
                         + " C# ランチャーが Aladdin RPA 起動引数 --id / --password を付与する。"
                         + " 資格情報本体は factory-operator-users.bin（リモートデスクトップタブで編集）。");
         put(
@@ -264,12 +285,12 @@ public final class EnvVarDocs {
                 "PM_AI_RDP_LAUNCH_PROFILE_NUMBER",
                 "リモートデスクトップタブで最後に使用した起動プロファイル番号（1～9）。"
                         + " 次回起動時の ComboBox 既定値。"
-                        + " RAP設定.ini の起動プログラム番号（スロット）と同一。"
+                        + " RPA設定.ini の起動プログラム番号（スロット）と同一。"
                         + " 名称・説明は共有フォルダの RDP起動プロファイル.json に保存。");
         put(
                 "PM_AI_RDP_EMBED_STARTUP_IN_PROFILE",
                 "1/true/on のときのみ PM_AI_RDP_COMPANION_PROGRAM を .rdp へ alternate shell として書込。"
-                        + "既定は off（接続先はタスクスケジューラ + RAP設定.ini）。");
+                        + "既定は off（接続先はタスクスケジューラ + RPA設定.ini）。");
         put(
                 "PM_AI_ACTUAL_DETAIL_WORKBOOK",
                 "加工実績明細DATAを読むブックのフルパス（指定時は"

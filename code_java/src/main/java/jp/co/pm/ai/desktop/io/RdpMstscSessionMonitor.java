@@ -115,20 +115,12 @@ public final class RdpMstscSessionMonitor {
     private static long resolveMstscPid(
             Path rdpProfile, OptionalLong knownMstscPid, Path markerFile)
             throws InterruptedException {
-        if (knownMstscPid.isPresent()) {
-            long pid = knownMstscPid.getAsLong();
-            Optional<ProcessHandle> handle = ProcessHandle.of(pid);
-            if (handle.isPresent() && handle.get().isAlive()) {
-                return pid;
-            }
-        }
-        if (markerFile != null) {
-            OptionalLong fromMarker = RdpMstscProcessFinder.pollPidMarkerFile(markerFile, PID_MARKER_TIMEOUT);
-            if (fromMarker.isPresent()) {
-                return fromMarker.getAsLong();
-            }
-        }
-        return findMstscProcessId(rdpProfile, FIND_TIMEOUT);
+        return RdpMstscProcessFinder.resolveMstscPid(
+                rdpProfile,
+                knownMstscPid,
+                markerFile,
+                PID_MARKER_TIMEOUT,
+                FIND_TIMEOUT);
     }
 
     static long findMstscProcessId(Path rdpProfile, Duration timeout) throws InterruptedException {

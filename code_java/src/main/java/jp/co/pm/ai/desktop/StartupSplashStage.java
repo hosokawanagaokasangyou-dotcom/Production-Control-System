@@ -88,18 +88,28 @@ final class StartupSplashStage {
     }
 
     private static Image loadSplashBackgroundImage() {
+        return loadSplashBackgroundImage(SPLASH_BACKGROUND_RESOURCE);
+    }
+
+    private static Image loadSplashBackgroundImage(String resourcePath) {
+        String path =
+                resourcePath != null && !resourcePath.isBlank()
+                        ? resourcePath.strip()
+                        : SPLASH_BACKGROUND_RESOURCE;
+        if (!path.startsWith("/")) {
+            path = "/" + path;
+        }
         for (Class<?> anchor : new Class<?>[] {StartupSplashStage.class, PmAiFxApp.class}) {
-            try (InputStream in = anchor.getResourceAsStream(SPLASH_BACKGROUND_RESOURCE)) {
+            try (InputStream in = anchor.getResourceAsStream(path)) {
                 if (in != null) {
                     byte[] bytes = in.readAllBytes();
                     return new Image(new ByteArrayInputStream(bytes), true);
                 }
             } catch (IOException e) {
-                throw new UncheckedIOException(
-                        "failed to read splash background: " + SPLASH_BACKGROUND_RESOURCE, e);
+                throw new UncheckedIOException("failed to read splash background: " + path, e);
             }
         }
-        String relative = SPLASH_BACKGROUND_RESOURCE.substring(1);
+        String relative = path.startsWith("/") ? path.substring(1) : path;
         ClassLoader context = Thread.currentThread().getContextClassLoader();
         if (context != null) {
             try (InputStream in = context.getResourceAsStream(relative)) {
@@ -108,8 +118,7 @@ final class StartupSplashStage {
                     return new Image(new ByteArrayInputStream(bytes), true);
                 }
             } catch (IOException e) {
-                throw new UncheckedIOException(
-                        "failed to read splash background: " + SPLASH_BACKGROUND_RESOURCE, e);
+                throw new UncheckedIOException("failed to read splash background: " + path, e);
             }
         }
         try (InputStream in = ClassLoader.getSystemResourceAsStream(relative)) {
@@ -118,14 +127,13 @@ final class StartupSplashStage {
                 return new Image(new ByteArrayInputStream(bytes), true);
             }
         } catch (IOException e) {
-            throw new UncheckedIOException(
-                    "failed to read splash background: " + SPLASH_BACKGROUND_RESOURCE, e);
+            throw new UncheckedIOException("failed to read splash background: " + path, e);
         }
         throw new IllegalStateException(
                 "classpath resource missing: "
-                        + SPLASH_BACKGROUND_RESOURCE
+                        + path
                         + " (run mvn compile; check target/classes"
-                        + SPLASH_BACKGROUND_RESOURCE
+                        + path
                         + ")");
     }
 
@@ -145,6 +153,14 @@ final class StartupSplashStage {
      */
     static Stage createAndShow(
             AtomicLong outVisibleSinceNanos, Consumer<Stage> afterSplashFullyDisplayed) {
+        return createAndShow(StartupSplashBranding.PMD, outVisibleSinceNanos, afterSplashFullyDisplayed);
+    }
+
+    static Stage createAndShow(
+            StartupSplashBranding branding,
+            AtomicLong outVisibleSinceNanos,
+            Consumer<Stage> afterSplashFullyDisplayed) {
+        StartupSplashBranding b = branding != null ? branding : StartupSplashBranding.PMD;
         FactorySite factorySite = GlobalInitSettingTarget.load();
 
         Stage stage = new Stage();
@@ -153,7 +169,7 @@ final class StartupSplashStage {
         stage.setAlwaysOnTop(true);
         stage.setTitle("起動中");
 
-        ImageView background = new ImageView(loadSplashBackgroundImage());
+        ImageView background = new ImageView(loadSplashBackgroundImage(b.backgroundResource()));
         background.setPreserveRatio(false);
         background.setSmooth(true);
         background.getStyleClass().add("splash-background-image");
@@ -170,13 +186,13 @@ final class StartupSplashStage {
         Label factoryBadge = new Label(factorySite.displayLabelJa());
         factoryBadge.getStyleClass().add("splash-factory-badge");
 
-        Label title = new Label("工程管理 AI 配台");
+        Label title = new Label(b.title());
         title.getStyleClass().add("splash-title");
 
-        Label subtitleJa = new Label("発泡樹脂（ペフ）· ロール加工 · 配台管理");
+        Label subtitleJa = new Label(b.subtitleJa());
         subtitleJa.getStyleClass().add("splash-subtitle-ja");
 
-        Label subtitleEn = new Label("PEF FOAM · ROLL SLICE SLIT PACK");
+        Label subtitleEn = new Label(b.subtitleEn());
         subtitleEn.getStyleClass().add("splash-subtitle-en");
 
         VBox titleBlock = new VBox(4, company, factoryBadge, title, subtitleJa, subtitleEn);
@@ -185,7 +201,7 @@ final class StartupSplashStage {
         brandRow.getStyleClass().add("splash-brand-row");
         brandRow.setAlignment(Pos.CENTER_LEFT);
 
-        Label status = new Label("発泡樹脂のロール加工・配台システムを起動しています…");
+        Label status = new Label(b.statusText());
         status.getStyleClass().add("splash-status");
 
         ProgressIndicator busy = new ProgressIndicator();
@@ -215,6 +231,9 @@ final class StartupSplashStage {
         StackPane root = new StackPane(background, overlay, content);
         root.getStyleClass().add("splash-root");
         root.getStyleClass().add(factoryStyleClass(factorySite));
+        if (b.rootStyleClass() != null && !b.rootStyleClass().isBlank()) {
+            root.getStyleClass().add(b.rootStyleClass().strip());
+        }
         root.setPrefSize(520, 320);
         root.setMinSize(520, 320);
         root.setMaxSize(520, 320);

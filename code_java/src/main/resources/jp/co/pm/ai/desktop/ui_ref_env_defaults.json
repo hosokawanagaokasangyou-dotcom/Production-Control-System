@@ -385,11 +385,23 @@
   }, {
     "key" : "PM_AI_RDP_LAUNCHER_EXE",
     "value" : "",
-    "description" : "接続先 RDP ランチャー exe のフルパス。空のときサマリ Excel 同階層。"
+    "description" : "接続先 RDP ランチャー exe のフルパス。空のとき配備先フォルダ。"
   }, {
     "key" : "PM_AI_RDP_LAUNCHER_INI",
     "value" : "",
-    "description" : "RAP設定.ini のフルパス。空のときサマリ Excel 同階層。"
+    "description" : "RPA設定 ini のフルパス上書き。空のとき配備先フォルダ（PmAiRdpRemoteLauncher.exe と同階層）の {操作者名}_RPA設定.ini（操作者未設定時は RPA設定.ini）。レガシー RAP設定.ini / DATA は読取フォールバック。"
+  }, {
+    "key" : "PM_AI_RDP_LAUNCHER_DEPLOY_DIR",
+    "value" : "\\\\192.168.0.101\\共有フォルダ\\掲示板\\rpa_luncher",
+    "description" : "接続先 RDP ランチャー exe（PmAiRdpRemoteLauncher.exe）、RDP起動プロファイル.json、RPA設定.ini の配備先共有フォルダ（UNC 可）。"
+  }, {
+    "key" : "PM_AI_RDP_PORTABLE_BUNDLE_SOURCE_DIR",
+    "value" : "",
+    "description" : "廃止: PmAiRpaLuncher.exe ポータブル配布の正本。配台 PMD のリモートデスクトップタブを使用する。"
+  }, {
+    "key" : "PM_AI_RDP_OPERATOR_USERS_STORE_DIR",
+    "value" : "\\\\192.168.0.101\\共有フォルダ\\掲示板\\rpa_luncher\\DATA",
+    "description" : "RDP ランチャー専用の操作者 bin 保存フォルダ（UNC 可）。空で掲示板共有 DATA。前回操作者選択は PC ローカル。"
   }, {
     "key" : "PM_AI_RDP_LAUNCHER_AUTO_DEPLOY",
     "value" : "",

@@ -33,7 +33,20 @@ public enum FactorySite {
             "\\\\192.168.0.101\\共有フォルダ\\国分工場\\国分共有\\●配台AIシステム\\DATA\\計画",
             "\\\\192.168.0.101\\共有フォルダ\\国分工場\\国分共有\\●配台AIシステム\\DATA\\実績",
             "国分master.xlsm",
-            AppPaths.SUMMARY_AI_DISPATCH_XLSX);
+            AppPaths.SUMMARY_AI_DISPATCH_XLSX),
+
+    /**
+     * リモートデスクトップRPAランチャー専用（配台システムの工場別ユーザー管理とは別正本・別 bin）。
+     *
+     * <p>複数部署での利用を想定し、{@link AppPaths#rdpLauncherOperatorUsersStorePath} に単一のユーザー一覧を保持する。
+     */
+    RDP_LAUNCHER(
+            "リモートデスクトップRPAランチャー",
+            "",
+            "",
+            "",
+            "",
+            "");
 
     private final String displayLabelJa;
     private final String portableBundleSourceDir;

@@ -19,6 +19,7 @@ code_java/dist/
 **/.pytest_cache/
 # fast_package_app.ps1: release output (PMD_* bundles under repo root). Download cache: code_java/Cash_PMD/
 pm-ai-package-release/
+rpa_luncher_release/
 /cash_PMD/
 /code_java/PMD_fast/
 /code_java/Cash_PMD/

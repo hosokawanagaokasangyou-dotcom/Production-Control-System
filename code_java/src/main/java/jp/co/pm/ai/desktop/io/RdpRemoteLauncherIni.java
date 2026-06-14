@@ -13,7 +13,7 @@ import java.util.TreeMap;
 import jp.co.pm.ai.desktop.config.AladdinRpaLaunchArgs;
 
 /**
- * 共有 UNC 上の {@code RAP設定.ini}（接続先 RDP ランチャー向け）の読み書き。
+ * 共有 UNC 上の {@code RPA設定.ini}（接続先 RDP ランチャー向け）の読み書き。
  */
 public final class RdpRemoteLauncherIni {
 
@@ -322,7 +322,7 @@ public final class RdpRemoteLauncherIni {
     }
 
     /**
-     * RDP セッション終了後、タスクスケジューラ用に {@code RAP設定.ini} の起動番号を UI 値へ戻す。
+     * RDP セッション終了後、タスクスケジューラ用に {@code RPA設定.ini} の起動番号を UI 値へ戻す。
      */
     public static void restoreTaskSchedulerSlot(Path path, int slot) throws IOException {
         Objects.requireNonNull(path, "path");
