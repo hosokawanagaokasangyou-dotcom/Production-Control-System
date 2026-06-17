@@ -59,7 +59,7 @@ $ReleaseRoot = Join-Path $WorkspaceRoot $ReleaseDirName
 . (Join-Path $Root 'package_jpackage_common.ps1')
 
 function Get-DefaultRdpCanonicalDeployUnc {
-    # UTF-8 bytes for 共有フォルダ\掲示板\rpa_luncher (WSL→powershell.exe で ps1 内日本語が化ける対策)
+    # UTF-8 bytes for 共有フォルダ\掲示板\rpa_luncher\RDPランチャ (WSL→powershell.exe で ps1 内日本語が化ける対策)
     $utf8 = [System.Text.Encoding]::UTF8
     $shareSuffix = $utf8.GetString([byte[]](
             0xE5, 0x85, 0xB1, 0xE6, 0x9C, 0x89,
@@ -67,7 +67,10 @@ function Get-DefaultRdpCanonicalDeployUnc {
             0x5C,
             0xE6, 0x8E, 0xB2, 0xE7, 0xA4, 0xBA, 0xE6, 0x9D, 0xBF,
             0x5C,
-            0x72, 0x70, 0x61, 0x5F, 0x6C, 0x75, 0x6E, 0x63, 0x68, 0x65, 0x72))
+            0x72, 0x70, 0x61, 0x5F, 0x6C, 0x75, 0x6E, 0x63, 0x68, 0x65, 0x72,
+            0x5C,
+            0x52, 0x44, 0x50,
+            0xE3, 0x83, 0xA9, 0xE3, 0x83, 0xB3, 0xE3, 0x83, 0x81, 0xE3, 0x83, 0xA3))
     return '\\192.168.0.101\' + $shareSuffix
 }
 
@@ -500,7 +503,7 @@ $canonicalDeployUncForDocs = Resolve-RdpCanonicalDeployDir -Override $CanonicalD
     'Per-user settings (PC local): %USERPROFILE%\.pm-ai-desktop-rdp\ (session-state, last operator)',
     'Shared DATA (default): \\\\192.168.0.101\\共有フォルダ\\掲示板\\rpa_luncher\\DATA',
     '  RPA設定.ini, operator users bin — see User Administrator tab.',
-    'Launcher deploy folder (remote exe): PM_AI_RDP_LAUNCHER_DEPLOY_DIR = rpa_luncher (not DATA).',
+    'Launcher deploy folder (remote exe + RPA設定.ini): PM_AI_RDP_LAUNCHER_DEPLOY_DIR = rpa_luncher\RDPランチャ (not DATA).',
     'Auto-update canonical (default PM_AI_RDP_PORTABLE_BUNDLE_SOURCE_DIR):',
     "  $canonicalDeployUncForDocs",
     '  (version.txt + PmAiRpaLuncher_version_upgrade.zip + build-manifest.json)',

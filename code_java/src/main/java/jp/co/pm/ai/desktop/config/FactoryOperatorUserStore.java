@@ -28,6 +28,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
+import jp.co.pm.ai.desktop.debug.AgentDebugLog;
+
 import jp.co.pm.ai.desktop.crypto.AladdinOperatorCredentialsCrypto;
 import jp.co.pm.ai.desktop.io.FactoryOperatorUserBackupStore;
 import jp.co.pm.ai.desktop.io.OperatorAladdinCredentialsLauncherJson;
@@ -382,6 +384,19 @@ public final class FactoryOperatorUserStore {
         return sessionOperatorName != null ? sessionOperatorName.strip() : "";
     }
 
+    /**
+     * 共有 {@code RPA設定.ini} の操作者名（セッション操作者を優先、無ければ {@link
+     * AppPaths#KEY_PM_AI_OPERATOR_USER}）。
+     */
+    public static String resolveRdpLauncherOperatorName(Map<String, String> ui) {
+        String session = sessionOperatorName();
+        if (!session.isBlank()) {
+            return session;
+        }
+        Map<String, String> u = ui != null ? ui : Map.of();
+        return u.getOrDefault(AppPaths.KEY_PM_AI_OPERATOR_USER, "").strip();
+    }
+
     public static void clearSessionOperatorName() {
         sessionOperatorName = "";
     }
@@ -475,6 +490,45 @@ public final class FactoryOperatorUserStore {
         return hash != null && !hash.isBlank();
     }
 
+    /** ユーザー管理者タブ一覧向け（RDP は {@link #adminRdpDepartmentContextKey()} の部署）。 */
+    public static boolean hasPinForAdminTable(FactorySite site, String name) throws IOException {
+        return hasPinInUsers(loadFactoryForAdminPinUi(site), name);
+    }
+
+    private static boolean hasPinInUsers(FactoryOperatorUsers users, String name) {
+        String normalized = normalizeName(name);
+        if (normalized.isEmpty() || isGuestOperator(normalized)) {
+            return false;
+        }
+        String hash = users.pinHashes().get(normalized);
+        return hash != null && !hash.isBlank();
+    }
+
+    private static FactoryOperatorUsers loadFactoryForAdminPinUi(FactorySite site) throws IOException {
+        FactorySite factory = site != null ? site : FactorySite.KONAN;
+        if (usesRdpDepartmentScope(factory)) {
+            return loadFactoryForAdmin(factory);
+        }
+        return loadFactory(factory);
+    }
+
+    private static boolean mustChangePinInUsers(FactoryOperatorUsers users, String name) {
+        String normalized = normalizeName(name);
+        if (normalized.isEmpty()) {
+            return false;
+        }
+        return users.pinMustChange().contains(normalized);
+    }
+
+    private static boolean isPinLockedInUsers(FactoryOperatorUsers users, String name) {
+        String normalized = normalizeName(name);
+        if (normalized.isEmpty()) {
+            return false;
+        }
+        Integer count = users.pinFailedAttempts().get(normalized);
+        return count != null && count >= MAX_CONSECUTIVE_PIN_FAILURES;
+    }
+
     /** 初回ログイン後の PIN 変更が未完了（管理者発行／新規追加のランダム PIN）。 */
     public static boolean mustChangePin(FactorySite site, String name) throws IOException {
         FactorySite factory = site != null ? site : FactorySite.KONAN;
@@ -492,7 +546,7 @@ public final class FactoryOperatorUserStore {
         if (normalized.isEmpty()) {
             return Optional.empty();
         }
-        String pin = loadFactory(factory).pinPlaintextAdmin().get(normalized);
+        String pin = loadFactoryForAdminPinUi(factory).pinPlaintextAdmin().get(normalized);
         if (pin == null || pin.isBlank()) {
             return Optional.empty();
         }
@@ -743,6 +797,34 @@ public final class FactoryOperatorUserStore {
         putFactoryUsersInDocument(
                 doc, factory, forSharedStore(current, current.names(), pins, attempts, mustChange, plaintextAdmin));
         saveDocument(doc);
+        // #region agent log
+        if (usesRdpDepartmentScope(factory)) {
+            String adminDept = adminRdpDepartmentContextKey();
+            String sessionDept = sessionRdpDepartmentKey();
+            boolean hashInAdmin =
+                    loadFactoryForAdmin(factory).pinHashes().containsKey(normalized);
+            boolean hashInSession = loadFactory(factory).pinHashes().containsKey(normalized);
+            AgentDebugLog.appendStructured(
+                    Map.of(),
+                    "3c7d26",
+                    "A",
+                    "FactoryOperatorUserStore.assignPin",
+                    "pin saved",
+                    Map.of(
+                            "name",
+                            normalized,
+                            "adminDept",
+                            adminDept,
+                            "sessionDept",
+                            sessionDept,
+                            "hashInAdminDept",
+                            hashInAdmin,
+                            "hashInSessionDept",
+                            hashInSession,
+                            "requireChange",
+                            requireChangeOnNextLogin));
+        }
+        // #endregion
         return pinNorm;
     }
 
@@ -923,7 +1005,7 @@ public final class FactoryOperatorUserStore {
 
     /** 管理者一覧表示用: PIN 平文または未記録の案内。 */
     public static String adminPinDisplayLabel(FactorySite site, String name) throws IOException {
-        if (!hasPin(site, name)) {
+        if (!hasPinForAdminTable(site, name)) {
             return "—";
         }
         return adminViewablePin(site, name).orElse("（再発行で確認）");
@@ -934,13 +1016,43 @@ public final class FactoryOperatorUserStore {
         if (isGuestOperator(name)) {
             return "PIN不要";
         }
-        if (isPinLocked(site, name)) {
+        FactorySite factory = site != null ? site : FactorySite.KONAN;
+        FactoryOperatorUsers users = loadFactoryForAdminPinUi(factory);
+        // #region agent log
+        if (usesRdpDepartmentScope(factory)) {
+            String normalized = normalizeName(name);
+            boolean hasSession = loadFactory(factory).pinHashes().containsKey(normalized);
+            boolean hasAdmin = users.pinHashes().containsKey(normalized);
+            AgentDebugLog.appendStructured(
+                    Map.of(),
+                    "3c7d26",
+                    "A",
+                    "FactoryOperatorUserStore.pinStatusLabel",
+                    "pin read paths",
+                    Map.of(
+                            "runId",
+                            "post-fix",
+                            "name",
+                            normalized,
+                            "adminDept",
+                            adminRdpDepartmentContextKey(),
+                            "sessionDept",
+                            sessionRdpDepartmentKey(),
+                            "hashInAdminDept",
+                            hasAdmin,
+                            "hashInSessionDept",
+                            hasSession,
+                            "labelUsesAdmin",
+                            hasPinInUsers(users, name)));
+        }
+        // #endregion
+        if (isPinLockedInUsers(users, name)) {
             return "ロック";
         }
-        if (mustChangePin(site, name)) {
+        if (mustChangePinInUsers(users, name)) {
             return "初回変更待";
         }
-        return hasPin(site, name) ? "設定済" : "未設定";
+        return hasPinInUsers(users, name) ? "設定済" : "未設定";
     }
 
     /** 当該操作者のアラジン ログイン ID（未設定なら空）。 */
@@ -1047,7 +1159,7 @@ public final class FactoryOperatorUserStore {
         FactorySite scope = operatorScopeForCurrentApp(env, null);
         configureForCurrentApp(env, scope);
         Document doc = loadDocument();
-        Path iniPath = AppPaths.resolveRdpLauncherIni(env, sessionOperatorName());
+        Path iniPath = AppPaths.resolveRdpLauncherIni(env, resolveRdpLauncherOperatorName(env));
         Path parent = iniPath.getParent();
         if (parent == null) {
             throw new IOException("RPA設定.ini の親ディレクトリが解決できません: " + iniPath);

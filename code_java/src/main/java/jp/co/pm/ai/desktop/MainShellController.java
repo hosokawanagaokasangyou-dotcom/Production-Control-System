@@ -5726,6 +5726,14 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
     @Override
     public void refreshOperatorUserPresentation() {
         refreshMainRunTabOperatorLabel();
+        refreshRemoteDesktopOperatorContext();
+    }
+
+    @Override
+    public void refreshRemoteDesktopOperatorContext() {
+        if (remoteDesktopTabController != null) {
+            remoteDesktopTabController.refreshForSessionOperatorChange();
+        }
     }
 
     /** 実行・ログタブの操作者表示を更新する。 */

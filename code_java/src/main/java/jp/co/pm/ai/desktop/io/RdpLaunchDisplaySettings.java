@@ -11,8 +11,8 @@ import jp.co.pm.ai.desktop.config.AppPaths;
 /** mstsc 起動前に .rdp へ解像度・全画面／ウィンドウ設定を反映する。 */
 public final class RdpLaunchDisplaySettings {
 
-    public static final int DEFAULT_WIDTH = 1280;
-    public static final int DEFAULT_HEIGHT = 800;
+    public static final int DEFAULT_WIDTH = 1920;
+    public static final int DEFAULT_HEIGHT = 1080;
     public static final int MIN_WIDTH = 270;
     public static final int MIN_HEIGHT = 200;
     public static final int MAX_WIDTH = 3840;

@@ -32,15 +32,14 @@ class PortableBundleProfileTest {
     @Test
     void rdpPortableBundleDefaultCanonicalMatchesBoardShare() {
         assertEquals(
-                "\\\\192.168.0.101\\共有フォルダ\\掲示板\\rpa_luncher",
+                "\\\\192.168.0.101\\共有フォルダ\\掲示板\\rpa_luncher\\RDPランチャ",
                 AppPaths.DEFAULT_PM_AI_RDP_PORTABLE_BUNDLE_SOURCE_DIR);
     }
 
     @Test
     void defaultRdpSharedDataDir_underRpaLauncherShare() {
         assertEquals(
-                AppPaths.DEFAULT_PM_AI_RDP_PORTABLE_BUNDLE_RELEASE_DIR
-                        + "\\"
+                "\\\\192.168.0.101\\共有フォルダ\\掲示板\\rpa_luncher\\"
                         + AppPaths.RDP_LAUNCHER_SHARED_DATA_DIR_LEAF,
                 AppPaths.DEFAULT_PM_AI_RDP_SHARED_DATA_DIR);
         Path store = AppPaths.rdpLauncherOperatorUsersStorePath();

@@ -21,7 +21,8 @@ public record RdpLaunchProfile(
         Boolean fullScreen,
         Integer desktopWidth,
         Integer desktopHeight,
-        Boolean rpaEternal) {
+        Boolean rpaEternal,
+        Boolean deleted) {
 
     public RdpLaunchProfile {
         if (number < 1 || number > RdpRemoteLauncherIni.MAX_SLOTS) {
@@ -34,7 +35,28 @@ public record RdpLaunchProfile(
     }
 
     public static RdpLaunchProfile empty(int number) {
-        return new RdpLaunchProfile(number, "", "", "", null, null, null, null, null, null);
+        return new RdpLaunchProfile(number, "", "", "", null, null, null, null, null, null, null);
+    }
+
+    /** 論理削除済みか（JSON の {@code deleted: true}）。 */
+    public boolean isDeleted() {
+        return Boolean.TRUE.equals(deleted);
+    }
+
+    /** 削除フラグのみ差し替えたコピー。 */
+    public RdpLaunchProfile withDeleted(boolean markDeleted) {
+        return new RdpLaunchProfile(
+                number,
+                name,
+                description,
+                category,
+                disconnectOnChildExit,
+                sessionEndAction,
+                fullScreen,
+                desktopWidth,
+                desktopHeight,
+                rpaEternal,
+                markDeleted ? Boolean.TRUE : null);
     }
 
     /** プロファイルが ini より優先する終了時セッション操作。未設定なら null。 */
@@ -54,7 +76,8 @@ public record RdpLaunchProfile(
     /** 接続ボタン横 ComboBox 向けの短い表示。 */
     public String displayLabel() {
         String labelName = name.isBlank() ? "（名称未設定）" : name;
-        return number + ": " + labelName;
+        String base = number + ": " + labelName;
+        return isDeleted() ? base + "（削除済）" : base;
     }
 
     /** 詳細パネル向けの 1 行要約。 */
@@ -125,7 +148,8 @@ public record RdpLaunchProfile(
                 && Objects.equals(fullScreen, other.fullScreen)
                 && Objects.equals(desktopWidth, other.desktopWidth)
                 && Objects.equals(desktopHeight, other.desktopHeight)
-                && Objects.equals(rpaEternal, other.rpaEternal);
+                && Objects.equals(rpaEternal, other.rpaEternal)
+                && Objects.equals(deleted, other.deleted);
     }
 
     @Override
@@ -140,6 +164,7 @@ public record RdpLaunchProfile(
                 fullScreen,
                 desktopWidth,
                 desktopHeight,
-                rpaEternal);
+                rpaEternal,
+                deleted);
     }
 }

@@ -108,6 +108,7 @@ public final class RemoteDesktopFxApp extends Application {
                                     Platform.runLater(
                                             () -> {
                                                 if (main != null && main.isShowing()) {
+                                                    applyStartupFullScreen(main);
                                                     main.toFront();
                                                     main.requestFocus();
                                                 }
@@ -120,6 +121,15 @@ public final class RemoteDesktopFxApp extends Application {
         PauseTransition pause = new PauseTransition(Duration.millis(waitNs / 1_000_000.0));
         pause.setOnFinished(e -> finish.run());
         pause.play();
+    }
+
+    /**
+     * 起動直後のアプリウィンドウを画面全体に広げる（RDP セッションのフルスクリーン設定とは別）。
+     * 排他フルスクリーンは mstsc 全画面セッションの Z 順・HWND 探索を妨げるため最大化のみ使う。
+     */
+    private static void applyStartupFullScreen(Stage stage) {
+        stage.setFullScreen(false);
+        stage.setMaximized(true);
     }
 
     private static RemoteDesktopShellController bootstrapMainWindow(Stage primaryStage)

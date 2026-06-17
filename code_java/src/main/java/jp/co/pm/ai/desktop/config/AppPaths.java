@@ -148,10 +148,10 @@ public final class AppPaths {
     /** mstsc 起動時に全画面にする（{@code 1/true/on}）。空または {@code 0} でウィンドウ＋解像度指定。 */
     public static final String KEY_PM_AI_RDP_FULLSCREEN = "PM_AI_RDP_FULLSCREEN";
 
-    /** ウィンドウ表示時のリモートデスクトップ幅（ピクセル）。空なら 1280。 */
+    /** ウィンドウ表示時のリモートデスクトップ幅（ピクセル）。空なら 1920。 */
     public static final String KEY_PM_AI_RDP_DESKTOP_WIDTH = "PM_AI_RDP_DESKTOP_WIDTH";
 
-    /** ウィンドウ表示時のリモートデスクトップ高さ（ピクセル）。空なら 800。 */
+    /** ウィンドウ表示時のリモートデスクトップ高さ（ピクセル）。空なら 1080。 */
     public static final String KEY_PM_AI_RDP_DESKTOP_HEIGHT = "PM_AI_RDP_DESKTOP_HEIGHT";
 
     public static final String RDP_LAUNCHER_EXE_BASENAME = "PmAiRdpRemoteLauncher.exe";
@@ -427,14 +427,16 @@ public final class AppPaths {
 
     /**
      * RDP ランチャー（{@code PmAiRpaLuncher.exe}）ポータブル配布の正本フォルダ（UNC）。
-     * 直下に外付け {@link #VERSION_TXT_FILE_NAME} と {@code PmAiRpaLuncher_version_upgrade.zip} を置く。
+     * 掲示板共有 {@code rpa_luncher\RDPランチャ}。直下に外付け {@link #VERSION_TXT_FILE_NAME} と
+     * {@code PmAiRpaLuncher_version_upgrade.zip} を置く。
      */
     public static final String DEFAULT_PM_AI_RDP_PORTABLE_BUNDLE_RELEASE_DIR =
-            "\\\\192.168.0.101\\共有フォルダ\\掲示板\\rpa_luncher";
+            "\\\\192.168.0.101\\共有フォルダ\\掲示板\\rpa_luncher\\RDPランチャ";
 
     /**
      * {@link #KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR} 未設定時の配備先（UNC）。
      * {@link #DEFAULT_PM_AI_RDP_PORTABLE_BUNDLE_RELEASE_DIR} と同一。
+     * {@link #RDP_LAUNCHER_EXE_BASENAME} と {@link #RDP_LAUNCHER_INI_BASENAME}（および操作者別 ini）はこのフォルダ直下。
      */
     public static final String DEFAULT_PM_AI_RDP_LAUNCHER_DEPLOY_DIR =
             DEFAULT_PM_AI_RDP_PORTABLE_BUNDLE_RELEASE_DIR;
@@ -466,11 +468,13 @@ public final class AppPaths {
     /**
      * 掲示板共有 {@code rpa_luncher\DATA}（ユーザー管理 bin・バックアップ等の共通格納）。
      * {@link #KEY_PM_AI_RDP_OPERATOR_USERS_STORE_DIR} 未設定時の既定フォルダ。
+     * exe/ini 配備先（{@link #DEFAULT_PM_AI_RDP_LAUNCHER_DEPLOY_DIR}）の {@code RDPランチャ} とは兄弟。
      */
     public static final String RDP_LAUNCHER_SHARED_DATA_DIR_LEAF = "DATA";
 
     public static final String DEFAULT_PM_AI_RDP_SHARED_DATA_DIR =
-            DEFAULT_PM_AI_RDP_PORTABLE_BUNDLE_RELEASE_DIR + "\\" + RDP_LAUNCHER_SHARED_DATA_DIR_LEAF;
+            "\\\\192.168.0.101\\共有フォルダ\\掲示板\\rpa_luncher\\"
+                    + RDP_LAUNCHER_SHARED_DATA_DIR_LEAF;
 
     /**
      * {@link #KEY_PM_AI_TASK_INPUT_SOURCE_DIR} が空のときの既定（工場共有・生産計画問合せフォルダ）。{@code plan/01_*.m} のパスと揃える。
@@ -1730,6 +1734,139 @@ public final class AppPaths {
             }
         }
         return canonical;
+    }
+
+    /**
+     * 操作者名なしの共通 {@link #RDP_LAUNCHER_INI_BASENAME} の正本パス（書込・表示用）。
+     * {@link #KEY_PM_AI_RDP_LAUNCHER_INI} が共通 basename を指すときのみ上書きを採用する。
+     */
+    public static Path resolveSharedRdpLauncherIni(Map<String, String> ui) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        String override = trim(u.get(KEY_PM_AI_RDP_LAUNCHER_INI));
+        if (!override.isEmpty()) {
+            Path overridden = Path.of(override).toAbsolutePath().normalize();
+            String name = overridden.getFileName().toString();
+            if (RDP_LAUNCHER_INI_BASENAME.equals(name)
+                    || RDP_LAUNCHER_INI_BASENAME_LEGACY.equals(name)) {
+                return overridden;
+            }
+        }
+        return resolveRdpLauncherDeployDir(u)
+                .resolve(RDP_LAUNCHER_INI_BASENAME)
+                .toAbsolutePath()
+                .normalize();
+    }
+
+    /**
+     * 既存の共通 {@code RPA設定.ini} を探す（レガシー {@code RAP設定.ini} / {@code DATA\} 配下も試行）。
+     * 無ければ {@link #resolveSharedRdpLauncherIni} と同じ正本パスを返す。
+     */
+    public static Path resolveExistingSharedRdpLauncherIni(Map<String, String> ui) {
+        Path canonical = resolveSharedRdpLauncherIni(ui);
+        if (Files.isRegularFile(canonical)) {
+            return canonical;
+        }
+        Map<String, String> u = ui != null ? ui : Map.of();
+        Path deployDir = resolveRdpLauncherDeployDir(u);
+        List<Path> candidates =
+                List.of(
+                        deployDir.resolve(RDP_LAUNCHER_INI_BASENAME_LEGACY),
+                        defaultRdpLauncherSharedDataDir().resolve(RDP_LAUNCHER_INI_BASENAME),
+                        defaultRdpLauncherSharedDataDir().resolve(RDP_LAUNCHER_INI_BASENAME_LEGACY));
+        for (Path candidate : candidates) {
+            if (Files.isRegularFile(candidate)) {
+                return candidate.toAbsolutePath().normalize();
+            }
+        }
+        return canonical;
+    }
+
+    /** 配備先フォルダ上の他操作者向け {@code *_RPA設定.ini}（インポート元候補）。 */
+    public record PeerOperatorRpaIniFile(String displayLabel, Path path) {
+
+        @Override
+        public String toString() {
+            return displayLabel;
+        }
+    }
+
+    /**
+     * ini ファイル名から UI 表示用ラベルを返す（例: {@code 細川_RPA設定.ini} → {@code 細川}）。
+     */
+    public static String displayLabelForRpaIniFilename(String filename) {
+        if (filename == null || filename.isBlank()) {
+            return "";
+        }
+        String name = Path.of(filename).getFileName().toString();
+        if (RDP_LAUNCHER_INI_BASENAME.equals(name)) {
+            return "（操作者未指定）";
+        }
+        String suffix = "_" + RDP_LAUNCHER_INI_BASENAME;
+        if (name.endsWith(suffix)) {
+            String stem = name.substring(0, name.length() - suffix.length());
+            return stem.isEmpty() ? name : stem;
+        }
+        String legacySuffix = "_" + RDP_LAUNCHER_INI_BASENAME_LEGACY;
+        if (name.endsWith(legacySuffix)) {
+            String stem = name.substring(0, name.length() - legacySuffix.length());
+            return stem.isEmpty() ? name : stem + "（レガシー）";
+        }
+        if (RDP_LAUNCHER_INI_BASENAME_LEGACY.equals(name)) {
+            return "（操作者未指定・レガシー）";
+        }
+        return name;
+    }
+
+    /**
+     * 配備先共有フォルダ上の操作者別 RPA設定 ini を列挙する（現在の操作者ファイルは除外）。
+     * {@link #KEY_PM_AI_RDP_LAUNCHER_INI} 上書き時も配備先フォルダを走査する。
+     */
+    public static List<PeerOperatorRpaIniFile> listPeerOperatorRpaIniFiles(
+            Map<String, String> ui, String currentOperatorName) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        Path deployDir = resolveRdpLauncherDeployDir(u);
+        Path currentIni =
+                resolveRdpLauncherIni(u, currentOperatorName != null ? currentOperatorName : "")
+                        .normalize();
+        if (!Files.isDirectory(deployDir)) {
+            return List.of();
+        }
+        Set<Path> seen = new HashSet<>();
+        List<PeerOperatorRpaIniFile> out = new ArrayList<>();
+        try (Stream<Path> stream = Files.list(deployDir)) {
+            stream.filter(Files::isRegularFile)
+                    .sorted(Comparator.comparing(p -> p.getFileName().toString()))
+                    .forEach(
+                            path -> {
+                                String name = path.getFileName().toString();
+                                if (!isOperatorRpaIniFilename(name)) {
+                                    return;
+                                }
+                                Path normalized = path.toAbsolutePath().normalize();
+                                if (normalized.equals(currentIni) || !seen.add(normalized)) {
+                                    return;
+                                }
+                                out.add(
+                                        new PeerOperatorRpaIniFile(
+                                                displayLabelForRpaIniFilename(name), normalized));
+                            });
+        } catch (IOException ignored) {
+            return List.of();
+        }
+        out.sort(Comparator.comparing(PeerOperatorRpaIniFile::displayLabel));
+        return List.copyOf(out);
+    }
+
+    private static boolean isOperatorRpaIniFilename(String filename) {
+        if (filename == null || filename.isBlank()) {
+            return false;
+        }
+        if (RDP_LAUNCHER_INI_BASENAME.equals(filename)
+                || RDP_LAUNCHER_INI_BASENAME_LEGACY.equals(filename)) {
+            return true;
+        }
+        return filename.endsWith("_" + RDP_LAUNCHER_INI_BASENAME)
+                || filename.endsWith("_" + RDP_LAUNCHER_INI_BASENAME_LEGACY);
     }
 
     public static Path resolveRdpLauncherVersionFile(Map<String, String> ui) {

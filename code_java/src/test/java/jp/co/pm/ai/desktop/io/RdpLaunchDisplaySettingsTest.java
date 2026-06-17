@@ -18,11 +18,11 @@ import jp.co.pm.ai.desktop.io.RdpLaunchDisplaySettings.LaunchDisplay;
 class RdpLaunchDisplaySettingsTest {
 
     @Test
-    void resolveDefaults_windowed1280x800() {
+    void resolveDefaults_windowed1920x1080() {
         assertFalse(RdpLaunchDisplaySettings.resolveFullScreen(Map.of()));
-        assertEquals(1280, RdpLaunchDisplaySettings.resolveWidth(Map.of()));
-        assertEquals(800, RdpLaunchDisplaySettings.resolveHeight(Map.of()));
-        assertEquals("1280 x 800（ウィンドウ）", RdpLaunchDisplaySettings.formatSummary(Map.of()));
+        assertEquals(1920, RdpLaunchDisplaySettings.resolveWidth(Map.of()));
+        assertEquals(1080, RdpLaunchDisplaySettings.resolveHeight(Map.of()));
+        assertEquals("1920 x 1080（ウィンドウ）", RdpLaunchDisplaySettings.formatSummary(Map.of()));
     }
 
     @Test
@@ -32,7 +32,7 @@ class RdpLaunchDisplaySettingsTest {
         LaunchDisplay display =
                 RdpLaunchDisplaySettings.resolveLaunchDisplay(
                         new RdpLaunchProfile(
-                                1, "", "", "", null, null, false, 100, 100, null),
+                                1, "", "", "", null, null, false, 100, 100, null, null),
                         Map.of());
         assertEquals(270, display.width());
         assertEquals(200, display.height());
@@ -41,7 +41,7 @@ class RdpLaunchDisplaySettingsTest {
     @Test
     void resolveLaunchDisplay_profileOverridesEnv() {
         RdpLaunchProfile profile =
-                new RdpLaunchProfile(2, "t", "", "", null, null, false, 640, 480, null);
+                new RdpLaunchProfile(2, "t", "", "", null, null, false, 640, 480, null, null);
         Map<String, String> ui =
                 Map.of(
                         AppPaths.KEY_PM_AI_RDP_DESKTOP_WIDTH,
@@ -57,7 +57,7 @@ class RdpLaunchDisplaySettingsTest {
     @Test
     void resolveLaunchDisplay_profileFullScreen() {
         RdpLaunchProfile profile =
-                new RdpLaunchProfile(1, "", "", "", null, null, true, 1280, 800, null);
+                new RdpLaunchProfile(1, "", "", "", null, null, true, 1280, 800, null, null);
         LaunchDisplay display =
                 RdpLaunchDisplaySettings.resolveLaunchDisplay(profile, Map.of());
         assertTrue(display.fullScreen());

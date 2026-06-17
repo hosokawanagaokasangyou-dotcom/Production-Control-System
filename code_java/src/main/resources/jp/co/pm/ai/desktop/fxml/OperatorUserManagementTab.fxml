@@ -101,8 +101,7 @@
                 <Button fx:id="viewPinButton" mnemonicParsing="false" onAction="#onViewPinAction" text="PIN 表示"/>
                 <Button fx:id="unlockPinButton" mnemonicParsing="false" onAction="#onUnlockPinAction" text="ロック解除"/>
             </HBox>
-            <TableView fx:id="operatorTableView" fixedCellSize="28.0" minHeight="120.0" prefHeight="200.0"
-                       maxHeight="320.0" VBox.vgrow="NEVER"/>
+            <TableView fx:id="operatorTableView" fixedCellSize="28.0" minHeight="120.0" VBox.vgrow="ALWAYS"/>
             <HBox spacing="6.0" alignment="CENTER_LEFT">
                 <Button fx:id="refreshButton" mnemonicParsing="false" onAction="#onRefreshAction" text="更新"/>
                 <Button fx:id="exportUsersPdfButton" mnemonicParsing="false" onAction="#onExportUsersPdfAction" text="PDF"/>

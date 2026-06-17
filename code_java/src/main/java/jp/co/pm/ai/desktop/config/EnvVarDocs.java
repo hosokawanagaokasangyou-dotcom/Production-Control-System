@@ -44,7 +44,7 @@ public final class EnvVarDocs {
                 "PM_AI_RDP_PORTABLE_BUNDLE_SOURCE_DIR",
                 "リモートデスクトップ専用ポータブル（PmAiRpaLuncher.exe）の版アップ正本。"
                         + " ローカルビルド出力はリポジトリ直下 rpa_luncher_release。"
-                        + " 共有 UNC 既定: 掲示板 rpa_luncher（version.txt + PmAiRpaLuncher_version_upgrade.zip）。"
+                        + " 共有 UNC 既定: 掲示板 rpa_luncher\\RDPランチャ（version.txt + PmAiRpaLuncher_version_upgrade.zip）。"
                         + " 配台 PMD の正本は PM_AI_PORTABLE_BUNDLE_SOURCE_DIR（pm-ai-package-release）。");
         put(
                 "PM_AI_OUTPUT_DIR",
@@ -238,10 +238,10 @@ public final class EnvVarDocs {
                         + " 配台計画システムの背面で接続先 RPA を動かす用途では 0 を推奨。");
         put(
                 "PM_AI_RDP_DESKTOP_WIDTH",
-                "RDP ウィンドウ表示時の幅（ピクセル）。PM_AI_RDP_FULLSCREEN=0 のとき起動前に .rdp へ反映。既定 1280。");
+                "RDP ウィンドウ表示時の幅（ピクセル）。PM_AI_RDP_FULLSCREEN=0 のとき起動前に .rdp へ反映。既定 1920。");
         put(
                 "PM_AI_RDP_DESKTOP_HEIGHT",
-                "RDP ウィンドウ表示時の高さ（ピクセル）。PM_AI_RDP_FULLSCREEN=0 のとき起動前に .rdp へ反映。既定 800。");
+                "RDP ウィンドウ表示時の高さ（ピクセル）。PM_AI_RDP_FULLSCREEN=0 のとき起動前に .rdp へ反映。既定 1080。");
         put(
                 "PM_AI_RDP_LAUNCHER_EXE",
                 "接続先 RDP ランチャー（PmAiRdpRemoteLauncher.exe）のフルパス。"

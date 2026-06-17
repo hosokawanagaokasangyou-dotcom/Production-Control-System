@@ -22,6 +22,9 @@ public interface DesktopShellHost {
 
     void refreshOperatorUserPresentation();
 
+    /** 操作者変更後にリモートデスクトップタブの RPA設定 ini パス表示・読込を同期する。 */
+    default void refreshRemoteDesktopOperatorContext() {}
+
     void prepareDialogForMainTheme(Dialog<?> dialog);
 
     void showWarningDialog(String title, String message);

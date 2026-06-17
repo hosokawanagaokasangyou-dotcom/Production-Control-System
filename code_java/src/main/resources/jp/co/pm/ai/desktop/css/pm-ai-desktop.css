@@ -2056,6 +2056,53 @@
     -fx-effect: dropshadow(gaussian, rgba(5, 150, 105, 0.35), 12, 0.3, 0, 4);
 }
 
+/* --- 起動プロファイル・クイック起動（先頭6件） --- */
+
+.pm-remote-desktop-tab .button.pm-rdp-quick-launch-button {
+    -fx-cursor: hand;
+    -fx-font-size: 13px;
+    -fx-font-weight: bold;
+    -fx-padding: 10 14;
+    -fx-background-radius: 8;
+    -fx-border-radius: 8;
+    -fx-border-width: 1;
+    -fx-min-height: 44;
+    -fx-pref-height: 44;
+    -fx-background-color: #1e3a5f;
+    -fx-border-color: #1d4ed8;
+    -fx-text-fill: #e0e7ff;
+    -fx-wrap-text: true;
+    -fx-text-alignment: center;
+    -fx-alignment: center;
+    -fx-effect: dropshadow(gaussian, rgba(30, 58, 95, 0.32), 10, 0.28, 0, 3);
+}
+
+.pm-remote-desktop-tab .button.pm-rdp-quick-launch-button:hover {
+    -fx-background-color: #2563eb;
+    -fx-border-color: #1d4ed8;
+    -fx-text-fill: #ffffff;
+    -fx-effect: dropshadow(gaussian, rgba(37, 99, 235, 0.38), 12, 0.3, 0, 4);
+}
+
+.pm-remote-desktop-tab .button.pm-rdp-quick-launch-button:pressed {
+    -fx-background-color: #1e40af;
+    -fx-border-color: #1e3a8a;
+    -fx-effect: dropshadow(gaussian, rgba(37, 99, 235, 0.2), 6, 0.24, 0, 2);
+}
+
+.pm-remote-desktop-tab .button.pm-rdp-quick-launch-button:disabled {
+    -fx-background-color: derive(-fx-base, -4%);
+    -fx-border-color: derive(-fx-text-box-border, -8%);
+    -fx-text-fill: -fx-mid-text-color;
+    -fx-opacity: 0.82;
+    -fx-effect: null;
+}
+
+.pm-remote-desktop-tab .button.pm-rdp-quick-launch-button:focused {
+    -fx-focus-color: transparent;
+    -fx-faint-focus-color: transparent;
+}
+
 /* --- 二次ボタン --- */
 
 .pm-remote-desktop-tab .button.pm-rdp-secondary-button {

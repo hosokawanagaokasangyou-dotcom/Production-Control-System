@@ -376,12 +376,12 @@
     "description" : "RDP 起動時に全画面にする。1/true/on=全画面、0/false/off=ウィンドウ（既定）。ウィンドウ時は PM_AI_RDP_DESKTOP_WIDTH/HEIGHT を .rdp に書き込む。"
   }, {
     "key" : "PM_AI_RDP_DESKTOP_WIDTH",
-    "value" : "1280",
-    "description" : "RDP ウィンドウ表示時の幅（ピクセル）。PM_AI_RDP_FULLSCREEN=0 のとき mstsc 起動前に .rdp へ反映。既定 1280。"
+    "value" : "1920",
+    "description" : "RDP ウィンドウ表示時の幅（ピクセル）。PM_AI_RDP_FULLSCREEN=0 のとき mstsc 起動前に .rdp へ反映。既定 1920。"
   }, {
     "key" : "PM_AI_RDP_DESKTOP_HEIGHT",
-    "value" : "800",
-    "description" : "RDP ウィンドウ表示時の高さ（ピクセル）。PM_AI_RDP_FULLSCREEN=0 のとき mstsc 起動前に .rdp へ反映。既定 800。"
+    "value" : "1080",
+    "description" : "RDP ウィンドウ表示時の高さ（ピクセル）。PM_AI_RDP_FULLSCREEN=0 のとき mstsc 起動前に .rdp へ反映。既定 1080。"
   }, {
     "key" : "PM_AI_RDP_LAUNCHER_EXE",
     "value" : "",
@@ -392,7 +392,7 @@
     "description" : "RPA設定 ini のフルパス上書き。空のとき配備先フォルダ（PmAiRdpRemoteLauncher.exe と同階層）の {操作者名}_RPA設定.ini（操作者未設定時は RPA設定.ini）。レガシー RAP設定.ini / DATA は読取フォールバック。"
   }, {
     "key" : "PM_AI_RDP_LAUNCHER_DEPLOY_DIR",
-    "value" : "\\\\192.168.0.101\\共有フォルダ\\掲示板\\rpa_luncher",
+    "value" : "\\\\192.168.0.101\\共有フォルダ\\掲示板\\rpa_luncher\\RDPランチャ",
     "description" : "接続先 RDP ランチャー exe（PmAiRdpRemoteLauncher.exe）、RDP起動プロファイル.json、RPA設定.ini の配備先共有フォルダ（UNC 可）。"
   }, {
     "key" : "PM_AI_RDP_PORTABLE_BUNDLE_SOURCE_DIR",

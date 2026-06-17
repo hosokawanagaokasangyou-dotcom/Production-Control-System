@@ -375,6 +375,14 @@ public final class RemoteDesktopShellController implements DesktopShellHost, Env
         if (operatorUserManagementTabContentController != null) {
             operatorUserManagementTabContentController.refreshPresentationQuietly();
         }
+        refreshRemoteDesktopOperatorContext();
+    }
+
+    @Override
+    public void refreshRemoteDesktopOperatorContext() {
+        if (remoteDesktopTabContentController != null) {
+            remoteDesktopTabContentController.refreshForSessionOperatorChange();
+        }
     }
 
     @Override

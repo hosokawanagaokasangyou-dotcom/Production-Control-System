@@ -13,8 +13,8 @@
       "description": "アラジン RPA で工程マスタを取得・更新します。接続先の RPA シナリオと exe パスは RAP設定.ini のスロット 2 に設定してください。",
       "category": "マスタ更新",
       "fullScreen": false,
-      "desktopWidth": 1280,
-      "desktopHeight": 800
+      "desktopWidth": 1920,
+      "desktopHeight": 1080
     },
     {
       "number": 3,
@@ -22,8 +22,8 @@
       "description": "アラジンから加工計画データを RPA で取得します。",
       "category": "データ取得",
       "fullScreen": false,
-      "desktopWidth": 1280,
-      "desktopHeight": 800
+      "desktopWidth": 1920,
+      "desktopHeight": 1080
     }
   ]
 }

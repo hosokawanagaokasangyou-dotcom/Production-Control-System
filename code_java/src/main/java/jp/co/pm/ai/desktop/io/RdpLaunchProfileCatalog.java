@@ -160,7 +160,8 @@ public final class RdpLaunchProfileCatalog {
                 nullableBoolean(node.get("fullScreen")),
                 nullableInteger(node.get("desktopWidth")),
                 nullableInteger(node.get("desktopHeight")),
-                nullableBoolean(node.get("rpaEternal")));
+                nullableBoolean(node.get("rpaEternal")),
+                nullableBoolean(node.get("deleted")));
     }
 
     private static ObjectNode toJson(RdpLaunchProfile profile) {
@@ -186,7 +187,42 @@ public final class RdpLaunchProfileCatalog {
         if (profile.rpaEternal() != null) {
             node.put("rpaEternal", profile.rpaEternal());
         }
+        if (profile.isDeleted()) {
+            node.put("deleted", true);
+        }
         return node;
+    }
+
+    /** 論理削除されていないプロファイルのみ。 */
+    public static List<RdpLaunchProfile> activeProfiles(List<RdpLaunchProfile> profiles) {
+        List<RdpLaunchProfile> out = new ArrayList<>();
+        for (RdpLaunchProfile profile : normalizeList(profiles)) {
+            if (!profile.isDeleted()) {
+                out.add(profile);
+            }
+        }
+        return out;
+    }
+
+    /** 論理削除済みプロファイルのみ。 */
+    public static List<RdpLaunchProfile> deletedProfiles(List<RdpLaunchProfile> profiles) {
+        List<RdpLaunchProfile> out = new ArrayList<>();
+        for (RdpLaunchProfile profile : normalizeList(profiles)) {
+            if (profile.isDeleted()) {
+                out.add(profile);
+            }
+        }
+        return out;
+    }
+
+    /** 有効（非削除）プロファイル数。 */
+    public static int countActive(List<RdpLaunchProfile> profiles) {
+        return activeProfiles(profiles).size();
+    }
+
+    /** 最後の1件は削除不可。 */
+    public static boolean canSoftDelete(List<RdpLaunchProfile> profiles) {
+        return countActive(profiles) > 1;
     }
 
     private static List<RdpLaunchProfile> normalizeList(List<RdpLaunchProfile> profiles) {

@@ -22,6 +22,7 @@ public final class RemoteDesktopTabController {
 
     private DesktopShellHost shell;
     private boolean contentBuilt;
+    private Runnable remoteDesktopOperatorContextRefresh;
 
     @FXML
     private StackPane contentHost;
@@ -33,6 +34,13 @@ public final class RemoteDesktopTabController {
 
     void bindShell(DesktopShellHost shell) {
         this.shell = shell;
+    }
+
+    /** 操作者変更後に RPA設定 ini のパス表示と共有ファイル読込を同期する。 */
+    void refreshForSessionOperatorChange() {
+        if (remoteDesktopOperatorContextRefresh != null) {
+            remoteDesktopOperatorContextRefresh.run();
+        }
     }
 
     void onMainShellTabSelected() {
@@ -135,6 +143,7 @@ public final class RemoteDesktopTabController {
 
         built.root().getStyleClass().add("pm-rdp-form-tab-container");
         contentHost.getChildren().setAll(built.root());
+        remoteDesktopOperatorContextRefresh = built.onSessionOperatorChanged();
         built.scheduleInitialRefresh().run();
         contentBuilt = true;
     }

@@ -31,6 +31,7 @@ import javafx.scene.control.ButtonType;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.ChoiceDialog;
 import javafx.scene.control.ComboBox;
+import javafx.scene.control.Dialog;
 import javafx.scene.control.ListCell;
 import javafx.scene.control.Label;
 import javafx.scene.control.Spinner;
@@ -44,6 +45,7 @@ import javafx.scene.control.TitledPane;
 import javafx.scene.control.Tooltip;
 import javafx.scene.input.Clipboard;
 import javafx.scene.input.ClipboardContent;
+import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
@@ -64,6 +66,7 @@ import jp.co.pm.ai.desktop.io.RdpLaunchDisplaySettings;
 import jp.co.pm.ai.desktop.io.RdpLaunchDisplaySettings.LaunchDisplay;
 import jp.co.pm.ai.desktop.io.RdpLaunchProfile;
 import jp.co.pm.ai.desktop.io.RdpLaunchProfileCatalog;
+import jp.co.pm.ai.desktop.io.RdpLaunchProfileQuickLaunch;
 import jp.co.pm.ai.desktop.io.RdpMstscSessionMonitor;
 import jp.co.pm.ai.desktop.io.RdpPreviewSettings;
 import jp.co.pm.ai.desktop.io.RdpRemoteLauncherDeployer;
@@ -79,6 +82,7 @@ public final class RequestFormRemoteDesktopPane {
 
     private record ProfileRowFields(
             int number,
+            VBox card,
             TextField nameField,
             TextField descriptionField,
             TextField categoryField,
@@ -112,9 +116,22 @@ public final class RequestFormRemoteDesktopPane {
     private static final double RIGHT_PANE_MIN_HEIGHT = 72;
 
     /** 構築結果。{@link #scheduleInitialRefresh()} はタブ初回表示時のみ呼ぶ（UNC I/O を初回マウントから分離）。 */
-    public record TabContent(SplitPane root, Runnable scheduleInitialRefresh) {}
+    public record TabContent(
+            SplitPane root,
+            Runnable scheduleInitialRefresh,
+            Runnable onSessionOperatorChanged) {}
 
     private RequestFormRemoteDesktopPane() {}
+
+    private static Path resolveRdpIniPath(Map<String, String> ui) {
+        return AppPaths.resolveRdpLauncherIni(
+                ui, FactoryOperatorUserStore.resolveRdpLauncherOperatorName(ui));
+    }
+
+    private static Path resolveExistingRdpIniPath(Map<String, String> ui) {
+        return AppPaths.resolveExistingRdpLauncherIni(
+                ui, FactoryOperatorUserStore.resolveRdpLauncherOperatorName(ui));
+    }
 
     public static TabContent buildTabContent(Window owner, Context ctx) {
         Supplier<Map<String, String>> uiEnv = ctx.uiEnv() != null ? ctx.uiEnv() : () -> Map.of();
@@ -225,13 +242,39 @@ public final class RequestFormRemoteDesktopPane {
         launchProfileDetail.setWrapText(true);
         launchProfileDetail.setMaxWidth(CARD_WIDTH);
 
+        List<Button> quickLaunchProfileButtons = new ArrayList<>();
+        GridPane quickLaunchProfileGrid = new GridPane();
+        quickLaunchProfileGrid.setHgap(8);
+        quickLaunchProfileGrid.setVgap(8);
+        quickLaunchProfileGrid.setMaxWidth(CARD_WIDTH);
+        for (int slot = 0; slot < RdpLaunchProfileQuickLaunch.BUTTON_SLOT_COUNT; slot++) {
+            Button quickBtn = new Button();
+            quickBtn.getStyleClass().add("pm-rdp-quick-launch-button");
+            quickBtn.setMaxWidth(Double.MAX_VALUE);
+            quickBtn.setWrapText(true);
+            quickBtn.setVisible(false);
+            quickBtn.setManaged(false);
+            quickLaunchProfileButtons.add(quickBtn);
+            quickLaunchProfileGrid.add(quickBtn, slot % 2, slot / 2);
+            GridPane.setHgrow(quickBtn, Priority.ALWAYS);
+        }
+
+        Runnable[] updateLaunchButtonState = new Runnable[1];
+
+        Runnable[] updateProfileManageButtons = new Runnable[1];
+
         Runnable[] refreshLaunchProfileCombo = new Runnable[1];
         refreshLaunchProfileCombo[0] =
                 () -> {
                     Integer previous = launchProfileCombo.getValue();
                     launchProfileCombo.getItems().clear();
+                    List<Integer> catalogOrder = new ArrayList<>();
                     for (ProfileRowFields row : profileFields) {
+                        if (isProfileDeleted(row, profileMetadataByNumber)) {
+                            continue;
+                        }
                         launchProfileCombo.getItems().add(row.number());
+                        catalogOrder.add(row.number());
                     }
                     int fallback = AppPaths.resolveRdpLaunchProfileNumber(uiEnv.get());
                     Integer target =
@@ -245,6 +288,42 @@ public final class RequestFormRemoteDesktopPane {
                     launchProfileCombo.setValue(target);
                     updateLaunchProfileDetail(
                             launchProfileDetail, target, profileFields, profileMetadataByNumber);
+
+                    List<Integer> quickNumbers =
+                            RdpLaunchProfileQuickLaunch.quickLaunchProfileNumbers(catalogOrder);
+                    for (int slot = 0; slot < quickLaunchProfileButtons.size(); slot++) {
+                        Button quickBtn = quickLaunchProfileButtons.get(slot);
+                        if (slot < quickNumbers.size()) {
+                            int profileNumber = quickNumbers.get(slot);
+                            ProfileRowFields row = findProfileRow(profileFields, profileNumber);
+                            RdpLaunchProfile meta =
+                                    row != null
+                                            ? buildProfileFromRow(row)
+                                            : profileMetadataByNumber.getOrDefault(
+                                                    profileNumber,
+                                                    RdpLaunchProfile.empty(profileNumber));
+                            String label =
+                                    row != null
+                                            ? profileComboLabel(row, meta)
+                                            : meta.displayLabel();
+                            quickBtn.setText(RdpLaunchProfileQuickLaunch.buttonLabel(label));
+                            quickBtn.setUserData(profileNumber);
+                            quickBtn.setTooltip(new Tooltip(label));
+                            quickBtn.setVisible(true);
+                            quickBtn.setManaged(true);
+                        } else {
+                            quickBtn.setUserData(null);
+                            quickBtn.setTooltip(null);
+                            quickBtn.setVisible(false);
+                            quickBtn.setManaged(false);
+                        }
+                    }
+                    if (updateLaunchButtonState[0] != null) {
+                        updateLaunchButtonState[0].run();
+                    }
+                    if (updateProfileManageButtons[0] != null) {
+                        updateProfileManageButtons[0].run();
+                    }
                 };
 
         launchProfileCombo
@@ -317,7 +396,7 @@ public final class RequestFormRemoteDesktopPane {
                         deployDirWarningLabel.setText("");
                     }
                     iniPathLabel.setText(
-                            "RPA設定.ini: " + AppPaths.resolveRdpLauncherIni(ui, FactoryOperatorUserStore.sessionOperatorName()).toString());
+                            "RPA設定.ini: " + resolveRdpIniPath(ui).toString());
                     launcherPathLabel.setText("ランチャー exe: " + launcherExe.toString());
                     Path sharedLog = AppPaths.resolveRdpLauncherSharedLogPath(ui);
                     launcherLogPathLabel.setText(
@@ -603,6 +682,7 @@ public final class RequestFormRemoteDesktopPane {
                     profileFields.add(
                             new ProfileRowFields(
                                     profileNumber,
+                                    cardInner,
                                     nameField,
                                     descriptionField,
                                     categoryField,
@@ -642,9 +722,25 @@ public final class RequestFormRemoteDesktopPane {
         Runnable saveIniToShareBody =
                 () -> {
                     Map<String, String> ui = uiEnv.get();
-                    Path iniPath =
-                            AppPaths.resolveRdpLauncherIni(
-                                    ui, FactoryOperatorUserStore.sessionOperatorName());
+                    String operator = FactoryOperatorUserStore.resolveRdpLauncherOperatorName(ui);
+                    if (operator.isBlank()) {
+                        showAlert(
+                                Alert.AlertType.WARNING,
+                                "操作者未選択",
+                                "RPA設定.ini の保存先は操作者別ファイル（{操作者名}_RPA設定.ini）です。"
+                                        + " ツールバーから操作者を選んでから保存してください。");
+                        rapStatusLabel.setText("操作者未選択のため保存できません。");
+                        return;
+                    }
+                    if (FactoryOperatorUserStore.isGuestOperator(operator)) {
+                        showAlert(
+                                Alert.AlertType.WARNING,
+                                "ゲストは保存不可",
+                                "ゲスト操作者向けの RPA設定.ini は保存できません。操作者を変更してください。");
+                        rapStatusLabel.setText("ゲスト操作者のため保存できません。");
+                        return;
+                    }
+                    Path iniPath = resolveRdpIniPath(ui);
                     Path profilesPath = AppPaths.resolveRdpLaunchProfilesFile(ui);
                     RdpRemoteLauncherIni ini = new RdpRemoteLauncherIni();
                     Integer selectedProfile = launchProfileCombo.getValue();
@@ -673,7 +769,9 @@ public final class RequestFormRemoteDesktopPane {
                     }
                     try {
                         ini.save(iniPath);
-                        List<RdpLaunchProfile> profiles = collectProfilesFromRows(profileFields);
+                        RdpRemoteLauncherIni.writeOperatorContext(iniPath, operator);
+                        List<RdpLaunchProfile> profiles =
+                                collectProfilesFromRows(profileFields, profileMetadataByNumber);
                         RdpLaunchProfileCatalog.save(profilesPath, profiles);
                         for (RdpLaunchProfile profile : profiles) {
                             profileMetadataByNumber.put(profile.number(), profile);
@@ -694,7 +792,6 @@ public final class RequestFormRemoteDesktopPane {
                     }
                 };
 
-        Runnable[] updateLaunchButtonState = new Runnable[1];
         Runnable[] refreshAladdinCredentialsUi = new Runnable[1];
         Runnable[] saveIniToShare = new Runnable[1];
 
@@ -712,6 +809,86 @@ public final class RequestFormRemoteDesktopPane {
                                     loadIniFromShare.run();
                                 }
                             });
+                });
+
+        Button btnImportFromPeer = new Button("他ユーザーからインポート");
+        styleSecondaryButton(btnImportFromPeer);
+        btnImportFromPeer.setTooltip(
+                new Tooltip(
+                        "配備先フォルダ上の他操作者 "
+                                + AppPaths.RDP_LAUNCHER_INI_BASENAME
+                                + " をプレビューし、現在の操作者設定へ取り込みます。"));
+        btnImportFromPeer.setOnAction(
+                e ->
+                        showImportOperatorRpaIniDialog(
+                                owner,
+                                uiEnv,
+                                launchProfileCombo,
+                                profileFields,
+                                appendProfileRow,
+                                cmbSessionEndAction,
+                                rapStatusLabel,
+                                status,
+                                refreshLaunchProfileCombo[0],
+                                refreshDisplayPreview[0],
+                                null,
+                                false));
+
+        Button btnImportFromSharedIni = new Button("共通 ini からコピー");
+        styleSecondaryButton(btnImportFromSharedIni);
+        btnImportFromSharedIni.setTooltip(
+                new Tooltip(
+                        "ユーザー名なしの共通 "
+                                + AppPaths.RDP_LAUNCHER_INI_BASENAME
+                                + "（レガシー共有ファイル）からプロファイルを現在の操作者設定へ取り込みます。"
+                                + " 取り込み後は「保存」で "
+                                + "{操作者名}_"
+                                + AppPaths.RDP_LAUNCHER_INI_BASENAME
+                                + " へ書き出してください。"));
+        btnImportFromSharedIni.setOnAction(
+                e -> {
+                    Map<String, String> ui = uiEnv.get();
+                    String operator = FactoryOperatorUserStore.resolveRdpLauncherOperatorName(ui);
+                    if (operator.isBlank()) {
+                        showAlert(
+                                Alert.AlertType.WARNING,
+                                "操作者未選択",
+                                "コピー先の操作者が未選択です。ツールバーから操作者を選んでから再度お試しください。");
+                        return;
+                    }
+                    Path sharedIni = AppPaths.resolveExistingSharedRdpLauncherIni(ui);
+                    if (!Files.isRegularFile(sharedIni)) {
+                        showAlert(
+                                Alert.AlertType.WARNING,
+                                "共通 ini 未作成",
+                                "共通の "
+                                        + AppPaths.RDP_LAUNCHER_INI_BASENAME
+                                        + " が見つかりません。\n"
+                                        + sharedIni);
+                        return;
+                    }
+                    Path targetIni = resolveRdpIniPath(ui).normalize();
+                    if (sharedIni.normalize().equals(targetIni)) {
+                        showAlert(
+                                Alert.AlertType.INFORMATION,
+                                "コピー不要",
+                                "現在の操作者の ini が共通ファイルと同じです。"
+                                        + " 他ユーザーからインポートするか、操作者を選び直してください。");
+                        return;
+                    }
+                    showImportOperatorRpaIniDialog(
+                            owner,
+                            uiEnv,
+                            launchProfileCombo,
+                            profileFields,
+                            appendProfileRow,
+                            cmbSessionEndAction,
+                            rapStatusLabel,
+                            status,
+                            refreshLaunchProfileCombo[0],
+                            refreshDisplayPreview[0],
+                            sharedIni,
+                            true);
                 });
 
         Button btnSaveIni = new Button("保存");
@@ -766,6 +943,8 @@ public final class RequestFormRemoteDesktopPane {
                 new HBox(
                         8,
                         btnReloadIni,
+                        btnImportFromPeer,
+                        btnImportFromSharedIni,
                         btnSaveIni,
                         btnSuppressLaunchSlot,
                         btnAddProfile);
@@ -887,7 +1066,21 @@ public final class RequestFormRemoteDesktopPane {
                     }
                 });
 
+        Button[] btnLaunchRef = new Button[1];
+
         Button btnLaunch = new Button("リモートデスクトップを起動");
+        btnLaunchRef[0] = btnLaunch;
+        for (Button quickBtn : quickLaunchProfileButtons) {
+            quickBtn.setOnAction(
+                    e -> {
+                        Integer profileNumber = (Integer) quickBtn.getUserData();
+                        if (profileNumber == null || btnLaunchRef[0] == null) {
+                            return;
+                        }
+                        launchProfileCombo.setValue(profileNumber);
+                        btnLaunchRef[0].fire();
+                    });
+        }
         btnLaunch.getStyleClass().add("pm-rdp-connect-button");
         btnLaunch.setMaxWidth(Double.MAX_VALUE);
         btnLaunch.setTooltip(
@@ -1042,9 +1235,7 @@ public final class RequestFormRemoteDesktopPane {
                         launchProfileNumberChangeHandler.accept(launchSlot);
                     }
                     String launchProfileLabel = profileComboLabel(launchRow, launchProfileMeta);
-                    Path launcherIniPath =
-                            AppPaths.resolveRdpLauncherIni(
-                                    launchUi, FactoryOperatorUserStore.sessionOperatorName());
+                    Path launcherIniPath = resolveRdpIniPath(launchUi);
                     RdpSessionEndAction profileEndAction =
                             launchProfileMeta.resolvedSessionEndAction();
                     try {
@@ -1156,11 +1347,7 @@ public final class RequestFormRemoteDesktopPane {
                                                         rightPanePreviewHolder[0].removePreviewPane();
                                                     }
                                                     try {
-                                                        Path iniPath =
-                                                                AppPaths.resolveRdpLauncherIni(
-                                                                        launchUi,
-                                                                        FactoryOperatorUserStore
-                                                                                .sessionOperatorName());
+                                                        Path iniPath = resolveRdpIniPath(launchUi);
                                                         RdpRemoteLauncherIni
                                                                 .writeTaskSchedulerSuppress(
                                                                         iniPath, launchUi);
@@ -1282,18 +1469,69 @@ public final class RequestFormRemoteDesktopPane {
         launchBlock.setFillWidth(true);
         launchBlock.setMaxWidth(CARD_WIDTH);
 
-        saveIniToShare[0] =
-                () ->
-                        scheduleLauncherDeploy(
-                                uiEnv,
-                                false,
-                                deployStatusLabel,
-                                btnForceDeployLauncher,
-                                launcherDeployInProgress,
-                                launcherDeployReady,
-                                updateLaunchButtonState[0],
-                                status,
-                                saveIniToShareBody);
+        saveIniToShare[0] = saveIniToShareBody;
+
+        Runnable onSessionOperatorChanged =
+                () -> {
+                    refreshPaths.run();
+                    loadIniFromShare.run();
+                    if (refreshAladdinCredentialsUi[0] != null) {
+                        refreshAladdinCredentialsUi[0].run();
+                    }
+                };
+
+        Button btnDeleteLaunchProfile = new Button("プロファイルを削除");
+        styleSecondaryButton(btnDeleteLaunchProfile);
+        btnDeleteLaunchProfile.setTooltip(
+                new Tooltip(
+                        "選択中の起動プロファイルを論理削除します。"
+                                + " 削除済みは「削除したプロファイルを復活」から戻せます。"));
+
+        Button btnRestoreDeletedProfiles = new Button("削除したプロファイルを復活");
+        styleSecondaryButton(btnRestoreDeletedProfiles);
+        btnRestoreDeletedProfiles.setTooltip(
+                new Tooltip("論理削除した起動プロファイルを一覧から選んで復元します。"));
+
+        HBox launchProfileManageRow =
+                new HBox(8, btnDeleteLaunchProfile, btnRestoreDeletedProfiles);
+        launchProfileManageRow.setAlignment(Pos.CENTER_LEFT);
+        launchProfileManageRow.setMaxWidth(CARD_WIDTH);
+
+        updateProfileManageButtons[0] =
+                () -> {
+                    Integer selected = launchProfileCombo.getValue();
+                    List<RdpLaunchProfile> all =
+                            collectProfilesFromRows(profileFields, profileMetadataByNumber);
+                    btnDeleteLaunchProfile.setDisable(
+                            selected == null || !RdpLaunchProfileCatalog.canSoftDelete(all));
+                    btnRestoreDeletedProfiles.setDisable(
+                            RdpLaunchProfileCatalog.deletedProfiles(all).isEmpty());
+                };
+
+        btnDeleteLaunchProfile.setOnAction(
+                e ->
+                        confirmAndSoftDeleteProfile(
+                                owner != null
+                                        ? owner
+                                        : btnDeleteLaunchProfile.getScene().getWindow(),
+                                launchProfileCombo.getValue(),
+                                profileFields,
+                                profileMetadataByNumber,
+                                refreshLaunchProfileCombo[0],
+                                saveIniToShare[0]));
+
+        btnRestoreDeletedProfiles.setOnAction(
+                e ->
+                        showRestoreDeletedProfilesDialog(
+                                owner != null
+                                        ? owner
+                                        : btnRestoreDeletedProfiles.getScene().getWindow(),
+                                profileFields,
+                                profileMetadataByNumber,
+                                refreshLaunchProfileCombo[0],
+                                saveIniToShare[0]));
+
+        updateProfileManageButtons[0].run();
 
         btnForceDeployLauncher.setOnAction(
                 e ->
@@ -1400,6 +1638,8 @@ public final class RequestFormRemoteDesktopPane {
                         operatorNameLabel,
                         fieldCaption("起動プロファイル"),
                         launchProfileCombo,
+                        launchProfileManageRow,
+                        quickLaunchProfileGrid,
                         launchProfileDetail,
                         fieldCaption("RDP プロファイル (.rdp)"),
                         profileRow,
@@ -1471,6 +1711,7 @@ public final class RequestFormRemoteDesktopPane {
                         applyRdpLaunchButtonState(
                                 uiEnv,
                                 btnLaunch,
+                                quickLaunchProfileButtons,
                                 launcherDeployInProgress,
                                 launcherDeployReady,
                                 rdpSessionActive);
@@ -1708,7 +1949,7 @@ public final class RequestFormRemoteDesktopPane {
                                 refreshLauncherLog[0],
                                 refreshLaunchProfileCombo[0]);
 
-        return new TabContent(splitPane, scheduleInitialRefresh);
+        return new TabContent(splitPane, scheduleInitialRefresh, onSessionOperatorChanged);
     }
 
     private static void scheduleSharedSettingsRefresh(
@@ -1763,9 +2004,7 @@ public final class RequestFormRemoteDesktopPane {
                     }
                     RdpRemoteLauncherDeployer.DeployOutcome deploy =
                             RdpRemoteLauncherDeployer.ensureDeployed(ui, null);
-                    Path iniPath =
-                            AppPaths.resolveExistingRdpLauncherIni(
-                                    ui, FactoryOperatorUserStore.sessionOperatorName());
+                    Path iniPath = resolveExistingRdpIniPath(ui);
                     Path profilesPath = AppPaths.resolveRdpLaunchProfilesFile(ui);
                     List<RdpLaunchProfile> catalogProfiles =
                             RdpLaunchProfileCatalog.loadOrDefaults(profilesPath);
@@ -1870,9 +2109,7 @@ public final class RequestFormRemoteDesktopPane {
         runBackgroundThenFx(
                 () -> {
                     Map<String, String> ui = uiEnv.get();
-                    Path iniPath =
-                            AppPaths.resolveExistingRdpLauncherIni(
-                                    ui, FactoryOperatorUserStore.sessionOperatorName());
+                    Path iniPath = resolveExistingRdpIniPath(ui);
                     Path profilesPath = AppPaths.resolveRdpLaunchProfilesFile(ui);
                     RdpRemoteLauncherIni ini = null;
                     IOException iniError = null;
@@ -1925,9 +2162,7 @@ public final class RequestFormRemoteDesktopPane {
         runBackgroundThenFx(
                 () -> {
                     Map<String, String> ui = uiEnv.get();
-                    Path iniPath =
-                            AppPaths.resolveExistingRdpLauncherIni(
-                                    ui, FactoryOperatorUserStore.sessionOperatorName());
+                    Path iniPath = resolveExistingRdpIniPath(ui);
                     String body;
                     String meta;
                     try {
@@ -2232,6 +2467,7 @@ public final class RequestFormRemoteDesktopPane {
             row.desktopHeightSpinner().getValueFactory().setValue(RdpLaunchDisplaySettings.clampHeight(height));
             updateDisplayControlsEnabled(
                     row.chkFullScreen(), row.desktopWidthSpinner(), row.desktopHeightSpinner());
+            applyProfileCardVisibility(row, profileMetadataByNumber);
         }
 
         if (refreshLaunchProfileCombo != null) {
@@ -2267,9 +2503,7 @@ public final class RequestFormRemoteDesktopPane {
         runBackgroundThenFx(
                 () -> {
                     Map<String, String> ui = uiEnv.get();
-                    Path iniPath =
-                            AppPaths.resolveRdpLauncherIni(
-                                    ui, FactoryOperatorUserStore.sessionOperatorName());
+                    Path iniPath = resolveRdpIniPath(ui);
                     IOException error = null;
                     try {
                         RdpRemoteLauncherIni.writeTaskSchedulerSuppress(iniPath, ui);
@@ -2355,6 +2589,7 @@ public final class RequestFormRemoteDesktopPane {
     private static void applyRdpLaunchButtonState(
             Supplier<Map<String, String>> uiEnv,
             Button btnLaunch,
+            List<Button> quickLaunchProfileButtons,
             AtomicBoolean deployInProgress,
             AtomicBoolean deployReady,
             AtomicBoolean sessionActive) {
@@ -2368,28 +2603,45 @@ public final class RequestFormRemoteDesktopPane {
             btnLaunch.getStyleClass().add("pm-rdp-connect-deploying");
             btnLaunch.setDisable(true);
             btnLaunch.setText("ランチャー転送中…");
+            applyQuickLaunchButtonDisabled(quickLaunchProfileButtons, true);
             return;
         }
         if (sessionActive.get()) {
             btnLaunch.getStyleClass().add("pm-rdp-connect-active");
             btnLaunch.setDisable(true);
             btnLaunch.setText("リモートデスクトップ接続中");
+            applyQuickLaunchButtonDisabled(quickLaunchProfileButtons, true);
             return;
         }
         if (!deployReady.get()) {
             btnLaunch.getStyleClass().add("pm-rdp-connect-pending");
             btnLaunch.setDisable(false);
             btnLaunch.setText("ランチャー転送してから起動");
+            applyQuickLaunchButtonDisabled(quickLaunchProfileButtons, false);
             return;
         }
         if (!rdpLaunchCredentialsReady(uiEnv)) {
             btnLaunch.getStyleClass().add("pm-rdp-connect-pending");
             btnLaunch.setDisable(true);
             btnLaunch.setText("アラジン資格情報を保存してください");
+            applyQuickLaunchButtonDisabled(quickLaunchProfileButtons, true);
             return;
         }
         btnLaunch.setDisable(false);
         btnLaunch.setText("リモートデスクトップを起動");
+        applyQuickLaunchButtonDisabled(quickLaunchProfileButtons, false);
+    }
+
+    private static void applyQuickLaunchButtonDisabled(
+            List<Button> quickLaunchProfileButtons, boolean disabled) {
+        if (quickLaunchProfileButtons == null) {
+            return;
+        }
+        for (Button quickBtn : quickLaunchProfileButtons) {
+            if (quickBtn.isVisible()) {
+                quickBtn.setDisable(disabled);
+            }
+        }
     }
 
     private static boolean rdpLaunchCredentialsReady(Supplier<Map<String, String>> uiEnv) {
@@ -2608,6 +2860,127 @@ public final class RequestFormRemoteDesktopPane {
                         });
     }
 
+    private static void confirmAndSoftDeleteProfile(
+            Window owner,
+            Integer profileNumber,
+            List<ProfileRowFields> profileFields,
+            Map<Integer, RdpLaunchProfile> profileMetadataByNumber,
+            Runnable refreshCombo,
+            Runnable persist) {
+        if (profileNumber == null) {
+            return;
+        }
+        ProfileRowFields row = findProfileRow(profileFields, profileNumber);
+        if (row == null) {
+            return;
+        }
+        List<RdpLaunchProfile> all =
+                collectProfilesFromRows(profileFields, profileMetadataByNumber);
+        if (!RdpLaunchProfileCatalog.canSoftDelete(all)) {
+            showAlert(
+                    Alert.AlertType.WARNING,
+                    "削除できません",
+                    "有効なプロファイルが1件しかないため削除できません。");
+            return;
+        }
+        RdpLaunchProfile built = buildProfileFromRow(row);
+        String label = profileComboLabel(row, built);
+        Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
+        confirm.setTitle("プロファイルを削除");
+        confirm.setHeaderText("プロファイル " + profileNumber + " を削除しますか？");
+        confirm.setContentText(
+                label
+                        + " を一覧から非表示にします。"
+                        + " RPA 設定は保持され、「削除したプロファイルを復活」から戻せます。");
+        if (owner != null) {
+            confirm.initOwner(owner);
+        }
+        confirm.showAndWait()
+                .ifPresent(
+                        choice -> {
+                            if (choice != ButtonType.OK) {
+                                return;
+                            }
+                            profileMetadataByNumber.put(profileNumber, built.withDeleted(true));
+                            applyProfileCardVisibility(row, profileMetadataByNumber);
+                            if (refreshCombo != null) {
+                                refreshCombo.run();
+                            }
+                            if (persist != null) {
+                                persist.run();
+                            }
+                        });
+    }
+
+    private static void showRestoreDeletedProfilesDialog(
+            Window owner,
+            List<ProfileRowFields> profileFields,
+            Map<Integer, RdpLaunchProfile> profileMetadataByNumber,
+            Runnable refreshCombo,
+            Runnable persist) {
+        List<RdpLaunchProfile> deleted =
+                RdpLaunchProfileCatalog.deletedProfiles(
+                        collectProfilesFromRows(profileFields, profileMetadataByNumber));
+        if (deleted.isEmpty()) {
+            showAlert(Alert.AlertType.INFORMATION, "復活", "削除済みのプロファイルはありません。");
+            return;
+        }
+        List<Integer> choices =
+                deleted.stream().map(RdpLaunchProfile::number).sorted().toList();
+        List<String> labels = new ArrayList<>();
+        Map<String, Integer> labelToNumber = new HashMap<>();
+        for (Integer number : choices) {
+            RdpLaunchProfile meta =
+                    profileMetadataByNumber.getOrDefault(number, RdpLaunchProfile.empty(number));
+            String label = meta.displayLabel();
+            labels.add(label);
+            labelToNumber.put(label, number);
+        }
+        ChoiceDialog<String> dialog = new ChoiceDialog<>(labels.getFirst(), labels);
+        dialog.setTitle("削除したプロファイルを復活");
+        dialog.setHeaderText("復活するプロファイルを選んでください");
+        dialog.setContentText("プロファイル:");
+        if (owner != null) {
+            dialog.initOwner(owner);
+        }
+        dialog.showAndWait()
+                .ifPresent(
+                        label -> {
+                            Integer number = labelToNumber.get(label);
+                            if (number == null) {
+                                return;
+                            }
+                            ProfileRowFields row = findProfileRow(profileFields, number);
+                            if (row == null) {
+                                return;
+                            }
+                            RdpLaunchProfile meta =
+                                    profileMetadataByNumber.getOrDefault(
+                                            number, buildProfileFromRow(row));
+                            profileMetadataByNumber.put(number, meta.withDeleted(false));
+                            applyProfileCardVisibility(row, profileMetadataByNumber);
+                            if (refreshCombo != null) {
+                                refreshCombo.run();
+                            }
+                            if (persist != null) {
+                                persist.run();
+                            }
+                        });
+    }
+
+    private static boolean isProfileDeleted(
+            ProfileRowFields row, Map<Integer, RdpLaunchProfile> profileMetadataByNumber) {
+        RdpLaunchProfile meta = profileMetadataByNumber.get(row.number());
+        return meta != null && meta.isDeleted();
+    }
+
+    private static void applyProfileCardVisibility(
+            ProfileRowFields row, Map<Integer, RdpLaunchProfile> profileMetadataByNumber) {
+        boolean deleted = isProfileDeleted(row, profileMetadataByNumber);
+        row.card().setVisible(!deleted);
+        row.card().setManaged(!deleted);
+    }
+
     private static void confirmAndClearProfile(
             Window owner,
             int profileNumber,
@@ -2659,13 +3032,20 @@ public final class RequestFormRemoteDesktopPane {
                 row.chkFullScreen().isSelected(),
                 row.desktopWidthSpinner().getValue(),
                 row.desktopHeightSpinner().getValue(),
-                row.chkRpaEternal().isSelected());
+                row.chkRpaEternal().isSelected(),
+                null);
     }
 
-    private static List<RdpLaunchProfile> collectProfilesFromRows(List<ProfileRowFields> rows) {
+    private static List<RdpLaunchProfile> collectProfilesFromRows(
+            List<ProfileRowFields> rows, Map<Integer, RdpLaunchProfile> profileMetadataByNumber) {
         List<RdpLaunchProfile> profiles = new ArrayList<>();
         for (ProfileRowFields row : rows) {
-            profiles.add(buildProfileFromRow(row));
+            RdpLaunchProfile built = buildProfileFromRow(row);
+            RdpLaunchProfile stored = profileMetadataByNumber.get(row.number());
+            if (stored != null && stored.isDeleted()) {
+                built = built.withDeleted(true);
+            }
+            profiles.add(built);
         }
         return profiles;
     }
@@ -2734,6 +3114,387 @@ public final class RequestFormRemoteDesktopPane {
         ClipboardContent content = new ClipboardContent();
         content.putString(text);
         Clipboard.getSystemClipboard().setContent(content);
+    }
+
+    private static void showImportOperatorRpaIniDialog(
+            Window owner,
+            Supplier<Map<String, String>> uiEnv,
+            ComboBox<Integer> launchProfileCombo,
+            List<ProfileRowFields> profileFields,
+            IntConsumer appendProfileRow,
+            ComboBox<RdpSessionEndAction> cmbSessionEndAction,
+            Label rapStatusLabel,
+            Consumer<String> status,
+            Runnable refreshLaunchProfileCombo,
+            Runnable refreshDisplayPreview,
+            Path preferredSource,
+            boolean sharedIniMode) {
+        Map<String, String> ui = uiEnv.get();
+        String currentOperator = FactoryOperatorUserStore.resolveRdpLauncherOperatorName(ui);
+        if (currentOperator.isBlank()) {
+            showAlert(
+                    Alert.AlertType.WARNING,
+                    "操作者未選択",
+                    "インポート先の操作者が未選択です。ツールバーから操作者を選んでから再度お試しください。");
+            return;
+        }
+        Path targetIni = resolveRdpIniPath(ui).normalize();
+
+        Dialog<ButtonType> dialog = new Dialog<>();
+        if (sharedIniMode) {
+            dialog.setTitle("共通 RPA設定.ini からインポート");
+            dialog.setHeaderText(
+                    "ユーザー名なしの共通 "
+                            + AppPaths.RDP_LAUNCHER_INI_BASENAME
+                            + " からプロファイルを、現在の操作者（"
+                            + currentOperator
+                            + "）の設定へ反映します。");
+        } else {
+            dialog.setTitle("他ユーザーの RPA設定.ini をインポート");
+            dialog.setHeaderText(
+                    "インポート元を選び内容を確認してから、現在の操作者（"
+                            + currentOperator
+                            + "）の設定へ反映します。");
+        }
+        if (owner != null) {
+            dialog.initOwner(owner);
+        }
+
+        ComboBox<AppPaths.PeerOperatorRpaIniFile> sourceCombo = new ComboBox<>();
+        sourceCombo.setPrefWidth(480);
+        sourceCombo.setCellFactory(
+                listView ->
+                        new ListCell<>() {
+                            @Override
+                            protected void updateItem(AppPaths.PeerOperatorRpaIniFile item, boolean empty) {
+                                super.updateItem(item, empty);
+                                if (empty || item == null) {
+                                    setText(null);
+                                    return;
+                                }
+                                setText(item.displayLabel() + "  —  " + item.path());
+                            }
+                        });
+        sourceCombo.setButtonCell(sourceCombo.getCellFactory().call(null));
+
+        Label sourcePathLabel = new Label();
+        sourcePathLabel.getStyleClass().add("pm-rdp-page-subtitle");
+        sourcePathLabel.setWrapText(true);
+        sourcePathLabel.setMaxWidth(560);
+
+        TextArea previewArea = new TextArea();
+        previewArea.setEditable(false);
+        previewArea.setWrapText(false);
+        previewArea.setPrefRowCount(14);
+        previewArea.setPromptText("インポート元 ini の内容がここに表示されます。");
+
+        Label previewMetaLabel = new Label("読込待ち…");
+        previewMetaLabel.getStyleClass().add("pm-rdp-page-subtitle");
+        previewMetaLabel.setWrapText(true);
+        previewMetaLabel.setMaxWidth(560);
+
+        CheckBox chkImportSlots = new CheckBox("スロット定義（exe / 引数）");
+        chkImportSlots.setSelected(true);
+        CheckBox chkOnlyEmptySlots = new CheckBox("空のスロットのみ上書き（追加インポート）");
+        chkOnlyEmptySlots.setSelected(true);
+        chkOnlyEmptySlots.setDisable(false);
+        chkImportSlots
+                .selectedProperty()
+                .addListener(
+                        (obs, was, selected) -> chkOnlyEmptySlots.setDisable(!selected));
+        CheckBox chkImportSelectedSlot = new CheckBox("起動プログラム番号");
+        CheckBox chkImportSessionEnd = new CheckBox("終了時セッション操作");
+
+        Label targetLabel = new Label("反映先: " + targetIni);
+        targetLabel.getStyleClass().add("pm-rdp-meta-label");
+        targetLabel.setWrapText(true);
+        targetLabel.setMaxWidth(560);
+
+        Button btnBrowseSource = new Button("参照…");
+        styleSecondaryButton(btnBrowseSource);
+
+        Runnable[] refreshPreview = new Runnable[1];
+        refreshPreview[0] =
+                () -> {
+                    AppPaths.PeerOperatorRpaIniFile selected = sourceCombo.getValue();
+                    if (selected == null) {
+                        previewArea.clear();
+                        previewMetaLabel.setText("インポート元を選択してください。");
+                        sourcePathLabel.setText("");
+                        return;
+                    }
+                    Path path = selected.path();
+                    sourcePathLabel.setText(path.toString());
+                    previewMetaLabel.setText("読込中…");
+                    runBackgroundThenFx(
+                            () -> {
+                                String body;
+                                String meta;
+                                try {
+                                    if (!Files.isRegularFile(path)) {
+                                        body = "";
+                                        meta = "ファイル未作成: " + path;
+                                    } else {
+                                        body = Files.readString(path, StandardCharsets.UTF_8);
+                                        var modified =
+                                                Files.getLastModifiedTime(path)
+                                                        .toInstant()
+                                                        .atZone(
+                                                                java.time.ZoneId.systemDefault())
+                                                        .toLocalDateTime()
+                                                        .format(
+                                                                java.time.format.DateTimeFormatter
+                                                                        .ofPattern(
+                                                                                "yyyy-MM-dd HH:mm:ss"));
+                                        meta =
+                                                Files.size(path)
+                                                        + " bytes · 更新 "
+                                                        + modified;
+                                    }
+                                } catch (IOException ex) {
+                                    body = "";
+                                    meta = "読込失敗: " + ex.getMessage();
+                                }
+                                final String previewBody = body;
+                                final String previewMeta = meta;
+                                Platform.runLater(
+                                        () -> {
+                                            previewArea.setText(previewBody);
+                                            previewMetaLabel.setText(previewMeta);
+                                        });
+                            });
+                };
+
+        sourceCombo.valueProperty().addListener((obs, was, now) -> refreshPreview[0].run());
+
+        btnBrowseSource.setOnAction(
+                e -> {
+                    FileChooser chooser = new FileChooser();
+                    chooser.setTitle("インポート元 RPA設定.ini");
+                    chooser
+                            .getExtensionFilters()
+                            .add(new FileChooser.ExtensionFilter("ini", "*.ini"));
+                    Path deployDir = AppPaths.resolveRdpLauncherDeployDir(ui);
+                    if (Files.isDirectory(deployDir)) {
+                        chooser.setInitialDirectory(deployDir.toFile());
+                    }
+                    java.io.File picked =
+                            chooser.showOpenDialog(owner != null ? owner : dialog.getDialogPane().getScene().getWindow());
+                    if (picked == null) {
+                        return;
+                    }
+                    Path pickedPath = picked.toPath().toAbsolutePath().normalize();
+                    if (pickedPath.equals(targetIni)) {
+                        showAlert(
+                                Alert.AlertType.WARNING,
+                                "同じファイル",
+                                "現在の操作者の ini と同じファイルはインポート元に選べません。");
+                        return;
+                    }
+                    AppPaths.PeerOperatorRpaIniFile custom =
+                            new AppPaths.PeerOperatorRpaIniFile(
+                                    AppPaths.displayLabelForRpaIniFilename(
+                                            pickedPath.getFileName().toString())
+                                            + "（参照）",
+                                    pickedPath);
+                    if (!sourceCombo.getItems().contains(custom)) {
+                        sourceCombo.getItems().add(custom);
+                    }
+                    sourceCombo.setValue(custom);
+                });
+
+        List<AppPaths.PeerOperatorRpaIniFile> peers =
+                AppPaths.listPeerOperatorRpaIniFiles(ui, currentOperator);
+        sourceCombo.getItems().setAll(peers);
+        if (preferredSource != null) {
+            selectImportSourceComboValue(sourceCombo, preferredSource);
+        } else if (!peers.isEmpty()) {
+            sourceCombo.getSelectionModel().selectFirst();
+        } else {
+            previewMetaLabel.setText(
+                    "配備先に他操作者の ini が見つかりません。「参照…」でファイルを選んでください。");
+        }
+
+        HBox sourceRow = new HBox(8, sourceCombo, btnBrowseSource);
+        sourceRow.setAlignment(Pos.CENTER_LEFT);
+        HBox.setHgrow(sourceCombo, Priority.ALWAYS);
+
+        VBox content =
+                new VBox(
+                        10,
+                        fieldCaption("インポート元"),
+                        sourceRow,
+                        sourcePathLabel,
+                        fieldCaption("内容プレビュー"),
+                        previewMetaLabel,
+                        previewArea,
+                        fieldCaption("取り込む項目"),
+                        chkImportSlots,
+                        chkOnlyEmptySlots,
+                        chkImportSelectedSlot,
+                        chkImportSessionEnd,
+                        targetLabel);
+        content.setPadding(new Insets(8, 0, 0, 0));
+        content.setFillWidth(true);
+        ScrollPane scroll = new ScrollPane(content);
+        scroll.setFitToWidth(true);
+        scroll.setPrefViewportHeight(520);
+        dialog.getDialogPane().setContent(scroll);
+        dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
+        dialog.getDialogPane().lookupButton(ButtonType.OK).setDisable(sourceCombo.getValue() == null);
+
+        sourceCombo
+                .valueProperty()
+                .addListener(
+                        (obs, was, now) ->
+                                dialog.getDialogPane()
+                                        .lookupButton(ButtonType.OK)
+                                        .setDisable(now == null));
+
+        if (sourceCombo.getValue() != null) {
+            refreshPreview[0].run();
+        }
+
+        dialog.showAndWait()
+                .ifPresent(
+                        choice -> {
+                            if (choice != ButtonType.OK) {
+                                return;
+                            }
+                            AppPaths.PeerOperatorRpaIniFile selected = sourceCombo.getValue();
+                            if (selected == null) {
+                                return;
+                            }
+                            if (!chkImportSlots.isSelected()
+                                    && !chkImportSelectedSlot.isSelected()
+                                    && !chkImportSessionEnd.isSelected()) {
+                                showAlert(
+                                        Alert.AlertType.WARNING,
+                                        "項目未選択",
+                                        "取り込む項目を 1 つ以上選んでください。");
+                                return;
+                            }
+                            try {
+                                RdpRemoteLauncherIni source =
+                                        RdpRemoteLauncherIni.load(selected.path());
+                                ensureProfileRowsForImport(source, profileFields, appendProfileRow);
+                                int importedSlots =
+                                        applyImportFromPeerIni(
+                                                source,
+                                                profileFields,
+                                                launchProfileCombo,
+                                                cmbSessionEndAction,
+                                                chkImportSlots.isSelected(),
+                                                chkOnlyEmptySlots.isSelected(),
+                                                chkImportSelectedSlot.isSelected(),
+                                                chkImportSessionEnd.isSelected());
+                                if (refreshLaunchProfileCombo != null) {
+                                    refreshLaunchProfileCombo.run();
+                                }
+                                if (refreshDisplayPreview != null) {
+                                    refreshDisplayPreview.run();
+                                }
+                                String message =
+                                        "インポートしました（"
+                                                + selected.displayLabel()
+                                                + "）。スロット "
+                                                + importedSlots
+                                                + " 件を反映。"
+                                                + " 「保存」で "
+                                                + targetIni
+                                                + " へ書き出してください。";
+                                rapStatusLabel.setText(message);
+                                status.accept(message);
+                            } catch (IOException ex) {
+                                showAlert(
+                                        Alert.AlertType.ERROR,
+                                        "読込失敗",
+                                        ex.getMessage() != null ? ex.getMessage() : ex.toString());
+                            }
+                        });
+    }
+
+    private static void selectImportSourceComboValue(
+            ComboBox<AppPaths.PeerOperatorRpaIniFile> sourceCombo, Path preferredSource) {
+        if (sourceCombo == null || preferredSource == null) {
+            return;
+        }
+        Path normalized = preferredSource.toAbsolutePath().normalize();
+        for (AppPaths.PeerOperatorRpaIniFile item : sourceCombo.getItems()) {
+            if (item.path().normalize().equals(normalized)) {
+                sourceCombo.setValue(item);
+                return;
+            }
+        }
+        AppPaths.PeerOperatorRpaIniFile entry =
+                new AppPaths.PeerOperatorRpaIniFile(
+                        AppPaths.displayLabelForRpaIniFilename(
+                                normalized.getFileName().toString()),
+                        normalized);
+        sourceCombo.getItems().add(0, entry);
+        sourceCombo.setValue(entry);
+    }
+
+    /** インポート元 ini のスロット数に合わせてプロファイル行を増やす。 */
+    private static void ensureProfileRowsForImport(
+            RdpRemoteLauncherIni source,
+            List<ProfileRowFields> profileFields,
+            IntConsumer appendProfileRow) {
+        if (source == null || appendProfileRow == null) {
+            return;
+        }
+        int needed =
+                Math.min(
+                        RdpRemoteLauncherIni.MAX_SLOTS,
+                        Math.max(source.visibleSlotCount(), source.highestDefinedSlot()));
+        while (profileFields.size() < needed) {
+            appendProfileRow.accept(profileFields.size() + 1);
+        }
+    }
+
+    /** @return 反映したスロット件数 */
+    private static int applyImportFromPeerIni(
+            RdpRemoteLauncherIni source,
+            List<ProfileRowFields> profileFields,
+            ComboBox<Integer> launchProfileCombo,
+            ComboBox<RdpSessionEndAction> cmbSessionEndAction,
+            boolean importSlots,
+            boolean onlyEmptySlots,
+            boolean importSelectedSlot,
+            boolean importSessionEnd) {
+        int importedSlotCount = 0;
+        if (importSlots) {
+            for (ProfileRowFields row : profileFields) {
+                RdpRemoteLauncherIni.Command command = source.getSlotCommand(row.number());
+                if (command.executable().isBlank()) {
+                    continue;
+                }
+                if (onlyEmptySlots && !row.programField().getText().isBlank()) {
+                    continue;
+                }
+                row.programField().setText(command.executable());
+                String slotArguments = command.arguments();
+                boolean eternalFromIni = RdpRemoteLauncherIni.hasEternalFlag(slotArguments);
+                row.argsField()
+                        .setText(
+                                RdpRemoteLauncherIni.argumentsForUiDisplayWithoutManagedFlags(
+                                        slotArguments));
+                row.chkRpaEternal().setSelected(eternalFromIni);
+                importedSlotCount++;
+            }
+        }
+        if (importSelectedSlot) {
+            int slot = source.selectedSlot();
+            if (slot >= 1
+                    && slot <= RdpRemoteLauncherIni.MAX_SLOTS
+                    && launchProfileCombo.getItems().contains(slot)) {
+                launchProfileCombo.setValue(slot);
+            }
+        }
+        if (importSessionEnd) {
+            cmbSessionEndAction.setValue(source.sessionEndAction());
+        }
+        return importedSlotCount;
     }
 
     private static void showExistenceCheckResult(

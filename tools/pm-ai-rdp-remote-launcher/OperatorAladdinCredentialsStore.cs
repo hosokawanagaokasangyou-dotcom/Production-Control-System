@@ -9,6 +9,8 @@ internal static class OperatorAladdinCredentialsStore
     internal const string FileName = "operator-aladdin-credentials.launcher.json";
     internal const string OperatorEnvVar = "PM_AI_OPERATOR_USER";
     internal const string FactoryEnvVar = "PM_AI_FACTORY_SITE";
+    /** Java {@code FactorySite.RDP_LAUNCHER} — RDP 配布アプリが資格情報 JSON に書く工場キー。 */
+    internal const string RdpLauncherFactoryKey = "RDP_LAUNCHER";
 
     internal static OperatorAladdinCredentials? Resolve(string iniPath, string? operatorFromIni)
     {
@@ -32,7 +34,13 @@ internal static class OperatorAladdinCredentialsStore
             using var doc = JsonDocument.Parse(stream);
             var root = doc.RootElement;
             var factory = ResolveFactorySite();
-            if (!TryReadOperatorEntry(root, factory, operatorName, out var loginId, out var passwordPayload))
+            if (!TryReadOperatorEntry(root, factory, operatorName, out var loginId, out var passwordPayload)
+                && !TryRdpLauncherFactoryFallback(
+                    root,
+                    factory,
+                    operatorName,
+                    out loginId,
+                    out passwordPayload))
             {
                 LauncherLog.Error(
                     "操作者のアラジン資格情報が未設定です: operator="
@@ -79,6 +87,35 @@ internal static class OperatorAladdinCredentialsStore
         }
 
         return "KONAN";
+    }
+
+    private static bool TryRdpLauncherFactoryFallback(
+        JsonElement root,
+        string primaryFactory,
+        string operatorName,
+        out string loginId,
+        out JsonElement passwordPayload)
+    {
+        loginId = "";
+        passwordPayload = default;
+        if (string.Equals(primaryFactory, RdpLauncherFactoryKey, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (!TryReadOperatorEntry(root, RdpLauncherFactoryKey, operatorName, out loginId, out passwordPayload))
+        {
+            return false;
+        }
+
+        LauncherLog.Info(
+            "アラジン資格情報を "
+                + RdpLauncherFactoryKey
+                + " ブロックから解決しました（"
+                + primaryFactory
+                + " に未設定）: operator="
+                + operatorName);
+        return true;
     }
 
     private static string ResolveJsonPath(string iniPath)

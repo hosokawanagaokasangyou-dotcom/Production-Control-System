@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -222,6 +223,7 @@ class AppPathsTest {
         String s = deployDir.toString();
         assertTrue(s.contains("192.168.0.101"), "host: " + s);
         assertTrue(s.contains("rpa_luncher"), "leaf: " + s);
+        assertTrue(s.contains("RDPランチャ"), "deploy subfolder: " + s);
     }
 
     @Test
@@ -269,11 +271,65 @@ class AppPathsTest {
     }
 
     @Test
+    void displayLabelForRpaIniFilename_extractsOperatorStem() {
+        assertEquals("細川", AppPaths.displayLabelForRpaIniFilename("細川_RPA設定.ini"));
+        assertEquals("（操作者未指定）", AppPaths.displayLabelForRpaIniFilename("RPA設定.ini"));
+        assertEquals("山田（レガシー）", AppPaths.displayLabelForRpaIniFilename("山田_RAP設定.ini"));
+    }
+
+    @Test
+    void resolveSharedRdpLauncherIni_usesDeployDirBesideRemoteLauncherExe(@TempDir Path fakeRepo) {
+        Path deploy = fakeRepo.resolve("deploy");
+        Map<String, String> ui =
+                Map.of(AppPaths.KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR, deploy.toString());
+        Path expectedIni = deploy.resolve(AppPaths.RDP_LAUNCHER_INI_BASENAME).normalize();
+        assertEquals(expectedIni, AppPaths.resolveSharedRdpLauncherIni(ui).normalize());
+    }
+
+    @Test
+    void resolveExistingSharedRdpLauncherIni_fallsBackToLegacyRapInDeployDir(@TempDir Path fakeRepo)
+            throws IOException {
+        Path deploy = fakeRepo.resolve("deploy");
+        Files.createDirectories(deploy);
+        Map<String, String> ui =
+                Map.of(AppPaths.KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR, deploy.toString());
+        Path legacy = deploy.resolve(AppPaths.RDP_LAUNCHER_INI_BASENAME_LEGACY);
+        Files.writeString(legacy, "起動プログラム番号=1", StandardCharsets.UTF_8);
+        assertEquals(
+                legacy.normalize(),
+                AppPaths.resolveExistingSharedRdpLauncherIni(ui).normalize());
+    }
+
+    @Test
+    void listPeerOperatorRpaIniFiles_excludesCurrentOperator(@TempDir Path deploy) throws IOException {
+        Files.createDirectories(deploy);
+        Files.writeString(deploy.resolve("細川_RPA設定.ini"), "起動プログラム番号=1", StandardCharsets.UTF_8);
+        Files.writeString(deploy.resolve("砂田_RPA設定.ini"), "起動プログラム番号=2", StandardCharsets.UTF_8);
+        Files.writeString(deploy.resolve("RPA設定.ini"), "起動プログラム番号=3", StandardCharsets.UTF_8);
+        Map<String, String> ui =
+                Map.of(AppPaths.KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR, deploy.toString());
+
+        List<AppPaths.PeerOperatorRpaIniFile> peers =
+                AppPaths.listPeerOperatorRpaIniFiles(ui, "細川");
+        assertEquals(2, peers.size());
+        assertTrue(
+                peers.stream().anyMatch(p -> "砂田".equals(p.displayLabel())),
+                peers.toString());
+        assertTrue(
+                peers.stream().anyMatch(p -> "（操作者未指定）".equals(p.displayLabel())),
+                peers.toString());
+        assertTrue(
+                peers.stream().noneMatch(p -> p.path().endsWith("細川_RPA設定.ini")),
+                peers.toString());
+    }
+
+    @Test
     void resolveRdpLauncherPaths_usesDefaultDeployDirWhenKeyEmpty() {
         Path deployDir = AppPaths.resolveRdpLauncherDeployDir(Map.of()).normalize();
         String s = deployDir.toString();
         assertTrue(s.contains("192.168.0.101"), "host: " + s);
         assertTrue(s.contains("rpa_luncher"), "leaf: " + s);
+        assertTrue(s.contains("RDPランチャ"), "deploy subfolder: " + s);
         Path expectedIni =
                 deployDir.resolve(AppPaths.RDP_LAUNCHER_INI_BASENAME).normalize();
         assertEquals(expectedIni, AppPaths.resolveRdpLauncherIni(Map.of()).normalize());

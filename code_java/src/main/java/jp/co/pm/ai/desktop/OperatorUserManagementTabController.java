@@ -43,6 +43,7 @@ import jp.co.pm.ai.desktop.io.DesktopFileOpener;
 import jp.co.pm.ai.desktop.io.FactoryOperatorUserBackupStore;
 import jp.co.pm.ai.desktop.print.FactoryOperatorUserPdfExporter;
 import jp.co.pm.ai.desktop.io.FactoryOperatorUserBackupStore.FactoryOperatorUserBackupEntry;
+import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 
 /** 工場別の配台システム操作者名と PIN（4～10 桁）の管理タブ（管理者パスワードで開く）。 */
 public final class OperatorUserManagementTabController {
@@ -674,7 +675,7 @@ public final class OperatorUserManagementTabController {
                             + AppPaths.resolveRdpLauncherExe(ui)
                             + "　RPA設定.ini: "
                             + AppPaths.resolveRdpLauncherIni(
-                                    ui, FactoryOperatorUserStore.sessionOperatorName()));
+                                    ui, FactoryOperatorUserStore.resolveRdpLauncherOperatorName(ui)));
         }
     }
 
@@ -867,9 +868,26 @@ public final class OperatorUserManagementTabController {
         }
         String name = sel.getName();
         FactorySite site = managedFactory();
+        // #region agent log
+        if (rdpLauncherAppMode() && shell != null) {
+            AgentDebugLog.appendStructured(
+                    shell.snapshotUiEnv(),
+                    "3c7d26",
+                    "C",
+                    "OperatorUserManagementTabController.onIssuePinAction",
+                    "issue pin clicked",
+                    Map.of(
+                            "name",
+                            name,
+                            "adminDept",
+                            FactoryOperatorUserStore.adminRdpDepartmentContextKey(),
+                            "sessionDept",
+                            FactoryOperatorUserStore.sessionRdpDepartmentKey()));
+        }
+        // #endregion
         boolean reissue;
         try {
-            reissue = FactoryOperatorUserStore.hasPin(site, name);
+            reissue = FactoryOperatorUserStore.hasPinForAdminTable(site, name);
         } catch (IOException ex) {
             warn("PIN 発行", ex.getMessage() != null ? ex.getMessage() : ex.toString());
             return;
@@ -939,6 +957,23 @@ public final class OperatorUserManagementTabController {
         }
         String name = sel.getName();
         FactorySite site = managedFactory();
+        // #region agent log
+        if (rdpLauncherAppMode() && shell != null) {
+            AgentDebugLog.appendStructured(
+                    shell.snapshotUiEnv(),
+                    "3c7d26",
+                    "C",
+                    "OperatorUserManagementTabController.onAssignPinManuallyAction",
+                    "manual pin clicked",
+                    Map.of(
+                            "name",
+                            name,
+                            "adminDept",
+                            FactoryOperatorUserStore.adminRdpDepartmentContextKey(),
+                            "sessionDept",
+                            FactoryOperatorUserStore.sessionRdpDepartmentKey()));
+        }
+        // #endregion
         Dialog<ButtonType> dialog = new Dialog<>();
         if (shell.primaryStageForDialogs() != null) {
             dialog.initOwner(shell.primaryStageForDialogs());

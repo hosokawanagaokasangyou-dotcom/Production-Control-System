@@ -1,6 +1,7 @@
 package jp.co.pm.ai.desktop.config;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -504,6 +505,28 @@ class FactoryOperatorUserStoreTest {
     }
 
     @Test
+    void resolveRdpLauncherOperatorName_prefersSessionOverUiEnv() throws Exception {
+        FactoryOperatorUserStore.selectSessionOperator(FactorySite.KONAN, "砂田");
+        try {
+            assertEquals(
+                    "砂田",
+                    FactoryOperatorUserStore.resolveRdpLauncherOperatorName(
+                            Map.of(AppPaths.KEY_PM_AI_OPERATOR_USER, "古家")));
+        } finally {
+            FactoryOperatorUserStore.clearSessionOperatorName();
+        }
+    }
+
+    @Test
+    void resolveRdpLauncherOperatorName_fallsBackToUiEnvWhenSessionEmpty() {
+        FactoryOperatorUserStore.clearSessionOperatorName();
+        assertEquals(
+                "古家",
+                FactoryOperatorUserStore.resolveRdpLauncherOperatorName(
+                        Map.of(AppPaths.KEY_PM_AI_OPERATOR_USER, "古家")));
+    }
+
+    @Test
     void syncLauncherCredentialsJsonToDeployDir_writesBesideRapIni(@TempDir Path fakeRepo)
             throws Exception {
         Path summary = fakeRepo.resolve("code").resolve(AppPaths.SUMMARY_AI_DISPATCH_XLSX);
@@ -613,6 +636,50 @@ class FactoryOperatorUserStoreTest {
             assertTrue(
                     FactoryOperatorUserStore.namesForAdminTable(FactorySite.RDP_LAUNCHER).contains("山田"));
             assertEquals(List.of("既定", "製造1課"), FactoryOperatorUserStore.listRdpDepartmentKeys());
+        } finally {
+            AppPaths.setDesktopAppHomeDirName(priorHome);
+            if (priorTestStore != null) {
+                System.setProperty("pm.ai.test.factoryOperatorUserStore", priorTestStore);
+            } else {
+                System.clearProperty("pm.ai.test.factoryOperatorUserStore");
+            }
+        }
+    }
+
+    @Test
+    void pinStatusLabel_usesAdminDepartmentNotSession(@TempDir Path tmp) throws Exception {
+        String priorHome = AppPaths.desktopAppHomeDirName();
+        String priorTestStore = System.getProperty("pm.ai.test.factoryOperatorUserStore");
+        Path customDir = tmp.resolve("rdp-user-store");
+        Map<String, String> ui =
+                Map.of(AppPaths.KEY_PM_AI_RDP_OPERATOR_USERS_STORE_DIR, customDir.toString());
+        try {
+            if (priorTestStore != null) {
+                System.clearProperty("pm.ai.test.factoryOperatorUserStore");
+            }
+            AppPaths.setDesktopAppHomeDirName(AppPaths.REMOTE_DESKTOP_APP_HOME_DIR_NAME);
+            FactoryOperatorUserStore.configureForStandaloneLocalOnly(ui, FactorySite.RDP_LAUNCHER);
+            FactoryOperatorUserStore.addRdpDepartment("国分工場");
+            FactoryOperatorUserStore.addRdpDepartment("湖南工場");
+            FactoryOperatorUserStore.selectSessionRdpDepartment("湖南工場");
+            FactoryOperatorUserStore.setAdminRdpDepartmentContext("国分工場");
+            FactoryOperatorUserStore.addName(FactorySite.RDP_LAUNCHER, "河合");
+            FactoryOperatorUserStore.issuePin(FactorySite.RDP_LAUNCHER, "河合");
+            assertFalse(
+                    FactoryOperatorUserStore.hasPin(FactorySite.RDP_LAUNCHER, "河合"),
+                    "ログイン検証はセッション部署を参照する");
+            assertEquals(
+                    "初回変更待",
+                    FactoryOperatorUserStore.pinStatusLabel(FactorySite.RDP_LAUNCHER, "河合"),
+                    "管理者一覧は編集中部署の PIN を表示する");
+            assertNotEquals(
+                    "—",
+                    FactoryOperatorUserStore.adminPinDisplayLabel(FactorySite.RDP_LAUNCHER, "河合"));
+            FactoryOperatorUserStore.setAdminRdpDepartmentContext("湖南工場");
+            assertEquals(
+                    "未設定",
+                    FactoryOperatorUserStore.pinStatusLabel(FactorySite.RDP_LAUNCHER, "河合"),
+                    "別部署を編集中は当該ユーザーの PIN を表示しない");
         } finally {
             AppPaths.setDesktopAppHomeDirName(priorHome);
             if (priorTestStore != null) {
