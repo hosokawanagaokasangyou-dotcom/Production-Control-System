@@ -271,7 +271,7 @@ def test_stale_parent_row_skipped_when_branches_exist(tmp_path):
 
 
 def test_branch_merge_split_branch_converted_qty_restores_parent(tmp_path):
-    """枝番が分割換算数量(5000+5000)を載せるとき、統合後は入力1表の親10000を復元する。"""
+    """枝番が分割換算数量(5000+5000)を載せるとき、統合後は合算で親10000へ復元する。"""
     xlsx = tmp_path / "plan_input_tasks.xlsx"
     rdj = tmp_path / "結果_配台表.json"
     _write_input3(xlsx)

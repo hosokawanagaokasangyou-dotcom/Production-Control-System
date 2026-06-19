@@ -8,7 +8,7 @@
 - 依頼NO        → 元依頼NO
 - **長形式（``配台日`` 列あり）**: 暦日ごとに1行（``当日配台数量`` はその日のみ合算）
 - **ワイド形式（``配台日`` 無し・``yyyy/M/d`` 列あり）**: 1行に暦日列を合算
-- 換算数量・実加工数・計画合計・実出来高 → 統合時に **入力1表の親換算数量** を復元（無いときは枝番分割量の合算／旧「親全量載せ」形式を推定）
+- 換算数量 → 枝番（同一 工程×機械 グループ）から推定。分割形式は合算、旧「親全量載せ」形式は単一値（_infer_parent_converted_qty）
 - メンバー名     → 重複排除して全角空白連結（グループ全体）
 - 枝番でない行（依頼NO＝元依頼NO）→ **統合せず**そのまま出力
 
@@ -101,28 +101,6 @@ def _dispatch_date_key(row: dict, sum_cols: set, *, has_dispatch_date_col: bool)
     return ""
 
 
-def load_parent_converted_qty_map(
-    plan_input_xlsx_path, *, input1_sheet: str | None = None
-) -> dict[str, float]:
-    """入力1表から ``{元依頼NO: 換算数量}`` を読み出す（枝番統合後の親行復元用）。"""
-    from planning_core import _core as pc
-
-    sheet = input1_sheet or pc.PLAN_INPUT_SHEET_NAME
-    df = pc.read_tabular_dataframe(
-        str(Path(plan_input_xlsx_path).resolve()), sheet_name=sheet
-    )
-    df.columns = df.columns.str.strip()
-    out: dict[str, float] = {}
-    for _, row in df.iterrows():
-        tid = _norm(pc.planning_task_id_str_from_plan_row(row))
-        if not tid:
-            continue
-        qty = _to_float(pc._planning_df_cell_scalar(row, pc.TASK_COL_QTY))
-        if qty is not None and qty > 1e-9:
-            out[tid] = qty
-    return out
-
-
 def _row_dispatch_m(row: dict) -> float:
     for col in _ALWAYS_SUM_COLUMNS:
         fv = _to_float(row.get(col))
@@ -154,9 +132,17 @@ def _branch_dispatch_totals(branch_rows: list[dict]) -> dict[str, float]:
 
 
 def _infer_parent_converted_qty(branch_rows: list[dict]) -> float | None:
-    """枝番行の換算数量から親の換算数量を推定。
+    """枝番行の換算数量から元依頼NO単位の換算数量を推定。
 
-    枝番が親全量を各行に載せる旧形式と、枝番分割量を載せる新形式を区別する。
+    枝番（同一 工程×機械 グループ）の換算数量は次の2形式があり得る:
+
+    - **分割形式（段階3 input3 builder）**: 各枝番が「残量（換算−実加工数）の暦日分割」を載せる。
+      例 C6-6: 4000 + 6000。元依頼NO の換算数量＝**合算**。
+    - **親全量形式（旧）**: 各枝番が親の総換算数量を載せる。例 10000 + 10000。
+      合算すると二重計上になるため**単一値**。
+
+    判定: 全枝番が同値かつ合算が配台 m 合計を超えるときのみ旧形式（単一値）。
+    それ以外は合算（分割形式・単一枝番ともに正しい値になる）。
     """
     by_branch = _branch_converted_qty_by_id(branch_rows)
     if not by_branch:
@@ -172,15 +158,6 @@ def _infer_parent_converted_qty(branch_rows: list[dict]) -> float | None:
             return single
         return unique_sum
     return unique_sum
-
-
-def _resolve_parent_converted_qty(
-    parent_id: str, branch_rows: list[dict], parent_qty_map: dict[str, float]
-) -> float | None:
-    mapped = parent_qty_map.get(parent_id)
-    if mapped is not None and mapped > 1e-9:
-        return mapped
-    return _infer_parent_converted_qty(branch_rows)
 
 
 def load_branch_parent_map(plan_input_xlsx_path, *, stage3_sheet: str | None = None) -> dict:
@@ -273,7 +250,6 @@ def _flush_branch_group(
     *,
     has_dispatch_date_col: bool,
     wide_date_columns: bool,
-    parent_qty_map: dict[str, float] | None = None,
 ) -> list[dict]:
     g = groups.pop(key, None)
     if not g:
@@ -283,9 +259,7 @@ def _flush_branch_group(
         return []
 
     parent_id = key[0]
-    parent_qty = _resolve_parent_converted_qty(
-        parent_id, day_rows, parent_qty_map or {}
-    )
+    parent_qty = _infer_parent_converted_qty(day_rows)
 
     per_day_long = has_dispatch_date_col or not wide_date_columns
     if not per_day_long:
@@ -322,13 +296,7 @@ def _flush_branch_group(
     return _apply_parent_converted_qty(out, parent_qty)
 
 
-def merge_branch_rows(
-    rows,
-    columns,
-    branch_parent_map: dict,
-    *,
-    parent_qty_map: dict[str, float] | None = None,
-) -> list:
+def merge_branch_rows(rows, columns, branch_parent_map: dict) -> list:
     """結果_配台表 rows を元依頼NO単位へ集約した rows を返す。"""
     sum_cols = _sum_columns_for(columns, rows)
     has_dispatch_date_col = _columns_have_dispatch_date(columns)
@@ -365,7 +333,6 @@ def merge_branch_rows(
                         sum_cols,
                         has_dispatch_date_col=has_dispatch_date_col,
                         wide_date_columns=wide_date_columns,
-                        parent_qty_map=parent_qty_map,
                     )
                 )
             open_keys.clear()
@@ -394,7 +361,6 @@ def merge_branch_rows(
                 sum_cols,
                 has_dispatch_date_col=has_dispatch_date_col,
                 wide_date_columns=wide_date_columns,
-                parent_qty_map=parent_qty_map,
             )
         )
     return merged
@@ -419,10 +385,7 @@ def merge_branch_result_dispatch(
     columns = raw.get("columns") or (list(rows[0].keys()) if rows else [])
 
     branch_parent_map = load_branch_parent_map(plan_input_xlsx_path, stage3_sheet=stage3_sheet)
-    parent_qty_map = load_parent_converted_qty_map(plan_input_xlsx_path)
-    merged_rows = merge_branch_rows(
-        rows, columns, branch_parent_map, parent_qty_map=parent_qty_map
-    )
+    merged_rows = merge_branch_rows(rows, columns, branch_parent_map)
 
     out = dict(raw)
     out["rows"] = merged_rows
