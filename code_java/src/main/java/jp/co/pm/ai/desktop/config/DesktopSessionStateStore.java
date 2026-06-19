@@ -314,6 +314,8 @@ public final class DesktopSessionStateStore {
             root.put("excludeRulesPath", abs);
             putOrUpdateUiEnvRowValueInSessionRoot(root, AppPaths.KEY_PM_AI_EXCLUDE_RULES_JSON, abs);
         }
+        // init_setting の開発機 BOX パス等を持ち込まない（未設定時は実行時フォールバック）
+        putOrUpdateUiEnvRowValueInSessionRoot(root, AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR, "");
         Files.createDirectories(storePath().getParent());
         JSON.writerWithDefaultPrettyPrinter().writeValue(storePath().toFile(), root);
     }

@@ -41,9 +41,22 @@ class PortableBundleProfileTest {
         assertEquals(
                 "\\\\192.168.0.101\\共有フォルダ\\掲示板\\rpa_luncher\\"
                         + AppPaths.RDP_LAUNCHER_SHARED_DATA_DIR_LEAF,
+                AppPaths.DEFAULT_PM_AI_RPA_LAUNCHER_OPERATOR_USERS_STORE_DIR);
+        assertEquals(
+                AppPaths.DEFAULT_PM_AI_RPA_LAUNCHER_OPERATOR_USERS_STORE_DIR,
                 AppPaths.DEFAULT_PM_AI_RDP_SHARED_DATA_DIR);
         Path store = AppPaths.rdpLauncherOperatorUsersStorePath();
         assertTrue(store.toString().contains(AppPaths.RDP_LAUNCHER_SHARED_DATA_DIR_LEAF));
         assertEquals(AppPaths.RDP_LAUNCHER_OPERATOR_USERS_BIN, store.getFileName().toString());
+    }
+
+    @Test
+    void pmdRdpLauncherDefaults_useKonanSharedDataDrive() {
+        assertEquals(
+                AppPaths.DEFAULT_KONAN_SHARED_DATA_DIR,
+                AppPaths.DEFAULT_PM_AI_RDP_LAUNCHER_DEPLOY_DIR);
+        assertEquals(
+                AppPaths.DEFAULT_KONAN_SHARED_DATA_DIR,
+                AppPaths.DEFAULT_PM_AI_RDP_OPERATOR_USERS_STORE_DIR);
     }
 }

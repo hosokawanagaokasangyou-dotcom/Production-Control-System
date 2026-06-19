@@ -35,7 +35,8 @@ class RemoteDesktopEnvRowsTest {
 
         assertFalse(names.contains(AppPaths.KEY_PM_AI_MASTER_WORKBOOK));
         assertFalse(names.contains("GEMINI_MODEL_TRY_ORDER"));
-        assertTrue(names.contains(AppPaths.KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR));
+        assertFalse(names.contains(AppPaths.KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR));
+        assertTrue(names.contains(AppPaths.KEY_PM_AI_RPA_LAUNCHER_DEPLOY_DIR));
         assertTrue(names.contains(AppPaths.KEY_PM_AI_RDP_PORTABLE_BUNDLE_SOURCE_DIR));
         assertTrue(RemoteDesktopEnvRows.relevantEnvKeys().containsAll(names));
     }
@@ -52,7 +53,7 @@ class RemoteDesktopEnvRowsTest {
                             new UiEnvRowSnapshot(
                                     AppPaths.KEY_PM_AI_MASTER_WORKBOOK, "C:\\master.xlsm", ""),
                             new UiEnvRowSnapshot(
-                                    AppPaths.KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR, "\\\\share\\rpa", "")),
+                                    AppPaths.KEY_PM_AI_RPA_LAUNCHER_DEPLOY_DIR, "\\\\share\\rpa", "")),
                     DesktopTheme.LIGHT.storedId());
             DesktopSessionState session = DesktopSessionStateStore.load();
 
@@ -63,7 +64,7 @@ class RemoteDesktopEnvRowsTest {
                     rows.stream()
                             .map(r -> r.getName() != null ? r.getName().strip() : "")
                             .collect(Collectors.toSet());
-            assertEquals(Set.of(AppPaths.KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR), names);
+            assertEquals(Set.of(AppPaths.KEY_PM_AI_RPA_LAUNCHER_DEPLOY_DIR), names);
         } finally {
             if (priorHome != null) {
                 System.setProperty("user.home", priorHome);
@@ -82,20 +83,20 @@ class RemoteDesktopEnvRowsTest {
         dispatch.setValue("C:\\out");
         rows.add(dispatch);
         EnvVarRow rdp = new EnvVarRow();
-        rdp.setName(AppPaths.KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR);
+        rdp.setName(AppPaths.KEY_PM_AI_RPA_LAUNCHER_DEPLOY_DIR);
         rdp.setValue("\\\\share\\rpa");
         rows.add(rdp);
 
         List<UiEnvRowSnapshot> snap = RemoteDesktopEnvRows.snapshot(rows);
         assertEquals(1, snap.size());
-        assertEquals(AppPaths.KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR, snap.get(0).name());
+        assertEquals(AppPaths.KEY_PM_AI_RPA_LAUNCHER_DEPLOY_DIR, snap.get(0).name());
     }
 
     @Test
     void mergeMissingFromUiRef_skipsDispatchKeys() {
         ObservableList<EnvVarRow> rows = FXCollections.observableArrayList();
         EnvVarRow existing = new EnvVarRow();
-        existing.setName(AppPaths.KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR);
+        existing.setName(AppPaths.KEY_PM_AI_RPA_LAUNCHER_DEPLOY_DIR);
         existing.setValue("keep");
         rows.add(existing);
 
@@ -107,7 +108,7 @@ class RemoteDesktopEnvRowsTest {
                         .filter(n -> !n.isEmpty())
                         .collect(Collectors.toSet());
         assertFalse(names.contains(AppPaths.KEY_PM_AI_MASTER_WORKBOOK));
-        assertTrue(names.contains(AppPaths.KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR));
+        assertTrue(names.contains(AppPaths.KEY_PM_AI_RPA_LAUNCHER_DEPLOY_DIR));
         assertTrue(names.contains(AppPaths.KEY_PM_AI_RDP_PORTABLE_BUNDLE_SOURCE_DIR));
     }
 
@@ -163,7 +164,7 @@ class RemoteDesktopEnvRowsTest {
                             new UiEnvRowSnapshot(
                                     AppPaths.KEY_PM_AI_MASTER_WORKBOOK, "C:\\master.xlsm", ""),
                             new UiEnvRowSnapshot(
-                                    AppPaths.KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR, "", "")),
+                                    AppPaths.KEY_PM_AI_RPA_LAUNCHER_DEPLOY_DIR, "", "")),
                     DesktopTheme.LIGHT.storedId());
             DesktopSessionState session = DesktopSessionStateStore.load();
 
@@ -173,9 +174,9 @@ class RemoteDesktopEnvRowsTest {
             Map<String, String> ui = RemoteDesktopEnvRows.collectMap(rows);
             assertFalse(ui.containsKey(AppPaths.KEY_PM_AI_MASTER_WORKBOOK));
             assertEquals(
-                    AppPaths.DEFAULT_PM_AI_RDP_LAUNCHER_DEPLOY_DIR,
-                    ui.get(AppPaths.KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR));
-            assertTrue(ui.containsKey(AppPaths.KEY_PM_AI_RDP_OPERATOR_USERS_STORE_DIR));
+                    AppPaths.DEFAULT_PM_AI_RPA_LAUNCHER_DEPLOY_DIR,
+                    ui.get(AppPaths.KEY_PM_AI_RPA_LAUNCHER_DEPLOY_DIR));
+            assertTrue(ui.containsKey(AppPaths.KEY_PM_AI_RPA_LAUNCHER_OPERATOR_USERS_STORE_DIR));
         } finally {
             if (priorHome != null) {
                 System.setProperty("user.home", priorHome);
@@ -187,14 +188,36 @@ class RemoteDesktopEnvRowsTest {
     }
 
     @Test
+    void migrateLegacyRdpEnvKeys_movesPmdKeysToRpaKeys() {
+        ObservableList<EnvVarRow> rows = FXCollections.observableArrayList();
+        EnvVarRow deploy = new EnvVarRow();
+        deploy.setName(AppPaths.KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR);
+        deploy.setValue("\\\\legacy\\deploy");
+        rows.add(deploy);
+        EnvVarRow store = new EnvVarRow();
+        store.setName(AppPaths.KEY_PM_AI_RDP_OPERATOR_USERS_STORE_DIR);
+        store.setValue("\\\\legacy\\data");
+        rows.add(store);
+
+        RemoteDesktopEnvRows.migrateLegacyRdpEnvKeys(rows);
+
+        Map<String, String> ui = RemoteDesktopEnvRows.collectMap(rows);
+        assertFalse(ui.containsKey(AppPaths.KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR));
+        assertFalse(ui.containsKey(AppPaths.KEY_PM_AI_RDP_OPERATOR_USERS_STORE_DIR));
+        assertEquals("\\\\legacy\\deploy", ui.get(AppPaths.KEY_PM_AI_RPA_LAUNCHER_DEPLOY_DIR));
+        assertEquals(
+                "\\\\legacy\\data", ui.get(AppPaths.KEY_PM_AI_RPA_LAUNCHER_OPERATOR_USERS_STORE_DIR));
+    }
+
+    @Test
     void syncRowValue_updatesExistingRow() {
         ObservableList<EnvVarRow> rows = FXCollections.observableArrayList();
         EnvVarRow row = new EnvVarRow();
-        row.setName(AppPaths.KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR);
+        row.setName(AppPaths.KEY_PM_AI_RPA_LAUNCHER_DEPLOY_DIR);
         row.setValue("old");
         rows.add(row);
 
-        RemoteDesktopEnvRows.syncRowValue(rows, AppPaths.KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR, "new");
+        RemoteDesktopEnvRows.syncRowValue(rows, AppPaths.KEY_PM_AI_RPA_LAUNCHER_DEPLOY_DIR, "new");
         assertEquals("new", rows.get(0).getValue());
     }
 }

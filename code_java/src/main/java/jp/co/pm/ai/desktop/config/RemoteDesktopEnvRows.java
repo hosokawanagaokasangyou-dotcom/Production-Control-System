@@ -28,9 +28,9 @@ public final class RemoteDesktopEnvRows {
                     AppPaths.KEY_PM_AI_RDP_DESKTOP_HEIGHT,
                     AppPaths.KEY_PM_AI_RDP_LAUNCHER_EXE,
                     AppPaths.KEY_PM_AI_RDP_LAUNCHER_INI,
-                    AppPaths.KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR,
+                    AppPaths.KEY_PM_AI_RPA_LAUNCHER_DEPLOY_DIR,
                     AppPaths.KEY_PM_AI_RDP_PORTABLE_BUNDLE_SOURCE_DIR,
-                    AppPaths.KEY_PM_AI_RDP_OPERATOR_USERS_STORE_DIR,
+                    AppPaths.KEY_PM_AI_RPA_LAUNCHER_OPERATOR_USERS_STORE_DIR,
                     AppPaths.KEY_PM_AI_RDP_LAUNCHER_AUTO_DEPLOY,
                     AppPaths.KEY_PM_AI_RDP_LAUNCH_PROFILE_NUMBER,
                     AppPaths.KEY_PM_AI_RDP_EMBED_STARTUP_IN_PROFILE,
@@ -56,6 +56,7 @@ public final class RemoteDesktopEnvRows {
         }
         if (session != null && session.uiEnvRows() != null && !session.uiEnvRows().isEmpty()) {
             applyFromSession(rows, session);
+            migrateLegacyRdpEnvKeys(rows);
             mergeMissingFromUiRef(rows);
         } else {
             populateFromUiRef(rows);
@@ -120,12 +121,48 @@ public final class RemoteDesktopEnvRows {
                 AppPaths.DEFAULT_PM_AI_RDP_PORTABLE_BUNDLE_SOURCE_DIR);
         setRowValueIfBlank(
                 rows,
-                AppPaths.KEY_PM_AI_RDP_OPERATOR_USERS_STORE_DIR,
+                AppPaths.KEY_PM_AI_RPA_LAUNCHER_OPERATOR_USERS_STORE_DIR,
                 AppPaths.defaultRdpLauncherSharedDataDir().toString());
         setRowValueIfBlank(
                 rows,
+                AppPaths.KEY_PM_AI_RPA_LAUNCHER_DEPLOY_DIR,
+                AppPaths.DEFAULT_PM_AI_RPA_LAUNCHER_DEPLOY_DIR);
+    }
+
+    /** 旧キー（配台 PMD 共用）から専用ランチャー向けキーへセッション値を移す。 */
+    public static void migrateLegacyRdpEnvKeys(ObservableList<EnvVarRow> rows) {
+        if (rows == null || rows.isEmpty()) {
+            return;
+        }
+        Map<String, String> map = collectMap(rows);
+        migrateLegacyKey(
+                rows,
                 AppPaths.KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR,
-                AppPaths.DEFAULT_PM_AI_RDP_LAUNCHER_DEPLOY_DIR);
+                AppPaths.KEY_PM_AI_RPA_LAUNCHER_DEPLOY_DIR,
+                map);
+        migrateLegacyKey(
+                rows,
+                AppPaths.KEY_PM_AI_RDP_OPERATOR_USERS_STORE_DIR,
+                AppPaths.KEY_PM_AI_RPA_LAUNCHER_OPERATOR_USERS_STORE_DIR,
+                map);
+        pruneIrrelevantRows(rows);
+    }
+
+    private static void migrateLegacyKey(
+            ObservableList<EnvVarRow> rows,
+            String legacyKey,
+            String newKey,
+            Map<String, String> map) {
+        String legacyValue = map.getOrDefault(legacyKey, "").strip();
+        String newValue = map.getOrDefault(newKey, "").strip();
+        if (legacyValue.isEmpty()) {
+            return;
+        }
+        if (newValue.isEmpty()) {
+            syncRowValue(rows, newKey, legacyValue);
+        }
+        rows.removeIf(
+                row -> legacyKey.equals(row.getName() != null ? row.getName().strip() : ""));
     }
 
     public static Map<String, String> collectMap(ObservableList<EnvVarRow> rows) {

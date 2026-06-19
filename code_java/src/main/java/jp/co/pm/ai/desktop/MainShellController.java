@@ -1562,7 +1562,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         FactorySite effective = site != null ? site : GlobalInitSettingTarget.load();
         if (requestFormInputTabController != null) {
             requestFormInputTabController.applyComboChoicesFromSession(
-                    DesktopSessionStateStore.loadFactoryRequestFormComboChoices(
+                    jp.co.pm.ai.desktop.reconciliation.RequestFormInputSettingsStore.loadComboChoices(
                             collectUiEnv(), effective));
             requestFormInputTabController.reloadJuchuHeaderAliasRegistry(
                     effective, collectUiEnv(), restoreJuchuFromInitSetting);
@@ -3869,7 +3869,6 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         }
         applyEnvRowsFullBundledResetAndPersist(true, site);
         requireOperatorSelectionForFactory(site, false);
-        requireRequestFormOriginalDirSelection(true);
     }
 
     /**
@@ -3975,78 +3974,50 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
     }
 
     private void maybePromptRequestFormOriginalDirAtStartup() {
-        requireRequestFormOriginalDirSelection(false);
+        maybePromptRequestFormOriginalDirIfUnset("[startup]");
     }
 
     /**
-     * {@link AppPaths#KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR} が空のとき、BOX ドライブ上の依頼書原本フォルダを選ばせる。
-     * キャンセルや未選択では先に進めない。
-     *
-     * @param afterEnvReset true のとき環境変数初期化直後（値を空にして必ず再選択）
+     * {@link AppPaths#KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR} が空のとき、BOX ドライブ上の依頼書原本フォルダ選択を1回案内する。
+     * キャンセル・未選択でも起動を続行する（実行時は {@link AppPaths#resolveRequestFormOriginalDir} の工場既定へフォールバック）。
      */
-    private void requireRequestFormOriginalDirSelection(boolean afterEnvReset) {
+    private void maybePromptRequestFormOriginalDirIfUnset(String logPrefix) {
         if (primaryStage == null || envRows == null) {
             return;
         }
-        if (afterEnvReset) {
-            updateEnvTabValue(AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR, "");
-        } else if (!envTabValueTrimmed(AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR).isEmpty()) {
+        if (!envTabValueTrimmed(AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR).isEmpty()) {
             return;
         }
-        String logPrefix = afterEnvReset ? "[env]" : "[startup]";
-        boolean firstPrompt = true;
-        while (envTabValueTrimmed(AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR).isEmpty()) {
-            if (firstPrompt) {
-                Alert intro = new Alert(AlertType.INFORMATION);
-                initDialogOwnerIfSceneReady(intro);
-                applyAlertStylesheetsFromOwner(intro);
-                intro.setTitle("依頼書原本フォルダ");
-                intro.setHeaderText(null);
-                intro.setContentText(
-                        afterEnvReset
-                                ? "環境変数を初期化しました。\n"
-                                        + AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR
-                                        + " を再度指定してください。\n"
-                                        + "BOX ドライブ上の依頼書原本フォルダ（*加工依頼書*.xlsm 等を含むフォルダ）を選択してください。\n"
-                                        + "この設定は必須です。選択するまで他の操作はできません。"
-                                : AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR
-                                        + " が未設定です。\n"
-                                        + "BOX ドライブ上の依頼書原本フォルダ（*加工依頼書*.xlsm 等を含むフォルダ）を選択してください。\n"
-                                        + "この設定は必須です。選択するまで他の操作はできません。");
-                intro.showAndWait();
-                firstPrompt = false;
-            }
+        Alert intro = new Alert(AlertType.INFORMATION);
+        initDialogOwnerIfSceneReady(intro);
+        applyAlertStylesheetsFromOwner(intro);
+        intro.setTitle("依頼書原本フォルダ（任意）");
+        intro.setHeaderText(null);
+        intro.setContentText(
+                AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR
+                        + " が未設定です。\n"
+                        + "BOX ドライブ上の依頼書原本フォルダ（*加工依頼書*.xlsm 等を含むフォルダ）を指定できます。\n"
+                        + "スキップした場合は工場既定（受注ファイル既定の親フォルダ）で動作します。");
+        intro.showAndWait();
 
-            DirectoryChooser dc = new DirectoryChooser();
-            dc.setTitle(
-                    afterEnvReset
-                            ? "依頼書原本フォルダを再選択（必須）"
-                            : "BOX ドライブの依頼書原本フォルダを選択（必須）");
-            resolveBoxDriveInitialDirectory()
-                    .filter(Files::isDirectory)
-                    .ifPresent(p -> dc.setInitialDirectory(p.toFile()));
-            File selected = dc.showDialog(primaryStage);
-            if (selected == null) {
-                appendLog(
-                        logPrefix
-                                + " "
-                                + AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR
-                                + " の選択がキャンセルされました。再選択を求めます。");
-                showWarningDialog(
-                        "依頼書原本フォルダ（必須）",
-                        (afterEnvReset
-                                        ? "環境変数初期化後は "
-                                        : "")
-                                + AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR
-                                + " の設定は必須です。\n"
-                                + "BOX ドライブ上の依頼書原本フォルダを選択してください。");
-                continue;
-            }
-            String abs = selected.toPath().toAbsolutePath().normalize().toString();
-            updateEnvTabValue(AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR, abs);
-            DesktopSessionStateStore.save(collectDesktopSession());
-            appendLog(logPrefix + " " + AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR + " を設定: " + abs);
+        DirectoryChooser dc = new DirectoryChooser();
+        dc.setTitle("BOX ドライブの依頼書原本フォルダを選択（任意）");
+        resolveBoxDriveInitialDirectory()
+                .filter(Files::isDirectory)
+                .ifPresent(p -> dc.setInitialDirectory(p.toFile()));
+        File selected = dc.showDialog(primaryStage);
+        if (selected == null) {
+            appendLog(
+                    logPrefix
+                            + " "
+                            + AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR
+                            + " は未設定のまま起動します（実行時は工場既定を使用）。");
+            return;
         }
+        String abs = selected.toPath().toAbsolutePath().normalize().toString();
+        updateEnvTabValue(AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR, abs);
+        DesktopSessionStateStore.save(collectDesktopSession());
+        appendLog(logPrefix + " " + AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR + " を設定: " + abs);
     }
 
     /** BOX 同期フォルダ（{@code %USERPROFILE%\\Box} 等）があれば DirectoryChooser の初期ディレクトリ候補にする。 */

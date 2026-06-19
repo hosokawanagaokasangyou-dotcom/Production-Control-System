@@ -40,18 +40,41 @@ public final class DesktopUiEnvMapLoader {
         if (map.getOrDefault(AppPaths.KEY_PM_AI_REPO_ROOT, "").isBlank()) {
             map.put(AppPaths.KEY_PM_AI_REPO_ROOT, AppPaths.resolveRepoRoot(map).toString());
         }
-        String deployKey = AppPaths.KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR;
-        if (map.getOrDefault(deployKey, "").isBlank()) {
-            map.put(deployKey, AppPaths.DEFAULT_PM_AI_RDP_LAUNCHER_DEPLOY_DIR);
+        if (!AppPaths.usesRemoteDesktopAppHome()) {
+            if (map.getOrDefault(AppPaths.KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR, "").isBlank()) {
+                map.put(
+                        AppPaths.KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR,
+                        AppPaths.DEFAULT_PM_AI_RDP_LAUNCHER_DEPLOY_DIR);
+            }
+            if (map.getOrDefault(AppPaths.KEY_PM_AI_RDP_OPERATOR_USERS_STORE_DIR, "").isBlank()) {
+                map.put(
+                        AppPaths.KEY_PM_AI_RDP_OPERATOR_USERS_STORE_DIR,
+                        AppPaths.DEFAULT_PM_AI_RDP_OPERATOR_USERS_STORE_DIR);
+            }
         }
         if (AppPaths.usesRemoteDesktopAppHome()) {
             String portableKey = AppPaths.KEY_PM_AI_RDP_PORTABLE_BUNDLE_SOURCE_DIR;
             if (map.getOrDefault(portableKey, "").isBlank()) {
                 map.put(portableKey, AppPaths.DEFAULT_PM_AI_RDP_PORTABLE_BUNDLE_SOURCE_DIR);
             }
-            String operatorStoreKey = AppPaths.KEY_PM_AI_RDP_OPERATOR_USERS_STORE_DIR;
+            String deployKey = AppPaths.KEY_PM_AI_RPA_LAUNCHER_DEPLOY_DIR;
+            if (map.getOrDefault(deployKey, "").isBlank()) {
+                String legacy = map.getOrDefault(AppPaths.KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR, "").strip();
+                map.put(
+                        deployKey,
+                        legacy.isEmpty()
+                                ? AppPaths.DEFAULT_PM_AI_RPA_LAUNCHER_DEPLOY_DIR
+                                : legacy);
+            }
+            String operatorStoreKey = AppPaths.KEY_PM_AI_RPA_LAUNCHER_OPERATOR_USERS_STORE_DIR;
             if (map.getOrDefault(operatorStoreKey, "").isBlank()) {
-                map.put(operatorStoreKey, AppPaths.defaultRdpLauncherSharedDataDir().toString());
+                String legacy =
+                        map.getOrDefault(AppPaths.KEY_PM_AI_RDP_OPERATOR_USERS_STORE_DIR, "").strip();
+                map.put(
+                        operatorStoreKey,
+                        legacy.isEmpty()
+                                ? AppPaths.defaultRdpLauncherSharedDataDir().toString()
+                                : legacy);
             }
             // PM_AI_RDP_LAUNCHER_INI は空のまま（操作者別 {操作者名}_RPA設定.ini を resolveRdpLauncherIni が解決）
         }

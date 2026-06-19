@@ -104,18 +104,25 @@ class RequestFormComboChoicesTest {
     }
 
     @Test
-    void fromSettingsFileRoot_readsFlatPrefixKeysAtRoot() throws Exception {
-        ObjectNode root = JSON.createObjectNode();
-        root.putArray(RequestFormComboChoices.KEY_MASTER_CANDIDATE_PREFIX_PRODUCT).add("A2").add("B1");
-        root.putArray(RequestFormComboChoices.KEY_MASTER_CANDIDATE_PREFIX_RAW).add("R1");
-        root.put("targetFolder", "C:\\work\\originals");
+    void mergedWithDefaults_emptySavedListDoesNotEraseBundledEcSide() throws Exception {
+        var ctor =
+                RequestFormComboChoices.class.getDeclaredConstructor(
+                        java.util.Map.class, java.util.Map.class);
+        ctor.setAccessible(true);
+        @SuppressWarnings("unchecked")
+        RequestFormComboChoices corrupt =
+                (RequestFormComboChoices)
+                        ctor.newInstance(
+                                java.util.Map.of(
+                                        RequestFormComboChoices.KEY_EC_SIDE,
+                                        java.util.List.<String>of()),
+                                java.util.Map.of());
 
-        RequestFormComboChoices loaded = RequestFormComboChoices.fromSettingsFileRoot(root);
+        RequestFormComboChoices merged = corrupt.mergedWithDefaults();
+        assertFalse(merged.optionsFor(RequestFormComboChoices.KEY_EC_SIDE).isEmpty());
         assertEquals(
-                List.of("A2", "B1"),
-                loaded.optionsFor(RequestFormComboChoices.KEY_MASTER_CANDIDATE_PREFIX_PRODUCT));
-        assertEquals(
-                List.of("R1"),
-                loaded.optionsFor(RequestFormComboChoices.KEY_MASTER_CANDIDATE_PREFIX_RAW));
+                RequestFormComboChoices.bundledDefaults()
+                        .optionsFor(RequestFormComboChoices.KEY_EC_SIDE),
+                merged.optionsFor(RequestFormComboChoices.KEY_EC_SIDE));
     }
 }

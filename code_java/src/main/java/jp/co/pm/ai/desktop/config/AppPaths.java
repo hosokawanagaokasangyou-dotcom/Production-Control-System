@@ -129,15 +129,29 @@ public final class AppPaths {
     public static final String KEY_PM_AI_RDP_LAUNCHER_INI = "PM_AI_RDP_LAUNCHER_INI";
 
     /**
-     * RDP ランチャー exe / ini / 起動プロファイル JSON の配備先フォルダ（UNC 可）。
-     * 空のときは {@link #DEFAULT_PM_AI_RDP_LAUNCHER_DEPLOY_DIR}（配台 PMD・RDP 配布アプリ共通）。
+     * 配台 PMD のリモートデスクトップタブ向け: 接続先ランチャー exe / ini / 起動プロファイル JSON の配備先（UNC 可）。
+     * 空のときは {@link #DEFAULT_PM_AI_RDP_LAUNCHER_DEPLOY_DIR}。
      */
     public static final String KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR = "PM_AI_RDP_LAUNCHER_DEPLOY_DIR";
 
     /**
-     * RDP ランチャー専用の操作者 bin 保存フォルダ（UNC 可）。空のとき {@link #resolveDesktopAppHomeDir}。
+     * 配台 PMD のリモートデスクトップタブ向け: 操作者 bin 保存フォルダ（UNC 可）。
+     * 空のときは {@link #DEFAULT_PM_AI_RDP_OPERATOR_USERS_STORE_DIR}。
      */
     public static final String KEY_PM_AI_RDP_OPERATOR_USERS_STORE_DIR = "PM_AI_RDP_OPERATOR_USERS_STORE_DIR";
+
+    /**
+     * リモートデスクトップ専用ランチャー（{@code PmAiRpaLuncher.exe}）向けの接続先ランチャー配備先。
+     * 配台 PMD の {@link #KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR} とは別キー。
+     */
+    public static final String KEY_PM_AI_RPA_LAUNCHER_DEPLOY_DIR = "PM_AI_RPA_LAUNCHER_DEPLOY_DIR";
+
+    /**
+     * リモートデスクトップ専用ランチャー向けの操作者 bin 保存フォルダ。
+     * 配台 PMD の {@link #KEY_PM_AI_RDP_OPERATOR_USERS_STORE_DIR} とは別キー。
+     */
+    public static final String KEY_PM_AI_RPA_LAUNCHER_OPERATOR_USERS_STORE_DIR =
+            "PM_AI_RPA_LAUNCHER_OPERATOR_USERS_STORE_DIR";
 
     /** {@code 1} のときのみ .rdp へ alternate shell（リモート起動プログラム）を書込。 */
     public static final String KEY_PM_AI_RDP_EMBED_STARTUP_IN_PROFILE = "PM_AI_RDP_EMBED_STARTUP_IN_PROFILE";
@@ -434,11 +448,29 @@ public final class AppPaths {
             "\\\\192.168.0.101\\共有フォルダ\\掲示板\\rpa_luncher\\RDPランチャ";
 
     /**
-     * {@link #KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR} 未設定時の配備先（UNC）。
-     * {@link #DEFAULT_PM_AI_RDP_PORTABLE_BUNDLE_RELEASE_DIR} と同一。
-     * {@link #RDP_LAUNCHER_EXE_BASENAME} と {@link #RDP_LAUNCHER_INI_BASENAME}（および操作者別 ini）はこのフォルダ直下。
+     * 湖南工場・配台AI {@code 共有DATA} フォルダ（UNC）。{@link FactorySite#KONAN} のマスタ／サマリ既定の親。
+     * 配台 PMD のリモートデスクトップ関連 env（{@link #KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR} 等）の既定にも使用。
      */
-    public static final String DEFAULT_PM_AI_RDP_LAUNCHER_DEPLOY_DIR =
+    public static final String DEFAULT_KONAN_SHARED_DATA_DIR =
+            "\\\\192.168.0.101\\"
+                    + "共有フォルダ\\"
+                    + "湖南工場\\"
+                    + "湖南共有\\"
+                    + "002  加工G\\"
+                    + "●配台AIシステム\\"
+                    + "共有DATA";
+
+    /**
+     * 配台 PMD（{@link #KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR}）未設定時の配備先。
+     * 湖南工場・配台AI {@code 共有DATA}（UNC）。
+     */
+    public static final String DEFAULT_PM_AI_RDP_LAUNCHER_DEPLOY_DIR = DEFAULT_KONAN_SHARED_DATA_DIR;
+
+    /**
+     * リモートデスクトップ専用ランチャー（{@link #KEY_PM_AI_RPA_LAUNCHER_DEPLOY_DIR}）未設定時の配備先（UNC）。
+     * {@link #DEFAULT_PM_AI_RDP_PORTABLE_BUNDLE_RELEASE_DIR} と同一。
+     */
+    public static final String DEFAULT_PM_AI_RPA_LAUNCHER_DEPLOY_DIR =
             DEFAULT_PM_AI_RDP_PORTABLE_BUNDLE_RELEASE_DIR;
 
     /**
@@ -466,15 +498,25 @@ public final class AppPaths {
             DEFAULT_PM_AI_RDP_PORTABLE_BUNDLE_RELEASE_DIR;
 
     /**
-     * 掲示板共有 {@code rpa_luncher\DATA}（ユーザー管理 bin・バックアップ等の共通格納）。
-     * {@link #KEY_PM_AI_RDP_OPERATOR_USERS_STORE_DIR} 未設定時の既定フォルダ。
-     * exe/ini 配備先（{@link #DEFAULT_PM_AI_RDP_LAUNCHER_DEPLOY_DIR}）の {@code RDPランチャ} とは兄弟。
+     * 配台 PMD（{@link #KEY_PM_AI_RDP_OPERATOR_USERS_STORE_DIR}）未設定時の操作者 bin 保存フォルダ。
+     * {@link #DEFAULT_PM_AI_RDP_LAUNCHER_DEPLOY_DIR} と同一（湖南工場・配台AI {@code 共有DATA}）。
+     */
+    public static final String DEFAULT_PM_AI_RDP_OPERATOR_USERS_STORE_DIR = DEFAULT_KONAN_SHARED_DATA_DIR;
+
+    /**
+     * 掲示板共有 {@code rpa_luncher\DATA}（リモートデスクトップ専用ランチャーのユーザー管理 bin 等）。
+     * {@link #KEY_PM_AI_RPA_LAUNCHER_OPERATOR_USERS_STORE_DIR} 未設定時の既定。
+     * exe/ini 配備先（{@link #DEFAULT_PM_AI_RPA_LAUNCHER_DEPLOY_DIR}）の {@code RDPランチャ} とは兄弟。
      */
     public static final String RDP_LAUNCHER_SHARED_DATA_DIR_LEAF = "DATA";
 
-    public static final String DEFAULT_PM_AI_RDP_SHARED_DATA_DIR =
+    public static final String DEFAULT_PM_AI_RPA_LAUNCHER_OPERATOR_USERS_STORE_DIR =
             "\\\\192.168.0.101\\共有フォルダ\\掲示板\\rpa_luncher\\"
                     + RDP_LAUNCHER_SHARED_DATA_DIR_LEAF;
+
+    /** レガシー ini 読取フォールバック用（掲示板 {@code rpa_luncher\DATA}）。 */
+    public static final String DEFAULT_PM_AI_RDP_SHARED_DATA_DIR =
+            DEFAULT_PM_AI_RPA_LAUNCHER_OPERATOR_USERS_STORE_DIR;
 
     /**
      * {@link #KEY_PM_AI_TASK_INPUT_SOURCE_DIR} が空のときの既定（工場共有・生産計画問合せフォルダ）。{@code plan/01_*.m} のパスと揃える。
@@ -528,7 +570,10 @@ public final class AppPaths {
             KEY_PM_AI_OUTPUT_DIR,
             KEY_PM_AI_RESULT_DISPATCH_TABLE_DIR,
             KEY_COMPARE_GANTT_SNAPSHOT_DIR,
-            KEY_PM_AI_RDP_OPERATOR_USERS_STORE_DIR);
+            KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR,
+            KEY_PM_AI_RDP_OPERATOR_USERS_STORE_DIR,
+            KEY_PM_AI_RPA_LAUNCHER_DEPLOY_DIR,
+            KEY_PM_AI_RPA_LAUNCHER_OPERATOR_USERS_STORE_DIR);
 
     /**
      * {@link #normalizedFolderEnvOverrides(Map)} の処理順（{@link #KEY_PM_AI_REPO_ROOT} を先に確定）。
@@ -1336,18 +1381,6 @@ public final class AppPaths {
      */
     public static final String SUMMARY_AI_DISPATCH_XLSX = "サマリ_AI配台.xlsx";
 
-    /**
-     * 湖南工場・配台AI {@code 共有DATA} フォルダ（UNC）。{@link FactorySite#KONAN} のマスタ／サマリ既定の親。
-     */
-    public static final String DEFAULT_KONAN_SHARED_DATA_DIR =
-            "\\\\192.168.0.101\\"
-                    + "共有フォルダ\\"
-                    + "湖南工場\\"
-                    + "湖南共有\\"
-                    + "002  加工G\\"
-                    + "●配台AIシステム\\"
-                    + "共有DATA";
-
     /** {@link FactorySite#KONAN} の {@link #KEY_PM_AI_MASTER_WORKBOOK} 既定（UNC）。 */
     public static final String DEFAULT_PM_AI_MASTER_WORKBOOK_KONAN =
             DEFAULT_KONAN_SHARED_DATA_DIR + "\\master.xlsm";
@@ -1463,16 +1496,53 @@ public final class AppPaths {
     /**
      * RDP ランチャー exe（{@link #RDP_LAUNCHER_EXE_BASENAME}）の配備先。
      *
-     * <p>優先: {@link #KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR} → {@link #DEFAULT_PM_AI_RDP_LAUNCHER_DEPLOY_DIR}。
-     * 配台 PMD・RDP 配布アプリで共通。
+     * <p>配台 PMD: {@link #KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR} → {@link #DEFAULT_PM_AI_RDP_LAUNCHER_DEPLOY_DIR}。
+     * 専用ランチャー: {@link #KEY_PM_AI_RPA_LAUNCHER_DEPLOY_DIR} → {@link #DEFAULT_PM_AI_RPA_LAUNCHER_DEPLOY_DIR}
+     * （旧 {@link #KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR} は読取フォールバックのみ）。
      */
     public static Path resolveRdpLauncherDeployDir(Map<String, String> ui) {
         Map<String, String> u = ui != null ? ui : Map.of();
+        if (usesRemoteDesktopAppHome()) {
+            String override =
+                    firstNonBlank(
+                            trim(u.get(KEY_PM_AI_RPA_LAUNCHER_DEPLOY_DIR)),
+                            trim(u.get(KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR)));
+            if (!override.isEmpty()) {
+                return Path.of(override).toAbsolutePath().normalize();
+            }
+            return Path.of(DEFAULT_PM_AI_RPA_LAUNCHER_DEPLOY_DIR).toAbsolutePath().normalize();
+        }
         String deployOverride = trim(u.get(KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR));
         if (!deployOverride.isEmpty()) {
             return Path.of(deployOverride).toAbsolutePath().normalize();
         }
         return Path.of(DEFAULT_PM_AI_RDP_LAUNCHER_DEPLOY_DIR).toAbsolutePath().normalize();
+    }
+
+    /** 起動中アプリ向けのランチャー配備先 env キー。 */
+    public static String rdpLauncherDeployDirEnvKey() {
+        return usesRemoteDesktopAppHome()
+                ? KEY_PM_AI_RPA_LAUNCHER_DEPLOY_DIR
+                : KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR;
+    }
+
+    /** 起動中アプリ向けの操作者 bin 保存フォルダ env キー。 */
+    public static String rdpLauncherOperatorUsersStoreDirEnvKey() {
+        return usesRemoteDesktopAppHome()
+                ? KEY_PM_AI_RPA_LAUNCHER_OPERATOR_USERS_STORE_DIR
+                : KEY_PM_AI_RDP_OPERATOR_USERS_STORE_DIR;
+    }
+
+    private static String firstNonBlank(String... values) {
+        if (values == null) {
+            return "";
+        }
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value.strip();
+            }
+        }
+        return "";
     }
 
     /** {@link #setDesktopAppHomeDirName} で切り替え可能な PC ローカル設定ルート。 */
@@ -1519,13 +1589,13 @@ public final class AppPaths {
     /** RDP ランチャー専用の操作者バックアップルート（{@link #defaultRdpLauncherSharedDataDir} 配下）。 */
     public static final String RDP_LAUNCHER_OPERATOR_USERS_BACKUPS_DIR = "rdp-launcher-operator-users-backups";
 
-    /** 掲示板共有の RDP 管理データフォルダ（{@link #DEFAULT_PM_AI_RDP_SHARED_DATA_DIR}）。 */
+    /** 掲示板共有の RDP 管理データフォルダ（{@link #DEFAULT_PM_AI_RPA_LAUNCHER_OPERATOR_USERS_STORE_DIR}）。 */
     public static Path defaultRdpLauncherSharedDataDir() {
-        return Path.of(DEFAULT_PM_AI_RDP_SHARED_DATA_DIR).toAbsolutePath().normalize();
+        return Path.of(DEFAULT_PM_AI_RPA_LAUNCHER_OPERATOR_USERS_STORE_DIR).toAbsolutePath().normalize();
     }
 
     public static Path rdpLauncherOperatorUsersStorePath() {
-        return defaultRdpLauncherSharedDataDir()
+        return Path.of(DEFAULT_PM_AI_RPA_LAUNCHER_OPERATOR_USERS_STORE_DIR)
                 .resolve(RDP_LAUNCHER_OPERATOR_USERS_BIN)
                 .toAbsolutePath()
                 .normalize();
@@ -1534,14 +1604,30 @@ public final class AppPaths {
     /**
      * RDP ランチャー専用の操作者 bin 絶対パス。
      *
-     * <p>{@link #KEY_PM_AI_RDP_OPERATOR_USERS_STORE_DIR} がフォルダのときその配下の
-     * {@link #RDP_LAUNCHER_OPERATOR_USERS_BIN}。値が {@code *.bin} で終わるときはファイルパスとして解釈。
+     * <p>配台 PMD: {@link #KEY_PM_AI_RDP_OPERATOR_USERS_STORE_DIR} → {@link #DEFAULT_PM_AI_RDP_OPERATOR_USERS_STORE_DIR}。
+     * 専用ランチャー: {@link #KEY_PM_AI_RPA_LAUNCHER_OPERATOR_USERS_STORE_DIR}
+     * → {@link #DEFAULT_PM_AI_RPA_LAUNCHER_OPERATOR_USERS_STORE_DIR}
+     * （旧 {@link #KEY_PM_AI_RDP_OPERATOR_USERS_STORE_DIR} は読取フォールバックのみ）。
      */
     public static Path resolveRdpLauncherOperatorUsersStorePath(Map<String, String> ui) {
         Map<String, String> u = ui != null ? ui : Map.of();
-        String override = trim(u.get(KEY_PM_AI_RDP_OPERATOR_USERS_STORE_DIR));
-        if (override.isEmpty()) {
-            return rdpLauncherOperatorUsersStorePath();
+        String override;
+        if (usesRemoteDesktopAppHome()) {
+            override =
+                    firstNonBlank(
+                            trim(u.get(KEY_PM_AI_RPA_LAUNCHER_OPERATOR_USERS_STORE_DIR)),
+                            trim(u.get(KEY_PM_AI_RDP_OPERATOR_USERS_STORE_DIR)));
+            if (override.isEmpty()) {
+                return rdpLauncherOperatorUsersStorePath();
+            }
+        } else {
+            override = trim(u.get(KEY_PM_AI_RDP_OPERATOR_USERS_STORE_DIR));
+            if (override.isEmpty()) {
+                return Path.of(DEFAULT_PM_AI_RDP_OPERATOR_USERS_STORE_DIR)
+                        .resolve(RDP_LAUNCHER_OPERATOR_USERS_BIN)
+                        .toAbsolutePath()
+                        .normalize();
+            }
         }
         Path raw = Path.of(override);
         String lower = override.toLowerCase(Locale.ROOT);

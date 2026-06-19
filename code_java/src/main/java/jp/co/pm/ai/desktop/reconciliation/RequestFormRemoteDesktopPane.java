@@ -3588,12 +3588,13 @@ public final class RequestFormRemoteDesktopPane {
         return true;
     }
 
-    /** 配布用アプリでは {@link AppPaths#KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR} の明示指定が必須。 */
+    /** 配布用アプリでは {@link AppPaths#KEY_PM_AI_RPA_LAUNCHER_DEPLOY_DIR} の明示指定が必須。 */
     private static boolean isExplicitLauncherDeployDirConfigured(Map<String, String> ui) {
         if (!RemoteDesktopStandaloneBootstrap.isActivated()) {
             return true;
         }
         Map<String, String> u = ui != null ? ui : Map.of();
-        return !u.getOrDefault(AppPaths.KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR, "").isBlank();
+        return !u.getOrDefault(AppPaths.KEY_PM_AI_RPA_LAUNCHER_DEPLOY_DIR, "").isBlank()
+                || !u.getOrDefault(AppPaths.KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR, "").isBlank();
     }
 }

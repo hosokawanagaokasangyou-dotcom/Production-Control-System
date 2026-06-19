@@ -2,7 +2,7 @@
   "processingActualsDetailRaw" : [ ],
   "planInput_columnVisible" : [ true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, false ],
   "stage1Preview_columnVisible" : [ true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true ],
-  "aladdinProcessingPlanRaw_columnVisible" : [ true, true, true, true, true, true, true, true, false, true, true, true, true, true, true, true, false, false, true, false, true, true, false, false, true, true, true, true, true, true, true, true, true, true, true, false, true, true, true, true, false, true, false, false, true, true, true, true, true, false, true, true, true, true, true, true, true, true, true, true, false, true, true, true, true, true, false, true, false, true, true, true, true, true, true, true, true, true, true, true, true, true, true, false, true, true, true, true, true, true, true, true, true, true, true, false, false, true, false, true, true, true, true, true, false, false, true, false, true, true, true, true, true, true, true, false, false, true, true, false, true, true, true, true, true, true, true, true, false, true, true, true, true, true ],
+  "aladdinProcessingPlanRaw_columnVisible" : [ true, true, true, true, true, true, true, true, false, true, true, true, true, true, true, true, false, false, true, false, true, true, false, false, true, true, true, true, true, true, true, true, true, true, true, false, true, true, true, true, false, true, false, true, true, true, true, true, true, true, false, true, true, true, true, true, false, true, false, true, true, true, true, true, true, true, true, true, true, true, true, true, true, false, true, true, true, true, true, true, true, true, true, true, true, false, false, true, false, true, true, true, true, true, false, false, true, false, true, true, true, true, true, true, true, false, false, true, true, false, true, true, true, true, true, true, true, true, false, true, true, true, true, true, false, true, true, true, true, true, false, true, true, true ],
   "resultDispatchTable_columnVisible" : [ true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, false, false ],
   "envVars" : [ {
     "title" : "変数名",
@@ -1507,106 +1507,7 @@
   "dispatchInteractiveByDay_headerColumnCount" : 3,
   "dispatchInteractive_ui_showStage35AfterQtyLine" : true,
   "planInputStage3_columnVisible" : [ true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, false, false, true, false, false, true, true, true ],
-  "planInputStage3" : [ {
-    "title" : "配台試行順番",
-    "width" : 82.0
-  }, {
-    "title" : "依頼NO",
-    "width" : 74.0
-  }, {
-    "title" : "加工内容",
-    "width" : 112.0
-  }, {
-    "title" : "機械名",
-    "width" : 112.0
-  }, {
-    "title" : "工程名",
-    "width" : 68.0
-  }, {
-    "title" : "回答納期",
-    "width" : 112.0
-  }, {
-    "title" : "指定納期",
-    "width" : 112.0
-  }, {
-    "title" : "配台可能日時",
-    "width" : 134.0
-  }, {
-    "title" : "原反投入日",
-    "width" : 112.0
-  }, {
-    "title" : "配台使用残数量",
-    "width" : 112.0
-  }, {
-    "title" : "未加工",
-    "width" : 112.0
-  }, {
-    "title" : "受注数",
-    "width" : 112.0
-  }, {
-    "title" : "加工速度",
-    "width" : 112.0
-  }, {
-    "title" : "配台不要",
-    "width" : 81.0
-  }, {
-    "title" : "受注NO",
-    "width" : 112.0
-  }, {
-    "title" : "換算数量",
-    "width" : 112.0
-  }, {
-    "title" : "製品名",
-    "width" : 112.0
-  }, {
-    "title" : "(製品)ロール単位長さ",
-    "width" : 112.0
-  }, {
-    "title" : "製品幅",
-    "width" : 112.0
-  }, {
-    "title" : "在庫場所",
-    "width" : 112.0
-  }, {
-    "title" : "使用原反",
-    "width" : 112.0
-  }, {
-    "title" : "(原反)ロール単位長さ",
-    "width" : 112.0
-  }, {
-    "title" : "原反幅",
-    "width" : 112.0
-  }, {
-    "title" : "加工完了区分",
-    "width" : 112.0
-  }, {
-    "title" : "実加工数",
-    "width" : 112.0
-  }, {
-    "title" : "加工工程の決定プロセスの因子",
-    "width" : 112.0
-  }, {
-    "title" : "担当OP_指定",
-    "width" : 112.0
-  }, {
-    "title" : "特別指定_備考",
-    "width" : 112.0
-  }, {
-    "title" : "実出来高",
-    "width" : 112.0
-  }, {
-    "title" : "AI特別指定_解析",
-    "width" : 112.0
-  }, {
-    "title" : "配台ロール数",
-    "width" : 112.0
-  }, {
-    "title" : "製品長",
-    "width" : 112.0
-  }, {
-    "title" : "製品厚み",
-    "width" : 112.0
-  } ],
+  "planInputStage3" : [ ],
   "planInputStage3_headerColumnCount" : 4,
   "dispatchInteractive_ui_showStage2PlanQtyLine" : true,
   "dispatchInteractiveWide_columnVisible" : [ true, true, true, true, true, true, true, true, false, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true ]

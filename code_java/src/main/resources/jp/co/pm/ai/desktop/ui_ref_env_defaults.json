@@ -353,7 +353,7 @@
   }, {
     "key" : "PM_AI_REQUEST_FORM_ORIGINAL_DIR",
     "value" : "",
-    "description" : "依頼書原本フォルダ（フルパス）。*加工依頼書*.xlsm 等の原本 Excel を含むディレクトリ。初期値は空。空のまま起動したときは BOX ドライブ上のフォルダ選択ダイアログを表示（必須・キャンセル不可）。未設定時の実行時解決は工場既定（受注ファイル既定の親フォルダ）にフォールバック。「フォルダ...」で選択可。"
+    "description" : "依頼書原本フォルダ（フルパス）。*加工依頼書*.xlsm 等の原本 Excel を含むディレクトリ。初期値は空（任意）。未設定のままでも起動可能。起動時に未設定なら BOX フォルダ選択を1回案内（スキップ可）。未設定時の実行時解決は工場既定（受注ファイル既定の親フォルダ）にフォールバック。「フォルダ...」で選択可。"
   }, {
     "key" : "PM_AI_REQUEST_FORM_PREVIEW_PDF_CJK_SCALE",
     "value" : "0.72",
@@ -392,16 +392,24 @@
     "description" : "RPA設定 ini のフルパス上書き。空のとき配備先フォルダ（PmAiRdpRemoteLauncher.exe と同階層）の {操作者名}_RPA設定.ini（操作者未設定時は RPA設定.ini）。レガシー RAP設定.ini / DATA は読取フォールバック。"
   }, {
     "key" : "PM_AI_RDP_LAUNCHER_DEPLOY_DIR",
+    "value" : "\\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\002  加工G\\●配台AIシステム\\共有DATA",
+    "description" : "配台 PMD のリモートデスクトップタブ向け: 接続先 RDP ランチャー exe（PmAiRdpRemoteLauncher.exe）、RDP起動プロファイル.json、RPA設定.ini の配備先共有フォルダ（UNC 可）。"
+  }, {
+    "key" : "PM_AI_RPA_LAUNCHER_DEPLOY_DIR",
     "value" : "\\\\192.168.0.101\\共有フォルダ\\掲示板\\rpa_luncher\\RDPランチャ",
-    "description" : "接続先 RDP ランチャー exe（PmAiRdpRemoteLauncher.exe）、RDP起動プロファイル.json、RPA設定.ini の配備先共有フォルダ（UNC 可）。"
+    "description" : "リモートデスクトップ専用ランチャー（PmAiRpaLuncher）向け: 接続先 RDP ランチャー exe・ini・起動プロファイル JSON の配備先共有フォルダ（UNC 可）。"
   }, {
     "key" : "PM_AI_RDP_PORTABLE_BUNDLE_SOURCE_DIR",
     "value" : "",
     "description" : "リモートデスクトップ専用ポータブル（PmAiRpaLuncher）の版アップ正本。ローカル出力 rpa_luncher_release。配台 PMD は pm-ai-package-release。"
   }, {
     "key" : "PM_AI_RDP_OPERATOR_USERS_STORE_DIR",
+    "value" : "\\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\002  加工G\\●配台AIシステム\\共有DATA",
+    "description" : "配台 PMD のリモートデスクトップタブ向け: 操作者 bin 保存フォルダ（UNC 可）。"
+  }, {
+    "key" : "PM_AI_RPA_LAUNCHER_OPERATOR_USERS_STORE_DIR",
     "value" : "\\\\192.168.0.101\\共有フォルダ\\掲示板\\rpa_luncher\\DATA",
-    "description" : "RDP ランチャー専用の操作者 bin 保存フォルダ（UNC 可）。空で掲示板共有 DATA。前回操作者選択は PC ローカル。"
+    "description" : "リモートデスクトップ専用ランチャー向けの操作者 bin 保存フォルダ（UNC 可）。前回操作者選択は PC ローカル。"
   }, {
     "key" : "PM_AI_RDP_LAUNCHER_AUTO_DEPLOY",
     "value" : "",

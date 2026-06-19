@@ -213,10 +213,15 @@ public final class RequestFormComboChoices {
         return options.isEmpty() ? "" : options.get(0);
     }
 
-    /** 保存済みキーだけ上書きし、欠落キーは bundled 既定を使う。 */
+    /** 保存済みキーだけ上書きし、欠落キーは bundled 既定を使う。空リストは欠落とみなし bundled を残す。 */
     public RequestFormComboChoices mergedWithDefaults() {
         LinkedHashMap<String, List<String>> mergedLists = new LinkedHashMap<>(bundledDefaults().byKey);
-        mergedLists.putAll(byKey);
+        for (Map.Entry<String, List<String>> entry : byKey.entrySet()) {
+            List<String> values = sanitizeList(entry.getValue());
+            if (!values.isEmpty()) {
+                mergedLists.put(entry.getKey(), values);
+            }
+        }
         LinkedHashMap<String, String> mergedDefaults = new LinkedHashMap<>(bundledFieldDefaultsMap());
         mergedDefaults.putAll(fieldDefaults);
         return new RequestFormComboChoices(mergedLists, mergedDefaults);

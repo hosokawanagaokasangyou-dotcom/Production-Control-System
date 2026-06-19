@@ -522,7 +522,7 @@ public final class OperatorUserManagementTabController {
         if (shell == null) {
             return;
         }
-        shell.updateEnvTabValue(AppPaths.KEY_PM_AI_RDP_OPERATOR_USERS_STORE_DIR, "");
+        shell.updateEnvTabValue(AppPaths.rdpLauncherOperatorUsersStoreDirEnvKey(), "");
         syncOperatorStoreDirFields();
         ensureOperatorStoreConfigured(effectiveAppFactory());
         refreshPresentation();
@@ -537,7 +537,7 @@ public final class OperatorUserManagementTabController {
             return;
         }
         String path = rawPath != null ? rawPath.strip() : "";
-        shell.updateEnvTabValue(AppPaths.KEY_PM_AI_RDP_OPERATOR_USERS_STORE_DIR, path);
+        shell.updateEnvTabValue(AppPaths.rdpLauncherOperatorUsersStoreDirEnvKey(), path);
         syncOperatorStoreDirFields();
         ensureOperatorStoreConfigured(effectiveAppFactory());
         refreshPresentation();
@@ -552,7 +552,7 @@ public final class OperatorUserManagementTabController {
         }
         Map<String, String> ui = shell.snapshotUiEnv();
         String configured =
-                ui.getOrDefault(AppPaths.KEY_PM_AI_RDP_OPERATOR_USERS_STORE_DIR, "").strip();
+                ui.getOrDefault(AppPaths.rdpLauncherOperatorUsersStoreDirEnvKey(), "").strip();
         if (operatorStoreDirField != null) {
             operatorStoreDirField.setText(
                     configured.isEmpty()
@@ -629,7 +629,7 @@ public final class OperatorUserManagementTabController {
         if (shell == null) {
             return;
         }
-        shell.updateEnvTabValue(AppPaths.KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR, "");
+        shell.updateEnvTabValue(AppPaths.rdpLauncherDeployDirEnvKey(), "");
         syncLauncherDeployDirFields();
         shell.appendLog(
                 "[operator-user] ランチャー転送先を環境変数未設定（自動解決）に戻しました。");
@@ -640,7 +640,7 @@ public final class OperatorUserManagementTabController {
             return;
         }
         String path = rawPath != null ? rawPath.strip() : "";
-        shell.updateEnvTabValue(AppPaths.KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR, path);
+        shell.updateEnvTabValue(AppPaths.rdpLauncherDeployDirEnvKey(), path);
         syncLauncherDeployDirFields();
         shell.appendLog(
                 "[operator-user] ランチャー転送先を更新: "
@@ -653,7 +653,7 @@ public final class OperatorUserManagementTabController {
         }
         Map<String, String> ui = shell.snapshotUiEnv();
         String configured =
-                ui.getOrDefault(AppPaths.KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR, "").strip();
+                ui.getOrDefault(AppPaths.rdpLauncherDeployDirEnvKey(), "").strip();
         Path resolved = AppPaths.resolveRdpLauncherDeployDir(ui);
         if (launcherDeployDirField != null) {
             launcherDeployDirField.setText(

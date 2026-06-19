@@ -1844,23 +1844,15 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
             return;
         }
         comboChoicesState = choices.mergedWithDefaults();
-        replaceOptList(
-                optInputKbn, comboChoicesState.optionsFor(RequestFormComboChoices.KEY_INPUT_KBN));
-        replaceOptList(
-                optKakoKbn, comboChoicesState.optionsFor(RequestFormComboChoices.KEY_KAKO_KBN));
-        replaceOptList(
-                optWariSu, comboChoicesState.optionsFor(RequestFormComboChoices.KEY_WARI_SU));
-        replaceOptList(
-                optEcSide, comboChoicesState.optionsFor(RequestFormComboChoices.KEY_EC_SIDE));
-        replaceOptList(
-                optTrimming, comboChoicesState.optionsFor(RequestFormComboChoices.KEY_TRIMMING));
-        replaceOptList(
-                optFeedLoc, comboChoicesState.optionsFor(RequestFormComboChoices.KEY_FEED_LOC));
-        replaceOptList(
-                optStorageLoc,
-                comboChoicesState.optionsFor(RequestFormComboChoices.KEY_STORAGE_LOC));
-        replaceOptList(optYoto, comboChoicesState.optionsFor(RequestFormComboChoices.KEY_YOTO));
-        replaceOptList(optUser, comboChoicesState.optionsFor(RequestFormComboChoices.KEY_USER));
+        replaceOptListForKey(optInputKbn, RequestFormComboChoices.KEY_INPUT_KBN);
+        replaceOptListForKey(optKakoKbn, RequestFormComboChoices.KEY_KAKO_KBN);
+        replaceOptListForKey(optWariSu, RequestFormComboChoices.KEY_WARI_SU);
+        replaceOptListForKey(optEcSide, RequestFormComboChoices.KEY_EC_SIDE);
+        replaceOptListForKey(optTrimming, RequestFormComboChoices.KEY_TRIMMING);
+        replaceOptListForKey(optFeedLoc, RequestFormComboChoices.KEY_FEED_LOC);
+        replaceOptListForKey(optStorageLoc, RequestFormComboChoices.KEY_STORAGE_LOC);
+        replaceOptListForKey(optYoto, RequestFormComboChoices.KEY_YOTO);
+        replaceOptListForKey(optUser, RequestFormComboChoices.KEY_USER);
         replaceOptListOrClear(
                 optMasterCandidatePrefixProduct,
                 prefixFilterOptions(
@@ -1937,6 +1929,17 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
 
     private int juchuFirstDataRowIndex0() {
         return juchuFirstDataRowIndexFor(juchuFilePath);
+    }
+
+    private void replaceOptListForKey(ObservableList<String> target, String key) {
+        if (target == null || key == null) {
+            return;
+        }
+        java.util.List<String> values = comboChoicesState.optionsFor(key);
+        if (values == null || values.isEmpty()) {
+            values = RequestFormComboChoices.bundledDefaults().optionsFor(key);
+        }
+        replaceOptList(target, values);
     }
 
     private static void replaceOptList(ObservableList<String> target, java.util.List<String> values) {

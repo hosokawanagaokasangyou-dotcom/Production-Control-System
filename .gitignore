@@ -18,6 +18,7 @@ code_java/package_input_rdp/
 code_java/dist/
 **/__pycache__/
 **/.pytest_cache/
+code_java/factory-operator-users-backups/
 # fast_package_app.ps1: release output (PMD_* bundles under repo root). Download cache: code_java/Cash_PMD/
 pm-ai-package-release/
 rpa_luncher_release/
@@ -37,29 +38,4 @@ stage1_task_input_table.xlsx
 # 生成物の実行出力（段階1/2/3 の xlsx・json）。再生成可能なためコミットしない
 /output/
 
-# 操作者名・PIN ストア（個人情報を含む可能性。コミットしない）
-**/factory-operator-users.bin
-code_java/factory-operator-users-backups/backup-07a1b5cbb84d4cca9bc732ac37aa1ecd/manifest.json
-code_java/factory-operator-users-backups/backup-16e1bd6680b34dd7bf97b2a0634b8ea5/manifest.json
-code_java/factory-operator-users-backups/backup-1dd5b1d8716644c09f2c5ec9a352ba08/manifest.json
-code_java/factory-operator-users-backups/backup-2fd594d3c17c40e3a8d62e7f12480672/manifest.json
-code_java/factory-operator-users-backups/backup-33b6a96b20524cfa96d4a9ec9f3f869d/manifest.json
-code_java/factory-operator-users-backups/backup-33fdd8ee544c4473bf6e228cd8e3feb4/manifest.json
-code_java/factory-operator-users-backups/backup-3784e9813977449294f53b8b55580489/manifest.json
-code_java/factory-operator-users-backups/backup-4f2c6681f4174a6db9f2dab7eb3d76a3/manifest.json
-code_java/factory-operator-users-backups/backup-5b110f81386440ada4ca16fee9e8f3c8/manifest.json
-code_java/factory-operator-users-backups/backup-5b12cbe0448b420582d76b0d5b67820e/manifest.json
-code_java/factory-operator-users-backups/backup-778b06eb6475456395bc34052dff3f6c/manifest.json
-code_java/factory-operator-users-backups/backup-8ba04d4ded2747eca18261eb8c79eb2d/manifest.json
-code_java/factory-operator-users-backups/backup-8feffb55833e49b186ece52e460d3a3b/manifest.json
-code_java/factory-operator-users-backups/backup-99aa21a46caf425e8c9c610c6b461977/manifest.json
-code_java/factory-operator-users-backups/backup-99b32dca7f4743c0998af6c58f68980e/manifest.json
-code_java/factory-operator-users-backups/backup-a0ad6693e2c540baaccd2b5bc80920f8/manifest.json
-code_java/factory-operator-users-backups/backup-a9d008be959246a0a781e000789b5c47/manifest.json
-code_java/factory-operator-users-backups/backup-b70488b1a8ce4b6eb84de052c7388aca/manifest.json
-code_java/factory-operator-users-backups/backup-bd2ab096977e4fa4bb739808a608eaa3/manifest.json
-code_java/factory-operator-users-backups/backup-c8e971d4085a401d86a03d71e96b2fbb/manifest.json
-code_java/factory-operator-users-backups/backup-cb1ca1f0407d418bb9422a19e527b4c7/manifest.json
-code_java/factory-operator-users-backups/backup-d1647de35dcc44ad8c494915900579a1/manifest.json
-code_java/factory-operator-users-backups/backup-e430271fb4b34941970c1c0501449282/manifest.json
-code_java/factory-operator-users-backups/backup-fad0ef4fe9574a7b9b7fc6c885bd885d/manifest.json
+

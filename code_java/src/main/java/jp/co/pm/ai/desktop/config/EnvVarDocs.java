@@ -207,7 +207,8 @@ public final class EnvVarDocs {
                 "PM_AI_REQUEST_FORM_ORIGINAL_DIR",
                 "依頼書入力タブがスキャンする依頼書原本フォルダ（フルパス）。"
                         + "*加工依頼書*.xlsm 等の原本 Excel が置かれたディレクトリ。"
-                        + "初期値は空。空のまま起動したときは BOX ドライブ上のフォルダ選択ダイアログを表示（必須・キャンセル不可）。"
+                        + "初期値は空（任意）。未設定のままでも起動可能。"
+                        + "起動時に未設定なら BOX フォルダ選択を1回案内（スキップ可）。"
                         + "未設定時の実行時解決は工場既定（受注ファイル既定の親フォルダ）にフォールバック。"
                         + "環境変数タブのフォルダ選択可。"
                         + "プレビュー・照合・背景キャッシュの原本読込先。");
@@ -245,9 +246,9 @@ public final class EnvVarDocs {
         put(
                 "PM_AI_RDP_LAUNCHER_EXE",
                 "接続先 RDP ランチャー（PmAiRdpRemoteLauncher.exe）のフルパス。"
-                        + "空のときは配備先フォルダ（PM_AI_RDP_LAUNCHER_DEPLOY_DIR、未設定時は "
-                        + AppPaths.DEFAULT_PM_AI_RDP_LAUNCHER_DEPLOY_DIR
-                        + "）の PmAiRdpRemoteLauncher.exe。");
+                        + "空のときは配備先フォルダ（配台 PMD: PM_AI_RDP_LAUNCHER_DEPLOY_DIR、"
+                        + "専用ランチャー: PM_AI_RPA_LAUNCHER_DEPLOY_DIR、各未設定時の既定は AppPaths 参照）の"
+                        + " PmAiRdpRemoteLauncher.exe。");
         put(
                 "PM_AI_RDP_LAUNCHER_INI",
                 "接続先 RDP ランチャー設定 ini のフルパス上書き。"
@@ -257,22 +258,39 @@ public final class EnvVarDocs {
                         + " PmAiRdpRemoteLauncher.exe に操作者名を引数で渡すと同じ ini を参照する。");
         put(
                 "PM_AI_RDP_LAUNCHER_DEPLOY_DIR",
-                "接続先 RDP ランチャー exe（PmAiRdpRemoteLauncher.exe）と RDP起動プロファイル.json、"
-                        + "RPA設定.ini の配備先共有フォルダ（UNC 可）。"
+                "配台 PMD のリモートデスクトップタブ向け: 接続先 RDP ランチャー exe（PmAiRdpRemoteLauncher.exe）と"
+                        + " RDP起動プロファイル.json、RPA設定.ini の配備先共有フォルダ（UNC 可）。"
                         + " 空のときは "
                         + AppPaths.DEFAULT_PM_AI_RDP_LAUNCHER_DEPLOY_DIR
-                        + "（配台 PMD・RDP 配布アプリ共通）。"
-                        + " リモートデスクトップRPAランチャー（配布用）では参照…で明示指定が必要。");
+                        + "。"
+                        + " リモートデスクトップ専用ランチャー（PmAiRpaLuncher.exe）では PM_AI_RPA_LAUNCHER_DEPLOY_DIR を使用。");
+        put(
+                "PM_AI_RPA_LAUNCHER_DEPLOY_DIR",
+                "リモートデスクトップ専用ランチャー（PmAiRpaLuncher.exe）向け: 接続先 RDP ランチャー exe と"
+                        + " RDP起動プロファイル.json、RPA設定.ini の配備先共有フォルダ（UNC 可）。"
+                        + " 空のときは "
+                        + AppPaths.DEFAULT_PM_AI_RPA_LAUNCHER_DEPLOY_DIR
+                        + "。"
+                        + " 配台 PMD とは別キー（PM_AI_RDP_LAUNCHER_DEPLOY_DIR）。");
         put(
                 "PM_AI_RDP_OPERATOR_USERS_STORE_DIR",
-                "リモートデスクトップRPAランチャー専用の操作者 bin 保存フォルダ（UNC 可）。"
-                        + " 空のときは掲示板共有 "
-                        + AppPaths.DEFAULT_PM_AI_RDP_SHARED_DATA_DIR
+                "配台 PMD のリモートデスクトップタブ向け: 操作者 bin 保存フォルダ（UNC 可）。"
+                        + " 空のときは "
+                        + AppPaths.DEFAULT_PM_AI_RDP_OPERATOR_USERS_STORE_DIR
                         + "（"
                         + AppPaths.RDP_LAUNCHER_OPERATOR_USERS_BIN
                         + " とバックアップ）。"
-                        + " 前回選択した操作者名は PC ローカルの last-rdp-launcher-operator.txt に保存し次回起動時に復元する。"
-                        + " 配台システムの factory-operator-users.bin とは別。");
+                        + " 専用ランチャーでは PM_AI_RPA_LAUNCHER_OPERATOR_USERS_STORE_DIR を使用。");
+        put(
+                "PM_AI_RPA_LAUNCHER_OPERATOR_USERS_STORE_DIR",
+                "リモートデスクトップ専用ランチャー向けの操作者 bin 保存フォルダ（UNC 可）。"
+                        + " 空のときは掲示板共有 "
+                        + AppPaths.DEFAULT_PM_AI_RPA_LAUNCHER_OPERATOR_USERS_STORE_DIR
+                        + "（"
+                        + AppPaths.RDP_LAUNCHER_OPERATOR_USERS_BIN
+                        + " とバックアップ）。"
+                        + " 前回選択した操作者名は PC ローカルの last-rdp-launcher-operator.txt に保存。"
+                        + " 配台 PMD とは別キー（PM_AI_RDP_OPERATOR_USERS_STORE_DIR）。");
         put(
                 "PM_AI_OPERATOR_USER",
                 "起動時に選択した操作者名。子プロセス env に載せる。"

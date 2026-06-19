@@ -218,12 +218,11 @@ class AppPathsTest {
     }
 
     @Test
-    void resolveRdpLauncherDeployDir_usesDefaultUncWhenKeyEmpty() {
+    void resolveRdpLauncherDeployDir_usesPmdDefaultWhenKeyEmpty() {
         Path deployDir = AppPaths.resolveRdpLauncherDeployDir(Map.of()).normalize();
-        String s = deployDir.toString();
-        assertTrue(s.contains("192.168.0.101"), "host: " + s);
-        assertTrue(s.contains("rpa_luncher"), "leaf: " + s);
-        assertTrue(s.contains("RDPランチャ"), "deploy subfolder: " + s);
+        assertTrue(
+                deployDir.toString().contains(AppPaths.DEFAULT_KONAN_SHARED_DATA_DIR),
+                "deploy: " + deployDir);
     }
 
     @Test
@@ -326,10 +325,9 @@ class AppPathsTest {
     @Test
     void resolveRdpLauncherPaths_usesDefaultDeployDirWhenKeyEmpty() {
         Path deployDir = AppPaths.resolveRdpLauncherDeployDir(Map.of()).normalize();
-        String s = deployDir.toString();
-        assertTrue(s.contains("192.168.0.101"), "host: " + s);
-        assertTrue(s.contains("rpa_luncher"), "leaf: " + s);
-        assertTrue(s.contains("RDPランチャ"), "deploy subfolder: " + s);
+        assertTrue(
+                deployDir.toString().contains(AppPaths.DEFAULT_KONAN_SHARED_DATA_DIR),
+                "deploy: " + deployDir);
         Path expectedIni =
                 deployDir.resolve(AppPaths.RDP_LAUNCHER_INI_BASENAME).normalize();
         assertEquals(expectedIni, AppPaths.resolveRdpLauncherIni(Map.of()).normalize());
@@ -1117,7 +1115,9 @@ class AppPathsTest {
             AppPaths.setDesktopAppHomeDirName(AppPaths.REMOTE_DESKTOP_APP_HOME_DIR_NAME);
             Path customDir = tmp.resolve("shared-users");
             Map<String, String> ui =
-                    Map.of(AppPaths.KEY_PM_AI_RDP_OPERATOR_USERS_STORE_DIR, customDir.toString());
+                    Map.of(
+                            AppPaths.KEY_PM_AI_RPA_LAUNCHER_OPERATOR_USERS_STORE_DIR,
+                            customDir.toString());
             Path expected =
                     customDir.resolve(AppPaths.RDP_LAUNCHER_OPERATOR_USERS_BIN).toAbsolutePath().normalize();
             assertEquals(expected, AppPaths.resolveRdpLauncherOperatorUsersStorePath(ui));

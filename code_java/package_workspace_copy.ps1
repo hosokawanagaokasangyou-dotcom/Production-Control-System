@@ -77,6 +77,7 @@ function Copy-WorkspaceTreeWithExplicitExclusions {
             '.venv/',
             'code_java/target/',
             'code_java/package_input/',
+            'code_java/package_input_rdp/',
             'code_java/PMD_fast/',
             'code_java/output/',
             'code_java/dist/',
@@ -84,6 +85,10 @@ function Copy-WorkspaceTreeWithExplicitExclusions {
             '.cursor/',
             '.vscode/',
             'code/VBA/',
+            'tools/',
+            'preview_cache/',
+            'log/',
+            'rpa_luncher_release/',
             $kokubuRuntimeEnvRel,
             $ReleaseFolderRelativePrefix
         )) {
