@@ -4039,11 +4039,11 @@ public final class DispatchInteractiveTabController {
         double rollUnitM = resolveRollUnitForWideRow(wr).unitM();
         double actualTotal = stage3DispatchQtyTotalForWideRow(wr);
         return Stage3DispatchQtyBalanceCheck.formatCheck(
-                        qtyConv,
-                        actualDone,
-                        actualTotal,
-                        docHasActualDispatchQtyColumn(),
-                        rollUnitM);
+                qtyConv,
+                actualDone,
+                actualTotal,
+                docHasActualDispatchQtyColumn(),
+                rollUnitM);
     }
 
     /**

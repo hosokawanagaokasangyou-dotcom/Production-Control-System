@@ -270,6 +270,76 @@ def test_stale_parent_row_skipped_when_branches_exist(tmp_path):
     assert res["merged_rows"] == 2
 
 
+def test_branch_merge_split_branch_converted_qty_restores_parent(tmp_path):
+    """枝番が分割換算数量(5000+5000)を載せるとき、統合後は入力1表の親10000を復元する。"""
+    xlsx = tmp_path / "plan_input_tasks.xlsx"
+    rdj = tmp_path / "結果_配台表.json"
+    _write_input3(xlsx)
+
+    # 入力1表に親 C6-6 換算数量 10000 を追加
+    order1 = pc.plan_input_sheet_column_order()
+    parent = {c: "" for c in order1}
+    parent[pc.TASK_COL_TASK_ID] = "C6-6"
+    parent[pc.TASK_COL_MACHINE] = "SEC"
+    parent[pc.TASK_COL_MACHINE_NAME] = "SEC機　湖南"
+    parent[pc.TASK_COL_QTY] = 10000
+    df1 = pd.DataFrame([parent]).reindex(columns=order1).fillna("")
+    with pd.ExcelWriter(xlsx, engine="openpyxl", mode="a", if_sheet_exists="overlay") as w:
+        df1.to_excel(w, sheet_name=pc.PLAN_INPUT_SHEET_NAME, index=False)
+
+    columns = [
+        "依頼NO",
+        "工程名",
+        "機械名",
+        "換算数量",
+        "当日配台数量",
+        "実配台数量",
+        "配台日",
+    ]
+    rows = [
+        {
+            "依頼NO": "C6-6-01",
+            "工程名": "SEC",
+            "機械名": "SEC機　湖南",
+            "換算数量": 5000,
+            "当日配台数量": 7000,
+            "実配台数量": 7000,
+            "配台日": "2026-06-26",
+        },
+        {
+            "依頼NO": "C6-6-02",
+            "工程名": "SEC",
+            "機械名": "SEC機　湖南",
+            "換算数量": 5000,
+            "当日配台数量": 3000,
+            "実配台数量": 3000,
+            "配台日": "2026-06-30",
+        },
+    ]
+    # 入力3表の枝番マップを C6-6 系に差し替え
+    order3 = pc.plan_input_stage3_sheet_column_order()
+    recs = []
+    for seq in ("01", "02"):
+        rec = {c: "" for c in order3}
+        rec[pc.TASK_COL_TASK_ID] = f"C6-6-{seq}"
+        rec[pc.PLAN_COL_PARENT_TASK_ID] = "C6-6"
+        rec[pc.PLAN_COL_BRANCH_SEQ] = seq
+        rec[pc.TASK_COL_MACHINE] = "SEC"
+        rec[pc.TASK_COL_MACHINE_NAME] = "SEC機　湖南"
+        recs.append(rec)
+    df3 = pd.DataFrame(recs).reindex(columns=order3).fillna("")
+    with pd.ExcelWriter(xlsx, engine="openpyxl", mode="a", if_sheet_exists="overlay") as w:
+        df3.to_excel(w, sheet_name=pc.PLAN_INPUT_STAGE3_SHEET_NAME, index=False)
+
+    rdj.write_text(json.dumps({"columns": columns, "rows": rows}, ensure_ascii=False), encoding="utf-8")
+
+    merge.merge_branch_result_dispatch(rdj, xlsx)
+    out_rows = json.loads(rdj.read_text(encoding="utf-8"))["rows"]
+    assert len(out_rows) == 2
+    assert all(float(r["換算数量"]) == 10000.0 for r in out_rows)
+    assert sum(float(r["実配台数量"]) for r in out_rows) == 10000.0
+
+
 def test_non_branch_passthrough(tmp_path):
     """マップに無い依頼NO（非枝番）も素通しで1行のまま。"""
     xlsx = tmp_path / "plan_input_tasks.xlsx"
