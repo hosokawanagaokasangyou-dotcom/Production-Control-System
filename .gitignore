@@ -39,3 +39,8 @@ stage1_task_input_table.xlsx
 /output/
 
 
+.pm-ai-cache/stage2-in-progress-next-day-dispatch.json
+.pm-ai-cache/network-source/actual-detail-newest.xlsx
+.pm-ai-cache/network-source/network-source-cache-meta.json
+.pm-ai-cache/network-source/task-input-newest.xlsx
+.pm-ai-cache/stage2-run-snapshot/master-workbook.xlsm

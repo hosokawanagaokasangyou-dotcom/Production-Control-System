@@ -1,14 +1,19 @@
 {
   "version" : 1,
   "entries" : [ {
-    "task_id" : "W6-8",
+    "task_id" : "W6-20",
     "process" : "検査",
     "machine_name" : "熱融着機　湖南",
-    "next_day_dispatch_m" : 0.0
+    "next_day_dispatch_m" : 6000.0
   }, {
-    "task_id" : "Y6-15",
+    "task_id" : "Y6-27",
     "process" : "スライス",
     "machine_name" : "スライス機1　湖南",
-    "next_day_dispatch_m" : 7200.0
+    "next_day_dispatch_m" : 6600.0
+  }, {
+    "task_id" : "W6-21",
+    "process" : "EC",
+    "machine_name" : "EC機　湖南",
+    "next_day_dispatch_m" : 5400.0
   } ]
 }
