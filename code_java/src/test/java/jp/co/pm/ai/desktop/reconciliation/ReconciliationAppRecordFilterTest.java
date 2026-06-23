@@ -104,6 +104,15 @@ class ReconciliationAppRecordFilterTest {
         assertFalse(
                 ReconciliationApp.recordIncludedInListFilter(
                         existing, RecordListFilterMode.NEW_ONLY, NO_ORIGINAL));
+        assertTrue(
+                ReconciliationApp.recordIncludedInListFilter(
+                        neu, RecordListFilterMode.NEW_ONLY, HAS_ORIGINAL));
+        assertFalse(
+                ReconciliationApp.recordIncludedInListFilter(
+                        neu, RecordListFilterMode.NEW_ONLY, NO_ORIGINAL));
+        assertTrue(
+                ReconciliationApp.recordMatchesFilter(
+                        record("JR260604-1", "新規自動追加 (TPI PDF)", "A"), "", true));
     }
 
     @Test

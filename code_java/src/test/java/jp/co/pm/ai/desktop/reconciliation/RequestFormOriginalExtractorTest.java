@@ -5,6 +5,7 @@ import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -32,6 +33,36 @@ class RequestFormOriginalExtractorTest {
     }
 
     @Test
+    void buildDbDefaultsFromRaw_blankColorDefaultsToNatural() {
+        Map<String, String> raw =
+                Map.of(
+                        "品名", "40040",
+                        "製品", "R10W-870-870X95",
+                        "原反品名", "7A1",
+                        "原反", "FEL4004AY-10WD-1000X100");
+
+        Map<String, String> db = RequestFormOriginalExtractor.buildDbDefaultsFromRaw(raw);
+        assertEquals("ナチュラル", db.get("色1"));
+        assertEquals("ナチュラル", db.get("原反色"));
+    }
+
+    @Test
+    void buildDbDefaultsFromRaw_preservesExplicitColor() {
+        Map<String, String> raw =
+                Map.of(
+                        "品名", "40040",
+                        "製品", "R10W-870-870X95",
+                        "色1", "ﾗｲﾄｸﾞﾚｰ",
+                        "原反品名", "7A1",
+                        "原反", "FEL4004AY-10WD-1000X100",
+                        "原反色", "ﾗｲﾄｸﾞﾚｰ");
+
+        Map<String, String> db = RequestFormOriginalExtractor.buildDbDefaultsFromRaw(raw);
+        assertEquals("ﾗｲﾄｸﾞﾚｰ", db.get("色1"));
+        assertEquals("ﾗｲﾄｸﾞﾚｰ", db.get("原反色"));
+    }
+
+    @Test
     void buildDbDefaultsFromRaw_onlyExtractableFields() {
         Map<String, String> raw =
                 Map.ofEntries(
@@ -50,6 +81,7 @@ class RequestFormOriginalExtractorTest {
         assertEquals("共和興", db.get("ユーザー"));
         assertEquals("Q面外巻き", db.get("特記事項1"));
         assertEquals("タイプ変更", db.get("特記事項2"));
+        assertEquals("ナチュラル", db.get("色1"));
         assertNull(db.get("用途"));
         assertNull(db.get("ＥＣ面"));
         assertNull(db.get("加工内容"));
@@ -174,6 +206,38 @@ class RequestFormOriginalExtractorTest {
 
             Map<String, String> raw = RequestFormOriginalExtractor.buildRawMapFromSheet(file, "E5-4", sheet);
             assertEquals("A22222", raw.get("契約Ｎｏ"));
+        }
+    }
+
+    @Test
+    void buildRawMapFromSheet_partialProductRowQtyAndLengthOnly() throws Exception {
+        File file = new File("sample.xlsm");
+        try (XSSFWorkbook wb = new XSSFWorkbook()) {
+            XSSFSheet sheet = wb.createSheet("W6-23");
+            sheet.createRow(4).createCell(17).setCellValue("W6-23");
+            fillProductRow(sheet, 9, "6783", "20020", "AP17", "1120", "300");
+            sheet.getRow(9)
+                    .createCell(RequestFormOriginalCellLayout.ProductColumn.QTY.columnIndex())
+                    .setCellValue("3000");
+
+            int lengthCol = RequestFormOriginalCellLayout.ProductColumn.LENGTH.columnIndex();
+            int qtyCol = RequestFormOriginalCellLayout.ProductColumn.QTY.columnIndex();
+            sheet.createRow(10).createCell(lengthCol).setCellValue("297");
+            sheet.getRow(10).createCell(qtyCol).setCellValue("297");
+            sheet.createRow(11).createCell(lengthCol).setCellValue("289");
+            sheet.getRow(11).createCell(qtyCol).setCellValue("289");
+
+            Map<String, String> raw = RequestFormOriginalExtractor.buildRawMapFromSheet(file, "W6-23", sheet);
+            assertEquals("3000\n297\n289", raw.get("数量1"));
+
+            List<RequestFormOriginalExtractor.ProductSlotValues> slots =
+                    RequestFormOriginalExtractor.readAllProductSlots(sheet);
+            assertEquals("3000", slots.get(0).quantity());
+            assertEquals("300", slots.get(0).length());
+            assertEquals("297", slots.get(1).quantity());
+            assertEquals("297", slots.get(1).length());
+            assertEquals("289", slots.get(2).quantity());
+            assertEquals("289", slots.get(2).length());
         }
     }
 

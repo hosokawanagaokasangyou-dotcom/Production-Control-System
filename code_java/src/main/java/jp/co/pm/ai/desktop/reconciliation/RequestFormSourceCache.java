@@ -26,6 +26,9 @@ final class RequestFormSourceCache {
      */
     static final String PARSE_SCHEMA_VERSION = "request-form-cell-layout-v4";
 
+    /** TPI 依頼書 PDF 用 parse キャッシュ schema（Excel 原本とは別バージョン）。 */
+    static final String TPI_PDF_PARSE_SCHEMA_VERSION = "request-form-tpi-pdf-v5";
+
     private RequestFormSourceCache() {}
 
     record SourceFingerprint(long lastModified, long length) {}
@@ -193,6 +196,14 @@ final class RequestFormSourceCache {
         return new File(parseDir(cacheRoot), safeBaseName(sourceFile.getName()) + ".json");
     }
 
+    static String parseSchemaVersionFor(File sourceFile) {
+        if (sourceFile != null
+                && sourceFile.getName().toLowerCase(java.util.Locale.ROOT).endsWith(".pdf")) {
+            return TPI_PDF_PARSE_SCHEMA_VERSION;
+        }
+        return PARSE_SCHEMA_VERSION;
+    }
+
     static Optional<List<Map<String, String>>> loadParseEntries(File cacheRoot, File sourceFile) {
         File cacheFile = parseCacheFile(cacheRoot, sourceFile);
         if (!cacheFile.isFile()) {
@@ -202,7 +213,7 @@ final class RequestFormSourceCache {
             ParseCachePayload payload = JSON.readValue(cacheFile, ParseCachePayload.class);
             if (payload == null
                     || payload.entries() == null
-                    || !PARSE_SCHEMA_VERSION.equals(payload.schemaVersion())
+                    || !parseSchemaVersionFor(sourceFile).equals(payload.schemaVersion())
                     || !matches(sourceFile, payload.source())) {
                 return Optional.empty();
             }
@@ -227,7 +238,8 @@ final class RequestFormSourceCache {
             }
         }
         ParseCachePayload payload =
-                new ParseCachePayload(fingerprint(sourceFile), PARSE_SCHEMA_VERSION, stored);
+                new ParseCachePayload(
+                        fingerprint(sourceFile), parseSchemaVersionFor(sourceFile), stored);
         JSON.writerWithDefaultPrettyPrinter().writeValue(cacheFile, payload);
     }
 

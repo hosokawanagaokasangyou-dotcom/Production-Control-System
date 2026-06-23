@@ -108,6 +108,7 @@ public class ReconciliationApp {
     /** 直前の単票自動転記を受注ファイルで取り消すためのスナップショット（1 件のみ）。 */
     private JuchuTransferUndoState lastJuchuTransferUndo;
     private String targetFolder = "";
+    private String tpiPdfFolder = "";
     private String juchuFilePath;
     private boolean isLoadingRecord = false;
     /** 受注ファイル転記中（UI スレッドをブロックしないようバックグラウンド実行）。 */
@@ -178,6 +179,9 @@ public class ReconciliationApp {
     private VBox rawRowsContainer;
     private final List<ProductRow> productRows = new ArrayList<>();
     private final List<RawMaterialRow> rawRows = new ArrayList<>();
+    /** 依頼書原本 Excel 10–12 行の数量・長さ（スロット 0–2）。 */
+    private final String[] cachedOriginalProductSlotQty = {"", "", ""};
+    private final String[] cachedOriginalProductSlotLength = {"", "", ""};
 private final List<ProductInfo> masterProductList = new ArrayList<>();
     private volatile long masterProductListLoadedMtime = -1L;
     private volatile String masterProductListLoadedPath = "";
@@ -446,6 +450,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
             rb.setMaxWidth(Double.MAX_VALUE);
             installRecordFilterRadioDeselectOnReselect(recordListFilterGroup, rb);
         }
+        rbAllRecordsFilter.setSelected(true);
         recordListFilterGroup.selectedToggleProperty().addListener((obs, oldT, newT) -> applyRecordFilter());
         HBox filterModeRow1 = new HBox(12);
         filterModeRow1.setAlignment(Pos.CENTER_LEFT);
@@ -587,7 +592,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         Button btnAddProd = new Button("＋ 追加");
         btnAddProd.setStyle("-fx-font-size: 11px; -fx-font-weight: bold; -fx-cursor: hand;");
         btnAddProd.getStyleClass().add("btn-settings-add");
-        btnAddProd.setOnAction(e -> addProductRow(null));
+        btnAddProd.setOnAction(e -> addProductRowClonedFromFirst());
         prodTitleBox.getChildren().addAll(lblProdTitle, btnAddProd);
         
         productRowsContainer = new VBox(10);
@@ -2116,6 +2121,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         RequestFormSheetPreviewPdfRenderer.applyCjkMetricsScaleFromUi(uiEnvSnapshot);
         aladdinMasterDir = AppPaths.resolveAladdinMasterDir(uiEnvSnapshot);
         applyRequestFormOriginalDirFromUiEnv();
+        applyRequestFormTpiPdfDirFromUiEnv();
         applyJuchuFilePathFromUiEnv();
         refreshJuchuPathDisplay();
         applyGuestSessionRestrictions();
@@ -2135,6 +2141,13 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
 
     private void applyRequestFormOriginalDirFromUiEnv() {
         targetFolder = AppPaths.resolveRequestFormOriginalDir(uiEnvSnapshot).toString();
+    }
+
+    private void applyRequestFormTpiPdfDirFromUiEnv() {
+        tpiPdfFolder =
+                AppPaths.resolveRequestFormTpiPdfDir(uiEnvSnapshot)
+                        .map(Path::toString)
+                        .orElse("");
     }
 
     private void applySelectedOriginalDir(String absolutePath) {
@@ -3161,6 +3174,15 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                         }
                     }
                 }
+
+                Set<String> excelRawKeys = new HashSet<>();
+                for (Map<String, String> raw : rawRequests) {
+                    String key = normalize_key(raw.get("依頼Ｎｏ"));
+                    if (!key.isEmpty()) {
+                        excelRawKeys.add(key);
+                    }
+                }
+                appendTpiPdfRawRequests(rawRequests, excelRawKeys, parseCacheRoot);
                 
                 Set<String> processedKeys = new HashSet<>();
                 
@@ -3168,6 +3190,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                     String reqNo = raw.get("依頼Ｎｏ");
                     String normK = normalize_key(reqNo);
                     processedKeys.add(normK);
+                    boolean tpiPdf = isTpiPdfRaw(raw);
                     
                     if (dbRows.containsKey(normK)) {
                         Map<String, String> dbRow = dbRows.get(normK);
@@ -3206,7 +3229,10 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                             }
                         }
                         
-                        String status = diffs.isEmpty() ? "既存登録 (原本一致)" : "既存登録 (相違あり)";
+                        String status =
+                                diffs.isEmpty()
+                                        ? "既存登録 (原本一致" + (tpiPdf ? "・TPI PDF" : "") + ")"
+                                        : "既存登録 (相違あり" + (tpiPdf ? "・TPI PDF" : "") + ")";
                         String discrepancy = diffs.isEmpty() ? "原本と完全一致" : "相違詳細: " + String.join(", ", diffs);
                         
                         loadedRecords.add(new OrderRecord(
@@ -3215,12 +3241,16 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                     } else {
                         loadedRecords.add(new OrderRecord(
                             reqNo,
-                            "新規自動追加 (未登録)",
+                            tpiPdf ? "新規自動追加 (TPI PDF)" : "新規自動追加 (未登録)",
                             raw.get("ユーザー"),
                             raw.get("製品"),
-                            "受注ファイル未入力のため自動追加",
+                            tpiPdf
+                                    ? "TPI PDF から自動追加（要確認）"
+                                    : "受注ファイル未入力のため自動追加",
                             raw,
-                            RequestFormOriginalExtractor.buildDbDefaultsFromRaw(raw)));
+                            tpiPdf
+                                    ? RequestFormOriginalExtractor.buildTpiDbDefaultsFromRaw(raw)
+                                    : RequestFormOriginalExtractor.buildDbDefaultsFromRaw(raw)));
                     }
                 }
                 
@@ -3305,6 +3335,99 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
             }
         }
         return parsed;
+    }
+
+    private void appendTpiPdfRawRequests(
+            List<Map<String, String>> rawRequests,
+            Set<String> excelRawKeys,
+            File parseCacheRoot) {
+        if (tpiPdfFolder == null || tpiPdfFolder.isBlank()) {
+            return;
+        }
+        File tpiDir = new File(tpiPdfFolder);
+        if (!tpiDir.isDirectory()) {
+            return;
+        }
+        File[] pdfFiles =
+                tpiDir.listFiles(
+                        (dir, name) ->
+                                name.toLowerCase(java.util.Locale.ROOT).endsWith(".pdf")
+                                        && !name.startsWith("~$"));
+        if (pdfFiles == null || pdfFiles.length == 0) {
+            return;
+        }
+        final int totalPdf = pdfFiles.length;
+        for (int i = 0; i < totalPdf; i++) {
+            File pdf = pdfFiles[i];
+            final String pdfName = pdf.getName();
+            final int pdfIdx = i + 1;
+            String normKey = normalize_key(RequestFormTpiPdfFieldLayout.parseIraiNoFromFileName(pdfName));
+            if (!normKey.isEmpty() && excelRawKeys.contains(normKey)) {
+                continue;
+            }
+            Optional<List<Map<String, String>>> cached =
+                    RequestFormSourceCache.loadParseEntries(parseCacheRoot, pdf);
+            if (cached.isPresent()) {
+                for (Map<String, String> entry : cached.get()) {
+                    String k = normalize_key(entry.get("依頼Ｎｏ"));
+                    if (!k.isEmpty() && excelRawKeys.contains(k)) {
+                        continue;
+                    }
+                    rawRequests.add(entry);
+                }
+                Platform.runLater(
+                        () ->
+                                updateLoadingOverlayText(
+                                        String.format(
+                                                "TPI PDF キャッシュ使用 (%d / %d)\n%s",
+                                                pdfIdx, totalPdf, pdfName)));
+                continue;
+            }
+            Platform.runLater(
+                    () ->
+                            updateLoadingOverlayText(
+                                    String.format(
+                                            "TPI PDF を解析中 (%d / %d)\n%s",
+                                            pdfIdx, totalPdf, pdfName)));
+            try {
+                List<Map<String, String>> parsed = RequestFormTpiPdfExtractor.extractEntries(pdf);
+                RequestFormSourceCache.saveParseEntries(parseCacheRoot, pdf, parsed);
+                for (Map<String, String> entry : parsed) {
+                    String k = normalize_key(entry.get("依頼Ｎｏ"));
+                    if (!k.isEmpty() && excelRawKeys.contains(k)) {
+                        continue;
+                    }
+                    rawRequests.add(entry);
+                }
+            } catch (Exception ex) {
+                System.err.println("Error reading TPI PDF " + pdf.getName() + ": " + ex.getMessage());
+            }
+        }
+    }
+
+    private static boolean isTpiPdfRaw(Map<String, String> raw) {
+        return raw != null
+                && RequestFormTpiPdfFieldLayout.META_SOURCE_KIND_TPI_PDF.equals(
+                        raw.get(RequestFormTpiPdfFieldLayout.META_SOURCE_KIND));
+    }
+
+    private File resolveOriginalFileForRecord(Map<String, String> raw) {
+        if (raw == null || raw.isEmpty()) {
+            return null;
+        }
+        String fName = raw.get("原本ファイル名");
+        if (fName == null || fName.isBlank()) {
+            return null;
+        }
+        if (isTpiPdfRaw(raw)) {
+            if (tpiPdfFolder == null || tpiPdfFolder.isBlank()) {
+                return null;
+            }
+            File f = new File(tpiPdfFolder, fName);
+            return f.isFile() ? f : null;
+        }
+        File f = new File(targetFolder + "\\" + fName);
+        return f.isFile() ? f : null;
     }
 
     private void enqueueBackgroundCacheTasks() {
@@ -3415,10 +3538,11 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
 
     private boolean hasExistingFile(OrderRecord rec) {
         Map<String, String> raw = rec.getRawValues();
-        if (raw == null || raw.isEmpty()) return false;
-        String fName = raw.get("原本ファイル名");
-        if (fName == null || fName.isBlank()) return false;
-        return new File(targetFolder + "\\" + fName).exists();
+        if (raw == null || raw.isEmpty()) {
+            return false;
+        }
+        File resolved = resolveOriginalFileForRecord(raw);
+        return resolved != null && resolved.isFile();
     }
 
     /**
@@ -3603,8 +3727,14 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         }
         
         Map<String, String> rawVals = record.getRawValues() != null ? record.getRawValues() : Map.of();
+        refreshOriginalProductSlotCache(rawVals);
         Map<String, String> activeVals;
-        if (record.getDbValues() == null || record.getDbValues().isEmpty()) {
+        if (isTpiPdfRaw(rawVals) && !rawVals.isEmpty()) {
+            activeVals = RequestFormOriginalExtractor.buildTpiDbDefaultsFromRaw(rawVals);
+            if (record.getDbValues() != null && !record.getDbValues().isEmpty()) {
+                mergeJuchuContractNoFromRawWhenBlankOrDifferent(activeVals, rawVals);
+            }
+        } else if (record.getDbValues() == null || record.getDbValues().isEmpty()) {
             activeVals =
                     rawVals.isEmpty()
                             ? Map.of()
@@ -3822,9 +3952,8 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         if (selectedRecord == null) return;
         Map<String, String> raw = selectedRecord.getRawValues();
         if (raw.isEmpty()) return;
-        String fName = raw.get("原本ファイル名");
-        File f = new File(targetFolder + "\\" + fName);
-        if (f.exists()) {
+        File f = resolveOriginalFileForRecord(raw);
+        if (f != null && f.exists()) {
             try {
                 java.awt.Desktop.getDesktop().open(f);
             } catch (Exception e) {
@@ -3848,6 +3977,21 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         
         String fName = raw.get("原本ファイル名");
         String sName = raw.get("原本シート名");
+
+        if (isTpiPdfRaw(raw)) {
+            File pdfOriginal = resolveOriginalFileForRecord(raw);
+            currentPreviewOriginalFile = pdfOriginal;
+            refreshPreviewFileHeader();
+            if (pdfOriginal == null || !pdfOriginal.isFile()) {
+                Label lblEmpty = new Label("TPI PDF が見つかりません: " + fName);
+                lblEmpty.getStyleClass().add("excel-grid-label-error");
+                sheetGrid.add(lblEmpty, 0, 0);
+                return;
+            }
+            acknowledgePreviewForCurrentOriginalFile();
+            displayPreviewPdf(pdfOriginal);
+            return;
+        }
         
         File f = new File(targetFolder + "\\" + fName);
         currentPreviewOriginalFile = f.isFile() ? f : null;
@@ -6606,6 +6750,105 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
             newCmbProdTrimming = pRow.cmbTrimming;
         }
         return pRow;
+    }
+
+    private void refreshOriginalProductSlotCache(Map<String, String> raw) {
+        for (int i = 0; i < cachedOriginalProductSlotQty.length; i++) {
+            cachedOriginalProductSlotQty[i] = "";
+            cachedOriginalProductSlotLength[i] = "";
+        }
+        if (raw == null || raw.isEmpty()) {
+            return;
+        }
+        String fName = raw.get("原本ファイル名");
+        String sName = raw.get("原本シート名");
+        if (fName == null || sName == null || fName.isBlank() || sName.isBlank()) {
+            return;
+        }
+        File f = new File(targetFolder + "\\" + fName);
+        if (!f.isFile()) {
+            return;
+        }
+        try (FileInputStream fis = new FileInputStream(f);
+                Workbook wb = PoiWorkbookOpener.open(fis)) {
+            Sheet sheet = wb.getSheet(sName);
+            if (sheet == null) {
+                return;
+            }
+            List<RequestFormOriginalExtractor.ProductSlotValues> slots =
+                    RequestFormOriginalExtractor.readAllProductSlots(sheet);
+            for (int i = 0; i < slots.size() && i < cachedOriginalProductSlotQty.length; i++) {
+                RequestFormOriginalExtractor.ProductSlotValues slot = slots.get(i);
+                cachedOriginalProductSlotQty[i] = slot.quantity() != null ? slot.quantity().strip() : "";
+                cachedOriginalProductSlotLength[i] = slot.length() != null ? slot.length().strip() : "";
+            }
+        } catch (Exception ignored) {
+            // 原本が読めない場合は複製のみ（数量上書きなし）
+        }
+    }
+
+    private void addProductRowClonedFromFirst() {
+        if (productRows.isEmpty()) {
+            addProductRow(null);
+            return;
+        }
+        ProductRow source = productRows.get(0);
+        int slotIndex = productRows.size();
+        ProductRow pRow = addProductRow(null);
+        copyProductRowFields(source, pRow);
+        applyOriginalProductSlotOverrides(pRow, slotIndex);
+        updateRowProdCandidates(pRow, false);
+        updateProductRowSpecDisplay(pRow);
+    }
+
+    private void copyProductRowFields(ProductRow source, ProductRow target) {
+        isLoadingRecord = true;
+        try {
+            target.txtHinmei.setText(source.txtHinmei.getText());
+            target.txtItem.setText(source.txtItem.getText());
+            target.txtSeihinmei.setText(source.txtSeihinmei.getText());
+            target.txtPart.setText(source.txtPart.getText());
+            target.txtType.setText(source.txtType.getText());
+            target.txtWidth.setText(source.txtWidth.getText());
+            target.txtLength.setText(source.txtLength.getText());
+            target.txtQty.setText(source.txtQty.getText());
+            target.txtGrade.setText(source.txtGrade.getText());
+            target.txtColor.setText(source.txtColor.getText());
+            target.txtCategory.setText(source.txtCategory.getText());
+            target.txtEdaban.setText(source.txtEdaban.getText());
+            target.txtKeiyakuNo.setText(source.txtKeiyakuNo.getText());
+            if (source.cmbEcSide.getValue() != null && !source.cmbEcSide.getValue().isBlank()) {
+                target.cmbEcSide.setValue(source.cmbEcSide.getValue());
+            }
+            if (source.cmbTrimming.getValue() != null && !source.cmbTrimming.getValue().isBlank()) {
+                target.cmbTrimming.setValue(source.cmbTrimming.getValue());
+            }
+        } finally {
+            isLoadingRecord = false;
+        }
+    }
+
+    /**
+     * 依頼書原本の製品行スロット（Excel 10=0, 11=1, 12=2）の数量・長さで上書きする。
+     * スロット 0 は 1 行目のため、追加行（1 以降）のみ対象。
+     */
+    private void applyOriginalProductSlotOverrides(ProductRow pRow, int slotIndex) {
+        if (slotIndex <= 0 || slotIndex >= cachedOriginalProductSlotQty.length) {
+            return;
+        }
+        String qty = cachedOriginalProductSlotQty[slotIndex];
+        String length = cachedOriginalProductSlotLength[slotIndex];
+        boolean lengthChanged = false;
+        if (qty != null && !qty.isBlank()) {
+            pRow.txtQty.setText(qty.trim());
+        }
+        if (length != null && !length.isBlank()) {
+            pRow.txtLength.setText(length.trim());
+            lengthChanged = true;
+        }
+        if (lengthChanged) {
+            updateProductRowSpecDisplay(pRow);
+        }
     }
 
     private void refreshAllRowCandidates() {

@@ -290,6 +290,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                     AppPaths.KEY_PM_AI_ALADDIN_MASTER_DIR,
                     AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR,
                     AppPaths.KEY_PM_AI_REQUEST_FORM_JUCHU_FILE,
+                    AppPaths.KEY_PM_AI_REQUEST_FORM_TPI_PDF_DIR,
                     AppPaths.KEY_PM_AI_RESULT_DISPATCH_TABLE_DIR,
                     AppPaths.KEY_PM_AI_PLAN_RESULT_TASK_JSON,
                     AppPaths.KEY_PM_AI_PLAN_RESULT_TASK_JSON_PATH,
@@ -5521,6 +5522,8 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                 r.setValue(site.aladdinMasterDir());
             } else if (AppPaths.KEY_PM_AI_REQUEST_FORM_JUCHU_FILE.equals(name)) {
                 r.setValue(site.requestFormJuchuFile());
+            } else if (AppPaths.KEY_PM_AI_REQUEST_FORM_TPI_PDF_DIR.equals(name)) {
+                r.setValue(site.requestFormTpiPdfDir());
             }
         }
         GlobalInitSettingTarget.save(site);
@@ -8275,6 +8278,9 @@ public PlanInputTabController planInputTabControllerForDispatchRollUnit() {
             }
             case AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR -> {
                 return "";
+            }
+            case AppPaths.KEY_PM_AI_REQUEST_FORM_TPI_PDF_DIR -> {
+                return AppPaths.defaultRequestFormTpiPdfDirForFactory(GlobalInitSettingTarget.load());
             }
             case AppPaths.KEY_PM_AI_RESULT_DISPATCH_TABLE_DIR -> {
                 return AppPaths.resolveResultDispatchTableDir(u).toString();

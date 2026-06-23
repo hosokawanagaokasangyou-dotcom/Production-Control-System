@@ -213,6 +213,14 @@ public final class EnvVarDocs {
                         + "環境変数タブのフォルダ選択可。"
                         + "プレビュー・照合・背景キャッシュの原本読込先。");
         put(
+                "PM_AI_REQUEST_FORM_TPI_PDF_DIR",
+                "TPI（東レペフ加工品）依頼書 PDF のスキャン先フォルダ（フルパス）。"
+                        + "ECOWD/JR 系・後加工/PN 系の *.pdf を半自動取込する。"
+                        + "空のとき湖南工場既定 UNC（共有DATA/TPI依頼書）。国分は空（手動指定）。"
+                        + "依頼書入力タブの照合・PDF プレビュー・parse キャッシュに使用。"
+                        + "フォルダ配下は読取専用（書込・削除禁止）。"
+                        + "環境変数タブのフォルダ選択可。");
+        put(
                 "PM_AI_REQUEST_FORM_PREVIEW_PDF_CJK_SCALE",
                 "依頼書 PDF プレビュー: 日本語フォントサイズ補正係数（Excel pt に乗算）。"
                         + "範囲 0.50～1.00。空または未設定で 0.72。"

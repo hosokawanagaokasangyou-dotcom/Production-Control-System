@@ -171,6 +171,9 @@ public final class RequestFormOriginalCellLayout {
                     "特記事項1",
                     "特記事項2");
 
+    /** 依頼書原本で色セルが空のときの既定値（製品・原反共通）。 */
+    public static final String DEFAULT_COLOR_WHEN_BLANK = "ナチュラル";
+
     private RequestFormOriginalCellLayout() {}
 
     public static int columnLetterToIndex(String letters) {
@@ -190,6 +193,20 @@ public final class RequestFormOriginalCellLayout {
         String hinmei = cellReader.apply(rowIndex, ProductColumn.HINMEI.columnIndex());
         String part = cellReader.apply(rowIndex, ProductColumn.PART_NO.columnIndex());
         return !hinmei.isBlank() || !part.isBlank();
+    }
+
+    /**
+     * 製品行スロット（Excel 10–12 行）に入力があるか。
+     * 品名・品番に加え、原本で数量・長さだけが書かれた行（2・3 行目の追記）も対象とする。
+     */
+    public static boolean isProductRowSlotUsed(
+            java.util.function.BiFunction<Integer, Integer, String> cellReader, int rowIndex) {
+        if (isProductRowPopulated(cellReader, rowIndex)) {
+            return true;
+        }
+        String qty = cellReader.apply(rowIndex, ProductColumn.QTY.columnIndex());
+        String length = cellReader.apply(rowIndex, ProductColumn.LENGTH.columnIndex());
+        return !qty.isBlank() || !length.isBlank();
     }
 
     public static boolean isRawRowPopulated(

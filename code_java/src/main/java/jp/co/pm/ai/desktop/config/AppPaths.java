@@ -110,6 +110,11 @@ public final class AppPaths {
     public static final String KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR = "PM_AI_REQUEST_FORM_ORIGINAL_DIR";
 
     /**
+     * TPI（東レペフ加工品）依頼書 PDF のスキャン先フォルダ（{@code *.pdf}）。
+     */
+    public static final String KEY_PM_AI_REQUEST_FORM_TPI_PDF_DIR = "PM_AI_REQUEST_FORM_TPI_PDF_DIR";
+
+    /**
      * 依頼書入力タブ「リモートデスクトップ」で起動する RDP プロファイル（{@code *.rdp}）のフルパス。
      */
     public static final String KEY_PM_AI_REQUEST_FORM_RDP_PROFILE = "PM_AI_REQUEST_FORM_RDP_PROFILE";
@@ -567,6 +572,7 @@ public final class AppPaths {
             KEY_PM_AI_ACTUAL_DETAIL_SOURCE_DIR,
             KEY_PM_AI_ALADDIN_MASTER_DIR,
             KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR,
+            KEY_PM_AI_REQUEST_FORM_TPI_PDF_DIR,
             KEY_PM_AI_OUTPUT_DIR,
             KEY_PM_AI_RESULT_DISPATCH_TABLE_DIR,
             KEY_COMPARE_GANTT_SNAPSHOT_DIR,
@@ -588,6 +594,7 @@ public final class AppPaths {
                     KEY_PM_AI_WORKSPACE,
                     KEY_PM_AI_ALADDIN_MASTER_DIR,
                     KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR,
+                    KEY_PM_AI_REQUEST_FORM_TPI_PDF_DIR,
                     KEY_PM_AI_OUTPUT_DIR,
                     KEY_PM_AI_RESULT_DISPATCH_TABLE_DIR,
                     KEY_COMPARE_GANTT_SNAPSHOT_DIR);
@@ -946,6 +953,24 @@ public final class AppPaths {
     }
 
     /**
+     * TPI 依頼書 PDF フォルダ。{@link #KEY_PM_AI_REQUEST_FORM_TPI_PDF_DIR} が空のときは工場既定（湖南のみ UNC）。
+     * 国分など未設定工場では empty。
+     */
+    public static Optional<Path> resolveRequestFormTpiPdfDir(Map<String, String> ui) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        String override = trim(u.get(KEY_PM_AI_REQUEST_FORM_TPI_PDF_DIR));
+        if (!override.isEmpty()) {
+            return Optional.of(Path.of(override).toAbsolutePath().normalize());
+        }
+        String factoryDefault =
+                defaultRequestFormTpiPdfDirForFactory(GlobalInitSettingTarget.load());
+        if (factoryDefault.isEmpty()) {
+            return Optional.empty();
+        }
+        return Optional.of(Path.of(factoryDefault));
+    }
+
+    /**
      * Windows の {@code Documents/Default.rdp} 等（OneDrive 日本語フォルダ含む）。存在する最初の候補。
      */
     public static Optional<Path> resolveWindowsDefaultRdpProfile() {
@@ -999,6 +1024,21 @@ public final class AppPaths {
     public static String defaultRequestFormOriginalDirForFactory(FactorySite site) {
         Path parent = Path.of(defaultRequestFormJuchuFileForFactory(site)).getParent();
         return parent != null ? parent.toAbsolutePath().normalize().toString() : "";
+    }
+
+    /** 湖南工場共有 DATA 配下の TPI 依頼書 PDF フォルダ名。 */
+    public static final String TPI_REQUEST_FORM_PDF_DIR_LEAF = "TPI依頼書";
+
+    /** {@link FactorySite#KONAN} の {@link #KEY_PM_AI_REQUEST_FORM_TPI_PDF_DIR} 既定（UNC）。 */
+    public static final String DEFAULT_PM_AI_REQUEST_FORM_TPI_PDF_DIR_KONAN =
+            DEFAULT_KONAN_SHARED_DATA_DIR + "\\" + TPI_REQUEST_FORM_PDF_DIR_LEAF;
+
+    /** {@link FactorySite} 別の {@link #KEY_PM_AI_REQUEST_FORM_TPI_PDF_DIR} 既定。湖南のみ UNC、他は空。 */
+    public static String defaultRequestFormTpiPdfDirForFactory(FactorySite site) {
+        if (site == FactorySite.KONAN) {
+            return DEFAULT_PM_AI_REQUEST_FORM_TPI_PDF_DIR_KONAN;
+        }
+        return "";
     }
 
     /**

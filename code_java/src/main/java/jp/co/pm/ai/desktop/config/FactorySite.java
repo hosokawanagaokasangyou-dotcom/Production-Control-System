@@ -150,6 +150,11 @@ public enum FactorySite {
         return AppPaths.defaultRequestFormOriginalDirForFactory(this);
     }
 
+    /** {@link AppPaths#KEY_PM_AI_REQUEST_FORM_TPI_PDF_DIR} 環境タブへ書く既定（UNC）。 */
+    public String requestFormTpiPdfDir() {
+        return AppPaths.defaultRequestFormTpiPdfDirForFactory(this);
+    }
+
     /**
      * ポータブル同梱の {@code pm-ai-data/init_setting/session_defaults.json} から工場を推定する。
      *

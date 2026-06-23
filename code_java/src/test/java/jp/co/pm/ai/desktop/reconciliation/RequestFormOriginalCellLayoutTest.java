@@ -42,6 +42,22 @@ class RequestFormOriginalCellLayoutTest {
     }
 
     @Test
+    void isProductRowSlotUsed_detectsQtyOrLengthOnlyRow() {
+        java.util.function.BiFunction<Integer, Integer, String> reader =
+                (row, col) -> {
+                    if (row == 10 && col == RequestFormOriginalCellLayout.ProductColumn.QTY.columnIndex()) {
+                        return "297";
+                    }
+                    if (row == 10 && col == RequestFormOriginalCellLayout.ProductColumn.LENGTH.columnIndex()) {
+                        return "297";
+                    }
+                    return "";
+                };
+        assertTrue(RequestFormOriginalCellLayout.isProductRowSlotUsed(reader, 10));
+        assertTrue(!RequestFormOriginalCellLayout.isProductRowPopulated(reader, 10));
+    }
+
+    @Test
     void formExtractKeys_includeTokkiSeparately() {
         assertTrue(RequestFormOriginalCellLayout.FORM_EXTRACT_RAW_KEYS.contains("特記事項1"));
         assertTrue(RequestFormOriginalCellLayout.FORM_EXTRACT_RAW_KEYS.contains("特記事項2"));

@@ -165,7 +165,7 @@
 /* リモートデスクトップ RPA ランチャー（工場名なし・部署別オペレータ向け） */
 .splash-root.splash-app-rdp-launcher {
     -fx-background-color: linear-gradient(
-        135deg,
+        from 0% 0% to 100% 100%,
         #041e33 0%,
         #0c4a6e 38%,
         #082f49 72%,

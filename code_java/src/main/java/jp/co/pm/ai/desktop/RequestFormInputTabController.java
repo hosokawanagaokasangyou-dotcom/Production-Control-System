@@ -280,6 +280,8 @@ public final class RequestFormInputTabController {
                         + " アラジンマスタ="
                         + AppPaths.resolveAladdinMasterDir(ui)
                         + " 受注ファイル="
-                        + AppPaths.resolveRequestFormJuchuFile(ui).map(Path::toString).orElse(""));
+                        + AppPaths.resolveRequestFormJuchuFile(ui).map(Path::toString).orElse("")
+                        + " TPI依頼書PDF="
+                        + AppPaths.resolveRequestFormTpiPdfDir(ui).map(Path::toString).orElse(""));
     }
 }

@@ -21,6 +21,9 @@ import org.apache.poi.ss.util.CellRangeAddress;
 /** 加工依頼書原本シートから受注フォーム向けの値を抽出・正規化する。 */
 final class RequestFormOriginalExtractor {
 
+    /** 製品ブロックの行スロット（Excel 10–12 行）ごとの数量・長さ。 */
+    record ProductSlotValues(String quantity, String length) {}
+
     private static final DataFormatter CELL_FORMATTER = new DataFormatter();
 
     /**
@@ -56,7 +59,7 @@ final class RequestFormOriginalExtractor {
 
         int productSlot = 0;
         for (int rowIndex : RequestFormOriginalCellLayout.PRODUCT_ROW_INDICES) {
-            if (!RequestFormOriginalCellLayout.isProductRowPopulated(thisCellReader(rawSheet), rowIndex)) {
+            if (!RequestFormOriginalCellLayout.isProductRowSlotUsed(thisCellReader(rawSheet), rowIndex)) {
                 continue;
             }
             String hinmei = cellString(rawSheet, rowIndex, RequestFormOriginalCellLayout.ProductColumn.HINMEI.columnIndex());
@@ -169,6 +172,24 @@ final class RequestFormOriginalExtractor {
         return rawMap;
     }
 
+    /** 製品ブロック全スロット（Excel 10–12 行）の数量・長さを行位置固定で読む。 */
+    static List<ProductSlotValues> readAllProductSlots(Sheet rawSheet) {
+        List<ProductSlotValues> slots = new ArrayList<>();
+        for (int rowIndex : RequestFormOriginalCellLayout.PRODUCT_ROW_INDICES) {
+            slots.add(
+                    new ProductSlotValues(
+                            cellString(
+                                    rawSheet,
+                                    rowIndex,
+                                    RequestFormOriginalCellLayout.ProductColumn.QTY.columnIndex()),
+                            cellString(
+                                    rawSheet,
+                                    rowIndex,
+                                    RequestFormOriginalCellLayout.ProductColumn.LENGTH.columnIndex())));
+        }
+        return slots;
+    }
+
     /** 受注ファイル未登録行向けに、原本 raw からフォーム初期値 dbValues を組み立てる。 */
     static Map<String, String> buildDbDefaultsFromRaw(Map<String, String> raw) {
         Map<String, String> db = new LinkedHashMap<>();
@@ -180,6 +201,82 @@ final class RequestFormOriginalExtractor {
         }
         if (db.containsKey("原反品名") && !db.containsKey("品名1")) {
             db.put("品名1", db.get("原反品名"));
+        }
+        applyOriginalColorDefaults(db, raw);
+        return db;
+    }
+
+    /** 依頼書原本の色（製品・原反）が空欄のとき {@link RequestFormOriginalCellLayout#DEFAULT_COLOR_WHEN_BLANK} を補う。 */
+    static String resolveOriginalColor(String color) {
+        if (color == null || color.isBlank()) {
+            return RequestFormOriginalCellLayout.DEFAULT_COLOR_WHEN_BLANK;
+        }
+        return color.strip();
+    }
+
+    private static void applyOriginalColorDefaults(Map<String, String> db, Map<String, String> raw) {
+        putResolvedColorLines(db, raw, "色1", slotLineCount(raw, db, "品名", "製品"));
+        putResolvedColorLines(db, raw, "原反色", slotLineCount(raw, db, "品名1", "原反品名", "原反"));
+    }
+
+    private static int slotLineCount(Map<String, String> raw, Map<String, String> db, String... keys) {
+        int max = 0;
+        for (String key : keys) {
+            String value = valueFromRawOrDb(raw, db, key);
+            if (value.isBlank()) {
+                continue;
+            }
+            max = Math.max(max, value.split("\\n", -1).length);
+        }
+        return max;
+    }
+
+    private static String valueFromRawOrDb(Map<String, String> raw, Map<String, String> db, String key) {
+        String dbVal = db.get(key);
+        if (dbVal != null && !dbVal.isBlank()) {
+            return dbVal;
+        }
+        String rawVal = raw.get(key);
+        return rawVal != null ? rawVal : "";
+    }
+
+    private static void putResolvedColorLines(
+            Map<String, String> db, Map<String, String> raw, String colorKey, int slotCount) {
+        if (slotCount <= 0) {
+            return;
+        }
+        String merged = valueFromRawOrDb(raw, db, colorKey);
+        String[] lines = merged.isBlank() ? new String[0] : merged.split("\\n", -1);
+        java.util.List<String> resolved = new java.util.ArrayList<>();
+        for (int i = 0; i < slotCount; i++) {
+            String line = i < lines.length ? lines[i].strip() : "";
+            resolved.add(
+                    line.isBlank()
+                            ? RequestFormOriginalCellLayout.DEFAULT_COLOR_WHEN_BLANK
+                            : line);
+        }
+        db.put(colorKey, String.join("\n", resolved));
+    }
+
+    /** TPI PDF 原本向け: {@link #buildDbDefaultsFromRaw} に加工区分・用途等を付与。 */
+    static Map<String, String> buildTpiDbDefaultsFromRaw(Map<String, String> raw) {
+        Map<String, String> db = buildDbDefaultsFromRaw(raw);
+        if (raw == null || raw.isEmpty()) {
+            return db;
+        }
+        db.put("加工区分", "TPI");
+        putIfPresent(db, "加工内容", raw.get("加工内容"));
+        putIfPresent(db, "用途", raw.get("用途"));
+        putIfPresent(db, "ＥＣ面", normalizeEcSideForForm(raw.get("ＥＣ面")));
+        putIfPresent(db, "投入場所", inferFeedLocation(raw.get("加工内容")));
+        String feedHint = raw.get("投入場所");
+        if (feedHint != null && !feedHint.isBlank()) {
+            db.put("投入場所", feedHint.strip());
+        }
+        if (raw.get("用途") != null && raw.get("用途").contains("JR")) {
+            db.put("用途", "JR（屋根）");
+        } else if (!db.containsKey("用途") || db.get("用途").isBlank()) {
+            db.put("用途", "V（TPI）");
         }
         return db;
     }

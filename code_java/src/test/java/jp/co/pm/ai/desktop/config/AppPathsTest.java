@@ -81,6 +81,30 @@ class AppPathsTest {
     }
 
     @Test
+    void requestFormTpiPdfDir_usesFolderPickerNotFile() {
+        assertTrue(AppPaths.isFolderPathEnvKey(AppPaths.KEY_PM_AI_REQUEST_FORM_TPI_PDF_DIR));
+        assertFalse(AppPaths.isFilePathEnvKey(AppPaths.KEY_PM_AI_REQUEST_FORM_TPI_PDF_DIR));
+    }
+
+    @Test
+    void resolveRequestFormTpiPdfDir_usesEnvOverrideOrFactoryDefault(@TempDir Path tmp) {
+        Path custom = tmp.resolve("tpi-pdf");
+        Map<String, String> ui =
+                Map.of(AppPaths.KEY_PM_AI_REQUEST_FORM_TPI_PDF_DIR, custom.toString());
+        assertEquals(
+                custom.toAbsolutePath().normalize(),
+                AppPaths.resolveRequestFormTpiPdfDir(ui).get());
+
+        GlobalInitSettingTarget.save(FactorySite.KONAN);
+        assertEquals(
+                AppPaths.DEFAULT_PM_AI_REQUEST_FORM_TPI_PDF_DIR_KONAN,
+                AppPaths.resolveRequestFormTpiPdfDir(Map.of()).get().toString());
+
+        GlobalInitSettingTarget.save(FactorySite.KOKUBU);
+        assertTrue(AppPaths.resolveRequestFormTpiPdfDir(Map.of()).isEmpty());
+    }
+
+    @Test
     void requestFormRdpProfile_usesFilePickerNotFolder(@TempDir Path tmp) throws Exception {
         assertTrue(AppPaths.isFilePathEnvKey(AppPaths.KEY_PM_AI_REQUEST_FORM_RDP_PROFILE));
         assertFalse(AppPaths.isFolderPathEnvKey(AppPaths.KEY_PM_AI_REQUEST_FORM_RDP_PROFILE));
