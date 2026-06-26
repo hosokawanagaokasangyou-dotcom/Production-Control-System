@@ -12,6 +12,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalInt;
 
 /**
  * 受注ファイル「受注ﾌｧｲﾙ」シートの列位置と見出し名の正本。
@@ -290,7 +291,7 @@ public final class JuchuSheetColumnLayout {
         return resolveHeaderRowIndex(registry, juchuFileAbsolutePath) + 1;
     }
 
-    /** 列ごとの不一致（ウィザード用）。 */
+    /** 列ごとの不一致（ウィザード用）。採用列設定があればその列の見出しを検証する。 */
     public static List<JuchuHeaderMismatch> collectHeaderMismatches(
             Row headerRow, JuchuHeaderAliasRegistry registry, String juchuFileAbsolutePath) {
         List<JuchuHeaderMismatch> out = new ArrayList<>();
@@ -303,7 +304,10 @@ public final class JuchuSheetColumnLayout {
                     && registry.isExcludedFromTransfer(juchuFileAbsolutePath, col)) {
                 continue;
             }
-            String actual = readHeaderCell(headerRow, col.columnIndex());
+            String actual =
+                    readHeaderCell(
+                            headerRow,
+                            resolveTransferColumnIndex(col, registry, juchuFileAbsolutePath));
             String expected =
                     registry == null
                             ? col.primaryHeader()
@@ -311,13 +315,17 @@ public final class JuchuSheetColumnLayout {
             if (!headerMatches(col, actual, registry, juchuFileAbsolutePath)) {
                 out.add(
                         new JuchuHeaderMismatch(
-                                col, expected, actual, actual.isBlank()));
+                                col,
+                                expected,
+                                actual,
+                                actual.isBlank(),
+                                resolveTransferColumnLetter(col, registry, juchuFileAbsolutePath)));
             }
         }
         return out;
     }
 
-    /** 既知列（{@link Col}）の行3見出しをすべて列挙（ウィザード管理用）。 */
+    /** フォーム転記項目の一覧（ウィザード用）。見出しは採用列から読む。 */
     public static List<JuchuHeaderMismatch> collectAllKnownColumns(
             Row headerRow, JuchuHeaderAliasRegistry registry, String juchuFileAbsolutePath) {
         List<JuchuHeaderMismatch> out = new ArrayList<>();
@@ -325,12 +333,21 @@ public final class JuchuSheetColumnLayout {
             return out;
         }
         for (Col col : Col.values()) {
-            String actual = readHeaderCell(headerRow, col.columnIndex());
+            String actual =
+                    readHeaderCell(
+                            headerRow,
+                            resolveTransferColumnIndex(col, registry, juchuFileAbsolutePath));
             String expected =
                     registry == null
                             ? col.primaryHeader()
                             : registry.expectedHeaderFor(juchuFileAbsolutePath, col);
-            out.add(new JuchuHeaderMismatch(col, expected, actual, actual.isBlank()));
+            out.add(
+                    new JuchuHeaderMismatch(
+                            col,
+                            expected,
+                            actual,
+                            actual.isBlank(),
+                            resolveTransferColumnLetter(col, registry, juchuFileAbsolutePath)));
         }
         return out;
     }
@@ -479,13 +496,59 @@ public final class JuchuSheetColumnLayout {
                     && registry.isExcludedFromTransfer(juchuFileAbsolutePath, col)) {
                 continue;
             }
-            String value = readDataCell(dataRow, col.columnIndex());
+            String value =
+                    readDataCell(
+                            dataRow,
+                            resolveTransferColumnIndex(col, registry, juchuFileAbsolutePath));
             vals.put(col.dbKey(), value);
             if (col == Col.HINMEI_1) {
                 vals.put("原反品名", value);
             }
         }
         return vals;
+    }
+
+    /**
+     * フォーム項目の転記・読込に使う列 index。
+     * 列定義ウィザードで採用した {@code XX列: 見出し} があればその列、なければ {@link Col} 既定。
+     */
+    public static int resolveTransferColumnIndex(
+            Col col, JuchuHeaderAliasRegistry registry, String juchuFileAbsolutePath) {
+        if (col == null) {
+            return 0;
+        }
+        if (registry != null && juchuFileAbsolutePath != null && !juchuFileAbsolutePath.isBlank()) {
+            OptionalInt fromPick =
+                    columnIndexFromPickDisplayLabel(
+                            registry
+                                    .expectedPickLabelFor(juchuFileAbsolutePath, col)
+                                    .orElse(null));
+            if (fromPick.isPresent()) {
+                return fromPick.getAsInt();
+            }
+        }
+        return col.columnIndex();
+    }
+
+    public static String resolveTransferColumnLetter(
+            Col col, JuchuHeaderAliasRegistry registry, String juchuFileAbsolutePath) {
+        return indexToColumnLetter(resolveTransferColumnIndex(col, registry, juchuFileAbsolutePath));
+    }
+
+    /** {@code BU列: 商品(製品)} 形式から列 index を得る。 */
+    public static OptionalInt columnIndexFromPickDisplayLabel(String pickLabel) {
+        if (pickLabel == null || pickLabel.isBlank()) {
+            return OptionalInt.empty();
+        }
+        int colon = pickLabel.indexOf("列:");
+        if (colon <= 0) {
+            return OptionalInt.empty();
+        }
+        try {
+            return OptionalInt.of(columnLetterToIndex(pickLabel.substring(0, colon).strip()));
+        } catch (Exception ex) {
+            return OptionalInt.empty();
+        }
     }
 
     public static String readHeaderCell(Row headerRow, int columnIndex) {

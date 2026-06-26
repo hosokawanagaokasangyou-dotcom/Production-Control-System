@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
+import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.config.FactorySite;
 import jp.co.pm.ai.desktop.config.InitSettingPaths;
 
@@ -25,7 +26,9 @@ import java.util.Set;
 /**
  * 受注ファイルごとの見出し別名・期待見出し上書き（列位置は {@link JuchuSheetColumnLayout.Col} 固定）。
  *
- * <p>永続化は工場別（{@link FactorySite}）のユーザーホームファイル。工場出荷既定はリポジトリ {@code init_setting} の
+ * <p>永続化はサマリ AI 配台 Excel と同一フォルダの {@link AppPaths#JUCHU_HEADER_ALIASES_JSON_FILENAME}
+ * （{@link AppPaths#juchuHeaderAliasesJsonPath(Map)}）。初回のみ {@code ~/.pm-ai-desktop/} の旧 properties
+ * から移行する。工場出荷既定はリポジトリ {@code init_setting} の
  * {@link InitSettingPaths#juchuHeaderAliasesFileForFactory(FactorySite)} に書き出す。
  */
 public final class JuchuHeaderAliasRegistry {
@@ -62,12 +65,15 @@ public final class JuchuHeaderAliasRegistry {
     private int factoryDefaultHeaderRowOneBased = DEFAULT_HEADER_ROW_ONE_BASED;
 
     public JuchuHeaderAliasRegistry(Path storePath) {
-        this.storePath = storePath != null ? storePath : storePathForFactory(FactorySite.KONAN);
+        this.storePath =
+                storePath != null
+                        ? storePath
+                        : storePathLegacyHome(FactorySite.KONAN);
     }
 
-    /** テスト用（湖南・工場別ストアパス）。 */
+    /** テスト用（湖南・旧ユーザーホーム properties パス）。 */
     JuchuHeaderAliasRegistry() {
-        this(storePathForFactory(FactorySite.KONAN));
+        this(storePathLegacyHome(FactorySite.KONAN));
     }
 
     public static JuchuHeaderAliasRegistry loadDefault() {
@@ -76,13 +82,22 @@ public final class JuchuHeaderAliasRegistry {
 
     public static JuchuHeaderAliasRegistry loadForFactory(FactorySite site, Map<String, String> ui) {
         FactorySite effective = site != null ? site : FactorySite.KONAN;
-        Path path = storePathForFactory(effective);
-        migrateLegacyStoreIfNeeded(path, effective);
+        Map<String, String> env = ui != null ? ui : Map.of();
+        Path path = resolveStorePath(effective, env);
+        Path legacyHome = storePathLegacyHome(effective);
+        migrateLegacyStoreIfNeeded(legacyHome, effective);
+        if (!env.isEmpty()) {
+            migrateLegacyHomeToSummaryIfNeeded(path, legacyHome);
+            Path legacySummary = AppPaths.juchuHeaderAliasesJsonPathLegacy(env);
+            if (!legacySummary.equals(path)) {
+                migrateLegacyHomeToSummaryIfNeeded(path, legacySummary);
+            }
+        }
         JuchuHeaderAliasRegistry registry = new JuchuHeaderAliasRegistry(path);
         registry.reloadFromDisk();
-        if (registry.isEmpty() && ui != null && !ui.isEmpty()) {
+        if (registry.isEmpty() && !env.isEmpty()) {
             Path initSetting =
-                    InitSettingPaths.resolveRepoInitSettingDir(ui)
+                    InitSettingPaths.resolveRepoInitSettingDir(env)
                             .resolve(InitSettingPaths.juchuHeaderAliasesFileForFactory(effective));
             if (Files.isRegularFile(initSetting)) {
                 try {
@@ -93,6 +108,15 @@ public final class JuchuHeaderAliasRegistry {
             }
         }
         return registry;
+    }
+
+    /** 列定義ウィザード設定の保存先（サマリ Excel 同フォルダ JSON、UI 未設定時は旧ユーザーホーム）。 */
+    public static Path resolveStorePath(FactorySite site, Map<String, String> ui) {
+        Map<String, String> env = ui != null ? ui : Map.of();
+        if (!env.isEmpty()) {
+            return AppPaths.juchuHeaderAliasesJsonPath(env);
+        }
+        return storePathLegacyHome(site != null ? site : FactorySite.KONAN);
     }
 
     public Path storePath() {
@@ -120,8 +144,24 @@ public final class JuchuHeaderAliasRegistry {
         if (!Files.isRegularFile(storePath)) {
             return;
         }
+        if (storeUsesJson()) {
+            try {
+                importFromJsonFile(storePath);
+            } catch (IOException ex) {
+                System.err.println(
+                        "Could not load juchu header aliases: "
+                                + storePath
+                                + " — "
+                                + (ex.getMessage() != null ? ex.getMessage() : ex));
+            }
+            return;
+        }
         PropertiesLike props = PropertiesLike.read(storePath);
         applyPropertiesEntries(props.entries());
+    }
+
+    private boolean storeUsesJson() {
+        return storePath.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".json");
     }
 
     private synchronized void applyPropertiesEntries(Map<String, String> entries) {
@@ -544,17 +584,45 @@ public final class JuchuHeaderAliasRegistry {
     }
 
     public synchronized void saveToDisk() throws IOException {
+        if (storeUsesJson()) {
+            exportToJsonFile(storePath);
+            return;
+        }
         Files.createDirectories(storePath.getParent());
         buildPropertiesSnapshot().write(storePath);
     }
 
+    /** @deprecated {@link #storePathLegacyHome(FactorySite)} を使用 */
+    @Deprecated
     public static Path storePathForFactory(FactorySite site) {
-        FactorySite effective = site != null ? site : FactorySite.KONAN;
-        String suffix = effective.name().toLowerCase(Locale.ROOT);
-        return Path.of(
-                System.getProperty("user.home"),
-                ".pm-ai-desktop",
-                "request-form-juchu-header-aliases_" + suffix + ".properties");
+        return storePathLegacyHome(site);
+    }
+
+    /** 列定義ウィザード設定の旧配置（ユーザーホーム・工場別 properties）。 */
+    public static Path storePathLegacyHome(FactorySite site) {
+        return AppPaths.juchuHeaderAliasesLegacyHomePath(site);
+    }
+
+    private static void migrateLegacyHomeToSummaryIfNeeded(Path summaryJson, Path legacyStore) {
+        if (Files.isRegularFile(summaryJson) || !Files.isRegularFile(legacyStore)) {
+            return;
+        }
+        try {
+            JuchuHeaderAliasRegistry legacy = new JuchuHeaderAliasRegistry(legacyStore);
+            legacy.reloadFromDisk();
+            if (legacy.isEmpty()) {
+                return;
+            }
+            JuchuHeaderAliasRegistry summary = new JuchuHeaderAliasRegistry(summaryJson);
+            summary.importFromJsonNode(legacy.toJsonObject());
+            summary.saveToDisk();
+        } catch (IOException ex) {
+            System.err.println(
+                    "Could not migrate juchu header aliases to summary folder: "
+                            + summaryJson
+                            + " — "
+                            + (ex.getMessage() != null ? ex.getMessage() : ex));
+        }
     }
 
     private static void migrateLegacyStoreIfNeeded(Path targetPath, FactorySite site) {

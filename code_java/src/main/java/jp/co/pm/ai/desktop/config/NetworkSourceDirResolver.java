@@ -80,7 +80,23 @@ public final class NetworkSourceDirResolver {
         return isDirectoryListingReachable(AppPaths.resolveActualDetailSourceDir(ui != null ? ui : Map.of()));
     }
 
-    private static boolean isDirectoryListingReachable(Path dir) {
+    /** {@link AppPaths#KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR} で解決される依頼書原本フォルダの一覧可否。 */
+    public static boolean isRequestFormOriginalDirReachable(Map<String, String> ui) {
+        return isDirectoryListingReachable(
+                AppPaths.resolveRequestFormOriginalDir(ui != null ? ui : Map.of()));
+    }
+
+    /** {@link AppPaths#KEY_PM_AI_REQUEST_FORM_TPI_PDF_DIR} で解決される TPI PDF フォルダの一覧可否。未設定時は {@code false}。 */
+    public static boolean isRequestFormTpiPdfDirReachable(Map<String, String> ui) {
+        return AppPaths.resolveRequestFormTpiPdfDir(ui != null ? ui : Map.of())
+                .map(NetworkSourceDirResolver::isDirectoryListingReachable)
+                .orElse(false);
+    }
+
+    /**
+     * ディレクトリとして存在し、{@link Files#list} が成功するか（UNC 未到達等は {@code false}）。
+     */
+    public static boolean isDirectoryListingReachable(Path dir) {
         if (dir == null) {
             return false;
         }

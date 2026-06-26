@@ -46,6 +46,7 @@ import java.util.regex.Pattern;
 import jp.co.pm.ai.desktop.bridge.PythonProcessRunner;
 import jp.co.pm.ai.desktop.bridge.StagePythonExecutable;
 import jp.co.pm.ai.desktop.config.AppPaths;
+import jp.co.pm.ai.desktop.config.NetworkSourceDirResolver;
 import jp.co.pm.ai.desktop.config.DesktopSessionStateStore;
 import jp.co.pm.ai.desktop.config.FactoryOperatorUserStore;
 import jp.co.pm.ai.desktop.config.FactorySite;
@@ -661,21 +662,21 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         newTxtFormTokki1 = new TextField();
         newTxtFormTokki1.setStyle("-fx-font-size: 11px;");
         workGrid.add(lblTokki1, 0, 2);
-        addFormField(workGrid, newTxtFormTokki1, 1, 2, 3, 1);
+        addFormField(workGrid, wrapTextFieldWithCopyButton(newTxtFormTokki1, "特記事項1をコピー"), 1, 2, 3, 1);
         
         Label lblTokki2 = new Label("特記事項2:");
         styleFormLabel(lblTokki2);
         newTxtFormTokki2 = new TextField();
         newTxtFormTokki2.setStyle("-fx-font-size: 11px;");
         workGrid.add(lblTokki2, 0, 3);
-        addFormField(workGrid, newTxtFormTokki2, 1, 3, 3, 1);
+        addFormField(workGrid, wrapTextFieldWithCopyButton(newTxtFormTokki2, "特記事項2をコピー"), 1, 3, 3, 1);
         
         Label lblTokki3 = new Label("特記事項3:");
         styleFormLabel(lblTokki3);
         newTxtFormTokki3 = new TextField();
         newTxtFormTokki3.setStyle("-fx-font-size: 11px;");
         workGrid.add(lblTokki3, 0, 4);
-        addFormField(workGrid, newTxtFormTokki3, 1, 4, 3, 1);
+        addFormField(workGrid, wrapTextFieldWithCopyButton(newTxtFormTokki3, "特記事項3をコピー"), 1, 4, 3, 1);
         
         leftContainer.getChildren().addAll(lblWorkflowTitle, workGrid);
         
@@ -2741,6 +2742,39 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         }
     }
 
+    /**
+     * 一覧選択レコードからフォームへ反映する db キー値マップを組み立てる。
+     * TPI PDF 由来で受注 dbValues がある場合は受注を優先し、契約Ｎｏのみ PDF で補完する。
+     */
+    static Map<String, String> resolveFormActiveValues(OrderRecord record) {
+        if (record == null) {
+            return Map.of();
+        }
+        Map<String, String> rawVals = record.getRawValues() != null ? record.getRawValues() : Map.of();
+        if (isTpiPdfRaw(rawVals) && !rawVals.isEmpty()) {
+            if (record.getDbValues() != null && !record.getDbValues().isEmpty()) {
+                Map<String, String> activeVals = new LinkedHashMap<>(record.getDbValues());
+                mergeJuchuContractNoFromRawWhenBlankOrDifferent(activeVals, rawVals);
+                return activeVals;
+            }
+            return RequestFormOriginalExtractor.buildTpiDbDefaultsFromRaw(rawVals);
+        }
+        if (record.getDbValues() == null || record.getDbValues().isEmpty()) {
+            return rawVals.isEmpty()
+                    ? Map.of()
+                    : RequestFormOriginalExtractor.buildDbDefaultsFromRaw(rawVals);
+        }
+        if (record.getStatus() != null && record.getStatus().contains("未登録")) {
+            Map<String, String> activeVals = new LinkedHashMap<>(record.getDbValues());
+            mergeJuchuDbFromRawDefaults(activeVals, rawVals);
+            mergeJuchuContractNoFromRawWhenBlankOrDifferent(activeVals, rawVals);
+            return activeVals;
+        }
+        Map<String, String> activeVals = new LinkedHashMap<>(record.getDbValues());
+        mergeJuchuContractNoFromRawWhenBlankOrDifferent(activeVals, rawVals);
+        return activeVals;
+    }
+
     private static void putIfBlank(Map<String, String> db, String key, String value) {
         if (value == null || value.isBlank()) {
             return;
@@ -3118,12 +3152,17 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                 int lastDataRowIndex = findJuchuSheetLastPopulatedDataRowIndex(sJuchu);
                 int firstDataRow = juchuFirstDataRowIndex0();
 
+                int reqNoColIdx =
+                        JuchuSheetColumnLayout.resolveTransferColumnIndex(
+                                JuchuSheetColumnLayout.Col.IRAI_NO,
+                                juchuHeaderAliasRegistry,
+                                juchuFilePath);
                 for (int r = firstDataRow; r <= lastDataRowIndex; r++) {
                     Row row = sJuchu.getRow(r);
                     if (row == null) continue;
-                    Cell reqCell = row.getCell(0); 
+                    Cell reqCell = row.getCell(reqNoColIdx);
                     if (reqCell == null || reqCell.getCellType() == CellType.BLANK) continue;
-                    
+
                     String reqNo = getCellValueAsString(reqCell).trim();
                     if (reqNo.isEmpty()) continue;
                     
@@ -3135,8 +3174,15 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                 wbJuchu.close();
                 fis.close();
                 
-                File folder = new File(targetFolder);
-                File[] files = folder.listFiles((dir, name) -> name.endsWith(".xlsm") && !name.startsWith("~$") && !name.equals("加工依頼書入力.xlsm"));
+                File[] files = null;
+                if (NetworkSourceDirResolver.isRequestFormOriginalDirReachable(uiEnvSnapshot)) {
+                    File folder = new File(targetFolder);
+                    files = listOriginalWorkbooks(folder);
+                } else {
+                    System.err.println(
+                            "[request-form] 依頼書原本フォルダにアクセスできないためスキップ: "
+                                    + targetFolder);
+                }
                 
                 List<Map<String, String>> rawRequests = new ArrayList<>();
                 File parseCacheRoot = previewCacheDirectory();
@@ -3344,10 +3390,13 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         if (tpiPdfFolder == null || tpiPdfFolder.isBlank()) {
             return;
         }
-        File tpiDir = new File(tpiPdfFolder);
-        if (!tpiDir.isDirectory()) {
+        if (!NetworkSourceDirResolver.isRequestFormTpiPdfDirReachable(uiEnvSnapshot)) {
+            System.err.println(
+                    "[request-form] TPI PDF フォルダにアクセスできないためスキップ: "
+                            + tpiPdfFolder);
             return;
         }
+        File tpiDir = new File(tpiPdfFolder);
         File[] pdfFiles =
                 tpiDir.listFiles(
                         (dir, name) ->
@@ -3728,25 +3777,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         
         Map<String, String> rawVals = record.getRawValues() != null ? record.getRawValues() : Map.of();
         refreshOriginalProductSlotCache(rawVals);
-        Map<String, String> activeVals;
-        if (isTpiPdfRaw(rawVals) && !rawVals.isEmpty()) {
-            activeVals = RequestFormOriginalExtractor.buildTpiDbDefaultsFromRaw(rawVals);
-            if (record.getDbValues() != null && !record.getDbValues().isEmpty()) {
-                mergeJuchuContractNoFromRawWhenBlankOrDifferent(activeVals, rawVals);
-            }
-        } else if (record.getDbValues() == null || record.getDbValues().isEmpty()) {
-            activeVals =
-                    rawVals.isEmpty()
-                            ? Map.of()
-                            : RequestFormOriginalExtractor.buildDbDefaultsFromRaw(rawVals);
-        } else if (record.getStatus() != null && record.getStatus().contains("未登録")) {
-            activeVals = new LinkedHashMap<>(record.getDbValues());
-            mergeJuchuDbFromRawDefaults(activeVals, rawVals);
-            mergeJuchuContractNoFromRawWhenBlankOrDifferent(activeVals, rawVals);
-        } else {
-            activeVals = new LinkedHashMap<>(record.getDbValues());
-            mergeJuchuContractNoFromRawWhenBlankOrDifferent(activeVals, rawVals);
-        }
+        Map<String, String> activeVals = resolveFormActiveValues(record);
         
         newCmbFormUser.setValue(activeVals.getOrDefault("ユーザー", ""));
         newDpFormDeliv.setValue(parseLocalDate(activeVals.getOrDefault("希望納期", "")));
@@ -4199,10 +4230,11 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         Thread worker =
                 new Thread(
                         () -> {
-                            File folder = new File(folderPath);
-                            if (!folder.isDirectory()) {
+                            if (!NetworkSourceDirResolver.isRequestFormOriginalDirReachable(
+                                    uiEnvSnapshot)) {
                                 return;
                             }
+                            File folder = new File(folderPath);
                             File[] files = listOriginalWorkbooks(folder);
                             if (files == null) {
                                 return;
@@ -4219,6 +4251,9 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
     }
 
     private void syncOriginalFileMonitorAfterReload() {
+        if (!NetworkSourceDirResolver.isRequestFormOriginalDirReachable(uiEnvSnapshot)) {
+            return;
+        }
         File folder = new File(targetFolder);
         File[] files = listOriginalWorkbooks(folder);
         if (files == null) {
@@ -4840,12 +4875,12 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         return count;
     }
 
-    /** 受注ﾌｧｲﾙ A 列（依頼No）に実データがある行か（数式の 0 や空文字は除外）。 */
+    /** 受注ﾌｧｲﾙの依頼No 採用列に実データがある行か（数式の 0 や空文字は除外）。 */
     private boolean juchuRowHasReqNo(Row row) {
         if (row == null) {
             return false;
         }
-        Cell cell = row.getCell(0);
+        Cell cell = row.getCell(juchuReqNoColumnIndex());
         if (cell == null) {
             return false;
         }
@@ -4868,7 +4903,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
     }
 
     /**
-     * 受注ﾌｧｲﾙの実データ末尾行（0-based）。後方走査で A 列に依頼No がある最終行を返す。
+     * 受注ﾌｧｲﾙの実データ末尾行（0-based）。後方走査で依頼No 採用列に値がある最終行を返す。
      */
     private int findJuchuSheetLastPopulatedDataRowIndex(Sheet sheet) {
         int first = juchuFirstDataRowIndex0();
@@ -4896,7 +4931,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
             if (row == null) {
                 continue;
             }
-            Cell cell = row.getCell(0);
+            Cell cell = row.getCell(juchuReqNoColumnIndex());
             if (cell != null && normalize_key(getCellValueAsString(cell)).equals(normKey)) {
                 return r;
             }
@@ -4949,14 +4984,15 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         return cell != null && cell.getCellType() == CellType.FORMULA;
     }
 
-    /** 依頼No（A列）のみ値として書き込む（他列の数式セルは触らない）。 */
+    /** 依頼No 列のみ値として書き込む（他列の数式セルは触らない）。 */
     private void setJuchuSheetReqNo(Workbook wb, Sheet sheet, Row targetRow, String reqNo) {
         if (targetRow == null || reqNo == null) {
             return;
         }
-        Cell cellReqNo = targetRow.getCell(0);
+        int colIdx = juchuTransferColumnIndex(JuchuSheetColumnLayout.Col.IRAI_NO);
+        Cell cellReqNo = targetRow.getCell(colIdx);
         if (cellReqNo == null) {
-            cellReqNo = targetRow.createCell(0);
+            cellReqNo = targetRow.createCell(colIdx);
         }
         cellReqNo.setCellValue(reqNo);
         CellStyle yellowStyle = wb.createCellStyle();
@@ -4965,8 +5001,8 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         if (refRow == null) {
             refRow = sheet.getRow(firstDataRow);
         }
-        if (refRow != null && refRow.getCell(0) != null) {
-            yellowStyle.cloneStyleFrom(refRow.getCell(0).getCellStyle());
+        if (refRow != null && refRow.getCell(colIdx) != null) {
+            yellowStyle.cloneStyleFrom(refRow.getCell(colIdx).getCellStyle());
         }
         yellowStyle.setFillForegroundColor(IndexedColors.YELLOW.getIndex());
         yellowStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
@@ -5115,18 +5151,27 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         }
     }
 
-    private static void setJuchuCellByLayout(Row row, JuchuSheetColumnLayout.Col col, String value) {
+    private int juchuReqNoColumnIndex() {
+        return juchuTransferColumnIndex(JuchuSheetColumnLayout.Col.IRAI_NO);
+    }
+
+    private int juchuTransferColumnIndex(JuchuSheetColumnLayout.Col col) {
+        return JuchuSheetColumnLayout.resolveTransferColumnIndex(
+                col, juchuHeaderAliasRegistry, juchuFilePath);
+    }
+
+    private void setJuchuCellByLayout(Row row, JuchuSheetColumnLayout.Col col, String value) {
         if (row == null || col == null) {
             return;
         }
-        Cell cell = writableJuchuCell(row, col.columnIndex());
+        Cell cell = writableJuchuCell(row, juchuTransferColumnIndex(col));
         if (cell == null) {
             return;
         }
         cell.setCellValue(value != null ? value : "");
     }
 
-    private static void setJuchuNumericOrStringByLayout(
+    private void setJuchuNumericOrStringByLayout(
             Row row, JuchuSheetColumnLayout.Col col, String text) {
         if (row == null || col == null) {
             return;
@@ -5136,7 +5181,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
             return;
         }
         try {
-            Cell cell = writableJuchuCell(row, col.columnIndex());
+            Cell cell = writableJuchuCell(row, juchuTransferColumnIndex(col));
             if (cell == null) {
                 return;
             }
@@ -5147,7 +5192,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
     }
 
     /** 受注ファイルの「入力日」列。転記時は db の値で上書き（空のときのみ新規行で本日）。 */
-    private static void applyJuchuNyuryokuBiFromDb(
+    private void applyJuchuNyuryokuBiFromDb(
             Row targetRow, Map<String, String> db, boolean fallbackToTodayIfBlank) {
         if (targetRow == null) {
             return;
@@ -5160,18 +5205,18 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         }
     }
 
-    private static void setJuchuDateByLayout(Row row, JuchuSheetColumnLayout.Col col, Date value) {
+    private void setJuchuDateByLayout(Row row, JuchuSheetColumnLayout.Col col, Date value) {
         if (row == null || col == null || value == null) {
             return;
         }
-        Cell cell = writableJuchuCell(row, col.columnIndex());
+        Cell cell = writableJuchuCell(row, juchuTransferColumnIndex(col));
         if (cell == null) {
             return;
         }
         cell.setCellValue(value);
     }
 
-    private static void setJuchuDateOrStringByLayout(
+    private void setJuchuDateOrStringByLayout(
             Row row, JuchuSheetColumnLayout.Col col, String rawValue) {
         if (rawValue == null || rawValue.isBlank()) {
             setJuchuCellByLayout(row, col, "");
@@ -6230,6 +6275,19 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         primary.setMaxWidth(Double.MAX_VALUE);
         HBox.setHgrow(secondary, Priority.SOMETIMES);
         secondary.setMaxWidth(Double.MAX_VALUE);
+    }
+
+    private Node wrapTextFieldWithCopyButton(TextField field, String copyTooltip) {
+        Button btnCopy = new Button("📋");
+        btnCopy.setStyle("-fx-font-size: 11px; -fx-padding: 2px 6px; -fx-cursor: hand;");
+        btnCopy.getStyleClass().add("btn-copy");
+        btnCopy.setTooltip(new Tooltip(copyTooltip));
+        btnCopy.setOnAction(evt -> copyToClipboard(field.getText(), btnCopy));
+        HBox actions = new HBox(3, btnCopy);
+        HBox.setHgrow(actions, Priority.NEVER);
+        HBox box = new HBox(5, field, actions);
+        configureSplitFieldRow(box, field, actions);
+        return box;
     }
 
     /** 製品行の「商品」欄（商品コード）のみクリアする。品番・タイプ・寸法・候補コンボは触らない。 */

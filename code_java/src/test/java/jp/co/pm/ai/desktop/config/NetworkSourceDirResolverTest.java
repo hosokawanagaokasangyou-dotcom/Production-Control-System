@@ -51,4 +51,35 @@ class NetworkSourceDirResolverTest {
                 Map.of(AppPaths.KEY_PM_AI_TASK_INPUT_SOURCE_DIR, "/no/such/path/pm_ai_task_input_" + System.nanoTime());
         assertFalse(NetworkSourceDirResolver.isTaskInputSourceDirReachable(ui));
     }
+
+    @Test
+    void requestFormOriginalDir_reachable_whenPresent(@TempDir Path dir) throws Exception {
+        Files.writeString(dir.resolve("sample.xlsm"), "x");
+        Map<String, String> ui =
+                Map.of(AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR, dir.toString());
+        assertTrue(NetworkSourceDirResolver.isRequestFormOriginalDirReachable(ui));
+    }
+
+    @Test
+    void requestFormOriginalDir_unreachable_whenMissing() {
+        Map<String, String> ui =
+                Map.of(
+                        AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR,
+                        "/no/such/request-form-original-" + System.nanoTime());
+        assertFalse(NetworkSourceDirResolver.isRequestFormOriginalDirReachable(ui));
+    }
+
+    @Test
+    void requestFormTpiPdfDir_unreachable_whenUnset() {
+        GlobalInitSettingTarget.save(FactorySite.KOKUBU);
+        assertFalse(NetworkSourceDirResolver.isRequestFormTpiPdfDirReachable(Map.of()));
+    }
+
+    @Test
+    void requestFormTpiPdfDir_reachable_whenPresent(@TempDir Path dir) throws Exception {
+        Files.writeString(dir.resolve("sample.pdf"), "x");
+        Map<String, String> ui =
+                Map.of(AppPaths.KEY_PM_AI_REQUEST_FORM_TPI_PDF_DIR, dir.toString());
+        assertTrue(NetworkSourceDirResolver.isRequestFormTpiPdfDirReachable(ui));
+    }
 }

@@ -14,6 +14,70 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class JuchuSheetColumnLayoutTest {
 
     @Test
+    void resolveTransferColumnIndex_usesExpectedPickLabel() {
+        JuchuHeaderAliasRegistry registry = new JuchuHeaderAliasRegistry();
+        String path = "C:\\test\\juchu.xlsm";
+        var col = JuchuSheetColumnLayout.Col.MASTER_BASE_SHOHIN_PRODUCT;
+        registry.setExpectedPickLabel(path, col, "BU列: 商品(製品)");
+
+        assertEquals(
+                JuchuSheetColumnLayout.columnLetterToIndex("BU"),
+                JuchuSheetColumnLayout.resolveTransferColumnIndex(col, registry, path));
+        assertEquals(
+                "BU",
+                JuchuSheetColumnLayout.resolveTransferColumnLetter(col, registry, path));
+    }
+
+    @Test
+    void columnIndexFromPickDisplayLabel_parsesBuFormat() {
+        var idx =
+                JuchuSheetColumnLayout.columnIndexFromPickDisplayLabel("BU列: 商品(製品)");
+        assertTrue(idx.isPresent());
+        assertEquals(JuchuSheetColumnLayout.columnLetterToIndex("BU"), idx.getAsInt());
+    }
+
+    @Test
+    void readDbValuesFromRow_usesAdoptedColumnWhenPickLabelSet() throws Exception {
+        JuchuHeaderAliasRegistry registry = new JuchuHeaderAliasRegistry();
+        String path = "C:\\test\\juchu.xlsm";
+        var col = JuchuSheetColumnLayout.Col.MASTER_BASE_SHOHIN_PRODUCT;
+        int buIndex = JuchuSheetColumnLayout.columnLetterToIndex("BU");
+        registry.setExpectedPickLabel(path, col, "BU列: 商品(製品)");
+        registry.setExpectedOverride(path, col, "商品(製品)");
+
+        try (XSSFWorkbook wb = new XSSFWorkbook()) {
+            XSSFSheet sheet = wb.createSheet("受注ﾌｧｲﾙ");
+            XSSFRow row = sheet.createRow(3);
+            row.createCell(col.columnIndex()).setCellValue("旧AP列");
+            row.createCell(buIndex).setCellValue("A2K10H6B8250FW3");
+
+            var vals = JuchuSheetColumnLayout.readDbValuesFromRow(row, registry, path);
+            assertEquals("A2K10H6B8250FW3", vals.get("masterBase商品(製品)"));
+        }
+    }
+
+    @Test
+    void collectHeaderMismatches_validatesAdoptedColumnHeader() throws Exception {
+        JuchuHeaderAliasRegistry registry = new JuchuHeaderAliasRegistry();
+        String path = "C:\\test\\juchu.xlsm";
+        var col = JuchuSheetColumnLayout.Col.MASTER_BASE_SHOHIN_PRODUCT;
+        int buIndex = JuchuSheetColumnLayout.columnLetterToIndex("BU");
+        registry.setExpectedPickLabel(path, col, "BU列: 商品(製品)");
+        registry.setExpectedOverride(path, col, "商品(製品)");
+
+        try (XSSFWorkbook wb = new XSSFWorkbook()) {
+            XSSFSheet sheet = wb.createSheet("受注ﾌｧｲﾙ");
+            XSSFRow header = sheet.createRow(JuchuSheetColumnLayout.HEADER_ROW_INDEX);
+            header.createCell(col.columnIndex()).setCellValue("タイプ");
+            header.createCell(buIndex).setCellValue("商品(製品)");
+
+            var mismatches =
+                    JuchuSheetColumnLayout.collectHeaderMismatches(header, registry, path);
+            assertTrue(mismatches.stream().noneMatch(m -> m.column() == col));
+        }
+    }
+
+    @Test
     void columnLetterToIndex_apAndAq() {
         assertEquals(41, JuchuSheetColumnLayout.columnLetterToIndex("AP"));
         assertEquals(42, JuchuSheetColumnLayout.columnLetterToIndex("AQ"));

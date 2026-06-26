@@ -1,7 +1,6 @@
 package jp.co.pm.ai.desktop.reconciliation;
 
 import javafx.application.Platform;
-import javafx.beans.binding.Bindings;
 import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.SimpleObjectProperty;
 import javafx.beans.property.SimpleStringProperty;
@@ -18,8 +17,6 @@ import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.Spinner;
 import javafx.scene.control.SpinnerValueFactory;
-import javafx.scene.control.Tab;
-import javafx.scene.control.TabPane;
 import javafx.scene.control.TableCell;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
@@ -50,7 +47,8 @@ import java.util.Set;
 import java.util.function.Supplier;
 
 /**
- * 受注ﾌｧｲﾙの列定義ウィザード（既知列・未知列）。
+ * 受注ﾌｧｲﾙの列定義ウィザード。
+ * 依頼書フォームの各項目について、採用する受注列（転記・読込・検証の物理列）を選ぶ。
  */
 public final class JuchuSheetHeaderRepairWizard {
 
@@ -61,31 +59,14 @@ public final class JuchuSheetHeaderRepairWizard {
     }
 
     public enum FixAction {
-        REDEFINE("期待定義をExcel見出しで再定義"),
+        REDEFINE("この列を採用"),
         ALIAS("実際の見出しを別名として許容"),
-        EXCLUDE("転記/吸出しから除外"),
-        SKIP("対応しない");
+        EXCLUDE("転記しない"),
+        SKIP("変更なし");
 
         private final String label;
 
         FixAction(String label) {
-            this.label = label;
-        }
-
-        @Override
-        public String toString() {
-            return label;
-        }
-    }
-
-    public enum UnknownAction {
-        SKIP("対応しない"),
-        IGNORE("転記・検証対象外（無視）"),
-        ALIAS_TO_KNOWN("既知列の別名として登録");
-
-        private final String label;
-
-        UnknownAction(String label) {
             this.label = label;
         }
 
@@ -155,10 +136,33 @@ public final class JuchuSheetHeaderRepairWizard {
         }
 
         String status(JuchuHeaderAliasRegistry registry, String path) {
-            if (registry != null && registry.isExcludedFromTransfer(path, mismatch.column())) {
+            return rowStatus(this, registry, path, List.of());
+        }
+
+        /** {@link #status} の拡張（採用列候補一覧付き）。 */
+        static String rowStatus(
+                KnownRow row,
+                JuchuHeaderAliasRegistry registry,
+                String pathKey,
+                List<JuchuSheetColumnLayout.ExcelHeaderPick> picks) {
+            if (registry != null && registry.isExcludedFromTransfer(pathKey, row.mismatch.column())) {
                 return "転記除外";
             }
-            return matching(registry, path) ? "一致" : "不一致";
+            if (isAdoptionSaved(registry, pathKey, row.mismatch.column())) {
+                String current = row.getSelectedPickLabel();
+                var saved = registry.expectedPickLabelFor(pathKey, row.mismatch.column());
+                if (saved.isPresent()
+                        && current != null
+                        && !current.isBlank()
+                        && !current.strip().equals(saved.get().strip())) {
+                    return "未保存";
+                }
+                return "採用済";
+            }
+            if (needsAdoptionPersist(row, registry, pathKey, picks)) {
+                return "要適用";
+            }
+            return row.matching(registry, pathKey) ? "一致" : "不一致";
         }
 
         FixAction getAction() {
@@ -179,48 +183,6 @@ public final class JuchuSheetHeaderRepairWizard {
 
         String getSelectedPickLabel() {
             return selectedPickLabel.get();
-        }
-    }
-
-    static final class UnknownRow {
-        final JuchuUnknownExcelColumn column;
-        final ObjectProperty<UnknownAction> action = new SimpleObjectProperty<>(UnknownAction.SKIP);
-        final ObjectProperty<JuchuSheetColumnLayout.Col> aliasTarget =
-                new SimpleObjectProperty<>();
-
-        UnknownRow(JuchuUnknownExcelColumn column) {
-            this.column = column;
-            if (column.ignored()) {
-                this.action.set(UnknownAction.IGNORE);
-            }
-        }
-
-        String columnLetter() {
-            return column.columnLetter();
-        }
-
-        String headerText() {
-            return column.headerText();
-        }
-
-        String status() {
-            return column.ignored() ? "無視済み" : "未設定";
-        }
-
-        UnknownAction getAction() {
-            return action.get();
-        }
-
-        void setAction(UnknownAction value) {
-            action.set(value);
-        }
-
-        JuchuSheetColumnLayout.Col getAliasTarget() {
-            return aliasTarget.get();
-        }
-
-        void setAliasTarget(JuchuSheetColumnLayout.Col value) {
-            aliasTarget.set(value);
         }
     }
 
@@ -282,7 +244,6 @@ public final class JuchuSheetHeaderRepairWizard {
         final javafx.collections.ObservableList<String> pickLabelItems =
                 FXCollections.observableArrayList(headerPickLabels(excelHeaderPicks));
         List<KnownRow> allKnownRows = buildKnownRows(sheetContext, registry, pathKey);
-        List<UnknownRow> unknownRows = buildUnknownRows(sheetContext, registry, pathKey);
 
         Spinner<Integer> headerRowSpinner =
                 new Spinner<>(
@@ -305,7 +266,7 @@ public final class JuchuSheetHeaderRepairWizard {
         headerRowRow.setAlignment(Pos.CENTER_LEFT);
 
         boolean mismatchesOnlyDefault = mode == DialogMode.TRANSFER_PROMPT;
-        CheckBox chkMismatchesOnly = new CheckBox("不一致の既知列のみ表示");
+        CheckBox chkMismatchesOnly = new CheckBox("不一致のフォーム項目のみ表示");
         chkMismatchesOnly.setSelected(mismatchesOnlyDefault);
         chkMismatchesOnly.setVisible(mode == DialogMode.MANAGE);
 
@@ -326,32 +287,20 @@ public final class JuchuSheetHeaderRepairWizard {
                                 pathKey,
                                 chkMismatchesOnly.isSelected()));
 
-        TableView<UnknownRow> unknownTable = createUnknownTable(unknownRows);
-
-        Tab tabKnown = new Tab("既知の列（フォーム転記定義）");
-        tabKnown.setClosable(false);
-        VBox knownBox = new VBox(8, chkMismatchesOnly, knownTable);
+        VBox formMappingBox = new VBox(8, chkMismatchesOnly, knownTable);
         VBox.setVgrow(knownTable, Priority.ALWAYS);
-        knownBox.setPadding(new Insets(8, 0, 0, 0));
-        tabKnown.setContent(knownBox);
+        formMappingBox.setPadding(new Insets(8, 0, 0, 0));
 
-        Tab tabUnknown = new Tab("未知の列（定義外のExcel見出し）");
-        tabUnknown.setClosable(false);
-        Label unknownIntro =
-                new Label(
-                        "転記定義に無い列位置の見出しです。「無視」で一覧から除外、「既知列の別名」で"
-                                + " 既知列の検証用別名に登録できます。");
-        unknownIntro.setWrapText(true);
-        unknownIntro.setStyle("-fx-text-fill: #555;");
-        VBox unknownBox = new VBox(8, unknownIntro, unknownTable);
-        VBox.setVgrow(unknownTable, Priority.ALWAYS);
-        unknownBox.setPadding(new Insets(8, 0, 0, 0));
-        tabUnknown.setContent(unknownBox);
-
-        TabPane tabPane = new TabPane(tabKnown, tabUnknown);
-        tabPane.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
+        Label mismatchBanner = new Label("");
+        mismatchBanner.setWrapText(true);
+        mismatchBanner.setManaged(false);
+        mismatchBanner.setVisible(false);
         if (mode == DialogMode.TRANSFER_PROMPT) {
-            tabKnown.setText("既知の列 — 不一致 " + (transferMismatches != null ? transferMismatches.size() : 0) + " 件");
+            int mismatchCount = transferMismatches != null ? transferMismatches.size() : 0;
+            mismatchBanner.setText("転記前に確認: 見出し不一致 " + mismatchCount + " 件");
+            mismatchBanner.setStyle("-fx-font-weight: bold;");
+            mismatchBanner.setManaged(true);
+            mismatchBanner.setVisible(true);
         }
 
         Runnable reloadSheetRows =
@@ -363,17 +312,13 @@ public final class JuchuSheetHeaderRepairWizard {
                         pickLabelItems.setAll(headerPickLabels(excelHeaderPicks));
                         allKnownRows.clear();
                         allKnownRows.addAll(buildKnownRows(refreshed, registry, pathKey));
-                        unknownRows.clear();
-                        unknownRows.addAll(buildUnknownRows(refreshed, registry, pathKey));
                         refreshKnownTableItems(
                                 knownTable,
                                 allKnownRows,
                                 registry,
                                 pathKey,
                                 chkMismatchesOnly.isSelected());
-                        unknownTable.setItems(FXCollections.observableArrayList(unknownRows));
                         knownTable.refresh();
-                        unknownTable.refresh();
                     } catch (Exception ex) {
                         showError(
                                 owner,
@@ -404,7 +349,7 @@ public final class JuchuSheetHeaderRepairWizard {
             stage.initOwner(owner);
         }
         stage.initModality(Modality.WINDOW_MODAL);
-        stage.setTitle("受注シート列定義 — 修正ウィザード");
+        stage.setTitle("受注列の採用 — フォーム転記");
 
         String fileName = juchuFile.getName();
         Label intro =
@@ -412,12 +357,12 @@ public final class JuchuSheetHeaderRepairWizard {
                         mode == DialogMode.TRANSFER_PROMPT
                                 ? "受注ファイル「"
                                         + fileName
-                                        + "」の見出し定義に不一致があります。"
-                                        + " 「既知の列」タブでフォーム項目ごとに修正し、「未知の列」タブで定義外見出しを設定できます。"
-                                : "受注ファイル「"
+                                        + "」を転記する前に、フォーム項目ごとに採用する受注列を確認してください。"
+                                        + " 推定候補はあらかじめ選ばれています。必要なら変更して「適用して再検証」を押してください。"
+                                : "依頼書フォームの転記項目について、受注ファイル「"
                                         + fileName
-                                        + "」の見出し行・列定義を確認・編集します。"
-                                        + " タブで「既知の列（転記定義）」と「未知の列（定義外）」を切り替えてください。");
+                                        + "」のどの列見出しを採用するかを設定します。"
+                                        + " 見出し行の変更や、項目ごとの採用列の修正ができます。");
         intro.setWrapText(true);
 
         Label statusLabel = new Label("");
@@ -436,12 +381,22 @@ public final class JuchuSheetHeaderRepairWizard {
                             registry.setHeaderRowOneBasedFor(pathKey, headerRow);
                         }
                         commitKnownRowPickSelections(allKnownRows, excelHeaderPicks);
-                        applyAll(allKnownRows, unknownRows, registry, pathKey, excelHeaderPicks);
+                        int promoted =
+                                promoteRowsNeedingAdoptionPersist(
+                                        allKnownRows, registry, pathKey, excelHeaderPicks);
+                        applyAll(allKnownRows, registry, pathKey, excelHeaderPicks);
                         registry.saveToDisk();
                         List<JuchuHeaderMismatch> remaining = readMismatches(juchuFile, registry);
                         reloadSheetRows.run();
                         if (remaining.isEmpty()) {
-                            statusLabel.setText("列定義を適用しました。不一致は解消されています。");
+                            statusLabel.setText(
+                                    promoted > 0
+                                            ? "採用列を "
+                                                    + promoted
+                                                    + " 件保存しました。不一致は解消されています。"
+                                            : "採用列を適用しました。不一致は解消されています。");
+                            mismatchBanner.setManaged(false);
+                            mismatchBanner.setVisible(false);
                             if (mode == DialogMode.TRANSFER_PROMPT) {
                                 outcome[0] = Result.FIXED;
                                 stage.close();
@@ -450,8 +405,10 @@ public final class JuchuSheetHeaderRepairWizard {
                             statusLabel.setText(
                                     "不一致が "
                                             + remaining.size()
-                                            + " 件残っています。設定を見直して再度「適用」してください。");
-                            tabKnown.setText("既知の列 — 不一致 " + remaining.size() + " 件");
+                                            + " 件残っています。採用列を見直して再度「適用」してください。");
+                            mismatchBanner.setText("見出し不一致 " + remaining.size() + " 件");
+                            mismatchBanner.setManaged(true);
+                            mismatchBanner.setVisible(true);
                         }
                     } catch (Exception ex) {
                         showError(
@@ -488,9 +445,9 @@ public final class JuchuSheetHeaderRepairWizard {
         buttons.setAlignment(Pos.CENTER_RIGHT);
         buttons.setPadding(new Insets(8, 0, 0, 0));
 
-        VBox center = new VBox(10, intro, headerRowRow, tabPane, statusLabel);
+        VBox center = new VBox(10, intro, headerRowRow, mismatchBanner, formMappingBox, statusLabel);
         center.setPadding(new Insets(12));
-        VBox.setVgrow(tabPane, Priority.ALWAYS);
+        VBox.setVgrow(formMappingBox, Priority.ALWAYS);
 
         BorderPane root = new BorderPane();
         root.setCenter(center);
@@ -522,17 +479,30 @@ public final class JuchuSheetHeaderRepairWizard {
         List<KnownRow> rows = new ArrayList<>();
         for (JuchuHeaderMismatch m :
                 JuchuSheetColumnLayout.collectAllKnownColumns(ctx.headerRow(), registry, pathKey)) {
+            String defaultPick =
+                    defaultSelectedPickLabel(m, ctx.headerPicks(), registry, pathKey);
+            JuchuSheetColumnLayout.ExcelHeaderPick resolvedDefault =
+                    resolvePick(defaultPick, ctx.headerPicks());
+            boolean crossColumnDefault =
+                    resolvedDefault != null
+                            && !resolvedDefault
+                                    .columnLetter()
+                                    .equalsIgnoreCase(m.columnLetter());
+            boolean adoptionSaved = isAdoptionSaved(registry, pathKey, m.column());
             FixAction defaultAction;
             if (registry.isExcludedFromTransfer(pathKey, m.column())) {
                 defaultAction = FixAction.EXCLUDE;
+            } else if (!adoptionSaved
+                    && (crossColumnDefault
+                            || !JuchuSheetColumnLayout.headerMatches(
+                                    m.column(), m.actualHeader(), registry, pathKey))) {
+                defaultAction = FixAction.REDEFINE;
             } else if (JuchuSheetColumnLayout.headerMatches(
                     m.column(), m.actualHeader(), registry, pathKey)) {
                 defaultAction = FixAction.SKIP;
             } else {
                 defaultAction = FixAction.REDEFINE;
             }
-            String defaultPick =
-                    defaultSelectedPickLabel(m, ctx.headerPicks(), registry, pathKey);
             rows.add(
                     new KnownRow(
                             m,
@@ -543,15 +513,8 @@ public final class JuchuSheetHeaderRepairWizard {
         return rows;
     }
 
-    private static List<UnknownRow> buildUnknownRows(
-            SheetContext ctx, JuchuHeaderAliasRegistry registry, String pathKey) {
-        List<UnknownRow> rows = new ArrayList<>();
-        for (JuchuUnknownExcelColumn col :
-                JuchuSheetColumnLayout.collectUnknownExcelColumns(
-                        ctx.headerRow(), registry, pathKey)) {
-            rows.add(new UnknownRow(col));
-        }
-        return rows;
+    private static List<FixAction> fixActionsForWizard() {
+        return List.of(FixAction.REDEFINE, FixAction.SKIP, FixAction.EXCLUDE);
     }
 
     private static TableView<KnownRow> createKnownTable(
@@ -569,25 +532,17 @@ public final class JuchuSheetHeaderRepairWizard {
         colStatus.setCellValueFactory(
                 c ->
                         new SimpleStringProperty(
-                                c.getValue().status(registry, pathKey)));
+                                KnownRow.rowStatus(
+                                        c.getValue(),
+                                        registry,
+                                        pathKey,
+                                        headerPicksSupplier.get())));
 
         TableColumn<KnownRow, String> colFormItem = new TableColumn<>("フォーム項目");
         colFormItem.setCellValueFactory(
                 c -> new SimpleStringProperty(c.getValue().formItem()));
 
-        TableColumn<KnownRow, String> colLetter = new TableColumn<>("列");
-        colLetter.setCellValueFactory(
-                c -> new SimpleStringProperty(c.getValue().columnLetter()));
-
-        TableColumn<KnownRow, String> colExpected = new TableColumn<>("期待見出し");
-        colExpected.setCellValueFactory(
-                c -> new SimpleStringProperty(c.getValue().expected()));
-
-        TableColumn<KnownRow, String> colActual = new TableColumn<>("Excel見出し");
-        colActual.setCellValueFactory(
-                c -> new SimpleStringProperty(c.getValue().actual()));
-
-        TableColumn<KnownRow, String> colPick = new TableColumn<>("採用Excel見出し");
+        TableColumn<KnownRow, String> colPick = new TableColumn<>("採用する受注列");
         colPick.setCellValueFactory(c -> c.getValue().selectedPickLabel);
         colPick.setCellFactory(
                 col ->
@@ -608,6 +563,9 @@ public final class JuchuSheetHeaderRepairWizard {
                                                     }
                                                     boundRow.applyPickSelection(
                                                             newV, headerPicksSupplier.get());
+                                                    if (newV != null && !newV.isBlank()) {
+                                                        boundRow.setAction(FixAction.REDEFINE);
+                                                    }
                                                 });
                             }
 
@@ -616,41 +574,32 @@ public final class JuchuSheetHeaderRepairWizard {
                                 super.updateItem(item, empty);
                                 if (empty) {
                                     boundRow = null;
-                                    combo.disableProperty().unbind();
                                     setGraphic(null);
                                 } else {
                                     boundRow = getTableView().getItems().get(getIndex());
                                     combo.setItems(pickLabelItems);
-                                    combo.disableProperty().unbind();
-                                    if (boundRow != null) {
-                                        combo.disableProperty()
-                                                .bind(
-                                                        Bindings.notEqual(
-                                                                boundRow.action,
-                                                                FixAction.REDEFINE));
-                                        syncingCombo = true;
-                                        try {
-                                            List<JuchuSheetColumnLayout.ExcelHeaderPick> picks =
-                                                    headerPicksSupplier.get();
-                                            String label = boundRow.getSelectedPickLabel();
-                                            if (label == null || label.isBlank()) {
-                                                label =
-                                                        displayLabelForHeaderText(
-                                                                boundRow.getSelectedExcelHeader(),
-                                                                picks,
-                                                                boundRow.columnLetter());
-                                            }
-                                            combo.setValue(label);
-                                        } finally {
-                                            syncingCombo = false;
+                                    syncingCombo = true;
+                                    try {
+                                        List<JuchuSheetColumnLayout.ExcelHeaderPick> picks =
+                                                headerPicksSupplier.get();
+                                        String label = boundRow.getSelectedPickLabel();
+                                        if (label == null || label.isBlank()) {
+                                            label =
+                                                    displayLabelForHeaderText(
+                                                            boundRow.getSelectedExcelHeader(),
+                                                            picks,
+                                                            boundRow.columnLetter());
                                         }
+                                        combo.setValue(label);
+                                    } finally {
+                                        syncingCombo = false;
                                     }
                                     setGraphic(combo);
                                 }
                             }
                         });
 
-        TableColumn<KnownRow, FixAction> colAction = new TableColumn<>("対応");
+        TableColumn<KnownRow, FixAction> colAction = new TableColumn<>("転記");
         colAction.setCellValueFactory(c -> c.getValue().action);
         colAction.setCellFactory(
                 col ->
@@ -661,6 +610,40 @@ public final class JuchuSheetHeaderRepairWizard {
                             {
                                 combo.setMaxWidth(Double.MAX_VALUE);
                                 enableComboPopupInTableCell(combo, this);
+                                combo.setConverter(
+                                        new javafx.util.StringConverter<>() {
+                                            @Override
+                                            public String toString(FixAction action) {
+                                                if (action == null) {
+                                                    return "";
+                                                }
+                                                if (action == FixAction.SKIP
+                                                        && boundRow != null
+                                                        && isAdoptionSaved(
+                                                                registry,
+                                                                pathKey,
+                                                                boundRow.mismatch.column())) {
+                                                    return "採用済";
+                                                }
+                                                return action.toString();
+                                            }
+
+                                            @Override
+                                            public FixAction fromString(String string) {
+                                                if (string == null || string.isBlank()) {
+                                                    return FixAction.SKIP;
+                                                }
+                                                if ("採用済".equals(string.strip())) {
+                                                    return FixAction.SKIP;
+                                                }
+                                                for (FixAction action : fixActionsForWizard()) {
+                                                    if (action.toString().equals(string)) {
+                                                        return action;
+                                                    }
+                                                }
+                                                return FixAction.SKIP;
+                                            }
+                                        });
                                 combo.valueProperty()
                                         .addListener(
                                                 (obs, oldV, newV) -> {
@@ -680,7 +663,7 @@ public final class JuchuSheetHeaderRepairWizard {
                                 } else {
                                     boundRow = getTableView().getItems().get(getIndex());
                                     combo.setItems(
-                                            FXCollections.observableArrayList(FixAction.values()));
+                                            FXCollections.observableArrayList(fixActionsForWizard()));
                                     combo.setValue(
                                             boundRow != null ? boundRow.getAction() : FixAction.SKIP);
                                     setGraphic(combo);
@@ -688,145 +671,82 @@ public final class JuchuSheetHeaderRepairWizard {
                             }
                         });
 
-        table.getColumns()
-                .addAll(colStatus, colFormItem, colLetter, colExpected, colActual, colPick, colAction);
-        return table;
-    }
-
-    private static TableView<UnknownRow> createUnknownTable(List<UnknownRow> rows) {
-        TableView<UnknownRow> table = new TableView<>(FXCollections.observableArrayList(rows));
-        table.setEditable(true);
-        table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
-        table.setPrefHeight(280);
-
-        TableColumn<UnknownRow, String> colStatus = new TableColumn<>("状態");
-        colStatus.setCellValueFactory(c -> new SimpleStringProperty(c.getValue().status()));
-
-        TableColumn<UnknownRow, String> colLetter = new TableColumn<>("列");
-        colLetter.setCellValueFactory(c -> new SimpleStringProperty(c.getValue().columnLetter()));
-
-        TableColumn<UnknownRow, String> colHeader = new TableColumn<>("Excel見出し");
-        colHeader.setCellValueFactory(c -> new SimpleStringProperty(c.getValue().headerText()));
-
-        TableColumn<UnknownRow, JuchuSheetColumnLayout.Col> colTarget = new TableColumn<>("既知列（別名先）");
-        colTarget.setCellValueFactory(c -> c.getValue().aliasTarget);
-        colTarget.setCellFactory(
-                col ->
-                        new TableCell<>() {
-                            private final ComboBox<JuchuSheetColumnLayout.Col> combo =
-                                    new ComboBox<>();
-                            private UnknownRow boundRow;
-
-                            {
-                                combo.setItems(
-                                        FXCollections.observableArrayList(
-                                                JuchuSheetColumnLayout.Col.values()));
-                                combo.setConverter(
-                                        new javafx.util.StringConverter<>() {
-                                            @Override
-                                            public String toString(
-                                                    JuchuSheetColumnLayout.Col object) {
-                                                return object == null
-                                                        ? ""
-                                                        : object.formItemDescription();
-                                            }
-
-                                            @Override
-                                            public JuchuSheetColumnLayout.Col fromString(
-                                                    String string) {
-                                                return null;
-                                            }
-                                        });
-                                combo.setMaxWidth(Double.MAX_VALUE);
-                                enableComboPopupInTableCell(combo, this);
-                                combo.valueProperty()
-                                        .addListener(
-                                                (obs, oldV, newV) -> {
-                                                    if (boundRow != null) {
-                                                        boundRow.setAliasTarget(newV);
-                                                    }
-                                                });
-                            }
-
-                            @Override
-                            protected void updateItem(
-                                    JuchuSheetColumnLayout.Col item, boolean empty) {
-                                super.updateItem(item, empty);
-                                if (empty) {
-                                    boundRow = null;
-                                    combo.disableProperty().unbind();
-                                    setGraphic(null);
-                                } else {
-                                    boundRow = getTableView().getItems().get(getIndex());
-                                    combo.disableProperty().unbind();
-                                    if (boundRow != null) {
-                                        combo.disableProperty()
-                                                .bind(
-                                                        Bindings.notEqual(
-                                                                boundRow.action,
-                                                                UnknownAction.ALIAS_TO_KNOWN));
-                                        combo.setValue(boundRow.getAliasTarget());
-                                    }
-                                    setGraphic(combo);
-                                }
-                            }
-                        });
-
-        TableColumn<UnknownRow, UnknownAction> colAction = new TableColumn<>("対応");
-        colAction.setCellValueFactory(c -> c.getValue().action);
-        colAction.setCellFactory(
-                col ->
-                        new TableCell<UnknownRow, UnknownAction>() {
-                            private final ComboBox<UnknownAction> combo = new ComboBox<>();
-
-                            {
-                                combo.setMaxWidth(Double.MAX_VALUE);
-                                enableComboPopupInTableCell(combo, this);
-                                combo.valueProperty()
-                                        .addListener(
-                                                (obs, oldV, newV) -> {
-                                                    UnknownRow row =
-                                                            getTableView().getItems().get(getIndex());
-                                                    if (row != null && newV != null) {
-                                                        row.setAction(newV);
-                                                    }
-                                                });
-                            }
-
-                            @Override
-                            protected void updateItem(UnknownAction item, boolean empty) {
-                                super.updateItem(item, empty);
-                                if (empty) {
-                                    setGraphic(null);
-                                } else {
-                                    UnknownRow row = getTableView().getItems().get(getIndex());
-                                    combo.setItems(
-                                            FXCollections.observableArrayList(UnknownAction.values()));
-                                    combo.setValue(
-                                            row != null ? row.getAction() : UnknownAction.SKIP);
-                                    setGraphic(combo);
-                                }
-                            }
-                        });
-
-        table.getColumns().addAll(colStatus, colLetter, colHeader, colTarget, colAction);
+        table.getColumns().addAll(colStatus, colFormItem, colPick, colAction);
         return table;
     }
 
     private static void applyAll(
             List<KnownRow> knownRows,
-            List<UnknownRow> unknownRows,
             JuchuHeaderAliasRegistry registry,
             String pathKey,
             List<JuchuSheetColumnLayout.ExcelHeaderPick> headerPicks)
             throws Exception {
         validateBeforeApply(knownRows, headerPicks);
-        validateBeforeApplyUnknown(unknownRows);
         boolean changed = applyKnownFixes(knownRows, registry, pathKey, headerPicks);
-        changed |= applyUnknownFixes(unknownRows, registry, pathKey);
         if (changed) {
             registry.saveToDisk();
         }
+    }
+
+    /** 「変更なし」のままでも、未保存の採用列があれば REDEFINE へ昇格する。 */
+    static int promoteRowsNeedingAdoptionPersist(
+            List<KnownRow> rows,
+            JuchuHeaderAliasRegistry registry,
+            String pathKey,
+            List<JuchuSheetColumnLayout.ExcelHeaderPick> picks) {
+        int promoted = 0;
+        for (KnownRow row : rows) {
+            if (row.getAction() == FixAction.EXCLUDE) {
+                continue;
+            }
+            if (needsAdoptionPersist(row, registry, pathKey, picks)) {
+                row.setAction(FixAction.REDEFINE);
+                promoted++;
+            }
+        }
+        return promoted;
+    }
+
+    static boolean isAdoptionSaved(
+            JuchuHeaderAliasRegistry registry,
+            String pathKey,
+            JuchuSheetColumnLayout.Col column) {
+        if (registry == null || pathKey == null || column == null) {
+            return false;
+        }
+        return registry
+                .expectedPickLabelFor(pathKey, column)
+                .map(label -> !label.isBlank())
+                .orElse(false);
+    }
+
+    static boolean needsAdoptionPersist(
+            KnownRow row,
+            JuchuHeaderAliasRegistry registry,
+            String pathKey,
+            List<JuchuSheetColumnLayout.ExcelHeaderPick> picks) {
+        if (row.getAction() == FixAction.EXCLUDE) {
+            return false;
+        }
+        String label = row.getSelectedPickLabel();
+        if (label == null || label.isBlank()) {
+            return false;
+        }
+        String stripped = label.strip();
+        if (registry == null || pathKey == null) {
+            return resolvePick(stripped, picks) != null;
+        }
+        if (isAdoptionSaved(registry, pathKey, row.mismatch.column())) {
+            var saved = registry.expectedPickLabelFor(pathKey, row.mismatch.column());
+            return saved.isEmpty() || !saved.get().strip().equals(stripped);
+        }
+        JuchuSheetColumnLayout.ExcelHeaderPick pick = resolvePick(stripped, picks);
+        String header = pick != null ? pick.headerText() : stripped;
+        var savedExpected = registry.expectedOverrideFor(pathKey, row.mismatch.column());
+        if (savedExpected.isEmpty()) {
+            return pick != null || !row.mismatch.actualEmpty();
+        }
+        return !savedExpected.get().equals(header);
     }
 
     private static void commitKnownRowPickSelections(
@@ -852,7 +772,7 @@ public final class JuchuSheetHeaderRepairWizard {
                     String header = resolveSelectedHeaderText(row, headerPicks);
                     if (header.isBlank()) {
                         throw new IllegalStateException(
-                                m.columnLetter() + "列: 採用する Excel 見出しを選んでください。");
+                                m.formItemDescription() + ": 採用する受注列を選んでください。");
                     }
                     registry.setExpectedOverride(pathKey, m.column(), header);
                     String pickLabel = row.getSelectedPickLabel();
@@ -886,37 +806,6 @@ public final class JuchuSheetHeaderRepairWizard {
                 case SKIP -> {
                     if (registry.isExcludedFromTransfer(pathKey, m.column())) {
                         registry.clearExcludedFromTransfer(pathKey, m.column());
-                        changed = true;
-                    }
-                }
-            }
-        }
-        return changed;
-    }
-
-    private static boolean applyUnknownFixes(
-            List<UnknownRow> rows, JuchuHeaderAliasRegistry registry, String pathKey) {
-        boolean changed = false;
-        for (UnknownRow row : rows) {
-            String letter = row.columnLetter();
-            switch (row.getAction()) {
-                case IGNORE -> {
-                    registry.setUnknownColumnIgnored(pathKey, letter);
-                    changed = true;
-                }
-                case ALIAS_TO_KNOWN -> {
-                    JuchuSheetColumnLayout.Col target = row.getAliasTarget();
-                    if (target == null) {
-                        throw new IllegalStateException(
-                                letter + "列: 別名登録先の既知列を選んでください。");
-                    }
-                    registry.addAlias(pathKey, target, row.headerText());
-                    registry.clearUnknownColumnIgnored(pathKey, letter);
-                    changed = true;
-                }
-                case SKIP -> {
-                    if (row.column.ignored()) {
-                        registry.clearUnknownColumnIgnored(pathKey, letter);
                         changed = true;
                     }
                 }
@@ -974,6 +863,11 @@ public final class JuchuSheetHeaderRepairWizard {
                 }
             }
         }
+        JuchuSheetColumnLayout.ExcelHeaderPick bestPick =
+                findBestMatchingPick(mismatch, picks, registry, pathKey);
+        if (bestPick != null) {
+            return bestPick.displayLabel();
+        }
         if (!mismatch.actualEmpty()) {
             for (JuchuSheetColumnLayout.ExcelHeaderPick pick : picks) {
                 if (pick.columnLetter().equals(mismatch.columnLetter())) {
@@ -996,6 +890,53 @@ public final class JuchuSheetHeaderRepairWizard {
             }
         }
         return primary;
+    }
+
+    /** フォーム項目の見出し候補と一致する受注列を推定。 */
+    static JuchuSheetColumnLayout.ExcelHeaderPick findBestMatchingPick(
+            JuchuHeaderMismatch mismatch,
+            List<JuchuSheetColumnLayout.ExcelHeaderPick> picks,
+            JuchuHeaderAliasRegistry registry,
+            String pathKey) {
+        if (picks == null || picks.isEmpty()) {
+            return null;
+        }
+        Set<String> candidates = new LinkedHashSet<>();
+        JuchuSheetColumnLayout.Col col = mismatch.column();
+        candidates.add(col.primaryHeader());
+        candidates.addAll(col.aliases());
+        if (mismatch.expectedHeader() != null && !mismatch.expectedHeader().isBlank()) {
+            candidates.add(mismatch.expectedHeader());
+        }
+        if (registry != null && pathKey != null) {
+            registry.expectedOverrideFor(pathKey, col).ifPresent(candidates::add);
+            candidates.addAll(registry.extraAliasesFor(pathKey, col));
+        }
+        for (JuchuSheetColumnLayout.ExcelHeaderPick pick : picks) {
+            for (String candidate : candidates) {
+                if (headerTextsMatch(pick.headerText(), candidate)) {
+                    return pick;
+                }
+            }
+        }
+        return null;
+    }
+
+    /** 見出し文字列の一致（完全一致または意味のある部分一致）。 */
+    static boolean headerTextsMatch(String pickHeader, String candidate) {
+        if (pickHeader == null || candidate == null) {
+            return false;
+        }
+        String normPick = JuchuSheetColumnLayout.normalizeHeader(pickHeader);
+        String normCand = JuchuSheetColumnLayout.normalizeHeader(candidate);
+        if (normPick.isEmpty() || normCand.isEmpty()) {
+            return false;
+        }
+        if (normPick.equals(normCand)) {
+            return true;
+        }
+        return (normPick.contains(normCand) || normCand.contains(normPick))
+                && Math.min(normPick.length(), normCand.length()) >= 2;
     }
 
     static JuchuSheetColumnLayout.ExcelHeaderPick resolvePick(
@@ -1122,16 +1063,7 @@ public final class JuchuSheetHeaderRepairWizard {
             }
             if (resolveSelectedHeaderText(row, headerPicks).isBlank()) {
                 throw new IllegalStateException(
-                        row.columnLetter() + "列: 採用する Excel 見出しを選んでください。");
-            }
-        }
-    }
-
-    private static void validateBeforeApplyUnknown(List<UnknownRow> rows) {
-        for (UnknownRow row : rows) {
-            if (row.getAction() == UnknownAction.ALIAS_TO_KNOWN && row.getAliasTarget() == null) {
-                throw new IllegalStateException(
-                        row.columnLetter() + "列: 別名登録先の既知列を選んでください。");
+                        row.formItem() + ": 採用する受注列を選んでください。");
             }
         }
     }

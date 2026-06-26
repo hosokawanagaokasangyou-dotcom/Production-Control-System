@@ -2342,6 +2342,12 @@ public final class AppPaths {
             "request_form_input_settings.json";
 
     /**
+     * 依頼書入力・受注シート列定義ウィザードの採用列設定（{@link
+     * jp.co.pm.ai.desktop.reconciliation.JuchuHeaderAliasRegistry}）。
+     */
+    public static final String JUCHU_HEADER_ALIASES_JSON_FILENAME = "juchu_header_aliases.json";
+
+    /**
      * {@link #summaryAiDispatchXlsxPathForFactory(Map, FactorySite)} と同一フォルダの依頼書入力設定 JSON。
      *
      * <p>操作者 bin 等と同様、環境変数のサマリが別工場を指すときは利用工場の既定 UNC 配下を使う。
@@ -2358,6 +2364,37 @@ public final class AppPaths {
      */
     public static Path requestFormInputSettingsJsonPathLegacy(Map<String, String> ui) {
         return siblingOfSummaryAiDispatchWorkbook(ui, REQUEST_FORM_INPUT_SETTINGS_JSON_FILENAME);
+    }
+
+    /**
+     * {@link #summaryAiDispatchXlsxPathForFactory(Map, FactorySite)} と同一フォルダの受注列採用設定 JSON。
+     */
+    public static Path juchuHeaderAliasesJsonPath(Map<String, String> ui) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        FactorySite site = GlobalInitSettingTarget.loadEffective(u);
+        return siblingOfSummaryAiDispatchWorkbookForFactory(
+                u, site, JUCHU_HEADER_ALIASES_JSON_FILENAME);
+    }
+
+    /**
+     * 受注列採用設定 JSON の旧解決（工場無指定のサマリ sibling）。移行読込用。
+     */
+    public static Path juchuHeaderAliasesJsonPathLegacy(Map<String, String> ui) {
+        return siblingOfSummaryAiDispatchWorkbook(ui, JUCHU_HEADER_ALIASES_JSON_FILENAME);
+    }
+
+    /**
+     * 列定義ウィザード設定の旧配置（ユーザーホーム・工場別 properties）。移行読込用。
+     */
+    public static Path juchuHeaderAliasesLegacyHomePath(FactorySite site) {
+        FactorySite effective = site != null ? site : FactorySite.KONAN;
+        String suffix = effective.name().toLowerCase(Locale.ROOT);
+        return Path.of(
+                        System.getProperty("user.home"),
+                        ".pm-ai-desktop",
+                        "request-form-juchu-header-aliases_" + suffix + ".properties")
+                .toAbsolutePath()
+                .normalize();
     }
 
     /**
