@@ -31,6 +31,7 @@ TEAM_ASSIGN_IGNORE_NEED_SURPLUS_ROW	0	1=need の「配台時追加人数」行�
 TEAM_ASSIGN_USE_NEED_SURPLUS_IN_MAIN_PASS		1/true=メイン探索で req〜追加上限まで試す（従来）。空または 0=メインは req のみ、追加分は後段。
 TEAM_ASSIGN_HEADCOUNT_FROM_NEED_ONLY	1	1（既定）=必須人数は need（基本＋特別指定）のみ。0=特別指定備考 AI の required_op を計画から参照し得る（列「必須人数」は廃止済み）。
 TEAM_ASSIGN_USE_MASTER_COMBO_SHEET	1	1（既定）=master「組み合わせ表」を使用。0=組み合わせ表プリセットを使わない。
+TEAM_ASSIGN_COMBO_SHEET_MAY_EXCEED_NEED	1	1（既定）=組み合わせ表の必須人数が need 基本人数を超えていてもプリセットを試行。0=need 上限を超える組み合わせ表は使わない。配台計画_タスク入力タブのチェックボックスでも上書き。
 DISPATCH_INTERVAL_MIRROR_ENFORCE	1	1（既定）=設備・人の占有区間をミラーして二重検査。0 等=avail のみの従来挙動。
 DISPATCH_TRIAL_PATTERN_LIST_SHEET		「配台試行順_パターン一覧」相当の出力シート名（空なら既定名）
 DISPATCH_TRIAL_PATTERN_LIST_NO_EXCEL_TABLE		1/true 等で ListObject を付けない（結合・太字は実施）

@@ -1552,6 +1552,32 @@ def _parse_dispatch_trial_order_float_sort_key(val) -> float | None:
     if not math.isfinite(x):
         return None
     return x
+
+
+def dispatch_trial_order_positive_finite(val) -> float | None:
+    """配台試行順番: 正の有限小数のみ。空・非数値・非正は None。"""
+    x = _parse_dispatch_trial_order_float_sort_key(val)
+    if x is None or x <= 0:
+        return None
+    return x
+
+
+def dispatch_trial_order_sort_key(val, default: float = 1e9) -> float:
+    """タスクキュー等のソート用。解釈不能は default。"""
+    x = _parse_dispatch_trial_order_float_sort_key(val)
+    if x is None or not math.isfinite(x):
+        return default
+    return x
+
+
+def dispatch_trial_order_key_from_task(task: dict, default: float = 1e9) -> float:
+    """task の dispatch_trial_order / dispatch_trial_order_from_sheet からソートキーを得る。"""
+    raw = task.get("dispatch_trial_order")
+    if raw is None:
+        raw = task.get("dispatch_trial_order_from_sheet")
+    return dispatch_trial_order_sort_key(raw, default)
+
+
 def _scalar_excel_accounting_speed_paren_negative_to_positive(val):
     """
     Excel は (数値) や会計表示で負数として格納・取得されることがある。

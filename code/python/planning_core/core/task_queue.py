@@ -313,7 +313,9 @@ def build_task_queue_from_planning_df(
 
         _dto_from_sheet = None
         if RESULT_TASK_COL_DISPATCH_TRIAL_ORDER in tasks_df.columns:
-            _dto_from_sheet = parse_optional_int(
+            from planning_core.core.plan_input import dispatch_trial_order_positive_finite
+
+            _dto_from_sheet = dispatch_trial_order_positive_finite(
                 _planning_df_cell_scalar(row, RESULT_TASK_COL_DISPATCH_TRIAL_ORDER)
             )
 
@@ -505,7 +507,9 @@ def _serial_dispatch_order_task_ids(task_queue) -> list:
         if not tid:
             continue
         try:
-            dto = int(t.get("dispatch_trial_order") or 10**9)
+            from planning_core.core.plan_input import dispatch_trial_order_key_from_task
+
+            dto = dispatch_trial_order_key_from_task(t)
         except (TypeError, ValueError):
             dto = 10**9
         prev_d = min_dto_by_tid.get(tid)
@@ -3239,10 +3243,12 @@ def _sort_stage1_plan_df_by_dispatch_trial_order_asc(plan_df: "pd.DataFrame") ->
     if n <= 1:
         return plan_df
     keys = []
+    from planning_core.core.plan_input import dispatch_trial_order_positive_finite
+
     for i in range(n):
-        dto = parse_optional_int(plan_df.iat[i, loc])
-        if dto is not None and dto >= 1:
-            keys.append((0, int(dto), i))
+        dto = dispatch_trial_order_positive_finite(plan_df.iat[i, loc])
+        if dto is not None:
+            keys.append((0, float(dto), i))
         else:
             keys.append((1, 10**9, i))
     order = sorted(range(n), key=lambda j: keys[j])

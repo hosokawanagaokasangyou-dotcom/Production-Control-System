@@ -1,38 +1,37 @@
 {
-  "planInputPath" : "C:\\工程管理AIプロジェクト_JAVA\\output\\plan_input_tasks.xlsx",
+  "planInputPath" : "C:\\システム開発\\工程管理AIプロジェクト_JAVA\\output\\plan_input_tasks.xlsx",
   "planInputSheet" : "タスク一覧",
-  "stage1PreviewPath" : "C:\\工程管理AIプロジェクト_JAVA\\output\\stage1_task_input_table.xlsx",
+  "stage1PreviewPath" : "C:\\システム開発\\工程管理AIプロジェクト_JAVA\\output\\stage1_task_input_table.xlsx",
   "stage1PreviewSheet" : "タスク入力整形",
-  "excludeRulesPath" : "C:\\工程管理AIプロジェクト_JAVA\\code\\json\\stage1_exclude_rules.json",
+  "excludeRulesPath" : "\\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\002  加工G\\●配台AIシステム\\共有DATA\\stage1_exclude_rules.json",
   "mainRunWorkbook" : "C:\\工程管理AIプロジェクト_JAVA\\master.xlsm",
-  "mainRunScriptDir" : "C:\\工程管理AIプロジェクト_JAVA\\code\\python",
+  "mainRunScriptDir" : "C:\\システム開発\\工程管理AIプロジェクト_JAVA\\code\\python",
   "uiTheme" : "midnight-blue",
   "logFontSize" : 16.0,
   "mainRunLogFilter" : "ALL",
-  "mainRunLogLines" : [ "[code-lookup] 読込: \\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\002  加工G\\●配台AIシステム\\共有DATA\\使用原反,ロール単位の長さ.txt", "[equipment-gantt-graphic] ガントを更新: 計画2606192211026422.json（対象シート数=3, 表示=結果_設備ガント）", "[plan-input] loaded rows=37 cols=33 path=C:\\工程管理AIプロジェクト_JAVA\\output\\plan_input_tasks.xlsx", "[stage1-preview] loaded rows=43 cols=136 path=C:\\工程管理AIプロジェクト_JAVA\\output\\stage1_task_input_table.xlsx", "[exclude-json] restored session: C:\\工程管理AIプロジェクト_JAVA\\code\\json\\stage1_exclude_rules.json", "[boot] JavaFX Prism: GPU 有効（起動時テスト合格） order=es2,d3d,sw", "[boot] PYTHONUTF8=1 PYTHONIOENCODING=utf-8 for child process.", "[startup] 自動バージョンアップは対象外（PMD.exe 直下に pm-ai-data のポータブル配布レイアウトがありません）。 user.dir=C:\\工程管理AIプロジェクト_JAVA\\code_java", "[startup] 操作者: 細川 （湖南工場・前回選択を復元）", "[request-form-input] 依頼書原本=C:\\Users\\0585\\Box\\長岡産業（ＥＸ）\\加工依頼書（湖南） アラジンマスタ=\\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\002  加工G\\●配台AIシステム\\共有DATA\\アラジンマスタ 受注ファイル=\\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\生産管理システム\\管理システム\\加工依頼書入力.xlsm", "[request-form-input] 依頼書原本=\\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\生産管理システム\\管理システム アラジンマスタ=\\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\002  加工G\\●配台AIシステム\\共有DATA\\アラジンマスタ 受注ファイル=\\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\生産管理システム\\管理システム\\加工依頼書入力.xlsm" ],
-  "mainRunLogScroll" : 1.0,
-  "mainRunStage2ProductionPlan" : "C:\\工程管理AIプロジェクト_JAVA\\output\\計画2606192211026422.xlsx",
+  "mainRunLogLines" : [ "[code-lookup] 読込: \\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\002  加工G\\●配台AIシステム\\共有DATA\\使用原反,ロール単位の長さ.txt", "[plan-input] loaded rows=65 cols=33 path=C:\\システム開発\\工程管理AIプロジェクト_JAVA\\output\\plan_input_tasks.xlsx", "[stage1-preview] loaded rows=76 cols=134 path=C:\\システム開発\\工程管理AIプロジェクト_JAVA\\output\\stage1_task_input_table.xlsx", "[exclude-json] restored session: \\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\002  加工G\\●配台AIシステム\\共有DATA\\stage1_exclude_rules.json", "[gemini-free-tier] 日次更新: Flash-Lite 7 件（2026-07-04 20:52:19）→ gemini_free_tier_flash_lite_models.json", "[boot] JavaFX Prism: GPU 有効（起動時テスト合格） order=es2,d3d,sw", "[boot] PYTHONUTF8=1 PYTHONIOENCODING=utf-8 for child process.", "[startup] 自動バージョンアップは対象外（PMD.exe 直下に pm-ai-data のポータブル配布レイアウトがありません）。 user.dir=C:\\システム開発\\工程管理AIプロジェクト_JAVA\\code_java", "[startup] 操作者: 細川 （湖南工場・前回選択を復元）", "[dashboard] ソース未変更のため読込を省略", "[dashboard] ソース未変更のため読込を省略", "[pipeline-check] 238 件" ],
   "mainRunStage2SkipTodayDispatch" : true,
   "planInputStage2InProgressNextDayPrompt" : true,
+  "planInputComboSheetMayExceedNeed" : false,
   "mainRunStage2ResultBookFont" : "Meiryo UI",
   "mainRunSkipGeminiApi" : false,
   "mainRunStage1MarkAllExcludeAfterRun" : false,
   "mainRunApplyLearnedSpeedFromActuals" : false,
   "uiEnvRows" : [ {
     "name" : "PM_AI_PYTHON",
-    "value" : "py",
+    "value" : "python",
     "description" : "段階1/2 等の子プロセスで使う Python 実行ファイル（パスは実行ファイル。フォルダのみ指定すると実行時に python.exe 等へ補正）。編集は環境変数タブのみ（実行・ログタブに Python 入力は無い）。値が空のとき: まず user.dir 周辺で pm-ai-data/runtime/python-embed/python.exe が実在すればそれを使い、無ければ OS の PATH 上の python / python3（開発ツリーに python-embed を置いていない場合はここに落ちる）。複数 Python を PATH で切り替えている／特定の python.exe に固定したいときは、本変数にその絶対パスを明示する。環境変数タブを空にしても動くのはこのフォールバックのため。初期化・空欄補完では pm-ai-data/runtime/python-embed/python.exe を user.dir から親ディレクトリへ最大12段まで辿って探索し、見つかれば絶対パスで入れる（ショートカットで user.dir が bin 等になる場合のため）。見つからずインストール根がポータル配布なら相対パス。開発などでは同梱 exe が取れたら絶対パス、無ければ PATH の python/python3。"
   }, {
     "name" : "PM_AI_REPO_ROOT",
-    "value" : "C:\\工程管理AIプロジェクト_JAVA",
+    "value" : "C:\\システム開発\\工程管理AIプロジェクト_JAVA",
     "description" : "Production-Control-System の親（リポジトリ根）。PM_AI_CODE_PYTHON_DIR 未指定時の推定に使用。"
   }, {
     "name" : "PM_AI_OUTPUT_DIR",
-    "value" : "C:\\工程管理AIプロジェクト_JAVA\\output",
+    "value" : "C:\\システム開発\\工程管理AIプロジェクト_JAVA\\output",
     "description" : "段階1/2の成果物フォルダ（plan_input_tasks.xlsx、計画*.xlsx、人員*.xlsx 等）。空のときは planning_core.bootstrap と同じ解決（PM_AI_REPO_ROOT 直下の output、または cwd 基準の output）。フルパス推奨。「フォルダ...」で選択可。 — 段階1/2 の出力先（plan_input_tasks.xlsx 等、従来 code/output に相当）。未設定時は PM_AI_REPO_ROOT 直下の output（JavaFX と planning_core.bootstrap と同解決）。"
   }, {
     "name" : "PM_AI_CODE_PYTHON_DIR",
-    "value" : "C:\\工程管理AIプロジェクト_JAVA\\code\\python",
+    "value" : "C:\\システム開発\\工程管理AIプロジェクト_JAVA\\code\\python",
     "description" : "スクリプト根（task_extract_stage1.py 等）。自動検出は user.dir から code/python を探す。"
   }, {
     "name" : "PM_AI_WORKSPACE",
@@ -40,11 +39,11 @@
     "description" : "配台作業ルート（Python の cwd、ログ/output、Gemini 証明書の搜索先。JavaFX と planning_core.bootstrap で最優先される。未指定時は PM_AI_CODE_PYTHON_DIR の親（code）から推定する場合が多い。"
   }, {
     "name" : "GEMINI_CREDENTIALS_JSON",
-    "value" : "C:\\工程管理AIプロジェクト_JAVA\\gemini_credentials.encrypted.json",
+    "value" : "C:\\システム開発\\工程管理AIプロジェクト_JAVA\\gemini_credentials.encrypted.json",
     "description" : "Gemini 暗号化証明書 JSON（例: gemini_credentials.encrypted.json）のフルパス。未設定時はマクロブック同階層または PM_AI_WORKSPACE 直下を参照。 — Gemini 暗号化証明書 JSON（例: gemini_credentials.encrypted.json）のフルパス。planning_core で最優先。JavaFX 環境変数タブの「ファイル...」で選択可。"
   }, {
     "name" : "PM_AI_EXCLUDE_RULES_JSON",
-    "value" : "C:\\工程管理AIプロジェクト_JAVA\\code\\stage1_exclude_rules.json",
+    "value" : "C:\\システム開発\\工程管理AIプロジェクト_JAVA\\code\\stage1_exclude_rules.json",
     "description" : "段階1の配台不要ルールを JSON に寄せる場合のフルパス（list または {\"rules\":[...]}）。既定は code/exclude_rules.json（実在時）、無ければ code/json/stage1_exclude_rules.json（実在時）。有効時はマクロブックの「設定_配台不要工程」Excel 保守も省略。 — 段階1（run_stage1_extract）で master.xlsm 「設定_配台不要工程」を PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK と同一フォルダの stage1_exclude_rules.json へ書き出し、本変数を その絶対パスに自動設定（子プロセス内）。 手動でも UTF-8 JSON（list または {\"rules\":[...]}、 列構造は設定シートと同槗。 有効ファイルがあれば read_excel 経路を省略可。 JavaFX 環境変数タブの既定はサマリ Excel 同フォルダの stage1_exclude_rules.json（無ければ code/exclude_rules.json または code/json/stage1_exclude_rules.json から初回コピー）。 JavaFX は「ファイル...」で選択可。"
   }, {
     "name" : "PM_AI_MASTER_WORKBOOK",
@@ -84,7 +83,7 @@
     "description" : "依頼書入力タブのアラジンマスタフォルダ（フルパス）。後加工商品／加工内容／工程マスタとマスタリレーション統合結果.xlsx。空のときは工場既定 UNC（湖南: 共有DATA/アラジンマスタ、国分: DATA/アラジンマスタ）。環境変数初期化の工場選択でも設定。「フォルダ...」で選択可。 — 依頼書入力タブが参照するアラジンマスタフォルダ（フルパス）。後加工商品／加工内容／工程マスタ xlsx とマスタリレーション統合結果.xlsx を置く。空のときはグローバル設定の工場（湖南／国分）に応じた UNC 既定。湖南: 共有DATA/アラジンマスタ。国分: DATA/アラジンマスタ。環境変数を初期化（工場選択）でも上書きされる。環境変数タブのフォルダ選択可。統合スクリプト create_integrated_master.py にも渡される。"
   }, {
     "name" : "PM_AI_REQUEST_FORM_ORIGINAL_DIR",
-    "value" : "",
+    "value" : "C:\\Users\\0585\\Box\\長岡産業（ＥＸ）\\加工依頼書（湖南）",
     "description" : "依頼書原本フォルダ（フルパス）。*加工依頼書*.xlsm 等の原本 Excel を含むディレクトリ。初期値は空（任意）。未設定のままでも起動可能。起動時に未設定なら BOX フォルダ選択を1回案内（スキップ可）。未設定時の実行時解決は工場既定（受注ファイル既定の親フォルダ）にフォールバック。「フォルダ...」で選択可。 — 依頼書入力タブがスキャンする依頼書原本フォルダ（フルパス）。*加工依頼書*.xlsm 等の原本 Excel が置かれたディレクトリ。初期値は空（任意）。未設定のままでも起動可能。起動時に未設定なら BOX フォルダ選択を1回案内（スキップ可）。未設定時の実行時解決は工場既定（受注ファイル既定の親フォルダ）にフォールバック。環境変数タブのフォルダ選択可。プレビュー・照合・背景キャッシュの原本読込先。"
   }, {
     "name" : "PM_AI_REQUEST_FORM_JUCHU_FILE",
@@ -93,10 +92,10 @@
   }, {
     "name" : "PM_AI_REQUEST_FORM_TPI_PDF_DIR",
     "value" : "\\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\002  加工G\\●配台AIシステム\\共有DATA\\TPI依頼書",
-    "description" : "TPI（東レペフ加工品）依頼書 PDF スキャン先フォルダ（フルパス）。ECOWD/JR 系・後加工/PN 系の *.pdf を半自動取込。空のとき湖南工場既定 UNC（共有DATA/TPI依頼書）。国分は空（手動指定）。依頼書入力タブの照合・PDF プレビューに使用。読取専用。「フォルダ...」で選択可。 — TPI 依頼書 PDF フォルダ。PM_AI_REQUEST_FORM_TPI_PDF_DIR。湖南初期値: 共有DATA/TPI依頼書。"
+    "description" : "TPI（東レペフ加工品）依頼書 PDF スキャン先フォルダ（フルパス）。空のとき湖南工場既定 UNC（共有DATA/TPI依頼書）。国分は空。依頼書入力タブの半自動取込・PDF プレビュー。「フォルダ...」で選択可。 — TPI（東レペフ加工品）依頼書 PDF のスキャン先フォルダ（フルパス）。ECOWD/JR 系・後加工/PN 系の *.pdf を半自動取込する。空のとき湖南工場既定 UNC（共有DATA/TPI依頼書）。国分は空（手動指定）。依頼書入力タブの照合・PDF プレビュー・parse キャッシュに使用。フォルダ配下は読取専用（書込・削除禁止）。環境変数タブのフォルダ選択可。"
   }, {
     "name" : "PM_AI_RESULT_DISPATCH_TABLE_DIR",
-    "value" : "C:\\工程管理AIプロジェクト_JAVA\\code\\output",
+    "value" : "C:\\システム開発\\工程管理AIプロジェクト_JAVA\\code\\output",
     "description" : "Power Query _q結果_配台表 参照用の 結果_配台表.xlsx 出力先（マクロブック側に フォルダパス名を合わせる場合）。未設定時は段階2は PM_AI_WORKSPACE または PM_AI_PLAN_INPUT_PATH 親階層に合わせる場合がある、JavaFX 初期値は PM_AI_REPO_ROOT 下の code/output（例: Production-Control-System/code/output/結果_配台表.xlsx 同階層に 結果_配台表.json も出力）。「納期管理ビュー」の計画比較サブタブはこのフォルダ直下の 結果_配台表.json とタスク入力ソースのアラジン日別数量を突き合わせる。"
   }, {
     "name" : "PM_AI_PLAN_RESULT_TASK_JSON",
@@ -160,23 +159,23 @@
     "description" : "空なら 4（D 列から設備列）"
   }, {
     "name" : "RAW_FABRIC_WIDTH_TABLE_PATH",
-    "value" : "C:\\工程管理AIプロジェクト_JAVA\\code\\使用原反, 加工幅.txt",
+    "value" : "C:\\システム開発\\工程管理AIプロジェクト_JAVA\\code\\使用原反, 加工幅.txt",
     "description" : "原反幅 CSV のフルパス（空なら既定ファイル名をマクロブック同フォルダ等で探索） — 原反幅 CSV。既定は PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK 同フォルダ（無ければ code/ から初回コピー）。"
   }, {
     "name" : "ROLL_UNIT_BY_USED_RAW_TABLE_PATH",
-    "value" : "C:\\工程管理AIプロジェクト_JAVA\\code\\使用原反,ロール単位の長さ.txt",
+    "value" : "C:\\システム開発\\工程管理AIプロジェクト_JAVA\\code\\使用原反,ロール単位の長さ.txt",
     "description" : "使用原反→ロール単位長さ(m) CSV のフルパス（空なら「使用原反,ロール単位の長さ.txt」をマクロブック同フォルダ・カレント・code で探索）"
   }, {
     "name" : "PRODUCT_WIDTH_TABLE_PATH",
-    "value" : "C:\\工程管理AIプロジェクト_JAVA\\code\\製品名, 製品幅.txt",
+    "value" : "C:\\システム開発\\工程管理AIプロジェクト_JAVA\\code\\製品名, 製品幅.txt",
     "description" : "製品幅 CSV のフルパス（同上） — 製品幅 CSV。既定はサマリ Excel 同フォルダ（無ければ code/ から初回コピー）。"
   }, {
     "name" : "PRODUCT_LENGTH_TABLE_PATH",
-    "value" : "C:\\工程管理AIプロジェクト_JAVA\\code\\製品名,製品長.txt",
+    "value" : "C:\\システム開発\\工程管理AIプロジェクト_JAVA\\code\\製品名,製品長.txt",
     "description" : "製品長 CSV のフルパス（同上）"
   }, {
     "name" : "PRODUCT_THICKNESS_TABLE_PATH",
-    "value" : "C:\\工程管理AIプロジェクト_JAVA\\code\\製品名,製品厚み.txt",
+    "value" : "C:\\システム開発\\工程管理AIプロジェクト_JAVA\\code\\製品名,製品厚み.txt",
     "description" : "製品厚み CSV のフルパス（同上）"
   }, {
     "name" : "STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST",
@@ -258,6 +257,10 @@
     "name" : "TEAM_ASSIGN_USE_MASTER_COMBO_SHEET",
     "value" : "1",
     "description" : "0=組合せ表プリセットを使わない"
+  }, {
+    "name" : "TEAM_ASSIGN_COMBO_SHEET_MAY_EXCEED_NEED",
+    "value" : "1",
+    "description" : "1（既定）=組み合わせ表の必須人数が need 基本人数を超えていてもプリセットを試行。0=need 上限を超える組み合わせ表は使わない。配台計画_タスク入力タブのチェックボックスでも上書き"
   }, {
     "name" : "DISPATCH_INTERVAL_MIRROR_ENFORCE",
     "value" : "1",
@@ -376,7 +379,7 @@
     "description" : "単一モデルに固定。空のときは GEMINI_MODEL_TRY_ORDER、さらに空なら planning_core のコード既定列"
   }, {
     "name" : "GEMINI_MODEL_TRY_ORDER",
-    "value" : "",
+    "value" : "gemini-3.5-flash,gemini-3.1-flash-lite,gemini-3.1-flash-lite-image,gemini-3.1-flash-lite-preview,gemini-2.5-flash-lite,gemini-2.0-flash-lite,gemini-2.0-flash-lite-001,gemini-flash-lite-latest",
     "description" : "カンマ区切りで試行順（例: gemini-3.5-flash,gemini-3.1-flash-lite,gemini-2.5-flash-lite）。GEMINI_MODEL 未設定時のみ有効。両方空ならコード既定（gemini-3.5-flash 最優先＋Flash-Lite 系）"
   }, {
     "name" : "GEMINI_PRE_REQUEST_JITTER_MAX_SEC",
@@ -415,12 +418,20 @@
     "value" : "",
     "description" : "後加工商品マスタのアップロード用 xlsx（フルパス）。依頼書入力【設定】タブのマスタ編集で使用。空のときは PM_AI_ALADDIN_MASTER_DIR 直下のアップロード用_後加工商品マスタ.xlsx。 — 後加工商品マスタのアップロード用 xlsx（フルパス）。依頼書入力【設定】タブのマスタ編集カードが読み書きする。空のときは PM_AI_ALADDIN_MASTER_DIR 直下のアップロード用_後加工商品マスタ.xlsx。見出し行は参照の後加工商品マスタ.xlsx と同一である必要がある。"
   }, {
+    "name" : "PM_AI_TESSERACT_CMD",
+    "value" : "",
+    "description" : "Tesseract OCR 実行ファイル（tesseract.exe）のフルパス。TPI 依頼書 PDF が画像スキャンのとき OCR 読取に使用。空のとき Program Files\\Tesseract-OCR\\tesseract.exe 等を探索。「ファイル...」で選択可。 — Tesseract OCR 実行ファイル（tesseract.exe）のフルパス。TPI 依頼書 PDF が画像スキャン（テキスト抽出不可）と判定されたとき OCR 読取に使用。空のとき C:\\Program Files\\Tesseract-OCR\\tesseract.exe 等を探索。環境変数タブのファイル選択可。"
+  }, {
+    "name" : "PM_AI_TESSERACT_TESSDATA_DIR",
+    "value" : "",
+    "description" : "Tesseract 言語データ（tessdata）フォルダ。jpn.traineddata が必要。空のとき PM_AI_TESSERACT_CMD 近傍または Program Files\\Tesseract-OCR\\tessdata を探索。「フォルダ...」で選択可。 — Tesseract 言語データ（tessdata）フォルダ。jpn.traineddata が必要。空のとき PM_AI_TESSERACT_CMD 近傍または Program Files\\Tesseract-OCR\\tessdata を探索。環境変数タブのフォルダ選択可。"
+  }, {
     "name" : "PM_AI_REQUEST_FORM_PREVIEW_PDF_CJK_SCALE",
     "value" : "0.72",
     "description" : "依頼書 PDF プレビュー: 日本語フォントサイズ補正係数（Excel の pt に乗算）。小さいほど文字が小さくなる。範囲 0.50～1.00。空または未設定で 0.72。はみ出しが残るときは 0.65～0.70、小さすぎるときは 0.80 前後を試す。変更後はプレビュー PDF が再生成される。 — 依頼書 PDF プレビュー: 日本語フォントサイズ補正係数（Excel pt に乗算）。範囲 0.50～1.00。空または未設定で 0.72。PDF が Excel より大きくはみ出すときは 0.65～0.70、小さすぎるときは 0.80 前後。変更後はプレビュー PDF キャッシュが再生成される。"
   }, {
     "name" : "PM_AI_REQUEST_FORM_RDP_PROFILE",
-    "value" : "",
+    "value" : "C:\\システム開発\\工程管理AIプロジェクト_JAVA\\Default.pm-ai-signed.rdp",
     "description" : "依頼書入力タブ「リモートデスクトップ」で起動する RDP プロファイル（.rdp）のフルパス。空のときは未設定。環境変数タブの「ファイル...」で選択可。 — 依頼書入力タブ「リモートデスクトップ」で起動する RDP プロファイル（.rdp）のフルパス。空のときは未設定。環境変数タブのファイル選択可。子タブの「リモートデスクトップを起動」で mstsc.exe に渡されます（Windows のみ）。"
   }, {
     "name" : "PM_AI_RDP_COMPANION_PROGRAM",
@@ -456,34 +467,34 @@
     "description" : "配台 PMD のリモートデスクトップタブ向け: 接続先 RDP ランチャー exe（PmAiRdpRemoteLauncher.exe）、RDP起動プロファイル.json、RPA設定.ini の配備先共有フォルダ（UNC 可）。 — 配台 PMD のリモートデスクトップタブ向け: 接続先 RDP ランチャー exe（PmAiRdpRemoteLauncher.exe）と RDP起動プロファイル.json、RPA設定.ini の配備先共有フォルダ（UNC 可）。 空のときは \\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\002  加工G\\●配台AIシステム\\共有DATA。 リモートデスクトップ専用ランチャー（PmAiRpaLuncher.exe）では PM_AI_RPA_LAUNCHER_DEPLOY_DIR を使用。"
   }, {
     "name" : "PM_AI_RPA_LAUNCHER_DEPLOY_DIR",
-    "value" : "\\\\192.168.0.101\\共有フォルダ\\掲示板\\rpa_luncher\\RDPランチャ",
-    "description" : "リモートデスクトップ専用ランチャー（PmAiRpaLuncher）向け: 接続先 RDP ランチャー exe・ini・起動プロファイル JSON の配備先共有フォルダ（UNC 可）。 — リモートデスクトップ専用ランチャー（PmAiRpaLuncher.exe）向け: 接続先 RDP ランチャー exe と RDP起動プロファイル.json、RPA設定.ini の配備先共有フォルダ（UNC 可）。 空のときは \\\\192.168.0.101\\共有フォルダ\\掲示板\\rpa_luncher\\RDPランチャ。 配台 PMD とは別キー（PM_AI_RDP_LAUNCHER_DEPLOY_DIR）。"
+    "value" : "M:\\湖南工場\\湖南共有\\002  加工G\\●配台AIシステム\\共有DATA",
+    "description" : "リモートデスクトップ専用ランチャー（PmAiRpaLuncher）向け: 接続先 RDP ランチャー exe・ini・起動プロファイル JSON の配備先共有フォルダ（UNC 可）。 — リモートデスクトップ専用ランチャー（PmAiRpaLuncher.exe）向け: 接続先 RDP ランチャー exe と RDP起動プロファイル.json、RPA設定.ini の配備先共有フォルダ（UNC 可）。 空のときは M:\\湖南工場\\湖南共有\\002  加工G\\●配台AIシステム\\共有DATA。 配台 PMD とは別キー（PM_AI_RDP_LAUNCHER_DEPLOY_DIR）。"
   }, {
     "name" : "PM_AI_RDP_PORTABLE_BUNDLE_SOURCE_DIR",
-    "value" : "",
-    "description" : "リモートデスクトップ専用ポータブル（PmAiRpaLuncher）の版アップ正本。ローカル出力 rpa_luncher_release。配台 PMD は pm-ai-package-release。 — リモートデスクトップ専用ポータブル（PmAiRpaLuncher.exe）の版アップ正本。 ローカルビルド出力はリポジトリ直下 rpa_luncher_release。 共有 UNC 既定: 掲示板 rpa_luncher\\RDPランチャ（version.txt + PmAiRpaLuncher_version_upgrade.zip）。 配台 PMD の正本は PM_AI_PORTABLE_BUNDLE_SOURCE_DIR（pm-ai-package-release）。"
+    "value" : "M:\\湖南工場\\湖南共有\\002  加工G\\●配台AIシステム\\共有DATA\\PmAiRpaLuncher_portable",
+    "description" : "リモートデスクトップ専用ポータブル（PmAiRpaLuncher）の版アップ正本。ローカル出力 rpa_luncher_release。配台 PMD は pm-ai-package-release。 — リモートデスクトップ専用ポータブル（PmAiRpaLuncher.exe）の版アップ正本。 ローカルビルド出力はリポジトリ直下 rpa_luncher_release。 湖南工場既定: M:\\湖南工場\\…\\共有DATA\\PmAiRpaLuncher_portable（PmAiRpaLuncher\\PmAiRpaLuncher.exe の2段上。version.txt + PmAiRpaLuncher_version_upgrade.zip）。 配台 PMD の正本は PM_AI_PORTABLE_BUNDLE_SOURCE_DIR（pm-ai-package-release）。"
   }, {
     "name" : "PM_AI_RDP_OPERATOR_USERS_STORE_DIR",
     "value" : "\\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\002  加工G\\●配台AIシステム\\共有DATA",
     "description" : "配台 PMD のリモートデスクトップタブ向け: 操作者 bin 保存フォルダ（UNC 可）。 空のときは \\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\002  加工G\\●配台AIシステム\\共有DATA（rdp-launcher-operator-users.bin とバックアップ）。 専用ランチャーでは PM_AI_RPA_LAUNCHER_OPERATOR_USERS_STORE_DIR を使用。"
   }, {
     "name" : "PM_AI_RPA_LAUNCHER_OPERATOR_USERS_STORE_DIR",
-    "value" : "\\\\192.168.0.101\\共有フォルダ\\掲示板\\rpa_luncher\\DATA",
-    "description" : "リモートデスクトップ専用ランチャー向けの操作者 bin 保存フォルダ（UNC 可）。前回操作者選択は PC ローカル。 — リモートデスクトップ専用ランチャー向けの操作者 bin 保存フォルダ（UNC 可）。 空のときは掲示板共有 \\\\192.168.0.101\\共有フォルダ\\掲示板\\rpa_luncher\\DATA（rdp-launcher-operator-users.bin とバックアップ）。 前回選択した操作者名は PC ローカルの last-rdp-launcher-operator.txt に保存。 配台 PMD とは別キー（PM_AI_RDP_OPERATOR_USERS_STORE_DIR）。"
+    "value" : "M:\\湖南工場\\湖南共有\\002  加工G\\●配台AIシステム\\共有DATA",
+    "description" : "リモートデスクトップ専用ランチャー向けの操作者 bin 保存フォルダ（UNC 可）。前回操作者選択は PC ローカル。 — リモートデスクトップ専用ランチャー向けの操作者 bin 保存フォルダ（UNC 可）。 空のときは掲示板共有 M:\\湖南工場\\湖南共有\\002  加工G\\●配台AIシステム\\共有DATA（rdp-launcher-operator-users.bin とバックアップ）。 前回選択した操作者名は PC ローカルの last-rdp-launcher-operator.txt に保存。 配台 PMD とは別キー（PM_AI_RDP_OPERATOR_USERS_STORE_DIR）。"
   }, {
     "name" : "PM_AI_RDP_LAUNCHER_AUTO_DEPLOY",
     "value" : "",
     "description" : "ランチャー exe の自動再配備。0/false/off で無効。 — 依頼書 UI から接続先共有フォルダへランチャー exe を自動再配備する。0/false/off で無効。既定は有効。"
   }, {
     "name" : "PM_AI_RDP_LAUNCH_PROFILE_NUMBER",
-    "value" : "",
+    "value" : "2",
     "description" : "リモートデスクトップタブで最後に使用した起動プロファイル番号（1～9）。次回の ComboBox 既定値。未設定時は 1。 — リモートデスクトップタブで最後に使用した起動プロファイル番号（1～9）。 次回起動時の ComboBox 既定値。 RPA設定.ini の起動プログラム番号（スロット）と同一。 名称・説明は共有フォルダの RDP起動プロファイル.json に保存。"
   }, {
     "name" : "PM_AI_RDP_EMBED_STARTUP_IN_PROFILE",
     "value" : "",
     "description" : "1 で .rdp へ alternate shell 書込。既定 off。 — 1/true/on のときのみ PM_AI_RDP_COMPANION_PROGRAM を .rdp へ alternate shell として書込。既定は off（接続先はタスクスケジューラ + RPA設定.ini）。"
   } ],
-  "mainShellTabOrder" : [ "equipmentStatusDashboard", "remoteDesktop", "requestFormInput", "run", "planInput", "dispatchInteractive", "planInputStage3", "equipmentGanttGraphic", "deliveryCalendarView", "operatorCard", "codeLookupTables", "env", "globalSettings", "userProfiles", "operatorUserManagement" ],
+  "mainShellTabOrder" : [ "equipmentStatusDashboard", "remoteDesktop", "requestFormInput", "requestFormPipelineCheck", "run", "planInput", "dispatchInteractive", "planInputStage3", "equipmentGanttGraphic", "deliveryCalendarView", "operatorCard", "codeLookupTables", "uiBadgeDesign", "pushButtonDesign", "ganttPersonBadgeDesign", "requestFormPreviewBadgeDesign", "planResultViewer", "stage1Preview", "resultDispatch", "masterSummary", "excludeRules", "specialRules", "planWorkspaceHistory", "summaryAiDispatchExportCustomize", "memorySettings", "apiModelBenchmark", "actualsStatus", "pipelineExecutionTiming", "cacheHistory", "summaryAiDispatchGeneration", "learnedSpeedData", "env", "globalSettings", "userProfiles", "operatorUserManagement" ],
   "mainShellTabLayout" : [ {
     "kind" : "tab",
     "color" : "#994d66",
@@ -496,6 +507,10 @@
     "kind" : "tab",
     "color" : "#336633",
     "id" : "requestFormInput"
+  }, {
+    "kind" : "tab",
+    "color" : "#9980e6",
+    "id" : "requestFormPipelineCheck"
   }, {
     "kind" : "tab",
     "color" : "#0000ff",
@@ -638,10 +653,24 @@
   "equipmentGanttHeaderHeightPercent" : 100.0,
   "equipmentGanttSlotWidthPercent" : 202.4390261347701,
   "equipmentGanttShiftWheelHScrollPercent" : 200.0,
-  "equipmentGanttPrepTimeLabelsEnabled" : false,
+  "equipmentGanttPrepTimeLabelsEnabled" : true,
   "equipmentGanttPersonBadgeGapPx" : 32.78048706054687,
   "equipmentGanttPersonBadgeBandVerticalOffsetPx" : -8.975611244759897,
-  "equipmentGanttGraphicDataFingerprint" : "cf5e41cc0315226917764daed5a54c6141f40e18373a1bc834f0e6e72d9e7b17",
+  "equipmentGanttGraphicDataFingerprint" : "7910e95f66b76f1d064961ea535b07369e5d67277545d51f375062867a816bdf",
+  "equipmentGanttBadgeDragDeltas" : {
+    "7|17|17|0|0|冨田" : {
+      "dx" : -46.0,
+      "dy" : 51.624927473030255
+    },
+    "7|30|32|0|0|宮島" : {
+      "dx" : -30.666666666666742,
+      "dy" : 51.624927473030255
+    },
+    "7|36|38|0|0|宮島" : {
+      "dx" : -31.562860614818646,
+      "dy" : 51.624927473030354
+    }
+  },
   "equipmentGanttPersonBadgeDragAdjustEnabled" : true,
   "equipmentGanttPersonBadgeEnabled" : true,
   "equipmentGanttPersonBadgeWireEnabled" : true,
@@ -661,48 +690,6 @@
   "equipmentGanttPersonBadgeGlowSpread" : 0.13440000000000005,
   "equipmentGanttPersonBadgeOpacity" : 0.84,
   "equipmentGanttPersonBadgeStylesByMemberKey" : {
-    "河合 直樹" : {
-      "fontFamily" : "French Script MT",
-      "fontPercent" : 88.0188639658802,
-      "fillHex" : "#632046",
-      "textHex" : "#f0f2f7",
-      "strokeHex" : "#360a23",
-      "strokeWidth" : 1.0,
-      "cornerRadius" : 18.0,
-      "pill" : false,
-      "glowColorHex" : "#e632cb",
-      "glowRadius" : 20.58,
-      "glowSpread" : 0.2772,
-      "opacity" : 0.73
-    },
-    "大平 有希子" : {
-      "fontFamily" : "MS Reference Sans Serif",
-      "fontPercent" : 88.0188639658802,
-      "fillHex" : "#5699be",
-      "textHex" : "#14171f",
-      "strokeHex" : "#214a60",
-      "strokeWidth" : 0.5,
-      "cornerRadius" : 15.0,
-      "pill" : false,
-      "glowColorHex" : "#c18bf7",
-      "glowRadius" : 15.959999999999999,
-      "glowSpread" : 0.3556,
-      "opacity" : 0.88
-    },
-    "図司 智子" : {
-      "fontFamily" : "Dubai Medium",
-      "fontPercent" : 88.0188639658802,
-      "fillHex" : "#c9866f",
-      "textHex" : "#14171f",
-      "strokeHex" : "#603a2c",
-      "strokeWidth" : 2.0,
-      "cornerRadius" : 15.0,
-      "pill" : true,
-      "glowColorHex" : "#d165e8",
-      "glowRadius" : 9.1,
-      "glowSpread" : 0.5068,
-      "opacity" : 0.89
-    },
     "松本 匡矢" : {
       "fontFamily" : "Harlow Solid Italic",
       "fontPercent" : 88.0188639658802,
@@ -1052,9 +1039,51 @@
       "glowRadius" : 19.88,
       "glowSpread" : 0.5516000000000001,
       "opacity" : 0.67
+    },
+    "河合 直樹" : {
+      "fontFamily" : "French Script MT",
+      "fontPercent" : 88.0188639658802,
+      "fillHex" : "#632046",
+      "textHex" : "#f0f2f7",
+      "strokeHex" : "#360a23",
+      "strokeWidth" : 1.0,
+      "cornerRadius" : 18.0,
+      "pill" : false,
+      "glowColorHex" : "#e632cb",
+      "glowRadius" : 20.58,
+      "glowSpread" : 0.2772,
+      "opacity" : 0.73
+    },
+    "大平 有希子" : {
+      "fontFamily" : "MS Reference Sans Serif",
+      "fontPercent" : 88.0188639658802,
+      "fillHex" : "#5699be",
+      "textHex" : "#14171f",
+      "strokeHex" : "#214a60",
+      "strokeWidth" : 0.5,
+      "cornerRadius" : 15.0,
+      "pill" : false,
+      "glowColorHex" : "#c18bf7",
+      "glowRadius" : 15.959999999999999,
+      "glowSpread" : 0.3556,
+      "opacity" : 0.88
+    },
+    "図司 智子" : {
+      "fontFamily" : "Dubai Medium",
+      "fontPercent" : 88.0188639658802,
+      "fillHex" : "#c9866f",
+      "textHex" : "#14171f",
+      "strokeHex" : "#603a2c",
+      "strokeWidth" : 2.0,
+      "cornerRadius" : 15.0,
+      "pill" : true,
+      "glowColorHex" : "#d165e8",
+      "glowRadius" : 9.1,
+      "glowSpread" : 0.5068,
+      "opacity" : 0.89
     }
   },
-  "equipmentGanttPlanJsonPath" : "C:\\工程管理AIプロジェクト_JAVA\\output\\計画2606192211026422.json",
+  "equipmentGanttPlanJsonPath" : "C:\\システム開発\\工程管理AIプロジェクト_JAVA\\output\\計画2607031216322680.json",
   "stage1NetworkCacheBadgeLabel" : "キャッシュ",
   "stage1NetworkCacheBadgeStyle" : {
     "fontFamily" : "",
@@ -1152,8 +1181,8 @@
   "nextLaunchHeapFixed" : false,
   "nextLaunchHeapMinMiB" : 5376,
   "nextLaunchHeapMaxMiB" : 6144,
-  "equipmentStatusDashboardActualDate" : "2026-06-22",
-  "equipmentStatusDashboardPlanDate" : "2026-06-22",
+  "equipmentStatusDashboardActualDate" : "2026-07-04",
+  "equipmentStatusDashboardPlanDate" : "2026-07-04",
   "equipmentStatusDashboardAutoRefreshEnabled" : true,
   "equipmentStatusDashboardAutoRefreshIntervalSec" : 300,
   "equipmentStatusDashboardShowAladdinPlans" : true,
@@ -1179,8 +1208,8 @@
     "chartShadowEnabled" : true,
     "fullscreenTheme" : "DARK"
   },
-  "windowWidth" : 2574.666748046875,
-  "windowHeight" : 1406.6666259765625,
+  "windowWidth" : 1721.3333740234375,
+  "windowHeight" : 860.0,
   "windowX" : -7.333333492279053,
   "windowY" : -7.333333492279053
 }

@@ -497,10 +497,9 @@ def _trial_order_flow_eligible_tasks(
             )
             if _b1_holder is not None and _b1_holder is not task:
                 continue
-        try:
-            _my_dispatch_ord = int(task.get("dispatch_trial_order") or 10**9)
-        except (TypeError, ValueError):
-            _my_dispatch_ord = 10**9
+            from planning_core.core.plan_input import dispatch_trial_order_key_from_task
+
+            _my_dispatch_ord = dispatch_trial_order_key_from_task(task)
         if _equipment_line_lower_dispatch_trial_still_pending(
             task_queue,
             _mocc_trial,
@@ -987,8 +986,13 @@ def _assign_one_roll_trial_order_flow(
                 machine_name=str(machine_name or "").strip(),
                 eq_line=eq_line,
                 abolish_limits=False,
-                prev_machining_end=(
-                    (_mh.get("last_machining_dt") or {}).get(machine_occ_key)
+                prev_machining_end=_resolve_prev_machining_end_for_roll_prep(
+                    _mh,
+                    machine_occ_key,
+                    (_mh.get("last_machining_dt") or {}).get(machine_occ_key),
+                    machine_avail_dt,
+                    machine_day_floor,
+                    _prev_mach_before_co,
                 ),
                 prev_eq_line=str(
                     (_mh.get("last_eq") or {}).get(machine_occ_key, "") or ""
@@ -1114,7 +1118,12 @@ def _assign_one_roll_trial_order_flow(
     _hist = task.get("assigned_history") or []
     _last_hist_date = _hist[-1].get("date") if _hist else None
     _same_day_last_roll = _last_hist_date == current_date.strftime("%m/%d")
-    if preferred_team and _same_day_last_roll:
+    _pref_team_size_ok = (
+        True
+        if TEAM_ASSIGN_COMBO_SHEET_MAY_EXCEED_NEED
+        else len(preferred_team or ()) <= max_team_size
+    )
+    if preferred_team and _same_day_last_roll and _pref_team_size_ok:
         pt = tuple(preferred_team)
         _pref_pt_ok = (not fixed_team_anchor) or all(
             m in pt for m in fixed_team_anchor
@@ -1920,7 +1929,7 @@ def _trial_order_first_schedule_pass(
     eligible_sorted = sorted(
         eligible,
         key=lambda t: (
-            int(t.get("dispatch_trial_order") or 10**9),
+            dispatch_trial_order_key_from_task(t),
             # 特別ルール（特別ルール列挙.md）:
             # SEC×SEC機 湖南で「PN」を含む依頼NOは、同日に配台する場合は「JR」等より優先（同一試行順帯の先頭側へ寄せる）
             0
@@ -1956,7 +1965,9 @@ def _trial_order_first_schedule_pass(
         L9: スライス×スライス機1 湖南で、直前ロールの試行順±10 かつ同厚みなら優先する。
         ただし原反投入日（start_date_req）・納期基準（due_basis_date）を満たさない場合は優先しない。
         """
-        dto = int(t.get("dispatch_trial_order") or 10**9)
+        from planning_core.core.plan_input import dispatch_trial_order_key_from_task
+
+        dto = dispatch_trial_order_key_from_task(t)
         proc = _normalize_process_name_for_rule_match(t.get("machine"))
         mach = _normalize_equipment_match_key(t.get("machine_name"))
         if not (
@@ -2324,8 +2335,10 @@ def _trial_order_first_schedule_pass(
             machine_handoff["last_machining_sub"][machine_occ_key] = _mach_sub_line
             machine_handoff.setdefault("last_dispatch_trial_order", {})
             machine_handoff.setdefault("last_product_thickness", {})
-            machine_handoff["last_dispatch_trial_order"][machine_occ_key] = int(
-                task.get("dispatch_trial_order") or 10**9
+            from planning_core.core.plan_input import dispatch_trial_order_key_from_task
+
+            machine_handoff["last_dispatch_trial_order"][machine_occ_key] = (
+                dispatch_trial_order_key_from_task(task)
             )
             machine_handoff["last_product_thickness"][machine_occ_key] = task.get(
                 PLAN_COL_PRODUCT_THICKNESS
@@ -2396,7 +2409,7 @@ def _trial_order_first_schedule_pass(
             t.get("roll_pipeline_inspection") or t.get("roll_pipeline_rewind")
         )
         return (
-            int(t.get("dispatch_trial_order") or 10**9),
+            dispatch_trial_order_key_from_task(t),
             0 if _fol else 1,
             str(t.get("task_id") or ""),
             int(t.get("same_request_line_seq") or 0),

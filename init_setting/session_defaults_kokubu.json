@@ -13,6 +13,7 @@
   "mainRunStage2ProductionPlan" : "C:\\工程管理AIプロジェクト_JAVA\\pm-ai-package-release\\PMD_initial_install\\pm-ai-data\\output\\計画2606111325187619.xlsx",
   "mainRunStage2SkipTodayDispatch" : true,
   "planInputStage2InProgressNextDayPrompt" : true,
+  "planInputComboSheetMayExceedNeed" : true,
   "mainRunStage2ResultBookFont" : "Meiryo UI",
   "mainRunSkipGeminiApi" : false,
   "mainRunStage1MarkAllExcludeAfterRun" : false,

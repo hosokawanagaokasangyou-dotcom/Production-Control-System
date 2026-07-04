@@ -466,6 +466,12 @@ TEAM_ASSIGN_USE_MASTER_COMBO_SHEET = (
     .lower()
     not in ("0", "false", "no", "off", "いいえ")
 )
+TEAM_ASSIGN_COMBO_SHEET_MAY_EXCEED_NEED = (
+    os.environ.get("TEAM_ASSIGN_COMBO_SHEET_MAY_EXCEED_NEED", "1")
+    .strip()
+    .lower()
+    not in ("0", "false", "no", "off", "いいえ")
+)
 PLANNING_B1_INSPECTION_EXCLUSIVE_MACHINE = (
     os.environ.get("PLANNING_B1_INSPECTION_EXCLUSIVE_MACHINE", "1")
     .strip()

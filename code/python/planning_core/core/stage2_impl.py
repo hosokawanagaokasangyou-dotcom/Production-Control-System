@@ -1326,6 +1326,9 @@ def _generate_plan_impl(
                             if (team_combo_presets and combo_key)
                             else None
                         )
+                        _prev_mach_raw_legacy = machine_avail_dt.get(
+                            machine_occ_key, _machine_day_start
+                        )
                         (
                             _mach_floor_legacy,
                             _co_segs_legacy,
@@ -1553,13 +1556,18 @@ def _generate_plan_impl(
                                             ).strip(),
                                             eq_line=eq_line,
                                             abolish_limits=False,
-                                            prev_machining_end=(
+                                            prev_machining_end=_resolve_prev_machining_end_for_roll_prep(
+                                                machine_handoff_legacy,
+                                                machine_occ_key,
                                                 (
                                                     machine_handoff_legacy.get(
                                                         "last_machining_dt"
                                                     )
                                                     or {}
-                                                ).get(machine_occ_key)
+                                                ).get(machine_occ_key),
+                                                machine_avail_dt,
+                                                _machine_day_start,
+                                                _prev_mach_raw_legacy,
                                             ),
                                             prev_eq_line=str(
                                                 (

@@ -1136,7 +1136,7 @@ def _exclusive_b1_inspection_holder_for_machine(task_queue, occupant_key: str):
     return min(
         holders,
         key=lambda t: (
-            int(t.get("dispatch_trial_order") or 10**9),
+            _dispatch_trial_order_key(t),
             str(t.get("task_id") or ""),
             int(t.get("same_request_line_seq") or 0),
         ),
@@ -1290,28 +1290,30 @@ def _normalize_dispatch_trial_order_by_process_sequence_within_task_id(
         ranks = [_task_rank_int_or_none(t) for t in group]
         if any(r is None for r in ranks):
             continue
-        order_vals: list[int] = []
+        order_vals: list[float] = []
         for t in group:
             raw = t.get("dispatch_trial_order")
             if raw is None:
                 raw = t.get("dispatch_trial_order_from_sheet")
+            from planning_core.core.plan_input import dispatch_trial_order_sort_key
+
             try:
-                order_vals.append(int(raw))
+                order_vals.append(
+                    dispatch_trial_order_sort_key(raw, default=float("nan"))
+                )
             except (TypeError, ValueError):
                 order_vals = []
                 break
         if len(order_vals) != len(group) or len(set(order_vals)) != len(group):
+            continue
+        if any(not math.isfinite(v) for v in order_vals):
             continue
         sorted_orders = sorted(order_vals)
         before = [
             {
                 "machine": str(t.get("machine") or ""),
                 "rank": _task_rank_int_or_none(t),
-                "dispatch_trial_order": int(
-                    t.get("dispatch_trial_order")
-                    or t.get("dispatch_trial_order_from_sheet")
-                    or 0
-                ),
+                "dispatch_trial_order": _dispatch_trial_order_key(t, default=0.0),
             }
             for t in group
         ]
@@ -1326,7 +1328,7 @@ def _normalize_dispatch_trial_order_by_process_sequence_within_task_id(
             {
                 "machine": str(t.get("machine") or ""),
                 "rank": _task_rank_int_or_none(t),
-                "dispatch_trial_order": int(t.get("dispatch_trial_order") or 0),
+                "dispatch_trial_order": _dispatch_trial_order_key(t, default=0.0),
             }
             for t in group
         ]
@@ -2378,8 +2380,8 @@ def _build_dispatch_trial_pattern_list_matrix(
     for pid, pname, tq, _df_ov in _iter_dispatch_trial_pattern_variant_queues(
         tq_template, pattern_jobs, p5_bundle=p5_bundle_mtx
     ):
-        for t in sorted(tq, key=lambda x: int(x.get("dispatch_trial_order") or 10**9)):
-            dto = int(t.get("dispatch_trial_order") or 0)
+        for t in sorted(tq, key=lambda x: _dispatch_trial_order_key(x)):
+            dto = _dispatch_trial_order_key(t, default=0.0)
             tid = str(t.get("task_id") or "").strip()
             proc = str(t.get("machine") or "").strip()
             mname = str(t.get("machine_name") or "").strip()
@@ -3190,19 +3192,21 @@ def _reorder_task_queue_connection_sec_consecutive(task_queue: list) -> None:
             "特別ルールB-6 配台試行順: 接続行の直後にSEC行を隣接した依頼NO: %s",
             ",".join(moved),
         )
+def _dispatch_trial_order_key(task: dict, default: float = 1e9) -> float:
+    from planning_core.core.plan_input import dispatch_trial_order_key_from_task
+
+    return dispatch_trial_order_key_from_task(task, default)
+
+
 def _task_queue_all_have_sheet_dispatch_trial_order(task_queue: list) -> bool:
-    """配台計画シートの「配台試行順番」はキュー全行に正の整数で入っているか。"""
+    """配台計画シートの「配台試行順番」はキュー全行に正の数（小数可）で入っているか。"""
     if not task_queue:
         return False
+    from planning_core.core.plan_input import dispatch_trial_order_positive_finite
+
     for t in task_queue:
-        v = t.get("dispatch_trial_order_from_sheet")
+        v = dispatch_trial_order_positive_finite(t.get("dispatch_trial_order_from_sheet"))
         if v is None:
-            return False
-        try:
-            iv = int(v)
-        except (TypeError, ValueError):
-            return False
-        if iv < 1:
             return False
     return True
 def _apply_dispatch_trial_order_for_generate_plan(
@@ -3216,14 +3220,18 @@ def _apply_dispatch_trial_order_for_generate_plan(
     欠損はあれみ従来どおりマスタ・紝期・need 列順などでソートし、EC 隣接後に 1..n を付与。
     """
     if _task_queue_all_have_sheet_dispatch_trial_order(task_queue):
+        from planning_core.core.plan_input import dispatch_trial_order_sort_key
+
         task_queue.sort(
             key=lambda t: (
-                int(t.get("dispatch_trial_order_from_sheet") or 10**9),
+                dispatch_trial_order_sort_key(t.get("dispatch_trial_order_from_sheet")),
                 int(t.get("planning_sheet_row_seq") or 10**9),
             )
         )
         for t in task_queue:
-            t["dispatch_trial_order"] = int(t.get("dispatch_trial_order_from_sheet") or 10**9)
+            t["dispatch_trial_order"] = dispatch_trial_order_sort_key(
+                t.get("dispatch_trial_order_from_sheet")
+            )
         _normalize_dispatch_trial_order_by_process_sequence_within_task_id(task_queue)
         logging.info(
             "配台試行順番: 「%s」列の値をしのまま使用しました（全 %s 行）。",
@@ -3788,7 +3796,7 @@ def _day_schedule_task_sort_key(
     except (TypeError, ValueError):
         line_seq = 0
     try:
-        dto = int(task.get("dispatch_trial_order") or 10**9)
+        dto = _dispatch_trial_order_key(task)
     except (TypeError, ValueError):
         dto = 10**9
     insp = bool(task.get("roll_pipeline_inspection"))
@@ -3935,7 +3943,7 @@ def _equipment_line_lower_dispatch_trial_still_pending(
         if t_occ != line:
             continue
         try:
-            o = int(t.get("dispatch_trial_order") or 10**9)
+            o = _dispatch_trial_order_key(t)
         except (TypeError, ValueError):
             o = 10**9
         if _lower_order_blocks(t, o):
@@ -3984,7 +3992,7 @@ def _min_pending_dispatch_trial_order_for_date(
     orders: list[int] = []
     for t in pool:
         try:
-            orders.append(int(t.get("dispatch_trial_order") or 10**9))
+            orders.append(_dispatch_trial_order_key(t))
         except (TypeError, ValueError):
             orders.append(10**9)
     return min(orders) if orders else None
@@ -4031,7 +4039,7 @@ def _task_blocked_by_global_dispatch_trial_order(
     if m is None:
         return False
     try:
-        my_o = int(task.get("dispatch_trial_order") or 10**9)
+        my_o = _dispatch_trial_order_key(task)
     except (TypeError, ValueError):
         my_o = 10**9
     return my_o > m
@@ -9719,6 +9727,39 @@ def _resolve_prev_machining_end_for_request_switch(
             if machine_day_floor is None or av > machine_day_floor:
                 return av
     return None
+
+
+def _resolve_prev_machining_end_for_roll_prep(
+    machine_handoff: dict,
+    machine_occ_key: str,
+    prev_from_handoff: datetime | None,
+    machine_avail_dt: dict | None,
+    machine_day_floor: datetime | None,
+    machine_avail_before_changeover: datetime | None = None,
+) -> datetime | None:
+    """
+    依頼切替用の直前加工終了。handoff → changeover 前の machine_avail の順で補完する。
+    """
+    if isinstance(prev_from_handoff, datetime):
+        return prev_from_handoff
+    mach_occ = str(machine_occ_key or "").strip()
+    machining_today = machine_handoff.get("machining_today_occ") or set()
+    if isinstance(machine_avail_before_changeover, datetime):
+        if mach_occ and mach_occ in machining_today:
+            if (
+                machine_day_floor is None
+                or machine_avail_before_changeover > machine_day_floor
+            ):
+                return machine_avail_before_changeover
+    return _resolve_prev_machining_end_for_request_switch(
+        machine_handoff=machine_handoff,
+        machine_occ_key=machine_occ_key,
+        explicit=None,
+        machine_avail_dt=machine_avail_dt,
+        machine_day_floor=machine_day_floor,
+    )
+
+
 def _roll_prep_segments_for_assign(
     *,
     team_start: datetime,
@@ -9755,7 +9796,6 @@ def _roll_prep_segments_for_assign(
             machine_avail_dt=machine_avail_dt,
             machine_day_floor=machine_day_floor,
         )
-        anchor = _prev_end if isinstance(_prev_end, datetime) else ts
         _prev_proc, _prev_mn = _normalize_proc_machine_for_prep_lookup(
             "", "", eq_line=str(prev_eq_line or "").strip()
         )
@@ -9765,29 +9805,33 @@ def _roll_prep_segments_for_assign(
         bf = _lookup_request_interval_buffer_minutes(
             _proc_lu, _mn_lu, eq_line=eq_line
         )
-        chain_end = anchor
-        if cu > 0:
-            chain_end, segs = _prep_segments_from_anchor(
-                anchor=chain_end,
-                prep_minutes=cu,
-                event_kind=TIMELINE_EVENT_POST_MACHINING_CLEANUP,
-                eq_line=eq_line,
-                machine_occ_key=machine_occ_key,
-            )
-            segments.extend(segs)
-        if bf > 0:
-            chain_end, segs = _prep_segments_from_anchor(
-                anchor=chain_end,
-                prep_minutes=bf,
-                event_kind=TIMELINE_EVENT_REQUEST_INTERVAL_BUFFER,
-                eq_line=eq_line,
-                machine_occ_key=machine_occ_key,
-            )
-            segments.extend(segs)
-        ts = max(ts, chain_end)
         pm = _lookup_request_switch_prep_minutes(
             _proc_lu, _mn_lu, eq_line=eq_line
         )
+        # 後始末・依頼間余裕は直前加工終了が分かるときだけ prev_end から置く。
+        # prev_end 不明のとき team_start を anchor にすると、余裕が加工直後ではなく
+        # 次依頼の準備直前（ギャップの中途）に付いてしまう。
+        if isinstance(_prev_end, datetime):
+            chain_end = _prev_end
+            if cu > 0:
+                chain_end, segs = _prep_segments_from_anchor(
+                    anchor=chain_end,
+                    prep_minutes=cu,
+                    event_kind=TIMELINE_EVENT_POST_MACHINING_CLEANUP,
+                    eq_line=eq_line,
+                    machine_occ_key=machine_occ_key,
+                )
+                segments.extend(segs)
+            if bf > 0:
+                chain_end, segs = _prep_segments_from_anchor(
+                    anchor=chain_end,
+                    prep_minutes=bf,
+                    event_kind=TIMELINE_EVENT_REQUEST_INTERVAL_BUFFER,
+                    eq_line=eq_line,
+                    machine_occ_key=machine_occ_key,
+                )
+                segments.extend(segs)
+            ts = max(ts, chain_end)
         if pm > 0:
             ts, segs = _prep_segments_immediately_before_machining(
                 machining_start=ts,
@@ -10934,7 +10978,7 @@ def _stage2_pending_by_machine_occ_index(
         if not t_occ:
             continue
         try:
-            o = int(t.get("dispatch_trial_order") or 10**9)
+            o = _dispatch_trial_order_key(t)
         except (TypeError, ValueError):
             o = 10**9
         idx[t_occ].append((o, t))
@@ -10947,20 +10991,34 @@ def _combo_preset_team_size_bounds(
     max_team_size_need: int,
 ) -> tuple[int, int] | None:
     """
-    組み合わせ表プリセット1行の人数範囲 (lo, hi)。need の基本人数よりシート坴を優先れる。
-    - 必須人数列は正のときはメンバー列の人数と一致すること。
-    - hi は need の上限と実人数の大しい方（プリセットは need より少人数でも採用可能）。
+    組み合わせ表プリセット1行の人数範囲 (lo, hi)。
+    TEAM_ASSIGN_COMBO_SHEET_MAY_EXCEED_NEED=1（既定）のときは表の必須人数が need より大きくても採用可。
+    =0 のときは need 解決後の max_team_size_need を上限とし、それを超えるプリセットは試行しない。
     """
     nmem = len(preset_team)
     if nmem < 1:
         return None
-    if sheet_req_n is not None and sheet_req_n >= 1:
-        if nmem != sheet_req_n:
-            return None
-        lo = sheet_req_n
+    cap = max(1, int(max_team_size_need or 1))
+    if TEAM_ASSIGN_COMBO_SHEET_MAY_EXCEED_NEED:
+        if sheet_req_n is not None and sheet_req_n >= 1:
+            if nmem != sheet_req_n:
+                return None
+            lo = sheet_req_n
+        else:
+            lo = nmem
+        hi = max(cap, nmem)
     else:
-        lo = nmem
-    hi = max(max_team_size_need, nmem)
+        if sheet_req_n is not None and sheet_req_n >= 1:
+            if nmem != sheet_req_n:
+                return None
+            if sheet_req_n > cap:
+                return None
+            lo = sheet_req_n
+        else:
+            if nmem > cap:
+                return None
+            lo = nmem
+        hi = min(cap, nmem)
     if not (lo <= nmem <= hi):
         return None
     return lo, hi
@@ -11016,6 +11074,7 @@ def _append_legacy_dispatch_candidate_for_team(
     if not op_list:
         return False
     team_start = max(avail_dt[m] for m in team)
+    _prev_mach_raw = machine_avail_dt.get(_machine_occ_key, _mdf)
     if not _gpo.get("abolish_all_scheduling_limits"):
         if machine_floor_cached is not None:
             machine_free_dt = machine_floor_cached
@@ -11136,8 +11195,13 @@ def _append_legacy_dispatch_candidate_for_team(
             machine_name=str(task.get("machine_name") or "").strip(),
             eq_line=eq_line,
             abolish_limits=False,
-            prev_machining_end=(
-                (_mh_legacy.get("last_machining_dt") or {}).get(_machine_occ_key)
+            prev_machining_end=_resolve_prev_machining_end_for_roll_prep(
+                _mh_legacy,
+                _machine_occ_key,
+                (_mh_legacy.get("last_machining_dt") or {}).get(_machine_occ_key),
+                machine_avail_dt,
+                _mdf,
+                _prev_mach_raw,
             ),
             prev_eq_line=str(
                 (_mh_legacy.get("last_eq") or {}).get(_machine_occ_key, "") or ""
@@ -11277,7 +11341,7 @@ def _effective_min_dispatch_trial_order_from_pool(
         return None
     dtos = sorted(
         {
-            int(t.get("dispatch_trial_order") or 10**9)
+            _dispatch_trial_order_key(t)
             for t in pool
         }
     )
@@ -11287,7 +11351,7 @@ def _effective_min_dispatch_trial_order_from_pool(
         at_d = [
             t
             for t in pool
-            if int(t.get("dispatch_trial_order") or 10**9) == d
+            if _dispatch_trial_order_key(t) == d
         ]
         if any(
             not _trial_order_assign_probe_fails(

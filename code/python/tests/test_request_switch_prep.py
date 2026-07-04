@@ -338,6 +338,59 @@ def test_roll_prep_switch_includes_buffer_and_prep_without_cleanup():
     assert ts == prev_end + timedelta(minutes=20)
 
 
+def test_roll_prep_skips_buffer_when_prev_end_unknown():
+    """直前加工終了が不明なとき、余裕を team_start に付けず（ギャップ中途表示を防ぐ）準備のみ。"""
+    _reset_stage2_prep_globals_with_cleanup_buffer()
+    d = date(2026, 5, 18)
+    team_start = datetime(2026, 5, 18, 11, 0)
+    mh = {
+        "last_tid": {"occ1": "A001"},
+        "last_machining_date": {"occ1": d},
+        "machining_today_occ": {"occ1"},
+        "last_eq": {"occ1": "スライス+スライス機1"},
+        "last_machining_dt": {},
+    }
+    ts, segs = core._roll_prep_segments_for_assign(
+        team_start=team_start,
+        team_breaks=[],
+        machine_handoff=mh,
+        machine_occ_key="occ1",
+        current_date=d,
+        task_id="B002",
+        machine_proc="スライス",
+        machine_name="スライス機1",
+        eq_line="スライス+スライス機1",
+        abolish_limits=False,
+        prev_machining_end=None,
+        prev_eq_line="スライス+スライス機1",
+        machine_avail_dt={},
+        machine_day_floor=datetime(2026, 5, 18, 8, 0),
+    )
+    assert [s["event_kind"] for s in segs] == [
+        core.TIMELINE_EVENT_REQUEST_SWITCH_PREP,
+    ]
+    assert segs[0]["start_dt"] == team_start
+    assert ts == team_start + timedelta(minutes=15)
+
+
+def test_resolve_prev_machining_end_for_roll_prep_uses_raw_avail():
+    d = date(2026, 5, 18)
+    prev_end = datetime(2026, 5, 18, 10, 0)
+    mh = {
+        "last_machining_dt": {},
+        "machining_today_occ": {"occ1"},
+    }
+    got = core._resolve_prev_machining_end_for_roll_prep(
+        mh,
+        "occ1",
+        None,
+        {"occ1": datetime(2026, 5, 18, 11, 30)},
+        datetime(2026, 5, 18, 8, 0),
+        prev_end,
+    )
+    assert got == prev_end
+
+
 def test_team_start_is_post_break_resume():
     be = datetime(2026, 5, 18, 12, 50)
     assert core._team_start_is_immediate_post_break_resume(
