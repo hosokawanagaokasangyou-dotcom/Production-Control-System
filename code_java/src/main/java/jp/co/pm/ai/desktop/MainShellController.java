@@ -362,6 +362,9 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
     private RequestFormInputTabController requestFormInputTabController;
 
     @FXML
+    private RequestFormPipelineCheckTabController requestFormPipelineCheckTabController;
+
+    @FXML
     private RemoteDesktopTabController remoteDesktopTabController;
 
     @FXML
@@ -476,6 +479,9 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
 
     @FXML
     private Tab mainShellTabRequestFormInput;
+
+    @FXML
+    private Tab mainShellTabRequestFormPipelineCheck;
 
     @FXML
     private Tab mainShellTabRemoteDesktop;
@@ -739,6 +745,9 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         }
         if (requestFormInputTabController != null) {
             requestFormInputTabController.bindShell(this);
+        }
+        if (requestFormPipelineCheckTabController != null) {
+            requestFormPipelineCheckTabController.bindShell(this);
         }
         if (remoteDesktopTabController != null) {
             remoteDesktopTabController.bindShell(this);
@@ -1088,6 +1097,8 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         planInputTabController.applyStage2SkipTodayDispatchFromSession(s.mainRunStage2SkipTodayDispatch());
         planInputTabController.applyStage2InProgressNextDayPromptFromSession(
                 s.planInputStage2InProgressNextDayPrompt());
+        planInputTabController.applyComboSheetMayExceedNeedFromSession(
+                s.planInputComboSheetMayExceedNeed());
         mainRunTabController.applyStage2ResultBookFontFromSession(s.mainRunStage2ResultBookFont());
         mainRunTabController.applyApplyLearnedSpeedFromActualsFromSession(
                 s.mainRunApplyLearnedSpeedFromActuals());
@@ -1201,6 +1212,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                 mainRunTabController.snapshotStage2MemberSchedulePath(),
                 planInputTabController.snapshotStage2SkipTodayDispatch(),
                 planInputTabController.snapshotStage2InProgressNextDayPrompt(),
+                planInputTabController.snapshotComboSheetMayExceedNeed(),
                 mainRunTabController.snapshotStage2ResultBookFont(),
                 false,
                 false,
@@ -1917,6 +1929,9 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         if (t == mainShellTabRequestFormInput) {
             return MainShellTabId.REQUEST_FORM_INPUT;
         }
+        if (t == mainShellTabRequestFormPipelineCheck) {
+            return MainShellTabId.REQUEST_FORM_PIPELINE_CHECK;
+        }
         if (t == mainShellTabRemoteDesktop) {
             return MainShellTabId.REMOTE_DESKTOP;
         }
@@ -1998,6 +2013,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
             case PLAN_INPUT -> mainShellTabPlanInput;
             case PLAN_INPUT_STAGE3 -> mainShellTabPlanInputStage3;
             case REQUEST_FORM_INPUT -> mainShellTabRequestFormInput;
+            case REQUEST_FORM_PIPELINE_CHECK -> mainShellTabRequestFormPipelineCheck;
             case REMOTE_DESKTOP -> mainShellTabRemoteDesktop;
             case STAGE1_PREVIEW -> mainShellTabStage1Preview;
             case CODE_LOOKUP_TABLES -> mainShellTabCodeLookupTables;
@@ -4196,6 +4212,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                         planInputTabController.snapshotStage2SkipTodayDispatch() ? "1" : "0");
                 uiRun.put(AppPaths.KEY_PM_AI_STAGE2_SKIP_IN_PROGRESS_DISPATCH, "0");
                 applyStage2InProgressNextDayDispatchEnv(uiRun);
+                overlayPlanInputComboSheetMayExceedNeedEnv(uiRun);
                 String resultFont = mainRunTabController.snapshotStage2ResultBookFont();
                 if (resultFont != null && !resultFont.isBlank()) {
                     uiRun.put(AppPaths.KEY_PM_AI_RESULT_BOOK_FONT, resultFont.trim());
@@ -5228,6 +5245,16 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                 mainRunTabController.snapshotApplyLearnedSpeedFromActuals() ? "1" : "0");
     }
 
+    /** 配台計画_タスク入力タブの組み合わせ表 need 超過チェックを子プロセス環境へ反映する。 */
+    private void overlayPlanInputComboSheetMayExceedNeedEnv(Map<String, String> ui) {
+        if (planInputTabController == null) {
+            return;
+        }
+        ui.put(
+                AppPaths.KEY_TEAM_ASSIGN_COMBO_SHEET_MAY_EXCEED_NEED,
+                planInputTabController.snapshotComboSheetMayExceedNeed() ? "1" : "0");
+    }
+
     /**
      * 入力3表生成: 段階2暦日別 baseline を Python へ渡す（sidecar または手動修正タブのスナップショット）。
      */
@@ -5524,6 +5551,14 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                 r.setValue(site.requestFormJuchuFile());
             } else if (AppPaths.KEY_PM_AI_REQUEST_FORM_TPI_PDF_DIR.equals(name)) {
                 r.setValue(site.requestFormTpiPdfDir());
+            } else if (AppPaths.KEY_PM_AI_RDP_PORTABLE_BUNDLE_SOURCE_DIR.equals(name)) {
+                r.setValue(site.rdpPortableBundleSourceDir());
+            } else if (AppPaths.KEY_PM_AI_RPA_LAUNCHER_DEPLOY_DIR.equals(name)
+                    && site == FactorySite.KONAN) {
+                r.setValue(AppPaths.DEFAULT_KONAN_SHARED_DATA_DIR_M);
+            } else if (AppPaths.KEY_PM_AI_RPA_LAUNCHER_OPERATOR_USERS_STORE_DIR.equals(name)
+                    && site == FactorySite.KONAN) {
+                r.setValue(AppPaths.DEFAULT_KONAN_SHARED_DATA_DIR_M);
             }
         }
         GlobalInitSettingTarget.save(site);
@@ -6152,6 +6187,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                 planInputTabController.snapshotStage2SkipTodayDispatch() ? "1" : "0");
         ui.put(AppPaths.KEY_PM_AI_STAGE2_SKIP_IN_PROGRESS_DISPATCH, "0");
         applyStage2InProgressNextDayDispatchEnv(ui);
+        overlayPlanInputComboSheetMayExceedNeedEnv(ui);
         overlayMainRunSkipGeminiApiEnv(ui);
         String resultFont = mainRunTabController.snapshotStage2ResultBookFont();
         if (resultFont != null && !resultFont.isBlank()) {
@@ -6173,6 +6209,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                 planInputTabController.snapshotStage2SkipTodayDispatch() ? "1" : "0");
         ui.put(AppPaths.KEY_PM_AI_STAGE2_SKIP_IN_PROGRESS_DISPATCH, "0");
         applyStage2InProgressNextDayDispatchEnv(ui);
+        overlayPlanInputComboSheetMayExceedNeedEnv(ui);
         overlayMainRunSkipGeminiApiEnv(ui);
         String resultFont = mainRunTabController.snapshotStage2ResultBookFont();
         if (resultFont != null && !resultFont.isBlank()) {

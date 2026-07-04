@@ -120,6 +120,11 @@
                         <fx:include fx:id="requestFormInputTab" source="RequestFormInputTab.fxml"/>
                     </content>
                 </Tab>
+                <Tab fx:id="mainShellTabRequestFormPipelineCheck" closable="false" text="原本転記・計画確認">
+                    <content>
+                        <fx:include fx:id="requestFormPipelineCheckTab" source="RequestFormPipelineCheckTab.fxml"/>
+                    </content>
+                </Tab>
                 <Tab fx:id="mainShellTabRemoteDesktop" closable="false" text="リモートデスクトップ">
                     <content>
                         <fx:include fx:id="remoteDesktopTab" source="RemoteDesktopTab.fxml"/>

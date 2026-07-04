@@ -20,6 +20,9 @@ import jp.co.pm.ai.desktop.io.JsonTableIo;
  */
 public final class AladdinShapedPlanQtyLookup {
 
+    /** 原本転記・計画確認タブのアラジン計画日別列数。 */
+    public static final int PIPELINE_CHECK_PLAN_DAY_COLUMNS = 7;
+
     /** 日付列ヘッダ: {@code yyyy/MM/dd} */
     private static final Pattern ALADDIN_DATE_COL = Pattern.compile("\\d{4}/\\d{2}/\\d{2}");
 
@@ -30,6 +33,112 @@ public final class AladdinShapedPlanQtyLookup {
     private AladdinShapedPlanQtyLookup() {}
 
     public record ShapedTable(List<String> headers, List<List<String>> rows) {}
+
+    /**
+     * shaped 表ヘッダから日付列（{@code yyyy/MM/dd}）を昇順で抽出する。
+     * {@code maxCount} を超える分は切り捨てる。
+     */
+    public static List<String> extractSortedDateColumnHeaders(List<String> headers, int maxCount) {
+        if (headers == null || headers.isEmpty() || maxCount <= 0) {
+            return List.of();
+        }
+        List<String> dates = new ArrayList<>();
+        for (String h : headers) {
+            if (h != null && ALADDIN_DATE_COL.matcher(h).matches()) {
+                dates.add(h);
+            }
+        }
+        dates.sort(String::compareTo);
+        if (dates.size() <= maxCount) {
+            return List.copyOf(dates);
+        }
+        return List.copyOf(dates.subList(0, maxCount));
+    }
+
+    /** 日付列見出しを表向け短ラベル（{@code M/d}）にする。 */
+    public static String shortPlanDateColumnLabel(String dateYmd) {
+        if (dateYmd == null || dateYmd.isBlank()) {
+            return "計画日";
+        }
+        LocalDate d = parsePlanDateColumn(dateYmd);
+        if (d != null) {
+            return d.getMonthValue() + "/" + d.getDayOfMonth();
+        }
+        if (dateYmd.length() >= 10) {
+            String tail = dateYmd.substring(5).replace("-", "/");
+            if (tail.startsWith("0")) {
+                tail = tail.substring(1);
+            }
+            int slash = tail.indexOf('/');
+            if (slash >= 0 && slash + 1 < tail.length() && tail.charAt(slash + 1) == '0') {
+                tail = tail.substring(0, slash + 1) + tail.substring(slash + 2);
+            }
+            return tail;
+        }
+        return dateYmd;
+    }
+
+    /** 原本転記・計画確認タブの計画日スロット列見出し（①〜⑳）。 */
+    public static String circledSlotColumnLabel(int indexZeroBased) {
+        if (indexZeroBased >= 0 && indexZeroBased < 20) {
+            return String.valueOf((char) ('\u2460' + indexZeroBased));
+        }
+        return String.valueOf(indexZeroBased + 1);
+    }
+
+    /** 計画日セル表示（{@code M/d} + 半角スペース + {@code m} 付き数量）。数量なしは空文字。 */
+    public static String formatPlanDateMetersCell(String dateYmd, double meters) {
+        if (Math.abs(meters) <= 1e-12) {
+            return "";
+        }
+        return shortPlanDateColumnLabel(dateYmd) + " " + formatPlanMeters(meters) + "m";
+    }
+
+    /**
+     * 依頼の計画エントリを {@code dateHeaders} の各日付スロットに集計（同一日・複数機械は m 合算）。
+     * 返却リスト長は {@code slotCount}（不足スロットは空文字）。各セルは {@code M/d Nm} 形式。
+     */
+    public static List<String> aggregatePlanMetersByDateSlots(
+            List<PlanEntry> entries, List<String> dateHeaders, int slotCount) {
+        if (slotCount <= 0) {
+            return List.of();
+        }
+        Map<String, Double> sumByDate = new LinkedHashMap<>();
+        if (entries != null) {
+            for (PlanEntry e : entries) {
+                String key = normaliseDateStr(e.dateYmd());
+                if (key == null) {
+                    key = e.dateYmd();
+                }
+                sumByDate.merge(key, e.planMeters(), Double::sum);
+            }
+        }
+        List<String> out = new ArrayList<>(slotCount);
+        for (int i = 0; i < slotCount; i++) {
+            if (dateHeaders != null && i < dateHeaders.size()) {
+                String header = dateHeaders.get(i);
+                String key = normaliseDateStr(header);
+                if (key == null) {
+                    key = header;
+                }
+                Double qty = sumByDate.get(key);
+                out.add(
+                        qty != null && Math.abs(qty) > 1e-12
+                                ? formatPlanDateMetersCell(header, qty)
+                                : "");
+            } else {
+                out.add("");
+            }
+        }
+        return List.copyOf(out);
+    }
+
+    private static String formatPlanMeters(double m) {
+        if (Math.abs(m - Math.rint(m)) < 1e-9) {
+            return String.valueOf((long) Math.rint(m));
+        }
+        return String.valueOf(m);
+    }
 
     /** shaped JSON があれば読み込む。失敗・未存在時は空表。 */
     public static ShapedTable loadShapedTable(Path shapedJsonPath) {
@@ -152,6 +261,110 @@ public final class AladdinShapedPlanQtyLookup {
             }
         }
         return new ArrayList<>(out);
+    }
+
+    /** 依頼NO に一致する全計画エントリ（機械名×工程名×日付×m）を収集する。 */
+    public record PlanEntry(String machineName, String processName, String dateYmd, double planMeters) {}
+
+    public static List<PlanEntry> collectEntriesForTaskId(
+            Map<String, Map<String, Map<String, Map<String, Double>>>> lookup, String taskId) {
+        if (lookup == null || lookup.isEmpty() || taskId == null || taskId.isBlank()) {
+            return List.of();
+        }
+        String tid = taskId.strip();
+        List<PlanEntry> out = new ArrayList<>();
+        for (Map.Entry<String, Map<String, Map<String, Map<String, Double>>>> mkEntry :
+                lookup.entrySet()) {
+            Map<String, Map<String, Map<String, Double>>> byTid = mkEntry.getValue();
+            Map<String, Map<String, Double>> byDate = byTid.get(tid);
+            if (byDate == null || byDate.isEmpty()) {
+                continue;
+            }
+            String machine = mkEntry.getKey();
+            for (Map.Entry<String, Map<String, Double>> dateEntry : byDate.entrySet()) {
+                String dateYmd = dateEntry.getKey();
+                for (Map.Entry<String, Double> procEntry : dateEntry.getValue().entrySet()) {
+                    double qty = procEntry.getValue() != null ? procEntry.getValue() : 0.0;
+                    if (Math.abs(qty) > 1e-12) {
+                        out.add(new PlanEntry(machine, procEntry.getKey(), dateYmd, qty));
+                    }
+                }
+            }
+        }
+        out.sort(
+                (a, b) -> {
+                    int c = a.dateYmd().compareTo(b.dateYmd());
+                    if (c != 0) {
+                        return c;
+                    }
+                    c = a.machineName().compareTo(b.machineName());
+                    if (c != 0) {
+                        return c;
+                    }
+                    return a.processName().compareTo(b.processName());
+                });
+        return List.copyOf(out);
+    }
+
+    /** shaped 表から依頼NO の計画エントリを収集（表示用の機械名・工程名を保持）。 */
+    public static List<PlanEntry> collectEntriesForTaskIdFromTable(
+            List<String> headers, List<List<String>> rows, String taskId) {
+        if (headers == null
+                || rows == null
+                || taskId == null
+                || taskId.isBlank()) {
+            return List.of();
+        }
+        int mkIdx = colIdx(headers, COL_MK_NAME);
+        int tidIdx = colIdx(headers, COL_TID);
+        int procIdx = colIdx(headers, COL_PROCESS);
+        if (mkIdx < 0 || tidIdx < 0) {
+            return List.of();
+        }
+        String tid = taskId.strip();
+        Map<Integer, String> dateCols = new LinkedHashMap<>();
+        for (int i = 0; i < headers.size(); i++) {
+            String h = headers.get(i);
+            if (h != null && ALADDIN_DATE_COL.matcher(h).matches()) {
+                dateCols.put(i, h);
+            }
+        }
+        if (dateCols.isEmpty()) {
+            return List.of();
+        }
+        List<PlanEntry> out = new ArrayList<>();
+        for (List<String> row : rows) {
+            if (!tid.equals(cellAt(row, tidIdx).strip())) {
+                continue;
+            }
+            String machine = cellAt(row, mkIdx).strip();
+            String process = procIdx >= 0 ? cellAt(row, procIdx).strip() : "";
+            for (Map.Entry<Integer, String> e : dateCols.entrySet()) {
+                double qty = parseCellDouble(cellAt(row, e.getKey()));
+                if (Math.abs(qty) > 1e-12) {
+                    String dsKey = normaliseDateStr(e.getValue());
+                    out.add(
+                            new PlanEntry(
+                                    machine,
+                                    process,
+                                    dsKey != null ? dsKey : e.getValue(),
+                                    qty));
+                }
+            }
+        }
+        out.sort(
+                (a, b) -> {
+                    int c = a.dateYmd().compareTo(b.dateYmd());
+                    if (c != 0) {
+                        return c;
+                    }
+                    c = a.machineName().compareTo(b.machineName());
+                    if (c != 0) {
+                        return c;
+                    }
+                    return a.processName().compareTo(b.processName());
+                });
+        return List.copyOf(out);
     }
 
     /** {@code yyyy/MM/dd} または {@code yyyy-MM-dd} 形式の日付列キーを {@link LocalDate} に変換。 */

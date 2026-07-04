@@ -24,6 +24,8 @@ public enum MainShellTabId {
     PLAN_INPUT_STAGE3("planInputStage3"),
     /** 加工依頼書の照合・対比型入力（湖南工場・ReconciliationApp 由来）。 */
     REQUEST_FORM_INPUT("requestFormInput"),
+    /** 依頼書原本の受注転記率・アラジン加工計画の確認。 */
+    REQUEST_FORM_PIPELINE_CHECK("requestFormPipelineCheck"),
     /** RDP 接続・RAP 設定・接続先ランチャー配備。 */
     REMOTE_DESKTOP("remoteDesktop"),
     STAGE1_PREVIEW("stage1Preview"),
