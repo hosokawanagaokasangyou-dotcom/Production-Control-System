@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "C:\\工程管理AIプロジェクト_JAVA\\tools\\pm-ai-rdp-remote-launcher\\PmAiRdpRemoteLauncher.csproj": {}
+    "C:\\システム開発\\工程管理AIプロジェクト_JAVA\\tools\\pm-ai-rdp-remote-launcher\\PmAiRdpRemoteLauncher.csproj": {}
   },
   "projects": {
-    "C:\\工程管理AIプロジェクト_JAVA\\tools\\pm-ai-rdp-remote-launcher\\PmAiRdpRemoteLauncher.csproj": {
+    "C:\\システム開発\\工程管理AIプロジェクト_JAVA\\tools\\pm-ai-rdp-remote-launcher\\PmAiRdpRemoteLauncher.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\工程管理AIプロジェクト_JAVA\\tools\\pm-ai-rdp-remote-launcher\\PmAiRdpRemoteLauncher.csproj",
+        "projectUniqueName": "C:\\システム開発\\工程管理AIプロジェクト_JAVA\\tools\\pm-ai-rdp-remote-launcher\\PmAiRdpRemoteLauncher.csproj",
         "projectName": "PmAiRdpRemoteLauncher",
-        "projectPath": "C:\\工程管理AIプロジェクト_JAVA\\tools\\pm-ai-rdp-remote-launcher\\PmAiRdpRemoteLauncher.csproj",
-        "packagesPath": "C:\\Users\\0585\\.nuget\\packages\\",
-        "outputPath": "C:\\工程管理AIプロジェクト_JAVA\\tools\\pm-ai-rdp-remote-launcher\\obj\\",
+        "projectPath": "C:\\システム開発\\工程管理AIプロジェクト_JAVA\\tools\\pm-ai-rdp-remote-launcher\\PmAiRdpRemoteLauncher.csproj",
+        "packagesPath": "C:\\Users\\0585\\AppData\\Local\\Temp\\cursor-sandbox-cache\\97c7a18842eafd74ba7cfcce10007209\\nuget",
+        "outputPath": "C:\\システム開発\\工程管理AIプロジェクト_JAVA\\tools\\pm-ai-rdp-remote-launcher\\obj\\",
         "projectStyle": "PackageReference",
         "configFilePaths": [
           "C:\\Users\\0585\\AppData\\Roaming\\NuGet\\NuGet.Config"
@@ -43,12 +43,6 @@
         "net8.0-windows7.0": {
           "targetAlias": "net8.0-windows",
           "dependencies": {
-            "Microsoft.NET.ILLink.Tasks": {
-              "suppressParent": "All",
-              "target": "Package",
-              "version": "[8.0.28, )",
-              "autoReferenced": true
-            },
             "System.Management": {
               "target": "Package",
               "version": "[8.0.0, )"

@@ -1,15 +1,14 @@
 {
   "version": 2,
-  "dgSpecHash": "ru1zv9r15Oc=",
+  "dgSpecHash": "h1nML3LNC8A=",
   "success": true,
-  "projectFilePath": "C:\\工程管理AIプロジェクト_JAVA\\tools\\pm-ai-rdp-remote-launcher\\PmAiRdpRemoteLauncher.csproj",
+  "projectFilePath": "C:\\システム開発\\工程管理AIプロジェクト_JAVA\\tools\\pm-ai-rdp-remote-launcher\\PmAiRdpRemoteLauncher.csproj",
   "expectedPackageFiles": [
-    "C:\\Users\\0585\\.nuget\\packages\\microsoft.net.illink.tasks\\8.0.28\\microsoft.net.illink.tasks.8.0.28.nupkg.sha512",
-    "C:\\Users\\0585\\.nuget\\packages\\system.codedom\\8.0.0\\system.codedom.8.0.0.nupkg.sha512",
-    "C:\\Users\\0585\\.nuget\\packages\\system.management\\8.0.0\\system.management.8.0.0.nupkg.sha512",
-    "C:\\Users\\0585\\.nuget\\packages\\microsoft.netcore.app.runtime.win-x64\\8.0.28\\microsoft.netcore.app.runtime.win-x64.8.0.28.nupkg.sha512",
-    "C:\\Users\\0585\\.nuget\\packages\\microsoft.windowsdesktop.app.runtime.win-x64\\8.0.28\\microsoft.windowsdesktop.app.runtime.win-x64.8.0.28.nupkg.sha512",
-    "C:\\Users\\0585\\.nuget\\packages\\microsoft.aspnetcore.app.runtime.win-x64\\8.0.28\\microsoft.aspnetcore.app.runtime.win-x64.8.0.28.nupkg.sha512"
+    "C:\\Users\\0585\\AppData\\Local\\Temp\\cursor-sandbox-cache\\97c7a18842eafd74ba7cfcce10007209\\nuget\\system.codedom\\8.0.0\\system.codedom.8.0.0.nupkg.sha512",
+    "C:\\Users\\0585\\AppData\\Local\\Temp\\cursor-sandbox-cache\\97c7a18842eafd74ba7cfcce10007209\\nuget\\system.management\\8.0.0\\system.management.8.0.0.nupkg.sha512",
+    "C:\\Users\\0585\\AppData\\Local\\Temp\\cursor-sandbox-cache\\97c7a18842eafd74ba7cfcce10007209\\nuget\\microsoft.netcore.app.runtime.win-x64\\8.0.28\\microsoft.netcore.app.runtime.win-x64.8.0.28.nupkg.sha512",
+    "C:\\Users\\0585\\AppData\\Local\\Temp\\cursor-sandbox-cache\\97c7a18842eafd74ba7cfcce10007209\\nuget\\microsoft.windowsdesktop.app.runtime.win-x64\\8.0.28\\microsoft.windowsdesktop.app.runtime.win-x64.8.0.28.nupkg.sha512",
+    "C:\\Users\\0585\\AppData\\Local\\Temp\\cursor-sandbox-cache\\97c7a18842eafd74ba7cfcce10007209\\nuget\\microsoft.aspnetcore.app.runtime.win-x64\\8.0.28\\microsoft.aspnetcore.app.runtime.win-x64.8.0.28.nupkg.sha512"
   ],
   "logs": []
 }

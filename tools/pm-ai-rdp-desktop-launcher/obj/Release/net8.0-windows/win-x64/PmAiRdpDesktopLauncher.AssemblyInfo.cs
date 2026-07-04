@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("PmAiRdpDesktopLauncher")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+f0fe4b7739b02a09455e53e8dccea90c44182bb0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+0513ebeb56171bd1d8d4f6eca4fae10700f93c17")]
 [assembly: System.Reflection.AssemblyProductAttribute("PmAiRdpDesktopLauncher")]
 [assembly: System.Reflection.AssemblyTitleAttribute("PmAiRdpDesktopLauncher")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
