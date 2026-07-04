@@ -23,11 +23,12 @@ public final class AladdinShapedPlanQtyLookup {
     /** 原本転記・計画確認タブのアラジン計画日別列数。 */
     public static final int PIPELINE_CHECK_PLAN_DAY_COLUMNS = 7;
 
-    /** 日付列ヘッダ: {@code yyyy/MM/dd} */
-    private static final Pattern ALADDIN_DATE_COL = Pattern.compile("\\d{4}/\\d{2}/\\d{2}");
+    /** 日付列ヘッダ: {@code yyyy/MM/dd}（厳密） */
+    private static final Pattern ALADDIN_DATE_COL_STRICT = Pattern.compile("\\d{4}/\\d{2}/\\d{2}");
 
     private static final String COL_MK_NAME = "機械名";
     private static final String COL_TID = "依頼NO";
+    private static final String[] COL_TID_ALIASES = {"依頼NO", "依頼No", "依頼Ｎｏ", "依頼ＮＯ"};
     private static final String COL_PROCESS = "工程名";
 
     private AladdinShapedPlanQtyLookup() {}
@@ -44,8 +45,9 @@ public final class AladdinShapedPlanQtyLookup {
         }
         List<String> dates = new ArrayList<>();
         for (String h : headers) {
-            if (h != null && ALADDIN_DATE_COL.matcher(h).matches()) {
-                dates.add(h);
+            if (isPlanDateColumnHeader(h)) {
+                String key = normaliseDateStr(h);
+                dates.add(key != null ? key : h);
             }
         }
         dates.sort(String::compareTo);
@@ -133,6 +135,53 @@ public final class AladdinShapedPlanQtyLookup {
         return List.copyOf(out);
     }
 
+    /**
+     * 依頼の計画エントリを暦日昇順に並べ、先頭 {@code slotCount} 件を {@code M/d Nm} セルにする。
+     * 列見出し ①〜⑦ は依頼ごとの計画日順（表全体の先頭7日付列とは無関係）。
+     */
+    public static List<String> aggregatePlanMetersByEntryDates(
+            List<PlanEntry> entries, int slotCount) {
+        if (slotCount <= 0) {
+            return List.of();
+        }
+        Map<String, Double> sumByDate = new LinkedHashMap<>();
+        if (entries != null) {
+            for (PlanEntry e : entries) {
+                String key = normaliseDateStr(e.dateYmd());
+                if (key == null) {
+                    key = e.dateYmd();
+                }
+                if (key == null || key.isBlank()) {
+                    continue;
+                }
+                sumByDate.merge(key, e.planMeters(), Double::sum);
+            }
+        }
+        List<String> sortedDates = new ArrayList<>(sumByDate.keySet());
+        sortedDates.sort(String::compareTo);
+        List<String> out = new ArrayList<>(slotCount);
+        for (int i = 0; i < slotCount; i++) {
+            if (i < sortedDates.size()) {
+                String date = sortedDates.get(i);
+                out.add(formatPlanDateMetersCell(date, sumByDate.get(date)));
+            } else {
+                out.add("");
+            }
+        }
+        return List.copyOf(out);
+    }
+
+    /** shaped 表ヘッダが日付列か（{@code yyyy/MM/dd} および {@code yyyy/M/d} 等）。 */
+    public static boolean isPlanDateColumnHeader(String header) {
+        if (header == null || header.isBlank()) {
+            return false;
+        }
+        if (ALADDIN_DATE_COL_STRICT.matcher(header.strip()).matches()) {
+            return true;
+        }
+        return normaliseDateStr(header) != null;
+    }
+
     private static String formatPlanMeters(double m) {
         if (Math.abs(m - Math.rint(m)) < 1e-9) {
             return String.valueOf((long) Math.rint(m));
@@ -160,7 +209,7 @@ public final class AladdinShapedPlanQtyLookup {
     public static Map<String, Map<String, Map<String, Map<String, Double>>>> buildLookup(
             List<String> headers, List<List<String>> rows) {
         int mkIdx = colIdx(headers, COL_MK_NAME);
-        int tidIdx = colIdx(headers, COL_TID);
+        int tidIdx = colIdx(headers, COL_TID_ALIASES);
         int procIdx = colIdx(headers, COL_PROCESS);
         if (mkIdx < 0 || tidIdx < 0) {
             return Map.of();
@@ -168,7 +217,7 @@ public final class AladdinShapedPlanQtyLookup {
         Map<Integer, String> dateCols = new LinkedHashMap<>();
         for (int i = 0; i < headers.size(); i++) {
             String h = headers.get(i);
-            if (h != null && ALADDIN_DATE_COL.matcher(h).matches()) {
+            if (isPlanDateColumnHeader(h)) {
                 dateCols.put(i, h);
             }
         }
@@ -178,7 +227,7 @@ public final class AladdinShapedPlanQtyLookup {
         Map<String, Map<String, Map<String, Map<String, Double>>>> result = new LinkedHashMap<>();
         for (List<String> row : rows) {
             String mk = normalizeEquipmentMatchKey(cellAt(row, mkIdx));
-            String tid = cellAt(row, tidIdx).strip();
+            String tid = normalizeTaskIdKey(cellAt(row, tidIdx));
             if (mk.isEmpty() || tid.isEmpty()) {
                 continue;
             }
@@ -271,7 +320,7 @@ public final class AladdinShapedPlanQtyLookup {
         if (lookup == null || lookup.isEmpty() || taskId == null || taskId.isBlank()) {
             return List.of();
         }
-        String tid = taskId.strip();
+        String tid = normalizeTaskIdKey(taskId);
         List<PlanEntry> out = new ArrayList<>();
         for (Map.Entry<String, Map<String, Map<String, Map<String, Double>>>> mkEntry :
                 lookup.entrySet()) {
@@ -316,16 +365,16 @@ public final class AladdinShapedPlanQtyLookup {
             return List.of();
         }
         int mkIdx = colIdx(headers, COL_MK_NAME);
-        int tidIdx = colIdx(headers, COL_TID);
+        int tidIdx = colIdx(headers, COL_TID_ALIASES);
         int procIdx = colIdx(headers, COL_PROCESS);
         if (mkIdx < 0 || tidIdx < 0) {
             return List.of();
         }
-        String tid = taskId.strip();
+        String tidKey = normalizeTaskIdKey(taskId);
         Map<Integer, String> dateCols = new LinkedHashMap<>();
         for (int i = 0; i < headers.size(); i++) {
             String h = headers.get(i);
-            if (h != null && ALADDIN_DATE_COL.matcher(h).matches()) {
+            if (isPlanDateColumnHeader(h)) {
                 dateCols.put(i, h);
             }
         }
@@ -334,7 +383,7 @@ public final class AladdinShapedPlanQtyLookup {
         }
         List<PlanEntry> out = new ArrayList<>();
         for (List<String> row : rows) {
-            if (!tid.equals(cellAt(row, tidIdx).strip())) {
+            if (!tidKey.equals(normalizeTaskIdKey(cellAt(row, tidIdx)))) {
                 continue;
             }
             String machine = cellAt(row, mkIdx).strip();
@@ -435,13 +484,20 @@ public final class AladdinShapedPlanQtyLookup {
         }
     }
 
-    private static int colIdx(List<String> headers, String title) {
-        for (int i = 0; i < headers.size(); i++) {
-            if (title.equals(headers.get(i))) {
-                return i;
+    private static int colIdx(List<String> headers, String... titles) {
+        for (String title : titles) {
+            for (int i = 0; i < headers.size(); i++) {
+                String h = headers.get(i);
+                if (h != null && title.equals(h.strip())) {
+                    return i;
+                }
             }
         }
         return -1;
+    }
+
+    static String normalizeTaskIdKey(String taskId) {
+        return jp.co.pm.ai.desktop.reconciliation.JuchuTransferValueNormalizer.normalizeKey(taskId);
     }
 
     private static String cellAt(List<String> row, int idx) {

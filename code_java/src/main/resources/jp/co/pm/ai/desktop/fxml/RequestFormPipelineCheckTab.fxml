@@ -29,6 +29,10 @@
                   text="受注入力日が" selected="true"/>
         <Spinner fx:id="juchuInputHideDaysSpinner" editable="true" prefWidth="72.0"/>
         <Label text="日以上前を非表示"/>
+        <CheckBox fx:id="showNoAladdinCheck" mnemonicParsing="false"
+                  text="アラジン計画無しを表示"/>
+        <CheckBox fx:id="showAdjustDeliveryFromTodayCheck" mnemonicParsing="false"
+                  text="調整納期が当日以降のみ表示" selected="true"/>
     </HBox>
     <Label fx:id="hintLabel" wrapText="true"/>
     <TableView fx:id="mainTable" minHeight="180.0" VBox.vgrow="ALWAYS"/>

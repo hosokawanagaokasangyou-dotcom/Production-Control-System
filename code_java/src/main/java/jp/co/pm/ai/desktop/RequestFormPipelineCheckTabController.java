@@ -46,9 +46,11 @@ public final class RequestFormPipelineCheckTabController {
     public static final class MainRow {
         private String iraiNo;
         private String originalFile;
-        private String juchuStatus;
+        private String juchuInputDate;
+        private String juchuAdjustDeliveryDate;
         private String rateDisplay;
         private String mismatchCount;
+        private String originalContractNo;
         private String contractNoStatus;
         private String aladdinStatus;
         private final List<String> planDayValues = new ArrayList<>(PLAN_DAY_COLUMNS);
@@ -76,12 +78,20 @@ public final class RequestFormPipelineCheckTabController {
             this.originalFile = originalFile;
         }
 
-        public String getJuchuStatus() {
-            return juchuStatus;
+        public String getJuchuInputDate() {
+            return juchuInputDate;
         }
 
-        public void setJuchuStatus(String juchuStatus) {
-            this.juchuStatus = juchuStatus;
+        public void setJuchuInputDate(String juchuInputDate) {
+            this.juchuInputDate = juchuInputDate;
+        }
+
+        public String getJuchuAdjustDeliveryDate() {
+            return juchuAdjustDeliveryDate;
+        }
+
+        public void setJuchuAdjustDeliveryDate(String juchuAdjustDeliveryDate) {
+            this.juchuAdjustDeliveryDate = juchuAdjustDeliveryDate;
         }
 
         public String getRateDisplay() {
@@ -98,6 +108,14 @@ public final class RequestFormPipelineCheckTabController {
 
         public void setMismatchCount(String mismatchCount) {
             this.mismatchCount = mismatchCount;
+        }
+
+        public String getOriginalContractNo() {
+            return originalContractNo;
+        }
+
+        public void setOriginalContractNo(String originalContractNo) {
+            this.originalContractNo = originalContractNo;
         }
 
         public String getContractNoStatus() {
@@ -272,6 +290,12 @@ public final class RequestFormPipelineCheckTabController {
     private Spinner<Integer> juchuInputHideDaysSpinner;
 
     @FXML
+    private CheckBox showNoAladdinCheck;
+
+    @FXML
+    private CheckBox showAdjustDeliveryFromTodayCheck;
+
+    @FXML
     private Label statusLabel;
 
     @FXML
@@ -312,6 +336,14 @@ public final class RequestFormPipelineCheckTabController {
 
         filterField.textProperty().addListener((obs, oldVal, newVal) -> applyFilter());
         hideNoOriginalCheck.selectedProperty().addListener((obs, o, n) -> applyFilter());
+        if (showNoAladdinCheck != null) {
+            showNoAladdinCheck.selectedProperty().addListener((obs, o, n) -> applyFilter());
+        }
+        if (showAdjustDeliveryFromTodayCheck != null) {
+            showAdjustDeliveryFromTodayCheck
+                    .selectedProperty()
+                    .addListener((obs, o, n) -> applyFilter());
+        }
         if (juchuInputHideDaysSpinner != null) {
             juchuInputHideDaysSpinner.setValueFactory(
                     new SpinnerValueFactory.IntegerSpinnerValueFactory(
@@ -386,9 +418,18 @@ public final class RequestFormPipelineCheckTabController {
                     row.originalPresent()
                             ? row.originalFileName()
                             : "（依頼書原本なし）");
-            ui.setJuchuStatus(row.juchuRegistered() ? "あり" : "なし");
+            ui.setJuchuInputDate(
+                    row.juchuInputDateDisplay() != null ? row.juchuInputDateDisplay() : "");
+            ui.setJuchuAdjustDeliveryDate(
+                    row.juchuAdjustDeliveryDateDisplay() != null
+                            ? row.juchuAdjustDeliveryDateDisplay()
+                            : "");
             ui.setRateDisplay(row.rateDisplay());
             ui.setMismatchCount(String.valueOf(row.mismatchCount()));
+            ui.setOriginalContractNo(
+                    row.originalContractNoDisplay() != null
+                            ? row.originalContractNoDisplay()
+                            : "");
             ui.setContractNoStatus(row.contractNoStatus());
             if (!aladdinJsonAvailable) {
                 ui.setAladdinStatus("未確認");
@@ -446,6 +487,11 @@ public final class RequestFormPipelineCheckTabController {
         boolean hideOldJuchuInput =
                 hideOldJuchuInputCheck != null && hideOldJuchuInputCheck.isSelected();
         int juchuInputHideDays = hideOldJuchuInput ? resolveJuchuInputHideDays() : 0;
+        boolean showNoAladdinOnly =
+                showNoAladdinCheck != null && showNoAladdinCheck.isSelected();
+        boolean showAdjustDeliveryFromTodayOnly =
+                showAdjustDeliveryFromTodayCheck != null
+                        && showAdjustDeliveryFromTodayCheck.isSelected();
 
         filteredRows.setPredicate(
                 row -> {
@@ -459,6 +505,15 @@ public final class RequestFormPipelineCheckTabController {
                     if (hideOldJuchuInput
                             && RequestFormPipelineStatusService.shouldHideByJuchuInputDate(
                                     src.juchuInputDate(), juchuInputHideDays)) {
+                        return false;
+                    }
+                    if (showNoAladdinOnly && aladdinJsonAvailable && src.aladdinPresent()) {
+                        return false;
+                    }
+                    if (showAdjustDeliveryFromTodayOnly
+                            && RequestFormPipelineStatusService
+                                    .shouldHideByAdjustDeliveryBeforeToday(
+                                            src.juchuAdjustDeliveryDate())) {
                         return false;
                     }
                     if (q.isEmpty()) {
@@ -497,6 +552,39 @@ public final class RequestFormPipelineCheckTabController {
         return count;
     }
 
+    private int countHiddenByNoAladdinOnly() {
+        if (!aladdinJsonAvailable
+                || showNoAladdinCheck == null
+                || !showNoAladdinCheck.isSelected()) {
+            return 0;
+        }
+        int count = 0;
+        for (MainRow row : allRows) {
+            PipelineStatusRow src = row.source();
+            if (src != null && src.aladdinPresent()) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    private int countHiddenByAdjustDeliveryBeforeToday() {
+        if (showAdjustDeliveryFromTodayCheck == null
+                || !showAdjustDeliveryFromTodayCheck.isSelected()) {
+            return 0;
+        }
+        int count = 0;
+        for (MainRow row : allRows) {
+            PipelineStatusRow src = row.source();
+            if (src != null
+                    && RequestFormPipelineStatusService.shouldHideByAdjustDeliveryBeforeToday(
+                            src.juchuAdjustDeliveryDate())) {
+                count++;
+            }
+        }
+        return count;
+    }
+
     private void updateStatusLabel() {
         int visible = filteredRows.size();
         int total = allRows.size();
@@ -510,18 +598,30 @@ public final class RequestFormPipelineCheckTabController {
                     .append(resolveJuchuInputHideDays())
                     .append("日以上前）");
         }
+        int hiddenByNoAladdin = countHiddenByNoAladdinOnly();
+        if (hiddenByNoAladdin > 0) {
+            status.append(" | 非表示: ")
+                    .append(hiddenByNoAladdin)
+                    .append("件（アラジン計画あり）");
+        }
+        int hiddenByAdjustDelivery = countHiddenByAdjustDeliveryBeforeToday();
+        if (hiddenByAdjustDelivery > 0) {
+            status.append(" | 非表示: ")
+                    .append(hiddenByAdjustDelivery)
+                    .append("件（調整納期が当日より前または未設定）");
+        }
         if (!planDateHeaders.isEmpty()) {
-            status.append(" | 計画日列: ");
+            status.append(" | アラジン日付列: ");
             for (int i = 0; i < planDateHeaders.size(); i++) {
                 if (i > 0) {
                     status.append(", ");
                 }
-                status.append(AladdinShapedPlanQtyLookup.circledSlotColumnLabel(i))
-                        .append('=')
-                        .append(
-                                AladdinShapedPlanQtyLookup.shortPlanDateColumnLabel(
-                                        planDateHeaders.get(i)));
+                status.append(
+                        AladdinShapedPlanQtyLookup.shortPlanDateColumnLabel(planDateHeaders.get(i)));
             }
+            status.append(" | ①〜⑦=依頼ごとの計画日順");
+        } else if (aladdinJsonAvailable) {
+            status.append(" | ①〜⑦=依頼ごとの計画日順");
         }
         if (!lastScanWarnings.isEmpty()) {
             status.append(" | ").append(lastScanWarnings);
@@ -533,10 +633,12 @@ public final class RequestFormPipelineCheckTabController {
         List<TableColumn<MainRow, String>> cols = new ArrayList<>();
         cols.add(col("依頼No", "iraiNo", 90));
         cols.add(col("原本", "originalFile", 140));
-        cols.add(col("受注", "juchuStatus", 52));
+        cols.add(col("入力日", "juchuInputDate", 88));
+        cols.add(col("調整納期", "juchuAdjustDeliveryDate", 88));
         cols.add(col("転記率", "rateDisplay", 100));
         cols.add(col("未一致", "mismatchCount", 52));
-        cols.add(col("契約NO", "contractNoStatus", 88));
+        cols.add(col("原本契約NO", "originalContractNo", 120));
+        cols.add(col("契約NO", "contractNoStatus", 120));
         cols.add(col("Aladdin", "aladdinStatus", 64));
         for (int i = 0; i < PLAN_DAY_COLUMNS; i++) {
             String title = AladdinShapedPlanQtyLookup.circledSlotColumnLabel(i);

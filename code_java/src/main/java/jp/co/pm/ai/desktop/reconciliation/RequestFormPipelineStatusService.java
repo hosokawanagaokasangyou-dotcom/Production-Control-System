@@ -24,6 +24,7 @@ import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.config.NetworkSourceDirResolver;
 import jp.co.pm.ai.desktop.dispatch.AladdinShapedPlanQtyLookup;
 import jp.co.pm.ai.desktop.dispatch.AladdinShapedPlanQtyLookup.PlanEntry;
+import jp.co.pm.ai.desktop.reconciliation.JuchuSheetColumnLayout.Col;
 import jp.co.pm.ai.desktop.io.PoiWorkbookOpener;
 
 /**
@@ -51,12 +52,16 @@ public final class RequestFormPipelineStatusService {
             String rateDisplay,
             double ratePercent,
             int mismatchCount,
+            String originalContractNoDisplay,
             String contractNoStatus,
             boolean aladdinPresent,
             List<String> planDayValues,
             JuchuTransferCoverageCheck.CoverageResult coverage,
             List<PlanEntry> planEntries,
-            LocalDate juchuInputDate) {}
+            LocalDate juchuInputDate,
+            String juchuInputDateDisplay,
+            LocalDate juchuAdjustDeliveryDate,
+            String juchuAdjustDeliveryDateDisplay) {}
 
     public record ScanResult(
             List<PipelineStatusRow> rows,
@@ -85,6 +90,10 @@ public final class RequestFormPipelineStatusService {
             warnings.add(
                     "shaped_aladdin_plan.json がありません。納期管理ビュー →"
                             + " アラジン加工計画取得データ で読込してください。");
+        } else if (planDateHeaders.isEmpty() && !shaped.headers().isEmpty()) {
+            warnings.add(
+                    "shaped_aladdin_plan.json に日付列が見つかりません。"
+                            + " アラジン加工計画取得データを再読込してください。");
         }
 
         List<Map<String, String>> rawRequests = loadOriginalRequests(env, warnings);
@@ -162,9 +171,12 @@ public final class RequestFormPipelineStatusService {
             List<String> planDateHeaders) {
         JuchuTransferCoverageCheck.CoverageResult coverage =
                 JuchuTransferCoverageCheck.compare(originalDb, juchuDb, reg, juchuPath);
-        String contractNoStatus =
-                JuchuTransferCoverageCheck.contractNoJuchuStatus(
-                        originalDb, juchuDb, coverage.juchuRowExists());
+        String originalContractNoDisplay =
+                JuchuTransferCoverageCheck.formatOriginalContractNoDisplay(
+                        originalDb, originalPresent);
+        String contractNoDisplay =
+                JuchuTransferCoverageCheck.formatJuchuContractNoDisplay(
+                        juchuDb, coverage.juchuRowExists());
         List<PlanEntry> planEntries =
                 aladdinJsonAvailable
                         ? AladdinShapedPlanQtyLookup.collectEntriesForTaskIdFromTable(
@@ -172,14 +184,19 @@ public final class RequestFormPipelineStatusService {
                         : List.of();
         List<String> planDayValues =
                 aladdinJsonAvailable
-                        ? AladdinShapedPlanQtyLookup.aggregatePlanMetersByDateSlots(
-                                planEntries, planDateHeaders, PLAN_DAY_COLUMNS)
+                        ? AladdinShapedPlanQtyLookup.aggregatePlanMetersByEntryDates(
+                                planEntries, PLAN_DAY_COLUMNS)
                         : emptyPlanDayValues();
         String user =
                 originalPresent
                         ? firstNonBlank(originalDb.get("ユーザー"))
                         : firstNonBlank(juchuDb != null ? juchuDb.get("ユーザー") : null);
         LocalDate juchuInputDate = parseJuchuInputDate(juchuDb);
+        String juchuInputDateDisplay = formatJuchuDateFieldDisplay(juchuDb, Col.NYURYOKU_BI.dbKey());
+        LocalDate juchuAdjustDeliveryDate =
+                parseJuchuDateField(juchuDb, Col.CHOSEI_NOKI.dbKey());
+        String juchuAdjustDeliveryDateDisplay =
+                formatJuchuDateFieldDisplay(juchuDb, Col.CHOSEI_NOKI.dbKey());
         return new PipelineStatusRow(
                 iraiNo,
                 originalFileName,
@@ -189,24 +206,58 @@ public final class RequestFormPipelineStatusService {
                 coverage.rateDisplay(),
                 coverage.ratePercent(),
                 coverage.mismatchCount(),
-                contractNoStatus,
+                originalContractNoDisplay,
+                contractNoDisplay,
                 !planEntries.isEmpty(),
                 planDayValues,
                 coverage,
                 List.copyOf(planEntries),
-                juchuInputDate);
+                juchuInputDate,
+                juchuInputDateDisplay,
+                juchuAdjustDeliveryDate,
+                juchuAdjustDeliveryDateDisplay);
+    }
+
+    /** 受注ファイルの日付項目表示（{@code yyyy/M/d}）。未登録・空は空文字。 */
+    public static String formatJuchuDateFieldDisplay(Map<String, String> juchuDb, String fieldKey) {
+        if (juchuDb == null || juchuDb.isEmpty() || fieldKey == null || fieldKey.isBlank()) {
+            return "";
+        }
+        String raw = juchuDb.get(fieldKey);
+        if (JuchuTransferValueNormalizer.isBlank(raw)) {
+            return "";
+        }
+        LocalDate parsed = parseJuchuDateField(juchuDb, fieldKey);
+        if (parsed != null) {
+            return parsed.getYear()
+                    + "/"
+                    + parsed.getMonthValue()
+                    + "/"
+                    + parsed.getDayOfMonth();
+        }
+        return raw.strip();
+    }
+
+    /** 受注「入力日」の表示文字列。未登録・空は空文字。 */
+    public static String formatJuchuInputDateDisplay(Map<String, String> juchuDb) {
+        return formatJuchuDateFieldDisplay(juchuDb, Col.NYURYOKU_BI.dbKey());
+    }
+
+    /** 受注ファイルの日付項目を解釈する。未登録・空・解釈不能は {@code null}。 */
+    public static LocalDate parseJuchuDateField(Map<String, String> juchuDb, String fieldKey) {
+        if (juchuDb == null || juchuDb.isEmpty() || fieldKey == null || fieldKey.isBlank()) {
+            return null;
+        }
+        String raw = juchuDb.get(fieldKey);
+        if (JuchuTransferValueNormalizer.isBlank(raw)) {
+            return null;
+        }
+        return JuchuTransferValueNormalizer.parseLocalDate(raw);
     }
 
     /** 受注ﾌｧｲﾙ「入力日」を解釈する。未登録・空・解釈不能は {@code null}。 */
     public static LocalDate parseJuchuInputDate(Map<String, String> juchuDb) {
-        if (juchuDb == null || juchuDb.isEmpty()) {
-            return null;
-        }
-        String inputDateRaw = juchuDb.get("入力日");
-        if (JuchuTransferValueNormalizer.isBlank(inputDateRaw)) {
-            return null;
-        }
-        return JuchuTransferValueNormalizer.parseLocalDate(inputDateRaw);
+        return parseJuchuDateField(juchuDb, Col.NYURYOKU_BI.dbKey());
     }
 
     /**
@@ -224,6 +275,17 @@ public final class RequestFormPipelineStatusService {
     /** {@link #parseJuchuInputDate} と {@link #shouldHideByJuchuInputDate} の合成。 */
     static boolean shouldHideByJuchuInputDate(Map<String, String> juchuDb, int excludeDays) {
         return shouldHideByJuchuInputDate(parseJuchuInputDate(juchuDb), excludeDays);
+    }
+
+    /**
+     * 調整納期が当日より前、または未設定なら非表示対象（「当日以降のみ表示」ON 時）。
+     * 当日は表示対象。
+     */
+    public static boolean shouldHideByAdjustDeliveryBeforeToday(LocalDate adjustDeliveryDate) {
+        if (adjustDeliveryDate == null) {
+            return true;
+        }
+        return adjustDeliveryDate.isBefore(LocalDate.now());
     }
 
     static List<String> emptyPlanDayValues() {
@@ -281,7 +343,13 @@ public final class RequestFormPipelineStatusService {
                 }
                 Map<String, String> vals =
                         JuchuSheetColumnLayout.readDbValuesFromRow(row, registry, juchuPath);
-                dbRows.put(JuchuTransferValueNormalizer.normalizeKey(reqNo), vals);
+                String normKey = JuchuTransferValueNormalizer.normalizeKey(reqNo);
+                Map<String, String> existing = dbRows.get(normKey);
+                if (existing != null) {
+                    JuchuTransferCoverageCheck.mergeContractNoValues(existing, vals);
+                } else {
+                    dbRows.put(normKey, vals);
+                }
             }
         } catch (Exception ex) {
             warnings.add("受注ファイル読込エラー: " + ex.getMessage());

@@ -88,21 +88,67 @@ class JuchuTransferCoverageCheckTest {
     }
 
     @Test
-    void contractNoJuchuStatus_presentWhenMatched() {
-        Map<String, String> orig = Map.of("契約Ｎｏ", "ABC-123");
-        Map<String, String> juchu = Map.of("契約Ｎｏ", "ABC-123");
-        assertEquals("あり", JuchuTransferCoverageCheck.contractNoJuchuStatus(orig, juchu, true));
+    void formatOriginalContractNoDisplay_multilineJoinedWithSlash() {
+        Map<String, String> orig = Map.of("契約Ｎｏ", "186046F\n187062R");
+        assertEquals(
+                "186046F/187062R",
+                JuchuTransferCoverageCheck.formatOriginalContractNoDisplay(orig, true));
     }
 
     @Test
-    void contractNoJuchuStatus_missingInJuchu() {
-        Map<String, String> orig = Map.of("契約Ｎｏ", "ABC-123");
-        assertEquals("なし", JuchuTransferCoverageCheck.contractNoJuchuStatus(orig, Map.of(), true));
+    void formatOriginalContractNoDisplay_noOriginalShowsDash() {
+        assertEquals(
+                "-",
+                JuchuTransferCoverageCheck.formatOriginalContractNoDisplay(Map.of(), false));
     }
 
     @Test
-    void contractNoJuchuStatus_noOriginalContract() {
-        assertEquals("-", JuchuTransferCoverageCheck.contractNoJuchuStatus(Map.of(), Map.of(), true));
+    void formatOriginalContractNoDisplay_blankShowsMishuuryoku() {
+        assertEquals(
+                "未入力",
+                JuchuTransferCoverageCheck.formatOriginalContractNoDisplay(Map.of(), true));
+    }
+
+    @Test
+    void formatJuchuContractNoDisplay_singleValue() {
+        Map<String, String> juchu = Map.of("契約Ｎｏ", "186046F");
+        assertEquals(
+                "186046F",
+                JuchuTransferCoverageCheck.formatJuchuContractNoDisplay(juchu, true));
+    }
+
+    @Test
+    void formatJuchuContractNoDisplay_multilineJoinedWithSlash() {
+        Map<String, String> juchu = Map.of("契約Ｎｏ", "186046F\n187062R");
+        assertEquals(
+                "186046F/187062R",
+                JuchuTransferCoverageCheck.formatJuchuContractNoDisplay(juchu, true));
+    }
+
+    @Test
+    void formatJuchuContractNoDisplay_blankShowsMishuuryoku() {
+        assertEquals(
+                "未入力",
+                JuchuTransferCoverageCheck.formatJuchuContractNoDisplay(Map.of(), true));
+        assertEquals(
+                "未入力",
+                JuchuTransferCoverageCheck.formatJuchuContractNoDisplay(
+                        Map.of("契約Ｎｏ", ""), true));
+        assertEquals(
+                "未入力",
+                JuchuTransferCoverageCheck.formatJuchuContractNoDisplay(Map.of(), false));
+    }
+
+    @Test
+    void mergeContractNoValues_combinesTwoRows() {
+        Map<String, String> first = new LinkedHashMap<>();
+        first.put("契約Ｎｏ", "186046F");
+        Map<String, String> second = new LinkedHashMap<>();
+        second.put("契約Ｎｏ", "187062R");
+        JuchuTransferCoverageCheck.mergeContractNoValues(first, second);
+        assertEquals(
+                "186046F/187062R",
+                JuchuTransferCoverageCheck.formatJuchuContractNoDisplay(first, true));
     }
 
     @Test

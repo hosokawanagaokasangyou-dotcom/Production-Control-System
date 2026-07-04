@@ -1,6 +1,7 @@
 package jp.co.pm.ai.desktop.dispatch;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
@@ -83,6 +84,37 @@ class AladdinShapedPlanQtyLookupCollectEntriesTest {
     void formatPlanDateMetersCell_includesDateAndUnit() {
         assertEquals("7/3 100m", AladdinShapedPlanQtyLookup.formatPlanDateMetersCell("2026/07/03", 100));
         assertEquals("", AladdinShapedPlanQtyLookup.formatPlanDateMetersCell("2026/07/03", 0));
+    }
+
+    @Test
+    void aggregatePlanMetersByEntryDates_ordersByDatePerTask() {
+        List<AladdinShapedPlanQtyLookup.PlanEntry> entries =
+                List.of(
+                        new AladdinShapedPlanQtyLookup.PlanEntry("M1", "スリット", "2026/06/11", 1000),
+                        new AladdinShapedPlanQtyLookup.PlanEntry("M2", "カレンダー", "2026/06/09", 4200));
+        List<String> slots =
+                AladdinShapedPlanQtyLookup.aggregatePlanMetersByEntryDates(entries, 7);
+        assertEquals("6/9 4200m", slots.get(0));
+        assertEquals("6/11 1000m", slots.get(1));
+        assertEquals("", slots.get(2));
+    }
+
+    @Test
+    void isPlanDateColumnHeader_acceptsFlexibleMonthDay() {
+        assertTrue(AladdinShapedPlanQtyLookup.isPlanDateColumnHeader("2026/6/9"));
+        assertTrue(AladdinShapedPlanQtyLookup.isPlanDateColumnHeader("2026/06/09"));
+        assertFalse(AladdinShapedPlanQtyLookup.isPlanDateColumnHeader("依頼NO"));
+    }
+
+    @Test
+    void collectEntries_matchesTaskIdWithNormalization() {
+        List<String> headers =
+                List.of("機械名", "依頼No", "工程名", "2026/6/9", "2026/6/10");
+        List<List<String>> rows =
+                List.of(List.of("スリット機1", "e6-1", "スリット", "100", "200"));
+        List<AladdinShapedPlanQtyLookup.PlanEntry> entries =
+                AladdinShapedPlanQtyLookup.collectEntriesForTaskIdFromTable(headers, rows, "E6-1");
+        assertEquals(2, entries.size());
     }
 
     @Test

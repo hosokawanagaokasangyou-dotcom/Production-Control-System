@@ -53,4 +53,19 @@ class RequestFormPipelineStatusServiceJuchuInputDateFilterTest {
         assertFalse(
                 RequestFormPipelineStatusService.shouldHideByJuchuInputDate(old, 0));
     }
+
+    @Test
+    void shouldHideAdjustDelivery_whenBeforeTodayOrMissing() {
+        assertTrue(
+                RequestFormPipelineStatusService.shouldHideByAdjustDeliveryBeforeToday(null));
+        assertTrue(
+                RequestFormPipelineStatusService.shouldHideByAdjustDeliveryBeforeToday(
+                        LocalDate.now().minusDays(1)));
+        assertFalse(
+                RequestFormPipelineStatusService.shouldHideByAdjustDeliveryBeforeToday(
+                        LocalDate.now()));
+        assertFalse(
+                RequestFormPipelineStatusService.shouldHideByAdjustDeliveryBeforeToday(
+                        LocalDate.now().plusDays(1)));
+    }
 }

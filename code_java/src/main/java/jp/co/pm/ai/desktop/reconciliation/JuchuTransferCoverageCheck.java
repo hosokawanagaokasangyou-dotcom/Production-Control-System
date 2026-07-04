@@ -99,9 +99,92 @@ public final class JuchuTransferCoverageCheck {
     }
 
     /**
-     * 契約Ｎｏが受注ファイルに書き込まれているかの表示用ステータス。
-     * {@code -} 原本に契約Ｎｏなし / {@code なし(未登録)} / {@code なし} / {@code あり} / {@code 相違}
+     * 受注ファイルの契約Ｎｏ表示。値そのものを返す（複数行・複数セル行は {@code /} 連結）。未入力は {@code 未入力}。
      */
+    public static String formatJuchuContractNoDisplay(
+            Map<String, String> juchuDb, boolean juchuRowExists) {
+        if (!juchuRowExists || juchuDb == null || juchuDb.isEmpty()) {
+            return "未入力";
+        }
+        List<String> parts = collectContractNoParts(juchuDb);
+        if (parts.isEmpty()) {
+            return "未入力";
+        }
+        return String.join("/", parts);
+    }
+
+    /**
+     * 依頼書原本の契約Ｎｏ表示。値そのもの（複数行は {@code /} 連結）。原本なしは {@code -}、空欄は {@code 未入力}。
+     */
+    public static String formatOriginalContractNoDisplay(
+            Map<String, String> originalDb, boolean originalPresent) {
+        if (!originalPresent || originalDb == null || originalDb.isEmpty()) {
+            return "-";
+        }
+        List<String> parts = collectContractNoParts(originalDb);
+        if (parts.isEmpty()) {
+            return "未入力";
+        }
+        return String.join("/", parts);
+    }
+
+    /** 契約Ｎｏ文字列（改行区切り可）から非空パーツを順序保持で収集。 */
+    static List<String> collectContractNoParts(Map<String, String> map) {
+        String raw = contractNoRaw(map);
+        List<String> parts = new ArrayList<>();
+        appendContractNoParts(parts, raw);
+        return List.copyOf(parts);
+    }
+
+    /** 改行区切りの契約Ｎｏを {@code target} にマージ（重複は除く）。 */
+    static void mergeContractNoValues(Map<String, String> target, Map<String, String> additional) {
+        if (target == null || additional == null) {
+            return;
+        }
+        List<String> parts = new ArrayList<>(collectContractNoParts(target));
+        appendContractNoParts(parts, contractNoRaw(additional));
+        if (parts.isEmpty()) {
+            target.remove(Col.KEIYAKU_NO.dbKey());
+            target.remove("契約No");
+            target.remove("契約NO");
+            return;
+        }
+        target.put(Col.KEIYAKU_NO.dbKey(), String.join("\n", parts));
+    }
+
+    private static void appendContractNoParts(List<String> parts, String raw) {
+        if (JuchuTransferValueNormalizer.isBlank(raw)) {
+            return;
+        }
+        for (String line : raw.split("\\n", -1)) {
+            String t = line != null ? line.strip() : "";
+            if (!t.isEmpty() && !parts.contains(t)) {
+                parts.add(t);
+            }
+        }
+    }
+
+    private static String contractNoRaw(Map<String, String> map) {
+        if (map == null || map.isEmpty()) {
+            return "";
+        }
+        String v = valueForKey(map, Col.KEIYAKU_NO.dbKey());
+        if (!JuchuTransferValueNormalizer.isBlank(v)) {
+            return v;
+        }
+        for (String key : List.of("契約No", "契約NO")) {
+            v = nullToEmpty(map.get(key));
+            if (!JuchuTransferValueNormalizer.isBlank(v)) {
+                return v;
+            }
+        }
+        return "";
+    }
+
+    /**
+     * @deprecated 一覧の契約NO列は {@link #formatJuchuContractNoDisplay} を使用。
+     */
+    @Deprecated
     public static String contractNoJuchuStatus(
             Map<String, String> originalDb, Map<String, String> juchuDb, boolean juchuRowExists) {
         Map<String, String> orig = originalDb != null ? originalDb : Map.of();
