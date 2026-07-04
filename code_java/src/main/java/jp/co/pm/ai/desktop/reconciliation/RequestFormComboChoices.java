@@ -142,7 +142,8 @@ public final class RequestFormComboChoices {
                         "V（TPI）",
                         "A（TPI）",
                         "JR（屋根）",
-                        "P（TPI）"));
+                        "P（TPI）",
+                        "小口加工"));
         map.put(
                 KEY_USER,
                 List.of(
@@ -215,16 +216,45 @@ public final class RequestFormComboChoices {
 
     /** 保存済みキーだけ上書きし、欠落キーは bundled 既定を使う。空リストは欠落とみなし bundled を残す。 */
     public RequestFormComboChoices mergedWithDefaults() {
-        LinkedHashMap<String, List<String>> mergedLists = new LinkedHashMap<>(bundledDefaults().byKey);
-        for (Map.Entry<String, List<String>> entry : byKey.entrySet()) {
-            List<String> values = sanitizeList(entry.getValue());
-            if (!values.isEmpty()) {
-                mergedLists.put(entry.getKey(), values);
+        LinkedHashMap<String, List<String>> mergedLists = new LinkedHashMap<>();
+        RequestFormComboChoices bundled = bundledDefaults();
+        for (String key : ALL_KEYS) {
+            List<String> saved = sanitizeList(byKey.get(key));
+            List<String> bundledOpts = sanitizeList(bundled.byKey.get(key));
+            if (saved.isEmpty()) {
+                if (!bundledOpts.isEmpty()) {
+                    mergedLists.put(key, bundledOpts);
+                }
+            } else {
+                mergedLists.put(key, unionDistinct(saved, bundledOpts));
             }
         }
         LinkedHashMap<String, String> mergedDefaults = new LinkedHashMap<>(bundledFieldDefaultsMap());
         mergedDefaults.putAll(fieldDefaults);
         return new RequestFormComboChoices(mergedLists, mergedDefaults);
+    }
+
+    /** 先頭リストの順序を保ち、続けて bundled 側の未登録値を末尾に足す。 */
+    static List<String> unionDistinct(List<String> primary, List<String> secondary) {
+        LinkedHashMap<String, String> ordered = new LinkedHashMap<>();
+        appendDistinct(ordered, primary);
+        appendDistinct(ordered, secondary);
+        return List.copyOf(ordered.values());
+    }
+
+    private static void appendDistinct(LinkedHashMap<String, String> target, List<String> source) {
+        if (source == null || source.isEmpty()) {
+            return;
+        }
+        for (String value : source) {
+            if (value == null) {
+                continue;
+            }
+            String text = value.strip();
+            if (!text.isEmpty()) {
+                target.putIfAbsent(text, text);
+            }
+        }
     }
 
     /** {@code session_defaults*.json} 等、{@link #JSON_KEY} 配下に候補がある JSON 根から読む。 */

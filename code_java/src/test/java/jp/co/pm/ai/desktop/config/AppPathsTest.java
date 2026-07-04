@@ -1134,8 +1134,7 @@ class AppPathsTest {
             AppPaths.setDesktopAppHomeDirName(AppPaths.REMOTE_DESKTOP_APP_HOME_DIR_NAME);
             assertTrue(AppPaths.usesRemoteDesktopAppHome());
             Path store = AppPaths.resolveRdpLauncherOperatorUsersStorePath(Map.of());
-            assertTrue(store.toString().contains("rpa_luncher"));
-            assertTrue(store.toString().contains(AppPaths.RDP_LAUNCHER_SHARED_DATA_DIR_LEAF));
+            assertTrue(store.toString().contains("共有DATA"));
             assertEquals(AppPaths.RDP_LAUNCHER_OPERATOR_USERS_BIN, store.getFileName().toString());
             assertEquals(AppPaths.RDP_LAUNCHER_OPERATOR_USERS_BIN, AppPaths.operatorUsersStoreBinBasename());
             Path backups = AppPaths.resolveRdpLauncherOperatorUsersBackupsRoot(Map.of());

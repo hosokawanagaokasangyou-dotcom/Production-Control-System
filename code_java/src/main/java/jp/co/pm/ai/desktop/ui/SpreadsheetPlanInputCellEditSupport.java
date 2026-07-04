@@ -1,6 +1,7 @@
 package jp.co.pm.ai.desktop.ui;
 
 import java.util.List;
+import java.util.function.Consumer;
 
 import javafx.collections.ObservableList;
 import javafx.scene.Node;
@@ -35,6 +36,27 @@ public final class SpreadsheetPlanInputCellEditSupport {
             List<String> headersRef,
             ObservableList<ObservableList<String>> rows,
             Runnable rebuildSpreadsheet) {
+        install(
+                spreadsheetView,
+                owner,
+                firstDataGridRow,
+                headersRef,
+                rows,
+                rebuildSpreadsheet,
+                null);
+    }
+
+    /**
+     * @param afterColumnEdit セル確定後・{@code rebuildSpreadsheet} 直前（列見出しを渡す。{@code null} 可）
+     */
+    public static void install(
+            SpreadsheetView spreadsheetView,
+            Stage owner,
+            int firstDataGridRow,
+            List<String> headersRef,
+            ObservableList<ObservableList<String>> rows,
+            Runnable rebuildSpreadsheet,
+            Consumer<String> afterColumnEdit) {
         if (spreadsheetView == null || owner == null || rebuildSpreadsheet == null) {
             return;
         }
@@ -133,10 +155,13 @@ public final class SpreadsheetPlanInputCellEditSupport {
                                     e.getScreenX(),
                                     e.getScreenY())
                             .ifPresent(
-                                    newVal -> {
-                                        row.set(colIndex, newVal);
-                                        rebuildSpreadsheet.run();
-                                    });
+                                    newVal -> applyCellEditValue(
+                                            columnTitle,
+                                            colIndex,
+                                            row,
+                                            newVal,
+                                            afterColumnEdit,
+                                            rebuildSpreadsheet));
                     e.consume();
                 });
 
@@ -155,6 +180,29 @@ public final class SpreadsheetPlanInputCellEditSupport {
                     }
                     e.consume();
                 });
+    }
+
+    private static void applyCellEditValue(
+            String columnTitle,
+            int colIndex,
+            ObservableList<String> row,
+            String newVal,
+            Consumer<String> afterColumnEdit,
+            Runnable rebuildSpreadsheet) {
+        if (PlanInputProcessSequenceRowOrder.COL_DISPATCH_TRIAL_ORDER.equals(columnTitle)) {
+            String trimmed = newVal != null ? newVal.strip() : "";
+            if (!trimmed.isEmpty()
+                    && PlanInputProcessSequenceRowOrder.parsePositiveTrialOrderSortKey(trimmed)
+                            == null) {
+                return;
+            }
+            newVal = trimmed;
+        }
+        row.set(colIndex, newVal);
+        if (afterColumnEdit != null) {
+            afterColumnEdit.accept(columnTitle);
+        }
+        rebuildSpreadsheet.run();
     }
 
     private static boolean isInsideTextInput(Node n) {

@@ -114,6 +114,12 @@ public final class AppPaths {
      */
     public static final String KEY_PM_AI_REQUEST_FORM_TPI_PDF_DIR = "PM_AI_REQUEST_FORM_TPI_PDF_DIR";
 
+    /** Tesseract OCR 実行ファイル（{@code tesseract.exe}）。画像スキャン TPI PDF 用。 */
+    public static final String KEY_PM_AI_TESSERACT_CMD = "PM_AI_TESSERACT_CMD";
+
+    /** Tesseract 言語データ（{@code tessdata}）フォルダ。未設定時は {@link #KEY_PM_AI_TESSERACT_CMD} 近傍を探索。 */
+    public static final String KEY_PM_AI_TESSERACT_TESSDATA_DIR = "PM_AI_TESSERACT_TESSDATA_DIR";
+
     /**
      * 依頼書入力タブ「リモートデスクトップ」で起動する RDP プロファイル（{@code *.rdp}）のフルパス。
      */
@@ -372,6 +378,13 @@ public final class AppPaths {
     public static final String KEY_PM_AI_STAGE2_SKIP_TODAY_DISPATCH = "PM_AI_STAGE2_SKIP_TODAY_DISPATCH";
 
     /**
+     * 1（既定）= 組み合わせ表の必須人数が need 基本人数を超えていてもプリセットを試行する。
+     * 0=need 上限を超える組み合わせ表プリセットは使わない。UI は配台計画_タスク入力タブのチェックボックス。
+     */
+    public static final String KEY_TEAM_ASSIGN_COMBO_SHEET_MAY_EXCEED_NEED =
+            "TEAM_ASSIGN_COMBO_SHEET_MAY_EXCEED_NEED";
+
+    /**
      * 1 のとき実加工数が正の行（加工途中相当）を配台キューに載せない（当日完了と想定、段階2）。JavaFX 段階2 では常に 0（翌日配台量はタスク入力タブ）。
      */
     public static final String KEY_PM_AI_STAGE2_SKIP_IN_PROGRESS_DISPATCH =
@@ -445,12 +458,33 @@ public final class AppPaths {
             "PM_AI_RDP_PORTABLE_BUNDLE_SOURCE_DIR";
 
     /**
-     * RDP ランチャー（{@code PmAiRpaLuncher.exe}）ポータブル配布の正本フォルダ（UNC）。
-     * 掲示板共有 {@code rpa_luncher\RDPランチャ}。直下に外付け {@link #VERSION_TXT_FILE_NAME} と
-     * {@code PmAiRpaLuncher_version_upgrade.zip} を置く。
+     * 湖南工場・配台AI {@code 共有DATA}（M: ドライブ。工場 PC で共有を M: にマップしたときのパス）。
+     * リモートデスクトップ専用ポータブル（{@link #RDP_DESKTOP_LAUNCHER_EXE_BASENAME}）の既定配置先の親。
+     */
+    public static final String DEFAULT_KONAN_SHARED_DATA_DIR_M =
+            "M:\\湖南工場\\湖南共有\\002  加工G\\●配台AIシステム\\共有DATA";
+
+    /**
+     * 湖南工場: {@link #RDP_DESKTOP_LAUNCHER_EXE_BASENAME} の既定フルパス（{@link #DEFAULT_KONAN_SHARED_DATA_DIR_M} 配下）。
+     */
+    public static final String DEFAULT_KONAN_RDP_DESKTOP_LAUNCHER_EXE =
+            DEFAULT_KONAN_SHARED_DATA_DIR_M
+                    + "\\PmAiRpaLuncher_portable\\PmAiRpaLuncher\\"
+                    + RDP_DESKTOP_LAUNCHER_EXE_BASENAME;
+
+    /**
+     * 湖南工場: {@link #KEY_PM_AI_RDP_PORTABLE_BUNDLE_SOURCE_DIR} 既定（版アップ正本フォルダ）。
+     * 直下に外付け {@link #VERSION_TXT_FILE_NAME} と {@link #RDP_DESKTOP_LAUNCHER_VERSION_UPGRADE_ZIP} を置く。
+     */
+    public static final String DEFAULT_PM_AI_RDP_PORTABLE_BUNDLE_RELEASE_DIR_KONAN =
+            DEFAULT_KONAN_SHARED_DATA_DIR_M + "\\PmAiRpaLuncher_portable";
+
+    /**
+     * RDP ランチャー（{@code PmAiRpaLuncher.exe}）ポータブル配布の正本フォルダ。
+     * 湖南工場既定は {@link #DEFAULT_PM_AI_RDP_PORTABLE_BUNDLE_RELEASE_DIR_KONAN}。
      */
     public static final String DEFAULT_PM_AI_RDP_PORTABLE_BUNDLE_RELEASE_DIR =
-            "\\\\192.168.0.101\\共有フォルダ\\掲示板\\rpa_luncher\\RDPランチャ";
+            DEFAULT_PM_AI_RDP_PORTABLE_BUNDLE_RELEASE_DIR_KONAN;
 
     /**
      * 湖南工場・配台AI {@code 共有DATA} フォルダ（UNC）。{@link FactorySite#KONAN} のマスタ／サマリ既定の親。
@@ -472,11 +506,10 @@ public final class AppPaths {
     public static final String DEFAULT_PM_AI_RDP_LAUNCHER_DEPLOY_DIR = DEFAULT_KONAN_SHARED_DATA_DIR;
 
     /**
-     * リモートデスクトップ専用ランチャー（{@link #KEY_PM_AI_RPA_LAUNCHER_DEPLOY_DIR}）未設定時の配備先（UNC）。
-     * {@link #DEFAULT_PM_AI_RDP_PORTABLE_BUNDLE_RELEASE_DIR} と同一。
+     * リモートデスクトップ専用ランチャー（{@link #KEY_PM_AI_RPA_LAUNCHER_DEPLOY_DIR}）未設定時の配備先。
+     * 湖南工場既定は {@link #DEFAULT_KONAN_SHARED_DATA_DIR_M}（接続先 {@link #RDP_LAUNCHER_EXE_BASENAME} 等）。
      */
-    public static final String DEFAULT_PM_AI_RPA_LAUNCHER_DEPLOY_DIR =
-            DEFAULT_PM_AI_RDP_PORTABLE_BUNDLE_RELEASE_DIR;
+    public static final String DEFAULT_PM_AI_RPA_LAUNCHER_DEPLOY_DIR = DEFAULT_KONAN_SHARED_DATA_DIR_M;
 
     /**
      * 湖南工場共有の {@code pm-ai-package-release} フォルダ（UNC）。{@link #KEY_PM_AI_PORTABLE_BUNDLE_SOURCE_DIR} の湖南既定。
@@ -509,15 +542,13 @@ public final class AppPaths {
     public static final String DEFAULT_PM_AI_RDP_OPERATOR_USERS_STORE_DIR = DEFAULT_KONAN_SHARED_DATA_DIR;
 
     /**
-     * 掲示板共有 {@code rpa_luncher\DATA}（リモートデスクトップ専用ランチャーのユーザー管理 bin 等）。
-     * {@link #KEY_PM_AI_RPA_LAUNCHER_OPERATOR_USERS_STORE_DIR} 未設定時の既定。
-     * exe/ini 配備先（{@link #DEFAULT_PM_AI_RPA_LAUNCHER_DEPLOY_DIR}）の {@code RDPランチャ} とは兄弟。
+     * リモートデスクトップ専用ランチャーの操作者 bin 等の保存先フォルダ名（レガシー掲示板配下）。
+     * {@link #KEY_PM_AI_RPA_LAUNCHER_OPERATOR_USERS_STORE_DIR} 未設定時の既定は {@link #DEFAULT_KONAN_SHARED_DATA_DIR_M}。
      */
     public static final String RDP_LAUNCHER_SHARED_DATA_DIR_LEAF = "DATA";
 
     public static final String DEFAULT_PM_AI_RPA_LAUNCHER_OPERATOR_USERS_STORE_DIR =
-            "\\\\192.168.0.101\\共有フォルダ\\掲示板\\rpa_luncher\\"
-                    + RDP_LAUNCHER_SHARED_DATA_DIR_LEAF;
+            DEFAULT_KONAN_SHARED_DATA_DIR_M;
 
     /** レガシー ini 読取フォールバック用（掲示板 {@code rpa_luncher\DATA}）。 */
     public static final String DEFAULT_PM_AI_RDP_SHARED_DATA_DIR =
@@ -573,6 +604,7 @@ public final class AppPaths {
             KEY_PM_AI_ALADDIN_MASTER_DIR,
             KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR,
             KEY_PM_AI_REQUEST_FORM_TPI_PDF_DIR,
+            KEY_PM_AI_TESSERACT_TESSDATA_DIR,
             KEY_PM_AI_OUTPUT_DIR,
             KEY_PM_AI_RESULT_DISPATCH_TABLE_DIR,
             KEY_COMPARE_GANTT_SNAPSHOT_DIR,
@@ -617,6 +649,7 @@ public final class AppPaths {
         s.add(KEY_PM_AI_ACTUAL_DETAIL_WORKBOOK);
         s.add(KEY_PM_AI_REQUEST_FORM_JUCHU_FILE);
         s.add(KEY_PM_AI_REQUEST_FORM_RDP_PROFILE);
+        s.add(KEY_PM_AI_TESSERACT_CMD);
         s.add(KEY_PM_AI_PLAN_RESULT_TASK_JSON_PATH);
         s.add(KEY_PM_AI_CURSOR_DEBUG_LOG);
         s.add(KEY_PM_AI_DEBUG_LOG_MIRROR);
@@ -968,6 +1001,115 @@ public final class AppPaths {
             return Optional.empty();
         }
         return Optional.of(Path.of(factoryDefault));
+    }
+
+    /** Tesseract OCR 設定（画像スキャン TPI PDF 用）。{@code jpn.traineddata} が存在する tessdata のみ返す。 */
+    public record TesseractConfig(Path executable, Path tessDataDir) {}
+
+    public static Optional<TesseractConfig> resolveTesseractConfig(Map<String, String> ui) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        Path executable = resolveTesseractExecutable(u);
+        Path tessData = resolveTesseractTessDataDir(u, executable);
+        if (tessData == null || !hasJapaneseTessData(tessData)) {
+            return Optional.empty();
+        }
+        return Optional.of(new TesseractConfig(executable, tessData));
+    }
+
+    private static Path resolveTesseractExecutable(Map<String, String> ui) {
+        String override = trim(ui.get(KEY_PM_AI_TESSERACT_CMD));
+        if (!override.isEmpty()) {
+            Path p = Path.of(override).toAbsolutePath().normalize();
+            if (Files.isRegularFile(p)) {
+                return p;
+            }
+        }
+        String env = trim(System.getenv("PM_AI_TESSERACT_CMD"));
+        if (!env.isEmpty()) {
+            Path p = Path.of(env).toAbsolutePath().normalize();
+            if (Files.isRegularFile(p)) {
+                return p;
+            }
+        }
+        for (Path candidate : defaultTesseractExecutableCandidates()) {
+            if (Files.isRegularFile(candidate)) {
+                return candidate;
+            }
+        }
+        return null;
+    }
+
+    private static Path resolveTesseractTessDataDir(Map<String, String> ui, Path executable) {
+        String override = trim(ui.get(KEY_PM_AI_TESSERACT_TESSDATA_DIR));
+        if (!override.isEmpty()) {
+            Path p = Path.of(override).toAbsolutePath().normalize();
+            if (Files.isDirectory(p)) {
+                return p;
+            }
+        }
+        String env = trim(System.getenv("PM_AI_TESSERACT_TESSDATA_DIR"));
+        if (!env.isEmpty()) {
+            Path p = Path.of(env).toAbsolutePath().normalize();
+            if (Files.isDirectory(p)) {
+                return p;
+            }
+        }
+        String tessPrefix = trim(System.getenv("TESSDATA_PREFIX"));
+        if (!tessPrefix.isEmpty()) {
+            Path p = Path.of(tessPrefix).toAbsolutePath().normalize();
+            if (Files.isDirectory(p)) {
+                return p;
+            }
+        }
+        if (executable != null) {
+            Path sibling = executable.getParent().resolve("tessdata");
+            if (Files.isDirectory(sibling)) {
+                return sibling;
+            }
+        }
+        for (Path candidate : defaultTesseractTessDataCandidates()) {
+            if (Files.isDirectory(candidate)) {
+                return candidate;
+            }
+        }
+        String localAppData = System.getenv("LOCALAPPDATA");
+        if (localAppData != null && !localAppData.isBlank()) {
+            Path userTess = Path.of(localAppData, "pm-ai-tessdata");
+            if (Files.isDirectory(userTess)) {
+                return userTess;
+            }
+        }
+        return null;
+    }
+
+    private static boolean hasJapaneseTessData(Path tessDataDir) {
+        return tessDataDir != null
+                && Files.isRegularFile(tessDataDir.resolve("jpn.traineddata"));
+    }
+
+    private static List<Path> defaultTesseractExecutableCandidates() {
+        List<Path> out = new ArrayList<>();
+        if (isWindowsOs()) {
+            for (String root : List.of("C:\\Program Files", "C:\\Program Files (x86)")) {
+                out.add(Path.of(root, "Tesseract-OCR", "tesseract.exe"));
+            }
+        }
+        return out;
+    }
+
+    private static List<Path> defaultTesseractTessDataCandidates() {
+        List<Path> out = new ArrayList<>();
+        if (isWindowsOs()) {
+            for (String root : List.of("C:\\Program Files", "C:\\Program Files (x86)")) {
+                out.add(Path.of(root, "Tesseract-OCR", "tessdata"));
+            }
+        }
+        return out;
+    }
+
+    private static boolean isWindowsOs() {
+        String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
+        return os.contains("win");
     }
 
     /**

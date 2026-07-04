@@ -9,6 +9,13 @@ log/execution_log.txt
 # Excel creates lock files while a workbook is open
 **/~$*
 
+# Accidental capture of UNC/network paths as repo-relative files under code_java/
+code_java/M:*
+code_java/*192.168*
+code_java/*operator-aladdin-credentials.launcher.json
+code_java/GbProbe.java
+.tmp/
+
 # Build / cache（ステージングしない）
 /preview_cache/
 code_java/target/

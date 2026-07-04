@@ -156,6 +156,24 @@ public enum FactorySite {
     }
 
     /**
+     * {@link AppPaths#KEY_PM_AI_RDP_PORTABLE_BUNDLE_SOURCE_DIR} 環境タブへ書く既定（湖南のみ M: 配下）。
+     */
+    public String rdpPortableBundleSourceDir() {
+        if (this == KONAN) {
+            return AppPaths.DEFAULT_PM_AI_RDP_PORTABLE_BUNDLE_RELEASE_DIR_KONAN;
+        }
+        return "";
+    }
+
+    /** 湖南工場: {@link AppPaths#RDP_DESKTOP_LAUNCHER_EXE_BASENAME} の既定フルパス。 */
+    public String rdpDesktopLauncherExe() {
+        if (this == KONAN) {
+            return AppPaths.DEFAULT_KONAN_RDP_DESKTOP_LAUNCHER_EXE;
+        }
+        return "";
+    }
+
+    /**
      * ポータブル同梱の {@code pm-ai-data/init_setting/session_defaults.json} から工場を推定する。
      *
      * <p>初回起動マーカー処理で湖南固定にしないため。{@link AppPaths#KEY_PM_AI_PORTABLE_BUNDLE_SOURCE_DIR}

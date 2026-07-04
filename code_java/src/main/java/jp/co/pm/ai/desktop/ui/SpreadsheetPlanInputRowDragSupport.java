@@ -40,6 +40,11 @@ public final class SpreadsheetPlanInputRowDragSupport {
         return PLAN_INPUT_ROW_DRAG_ACTIVE.get();
     }
 
+    /** 行 DnD セッション終了（{@code afterReorder} 完了後に呼ぶ）。 */
+    public static void endPlanInputRowDragSession() {
+        PLAN_INPUT_ROW_DRAG_ACTIVE.set(false);
+    }
+
     /**
      * Installs spreadsheet-level filters for drag source (cell), drag-over acceptance, and drop.
      *
@@ -53,7 +58,13 @@ public final class SpreadsheetPlanInputRowDragSupport {
             ObservableList<ObservableList<String>> dataRows,
             List<String> headers,
             Runnable afterReorder) {
-        spreadsheetView.addEventFilter(DragEvent.DRAG_DONE, e -> PLAN_INPUT_ROW_DRAG_ACTIVE.set(false));
+        spreadsheetView.addEventFilter(
+                DragEvent.DRAG_DONE,
+                e -> {
+                    if (!e.isDropCompleted()) {
+                        PLAN_INPUT_ROW_DRAG_ACTIVE.set(false);
+                    }
+                });
 
         spreadsheetView.addEventFilter(
                 MouseEvent.DRAG_DETECTED,

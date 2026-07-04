@@ -10,6 +10,7 @@ import javafx.scene.control.DatePicker;
 import javafx.scene.control.Dialog;
 import javafx.scene.control.Label;
 import javafx.scene.control.TextArea;
+import javafx.scene.control.TextInputControl;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
@@ -71,11 +72,13 @@ public final class SpreadsheetPlanInputCellEditDialog {
         dialog.setOnShown(
                 e ->
                         Platform.runLater(
-                                () ->
-                                        positionNearAnchor(
-                                                dialog.getDialogPane().getScene().getWindow(),
-                                                anchorScreenX,
-                                                anchorScreenY)));
+                                () -> {
+                                    positionNearAnchor(
+                                            dialog.getDialogPane().getScene().getWindow(),
+                                            anchorScreenX,
+                                            anchorScreenY);
+                                    focusForImmediateEdit(area);
+                                }));
 
         Optional<ButtonType> r = dialog.showAndWait();
         if (r.isPresent() && r.get() == ButtonType.OK) {
@@ -127,11 +130,13 @@ public final class SpreadsheetPlanInputCellEditDialog {
         dialog.setOnShown(
                 e ->
                         Platform.runLater(
-                                () ->
-                                        positionNearAnchor(
-                                                dialog.getDialogPane().getScene().getWindow(),
-                                                anchorScreenX,
-                                                anchorScreenY)));
+                                () -> {
+                                    positionNearAnchor(
+                                            dialog.getDialogPane().getScene().getWindow(),
+                                            anchorScreenX,
+                                            anchorScreenY);
+                                    picker.requestFocus();
+                                }));
 
         Optional<ButtonType> r = dialog.showAndWait();
         if (r.isPresent() && r.get() == ButtonType.OK) {
@@ -197,11 +202,13 @@ public final class SpreadsheetPlanInputCellEditDialog {
         dialog.setOnShown(
                 e ->
                         Platform.runLater(
-                                () ->
-                                        positionNearAnchor(
-                                                dialog.getDialogPane().getScene().getWindow(),
-                                                anchorScreenX,
-                                                anchorScreenY)));
+                                () -> {
+                                    positionNearAnchor(
+                                            dialog.getDialogPane().getScene().getWindow(),
+                                            anchorScreenX,
+                                            anchorScreenY);
+                                    focusForImmediateEdit(timeField);
+                                }));
 
         Optional<ButtonType> r = dialog.showAndWait();
         if (r.isPresent() && r.get() == ButtonType.OK) {
@@ -256,5 +263,14 @@ public final class SpreadsheetPlanInputCellEditDialog {
         y = Math.max(bounds.getMinY(), Math.min(y, bounds.getMaxY() - hh));
         win.setX(x);
         win.setY(y);
+    }
+
+    /** ダイアログ表示直後に入力欄へフォーカスし、既存値を全選択する。 */
+    private static void focusForImmediateEdit(TextInputControl field) {
+        if (field == null) {
+            return;
+        }
+        field.requestFocus();
+        field.selectAll();
     }
 }

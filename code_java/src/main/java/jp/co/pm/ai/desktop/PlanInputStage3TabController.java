@@ -45,6 +45,7 @@ import jp.co.pm.ai.desktop.ui.ColumnVisibilitySupport;
 import jp.co.pm.ai.desktop.ui.PlanInputDeprecatedOverrideColumnSupport;
 import jp.co.pm.ai.desktop.ui.PlanInputEditedCellMarks;
 import jp.co.pm.ai.desktop.ui.PlanInputDateColumnSupport;
+import jp.co.pm.ai.desktop.ui.PlanInputProcessSequenceRowOrder;
 import jp.co.pm.ai.desktop.ui.PlanInputSpreadsheetRowReorder;
 import jp.co.pm.ai.desktop.ui.PlanInputStage3DispatchableViolationSupport;
 import jp.co.pm.ai.desktop.ui.SpreadsheetColumnReorderDialog;
@@ -205,6 +206,11 @@ public class PlanInputStage3TabController {
                     () -> {
                         markTableDirtySinceSave();
                         rebuildSpreadsheet();
+                    },
+                    col -> {
+                        if (PlanInputProcessSequenceRowOrder.COL_DISPATCH_TRIAL_ORDER.equals(col)) {
+                            renumberDispatchTrialOrderColumn();
+                        }
                     });
             cellEditHooksInstalled = true;
         }
@@ -698,6 +704,7 @@ public class PlanInputStage3TabController {
                                     SpreadsheetMultiColumnFilterCoordinator.setRowTextSearchQuery(
                                             spreadsheetView, q);
                                 }
+                                SpreadsheetPlanInputRowDragSupport.endPlanInputRowDragSession();
                                 return;
                             }
                             SpreadsheetTabularSupport.applyColumnWidths(

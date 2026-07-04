@@ -27,7 +27,7 @@ final class RequestFormSourceCache {
     static final String PARSE_SCHEMA_VERSION = "request-form-cell-layout-v4";
 
     /** TPI 依頼書 PDF 用 parse キャッシュ schema（Excel 原本とは別バージョン）。 */
-    static final String TPI_PDF_PARSE_SCHEMA_VERSION = "request-form-tpi-pdf-v5";
+    static final String TPI_PDF_PARSE_SCHEMA_VERSION = "request-form-tpi-pdf-v13";
 
     private RequestFormSourceCache() {}
 
@@ -37,6 +37,8 @@ final class RequestFormSourceCache {
             SourceFingerprint source, String schemaVersion, List<Map<String, String>> entries) {}
 
     private record PreviewMeta(SourceFingerprint source, String range, String renderer) {}
+
+    private record SplitCacheMeta(SourceFingerprint source, int startPage, int endPage) {}
 
     /** {@link #clearAllDiskCache(File)} の結果。 */
     record ClearDiskCacheResult(int pdfFilesDeleted, int parseFilesDeleted, int deleteFailures) {
@@ -63,6 +65,55 @@ final class RequestFormSourceCache {
             dir.mkdirs();
         }
         return dir;
+    }
+
+    static File splitDir(File cacheRoot) {
+        File dir = new File(cacheRoot, "tpi-split");
+        if (!dir.exists()) {
+            dir.mkdirs();
+        }
+        return dir;
+    }
+
+    static File splitCacheFile(File cacheRoot, File sourcePdf, String iraiNo) {
+        String sourceBase = safeBaseName(sourcePdf != null ? sourcePdf.getName() : "unknown");
+        String iraiBase = safeBaseName(iraiNo != null ? iraiNo : "unknown");
+        return new File(splitDir(cacheRoot), sourceBase + "__" + iraiBase + ".pdf");
+    }
+
+    static File splitMetaFile(File splitPdf) {
+        return new File(splitPdf.getAbsolutePath() + ".meta.json");
+    }
+
+    static boolean isSplitCacheValid(
+            File splitPdf, File sourcePdf, int startPage0, int endPage0) {
+        if (splitPdf == null
+                || !splitPdf.isFile()
+                || splitPdf.length() < 128
+                || !looksLikePdf(splitPdf)) {
+            return false;
+        }
+        File metaFile = splitMetaFile(splitPdf);
+        if (!metaFile.isFile()) {
+            return false;
+        }
+        try {
+            SplitCacheMeta meta = JSON.readValue(metaFile, SplitCacheMeta.class);
+            return meta != null
+                    && matches(sourcePdf, meta.source())
+                    && meta.startPage() == startPage0
+                    && meta.endPage() == endPage0;
+        } catch (IOException ex) {
+            return false;
+        }
+    }
+
+    static void writeSplitCacheMeta(
+            File splitPdf, File sourcePdf, int startPage0, int endPage0) throws IOException {
+        Files.createDirectories(splitMetaFile(splitPdf).getParentFile().toPath());
+        JSON.writeValue(
+                splitMetaFile(splitPdf),
+                new SplitCacheMeta(fingerprint(sourcePdf), startPage0, endPage0));
     }
 
     /** @deprecated {@link #pdfCacheFile(File, String, String)} を使用 */
@@ -144,6 +195,7 @@ final class RequestFormSourceCache {
         int[] parse = new int[2];
         clearDirectoryFiles(pdfDir(cacheRoot), pdf);
         clearDirectoryFiles(parseDir(cacheRoot), parse);
+        clearDirectoryFiles(splitDir(cacheRoot), parse);
         return new ClearDiskCacheResult(pdf[0], parse[0], pdf[1] + parse[1]);
     }
 

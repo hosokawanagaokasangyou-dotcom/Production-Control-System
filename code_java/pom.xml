@@ -21,6 +21,7 @@
     <poi.version>5.5.1</poi.version>
     <jfreechart.version>1.5.4</jfreechart.version>
     <pdfbox.version>3.0.5</pdfbox.version>
+    <tess4j.version>5.11.0</tess4j.version>
     <jackson.version>2.21.3</jackson.version>
     <jna.version>5.16.0</jna.version>
     <junit.version>5.12.2</junit.version>
@@ -71,6 +72,11 @@
       <groupId>org.apache.pdfbox</groupId>
       <artifactId>pdfbox</artifactId>
       <version>${pdfbox.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>net.sourceforge.tess4j</groupId>
+      <artifactId>tess4j</artifactId>
+      <version>${tess4j.version}</version>
     </dependency>
     <dependency>
       <groupId>net.java.dev.jna</groupId>

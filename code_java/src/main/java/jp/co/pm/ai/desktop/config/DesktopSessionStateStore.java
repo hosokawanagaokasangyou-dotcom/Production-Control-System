@@ -242,6 +242,9 @@ public final class DesktopSessionStateStore {
         root.put(
                 "planInputStage2InProgressNextDayPrompt",
                 state.planInputStage2InProgressNextDayPrompt());
+        root.put(
+                "planInputComboSheetMayExceedNeed",
+                state.planInputComboSheetMayExceedNeed());
         put(root, "mainRunStage2ResultBookFont", state.mainRunStage2ResultBookFont());
         root.put("mainRunSkipGeminiApi", state.mainRunSkipGeminiApi());
         root.put("mainRunStage1MarkAllExcludeAfterRun", state.mainRunStage1MarkAllExcludeAfterRun());
@@ -386,6 +389,7 @@ public final class DesktopSessionStateStore {
                 text(root, "mainRunStage2MemberSchedule"),
                 optionalBoolean(root, "mainRunStage2SkipTodayDispatch", false),
                 optionalBoolean(root, "planInputStage2InProgressNextDayPrompt", true),
+                optionalBoolean(root, "planInputComboSheetMayExceedNeed", true),
                 text(root, "mainRunStage2ResultBookFont"),
                 optionalBoolean(root, "mainRunSkipGeminiApi", false),
                 optionalBoolean(root, "mainRunStage1MarkAllExcludeAfterRun", false),

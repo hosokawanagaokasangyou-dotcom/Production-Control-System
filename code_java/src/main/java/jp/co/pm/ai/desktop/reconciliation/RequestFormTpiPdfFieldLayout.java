@@ -1,6 +1,7 @@
 package jp.co.pm.ai.desktop.reconciliation;
 
 import java.text.Normalizer;
+import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -11,9 +12,15 @@ public final class RequestFormTpiPdfFieldLayout {
     public static final String META_SOURCE_KIND_TPI_PDF = "TPI_PDF";
     public static final String META_TPI_LAYOUT = "TPI様式";
     public static final String META_SHEET_NAME = "_pdf";
+    public static final String META_READ_MODE = "TPI_PDF読取";
+    /** 束ね PDF から切り出した依頼単位 PDF（preview_cache/tpi-split 配下の絶対パス）。 */
+    public static final String META_SPLIT_PDF_PATH = "TPI分割PDFパス";
+    public static final String READ_MODE_TEXT = "TEXT";
+    public static final String READ_MODE_OCR = "OCR";
 
     public static final String LAYOUT_ECOWD = "ECOWD";
     public static final String LAYOUT_PN = "PN";
+    public static final String LAYOUT_GB_SLICE = "GB_SLICE";
 
     private static final Pattern ECOWD_FILE_NAME =
             Pattern.compile("ECOWD.*?[（(]([JＪRＲ\\d０-９\\-－]+[^）)]*)[）)]", Pattern.CASE_INSENSITIVE);
@@ -23,6 +30,11 @@ public final class RequestFormTpiPdfFieldLayout {
     private static final Pattern JR_BODY =
             Pattern.compile("[ＪJ][ＲR]([\\d０-９]{6}(?:-[\\d０-９]+)?)");
     private static final Pattern PN_BODY = Pattern.compile("(PN\\d{2}-\\d{2})\\s+202[\\d０-９]");
+    /** 古河原反スライス依頼書（例: 依頼No. GB 6064 / GB60604）。 */
+    private static final Pattern GB_BODY =
+            Pattern.compile("(?:依頼No[,.]?\\s*|No\\.)(G\\s*B\\s*[\\d０-９]{4,6})", Pattern.CASE_INSENSITIVE);
+    private static final Pattern GB_FILE_STEM =
+            Pattern.compile("^(GB[\\d０-９]{4,6})(?:[^\\d].*)?$", Pattern.CASE_INSENSITIVE);
     private static final Pattern DELIVERY_DATE =
             Pattern.compile("年\\s*([\\d０-９]{1,2})\\s*月\\s*([\\d０-９]{1,2})\\s*日\\s*湖南");
     private static final Pattern DOCUMENT_YEAR = Pattern.compile("20([\\d０-９]{2})");
@@ -39,18 +51,25 @@ public final class RequestFormTpiPdfFieldLayout {
 
     public enum LayoutKind {
         ECOWD,
-        PN
+        PN,
+        GB_SLICE
     }
 
     static LayoutKind detectLayout(String fileName, String text) {
         String name = fileName != null ? fileName : "";
+        String body = normalizeText(text);
+        if (body.contains("古河原反") && body.contains("スライス")) {
+            return LayoutKind.GB_SLICE;
+        }
+        if (GB_BODY.matcher(body).find()) {
+            return LayoutKind.GB_SLICE;
+        }
         if (name.contains("ECOWD") || name.contains("JR")) {
             return LayoutKind.ECOWD;
         }
         if (name.contains("後加工") || name.contains("PN")) {
             return LayoutKind.PN;
         }
-        String body = normalizeText(text);
         if (body.contains("JR屋根") || JR_BODY.matcher(body).find()) {
             return LayoutKind.ECOWD;
         }
@@ -80,6 +99,10 @@ public final class RequestFormTpiPdfFieldLayout {
         if (n.matches("R\\d{6}.*")) {
             return ("J" + n).toUpperCase();
         }
+        String compact = n.replaceAll("\\s+", "");
+        if (compact.matches("(?i)GB\\d+")) {
+            return compact.toUpperCase(Locale.ROOT);
+        }
         return n.toUpperCase();
     }
 
@@ -99,6 +122,15 @@ public final class RequestFormTpiPdfFieldLayout {
         if (pn.find()) {
             return normalizeIraiNo(pn.group(1));
         }
+        String stem = fileName;
+        int dot = fileName.lastIndexOf('.');
+        if (dot > 0) {
+            stem = fileName.substring(0, dot);
+        }
+        Matcher gbStem = GB_FILE_STEM.matcher(stem);
+        if (gbStem.find()) {
+            return normalizeIraiNo(gbStem.group(1));
+        }
         return "";
     }
 
@@ -107,6 +139,10 @@ public final class RequestFormTpiPdfFieldLayout {
         Matcher jr = JR_BODY.matcher(body);
         if (jr.find()) {
             return normalizeIraiNo("JR" + jr.group(1));
+        }
+        Matcher gb = GB_BODY.matcher(body);
+        if (gb.find()) {
+            return normalizeIraiNo(gb.group(1));
         }
         Matcher pn = PN_BODY.matcher(body);
         if (pn.find()) {

@@ -58,6 +58,8 @@
                     </HBox>
                     <CheckBox fx:id="stage2InProgressNextDayPromptCheckBox" mnemonicParsing="false" selected="true"
                             text="加工途中タスクの翌日配台量を設定してから段階2を実行" />
+                    <CheckBox fx:id="comboSheetMayExceedNeedCheckBox" mnemonicParsing="false" selected="true"
+                            text="組み合わせ表の人数が need より多い場合も有効にする" />
                 </VBox>
                 <HBox alignment="CENTER_LEFT" spacing="8.0">
                     <Button mnemonicParsing="false" onAction="#onRowUpAction" prefWidth="40.0" text="↑" />

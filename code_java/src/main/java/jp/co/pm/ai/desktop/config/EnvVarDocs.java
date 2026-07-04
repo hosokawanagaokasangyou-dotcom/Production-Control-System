@@ -44,7 +44,8 @@ public final class EnvVarDocs {
                 "PM_AI_RDP_PORTABLE_BUNDLE_SOURCE_DIR",
                 "リモートデスクトップ専用ポータブル（PmAiRpaLuncher.exe）の版アップ正本。"
                         + " ローカルビルド出力はリポジトリ直下 rpa_luncher_release。"
-                        + " 共有 UNC 既定: 掲示板 rpa_luncher\\RDPランチャ（version.txt + PmAiRpaLuncher_version_upgrade.zip）。"
+                        + " 湖南工場既定: M:\\湖南工場\\…\\共有DATA\\PmAiRpaLuncher_portable"
+                        + "（PmAiRpaLuncher\\PmAiRpaLuncher.exe の2段上。version.txt + PmAiRpaLuncher_version_upgrade.zip）。"
                         + " 配台 PMD の正本は PM_AI_PORTABLE_BUNDLE_SOURCE_DIR（pm-ai-package-release）。");
         put(
                 "PM_AI_OUTPUT_DIR",
@@ -219,6 +220,17 @@ public final class EnvVarDocs {
                         + "空のとき湖南工場既定 UNC（共有DATA/TPI依頼書）。国分は空（手動指定）。"
                         + "依頼書入力タブの照合・PDF プレビュー・parse キャッシュに使用。"
                         + "フォルダ配下は読取専用（書込・削除禁止）。"
+                        + "環境変数タブのフォルダ選択可。");
+        put(
+                "PM_AI_TESSERACT_CMD",
+                "Tesseract OCR 実行ファイル（tesseract.exe）のフルパス。"
+                        + "TPI 依頼書 PDF が画像スキャン（テキスト抽出不可）と判定されたとき OCR 読取に使用。"
+                        + "空のとき C:\\Program Files\\Tesseract-OCR\\tesseract.exe 等を探索。"
+                        + "環境変数タブのファイル選択可。");
+        put(
+                "PM_AI_TESSERACT_TESSDATA_DIR",
+                "Tesseract 言語データ（tessdata）フォルダ。jpn.traineddata が必要。"
+                        + "空のとき PM_AI_TESSERACT_CMD 近傍または Program Files\\Tesseract-OCR\\tessdata を探索。"
                         + "環境変数タブのフォルダ選択可。");
         put(
                 "PM_AI_REQUEST_FORM_PREVIEW_PDF_CJK_SCALE",

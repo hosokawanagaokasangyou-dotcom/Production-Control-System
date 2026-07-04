@@ -104,6 +104,22 @@ class RequestFormComboChoicesTest {
     }
 
     @Test
+    void mergedWithDefaults_partialSavedListAppendsMissingBundledYoto() {
+        RequestFormComboChoices saved =
+                RequestFormComboChoices.of(
+                        Map.of(
+                                RequestFormComboChoices.KEY_YOTO,
+                                List.of("W（自動車）", "B（輸出）", "Y（工材）")));
+        RequestFormComboChoices merged = saved.mergedWithDefaults();
+        assertEquals(
+                List.of("W（自動車）", "B（輸出）", "Y（工材）"),
+                merged.optionsFor(RequestFormComboChoices.KEY_YOTO).subList(0, 3));
+        assertTrue(
+                merged.optionsFor(RequestFormComboChoices.KEY_YOTO).contains("小口加工"));
+        assertTrue(merged.optionsFor(RequestFormComboChoices.KEY_YOTO).contains("V（TPI）"));
+    }
+
+    @Test
     void mergedWithDefaults_emptySavedListDoesNotEraseBundledEcSide() throws Exception {
         var ctor =
                 RequestFormComboChoices.class.getDeclaredConstructor(

@@ -24,30 +24,100 @@ public final class RequestFormTpiPdfExtractor {
      * @throws IOException PDF 読込失敗
      */
     public static List<Map<String, String>> extractEntries(File pdfFile) throws IOException {
+        return extractEntries(pdfFile, Map.of());
+    }
+
+    /**
+     * PDF 1 ファイルから依頼 1 件分の rawMap を返す。{@code ui} は Tesseract 設定解決に使う（空可）。
+     *
+     * @throws IOException PDF 読込失敗
+     */
+    public static List<Map<String, String>> extractEntries(File pdfFile, Map<String, String> ui)
+            throws IOException {
         if (pdfFile == null || !pdfFile.isFile()) {
             return List.of();
         }
-        String text = readPdfText(pdfFile);
-        String fileName = pdfFile.getName();
-        LayoutKind kind = RequestFormTpiPdfFieldLayout.detectLayout(fileName, text);
-        Map<String, String> raw =
-                kind == LayoutKind.ECOWD
-                        ? RequestFormTpiPdfLayoutEcowd.buildRawMap(fileName, text)
-                        : RequestFormTpiPdfLayoutPn.buildRawMap(fileName, text);
-        if (raw.get("依頼Ｎｏ") == null || raw.get("依頼Ｎｏ").isBlank()) {
-            Map<String, String> copy = new LinkedHashMap<>(raw);
-            copy.put("依頼Ｎｏ", RequestFormTpiPdfFieldLayout.parseIraiNoFromFileName(fileName));
-            raw = copy;
-        }
-        return List.of(raw);
+        RequestFormTpiPdfContentKind contentKind = RequestFormTpiPdfContentDetector.detect(pdfFile);
+        String text =
+                contentKind == RequestFormTpiPdfContentKind.TEXT
+                        ? readPdfText(pdfFile)
+                        : RequestFormTpiPdfOcrReader.readPdfText(pdfFile, ui);
+        String readMode =
+                contentKind == RequestFormTpiPdfContentKind.TEXT
+                        ? RequestFormTpiPdfFieldLayout.READ_MODE_TEXT
+                        : RequestFormTpiPdfFieldLayout.READ_MODE_OCR;
+        List<Map<String, String>> entries = buildAllEntries(pdfFile.getName(), text, readMode);
+        return entries;
     }
 
-    /** テスト・デバッグ向け: プレーンテキストから rawMap を組み立てる。 */
+    /**
+     * PDF を解析し、複数依頼が束ねられている場合は依頼単位 PDF へ分割してから返す。
+     */
+    static List<Map<String, String>> extractEntriesWithSplit(
+            File pdfFile, Map<String, String> ui, File parseCacheRoot) throws IOException {
+        List<Map<String, String>> entries = extractEntries(pdfFile, ui);
+        if (parseCacheRoot == null || entries.size() <= 1) {
+            return entries;
+        }
+        return RequestFormTpiPdfSplitter.attachSplitPdfsIfBundled(
+                pdfFile, entries, parseCacheRoot, ui);
+    }
+
+    /** テスト・デバッグ向け: プレーンテキストから rawMap を組み立てる（先頭依頼）。 */
     static Map<String, String> extractFromTextForTest(String fileName, String text) {
+        List<Map<String, String>> entries =
+                buildAllEntries(fileName, text, RequestFormTpiPdfFieldLayout.READ_MODE_TEXT);
+        return entries.isEmpty() ? Map.of() : entries.get(0);
+    }
+
+    private static List<Map<String, String>> buildAllEntries(
+            String fileName, String text, String readMode) {
         LayoutKind kind = RequestFormTpiPdfFieldLayout.detectLayout(fileName, text);
-        return kind == LayoutKind.ECOWD
-                ? RequestFormTpiPdfLayoutEcowd.buildRawMap(fileName, text)
-                : RequestFormTpiPdfLayoutPn.buildRawMap(fileName, text);
+        if (kind == LayoutKind.GB_SLICE) {
+            List<Map<String, String>> gbEntries =
+                    RequestFormTpiPdfLayoutGb.buildAllRawMaps(fileName, text);
+            if (gbEntries.isEmpty()) {
+                gbEntries = List.of(RequestFormTpiPdfLayoutGb.buildRawMap(fileName, text));
+            }
+            return finalizeEntries(fileName, text, readMode, gbEntries);
+        }
+        Map<String, String> raw =
+                switch (kind) {
+                    case ECOWD -> RequestFormTpiPdfLayoutEcowd.buildRawMap(fileName, text);
+                    case GB_SLICE -> RequestFormTpiPdfLayoutGb.buildRawMap(fileName, text);
+                    case PN -> RequestFormTpiPdfLayoutPn.buildRawMap(fileName, text);
+                };
+        return List.of(finalizeEntry(fileName, text, readMode, raw));
+    }
+
+    private static List<Map<String, String>> finalizeEntries(
+            String fileName,
+            String text,
+            String readMode,
+            List<Map<String, String>> entries) {
+        List<Map<String, String>> out = new ArrayList<>(entries.size());
+        for (Map<String, String> entry : entries) {
+            out.add(finalizeEntry(fileName, text, readMode, entry));
+        }
+        return out;
+    }
+
+    private static Map<String, String> finalizeEntry(
+            String fileName, String text, String readMode, Map<String, String> raw) {
+        Map<String, String> resolved = new LinkedHashMap<>(raw);
+        if (resolved.get("依頼Ｎｏ") == null || resolved.get("依頼Ｎｏ").isBlank()) {
+            resolved.put("依頼Ｎｏ", RequestFormTpiPdfFieldLayout.parseIraiNoFromFileName(fileName));
+            if (resolved.get("依頼Ｎｏ").isBlank()) {
+                resolved.put("依頼Ｎｏ", RequestFormTpiPdfFieldLayout.parseIraiNoFromText(text));
+            }
+        }
+        resolved.put(RequestFormTpiPdfFieldLayout.META_READ_MODE, readMode);
+        return resolved;
+    }
+
+    private static Map<String, String> buildRawMap(String fileName, String text, String readMode) {
+        List<Map<String, String>> entries = buildAllEntries(fileName, text, readMode);
+        return entries.isEmpty() ? Map.of() : entries.get(0);
     }
 
     static String readPdfText(File pdfFile) throws IOException {

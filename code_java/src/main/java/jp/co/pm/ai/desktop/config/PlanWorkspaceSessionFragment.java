@@ -193,6 +193,7 @@ public record PlanWorkspaceSessionFragment(
                 mainRunStage2MemberSchedule != null ? mainRunStage2MemberSchedule : "",
                 base.mainRunStage2SkipTodayDispatch(),
                 base.planInputStage2InProgressNextDayPrompt(),
+                base.planInputComboSheetMayExceedNeed(),
                 base.mainRunStage2ResultBookFont(),
                 base.mainRunSkipGeminiApi(),
                 base.mainRunStage1MarkAllExcludeAfterRun(),

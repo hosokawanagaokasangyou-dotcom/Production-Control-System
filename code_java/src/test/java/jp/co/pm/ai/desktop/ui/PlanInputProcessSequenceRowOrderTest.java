@@ -241,6 +241,35 @@ class PlanInputProcessSequenceRowOrderTest {
     }
 
     @Test
+    void stabilize_sortsByDecimalKeysThenRenumbersToIntegers() {
+        List<String> headers =
+                List.of(
+                        PlanInputProcessSequenceRowOrder.COL_DISPATCH_TRIAL_ORDER,
+                        PlanInputProcessSequenceRowOrder.COL_TASK_ID,
+                        PlanInputProcessSequenceRowOrder.COL_PROCESS,
+                        PlanInputProcessSequenceRowOrder.COL_PROCESS_CONTENT);
+        ObservableList<ObservableList<String>> rows = FXCollections.observableArrayList();
+        rows.add(row("3", "A", "EC", "EC"));
+        rows.add(row("1.5", "B", "EC", "EC"));
+        rows.add(row("1", "C", "EC", "EC"));
+
+        PlanInputProcessSequenceRowOrder.stabilizeAndRenumberDispatchTrialOrder(headers, rows);
+
+        assertEquals("C", cell(rows, 0, 1));
+        assertEquals("B", cell(rows, 1, 1));
+        assertEquals("A", cell(rows, 2, 1));
+        assertEquals("1", cell(rows, 0, 0));
+        assertEquals("2", cell(rows, 1, 0));
+        assertEquals("3", cell(rows, 2, 0));
+    }
+
+    @Test
+    void parsePositiveTrialOrderSortKey_acceptsDecimals() {
+        assertEquals(1.5, PlanInputProcessSequenceRowOrder.parsePositiveTrialOrderSortKey("1.5"));
+        assertEquals(2.0, PlanInputProcessSequenceRowOrder.parsePositiveTrialOrderSortKey("2"));
+    }
+
+    @Test
     void processSequenceRank_matchesNormalizedTokens() {
         List<String> tokens = List.of("スリット", "分割", "融着");
         assertEquals(0, PlanInputProcessSequenceRowOrder.processSequenceRank("スリット", tokens));

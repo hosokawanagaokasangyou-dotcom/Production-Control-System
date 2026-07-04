@@ -251,9 +251,15 @@ class RequestFormTpiPdfExtractorTest {
         }
         int ok = 0;
         for (File pdf : pdfs) {
+            if (RequestFormTpiPdfContentDetector.detect(pdf) == RequestFormTpiPdfContentKind.IMAGE_SCAN
+                    && !RequestFormTpiPdfOcrReader.isAvailable(Map.of())) {
+                continue;
+            }
             List<Map<String, String>> entries = RequestFormTpiPdfExtractor.extractEntries(pdf);
-            assertEquals(1, entries.size(), pdf.getName());
-            assertFalse(entries.get(0).get("依頼Ｎｏ").isBlank(), pdf.getName());
+            assertTrue(entries.size() >= 1, pdf.getName());
+            for (Map<String, String> entry : entries) {
+                assertFalse(entry.get("依頼Ｎｏ").isBlank(), pdf.getName());
+            }
             ok++;
         }
         assertTrue(ok >= 8, "expected at least 8 PDFs in TPI folder, got " + ok);
@@ -277,5 +283,210 @@ class RequestFormTpiPdfExtractorTest {
             return fixtures;
         }
         return null;
+    }
+
+    @Test
+    void parseIraiNoFromText_gbSliceRequest() {
+        String text =
+                "古河原反 スライス 加工依頼\n依頼No. GB 6064\n2026年6月29日\n長岡産業(株) 湖南加工課長殿";
+        Map<String, String> raw =
+                RequestFormTpiPdfExtractor.extractFromTextForTest("GB.pdf", text);
+        assertEquals("GB6064", raw.get("依頼Ｎｏ"));
+    }
+
+    @Test
+    void extractFromText_gbSliceFullSample() {
+        String text =
+                """
+                古河原反 スライス 加工依頼
+                2026年6月29日
+                長岡産業(株) 湖南加工課長殿
+                依頼No,GB 60604 納期 7月 6日
+                品番 幅(mm) 長さ(m) ロール数 全長
+                HB3000GB 厚み 4.5mm 1050 100 4 400
+                HB3000GB 厚み 9mm 1050 100 2 200
+                原 反
+                投 入
+                """;
+        Map<String, String> raw = RequestFormTpiPdfExtractor.extractFromTextForTest("GB.pdf", text);
+
+        assertEquals("GB60604", raw.get("依頼Ｎｏ"));
+        assertEquals("2026-07-06", raw.get("希望納期"));
+        assertEquals("長岡産業（株）湖南工場", raw.get("ユーザー"));
+        assertTrue(
+                raw.get("加工内容") == null || raw.get("加工内容").isBlank(),
+                "GB PDF から加工内容は転記しない");
+        assertEquals(
+                RequestFormTpiPdfFieldLayout.LAYOUT_GB_SLICE,
+                raw.get(RequestFormTpiPdfFieldLayout.META_TPI_LAYOUT));
+        assertEquals("HB3000GB", raw.get("品名"));
+        assertEquals("HB3000GB-45-1050X100", raw.get("製品"));
+        assertEquals("4", raw.get("数量1"));
+        assertEquals("HB3000GB-90-1050X100", raw.get("原反"));
+        assertEquals("2", raw.get("原反数量"));
+        assertEquals("小口加工", raw.get("用途"));
+
+        Map<String, String> db = RequestFormOriginalExtractor.buildTpiDbDefaultsFromRaw(raw);
+        assertEquals("2026-07-06", db.get("希望納期"));
+        assertEquals("HB3000GB-45-1050X100", db.get("製品"));
+        assertEquals("4", db.get("数量1"));
+        assertEquals("HB3000GB-90-1050X100", db.get("原反"));
+        assertEquals("2", db.get("原反数量"));
+        assertEquals("小口加工", db.get("用途"));
+        assertTrue(
+                db.get("投入場所") == null || db.get("投入場所").isBlank(),
+                "加工内容未転記のため投入場所も推定しない");
+    }
+
+    @Test
+    void extractFromText_gbSliceGenericProductRows() {
+        String block60605 =
+                """
+                2026年6月29日
+                No.GB60605 納期 7月 1日
+                品番 タイプ : 幅(mm) 長さ(m) ロール数 全長
+                15025 AW07 400 50 1 50
+                品 15025 AW07 760 50 1 50
+                """;
+        String block60606 =
+                """
+                2026年6月29日
+                No.GB60606 納期 7月 1日
+                品番 タイプ : 幅(mm) 長さ(m) ロール数 全長
+                15025 NR28 BK0 1560 50 1 50
+                品 15025 NR28 BK0 1560 150 1 150
+                15025 NR28 BK0 1560 200 1 200
+                原 反
+                投 入
+                """;
+
+        Map<String, String> raw605 =
+                RequestFormTpiPdfExtractor.extractFromTextForTest("GB.pdf", block60605);
+        assertEquals("GB60605", raw605.get("依頼Ｎｏ"));
+        assertEquals("2026-07-01", raw605.get("希望納期"));
+        assertEquals("15025\n15025", raw605.get("品名"));
+        assertEquals("15025-AW07-400X50\n15025-AW07-760X50", raw605.get("製品"));
+        assertEquals("1\n1", raw605.get("数量1"));
+
+        Map<String, String> raw606 =
+                RequestFormTpiPdfExtractor.extractFromTextForTest("GB.pdf", block60606);
+        assertEquals("GB60606", raw606.get("依頼Ｎｏ"));
+        assertEquals("15025-NR28-1560X50\n15025-NR28-1560X150", raw606.get("製品"));
+        assertEquals("1\n1", raw606.get("数量1"));
+        assertEquals("15025-NR28-1560X200", raw606.get("原反"));
+        assertEquals("1", raw606.get("原反数量"));
+        assertEquals("BK0\nBK0", raw606.get("色1"));
+        assertEquals("BK0", raw606.get("原反色"));
+        assertTrue(
+                raw605.get("加工内容") == null || raw605.get("加工内容").isBlank());
+        assertTrue(
+                raw606.get("加工内容") == null || raw606.get("加工内容").isBlank());
+    }
+
+    @Test
+    void extractFromText_gbRewindTitle_doesNotInferProcessingContent() {
+        String text =
+                """
+                ペフ 巻き返し 加工依頼
+                2026年6月29日
+                No.GB60606 納期 7月 1日
+                15025 NR28 BK0 1560 50 1 50
+                品 15025 NR28 BK0 1560 150 1 150
+                15025 NR28 BK0 1560 200 1 200
+                原 反
+                投 入
+                """;
+        Map<String, String> raw =
+                RequestFormTpiPdfExtractor.extractFromTextForTest("GB.pdf", text);
+        assertEquals("GB60606", raw.get("依頼Ｎｏ"));
+        assertTrue(
+                raw.get("加工内容") == null || raw.get("加工内容").isBlank(),
+                "タイトルに巻き返しがあっても加工内容は空");
+    }
+
+    @Test
+    void extractFromText_gb60606RealPdfBlockShape() {
+        String text =
+                """
+                No.GB60606 納期 7月 1日
+                15025 NR28 BK0 1560 50 1 50
+                製  品 15025 NR28 BK0 1560 150 1 150
+                15025 NR28 BK0 1560 200 1 200
+                投 入
+                原 反
+                """;
+        Map<String, String> raw =
+                RequestFormTpiPdfExtractor.extractFromTextForTest("GB.pdf", text);
+        assertEquals("15025-NR28-1560X50\n15025-NR28-1560X150", raw.get("製品"));
+        assertEquals("15025-NR28-1560X200", raw.get("原反"));
+    }
+
+    @Test
+    void extractFromText_gb60604RealPdfBlockShape() {
+        String text =
+                """
+                依頼No,GB 60604 納期 7月 6日
+                品番 タイプ 色 幅(mm) 長さ(m) ロール数 全長
+                HB3000GB―厚み 4.5mm 1050 100 4 400
+                製  品
+                HB3000GB― 早み 9mm 1050 100 2 200
+                投  入
+                原  反
+                """;
+        Map<String, String> raw = RequestFormTpiPdfExtractor.extractFromTextForTest("GB.pdf", text);
+        assertEquals("HB3000GB-45-1050X100", raw.get("製品"));
+        assertEquals("4", raw.get("数量1"));
+        assertEquals("HB3000GB-90-1050X100", raw.get("原反"));
+        assertEquals("2", raw.get("原反数量"));
+    }
+
+    @Test
+    void extractFromText_gbSliceFullSample_withProductInputSectionLabels() {
+        String text =
+                """
+                古河原反 スライス 加工依頼
+                依頼No,GB 60604 納期 7月 6日
+                製品 HB3000GB 厚み 4.5mm 1050 100 4 400
+                投入 HB3000GB 厚み 9mm 1050 100 2 200
+                """;
+        Map<String, String> raw = RequestFormTpiPdfExtractor.extractFromTextForTest("GB.pdf", text);
+        assertEquals("HB3000GB-45-1050X100", raw.get("製品"));
+        assertEquals("HB3000GB-90-1050X100", raw.get("原反"));
+    }
+
+    @Test
+    void parseHbTables_treatsLineBeforeRawHeaderAsRawMaterial() {
+        String text =
+                """
+                依頼No,GB 60604 納期 7月 6日
+                HB3000GB 厚み 4.5mm 1050 100 4 400
+                HB3000GB 厚み 9mm 1050 100 2 200
+                原 反
+                投 入
+                """;
+        Map<String, String> raw =
+                RequestFormTpiPdfExtractor.extractFromTextForTest("GB.pdf", text);
+        assertEquals("HB3000GB-45-1050X100", raw.get("製品"));
+        assertEquals("4", raw.get("数量1"));
+        assertEquals("HB3000GB-90-1050X100", raw.get("原反"));
+        assertEquals("2", raw.get("原反数量"));
+    }
+
+    @Test
+    void parseGenericTables_treatsLineBeforeRawHeaderAsRawMaterial() {
+        String text =
+                """
+                2026年6月29日
+                No.GB60606 納期 7月 1日
+                15025 NR28 BK0 1560 50 1 50
+                品 15025 NR28 BK0 1560 150 1 150
+                15025 NR28 BK0 1560 200 1 200
+                原 反
+                投 入
+                """;
+        Map<String, String> raw =
+                RequestFormTpiPdfExtractor.extractFromTextForTest("GB.pdf", text);
+        assertEquals("15025-NR28-1560X50\n15025-NR28-1560X150", raw.get("製品"));
+        assertEquals("15025-NR28-1560X200", raw.get("原反"));
     }
 }

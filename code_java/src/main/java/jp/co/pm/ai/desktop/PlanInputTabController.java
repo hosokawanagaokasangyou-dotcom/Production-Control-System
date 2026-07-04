@@ -51,6 +51,7 @@ import jp.co.pm.ai.desktop.io.PlanInputTabularIo;
 import jp.co.pm.ai.desktop.ui.ColumnVisibilitySupport;
 import jp.co.pm.ai.desktop.ui.PlanInputDeprecatedOverrideColumnSupport;
 import jp.co.pm.ai.desktop.ui.PlanInputEditedCellMarks;
+import jp.co.pm.ai.desktop.ui.PlanInputProcessSequenceRowOrder;
 import jp.co.pm.ai.desktop.ui.PlanInputSpreadsheetRowReorder;
 import jp.co.pm.ai.desktop.ui.PlanInputDateColumnSupport;
 import jp.co.pm.ai.desktop.ui.PlanInputRawInputDateShift;
@@ -141,6 +142,9 @@ public final class PlanInputTabController {
     private CheckBox stage2InProgressNextDayPromptCheckBox;
 
     @FXML
+    private CheckBox comboSheetMayExceedNeedCheckBox;
+
+    @FXML
     private HBox columnStripHost;
 
     @FXML
@@ -221,6 +225,17 @@ public final class PlanInputTabController {
         if (stage2InProgressNextDayPromptCheckBox != null) {
             stage2InProgressNextDayPromptCheckBox.setSelected(true);
             stage2InProgressNextDayPromptCheckBox
+                    .selectedProperty()
+                    .addListener(
+                            (o, a, b) -> {
+                                if (shell != null) {
+                                    shell.scheduleDesktopSessionSave();
+                                }
+                            });
+        }
+        if (comboSheetMayExceedNeedCheckBox != null) {
+            comboSheetMayExceedNeedCheckBox.setSelected(true);
+            comboSheetMayExceedNeedCheckBox
                     .selectedProperty()
                     .addListener(
                             (o, a, b) -> {
@@ -320,6 +335,11 @@ public final class PlanInputTabController {
                     () -> {
                         markPlanInputTableDirtySinceSave();
                         rebuildSpreadsheet();
+                    },
+                    col -> {
+                        if (PlanInputProcessSequenceRowOrder.COL_DISPATCH_TRIAL_ORDER.equals(col)) {
+                            renumberDispatchTrialOrderColumn();
+                        }
                     });
             planInputCellEditHooksInstalled = true;
         }
@@ -484,6 +504,17 @@ public final class PlanInputTabController {
     void applyStage2InProgressNextDayPromptFromSession(boolean prompt) {
         if (stage2InProgressNextDayPromptCheckBox != null) {
             stage2InProgressNextDayPromptCheckBox.setSelected(prompt);
+        }
+    }
+
+    /** 段階2子プロセスへ渡す {@code TEAM_ASSIGN_COMBO_SHEET_MAY_EXCEED_NEED}（チェックは本タブ）。 */
+    boolean snapshotComboSheetMayExceedNeed() {
+        return comboSheetMayExceedNeedCheckBox == null || comboSheetMayExceedNeedCheckBox.isSelected();
+    }
+
+    void applyComboSheetMayExceedNeedFromSession(boolean mayExceed) {
+        if (comboSheetMayExceedNeedCheckBox != null) {
+            comboSheetMayExceedNeedCheckBox.setSelected(mayExceed);
         }
     }
 
@@ -1179,6 +1210,7 @@ public final class PlanInputTabController {
                                     SpreadsheetMultiColumnFilterCoordinator.setRowTextSearchQuery(
                                             spreadsheetView, q);
                                 }
+                                SpreadsheetPlanInputRowDragSupport.endPlanInputRowDragSession();
                                 return;
                             }
                             SpreadsheetTabularSupport.applyColumnWidths(

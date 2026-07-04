@@ -46,11 +46,11 @@ import java.util.regex.Pattern;
 import jp.co.pm.ai.desktop.bridge.PythonProcessRunner;
 import jp.co.pm.ai.desktop.bridge.StagePythonExecutable;
 import jp.co.pm.ai.desktop.config.AppPaths;
-import jp.co.pm.ai.desktop.config.NetworkSourceDirResolver;
 import jp.co.pm.ai.desktop.config.DesktopSessionStateStore;
 import jp.co.pm.ai.desktop.config.FactoryOperatorUserStore;
 import jp.co.pm.ai.desktop.config.FactorySite;
 import jp.co.pm.ai.desktop.config.GlobalInitSettingTarget;
+import jp.co.pm.ai.desktop.config.NetworkSourceDirResolver;
 import jp.co.pm.ai.desktop.io.PoiWorkbookFileWriter;
 import jp.co.pm.ai.desktop.io.PoiWorkbookOpener;
 import jp.co.pm.ai.desktop.io.PoiWorkbookSaver;
@@ -132,6 +132,7 @@ public class ReconciliationApp {
 
     private GridPane sheetGrid;
     private ScrollPane sheetScrollPane;
+    private ScrollPane leftScrollPane;
     
     private Label statusLabel;
     private Label discrepancyLabel;
@@ -245,7 +246,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
     private final ObservableList<String> optTrimming    = FXCollections.observableArrayList("有","無","-");
     private final ObservableList<String> optFeedLoc     = FXCollections.observableArrayList("EC","SEC","ｽﾗｲｽ","ｽﾘｯﾄ","ｴﾝﾎﾞｽ","検反","融着");
     private final ObservableList<String> optStorageLoc  = FXCollections.observableArrayList("滋賀","湖南","滋賀/湖南","湖南/中央","山田","中山","中央湖東","湖南/滋賀","奥田");
-    private final ObservableList<String> optYoto        = FXCollections.observableArrayList("W（自動車）","B（輸出）","Y（工材）","V（TPI）","A（TPI）","JR（屋根）","P（TPI）");
+    private final ObservableList<String> optYoto        = FXCollections.observableArrayList("W（自動車）","B（輸出）","Y（工材）","V（TPI）","A（TPI）","JR（屋根）","P（TPI）","小口加工");
     private final ObservableList<String> optUser        = FXCollections.observableArrayList("自動転記","ｵｶﾓﾄ","ﾀﾂﾀ","共和ﾚｻﾞｰ","Scientex","共和興","ｻｶｲﾅｺﾞﾔ","ﾀﾞｲｳﾚ","在ｴﾙ","U4059","U5001","張家港","ｲｽﾞﾐ","盟和","高山産業","中央物産");
     /** 製品行マスタ候補コンボ: 商品コード先頭フィルタ（空なら無制限）。 */
     private final ObservableList<String> optMasterCandidatePrefixProduct = FXCollections.observableArrayList();
@@ -403,19 +404,19 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         BorderPane.setMargin(splitPane, new Insets(15));
         
         // 1. LEFT PANE: ScrollPane container for detailed inputs
-        ScrollPane leftScroll = new ScrollPane();
-        leftScroll.setFitToWidth(true);
-        leftScroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
-        leftScroll.setStyle("-fx-background-color: transparent; -fx-border-color: transparent;");
-        leftScroll.setMinWidth(LEFT_PANE_MIN_WIDTH);
-        leftScroll.setPrefWidth(LEFT_PANE_PREF_WIDTH);
-        leftScroll.setMaxWidth(LEFT_PANE_MAX_WIDTH);
+        leftScrollPane = new ScrollPane();
+        leftScrollPane.setFitToWidth(true);
+        leftScrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+        leftScrollPane.setStyle("-fx-background-color: transparent; -fx-border-color: transparent;");
+        leftScrollPane.setMinWidth(LEFT_PANE_MIN_WIDTH);
+        leftScrollPane.setPrefWidth(LEFT_PANE_PREF_WIDTH);
+        leftScrollPane.setMaxWidth(LEFT_PANE_MAX_WIDTH);
         
         VBox leftContainer = new VBox(15);
         leftContainer.getStyleClass().add("pane-container");
         leftContainer.setPadding(new Insets(10));
         leftContainer.setFillWidth(true);
-        leftScroll.setContent(leftContainer);
+        leftScrollPane.setContent(leftContainer);
         
         Label lblLeftTitle = new Label("受注データベース & 選択フィルタ");
         lblLeftTitle.getStyleClass().add("pane-title-left");
@@ -711,6 +712,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
             lblFormTitle.setStyle("-fx-font-size: 13px; -fx-font-weight: bold;");
             lblFormTitle.getStyleClass().removeAll("section-title-form", "section-title-new-mode");
             lblFormTitle.getStyleClass().add("section-title-new-mode");
+            scrollLeftPaneToTop();
         });
         
         btnSaveLocal = new Button("手修正を一時保存");
@@ -787,8 +789,14 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         transferBlockedReasonLabel.setMaxWidth(Double.MAX_VALUE);
         transferBlockedReasonLabel.setManaged(false);
         transferBlockedReasonLabel.setVisible(false);
+
+        Button btnScrollLeftToTop = new Button("最上部へスクロールを戻す");
+        btnScrollLeftToTop.setMaxWidth(Double.MAX_VALUE);
+        btnScrollLeftToTop.setStyle("-fx-font-weight: bold; -fx-cursor: hand; -fx-padding: 8px;");
+        btnScrollLeftToTop.getStyleClass().add("btn-reload");
+        btnScrollLeftToTop.setOnAction(e -> scrollLeftPaneToTop());
         
-        btnContainer.getChildren().addAll(btnNewRecord, sideBtns, transferBlockedReasonLabel);
+        btnContainer.getChildren().addAll(btnNewRecord, sideBtns, btnScrollLeftToTop, transferBlockedReasonLabel);
         leftContainer.getChildren().add(btnContainer);
         
         // 2. RIGHT PANE: Visual Sheet Viewer & Discrepancies
@@ -838,9 +846,9 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         
         rightPane.getChildren().addAll(viewerHeaderBox, sheetScrollPane, discrepancyLabel);
 
-        splitPane.getItems().addAll(leftScroll, rightPane);
+        splitPane.getItems().addAll(leftScrollPane, rightPane);
         splitPane.setDividerPositions(SPLIT_LEFT_RATIO);
-        SplitPane.setResizableWithParent(leftScroll, Boolean.TRUE);
+        SplitPane.setResizableWithParent(leftScrollPane, Boolean.TRUE);
         SplitPane.setResizableWithParent(rightPane, Boolean.TRUE);
 
         // --- DYNAMIC TABS STRUCTURE ---
@@ -1595,6 +1603,20 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         updateComboChoiceListViewHeight(listView, items.size());
         listView.setMaxHeight(110);
         listView.setEditable(false);
+        items.addListener(
+                (javafx.collections.ListChangeListener<String>)
+                        change -> {
+                            while (change.next()) {
+                                if (change.wasReplaced()
+                                        || change.wasAdded()
+                                        || change.wasRemoved()
+                                        || change.wasUpdated()) {
+                                    updateComboChoiceListViewHeight(listView, items.size());
+                                    listView.setItems(items);
+                                    listView.refresh();
+                                }
+                            }
+                        });
 
         HBox addRow = new HBox(6);
         addRow.setAlignment(Pos.CENTER_LEFT);
@@ -1809,6 +1831,51 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         return value == null || value.isBlank();
     }
 
+    /** 転記値が候補外のとき ComboBox に表示されない問題を防ぐ（候補末尾へ追記）。 */
+    private static boolean ensureComboOptionInList(ObservableList<String> options, String value) {
+        if (options == null || value == null || value.isBlank()) {
+            return false;
+        }
+        String text = value.strip();
+        if (text.isEmpty() || options.contains(text)) {
+            return false;
+        }
+        options.add(text);
+        return true;
+    }
+
+    private static boolean ensureComboOptionsFromMultiline(
+            ObservableList<String> options, String multiline) {
+        if (multiline == null || multiline.isBlank()) {
+            return false;
+        }
+        boolean changed = false;
+        for (String part : multiline.split("\\n", -1)) {
+            changed |= ensureComboOptionInList(options, part);
+        }
+        return changed;
+    }
+
+    /** レコード反映前に、activeVals 内の ComboBox 値を候補リストへ不足分だけ追記する。 */
+    private void ensureFormComboOptionsFromActiveValues(Map<String, String> activeVals) {
+        if (activeVals == null || activeVals.isEmpty()) {
+            return;
+        }
+        boolean changed = false;
+        changed |= ensureComboOptionInList(optUser, activeVals.get("ユーザー"));
+        changed |= ensureComboOptionInList(optYoto, activeVals.get("用途"));
+        changed |= ensureComboOptionInList(optInputKbn, activeVals.get("入力区分"));
+        changed |= ensureComboOptionInList(optKakoKbn, activeVals.get("加工区分"));
+        changed |= ensureComboOptionsFromMultiline(optWariSu, activeVals.get("割数"));
+        changed |= ensureComboOptionsFromMultiline(optEcSide, activeVals.get("ＥＣ面"));
+        changed |= ensureComboOptionsFromMultiline(optTrimming, activeVals.get("ﾄﾘﾐﾝｸﾞ"));
+        changed |= ensureComboOptionsFromMultiline(optFeedLoc, activeVals.get("投入場所"));
+        changed |= ensureComboOptionsFromMultiline(optStorageLoc, activeVals.get("在庫場所"));
+        if (changed) {
+            refreshDynamicRowComboItems();
+        }
+    }
+
     /** セッション／プロファイル保存用: 現在の ComboBox 候補リストと入力既定値。 */
     public RequestFormComboChoices snapshotComboChoices() {
         java.util.LinkedHashMap<String, java.util.List<String>> map = new java.util.LinkedHashMap<>();
@@ -1859,14 +1926,8 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         replaceOptListForKey(optStorageLoc, RequestFormComboChoices.KEY_STORAGE_LOC);
         replaceOptListForKey(optYoto, RequestFormComboChoices.KEY_YOTO);
         replaceOptListForKey(optUser, RequestFormComboChoices.KEY_USER);
-        replaceOptListOrClear(
-                optMasterCandidatePrefixProduct,
-                prefixFilterOptions(
-                        comboChoicesState, RequestFormComboChoices.KEY_MASTER_CANDIDATE_PREFIX_PRODUCT));
-        replaceOptListOrClear(
-                optMasterCandidatePrefixRaw,
-                prefixFilterOptions(
-                        comboChoicesState, RequestFormComboChoices.KEY_MASTER_CANDIDATE_PREFIX_RAW));
+        applyPrefixFiltersFromChoices(choices);
+        syncComboChoicesStatePrefixFilters();
         refreshDynamicRowComboItems();
         refreshAllMasterCandidateCombos();
         syncFieldDefaultSelectorCombos();
@@ -1972,8 +2033,60 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
             }
             ObservableList<String> items = listView.getItems();
             updateComboChoiceListViewHeight(listView, items != null ? items.size() : 0);
+            if (items != null) {
+                listView.setItems(items);
+            }
             listView.refresh();
         }
+    }
+
+    /**
+     * 先頭文字フィルタは bundled 既定が無い。JSON にキーが無いときは現在の UI リストを維持し、
+     * 部分再読込で消えないようにする。
+     */
+    private void applyPrefixFiltersFromChoices(RequestFormComboChoices choices) {
+        applyPrefixFilterFromChoices(
+                optMasterCandidatePrefixProduct,
+                RequestFormComboChoices.KEY_MASTER_CANDIDATE_PREFIX_PRODUCT,
+                choices);
+        applyPrefixFilterFromChoices(
+                optMasterCandidatePrefixRaw,
+                RequestFormComboChoices.KEY_MASTER_CANDIDATE_PREFIX_RAW,
+                choices);
+    }
+
+    private void applyPrefixFilterFromChoices(
+            ObservableList<String> target, String key, RequestFormComboChoices choices) {
+        if (target == null || key == null || choices == null) {
+            return;
+        }
+        if (!choices.asMap().containsKey(key)) {
+            return;
+        }
+        replaceOptListOrClear(
+                target, prefixFilterOptions(choices.mergedWithDefaults(), key));
+    }
+
+    private void syncComboChoicesStatePrefixFilters() {
+        java.util.LinkedHashMap<String, java.util.List<String>> map =
+                new java.util.LinkedHashMap<>(comboChoicesState.asMap());
+        if (!optMasterCandidatePrefixProduct.isEmpty()) {
+            map.put(
+                    RequestFormComboChoices.KEY_MASTER_CANDIDATE_PREFIX_PRODUCT,
+                    List.copyOf(optMasterCandidatePrefixProduct));
+        } else {
+            map.remove(RequestFormComboChoices.KEY_MASTER_CANDIDATE_PREFIX_PRODUCT);
+        }
+        if (!optMasterCandidatePrefixRaw.isEmpty()) {
+            map.put(
+                    RequestFormComboChoices.KEY_MASTER_CANDIDATE_PREFIX_RAW,
+                    List.copyOf(optMasterCandidatePrefixRaw));
+        } else {
+            map.remove(RequestFormComboChoices.KEY_MASTER_CANDIDATE_PREFIX_RAW);
+        }
+        comboChoicesState =
+                RequestFormComboChoices.of(map, comboChoicesState.fieldDefaultsAsMap())
+                        .mergedWithDefaults();
     }
 
     private static void replaceOptListOrClear(
@@ -3305,9 +3418,27 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                         Map<String, String> dbRow = entry.getValue();
                         String reqNoDisplay =
                                 firstNonBlank(dbRow.get("依頼No"), dbRow.get("依頼Ｎｏ"), entry.getKey());
-                        loadedRecords.add(new OrderRecord(
-                            reqNoDisplay, "既存登録 (原本未確認)", dbRow.get("ユーザー"), dbRow.get("製品"), "原本ファイル未検出（過去データ）", new HashMap<>(), dbRow
-                        ));
+                        Map<String, String> raw = new HashMap<>();
+                        String status = "既存登録 (原本未確認)";
+                        String discrepancy = "原本ファイル未検出（過去データ）";
+                        Optional<File> linkedTpiPdf =
+                                resolveLinkedTpiPdf(reqNoDisplay, parseCacheRoot);
+                        if (linkedTpiPdf.isPresent()) {
+                            raw = loadTpiPdfRawLinked(linkedTpiPdf.get(), reqNoDisplay, parseCacheRoot);
+                        }
+                        if (linkedTpiPdf.isPresent() && !raw.isEmpty()) {
+                            status = "既存登録 (TPI PDF)";
+                            discrepancy = "TPI PDF を本文照合で関連付け";
+                        }
+                        loadedRecords.add(
+                                new OrderRecord(
+                                        reqNoDisplay,
+                                        status,
+                                        dbRow.get("ユーザー"),
+                                        dbRow.get("製品"),
+                                        discrepancy,
+                                        raw,
+                                        dbRow));
                     }
                 }
                 
@@ -3417,12 +3548,24 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
             Optional<List<Map<String, String>>> cached =
                     RequestFormSourceCache.loadParseEntries(parseCacheRoot, pdf);
             if (cached.isPresent()) {
-                for (Map<String, String> entry : cached.get()) {
-                    String k = normalize_key(entry.get("依頼Ｎｏ"));
-                    if (!k.isEmpty() && excelRawKeys.contains(k)) {
-                        continue;
+                try {
+                    List<Map<String, String>> entries =
+                            RequestFormTpiPdfSplitter.ensureSplitPdfs(
+                                    pdf, cached.get(), parseCacheRoot, uiEnvSnapshot);
+                    for (Map<String, String> entry : entries) {
+                        String k = normalize_key(entry.get("依頼Ｎｏ"));
+                        if (!k.isEmpty() && excelRawKeys.contains(k)) {
+                            continue;
+                        }
+                        if (!RequestFormTpiPdfCatalog.shouldAutoAddScannedEntry(
+                                tpiDir, pdf, entries, entry)) {
+                            continue;
+                        }
+                        rawRequests.add(entry);
                     }
-                    rawRequests.add(entry);
+                } catch (Exception ex) {
+                    System.err.println(
+                            "Error reading TPI PDF cache " + pdf.getName() + ": " + ex.getMessage());
                 }
                 Platform.runLater(
                         () ->
@@ -3439,11 +3582,17 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                                             "TPI PDF を解析中 (%d / %d)\n%s",
                                             pdfIdx, totalPdf, pdfName)));
             try {
-                List<Map<String, String>> parsed = RequestFormTpiPdfExtractor.extractEntries(pdf);
+                List<Map<String, String>> parsed =
+                        RequestFormTpiPdfExtractor.extractEntriesWithSplit(
+                                pdf, uiEnvSnapshot, parseCacheRoot);
                 RequestFormSourceCache.saveParseEntries(parseCacheRoot, pdf, parsed);
                 for (Map<String, String> entry : parsed) {
                     String k = normalize_key(entry.get("依頼Ｎｏ"));
                     if (!k.isEmpty() && excelRawKeys.contains(k)) {
+                        continue;
+                    }
+                    if (!RequestFormTpiPdfCatalog.shouldAutoAddScannedEntry(
+                            tpiDir, pdf, parsed, entry)) {
                         continue;
                     }
                     rawRequests.add(entry);
@@ -3452,6 +3601,92 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                 System.err.println("Error reading TPI PDF " + pdf.getName() + ": " + ex.getMessage());
             }
         }
+    }
+
+    /**
+     * 受注のみ行へ TPI PDF を関連付ける。本文（OCR/テキスト）の依頼Ｎｏが一致しない場合は関連付けしない。
+     */
+    private Map<String, String> loadTpiPdfRawLinked(
+            File pdf, String iraiNo, File parseCacheRoot) {
+        if (pdf == null || !pdf.isFile()) {
+            return new HashMap<>();
+        }
+        try {
+            Optional<List<Map<String, String>>> cached =
+                    RequestFormSourceCache.loadParseEntries(parseCacheRoot, pdf);
+            if (cached.isPresent() && !cached.get().isEmpty()) {
+                List<Map<String, String>> entries =
+                        RequestFormTpiPdfSplitter.ensureSplitPdfs(
+                                pdf, cached.get(), parseCacheRoot, uiEnvSnapshot);
+                return reconcileLinkedTpiRaw(selectLinkedEntry(entries, iraiNo), iraiNo);
+            }
+            List<Map<String, String>> parsed =
+                    RequestFormTpiPdfExtractor.extractEntriesWithSplit(
+                            pdf, uiEnvSnapshot, parseCacheRoot);
+            RequestFormSourceCache.saveParseEntries(parseCacheRoot, pdf, parsed);
+            if (!parsed.isEmpty()) {
+                return reconcileLinkedTpiRaw(selectLinkedEntry(parsed, iraiNo), iraiNo);
+            }
+        } catch (Exception ex) {
+            System.err.println(
+                    "TPI PDF 関連付け解析失敗 " + pdf.getName() + ": " + ex.getMessage());
+        }
+        return new HashMap<>();
+    }
+
+    private Map<String, String> selectLinkedEntry(List<Map<String, String>> entries, String iraiNo) {
+        if (entries == null || entries.isEmpty()) {
+            return Map.of();
+        }
+        for (Map<String, String> entry : entries) {
+            String parsedIrai = entry.get("依頼Ｎｏ");
+            if (parsedIrai != null
+                    && !parsedIrai.isBlank()
+                    && normalize_key(parsedIrai).equals(normalize_key(iraiNo))) {
+                File tpiDir =
+                        tpiPdfFolder != null && !tpiPdfFolder.isBlank()
+                                ? new File(tpiPdfFolder)
+                                : null;
+                String pdfName = entry.get("原本ファイル名");
+                File pdf =
+                        pdfName != null && tpiDir != null
+                                ? new File(tpiDir, pdfName)
+                                : null;
+                if (pdf != null
+                        && !RequestFormTpiPdfCatalog.canLinkIraiInSharedPdf(
+                                iraiNo, pdf, entries, tpiDir)) {
+                    return Map.of();
+                }
+                return entry;
+            }
+        }
+        return entries.get(0);
+    }
+
+    private Optional<File> resolveLinkedTpiPdf(String reqNo, File parseCacheRoot) {
+        Optional<File> linked =
+                RequestFormTpiPdfCatalog.findForIraiNo(reqNo, tpiPdfFolder);
+        if (linked.isPresent()) {
+            return linked;
+        }
+        return RequestFormTpiPdfCatalog.findForIraiNoByPdfContent(
+                reqNo, tpiPdfFolder, uiEnvSnapshot, parseCacheRoot);
+    }
+
+    private Map<String, String> reconcileLinkedTpiRaw(Map<String, String> parsed, String iraiNo) {
+        Map<String, String> raw = new LinkedHashMap<>(parsed);
+        String parsedIrai = raw.get("依頼Ｎｏ");
+        boolean mismatch =
+                parsedIrai != null
+                        && !parsedIrai.isBlank()
+                        && !normalize_key(parsedIrai).equals(normalize_key(iraiNo));
+        if (mismatch) {
+            return new HashMap<>();
+        }
+        if (parsedIrai == null || parsedIrai.isBlank()) {
+            return new HashMap<>();
+        }
+        return raw;
     }
 
     private static boolean isTpiPdfRaw(Map<String, String> raw) {
@@ -3469,6 +3704,13 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
             return null;
         }
         if (isTpiPdfRaw(raw)) {
+            String splitPath = raw.get(RequestFormTpiPdfFieldLayout.META_SPLIT_PDF_PATH);
+            if (splitPath != null && !splitPath.isBlank()) {
+                File split = new File(splitPath);
+                if (split.isFile()) {
+                    return split;
+                }
+            }
             if (tpiPdfFolder == null || tpiPdfFolder.isBlank()) {
                 return null;
             }
@@ -3477,6 +3719,23 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         }
         File f = new File(targetFolder + "\\" + fName);
         return f.isFile() ? f : null;
+    }
+
+    /** 分割 PDF プレビュー時も parse キャッシュ参照は束ね原本（例: GB.pdf）へ戻す。 */
+    private File resolveTpiParseSourcePdf(Map<String, String> raw, File resolvedPreviewPdf) {
+        if (raw == null || raw.isEmpty()) {
+            return resolvedPreviewPdf;
+        }
+        String splitPath = raw.get(RequestFormTpiPdfFieldLayout.META_SPLIT_PDF_PATH);
+        if (splitPath == null || splitPath.isBlank()) {
+            return resolvedPreviewPdf;
+        }
+        String sourceName = raw.get("原本ファイル名");
+        if (sourceName == null || sourceName.isBlank() || tpiPdfFolder == null || tpiPdfFolder.isBlank()) {
+            return resolvedPreviewPdf;
+        }
+        File source = new File(tpiPdfFolder, sourceName);
+        return source.isFile() ? source : resolvedPreviewPdf;
     }
 
     private void enqueueBackgroundCacheTasks() {
@@ -3586,12 +3845,23 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
     }
 
     private boolean hasExistingFile(OrderRecord rec) {
-        Map<String, String> raw = rec.getRawValues();
-        if (raw == null || raw.isEmpty()) {
+        if (rec == null) {
             return false;
         }
-        File resolved = resolveOriginalFileForRecord(raw);
-        return resolved != null && resolved.isFile();
+        Map<String, String> raw = rec.getRawValues();
+        if (raw != null && !raw.isEmpty()) {
+            File resolved = resolveOriginalFileForRecord(raw);
+            if (resolved != null && resolved.isFile()) {
+                return true;
+            }
+        }
+        return resolveLinkedTpiPdf(rec.getReqNo(), previewCacheDirectory())
+                .filter(
+                        pdf ->
+                                !loadTpiPdfRawLinked(
+                                                pdf, rec.getReqNo(), previewCacheDirectory())
+                                        .isEmpty())
+                .isPresent();
     }
 
     /**
@@ -3778,6 +4048,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         Map<String, String> rawVals = record.getRawValues() != null ? record.getRawValues() : Map.of();
         refreshOriginalProductSlotCache(rawVals);
         Map<String, String> activeVals = resolveFormActiveValues(record);
+        ensureFormComboOptionsFromActiveValues(activeVals);
         
         newCmbFormUser.setValue(activeVals.getOrDefault("ユーザー", ""));
         newDpFormDeliv.setValue(parseLocalDate(activeVals.getOrDefault("希望納期", "")));
@@ -3998,6 +4269,20 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         
         Map<String, String> raw = record.getRawValues();
         if (raw.isEmpty()) {
+            File cacheRoot = previewCacheDirectory();
+            Optional<File> linkedTpiPdf = resolveLinkedTpiPdf(record.getReqNo(), cacheRoot);
+            if (linkedTpiPdf.isPresent()) {
+                Map<String, String> linkedRaw =
+                        loadTpiPdfRawLinked(linkedTpiPdf.get(), record.getReqNo(), cacheRoot);
+                if (!linkedRaw.isEmpty()) {
+                    File pdfOriginal = linkedTpiPdf.get();
+                    currentPreviewOriginalFile = pdfOriginal;
+                    refreshPreviewFileHeader();
+                    acknowledgePreviewForCurrentOriginalFile();
+                    displayPreviewPdf(pdfOriginal);
+                    return;
+                }
+            }
             currentPreviewOriginalFile = null;
             refreshPreviewFileHeader();
             Label lblEmpty = new Label("このレコードに関連する原本ファイルはありません（過去に手入力されたデータです）");
@@ -4017,6 +4302,21 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                 Label lblEmpty = new Label("TPI PDF が見つかりません: " + fName);
                 lblEmpty.getStyleClass().add("excel-grid-label-error");
                 sheetGrid.add(lblEmpty, 0, 0);
+                return;
+            }
+            Map<String, String> verified =
+                    loadTpiPdfRawLinked(
+                            resolveTpiParseSourcePdf(raw, pdfOriginal),
+                            record.getReqNo(),
+                            previewCacheDirectory());
+            if (verified.isEmpty()) {
+                Label lblMismatch =
+                        new Label(
+                                "TPI PDF の依頼Ｎｏが一致しません（"
+                                        + fName
+                                        + "）。本文 OCR/テキスト照合で関連付けできません。");
+                lblMismatch.getStyleClass().add("excel-grid-label-error");
+                sheetGrid.add(lblMismatch, 0, 0);
                 return;
             }
             acknowledgePreviewForCurrentOriginalFile();
@@ -6256,6 +6556,11 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         GridPane.setHgrow(field, Priority.ALWAYS);
         GridPane.setFillWidth(field, true);
         grid.add(field, col, row, colSpan, rowSpan);
+    }
+
+    /** 左ペイン（依頼書入力フォーム）のスクロール位置を先頭へ戻す。 */
+    private void scrollLeftPaneToTop() {
+        javafx.application.Platform.runLater(() -> leftScrollPane.setVvalue(0.0));
     }
 
     /** 横並び操作ボタン: ラベル全文表示（均等縮小・省略記号を避ける）。 */

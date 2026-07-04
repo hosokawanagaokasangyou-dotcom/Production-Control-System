@@ -248,6 +248,8 @@ public final class PlanInputProcessSequenceRowOrder {
 
     /**
      * 現在の行順を §A-1 に沿って整え、{@link #COL_DISPATCH_TRIAL_ORDER} を 1..n で振り直す。
+     *
+     * <p>並べ替えキーはセル内の数値（小数可）。空・非数値の行のみ現在行位置の連番を仮キーとする。
      */
     public static void stabilizeAndRenumberDispatchTrialOrder(
             List<String> headers, ObservableList<ObservableList<String>> rows) {
@@ -268,7 +270,7 @@ public final class PlanInputProcessSequenceRowOrder {
         boolean stage3 = isStage3Headers(headers);
 
         int n = rows.size();
-        seedTrialOrderKeysFromCurrentRowOrder(rows, colDto, n);
+        ensureTrialOrderFallbackKeys(rows, colDto, n);
         Map<String, List<String>> tokensByBlockKey =
                 collectProcessContentTokensByBlockKey(rows, colTask, colParent, colContent);
         Map<String, Double> eligibleBlockDtoByBlockKey = new HashMap<>();
@@ -456,12 +458,23 @@ public final class PlanInputProcessSequenceRowOrder {
         rows.addAll(insertAt, block);
     }
 
-    private static void seedTrialOrderKeysFromCurrentRowOrder(
+    /** 正の有限小数を並べ替えキーとして解釈。空・非数値・非正は {@code null}。 */
+    public static Double parsePositiveTrialOrderSortKey(String raw) {
+        Double d = parseTrialOrderSortKey(raw);
+        if (d == null || d <= 0.0) {
+            return null;
+        }
+        return d;
+    }
+
+    private static void ensureTrialOrderFallbackKeys(
             ObservableList<ObservableList<String>> rows, int colDto, int n) {
         for (int i = 0; i < n; i++) {
             ObservableList<String> row = rows.get(i);
             ensureSize(row, colDto + 1);
-            row.set(colDto, Integer.toString(i + 1));
+            if (parseTrialOrderSortKey(cellAt(row, colDto)) == null) {
+                row.set(colDto, Integer.toString(i + 1));
+            }
         }
     }
 

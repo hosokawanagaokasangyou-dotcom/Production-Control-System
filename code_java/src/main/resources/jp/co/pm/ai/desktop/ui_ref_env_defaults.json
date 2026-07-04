@@ -190,6 +190,10 @@
     "value" : "1",
     "description" : "0=組合せ表プリセットを使わない"
   }, {
+    "key" : "TEAM_ASSIGN_COMBO_SHEET_MAY_EXCEED_NEED",
+    "value" : "1",
+    "description" : "1（既定）=組み合わせ表の必須人数が need 基本人数を超えていてもプリセットを試行。0=need 上限を超える組み合わせ表は使わない。配台計画_タスク入力タブのチェックボックスでも上書き"
+  }, {
     "key" : "DISPATCH_INTERVAL_MIRROR_ENFORCE",
     "value" : "1",
     "description" : "1=配台中の占有区間ミラーで二重検査（0 で無効）"
@@ -359,6 +363,14 @@
     "value" : "",
     "description" : "TPI（東レペフ加工品）依頼書 PDF スキャン先フォルダ（フルパス）。空のとき湖南工場既定 UNC（共有DATA/TPI依頼書）。国分は空。依頼書入力タブの半自動取込・PDF プレビュー。「フォルダ...」で選択可。"
   }, {
+    "key" : "PM_AI_TESSERACT_CMD",
+    "value" : "",
+    "description" : "Tesseract OCR 実行ファイル（tesseract.exe）のフルパス。TPI 依頼書 PDF が画像スキャンのとき OCR 読取に使用。空のとき Program Files\\Tesseract-OCR\\tesseract.exe 等を探索。「ファイル...」で選択可。"
+  }, {
+    "key" : "PM_AI_TESSERACT_TESSDATA_DIR",
+    "value" : "",
+    "description" : "Tesseract 言語データ（tessdata）フォルダ。jpn.traineddata が必要。空のとき PM_AI_TESSERACT_CMD 近傍または Program Files\\Tesseract-OCR\\tessdata を探索。「フォルダ...」で選択可。"
+  }, {
     "key" : "PM_AI_REQUEST_FORM_PREVIEW_PDF_CJK_SCALE",
     "value" : "0.72",
     "description" : "依頼書 PDF プレビュー: 日本語フォントサイズ補正係数（Excel の pt に乗算）。小さいほど文字が小さくなる。範囲 0.50～1.00。空または未設定で 0.72。はみ出しが残るときは 0.65～0.70、小さすぎるときは 0.80 前後を試す。変更後はプレビュー PDF が再生成される。"
@@ -400,11 +412,11 @@
     "description" : "配台 PMD のリモートデスクトップタブ向け: 接続先 RDP ランチャー exe（PmAiRdpRemoteLauncher.exe）、RDP起動プロファイル.json、RPA設定.ini の配備先共有フォルダ（UNC 可）。"
   }, {
     "key" : "PM_AI_RPA_LAUNCHER_DEPLOY_DIR",
-    "value" : "\\\\192.168.0.101\\共有フォルダ\\掲示板\\rpa_luncher\\RDPランチャ",
+    "value" : "M:\\湖南工場\\湖南共有\\002  加工G\\●配台AIシステム\\共有DATA",
     "description" : "リモートデスクトップ専用ランチャー（PmAiRpaLuncher）向け: 接続先 RDP ランチャー exe・ini・起動プロファイル JSON の配備先共有フォルダ（UNC 可）。"
   }, {
     "key" : "PM_AI_RDP_PORTABLE_BUNDLE_SOURCE_DIR",
-    "value" : "",
+    "value" : "M:\\湖南工場\\湖南共有\\002  加工G\\●配台AIシステム\\共有DATA\\PmAiRpaLuncher_portable",
     "description" : "リモートデスクトップ専用ポータブル（PmAiRpaLuncher）の版アップ正本。ローカル出力 rpa_luncher_release。配台 PMD は pm-ai-package-release。"
   }, {
     "key" : "PM_AI_RDP_OPERATOR_USERS_STORE_DIR",
@@ -412,7 +424,7 @@
     "description" : "配台 PMD のリモートデスクトップタブ向け: 操作者 bin 保存フォルダ（UNC 可）。"
   }, {
     "key" : "PM_AI_RPA_LAUNCHER_OPERATOR_USERS_STORE_DIR",
-    "value" : "\\\\192.168.0.101\\共有フォルダ\\掲示板\\rpa_luncher\\DATA",
+    "value" : "M:\\湖南工場\\湖南共有\\002  加工G\\●配台AIシステム\\共有DATA",
     "description" : "リモートデスクトップ専用ランチャー向けの操作者 bin 保存フォルダ（UNC 可）。前回操作者選択は PC ローカル。"
   }, {
     "key" : "PM_AI_RDP_LAUNCHER_AUTO_DEPLOY",
