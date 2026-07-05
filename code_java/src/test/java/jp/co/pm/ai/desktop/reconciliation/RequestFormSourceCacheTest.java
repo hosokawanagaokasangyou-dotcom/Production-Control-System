@@ -33,6 +33,7 @@ class RequestFormSourceCacheTest {
                         + "},\"entries\":[{\"依頼Ｎｏ\":\"E6-2\",\"加工賃\":\"18+18+13\"}]}");
 
         assertTrue(RequestFormSourceCache.loadParseEntries(cacheRoot, source).isEmpty());
+        assertFalse(cacheFile.isFile(), "stale parse cache should be deleted");
     }
 
     @Test
@@ -52,6 +53,7 @@ class RequestFormSourceCacheTest {
 
         Files.writeString(source.toPath(), "updated");
         assertTrue(RequestFormSourceCache.loadParseEntries(cacheRoot, source).isEmpty());
+        assertFalse(RequestFormSourceCache.parseCacheFile(cacheRoot, source).isFile());
     }
 
     @Test
@@ -128,5 +130,43 @@ class RequestFormSourceCacheTest {
         assertEquals(0, result.deleteFailures());
         assertFalse(pdf.isFile());
         assertFalse(RequestFormSourceCache.parseCacheFile(cacheRoot, source).isFile());
+    }
+
+    @Test
+    void pruneStaleParseCacheFiles_removesOutdatedTpiSchema(@TempDir Path tmp) throws Exception {
+        File cacheRoot = tmp.resolve("preview_cache").toFile();
+        File stale =
+                new File(RequestFormSourceCache.parseDir(cacheRoot), "GB__GB60604.json");
+        Files.createDirectories(stale.getParentFile().toPath());
+        Files.writeString(
+                stale.toPath(),
+                "{\"schemaVersion\":\"request-form-tpi-pdf-v8\",\"entries\":[]}");
+        File current =
+                new File(RequestFormSourceCache.parseDir(cacheRoot), "GB.json");
+        Files.writeString(
+                current.toPath(),
+                "{\"schemaVersion\":\""
+                        + RequestFormSourceCache.TPI_PDF_PARSE_SCHEMA_VERSION
+                        + "\",\"entries\":[]}");
+
+        int deleted = RequestFormSourceCache.pruneStaleParseCacheFiles(cacheRoot);
+
+        assertEquals(1, deleted);
+        assertFalse(stale.isFile());
+        assertTrue(current.isFile());
+    }
+
+    @Test
+    void pruneOrphanTpiSplitArtifacts_removesMetaWithoutPdf(@TempDir Path tmp) throws Exception {
+        File cacheRoot = tmp.resolve("preview_cache").toFile();
+        File splitDir = RequestFormSourceCache.splitDir(cacheRoot);
+        File meta = new File(splitDir, "GB__GB60604.pdf.meta.json");
+        Files.createDirectories(splitDir.toPath());
+        Files.writeString(meta.toPath(), "{}");
+
+        int deleted = RequestFormSourceCache.pruneOrphanTpiSplitArtifacts(cacheRoot);
+
+        assertEquals(1, deleted);
+        assertFalse(meta.isFile());
     }
 }

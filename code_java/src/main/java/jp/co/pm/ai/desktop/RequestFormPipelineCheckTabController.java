@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Locale;
 
 import javafx.application.Platform;
+import javafx.beans.binding.Bindings;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
@@ -19,11 +20,14 @@ import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextField;
 import javafx.scene.control.cell.PropertyValueFactory;
+import javafx.scene.input.Clipboard;
+import javafx.scene.input.ClipboardContent;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 
 import jp.co.pm.ai.desktop.dispatch.AladdinShapedPlanQtyLookup;
 import jp.co.pm.ai.desktop.dispatch.AladdinShapedPlanQtyLookup.PlanEntry;
+import jp.co.pm.ai.desktop.ui.ClipboardTableSupport;
 import jp.co.pm.ai.desktop.reconciliation.JuchuTransferCoverageCheck.ColumnCheck;
 import jp.co.pm.ai.desktop.reconciliation.JuchuHeaderAliasRegistry;
 import jp.co.pm.ai.desktop.reconciliation.RequestFormPipelineStatusService;
@@ -40,13 +44,15 @@ public final class RequestFormPipelineCheckTabController {
             "依頼書原本フォルダ内の Excel 原本を走査し、受注ファイルへの転記状況と"
                     + " shaped_aladdin_plan.json 上のアラジン加工計画を照合します。"
                     + " 転記率は原本に値がある転記対象列を分母とします。"
-                    + " アラジン計画は先頭7日分を①〜⑦列に表示（セル例: 7/3 100m）。"
+                    + " ①〜⑦列は依頼ごとの加工計画日（昇順・最大7日）を表示（セル例: 7/3 100m）。"
+                    + " JSON表の日付列順とは無関係。"
                     + " 受注入力日フィルタは既定30日（変更可）。";
 
     public static final class MainRow {
         private String iraiNo;
         private String originalFile;
         private String juchuInputDate;
+        private String juchuInputOperator;
         private String juchuAdjustDeliveryDate;
         private String rateDisplay;
         private String mismatchCount;
@@ -84,6 +90,14 @@ public final class RequestFormPipelineCheckTabController {
 
         public void setJuchuInputDate(String juchuInputDate) {
             this.juchuInputDate = juchuInputDate;
+        }
+
+        public String getJuchuInputOperator() {
+            return juchuInputOperator;
+        }
+
+        public void setJuchuInputOperator(String juchuInputOperator) {
+            this.juchuInputOperator = juchuInputOperator;
         }
 
         public String getJuchuAdjustDeliveryDate() {
@@ -274,6 +288,29 @@ public final class RequestFormPipelineCheckTabController {
         }
     }
 
+    /** クリップボード用の依頼ヘッダ（上段一覧の選択行）。 */
+    record PlanCopyHeader(String iraiNo, String contractNo, String rawInputDate) {
+
+        static PlanCopyHeader from(MainRow row) {
+            if (row == null) {
+                return null;
+            }
+            String rawInputDate = "";
+            PipelineStatusRow src = row.source();
+            if (src != null && src.rawInputDateDisplay() != null) {
+                rawInputDate = src.rawInputDateDisplay();
+            }
+            return new PlanCopyHeader(
+                    nullToEmpty(row.getIraiNo()),
+                    nullToEmpty(row.getContractNoStatus()),
+                    nullToEmpty(rawInputDate));
+        }
+
+        private static String nullToEmpty(String val) {
+            return val != null ? val : "";
+        }
+    }
+
     @FXML
     private Button refreshButton;
 
@@ -310,6 +347,12 @@ public final class RequestFormPipelineCheckTabController {
     @FXML
     private TableView<PlanRow> planTable;
 
+    @FXML
+    private Button copyPlanTableButton;
+
+    @FXML
+    private Button copyPlanTableForEmailButton;
+
     private MainShellController shell;
 
     private final ObservableList<MainRow> allRows = FXCollections.observableArrayList();
@@ -317,8 +360,10 @@ public final class RequestFormPipelineCheckTabController {
     private final ObservableList<MismatchRow> mismatchRows = FXCollections.observableArrayList();
     private final ObservableList<PlanRow> planRows = FXCollections.observableArrayList();
 
+    /** 下段アラジン計画表の表示元（コピー時の依頼ヘッダ）。 */
+    private MainRow planContextRow;
+
     private boolean aladdinJsonAvailable = true;
-    private List<String> planDateHeaders = List.of();
     private String lastScanWarnings = "";
 
     @FXML
@@ -330,9 +375,16 @@ public final class RequestFormPipelineCheckTabController {
         planTable.setItems(planRows);
         VBox.setVgrow(mainTable, Priority.ALWAYS);
 
-        setupMainColumns(List.of());
+        setupMainColumns();
         setupMismatchColumns();
         setupPlanColumns();
+
+        if (copyPlanTableButton != null) {
+            copyPlanTableButton.disableProperty().bind(Bindings.isEmpty(planRows));
+        }
+        if (copyPlanTableForEmailButton != null) {
+            copyPlanTableForEmailButton.disableProperty().bind(Bindings.isEmpty(planRows));
+        }
 
         filterField.textProperty().addListener((obs, oldVal, newVal) -> applyFilter());
         hideNoOriginalCheck.selectedProperty().addListener((obs, o, n) -> applyFilter());
@@ -408,8 +460,7 @@ public final class RequestFormPipelineCheckTabController {
     private void applyScanResult(ScanResult result) {
         allRows.clear();
         aladdinJsonAvailable = result.aladdinJsonAvailable();
-        planDateHeaders = result.planDateHeaders() != null ? result.planDateHeaders() : List.of();
-        setupMainColumns(planDateHeaders);
+        setupMainColumns();
 
         for (PipelineStatusRow row : result.rows()) {
             MainRow ui = new MainRow();
@@ -420,6 +471,8 @@ public final class RequestFormPipelineCheckTabController {
                             : "（依頼書原本なし）");
             ui.setJuchuInputDate(
                     row.juchuInputDateDisplay() != null ? row.juchuInputDateDisplay() : "");
+            ui.setJuchuInputOperator(
+                    row.juchuInputOperatorDisplay() != null ? row.juchuInputOperatorDisplay() : "");
             ui.setJuchuAdjustDeliveryDate(
                     row.juchuAdjustDeliveryDateDisplay() != null
                             ? row.juchuAdjustDeliveryDateDisplay()
@@ -457,11 +510,13 @@ public final class RequestFormPipelineCheckTabController {
         mainTable.getSelectionModel().clearSelection();
         mismatchRows.clear();
         planRows.clear();
+        planContextRow = null;
     }
 
     private void showDetail(MainRow row) {
         mismatchRows.clear();
         planRows.clear();
+        planContextRow = row;
         if (row == null || row.source() == null) {
             return;
         }
@@ -475,6 +530,166 @@ public final class RequestFormPipelineCheckTabController {
         }
         for (PlanEntry entry : src.planEntries()) {
             planRows.add(new PlanRow(entry));
+        }
+    }
+
+    @FXML
+    private void onCopyPlanTableButtonAction() {
+        if (planRows.isEmpty()) {
+            return;
+        }
+        PlanCopyHeader header = PlanCopyHeader.from(planContextRow);
+        String tsv = formatPlanTableTsv(header, planRows);
+        ClipboardContent content = new ClipboardContent();
+        content.putString(tsv);
+        Clipboard.getSystemClipboard().setContent(content);
+        if (shell != null) {
+            shell.appendLog(
+                    "[pipeline-check] アラジン加工計画 "
+                            + planRows.size()
+                            + " 行をクリップボードへ表としてコピー"
+                            + headerLogSuffix(header));
+        }
+    }
+
+    @FXML
+    private void onCopyPlanTableForEmailButtonAction() {
+        if (planRows.isEmpty()) {
+            return;
+        }
+        PlanCopyHeader header = PlanCopyHeader.from(planContextRow);
+        String tsv = formatPlanTableTsv(header, planRows);
+        String html = formatPlanTableHtml(header, planRows);
+        ClipboardTableSupport.copyTabularForRichTextPaste(tsv, html);
+        if (shell != null) {
+            shell.appendLog(
+                    "[pipeline-check] アラジン加工計画 "
+                            + planRows.size()
+                            + " 行をメール貼り付け用（HTML表）でクリップボードへコピー"
+                            + headerLogSuffix(header));
+        }
+    }
+
+    private static String headerLogSuffix(PlanCopyHeader header) {
+        if (header == null || header.iraiNo().isBlank()) {
+            return "";
+        }
+        return "（依頼No: " + header.iraiNo() + "）";
+    }
+
+    static String formatPlanTableHtml(PlanCopyHeader header, List<PlanRow> rows) {
+        StringBuilder sb = new StringBuilder();
+        appendPlanCopyHeaderHtml(sb, header);
+        sb.append(
+                "<table border=\"1\" cellspacing=\"0\" cellpadding=\"4\""
+                        + " style=\"border-collapse:collapse;font-family:'Meiryo UI',sans-serif;font-size:11pt;\">");
+        sb.append("<thead><tr>");
+        for (String columnTitle : List.of("機械名", "工程名", "日付", "計画m")) {
+            sb.append("<th style=\"background:#D9E1F2;padding:4px 8px;text-align:left;\">")
+                    .append(ClipboardTableSupport.escapeHtml(columnTitle))
+                    .append("</th>");
+        }
+        sb.append("</tr></thead><tbody>");
+        for (PlanRow row : rows) {
+            sb.append("<tr>");
+            appendHtmlCell(sb, row.getMachineName());
+            appendHtmlCell(sb, row.getProcessName());
+            appendHtmlCell(sb, row.getDateYmd());
+            appendHtmlCell(sb, row.getPlanMeters());
+            sb.append("</tr>");
+        }
+        sb.append("</tbody></table>");
+        return sb.toString();
+    }
+
+    private static void appendHtmlCell(StringBuilder sb, String value) {
+        sb.append("<td style=\"padding:4px 8px;\">")
+                .append(ClipboardTableSupport.escapeHtml(value != null ? value : ""))
+                .append("</td>");
+    }
+
+    static String formatPlanTableTsv(PlanCopyHeader header, List<PlanRow> rows) {
+        StringBuilder sb = new StringBuilder();
+        appendPlanCopyHeaderTsv(sb, header);
+        if (!sb.isEmpty()) {
+            sb.append('\n');
+        }
+        sb.append("機械名")
+                .append('\t')
+                .append("工程名")
+                .append('\t')
+                .append("日付")
+                .append('\t')
+                .append("計画m");
+        for (PlanRow row : rows) {
+            sb.append('\n');
+            appendTsvCell(sb, row.getMachineName());
+            sb.append('\t');
+            appendTsvCell(sb, row.getProcessName());
+            sb.append('\t');
+            appendTsvCell(sb, row.getDateYmd());
+            sb.append('\t');
+            appendTsvCell(sb, row.getPlanMeters());
+        }
+        return sb.toString();
+    }
+
+    private static void appendPlanCopyHeaderTsv(StringBuilder sb, PlanCopyHeader header) {
+        if (header == null) {
+            return;
+        }
+        appendHeaderTsvLineRequired(sb, "依頼No", header.iraiNo());
+        appendHeaderTsvLineRequired(sb, "契約NO", header.contractNo());
+        appendHeaderTsvLineRequired(sb, "原反投入日", header.rawInputDate());
+    }
+
+    private static void appendHeaderTsvLineRequired(StringBuilder sb, String label, String value) {
+        if (!sb.isEmpty()) {
+            sb.append('\n');
+        }
+        appendTsvCell(sb, label);
+        sb.append('\t');
+        appendTsvCell(sb, value != null ? value : "");
+    }
+
+    private static void appendPlanCopyHeaderHtml(StringBuilder sb, PlanCopyHeader header) {
+        if (header == null) {
+            return;
+        }
+        List<String[]> lines = headerLines(header);
+        if (lines.isEmpty()) {
+            return;
+        }
+        sb.append(
+                "<table border=\"0\" cellspacing=\"0\" cellpadding=\"2\""
+                        + " style=\"border-collapse:collapse;font-family:'Meiryo UI',sans-serif;font-size:11pt;margin-bottom:8px;\">");
+        for (String[] line : lines) {
+            sb.append("<tr><td style=\"padding:2px 12px 2px 0;font-weight:bold;white-space:nowrap;\">")
+                    .append(ClipboardTableSupport.escapeHtml(line[0]))
+                    .append("</td><td style=\"padding:2px 0;\">")
+                    .append(ClipboardTableSupport.escapeHtml(line[1]))
+                    .append("</td></tr>");
+        }
+        sb.append("</table>");
+    }
+
+    private static List<String[]> headerLines(PlanCopyHeader header) {
+        List<String[]> lines = new ArrayList<>();
+        lines.add(new String[] {"依頼No", header.iraiNo() != null ? header.iraiNo() : ""});
+        lines.add(new String[] {"契約NO", header.contractNo() != null ? header.contractNo() : ""});
+        lines.add(
+                new String[] {
+                    "原反投入日", header.rawInputDate() != null ? header.rawInputDate() : ""
+                });
+        return lines;
+    }
+
+    private static void appendTsvCell(StringBuilder sb, String value) {
+        String text = value != null ? value : "";
+        if (text.indexOf('\t') >= 0 || text.indexOf('\n') >= 0 || text.indexOf('\r') >= 0) {
+            sb.append('"').append(text.replace("\"", "\"\"")).append('"');
+        } else {
+            sb.append(text);
         }
     }
 
@@ -610,18 +825,8 @@ public final class RequestFormPipelineCheckTabController {
                     .append(hiddenByAdjustDelivery)
                     .append("件（調整納期が当日より前または未設定）");
         }
-        if (!planDateHeaders.isEmpty()) {
-            status.append(" | アラジン日付列: ");
-            for (int i = 0; i < planDateHeaders.size(); i++) {
-                if (i > 0) {
-                    status.append(", ");
-                }
-                status.append(
-                        AladdinShapedPlanQtyLookup.shortPlanDateColumnLabel(planDateHeaders.get(i)));
-            }
-            status.append(" | ①〜⑦=依頼ごとの計画日順");
-        } else if (aladdinJsonAvailable) {
-            status.append(" | ①〜⑦=依頼ごとの計画日順");
+        if (aladdinJsonAvailable) {
+            status.append(" | ①〜⑦=依頼ごとの計画日（昇順・最大7日）");
         }
         if (!lastScanWarnings.isEmpty()) {
             status.append(" | ").append(lastScanWarnings);
@@ -629,11 +834,12 @@ public final class RequestFormPipelineCheckTabController {
         statusLabel.setText(status.toString());
     }
 
-    private void setupMainColumns(List<String> dateHeaders) {
+    private void setupMainColumns() {
         List<TableColumn<MainRow, String>> cols = new ArrayList<>();
         cols.add(col("依頼No", "iraiNo", 90));
         cols.add(col("原本", "originalFile", 140));
         cols.add(col("入力日", "juchuInputDate", 88));
+        cols.add(col("入力者", "juchuInputOperator", 88));
         cols.add(col("調整納期", "juchuAdjustDeliveryDate", 88));
         cols.add(col("転記率", "rateDisplay", 100));
         cols.add(col("未一致", "mismatchCount", 52));
@@ -651,7 +857,7 @@ public final class RequestFormPipelineCheckTabController {
         mismatchTable.getColumns().setAll(
                 colMismatch("フォーム項目", "formLabel", 220),
                 colMismatch("原本値", "originalValue", 160),
-                colMismatch("受注値", "juchuValue", 160));
+                colMismatch("受注ファイル値", "juchuValue", 160));
     }
 
     private void setupPlanColumns() {

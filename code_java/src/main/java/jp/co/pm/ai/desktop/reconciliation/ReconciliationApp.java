@@ -3299,6 +3299,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                 
                 List<Map<String, String>> rawRequests = new ArrayList<>();
                 File parseCacheRoot = previewCacheDirectory();
+                RequestFormSourceCache.pruneStaleDiskCaches(parseCacheRoot);
                 
                 if (files != null) {
                     final int totalFiles = files.length;
@@ -3552,6 +3553,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                     List<Map<String, String>> entries =
                             RequestFormTpiPdfSplitter.ensureSplitPdfs(
                                     pdf, cached.get(), parseCacheRoot, uiEnvSnapshot);
+                    RequestFormSourceCache.saveParseEntries(parseCacheRoot, pdf, entries);
                     for (Map<String, String> entry : entries) {
                         String k = normalize_key(entry.get("依頼Ｎｏ"));
                         if (!k.isEmpty() && excelRawKeys.contains(k)) {
@@ -3618,6 +3620,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                 List<Map<String, String>> entries =
                         RequestFormTpiPdfSplitter.ensureSplitPdfs(
                                 pdf, cached.get(), parseCacheRoot, uiEnvSnapshot);
+                RequestFormSourceCache.saveParseEntries(parseCacheRoot, pdf, entries);
                 return reconcileLinkedTpiRaw(selectLinkedEntry(entries, iraiNo), iraiNo);
             }
             List<Map<String, String>> parsed =
@@ -6151,20 +6154,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
     }
 
     private String normalize_date_val(String val) {
-        if (val == null) return "";
-        String text = val.strip();
-        List<String> fmts = Arrays.asList("yyyy-MM-dd HH:mm:ss", "yyyy/MM/dd HH:mm:ss", "yyyy-MM-dd", "yyyy/MM/dd");
-        for (String fmt : fmts) {
-            try {
-                SimpleDateFormat sdf = new SimpleDateFormat(fmt);
-                Date d = sdf.parse(text);
-                SimpleDateFormat outSdf = new SimpleDateFormat("yyyy-MM-dd");
-                return outSdf.format(d);
-            } catch (Exception e) {
-                // continue
-            }
-        }
-        return normalize_text(val);
+        return JuchuTransferValueNormalizer.normalizeDateVal(val);
     }
 
     private static void applyMainShellAlignedStyles(Parent root) {

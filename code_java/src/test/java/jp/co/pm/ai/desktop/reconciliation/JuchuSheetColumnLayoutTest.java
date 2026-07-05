@@ -101,6 +101,10 @@ class JuchuSheetColumnLayoutTest {
 
         JuchuSheetColumnLayout.Col warisu = JuchuSheetColumnLayout.Col.WARISU;
         assertTrue(warisu.matchesHeader("加工回数（加工換算数に利用）"));
+
+        JuchuSheetColumnLayout.Col tanto = JuchuSheetColumnLayout.Col.NYURYOKU_TANTO;
+        assertTrue(tanto.matchesHeader("入力担当"));
+        assertTrue(tanto.matchesHeader("入力者"));
     }
 
     @Test

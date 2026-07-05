@@ -82,4 +82,19 @@ class NetworkSourceDirResolverTest {
                 Map.of(AppPaths.KEY_PM_AI_REQUEST_FORM_TPI_PDF_DIR, dir.toString());
         assertTrue(NetworkSourceDirResolver.isRequestFormTpiPdfDirReachable(ui));
     }
+
+    @Test
+    void pruneSiblingCacheFiles_removesOldExtension(@TempDir Path root) throws Exception {
+        Files.createDirectories(root);
+        Path staleCsv = root.resolve("task-input-newest.csv");
+        Path keepXlsx = root.resolve("task-input-newest.xlsx");
+        Files.writeString(staleCsv, "old");
+        Files.writeString(keepXlsx, "new");
+
+        NetworkSourceDirResolver.pruneSiblingCacheFiles(
+                root, "task-input-newest", keepXlsx.getFileName().toString());
+
+        assertFalse(Files.exists(staleCsv));
+        assertTrue(Files.exists(keepXlsx));
+    }
 }

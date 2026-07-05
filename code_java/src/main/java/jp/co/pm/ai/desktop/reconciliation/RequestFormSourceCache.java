@@ -199,6 +199,62 @@ final class RequestFormSourceCache {
         return new ClearDiskCacheResult(pdf[0], parse[0], pdf[1] + parse[1]);
     }
 
+    /**
+     * スキーマ不一致の parse キャッシュと、tpi-split の孤立メタを削除する。
+     *
+     * @return 削除したファイル数
+     */
+    static int pruneStaleDiskCaches(File cacheRoot) {
+        if (cacheRoot == null) {
+            return 0;
+        }
+        return pruneStaleParseCacheFiles(cacheRoot) + pruneOrphanTpiSplitArtifacts(cacheRoot);
+    }
+
+    static int pruneStaleParseCacheFiles(File cacheRoot) {
+        File dir = parseDir(cacheRoot);
+        File[] children = dir.listFiles();
+        if (children == null) {
+            return 0;
+        }
+        int deleted = 0;
+        for (File child : children) {
+            if (child == null || !child.isFile() || !child.getName().endsWith(".json")) {
+                continue;
+            }
+            if (isStaleParseCacheFile(child)) {
+                if (deleteFileQuietly(child)) {
+                    deleted++;
+                }
+            }
+        }
+        return deleted;
+    }
+
+    static int pruneOrphanTpiSplitArtifacts(File cacheRoot) {
+        File dir = splitDir(cacheRoot);
+        File[] children = dir.listFiles();
+        if (children == null) {
+            return 0;
+        }
+        int deleted = 0;
+        for (File child : children) {
+            if (child == null || !child.isFile()) {
+                continue;
+            }
+            String name = child.getName();
+            if (name.endsWith(".meta.json")) {
+                File pdf = new File(child.getParentFile(), name.substring(0, name.length() - ".meta.json".length()));
+                if (!pdf.isFile()) {
+                    if (deleteFileQuietly(child)) {
+                        deleted++;
+                    }
+                }
+            }
+        }
+        return deleted;
+    }
+
     private static void clearDirectoryFiles(File dir, int[] deletedAndFailures) {
         if (dir == null || !dir.isDirectory()) {
             return;
@@ -267,6 +323,7 @@ final class RequestFormSourceCache {
                     || payload.entries() == null
                     || !parseSchemaVersionFor(sourceFile).equals(payload.schemaVersion())
                     || !matches(sourceFile, payload.source())) {
+                deleteFileQuietly(cacheFile);
                 return Optional.empty();
             }
             List<Map<String, String>> copy = new ArrayList<>(payload.entries().size());
@@ -275,6 +332,7 @@ final class RequestFormSourceCache {
             }
             return Optional.of(copy);
         } catch (IOException ex) {
+            deleteFileQuietly(cacheFile);
             return Optional.empty();
         }
     }
@@ -293,6 +351,36 @@ final class RequestFormSourceCache {
                 new ParseCachePayload(
                         fingerprint(sourceFile), parseSchemaVersionFor(sourceFile), stored);
         JSON.writerWithDefaultPrettyPrinter().writeValue(cacheFile, payload);
+    }
+
+    private static boolean isStaleParseCacheFile(File cacheFile) {
+        try {
+            ParseCachePayload payload = JSON.readValue(cacheFile, ParseCachePayload.class);
+            if (payload == null || payload.schemaVersion() == null) {
+                return true;
+            }
+            String schema = payload.schemaVersion();
+            if (schema.startsWith("request-form-tpi-pdf-")) {
+                return !TPI_PDF_PARSE_SCHEMA_VERSION.equals(schema);
+            }
+            if (schema.startsWith("request-form-cell-layout-")) {
+                return !PARSE_SCHEMA_VERSION.equals(schema);
+            }
+            return true;
+        } catch (IOException ex) {
+            return true;
+        }
+    }
+
+    private static boolean deleteFileQuietly(File file) {
+        if (file == null || !file.isFile()) {
+            return false;
+        }
+        try {
+            return file.delete();
+        } catch (Exception ex) {
+            return false;
+        }
     }
 
     private static String safeBaseName(String name) {

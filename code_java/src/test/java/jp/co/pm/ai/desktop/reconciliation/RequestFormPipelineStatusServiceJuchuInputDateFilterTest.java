@@ -1,6 +1,7 @@
 package jp.co.pm.ai.desktop.reconciliation;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.LocalDate;
@@ -52,6 +53,22 @@ class RequestFormPipelineStatusServiceJuchuInputDateFilterTest {
         LocalDate old = LocalDate.now().minusDays(100);
         assertFalse(
                 RequestFormPipelineStatusService.shouldHideByJuchuInputDate(old, 0));
+    }
+
+    @Test
+    void formatJuchuInputOperatorDisplay_readsNyuryokuTanto() {
+        Map<String, String> juchu = Map.of("入力担当", "細川");
+        assertEquals(
+                "細川",
+                RequestFormPipelineStatusService.formatJuchuInputOperatorDisplay(juchu));
+    }
+
+    @Test
+    void formatJuchuInputOperatorDisplay_acceptsNyuryokushaAliasKey() {
+        Map<String, String> juchu = Map.of("入力者", "田中");
+        assertEquals(
+                "田中",
+                RequestFormPipelineStatusService.formatJuchuInputOperatorDisplay(juchu));
     }
 
     @Test

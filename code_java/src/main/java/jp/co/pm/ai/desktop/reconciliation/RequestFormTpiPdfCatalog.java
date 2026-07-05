@@ -110,6 +110,9 @@ public final class RequestFormTpiPdfCatalog {
             parsed =
                     RequestFormTpiPdfSplitter.ensureSplitPdfs(
                             pdf, cached.get(), parseCacheRoot, ui);
+            if (parseCacheRoot != null && !parsed.isEmpty()) {
+                RequestFormSourceCache.saveParseEntries(parseCacheRoot, pdf, parsed);
+            }
         } else {
             parsed = RequestFormTpiPdfExtractor.extractEntriesWithSplit(pdf, ui, parseCacheRoot);
             if (parseCacheRoot != null && !parsed.isEmpty()) {

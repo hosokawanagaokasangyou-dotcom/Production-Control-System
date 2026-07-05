@@ -42,7 +42,13 @@
             <TableView fx:id="mismatchTable" VBox.vgrow="ALWAYS"/>
         </VBox>
         <VBox spacing="4.0">
-            <Label text="アラジン加工計画（日付×m）"/>
+            <HBox alignment="CENTER_LEFT" spacing="8.0">
+                <Label text="アラジン加工計画（日付×m）"/>
+                <Button fx:id="copyPlanTableButton" mnemonicParsing="false"
+                        text="表としてコピー" onAction="#onCopyPlanTableButtonAction"/>
+                <Button fx:id="copyPlanTableForEmailButton" mnemonicParsing="false"
+                        text="メール貼り付け用" onAction="#onCopyPlanTableForEmailButtonAction"/>
+            </HBox>
             <TableView fx:id="planTable" VBox.vgrow="ALWAYS"/>
         </VBox>
     </SplitPane>

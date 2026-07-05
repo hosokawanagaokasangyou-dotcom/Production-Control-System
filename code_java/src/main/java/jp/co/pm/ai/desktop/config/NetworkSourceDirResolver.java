@@ -261,6 +261,7 @@ public final class NetworkSourceDirResolver {
             String ext = extensionOf(name);
             Path dest = root.resolve(stem + ext);
             Files.copy(liveFile, dest, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            pruneSiblingCacheFiles(root, stem, dest.getFileName().toString());
             writeMeta(ui, stem + ext, liveFile.toString());
             return Optional.of(dest);
         } catch (IOException ex) {
@@ -349,6 +350,31 @@ public final class NetworkSourceDirResolver {
             return n;
         }
         return n.substring(0, dot);
+    }
+
+    /** 同一 stem の旧拡張子キャッシュ（例: csv → xlsx 更新後の csv）を削除する。 */
+    static void pruneSiblingCacheFiles(Path root, String stem, String keepFileName) {
+        if (root == null || stem == null || stem.isBlank() || keepFileName == null || keepFileName.isBlank()) {
+            return;
+        }
+        if (!Files.isDirectory(root)) {
+            return;
+        }
+        try (Stream<Path> stream = Files.list(root)) {
+            for (Path path : stream.toList()) {
+                if (!Files.isRegularFile(path)) {
+                    continue;
+                }
+                String name = path.getFileName() != null ? path.getFileName().toString() : "";
+                if (name.equals(keepFileName)) {
+                    continue;
+                }
+                if (stem.equals(cacheFileStemFromCacheFileName(name))) {
+                    Files.deleteIfExists(path);
+                }
+            }
+        } catch (IOException ignored) {
+        }
     }
 
     private static String text(com.fasterxml.jackson.databind.JsonNode o, String key) {

@@ -1,5 +1,6 @@
 package jp.co.pm.ai.desktop.reconciliation;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
@@ -118,8 +119,11 @@ public final class JuchuTransferCoverageCheck {
      */
     public static String formatOriginalContractNoDisplay(
             Map<String, String> originalDb, boolean originalPresent) {
-        if (!originalPresent || originalDb == null || originalDb.isEmpty()) {
+        if (!originalPresent || originalDb == null) {
             return "-";
+        }
+        if (originalDb.isEmpty()) {
+            return "未入力";
         }
         List<String> parts = collectContractNoParts(originalDb);
         if (parts.isEmpty()) {
@@ -156,12 +160,32 @@ public final class JuchuTransferCoverageCheck {
         if (JuchuTransferValueNormalizer.isBlank(raw)) {
             return;
         }
-        for (String line : raw.split("\\n", -1)) {
-            String t = line != null ? line.strip() : "";
+        for (String segment : raw.split("[\\n/／]+", -1)) {
+            String t = segment != null ? segment.strip() : "";
             if (!t.isEmpty() && !parts.contains(t)) {
                 parts.add(t);
             }
         }
+    }
+
+    private static boolean contractNoValuesMatch(String original, String juchu) {
+        List<String> origParts = new ArrayList<>();
+        appendContractNoParts(origParts, original);
+        List<String> juchuParts = new ArrayList<>();
+        appendContractNoParts(juchuParts, juchu);
+        if (origParts.isEmpty() && juchuParts.isEmpty()) {
+            return true;
+        }
+        if (origParts.size() != juchuParts.size()) {
+            return false;
+        }
+        for (int i = 0; i < origParts.size(); i++) {
+            if (!JuchuTransferValueNormalizer.normalizeText(origParts.get(i))
+                    .equals(JuchuTransferValueNormalizer.normalizeText(juchuParts.get(i)))) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static String contractNoRaw(Map<String, String> map) {
@@ -217,12 +241,14 @@ public final class JuchuTransferCoverageCheck {
         if (col == Col.USER) {
             return userValuesMatch(original, juchu);
         }
+        if (col == Col.KEIYAKU_NO) {
+            return contractNoValuesMatch(original, juchu);
+        }
         if (col == Col.KAKO_NAIYO) {
             return normalizeProcessContent(original).equals(normalizeProcessContent(juchu));
         }
         if (DATE_COLUMNS.contains(col)) {
-            return JuchuTransferValueNormalizer.normalizeDateVal(original)
-                    .equals(JuchuTransferValueNormalizer.normalizeDateVal(juchu));
+            return datesMatch(original, juchu);
         }
         if (NUMERIC_COLUMNS.contains(col)) {
             return Math.abs(
@@ -232,6 +258,53 @@ public final class JuchuTransferCoverageCheck {
         }
         return JuchuTransferValueNormalizer.normalizeText(original)
                 .equals(JuchuTransferValueNormalizer.normalizeText(juchu));
+    }
+
+    private static boolean datesMatch(String original, String juchu) {
+        List<String> origLines = splitDateLines(original);
+        List<String> juchuLines = splitDateLines(juchu);
+        if (origLines.isEmpty() && juchuLines.isEmpty()) {
+            return true;
+        }
+        if (origLines.size() != juchuLines.size()) {
+            return false;
+        }
+        for (int i = 0; i < origLines.size(); i++) {
+            if (!singleDateMatch(origLines.get(i), juchuLines.get(i))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static List<String> splitDateLines(String val) {
+        if (JuchuTransferValueNormalizer.isBlank(val)) {
+            return List.of();
+        }
+        List<String> lines = new ArrayList<>();
+        for (String line : val.split("\\n", -1)) {
+            String t = line != null ? line.strip() : "";
+            if (!t.isEmpty()) {
+                lines.add(t);
+            }
+        }
+        return List.copyOf(lines);
+    }
+
+    private static boolean singleDateMatch(String original, String juchu) {
+        LocalDate juchuFull = JuchuTransferValueNormalizer.parseLocalDate(juchu);
+        LocalDate originalFull = JuchuTransferValueNormalizer.parseLocalDate(original);
+        LocalDate origResolved =
+                JuchuTransferValueNormalizer.parseLocalDate(
+                        original, juchuFull != null ? juchuFull : LocalDate.now());
+        LocalDate juchuResolved =
+                JuchuTransferValueNormalizer.parseLocalDate(
+                        juchu, originalFull != null ? originalFull : LocalDate.now());
+        if (origResolved != null && juchuResolved != null) {
+            return origResolved.equals(juchuResolved);
+        }
+        return JuchuTransferValueNormalizer.normalizeDateVal(original)
+                .equals(JuchuTransferValueNormalizer.normalizeDateVal(juchu));
     }
 
     private static boolean userValuesMatch(String original, String juchu) {

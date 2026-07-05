@@ -152,6 +152,45 @@ class JuchuTransferCoverageCheckTest {
     }
 
     @Test
+    void compare_contractNoSlashVsNewlineMatches() {
+        Map<String, String> orig = Map.of("契約Ｎｏ", "187065Y/187066S");
+        Map<String, String> juchu = Map.of("契約Ｎｏ", "187065Y\n187066S");
+
+        JuchuTransferCoverageCheck.CoverageResult result =
+                JuchuTransferCoverageCheck.compare(orig, juchu, null, null);
+
+        assertEquals(1, result.totalWithOriginalValue());
+        assertEquals(1, result.matchedCount());
+        assertTrue(result.details().get(0).matched());
+    }
+
+    @Test
+    void compare_inputDateShortMonthDayMatchesFullDate() {
+        Map<String, String> orig = Map.of("投入日", "7/15");
+        Map<String, String> juchu = Map.of("投入日", "2026-07-15");
+
+        JuchuTransferCoverageCheck.CoverageResult result =
+                JuchuTransferCoverageCheck.compare(orig, juchu, null, null);
+
+        assertEquals(1, result.totalWithOriginalValue());
+        assertEquals(1, result.matchedCount());
+        assertTrue(result.details().get(0).matched());
+    }
+
+    @Test
+    void compare_kiboNokiJapaneseMonthDayMatchesIsoDate() {
+        Map<String, String> orig = Map.of("希望納期", "7月7日");
+        Map<String, String> juchu = Map.of("希望納期", "2026-07-07");
+
+        JuchuTransferCoverageCheck.CoverageResult result =
+                JuchuTransferCoverageCheck.compare(orig, juchu, null, null);
+
+        assertEquals(1, result.totalWithOriginalValue());
+        assertEquals(1, result.matchedCount());
+        assertTrue(result.details().get(0).matched());
+    }
+
+    @Test
     void compare_excludedColumnSkipped() {
         Map<String, String> orig = Map.of("品名", "A", "製品", "B");
         Map<String, String> juchu = Map.of("品名", "A", "製品", "WRONG");

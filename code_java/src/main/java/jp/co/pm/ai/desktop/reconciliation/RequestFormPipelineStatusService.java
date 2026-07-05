@@ -60,8 +60,10 @@ public final class RequestFormPipelineStatusService {
             List<PlanEntry> planEntries,
             LocalDate juchuInputDate,
             String juchuInputDateDisplay,
+            String juchuInputOperatorDisplay,
             LocalDate juchuAdjustDeliveryDate,
-            String juchuAdjustDeliveryDateDisplay) {}
+            String juchuAdjustDeliveryDateDisplay,
+            String rawInputDateDisplay) {}
 
     public record ScanResult(
             List<PipelineStatusRow> rows,
@@ -193,10 +195,13 @@ public final class RequestFormPipelineStatusService {
                         : firstNonBlank(juchuDb != null ? juchuDb.get("ユーザー") : null);
         LocalDate juchuInputDate = parseJuchuInputDate(juchuDb);
         String juchuInputDateDisplay = formatJuchuDateFieldDisplay(juchuDb, Col.NYURYOKU_BI.dbKey());
+        String juchuInputOperatorDisplay = formatJuchuInputOperatorDisplay(juchuDb);
         LocalDate juchuAdjustDeliveryDate =
                 parseJuchuDateField(juchuDb, Col.CHOSEI_NOKI.dbKey());
         String juchuAdjustDeliveryDateDisplay =
                 formatJuchuDateFieldDisplay(juchuDb, Col.CHOSEI_NOKI.dbKey());
+        String rawInputDateDisplay =
+                formatRawInputDateDisplay(originalDb, originalPresent, juchuDb);
         return new PipelineStatusRow(
                 iraiNo,
                 originalFileName,
@@ -214,8 +219,53 @@ public final class RequestFormPipelineStatusService {
                 List.copyOf(planEntries),
                 juchuInputDate,
                 juchuInputDateDisplay,
+                juchuInputOperatorDisplay,
                 juchuAdjustDeliveryDate,
-                juchuAdjustDeliveryDateDisplay);
+                juchuAdjustDeliveryDateDisplay,
+                rawInputDateDisplay);
+    }
+
+    /** 原反（材料）投入日の表示。受注「投入日」優先、なければ原本「投入日」。 */
+    public static String formatRawInputDateDisplay(
+            Map<String, String> originalDb,
+            boolean originalPresent,
+            Map<String, String> juchuDb) {
+        String juchu = formatJuchuDateFieldDisplay(juchuDb, Col.TONYU_BI.dbKey());
+        if (!juchu.isBlank()) {
+            return juchu;
+        }
+        if (!originalPresent || originalDb == null) {
+            return "";
+        }
+        String raw = originalDb.get("投入日");
+        if (JuchuTransferValueNormalizer.isBlank(raw)) {
+            return "";
+        }
+        String firstLine = raw.strip();
+        int nl = firstLine.indexOf('\n');
+        if (nl >= 0) {
+            firstLine = firstLine.substring(0, nl).strip();
+        }
+        LocalDate parsed = JuchuTransferValueNormalizer.parseLocalDate(firstLine);
+        if (parsed != null) {
+            return parsed.getYear()
+                    + "/"
+                    + parsed.getMonthValue()
+                    + "/"
+                    + parsed.getDayOfMonth();
+        }
+        return firstLine;
+    }
+
+    /** 受注「入力担当／入力者」の表示文字列。未登録・空は空文字。 */
+    public static String formatJuchuInputOperatorDisplay(Map<String, String> juchuDb) {
+        if (juchuDb == null || juchuDb.isEmpty()) {
+            return "";
+        }
+        return firstNonBlank(
+                juchuDb.get(Col.NYURYOKU_TANTO.dbKey()),
+                juchuDb.get("入力者"),
+                juchuDb.get("入力担当"));
     }
 
     /** 受注ファイルの日付項目表示（{@code yyyy/M/d}）。未登録・空は空文字。 */

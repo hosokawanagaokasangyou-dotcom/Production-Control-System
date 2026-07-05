@@ -34,7 +34,7 @@ public final class JuchuSheetColumnLayout {
         IRAI_NO("A", "依頼No", "依頼Ｎｏ", "依頼NO"),
         NYURYOKU_KBN("B", "入力区分"),
         KAKO_KBN("C", "加工区分"),
-        NYURYOKU_TANTO("D", "入力担当"),
+        NYURYOKU_TANTO("D", "入力担当", "入力者"),
         NYURYOKU_BI("E", "入力日"),
         UKETSUKE_NO("F", "受付Ｎｏ", "受付No", "受付NO"),
         HINMEI("G", "品名"),
