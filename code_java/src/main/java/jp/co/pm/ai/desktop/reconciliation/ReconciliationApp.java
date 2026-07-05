@@ -136,6 +136,7 @@ public class ReconciliationApp {
     
     private Label statusLabel;
     private Label discrepancyLabel;
+    private Label indexSheetConflictBanner;
     private Label lblFormTitle;
 
     private HBox previewFileNameRow;
@@ -825,6 +826,15 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                 .getChildren()
                 .addAll(lblViewer, previewFileNameRow, btnOpenExcel, btnClearPreviewCache);
         HBox.setHgrow(previewFileNameRow, Priority.ALWAYS);
+        indexSheetConflictBanner = new Label();
+        indexSheetConflictBanner.getStyleClass().add("index-sheet-conflict-banner");
+        indexSheetConflictBanner.setWrapText(true);
+        indexSheetConflictBanner.setTextOverrun(OverrunStyle.CLIP);
+        indexSheetConflictBanner.setMaxWidth(Double.MAX_VALUE);
+        indexSheetConflictBanner.prefWidthProperty().bind(rightPane.widthProperty());
+        indexSheetConflictBanner.setMinHeight(Region.USE_PREF_SIZE);
+        indexSheetConflictBanner.setManaged(false);
+        indexSheetConflictBanner.setVisible(false);
         sheetScrollPane = new ScrollPane();
         sheetScrollPane.setFitToWidth(true);
         sheetScrollPane.setFitToHeight(false);
@@ -844,7 +854,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         discrepancyLabel.getStyleClass().add("discrepancy-label-info");
         discrepancyLabel.setMaxWidth(Double.MAX_VALUE);
         
-        rightPane.getChildren().addAll(viewerHeaderBox, sheetScrollPane, discrepancyLabel);
+        rightPane.getChildren().addAll(viewerHeaderBox, indexSheetConflictBanner, sheetScrollPane, discrepancyLabel);
 
         splitPane.getItems().addAll(leftScrollPane, rightPane);
         splitPane.setDividerPositions(SPLIT_LEFT_RATIO);
@@ -3500,19 +3510,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
     }
 
     private List<Map<String, String>> parseOriginalWorkbook(File file) throws Exception {
-        List<Map<String, String>> parsed = new ArrayList<>();
-        try (FileInputStream fisRaw = new FileInputStream(file);
-                Workbook wbRaw = PoiWorkbookOpener.open(fisRaw)) {
-            for (int s = 0; s < wbRaw.getNumberOfSheets(); s++) {
-                String sName = wbRaw.getSheetName(s);
-                if (Pattern.matches("^[A-Z]+\\d+-\\d+$", sName)
-                        || Pattern.matches("^[A-Z]\\d+-\\d+-\\d+$", sName)) {
-                    Sheet rawSheet = wbRaw.getSheetAt(s);
-                    parsed.add(RequestFormOriginalExtractor.buildRawMapFromSheet(file, sName, rawSheet));
-                }
-            }
-        }
-        return parsed;
+        return RequestFormOriginalWorkbookParser.parse(file);
     }
 
     private void appendTpiPdfRawRequests(
@@ -4231,6 +4229,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
 
     /** 依頼レコード未選択・新規追加時: プレビュー領域を空にする。 */
     private void clearOriginalSheetPreview() {
+        hideIndexSheetConflictBanner();
         if (sheetGrid != null) {
             sheetGrid.getChildren().clear();
         }
@@ -4239,6 +4238,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
     }
 
     private void resetDiscrepancyLabelForNewEntry() {
+        hideIndexSheetConflictBanner();
         if (discrepancyLabel == null) {
             return;
         }
@@ -4267,7 +4267,36 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         }
     }
 
+    private void refreshIndexSheetConflictBanner(OrderRecord record) {
+        if (indexSheetConflictBanner == null) {
+            return;
+        }
+        String conflicts = null;
+        if (record != null && record.getRawValues() != null) {
+            conflicts =
+                    record.getRawValues()
+                            .get(RequestFormOriginalIndexSheetMerger.META_INDEX_CONFLICTS);
+        }
+        if (conflicts == null || conflicts.isBlank()) {
+            hideIndexSheetConflictBanner();
+            return;
+        }
+        indexSheetConflictBanner.setText(conflicts);
+        indexSheetConflictBanner.setManaged(true);
+        indexSheetConflictBanner.setVisible(true);
+    }
+
+    private void hideIndexSheetConflictBanner() {
+        if (indexSheetConflictBanner == null) {
+            return;
+        }
+        indexSheetConflictBanner.setText("");
+        indexSheetConflictBanner.setManaged(false);
+        indexSheetConflictBanner.setVisible(false);
+    }
+
     private void renderOriginalSheetInGrid(OrderRecord record) {
+        refreshIndexSheetConflictBanner(record);
         sheetGrid.getChildren().clear();
         
         Map<String, String> raw = record.getRawValues();

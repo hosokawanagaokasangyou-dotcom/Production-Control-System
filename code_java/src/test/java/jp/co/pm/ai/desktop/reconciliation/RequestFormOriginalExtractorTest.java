@@ -5,6 +5,7 @@ import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -24,6 +25,32 @@ class RequestFormOriginalExtractorTest {
     void normalizeEcSideForForm_mapsSingleLetter() {
         assertEquals("Ｈ面", RequestFormOriginalExtractor.normalizeEcSideForForm("H"));
         assertEquals("Ｑ面", RequestFormOriginalExtractor.normalizeEcSideForForm("Q"));
+    }
+
+    @Test
+    void buildRawMapFromSheet_readsShippingHopeAndDeliveryAnswerOnRow20() throws Exception {
+        File file = new File("sample.xlsm");
+        try (XSSFWorkbook wb = new XSSFWorkbook()) {
+            XSSFSheet sheet = wb.createSheet("T6-20");
+            sheet.createRow(4).createCell(17).setCellValue("T6-20");
+            var row20 = sheet.createRow(19);
+            row20.createCell(8).setCellValue("6/15");
+            row20.createCell(20).setCellValue("6/10");
+            Map<String, String> raw = RequestFormOriginalExtractor.buildRawMapFromSheet(file, "T6-20", sheet);
+            assertEquals("6/15", raw.get("希望納期"));
+            assertEquals("6/10", raw.get("納期回答"));
+        }
+    }
+
+    @Test
+    void buildDbDefaultsFromRaw_mapsDeliveryAnswerToAdjustDelivery() {
+        Map<String, String> raw = new LinkedHashMap<>();
+        raw.put("依頼Ｎｏ", "T6-20");
+        raw.put("希望納期", "6月29日");
+        raw.put("納期回答", "2026-06-30");
+        Map<String, String> db = RequestFormOriginalExtractor.buildDbDefaultsFromRaw(raw);
+        assertEquals("6月29日", db.get("希望納期"));
+        assertEquals("2026-06-30", db.get("調整納期"));
     }
 
     @Test

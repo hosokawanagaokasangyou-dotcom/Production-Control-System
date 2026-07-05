@@ -149,6 +149,7 @@
 .discrepancy-label-unregistered { -fx-background-color: #F1C40F; -fx-text-fill: #004D40; -fx-padding: 6px 10px; -fx-background-radius: 3px; }
 .discrepancy-label-matched { -fx-background-color: #2ECC71; -fx-text-fill: white; -fx-padding: 6px 10px; -fx-background-radius: 3px; }
 .discrepancy-label-info { -fx-background-color: #00695C; -fx-text-fill: #E0F2F1; -fx-padding: 6px 10px; -fx-background-radius: 3px; }
+.index-sheet-conflict-banner { -fx-background-color: #B45309; -fx-text-fill: #FFFBEB; -fx-font-size: 13px; -fx-font-weight: bold; -fx-padding: 12px 14px; -fx-background-radius: 4px; -fx-border-color: #F59E0B; -fx-border-width: 0 0 0 5px; -fx-wrap-text: true; -fx-text-overrun: clip; }
 
 /* Settings Card Styles */
 .settings-card {

@@ -369,6 +369,9 @@ public final class RequestFormPipelineCheckTabController {
 
     private boolean aladdinJsonAvailable = true;
     private String lastScanWarnings = "";
+    /** 起動後に一度でも走査結果を反映したら true（手動「更新」は常に可）。 */
+    private boolean scanApplied;
+    private boolean refreshInProgress;
 
     @FXML
     private void initialize() {
@@ -436,26 +439,58 @@ public final class RequestFormPipelineCheckTabController {
         this.shell = shell;
     }
 
+    /** メインシェルで当該タブが選択されたとき。起動後未走査なら自動更新する。 */
+    void onMainShellTabSelected() {
+        scheduleInitialRefreshIfNeeded();
+    }
+
+    private void scheduleInitialRefreshIfNeeded() {
+        if (scanApplied || refreshInProgress || shell == null) {
+            return;
+        }
+        Platform.runLater(this::startRefresh);
+    }
+
     @FXML
     private void onRefreshButtonAction() {
+        startRefresh();
+    }
+
+    private void startRefresh() {
         if (shell == null) {
             statusLabel.setText("シェル未接続");
             return;
         }
+        if (refreshInProgress) {
+            return;
+        }
+        refreshInProgress = true;
         setRefreshing(true);
         statusLabel.setText("走査中…");
         JuchuHeaderAliasRegistry registry = shell.snapshotJuchuHeaderAliasRegistryForExport();
         Thread worker =
                 new Thread(
                         () -> {
-                            ScanResult result =
-                                    RequestFormPipelineStatusService.scan(
-                                            shell.snapshotUiEnv(), registry);
-                            Platform.runLater(
-                                    () -> {
-                                        setRefreshing(false);
-                                        applyScanResult(result);
-                                    });
+                            try {
+                                ScanResult result =
+                                        RequestFormPipelineStatusService.scan(
+                                                shell.snapshotUiEnv(), registry);
+                                Platform.runLater(
+                                        () -> {
+                                            setRefreshing(false);
+                                            applyScanResult(result);
+                                        });
+                            } catch (Exception ex) {
+                                Platform.runLater(
+                                        () -> {
+                                            setRefreshing(false);
+                                            statusLabel.setText(
+                                                    "走査失敗: "
+                                                            + (ex.getMessage() != null
+                                                                    ? ex.getMessage()
+                                                                    : ex.toString()));
+                                        });
+                            }
                         },
                         "request-form-pipeline-check");
         worker.setDaemon(true);
@@ -463,6 +498,9 @@ public final class RequestFormPipelineCheckTabController {
     }
 
     private void setRefreshing(boolean on) {
+        if (!on) {
+            refreshInProgress = false;
+        }
         if (refreshProgressIndicator != null) {
             refreshProgressIndicator.setVisible(on);
             refreshProgressIndicator.setManaged(on);
@@ -473,6 +511,7 @@ public final class RequestFormPipelineCheckTabController {
     }
 
     private void applyScanResult(ScanResult result) {
+        scanApplied = true;
         allRows.clear();
         aladdinJsonAvailable = result.aladdinJsonAvailable();
         setupMainColumns();

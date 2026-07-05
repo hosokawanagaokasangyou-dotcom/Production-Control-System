@@ -272,7 +272,22 @@ public final class RequestFormTpiPdfFieldLayout {
 
     static String parseFeedHint(String text) {
         Matcher m = SC_FEED.matcher(normalizeText(text));
-        return m.find() ? m.group(2).strip() : "";
+        return m.find() ? normalizeTpiFeedLocationHint(m.group(2)) : "";
+    }
+
+    /**
+     * PN 系 TPI PDF の {@code SC：… 投入先：…} 行から得た投入場所コードを正規化する。
+     * OCR で {@code HFN1} が {@code HF71} と誤読されることがある。
+     */
+    static String normalizeTpiFeedLocationHint(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return "";
+        }
+        String code = raw.strip().replaceAll("[.,;、。]+$", "");
+        if ("HF71".equals(code)) {
+            return "HFN1";
+        }
+        return code;
     }
 
     static String parseEcSide(String text) {
@@ -412,6 +427,14 @@ public final class RequestFormTpiPdfFieldLayout {
             }
         }
         return out.toString();
+    }
+
+    /** PDF 数量文字列（{@code 1,940m} 等）から桁のみを取り出す。 */
+    static String parseQuantityDigits(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return "";
+        }
+        return toAsciiDigits(raw).replace(",", "").replace("，", "").replace("m", "").replace("ｍ", "").strip();
     }
 
     private static void appendPart(StringBuilder sb, String part) {

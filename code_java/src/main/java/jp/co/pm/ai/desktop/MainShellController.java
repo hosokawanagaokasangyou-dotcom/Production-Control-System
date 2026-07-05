@@ -850,6 +850,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                                             () -> {
                                                 refreshMainShellTabHeaderChromeFromStoredColors();
                                                 scheduleEquipmentStatusDashboardInitialReloadIfSelected();
+                                                scheduleRequestFormPipelineCheckInitialRefreshIfSelected();
                                                 if (dispatchInteractiveTabController != null) {
                                                     dispatchInteractiveTabController
                                                             .scheduleInitialReloadAfterMainWindowShown();
@@ -897,6 +898,12 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                                     && requestFormInputTabController != null) {
                                 Platform.runLater(
                                         requestFormInputTabController::onMainShellTabSelected);
+                            }
+                            if (newTab == mainShellTabRequestFormPipelineCheck
+                                    && requestFormPipelineCheckTabController != null) {
+                                Platform.runLater(
+                                        requestFormPipelineCheckTabController
+                                                ::onMainShellTabSelected);
                             }
                             if (newTab == mainShellTabRemoteDesktop
                                     && remoteDesktopTabController != null) {
@@ -2765,6 +2772,17 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         }
         if (tabPane.getSelectionModel().getSelectedItem() == mainShellTabEquipmentStatusDashboard) {
             equipmentStatusDashboardTabController.onMainShellTabSelected();
+        }
+    }
+
+    private void scheduleRequestFormPipelineCheckInitialRefreshIfSelected() {
+        if (tabPane == null
+                || mainShellTabRequestFormPipelineCheck == null
+                || requestFormPipelineCheckTabController == null) {
+            return;
+        }
+        if (tabPane.getSelectionModel().getSelectedItem() == mainShellTabRequestFormPipelineCheck) {
+            requestFormPipelineCheckTabController.onMainShellTabSelected();
         }
     }
 

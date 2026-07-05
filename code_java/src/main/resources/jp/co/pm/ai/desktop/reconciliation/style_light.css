@@ -48,6 +48,7 @@
 .discrepancy-label-unregistered { -fx-background-color: #FFC107; -fx-text-fill: #212529; -fx-padding: 6px 10px; -fx-background-radius: 3px; }
 .discrepancy-label-matched { -fx-background-color: #28A745; -fx-text-fill: white; -fx-padding: 6px 10px; -fx-background-radius: 3px; }
 .discrepancy-label-info { -fx-background-color: #E9ECEF; -fx-text-fill: #495057; -fx-padding: 6px 10px; -fx-background-radius: 3px; }
+.index-sheet-conflict-banner { -fx-background-color: #D97706; -fx-text-fill: #FFFBEB; -fx-font-size: 13px; -fx-font-weight: bold; -fx-padding: 12px 14px; -fx-background-radius: 4px; -fx-border-color: #F59E0B; -fx-border-width: 0 0 0 5px; -fx-wrap-text: true; -fx-text-overrun: clip; }
 
 /* Custom Section Headings */
 .section-title-form { -fx-text-fill: #2C3E50; }

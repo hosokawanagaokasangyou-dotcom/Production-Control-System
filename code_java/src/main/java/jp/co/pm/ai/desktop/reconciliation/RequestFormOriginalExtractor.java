@@ -203,6 +203,9 @@ final class RequestFormOriginalExtractor {
             db.put("品名1", db.get("原反品名"));
         }
         applyOriginalColorDefaults(db, raw);
+        if (!db.containsKey("調整納期") || db.get("調整納期").isBlank()) {
+            putIfPresent(db, "調整納期", raw.get("納期回答"));
+        }
         return db;
     }
 

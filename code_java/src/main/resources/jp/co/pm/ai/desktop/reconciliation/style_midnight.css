@@ -211,6 +211,19 @@
     -fx-background-radius: 4px;
 }
 
+.index-sheet-conflict-banner {
+    -fx-background-color: #92400E;
+    -fx-text-fill: #FEF3C7;
+    -fx-font-size: 13px;
+    -fx-font-weight: bold;
+    -fx-padding: 12px 14px;
+    -fx-background-radius: 4px;
+    -fx-border-color: #F59E0B;
+    -fx-border-width: 0 0 0 5px;
+    -fx-wrap-text: true;
+    -fx-text-overrun: clip;
+}
+
 /* --- Settings Tab Styles --- */
 .form-scroll-pane {
     -fx-background-color: #0F172A;

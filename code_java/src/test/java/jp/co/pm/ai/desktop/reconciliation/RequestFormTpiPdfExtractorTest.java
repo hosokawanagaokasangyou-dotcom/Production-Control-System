@@ -203,9 +203,21 @@ class RequestFormTpiPdfExtractorTest {
         assertEquals("P000074932", raw.get("契約Ｎｏ"));
         assertEquals("PN", raw.get(RequestFormTpiPdfFieldLayout.META_TPI_LAYOUT));
 
+        assertEquals("HFN1", raw.get("投入場所"));
+
         Map<String, String> db = RequestFormOriginalExtractor.buildTpiDbDefaultsFromRaw(raw);
         assertEquals("TPI", db.get("加工区分"));
         assertEquals("V（TPI）", db.get("用途"));
+        assertEquals("HFN1", db.get("投入場所"));
+    }
+
+    @Test
+    void parseFeedHint_correctsOcrHf71ToHfn1() {
+        String text = "SC：52201 投入先：HF71\nEC（片面） 22 ロール品 or カット品";
+        assertEquals("HFN1", RequestFormTpiPdfFieldLayout.parseFeedHint(text));
+        Map<String, String> raw =
+                RequestFormTpiPdfExtractor.extractFromTextForTest("後加工注文書（PN07-01).pdf", text);
+        assertEquals("HFN1", raw.get("投入場所"));
     }
 
     @Test
@@ -220,6 +232,20 @@ class RequestFormTpiPdfExtractorTest {
     void resolveRequestFormTpiPdfDir_kokubuEmptyByDefault() {
         GlobalInitSettingTarget.save(FactorySite.KOKUBU);
         assertTrue(AppPaths.resolveRequestFormTpiPdfDir(Map.of()).isEmpty());
+    }
+
+    @Test
+    void extractFromPdf_jr260701_fields() throws Exception {
+        Path pdf = Path.of("src/test/resources/tpi-request-forms/ECOWD-JR260701.pdf");
+        assertTrue(Files.isRegularFile(pdf));
+        Map<String, String> raw = RequestFormTpiPdfExtractor.extractEntries(pdf.toFile()).get(0);
+        assertEquals("JR260701", raw.get("依頼Ｎｏ"));
+        assertEquals("1940", raw.get("数量1"));
+        assertEquals("1400", raw.get("原反数量"));
+        assertEquals("7/6", raw.get("投入日"));
+        assertFalse(raw.containsKey("品名"), "品番30020を品名にしない");
+        assertEquals("A05W-870-870X97", raw.get("製品"));
+        assertEquals("EC（片面）", raw.get("ＥＣ面"));
     }
 
     static Stream<Arguments> pdfFixtures() {

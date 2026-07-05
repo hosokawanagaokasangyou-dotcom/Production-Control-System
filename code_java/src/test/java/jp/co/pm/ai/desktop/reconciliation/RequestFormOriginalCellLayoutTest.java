@@ -26,6 +26,11 @@ class RequestFormOriginalCellLayoutTest {
         RequestFormOriginalCellLayout.CellAddress charge =
                 RequestFormOriginalCellLayout.BasicField.KAKOCHIN.cell();
         assertEquals("AE20", charge.excelRef());
+
+        RequestFormOriginalCellLayout.CellAddress answer =
+                RequestFormOriginalCellLayout.BasicField.NOKI_KAITO.cell();
+        assertEquals("U20", answer.excelRef());
+        assertEquals("納期回答", RequestFormOriginalCellLayout.BasicField.NOKI_KAITO.rawKey());
     }
 
     @Test

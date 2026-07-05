@@ -291,6 +291,19 @@
     -fx-font-weight: bold;
 }
 
+.pm-request-form-reconciliation-root .index-sheet-conflict-banner {
+    -fx-background-color: #B45309;
+    -fx-text-fill: #FFFBEB;
+    -fx-font-size: 13px;
+    -fx-font-weight: bold;
+    -fx-padding: 12px 14px;
+    -fx-background-radius: 4px;
+    -fx-border-color: #F59E0B;
+    -fx-border-width: 0 0 0 5px;
+    -fx-wrap-text: true;
+    -fx-text-overrun: clip;
+}
+
 .pm-request-form-reconciliation-root .form-scroll-pane,
 .pm-request-form-reconciliation-root .form-tab-container {
     -fx-background-color: -fx-background;

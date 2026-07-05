@@ -1,7 +1,10 @@
 package jp.co.pm.ai.desktop.reconciliation;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -16,19 +19,19 @@ final class RequestFormTpiPdfLayoutEcowd {
             Pattern.compile("加工製品\\s+(?:[①１1]\\s+)?(\\d+)\\s+(\\S+)\\s+(\\S+)");
     /** 製品行: 「95 190m」（幅+長さ）または「95 950m」（長さ+数量）。 */
     private static final Pattern DIM_LINE_WITH_M =
-            Pattern.compile("(?:^|\\n)\\s*(\\d{1,4})\\s+(\\d{1,5})\\s*m\\b", Pattern.MULTILINE);
+            Pattern.compile("(?:^|\\n)\\s*(\\d{1,4})\\s+([\\d,０-９]+)\\s*m\\b", Pattern.MULTILINE);
     /** 製品行: 長さ＋色＋数量が分離するケース（JR260603 系）。 */
     private static final Pattern LENGTH_COLOR_QTY =
             Pattern.compile(
-                    "(\\d{1,4})\\s+(?:ﾗｲﾄ|ライト)[\\s\\S]{0,24}?(?:ｸﾞﾚ|グレ)[\\s\\S]{0,12}?(\\d{1,5})\\s*m\\b");
+                    "(\\d{1,4})\\s+(?:ﾗｲﾄ|ライト)[\\s\\S]{0,24}?(?:ｸﾞﾚ|グレ)[\\s\\S]{0,12}?([\\d,０-９]+)\\s*m\\b");
     private static final Pattern PRODUCT_QTY =
-            Pattern.compile("(?:^|\\n)\\s*(\\d{1,5})\\s*m\\b", Pattern.MULTILINE | Pattern.CASE_INSENSITIVE);
+            Pattern.compile("(?:^|\\n)\\s*([\\d,０-９]+)\\s*m\\b", Pattern.MULTILINE | Pattern.CASE_INSENSITIVE);
     private static final Pattern RAW_HEADER =
-            Pattern.compile("投入原反\\s+(?:[①１1]\\s+)?(\\S+)\\s+(.+)");
+            Pattern.compile("投入原反\\s+(?:[①１1②２2]\\s+)?(\\S+)\\s+(.+)");
     /** 投入原反の数量行: 「100 ﾗｲﾄｸﾞﾚｰ 500m 6/10」 */
     private static final Pattern RAW_COLOR_QTY_DATE =
             Pattern.compile(
-                    "(\\d{1,4})\\s+(?:ﾗｲﾄ|ライト)[\\s\\S]{0,24}?(?:ｸﾞﾚ|グレ)[\\s\\S]{0,12}?(\\d{1,5})\\s*m\\s+(\\d{1,2}/\\d{1,2})");
+                    "(\\d{1,4})\\s+(?:ﾗｲﾄ|ライト)[\\s\\S]{0,24}?(?:ｸﾞﾚ|グレ)[\\s\\S]{0,12}?([\\d,０-９]+)\\s*m\\s+(\\d{1,2}/\\d{1,2})");
     /** 投入原反の数量行（色なし）: 「100 1,000m 6/10」 */
     private static final Pattern RAW_QTY_DATE =
             Pattern.compile(
@@ -80,6 +83,10 @@ final class RequestFormTpiPdfLayoutEcowd {
         return raw;
     }
 
+    private static boolean looksLikeEcowdPartNumberType(String typeToken) {
+        return typeToken != null && typeToken.matches("A\\d{2}W");
+    }
+
     private static Matcher findProductHeader(String body) {
         Matcher header = PRODUCT_HEADER.matcher(body);
         Matcher fallback = null;
@@ -101,8 +108,12 @@ final class RequestFormTpiPdfLayoutEcowd {
         if (header == null) {
             return;
         }
-        raw.put("品名", header.group(1));
+        String hinmeiToken = header.group(1);
         String part = header.group(2);
+        // A05W 系は先頭数字が品番（30020）。R10W 系は先頭数字が品名コード（40040）。
+        if (!hinmeiToken.matches("\\d+") || !looksLikeEcowdPartNumberType(part)) {
+            raw.put("品名", hinmeiToken);
+        }
         String headerThird = header.group(3);
 
         ProductDims dims = parseProductDims(body, header.start(), header.end(), headerThird);
@@ -144,7 +155,8 @@ final class RequestFormTpiPdfLayoutEcowd {
         if (lengthColor != null) {
             dims.length = lengthColor.length();
             dims.width = headerThird;
-            dims.quantity = lengthColor.quantity();
+            dims.quantity =
+                    RequestFormTpiPdfFieldLayout.parseQuantityDigits(lengthColor.quantity());
             dims.color =
                     RequestFormTpiPdfFieldLayout.extractTpiLightGrayColorIfPresent(
                             lengthColor.snippet());
@@ -212,7 +224,7 @@ final class RequestFormTpiPdfLayoutEcowd {
     private static void applyDimLine(ProductDims dims, String headerThird, DimLineMatch dimLine) {
         dims.width = headerThird;
         dims.length = dimLine.first();
-        dims.quantity = dimLine.secondMeters();
+        dims.quantity = RequestFormTpiPdfFieldLayout.parseQuantityDigits(dimLine.secondMeters());
         dims.type = headerThird;
     }
 
@@ -225,8 +237,9 @@ final class RequestFormTpiPdfLayoutEcowd {
                                 .replace("ｍ", "");
         Matcher qty = PRODUCT_QTY.matcher(productBlock);
         while (qty.find()) {
-            String candidate = RequestFormTpiPdfFieldLayout.toAsciiDigits(qty.group(1));
-            if (!candidate.equals(lengthDigits)) {
+            String candidate =
+                    RequestFormTpiPdfFieldLayout.parseQuantityDigits(qty.group(1));
+            if (!candidate.isBlank() && !candidate.equals(lengthDigits)) {
                 return candidate;
             }
         }
@@ -238,10 +251,12 @@ final class RequestFormTpiPdfLayoutEcowd {
         if (!header.find()) {
             return;
         }
+        int firstHeaderStart = header.start();
+        int windowEnd = header.end() + 800;
+
         String hinmei = header.group(1);
         String tail = header.group(2).strip();
         raw.put("原反品名", hinmei);
-
         String[] tokens = tail.split("\\s+");
         String part = tokens.length > 0 ? tokens[0] : "";
         String type = tokens.length > 1 ? tokens[1] : "";
@@ -249,33 +264,83 @@ final class RequestFormTpiPdfLayoutEcowd {
         String length = tokens.length > 3 ? tokens[3] : "";
         raw.put("原反", JuchuSheetColumnLayout.buildSpecName(part, type, width, length));
 
-        int searchFrom = Math.max(0, header.start() - 400);
-        int searchTo = Math.min(body.length(), header.end() + 800);
-        String rawWindow = body.substring(searchFrom, searchTo);
+        while (header.find()) {
+            windowEnd = Math.max(windowEnd, header.end() + 800);
+        }
 
-        Matcher detail = RAW_COLOR_QTY_DATE.matcher(rawWindow);
-        if (detail.find()) {
-            raw.put("原反数量", detail.group(2));
+        int searchFrom = Math.max(0, firstHeaderStart - 400);
+        int searchTo = Math.min(body.length(), windowEnd);
+        List<RawMaterialLine> lines = findAllRawMaterialLines(body.substring(searchFrom, searchTo));
+
+        List<String> qtys = new ArrayList<>();
+        List<String> dates = new ArrayList<>();
+        for (RawMaterialLine line : lines) {
+            if (!line.quantity.isBlank()
+                    && (qtys.isEmpty() || !qtys.get(qtys.size() - 1).equals(line.quantity))) {
+                qtys.add(line.quantity);
+            }
+            if (!line.inputDate.isBlank()
+                    && (dates.isEmpty() || !dates.get(dates.size() - 1).equals(line.inputDate))) {
+                dates.add(line.inputDate);
+            }
+            if (!line.color.isBlank() && !raw.containsKey("原反色")) {
+                raw.put("原反色", line.color);
+            }
+        }
+        if (!qtys.isEmpty()) {
+            raw.put("原反数量", String.join("\n", qtys));
+        }
+        if (!dates.isEmpty()) {
+            raw.put("投入日", String.join("\n", dates));
+        }
+        if (!raw.containsKey("原反色")) {
             raw.put(
                     "原反色",
                     RequestFormOriginalExtractor.resolveOriginalColor(
-                            RequestFormTpiPdfFieldLayout.extractTpiLightGrayColorIfPresent(
-                                    detail.group(0))));
-            raw.put("投入日", detail.group(3));
-            return;
+                            RequestFormTpiPdfFieldLayout.extractTpiLightGrayColorIfPresent(body)));
+        }
+    }
+
+    /** 投入原反ブロック内の数量・投入日行を出現順に収集（同一位置の重複は除外）。 */
+    private static List<RawMaterialLine> findAllRawMaterialLines(String rawWindow) {
+        TreeMap<Integer, RawMaterialLine> byStart = new TreeMap<>();
+        Matcher detail = RAW_COLOR_QTY_DATE.matcher(rawWindow);
+        while (detail.find()) {
+            byStart.put(
+                    detail.start(),
+                    new RawMaterialLine(
+                            RequestFormTpiPdfFieldLayout.parseQuantityDigits(detail.group(2)),
+                            detail.group(3),
+                            RequestFormOriginalExtractor.resolveOriginalColor(
+                                    RequestFormTpiPdfFieldLayout.extractTpiLightGrayColorIfPresent(
+                                            detail.group(0)))));
         }
         Matcher qtyDate = RAW_QTY_DATE.matcher(rawWindow);
-        if (qtyDate.find()) {
-            raw.put(
-                    "原反数量",
-                    RequestFormTpiPdfFieldLayout.toAsciiDigits(qtyDate.group(2)).replace(",", ""));
-            raw.put("投入日", qtyDate.group(3));
+        while (qtyDate.find()) {
+            int start = qtyDate.start();
+            if (overlapsExistingRawLine(byStart, start)) {
+                continue;
+            }
+            byStart.put(
+                    start,
+                    new RawMaterialLine(
+                            RequestFormTpiPdfFieldLayout.parseQuantityDigits(qtyDate.group(2)),
+                            qtyDate.group(3),
+                            ""));
         }
-        raw.put(
-                "原反色",
-                RequestFormOriginalExtractor.resolveOriginalColor(
-                        RequestFormTpiPdfFieldLayout.extractTpiLightGrayColorIfPresent(rawWindow)));
+        return new ArrayList<>(byStart.values());
     }
+
+    private static boolean overlapsExistingRawLine(TreeMap<Integer, RawMaterialLine> byStart, int start) {
+        Integer floor = byStart.floorKey(start);
+        if (floor != null && start - floor < 24) {
+            return true;
+        }
+        Integer ceiling = byStart.ceilingKey(start);
+        return ceiling != null && ceiling - start < 24;
+    }
+
+    private record RawMaterialLine(String quantity, String inputDate, String color) {}
 
     private static void fillMeta(Map<String, String> raw, String fileName, String text) {
         raw.put("原本ファイル名", fileName != null ? fileName : "");

@@ -12,7 +12,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.regex.Pattern;
 
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellType;
@@ -37,9 +36,6 @@ public final class RequestFormPipelineStatusService {
     private static final int PLAN_DAY_COLUMNS = AladdinShapedPlanQtyLookup.PIPELINE_CHECK_PLAN_DAY_COLUMNS;
     /** UI の受注入力日フィルタ既定値（日）。 */
     public static final int DEFAULT_JUCHU_INPUT_DATE_HIDE_DAYS = 30;
-
-    private static final Pattern ORIGINAL_SHEET_NAME =
-            Pattern.compile("^[A-Z]+\\d+-\\d+$|^[A-Z]\\d+-\\d+-\\d+$");
 
     private RequestFormPipelineStatusService() {}
 
@@ -683,19 +679,7 @@ public final class RequestFormPipelineStatusService {
     }
 
     private static List<Map<String, String>> parseOriginalWorkbook(File file) throws Exception {
-        List<Map<String, String>> parsed = new ArrayList<>();
-        try (FileInputStream fis = new FileInputStream(file);
-                Workbook wb = PoiWorkbookOpener.open(fis)) {
-            for (int s = 0; s < wb.getNumberOfSheets(); s++) {
-                String sName = wb.getSheetName(s);
-                if (ORIGINAL_SHEET_NAME.matcher(sName).matches()) {
-                    parsed.add(
-                            RequestFormOriginalExtractor.buildRawMapFromSheet(
-                                    file, sName, wb.getSheetAt(s)));
-                }
-            }
-        }
-        return parsed;
+        return RequestFormOriginalWorkbookParser.parse(file);
     }
 
     private static File[] listOriginalWorkbooks(File folder) {

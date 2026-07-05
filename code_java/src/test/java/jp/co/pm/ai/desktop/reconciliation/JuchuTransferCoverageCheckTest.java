@@ -191,9 +191,80 @@ class JuchuTransferCoverageCheckTest {
     }
 
     @Test
+    void compare_colorAbbreviationMatchesFullName() {
+        Map<String, String> orig = Map.of("色1", "ライトグレー");
+        Map<String, String> juchu = Map.of("色1", "LG");
+
+        JuchuTransferCoverageCheck.CoverageResult result =
+                JuchuTransferCoverageCheck.compare(orig, juchu, null, null);
+
+        assertEquals(1, result.matchedCount());
+    }
+
+    @Test
+    void compare_productSpecIgnoresLeadingPartNumberPrefix() {
+        Map<String, String> orig = Map.of("製品", "A05W-870-870X97");
+        Map<String, String> juchu = Map.of("製品", "30020-A05W-870-870X97");
+
+        JuchuTransferCoverageCheck.CoverageResult result =
+                JuchuTransferCoverageCheck.compare(orig, juchu, null, null);
+
+        assertEquals(1, result.matchedCount());
+    }
+
+    @Test
+    void compare_productSpecJr260701TpiVsJuchuFormat() {
+        Map<String, String> orig = Map.of("製品", "A05W-870-870X97");
+        Map<String, String> juchu = Map.of("製品", "30020-A05W-870X97");
+
+        JuchuTransferCoverageCheck.CoverageResult result =
+                JuchuTransferCoverageCheck.compare(orig, juchu, null, null);
+
+        assertEquals(1, result.matchedCount());
+    }
+
+    @Test
+    void compare_contractNoIgnoresLeadingZerosAfterP() {
+        Map<String, String> orig = Map.of("契約Ｎｏ", "P000075564");
+        Map<String, String> juchu = Map.of("契約Ｎｏ", "P75564");
+
+        JuchuTransferCoverageCheck.CoverageResult result =
+                JuchuTransferCoverageCheck.compare(orig, juchu, null, null);
+
+        assertEquals(1, result.matchedCount());
+    }
+
+    @Test
+    void compare_inputDateMultilineShortMatchesSingleFullDate() {
+        Map<String, String> orig = Map.of("投入日", "7/3\n7/3");
+        Map<String, String> juchu = Map.of("投入日", "2026-07-03");
+
+        JuchuTransferCoverageCheck.CoverageResult result =
+                JuchuTransferCoverageCheck.compare(orig, juchu, null, null);
+
+        assertEquals(1, result.totalWithOriginalValue());
+        assertEquals(1, result.matchedCount());
+        assertTrue(result.details().get(0).matched());
+    }
+
+    @Test
     void compare_genpanQuantityIgnoresThousandsSeparator() {
         Map<String, String> orig = Map.of("原反数量", "1,050");
         Map<String, String> juchu = Map.of("原反数量", "1050");
+
+        JuchuTransferCoverageCheck.CoverageResult result =
+                JuchuTransferCoverageCheck.compare(orig, juchu, null, null);
+
+        assertEquals(1, result.totalWithOriginalValue());
+        assertEquals(1, result.matchedCount());
+        assertTrue(result.details().get(0).matched());
+    }
+
+    @Test
+    void compare_ecMenBlankJuchuMatchesWhenProcessingContentMentionsEc() {
+        Map<String, String> orig = Map.of("ＥＣ面", "EC（片面）");
+        Map<String, String> juchu =
+                Map.of("加工内容", "JR屋根：EC（片面）穴あけ, JR屋根：スリット");
 
         JuchuTransferCoverageCheck.CoverageResult result =
                 JuchuTransferCoverageCheck.compare(orig, juchu, null, null);

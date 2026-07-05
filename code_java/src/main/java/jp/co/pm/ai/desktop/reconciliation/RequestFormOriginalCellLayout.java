@@ -40,7 +40,10 @@ public final class RequestFormOriginalCellLayout {
     public enum BasicField {
         IRAI_NO("依頼Ｎｏ", true, 4, "R", 5),
         USER("ユーザー", true, 18, "E", 19),
+        /** 出荷希望（依頼シート I20:O20 結合セル）。 */
         KIBO_NOKI("希望納期", true, 19, "I", 20),
+        /** 納期回答（依頼シート U20:Z20 結合セル）。目次「納期」と照合する正本。 */
+        NOKI_KAITO("納期回答", true, 19, "U", 20),
         KAKOCHIN("加工賃", true, 19, "AE", 20),
         YOTO_COMPARE("用途", false, 17, "E", 18);
 
@@ -151,6 +154,7 @@ public final class RequestFormOriginalCellLayout {
                     "依頼Ｎｏ",
                     "ユーザー",
                     "希望納期",
+                    "納期回答",
                     "加工賃",
                     "契約Ｎｏ",
                     "品名",

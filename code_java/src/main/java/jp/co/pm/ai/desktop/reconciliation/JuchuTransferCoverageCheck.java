@@ -20,6 +20,8 @@ public final class JuchuTransferCoverageCheck {
     private static final Set<Col> NUMERIC_COLUMNS =
             EnumSet.of(Col.SURYO_1, Col.SURYO, Col.WARISU, Col.GENPAN_ROLL_SU, Col.KAKOCHIN);
 
+    private static final Set<Col> COLOR_COLUMNS = EnumSet.of(Col.IRO_1, Col.IRO);
+
     private JuchuTransferCoverageCheck() {}
 
     public record ColumnCheck(
@@ -71,7 +73,8 @@ public final class JuchuTransferCoverageCheck {
             }
             total++;
             String juchuValue = valueForKey(juchu, dbKey);
-            boolean isMatch = juchuExists && valuesMatch(col, originalValue, juchuValue);
+            boolean isMatch =
+                    juchuExists && valuesMatch(col, originalValue, juchuValue, juchu);
             if (isMatch) {
                 matched++;
             }
@@ -180,12 +183,26 @@ public final class JuchuTransferCoverageCheck {
             return false;
         }
         for (int i = 0; i < origParts.size(); i++) {
-            if (!JuchuTransferValueNormalizer.normalizeText(origParts.get(i))
-                    .equals(JuchuTransferValueNormalizer.normalizeText(juchuParts.get(i)))) {
+            if (!normalizeContractNoToken(origParts.get(i))
+                    .equals(normalizeContractNoToken(juchuParts.get(i)))) {
                 return false;
             }
         }
         return true;
+    }
+
+    /** 目次シート vs 依頼シートの契約Ｎｏ比較。 */
+    static boolean contractNoStringsEquivalent(String a, String b) {
+        return contractNoValuesMatch(a, b);
+    }
+
+    /** {@code P000075564} と {@code P75564} を同一視。 */
+    private static String normalizeContractNoToken(String token) {
+        String t = JuchuTransferValueNormalizer.normalizeText(token);
+        if (t.matches("(?i)P\\d+")) {
+            return "P" + Long.parseLong(t.substring(1));
+        }
+        return t;
     }
 
     private static String contractNoRaw(Map<String, String> map) {
@@ -224,7 +241,7 @@ public final class JuchuTransferCoverageCheck {
         if (JuchuTransferValueNormalizer.isBlank(juchuContract)) {
             return "なし";
         }
-        if (valuesMatch(Col.KEIYAKU_NO, originalContract, juchuContract)) {
+        if (valuesMatch(Col.KEIYAKU_NO, originalContract, juchuContract, juchu)) {
             return "あり";
         }
         return "相違";
@@ -237,12 +254,22 @@ public final class JuchuTransferCoverageCheck {
         return "";
     }
 
-    private static boolean valuesMatch(Col col, String original, String juchu) {
+    private static boolean valuesMatch(
+            Col col, String original, String juchu, Map<String, String> juchuDb) {
         if (col == Col.USER) {
             return userValuesMatch(original, juchu);
         }
         if (col == Col.KEIYAKU_NO) {
             return contractNoValuesMatch(original, juchu);
+        }
+        if (col == Col.SEIHIN) {
+            return productSpecValuesMatch(original, juchu);
+        }
+        if (col == Col.EC_MEN) {
+            return ecMenValuesMatch(original, juchu, juchuDb);
+        }
+        if (COLOR_COLUMNS.contains(col)) {
+            return colorValuesMatch(original, juchu);
         }
         if (col == Col.KAKO_NAIYO) {
             return normalizeProcessContent(original).equals(normalizeProcessContent(juchu));
@@ -266,15 +293,62 @@ public final class JuchuTransferCoverageCheck {
         if (origLines.isEmpty() && juchuLines.isEmpty()) {
             return true;
         }
-        if (origLines.size() != juchuLines.size()) {
+        if (origLines.isEmpty() || juchuLines.isEmpty()) {
             return false;
         }
-        for (int i = 0; i < origLines.size(); i++) {
-            if (!singleDateMatch(origLines.get(i), juchuLines.get(i))) {
-                return false;
+        if (origLines.size() == juchuLines.size()) {
+            for (int i = 0; i < origLines.size(); i++) {
+                if (!singleDateMatch(origLines.get(i), juchuLines.get(i))) {
+                    return false;
+                }
             }
+            return true;
         }
-        return true;
+        // 原反複数行で原本のみ M/D が複数行・受注が1行（同一日）など
+        if (juchuLines.size() == 1) {
+            String juchuDate = juchuLines.get(0);
+            return origLines.stream().allMatch(o -> singleDateMatch(o, juchuDate));
+        }
+        if (origLines.size() == 1) {
+            String origDate = origLines.get(0);
+            return juchuLines.stream().allMatch(j -> singleDateMatch(origDate, j));
+        }
+        return datesMatchSameUniqueResolvedDate(origLines, juchuLines);
+    }
+
+    /** 行数は異なるが、解決後の日付がいずれも同一なら一致。 */
+    private static boolean datesMatchSameUniqueResolvedDate(
+            List<String> origLines, List<String> juchuLines) {
+        LocalDate juchuRef =
+                juchuLines.stream()
+                        .map(JuchuTransferValueNormalizer::parseLocalDate)
+                        .filter(d -> d != null)
+                        .findFirst()
+                        .orElse(LocalDate.now());
+        LocalDate origRef =
+                origLines.stream()
+                        .map(JuchuTransferValueNormalizer::parseLocalDate)
+                        .filter(d -> d != null)
+                        .findFirst()
+                        .orElse(juchuRef);
+        List<LocalDate> origResolved = resolveDateLines(origLines, juchuRef);
+        List<LocalDate> juchuResolved = resolveDateLines(juchuLines, origRef);
+        if (origResolved.contains(null) || juchuResolved.contains(null)) {
+            return false;
+        }
+        if (origResolved.stream().distinct().count() != 1
+                || juchuResolved.stream().distinct().count() != 1) {
+            return false;
+        }
+        return origResolved.get(0).equals(juchuResolved.get(0));
+    }
+
+    private static List<LocalDate> resolveDateLines(List<String> lines, LocalDate yearReference) {
+        List<LocalDate> resolved = new ArrayList<>();
+        for (String line : lines) {
+            resolved.add(JuchuTransferValueNormalizer.parseLocalDate(line, yearReference));
+        }
+        return resolved;
     }
 
     private static List<String> splitDateLines(String val) {
@@ -311,6 +385,70 @@ public final class JuchuTransferCoverageCheck {
         String ru = JuchuTransferValueNormalizer.normalizeText(original);
         String dbu = JuchuTransferValueNormalizer.normalizeText(juchu);
         return ru.equals(dbu) || ru.contains(dbu) || dbu.contains(ru);
+    }
+
+    /** 受注側の品番プレフィックス（例: {@code 30020-A05W-870-870X97}）を除いて製品 spec を比較。 */
+    private static boolean productSpecValuesMatch(String original, String juchu) {
+        return normalizeProductSpec(original).equals(normalizeProductSpec(juchu));
+    }
+
+    private static String normalizeProductSpec(String val) {
+        if (val == null || val.isBlank()) {
+            return "";
+        }
+        String normalized = JuchuTransferValueNormalizer.normalizeText(val);
+        // 受注の品番プレフィックス（例: 30020-）を除去
+        normalized = normalized.replaceFirst("^\\d+-", "");
+        // TPI 原本の幅重複（A05W-870-870X97）を受注形式（A05W-870X97）へ
+        normalized =
+                normalized.replaceFirst(
+                        "^(A\\d{2}W|R\\d{2}W)-(\\d+)-\\2X(\\d+)$", "$1-$2X$3");
+        return normalized;
+    }
+
+    /** 受注 EC 欄が空でも、加工内容に EC 面情報があれば一致扱い。 */
+    private static boolean ecMenValuesMatch(
+            String original, String juchu, Map<String, String> juchuDb) {
+        if (!JuchuTransferValueNormalizer.isBlank(juchu)) {
+            return JuchuTransferValueNormalizer.normalizeText(original)
+                    .equals(JuchuTransferValueNormalizer.normalizeText(juchu));
+        }
+        if (JuchuTransferValueNormalizer.isBlank(original)) {
+            return true;
+        }
+        String kako = valueForKey(juchuDb, Col.KAKO_NAIYO.dbKey());
+        if (JuchuTransferValueNormalizer.isBlank(kako)) {
+            return false;
+        }
+        String normKako = JuchuTransferValueNormalizer.normalizeText(kako);
+        String normOrig = JuchuTransferValueNormalizer.normalizeText(original);
+        if (normKako.contains(normOrig)) {
+            return true;
+        }
+        if (normOrig.contains("片面") && normKako.contains("片面") && normKako.contains("EC")) {
+            return true;
+        }
+        if (normOrig.contains("両面") && normKako.contains("両面") && normKako.contains("EC")) {
+            return true;
+        }
+        return false;
+    }
+
+    /** {@code LG} と {@code ライトグレー} 等の略称・正式名を同一視。 */
+    private static boolean colorValuesMatch(String original, String juchu) {
+        return normalizeColorKey(original).equals(normalizeColorKey(juchu));
+    }
+
+    private static String normalizeColorKey(String val) {
+        if (val == null || val.isBlank()) {
+            return "";
+        }
+        String normalized = JuchuTransferValueNormalizer.normalizeText(val);
+        if ("LG".equals(normalized)
+                || (normalized.contains("ライト") && normalized.contains("グレ"))) {
+            return "LIGHTGRAY";
+        }
+        return normalized;
     }
 
     private static String normalizeProcessContent(String val) {
