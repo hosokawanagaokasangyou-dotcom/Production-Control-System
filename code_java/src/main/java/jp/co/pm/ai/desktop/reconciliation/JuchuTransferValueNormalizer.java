@@ -75,7 +75,11 @@ public final class JuchuTransferValueNormalizer {
         if (val == null || val.isEmpty()) {
             return 0.0;
         }
-        var m = NUMERIC_PATTERN.matcher(val.strip());
+        String cleaned =
+                java.text.Normalizer.normalize(val.strip(), java.text.Normalizer.Form.NFKC)
+                        .replace(",", "")
+                        .replace("，", "");
+        var m = NUMERIC_PATTERN.matcher(cleaned);
         if (m.find()) {
             return Double.parseDouble(m.group());
         }

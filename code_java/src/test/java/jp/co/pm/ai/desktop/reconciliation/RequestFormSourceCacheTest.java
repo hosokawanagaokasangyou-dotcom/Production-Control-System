@@ -147,13 +147,138 @@ class RequestFormSourceCacheTest {
                 current.toPath(),
                 "{\"schemaVersion\":\""
                         + RequestFormSourceCache.TPI_PDF_PARSE_SCHEMA_VERSION
-                        + "\",\"entries\":[]}");
+                        + "\",\"cachedAtMillis\":"
+                        + System.currentTimeMillis()
+                        + ",\"entries\":[]}");
 
         int deleted = RequestFormSourceCache.pruneStaleParseCacheFiles(cacheRoot);
 
         assertEquals(1, deleted);
         assertFalse(stale.isFile());
         assertTrue(current.isFile());
+    }
+
+    @Test
+    void previewMeta_invalidatesWhenSchemaVersionMissing(@TempDir Path tmp) throws Exception {
+        File cacheRoot = tmp.resolve("preview_cache").toFile();
+        File source = tmp.resolve("book.xlsm").toFile();
+        Files.writeString(source.toPath(), "v1");
+
+        File pdf = RequestFormSourceCache.pdfCacheFile(cacheRoot, "book.xlsm", "E5-1");
+        Files.createDirectories(pdf.getParentFile().toPath());
+        Files.write(pdf.toPath(), "%PDF-1.4\n% preview\n".getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+        Files.writeString(
+                RequestFormSourceCache.previewMetaFile(pdf).toPath(),
+                "{\"source\":{\"lastModified\":"
+                        + source.lastModified()
+                        + ",\"length\":"
+                        + source.length()
+                        + "},\"range\":\""
+                        + RequestFormSheetPreviewRenderer.PREVIEW_RANGE_SPEC
+                        + "\",\"renderer\":\""
+                        + RequestFormSheetPreviewPdfRenderer.rendererSpec()
+                        + "\"}");
+
+        assertFalse(RequestFormSourceCache.isPreviewCacheValid(pdf, source));
+        assertEquals(2, RequestFormSourceCache.pruneStalePreviewCacheFiles(cacheRoot));
+        assertFalse(pdf.isFile());
+    }
+
+    @Test
+    void loadParseEntries_invalidatesTpiSplitWhenSchemaStale(@TempDir Path tmp) throws Exception {
+        File cacheRoot = tmp.resolve("preview_cache").toFile();
+        File source = tmp.resolve("GB.pdf").toFile();
+        Files.writeString(source.toPath(), "dummy");
+
+        File splitPdf =
+                RequestFormSourceCache.splitCacheFile(cacheRoot, source, "GB60606");
+        Files.createDirectories(splitPdf.getParentFile().toPath());
+        Files.write(splitPdf.toPath(), "%PDF-1.4\n".getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+        Files.writeString(
+                RequestFormSourceCache.splitMetaFile(splitPdf).toPath(),
+                "{\"source\":{\"lastModified\":"
+                        + source.lastModified()
+                        + ",\"length\":"
+                        + source.length()
+                        + "},\"startPage\":0,\"endPage\":0,\"schemaVersion\":\"request-form-tpi-pdf-v8\"}");
+
+        File cacheFile = RequestFormSourceCache.parseCacheFile(cacheRoot, source);
+        Files.createDirectories(cacheFile.getParentFile().toPath());
+        Files.writeString(
+                cacheFile.toPath(),
+                "{\"source\":{\"lastModified\":"
+                        + source.lastModified()
+                        + ",\"length\":"
+                        + source.length()
+                        + "},\"schemaVersion\":\"request-form-tpi-pdf-v8\",\"entries\":[]}");
+
+        assertTrue(RequestFormSourceCache.loadParseEntries(cacheRoot, source).isEmpty());
+        assertFalse(splitPdf.isFile());
+        assertFalse(RequestFormSourceCache.splitMetaFile(splitPdf).isFile());
+    }
+
+    @Test
+    void pruneStaleTpiSplitCacheFiles_removesOutdatedSchema(@TempDir Path tmp) throws Exception {
+        File cacheRoot = tmp.resolve("preview_cache").toFile();
+        File splitDir = RequestFormSourceCache.splitDir(cacheRoot);
+        File splitPdf = new File(splitDir, "GB__GB60606.pdf");
+        Files.createDirectories(splitDir.toPath());
+        Files.write(splitPdf.toPath(), "%PDF-1.4\n".getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+        Files.writeString(
+                RequestFormSourceCache.splitMetaFile(splitPdf).toPath(),
+                "{\"schemaVersion\":\"request-form-tpi-pdf-v8\",\"startPage\":0,\"endPage\":0}");
+
+        int deleted = RequestFormSourceCache.pruneStaleTpiSplitCacheFiles(cacheRoot);
+
+        assertEquals(2, deleted);
+        assertFalse(splitPdf.isFile());
+    }
+
+    @Test
+    void parseCache_invalidatesWhenOlderThanMaxAge(@TempDir Path tmp) throws Exception {
+        File cacheRoot = tmp.resolve("preview_cache").toFile();
+        File source = tmp.resolve("依頼書C.xlsm").toFile();
+        Files.writeString(source.toPath(), "dummy");
+
+        List<Map<String, String>> entries = List.of(Map.of("依頼Ｎｏ", "E7-1"));
+        RequestFormSourceCache.saveParseEntries(cacheRoot, source, entries);
+
+        File cacheFile = RequestFormSourceCache.parseCacheFile(cacheRoot, source);
+        long expiredAt =
+                System.currentTimeMillis()
+                        - RequestFormSourceCache.CACHE_MAX_AGE_MILLIS
+                        - 1L;
+        String json = Files.readString(cacheFile.toPath());
+        json = json.replaceFirst("\"cachedAtMillis\"\\s*:\\s*\\d+", "\"cachedAtMillis\":" + expiredAt);
+        Files.writeString(cacheFile.toPath(), json);
+
+        assertTrue(RequestFormSourceCache.loadParseEntries(cacheRoot, source).isEmpty());
+        assertFalse(cacheFile.isFile());
+    }
+
+    @Test
+    void pruneStaleParseCacheFiles_removesExpiredByFileAge(@TempDir Path tmp) throws Exception {
+        File cacheRoot = tmp.resolve("preview_cache").toFile();
+        File cacheFile =
+                new File(RequestFormSourceCache.parseDir(cacheRoot), "old-book.json");
+        Files.createDirectories(cacheFile.getParentFile().toPath());
+        Files.writeString(
+                cacheFile.toPath(),
+                "{\"schemaVersion\":\""
+                        + RequestFormSourceCache.PARSE_SCHEMA_VERSION
+                        + "\",\"cachedAtMillis\":"
+                        + System.currentTimeMillis()
+                        + ",\"entries\":[]}");
+        long oldTime =
+                System.currentTimeMillis()
+                        - RequestFormSourceCache.CACHE_MAX_AGE_MILLIS
+                        - 86_400_000L;
+        assertTrue(cacheFile.setLastModified(oldTime));
+
+        int deleted = RequestFormSourceCache.pruneStaleParseCacheFiles(cacheRoot);
+
+        assertEquals(1, deleted);
+        assertFalse(cacheFile.isFile());
     }
 
     @Test

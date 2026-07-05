@@ -99,6 +99,8 @@ public final class RequestFormPipelineStatusService {
         }
 
         List<Map<String, String>> rawRequests = loadOriginalRequests(env, warnings);
+        Path parseCacheRootPath = AppPaths.resolveRepoRoot(env).resolve("preview_cache");
+        File parseCacheRoot = parseCacheRootPath.toFile();
         List<PipelineStatusRow> rows = new ArrayList<>();
         Set<String> processedOriginalKeys = new HashSet<>();
         for (Map<String, String> raw : rawRequests) {
@@ -108,16 +110,14 @@ public final class RequestFormPipelineStatusService {
             }
             String normKey = JuchuTransferValueNormalizer.normalizeKey(iraiNo);
             processedOriginalKeys.add(normKey);
-            Map<String, String> originalDb =
-                    RequestFormOriginalExtractor.buildDbDefaultsFromRaw(raw);
-            Map<String, String> juchuDb = dbRows.get(normKey);
+            Map<String, String> originalDb = buildOriginalDbFromRaw(raw);
             rows.add(
                     buildRow(
                             iraiNo,
-                            nullToEmpty(raw.get("_sourceFileName")),
+                            resolveOriginalFileName(raw),
                             true,
                             originalDb,
-                            juchuDb,
+                            dbRows.get(normKey),
                             reg,
                             juchuPath,
                             aladdinJsonAvailable,
@@ -135,6 +135,25 @@ public final class RequestFormPipelineStatusService {
                             juchuDb.get("依頼Ｎｏ"),
                             juchuDb.get("依頼NO"),
                             entry.getKey());
+            Optional<Map<String, String>> linkedTpiRaw =
+                    resolveLinkedTpiPdfRaw(iraiNo, env, parseCacheRoot, warnings);
+            if (linkedTpiRaw.isPresent()) {
+                Map<String, String> raw = linkedTpiRaw.get();
+                Map<String, String> originalDb = buildOriginalDbFromRaw(raw);
+                rows.add(
+                        buildRow(
+                                iraiNo,
+                                resolveOriginalFileName(raw),
+                                true,
+                                originalDb,
+                                juchuDb,
+                                reg,
+                                juchuPath,
+                                aladdinJsonAvailable,
+                                shaped,
+                                planDateHeaders));
+                continue;
+            }
             rows.add(
                     buildRow(
                             iraiNo,
@@ -410,43 +429,257 @@ public final class RequestFormPipelineStatusService {
     private static List<Map<String, String>> loadOriginalRequests(
             Map<String, String> ui, List<String> warnings) {
         List<Map<String, String>> rawRequests = new ArrayList<>();
-        Path originalDir = AppPaths.resolveRequestFormOriginalDir(ui);
-        if (!NetworkSourceDirResolver.isRequestFormOriginalDirReachable(ui)) {
-            warnings.add("依頼書原本フォルダにアクセスできません: " + originalDir);
-            return rawRequests;
-        }
-        File folder = originalDir.toFile();
-        File[] files = listOriginalWorkbooks(folder);
-        if (files == null || files.length == 0) {
-            warnings.add("依頼書原本が見つかりません: " + originalDir);
-            return rawRequests;
-        }
         Path repoRoot = AppPaths.resolveRepoRoot(ui);
         File parseCacheRoot = repoRoot.resolve("preview_cache").toFile();
         if (!parseCacheRoot.exists()) {
             parseCacheRoot.mkdirs();
         }
-        for (File file : files) {
+        RequestFormSourceCache.pruneStaleDiskCaches(parseCacheRoot);
+
+        Path originalDir = AppPaths.resolveRequestFormOriginalDir(ui);
+        if (NetworkSourceDirResolver.isRequestFormOriginalDirReachable(ui)) {
+            File[] files = listOriginalWorkbooks(originalDir.toFile());
+            if (files == null || files.length == 0) {
+                warnings.add("Excel 依頼書原本が見つかりません: " + originalDir);
+            } else {
+                for (File file : files) {
+                    try {
+                        Optional<List<Map<String, String>>> cached =
+                                RequestFormSourceCache.loadParseEntries(parseCacheRoot, file);
+                        List<Map<String, String>> parsed;
+                        if (cached.isPresent()) {
+                            parsed = cached.get();
+                        } else {
+                            parsed = parseOriginalWorkbook(file);
+                            RequestFormSourceCache.saveParseEntries(parseCacheRoot, file, parsed);
+                        }
+                        for (Map<String, String> entry : parsed) {
+                            Map<String, String> tagged = new HashMap<>(entry);
+                            tagged.put("_sourceFileName", file.getName());
+                            rawRequests.add(tagged);
+                        }
+                    } catch (Exception ex) {
+                        warnings.add("原本解析エラー " + file.getName() + ": " + ex.getMessage());
+                    }
+                }
+            }
+        } else {
+            warnings.add("依頼書原本フォルダにアクセスできません: " + originalDir);
+        }
+
+        Set<String> excelRawKeys = collectIraiNormKeys(rawRequests);
+        appendTpiPdfRawRequests(ui, rawRequests, excelRawKeys, parseCacheRoot, warnings);
+        return rawRequests;
+    }
+
+    private static Set<String> collectIraiNormKeys(List<Map<String, String>> rawRequests) {
+        Set<String> keys = new HashSet<>();
+        for (Map<String, String> raw : rawRequests) {
+            String key =
+                    JuchuTransferValueNormalizer.normalizeKey(
+                            firstNonBlank(
+                                    raw.get("依頼Ｎｏ"), raw.get("依頼No"), raw.get("依頼NO")));
+            if (!key.isEmpty()) {
+                keys.add(key);
+            }
+        }
+        return keys;
+    }
+
+    private static void appendTpiPdfRawRequests(
+            Map<String, String> ui,
+            List<Map<String, String>> rawRequests,
+            Set<String> excelRawKeys,
+            File parseCacheRoot,
+            List<String> warnings) {
+        Optional<Path> tpiDirOpt = AppPaths.resolveRequestFormTpiPdfDir(ui);
+        if (tpiDirOpt.isEmpty()) {
+            return;
+        }
+        String tpiPdfFolder = tpiDirOpt.get().toString();
+        if (!NetworkSourceDirResolver.isRequestFormTpiPdfDirReachable(ui)) {
+            warnings.add("TPI PDF フォルダにアクセスできません: " + tpiPdfFolder);
+            return;
+        }
+        File tpiDir = tpiDirOpt.get().toFile();
+        File[] pdfFiles =
+                tpiDir.listFiles(
+                        (dir, name) ->
+                                name != null
+                                        && name.toLowerCase(java.util.Locale.ROOT).endsWith(".pdf")
+                                        && !name.startsWith("~$"));
+        if (pdfFiles == null || pdfFiles.length == 0) {
+            return;
+        }
+        for (File pdf : pdfFiles) {
             try {
                 Optional<List<Map<String, String>>> cached =
-                        RequestFormSourceCache.loadParseEntries(parseCacheRoot, file);
+                        RequestFormSourceCache.loadParseEntries(parseCacheRoot, pdf);
                 List<Map<String, String>> parsed;
                 if (cached.isPresent()) {
-                    parsed = cached.get();
+                    parsed =
+                            RequestFormTpiPdfSplitter.ensureSplitPdfs(
+                                    pdf, cached.get(), parseCacheRoot, ui);
+                    RequestFormSourceCache.saveParseEntries(parseCacheRoot, pdf, parsed);
                 } else {
-                    parsed = parseOriginalWorkbook(file);
-                    RequestFormSourceCache.saveParseEntries(parseCacheRoot, file, parsed);
+                    parsed =
+                            RequestFormTpiPdfExtractor.extractEntriesWithSplit(
+                                    pdf, ui, parseCacheRoot);
+                    RequestFormSourceCache.saveParseEntries(parseCacheRoot, pdf, parsed);
                 }
                 for (Map<String, String> entry : parsed) {
+                    String key =
+                            JuchuTransferValueNormalizer.normalizeKey(
+                                    firstNonBlank(
+                                            entry.get("依頼Ｎｏ"),
+                                            entry.get("依頼No"),
+                                            entry.get("依頼NO")));
+                    if (!key.isEmpty() && excelRawKeys.contains(key)) {
+                        continue;
+                    }
+                    if (!RequestFormTpiPdfCatalog.shouldAutoAddScannedEntry(
+                            tpiDir, pdf, parsed, entry)) {
+                        continue;
+                    }
                     Map<String, String> tagged = new HashMap<>(entry);
-                    tagged.put("_sourceFileName", file.getName());
+                    tagged.put("_sourceFileName", resolveOriginalFileName(tagged));
                     rawRequests.add(tagged);
                 }
             } catch (Exception ex) {
-                warnings.add("原本解析エラー " + file.getName() + ": " + ex.getMessage());
+                warnings.add("TPI PDF 解析エラー " + pdf.getName() + ": " + ex.getMessage());
             }
         }
-        return rawRequests;
+    }
+
+    private static Optional<Map<String, String>> resolveLinkedTpiPdfRaw(
+            String iraiNo, Map<String, String> ui, File parseCacheRoot, List<String> warnings) {
+        Optional<Path> tpiDirOpt = AppPaths.resolveRequestFormTpiPdfDir(ui);
+        if (tpiDirOpt.isEmpty() || iraiNo == null || iraiNo.isBlank()) {
+            return Optional.empty();
+        }
+        String tpiPdfFolder = tpiDirOpt.get().toString();
+        if (!NetworkSourceDirResolver.isRequestFormTpiPdfDirReachable(ui)) {
+            return Optional.empty();
+        }
+        Optional<File> linked =
+                RequestFormTpiPdfCatalog.findForIraiNo(iraiNo, tpiPdfFolder);
+        if (linked.isEmpty()) {
+            linked =
+                    RequestFormTpiPdfCatalog.findForIraiNoByPdfContent(
+                            iraiNo, tpiPdfFolder, ui, parseCacheRoot);
+        }
+        if (linked.isEmpty()) {
+            return Optional.empty();
+        }
+        Map<String, String> raw = loadTpiPdfRawLinked(linked.get(), iraiNo, ui, parseCacheRoot);
+        if (raw.isEmpty()) {
+            return Optional.empty();
+        }
+        Map<String, String> tagged = new HashMap<>(raw);
+        tagged.put("_sourceFileName", resolveOriginalFileName(tagged));
+        return Optional.of(tagged);
+    }
+
+    private static Map<String, String> loadTpiPdfRawLinked(
+            File pdf, String iraiNo, Map<String, String> ui, File parseCacheRoot) {
+        if (pdf == null || !pdf.isFile()) {
+            return Map.of();
+        }
+        try {
+            Optional<List<Map<String, String>>> cached =
+                    RequestFormSourceCache.loadParseEntries(parseCacheRoot, pdf);
+            List<Map<String, String>> parsed;
+            if (cached.isPresent() && !cached.get().isEmpty()) {
+                parsed =
+                        RequestFormTpiPdfSplitter.ensureSplitPdfs(
+                                pdf, cached.get(), parseCacheRoot, ui);
+                RequestFormSourceCache.saveParseEntries(parseCacheRoot, pdf, parsed);
+            } else {
+                parsed =
+                        RequestFormTpiPdfExtractor.extractEntriesWithSplit(pdf, ui, parseCacheRoot);
+                RequestFormSourceCache.saveParseEntries(parseCacheRoot, pdf, parsed);
+            }
+            if (parsed.isEmpty()) {
+                return Map.of();
+            }
+            Map<String, String> selected = selectLinkedTpiEntry(parsed, iraiNo, ui);
+            return reconcileLinkedTpiRaw(selected, iraiNo);
+        } catch (Exception ex) {
+            return Map.of();
+        }
+    }
+
+    private static Map<String, String> selectLinkedTpiEntry(
+            List<Map<String, String>> entries, String iraiNo, Map<String, String> ui) {
+        if (entries == null || entries.isEmpty()) {
+            return Map.of();
+        }
+        String normIrai = JuchuTransferValueNormalizer.normalizeKey(iraiNo);
+        for (Map<String, String> entry : entries) {
+            String parsedIrai = entry.get("依頼Ｎｏ");
+            if (parsedIrai == null
+                    || parsedIrai.isBlank()
+                    || !JuchuTransferValueNormalizer.normalizeKey(parsedIrai).equals(normIrai)) {
+                continue;
+            }
+            Optional<Path> tpiDirOpt = AppPaths.resolveRequestFormTpiPdfDir(ui);
+            File tpiDir = tpiDirOpt.map(Path::toFile).orElse(null);
+            String pdfName = entry.get("原本ファイル名");
+            File pdf =
+                    pdfName != null && tpiDir != null ? new File(tpiDir, pdfName) : null;
+            if (pdf != null
+                    && !RequestFormTpiPdfCatalog.canLinkIraiInSharedPdf(
+                            iraiNo, pdf, entries, tpiDir)) {
+                return Map.of();
+            }
+            return entry;
+        }
+        return Map.of();
+    }
+
+    private static Map<String, String> reconcileLinkedTpiRaw(
+            Map<String, String> parsed, String iraiNo) {
+        if (parsed == null || parsed.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, String> raw = new java.util.LinkedHashMap<>(parsed);
+        String parsedIrai = raw.get("依頼Ｎｏ");
+        if (parsedIrai == null
+                || parsedIrai.isBlank()
+                || !JuchuTransferValueNormalizer.normalizeKey(parsedIrai)
+                        .equals(JuchuTransferValueNormalizer.normalizeKey(iraiNo))) {
+            return Map.of();
+        }
+        return raw;
+    }
+
+    static Map<String, String> buildOriginalDbFromRaw(Map<String, String> raw) {
+        if (isTpiPdfRaw(raw)) {
+            return RequestFormOriginalExtractor.buildTpiDbDefaultsFromRaw(raw);
+        }
+        return RequestFormOriginalExtractor.buildDbDefaultsFromRaw(raw);
+    }
+
+    static String resolveOriginalFileName(Map<String, String> raw) {
+        if (raw == null || raw.isEmpty()) {
+            return "";
+        }
+        String tagged = raw.get("_sourceFileName");
+        if (tagged != null && !tagged.isBlank()) {
+            return tagged;
+        }
+        String splitPath = raw.get(RequestFormTpiPdfFieldLayout.META_SPLIT_PDF_PATH);
+        if (splitPath != null && !splitPath.isBlank()) {
+            return new File(splitPath).getName();
+        }
+        String originalName = raw.get("原本ファイル名");
+        return originalName != null ? originalName : "";
+    }
+
+    private static boolean isTpiPdfRaw(Map<String, String> raw) {
+        return raw != null
+                && RequestFormTpiPdfFieldLayout.META_SOURCE_KIND_TPI_PDF.equals(
+                        raw.get(RequestFormTpiPdfFieldLayout.META_SOURCE_KIND));
     }
 
     private static List<Map<String, String>> parseOriginalWorkbook(File file) throws Exception {

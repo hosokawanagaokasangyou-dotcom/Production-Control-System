@@ -40,6 +40,12 @@ public final class RequestFormTpiPdfFieldLayout {
     private static final Pattern DOCUMENT_YEAR = Pattern.compile("20([\\d０-９]{2})");
     private static final Pattern CONTRACT_NO = Pattern.compile("X[\\d０-９]{9}");
     private static final Pattern P_NUMBER = Pattern.compile("P[\\d０-９]{9}");
+    /** 表「発注・契約No」「出荷指図・契約No」欄の P 番号（X 番号は対象外）。 */
+    private static final Pattern TABLE_CONTRACT_P =
+            Pattern.compile("(?:発注・契約|出荷指図・契約)\\s*No[^P\\n]{0,160}(P[\\d０-９]{9})");
+    /** 右下「入庫お願いします。『P…』」の契約Ｎｏ（表の出荷指図 X 番号より優先）。 */
+    private static final Pattern NYUKO_CONTRACT_NO =
+            Pattern.compile("入庫お願い[^『]*?『?(P[\\d０-９]{9})");
     private static final Pattern USER_LINE =
             Pattern.compile("長岡産業[（(]株[）)]\\s*湖南工場");
     private static final Pattern SC_FEED =
@@ -183,6 +189,42 @@ public final class RequestFormTpiPdfFieldLayout {
     }
 
     static String parseContractNo(String text) {
+        String nyuko = parseNyukoContractNo(text);
+        if (!nyuko.isBlank()) {
+            return nyuko;
+        }
+        String tableP = parseTableContractColumnP(text);
+        if (!tableP.isBlank()) {
+            return tableP;
+        }
+        // 出荷指図の X 番号は契約Ｎｏではない。表欄・入庫 P が無いときのみ文中の P 番号を採用。
+        return parsePNumber(text);
+    }
+
+    /** 表「発注・契約No」「出荷指図・契約No」欄に記載された P 番号。 */
+    static String parseTableContractColumnP(String text) {
+        String body = normalizeText(text);
+        Matcher m = TABLE_CONTRACT_P.matcher(body);
+        String last = "";
+        while (m.find()) {
+            last = toAsciiDigits(m.group(1));
+        }
+        return last;
+    }
+
+    /** 右下「入庫お願いします。『P000075558』」形式の契約Ｎｏ。 */
+    static String parseNyukoContractNo(String text) {
+        String body = normalizeText(text);
+        Matcher m = NYUKO_CONTRACT_NO.matcher(body);
+        String last = "";
+        while (m.find()) {
+            last = toAsciiDigits(m.group(1));
+        }
+        return last;
+    }
+
+    /** 表「出荷指図・契約No」の X 番号。契約Ｎｏには使用しない（診断・テスト用）。 */
+    static String parseXContractNo(String text) {
         String body = normalizeText(text);
         Matcher m = CONTRACT_NO.matcher(body);
         String last = "";
@@ -293,7 +335,10 @@ public final class RequestFormTpiPdfFieldLayout {
             appendTokkiPart(sb, "赤テープ：つなぎありのため熱融着必要");
         }
         if (body.contains("入庫お願い")) {
-            String p = parsePNumber(text);
+            String p = parseNyukoContractNo(text);
+            if (p.isBlank()) {
+                p = parsePNumber(text);
+            }
             appendTokkiPart(
                     sb, p.isBlank() ? "入庫お願いします" : "入庫お願いします。『" + p + "』");
         }

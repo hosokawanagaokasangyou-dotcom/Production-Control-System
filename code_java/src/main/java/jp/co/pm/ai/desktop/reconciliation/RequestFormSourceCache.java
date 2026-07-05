@@ -4,6 +4,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -14,11 +15,18 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
  * 依頼書原本の解析結果とプレビュー PDF を {@code preview_cache/} 以下に保持する。
- * 原本 Excel の更新日時・サイズと {@link #PARSE_SCHEMA_VERSION} が一致するときのみキャッシュを再利用する。
+ *
+ * <p>各キャッシュ JSON に {@code schemaVersion} を記録し、{@link #PARSE_SCHEMA_VERSION} /
+ * {@link #TPI_PDF_PARSE_SCHEMA_VERSION} / {@link #PREVIEW_SCHEMA_VERSION} と一致しないもの、
+ * および {@link #CACHE_MAX_AGE} を超えたものは読込時に破棄し、{@link #pruneStaleDiskCaches} で一括削除する。
  */
 final class RequestFormSourceCache {
 
     private static final ObjectMapper JSON = new ObjectMapper();
+
+    /** 依頼書キャッシュの最大保持期間（1か月＝30日）。 */
+    static final Duration CACHE_MAX_AGE = Duration.ofDays(30);
+    static final long CACHE_MAX_AGE_MILLIS = CACHE_MAX_AGE.toMillis();
 
     /**
      * {@link RequestFormOriginalCellLayout} ベースのセル読取に合わせて上げる。
@@ -27,18 +35,34 @@ final class RequestFormSourceCache {
     static final String PARSE_SCHEMA_VERSION = "request-form-cell-layout-v4";
 
     /** TPI 依頼書 PDF 用 parse キャッシュ schema（Excel 原本とは別バージョン）。 */
-    static final String TPI_PDF_PARSE_SCHEMA_VERSION = "request-form-tpi-pdf-v13";
+    static final String TPI_PDF_PARSE_SCHEMA_VERSION = "request-form-tpi-pdf-v17";
+
+    /** Excel 原本シート PDF プレビュー用 schema。レンダラ・範囲変更時に上げる。 */
+    static final String PREVIEW_SCHEMA_VERSION = "request-form-preview-v2";
 
     private RequestFormSourceCache() {}
 
     record SourceFingerprint(long lastModified, long length) {}
 
     private record ParseCachePayload(
-            SourceFingerprint source, String schemaVersion, List<Map<String, String>> entries) {}
+            SourceFingerprint source,
+            String schemaVersion,
+            long cachedAtMillis,
+            List<Map<String, String>> entries) {}
 
-    private record PreviewMeta(SourceFingerprint source, String range, String renderer) {}
+    private record PreviewMeta(
+            SourceFingerprint source,
+            String range,
+            String renderer,
+            String schemaVersion,
+            long cachedAtMillis) {}
 
-    private record SplitCacheMeta(SourceFingerprint source, int startPage, int endPage) {}
+    private record SplitCacheMeta(
+            SourceFingerprint source,
+            int startPage,
+            int endPage,
+            String schemaVersion,
+            long cachedAtMillis) {}
 
     /** {@link #clearAllDiskCache(File)} の結果。 */
     record ClearDiskCacheResult(int pdfFilesDeleted, int parseFilesDeleted, int deleteFailures) {
@@ -102,7 +126,9 @@ final class RequestFormSourceCache {
             return meta != null
                     && matches(sourcePdf, meta.source())
                     && meta.startPage() == startPage0
-                    && meta.endPage() == endPage0;
+                    && meta.endPage() == endPage0
+                    && TPI_PDF_PARSE_SCHEMA_VERSION.equals(meta.schemaVersion())
+                    && !isCacheExpired(meta.cachedAtMillis());
         } catch (IOException ex) {
             return false;
         }
@@ -113,7 +139,12 @@ final class RequestFormSourceCache {
         Files.createDirectories(splitMetaFile(splitPdf).getParentFile().toPath());
         JSON.writeValue(
                 splitMetaFile(splitPdf),
-                new SplitCacheMeta(fingerprint(sourcePdf), startPage0, endPage0));
+                new SplitCacheMeta(
+                        fingerprint(sourcePdf),
+                        startPage0,
+                        endPage0,
+                        TPI_PDF_PARSE_SCHEMA_VERSION,
+                        nowMillis()));
     }
 
     /** @deprecated {@link #pdfCacheFile(File, String, String)} を使用 */
@@ -154,7 +185,9 @@ final class RequestFormSourceCache {
             if (meta == null
                     || !matches(sourceFile, meta.source())
                     || !RequestFormSheetPreviewRenderer.PREVIEW_RANGE_SPEC.equals(meta.range())
-                    || !RequestFormSheetPreviewPdfRenderer.rendererSpec().equals(meta.renderer())) {
+                    || !RequestFormSheetPreviewPdfRenderer.rendererSpec().equals(meta.renderer())
+                    || !PREVIEW_SCHEMA_VERSION.equals(meta.schemaVersion())
+                    || isCacheExpired(meta.cachedAtMillis())) {
                 return false;
             }
             return true;
@@ -170,7 +203,9 @@ final class RequestFormSourceCache {
                 new PreviewMeta(
                         fingerprint(sourceFile),
                         RequestFormSheetPreviewRenderer.PREVIEW_RANGE_SPEC,
-                        RequestFormSheetPreviewPdfRenderer.rendererSpec()));
+                        RequestFormSheetPreviewPdfRenderer.rendererSpec(),
+                        PREVIEW_SCHEMA_VERSION,
+                        nowMillis()));
     }
 
     static void deletePreviewCache(File pdfFile) {
@@ -208,7 +243,10 @@ final class RequestFormSourceCache {
         if (cacheRoot == null) {
             return 0;
         }
-        return pruneStaleParseCacheFiles(cacheRoot) + pruneOrphanTpiSplitArtifacts(cacheRoot);
+        return pruneStaleParseCacheFiles(cacheRoot)
+                + pruneStalePreviewCacheFiles(cacheRoot)
+                + pruneStaleTpiSplitCacheFiles(cacheRoot)
+                + pruneOrphanTpiSplitArtifacts(cacheRoot);
     }
 
     static int pruneStaleParseCacheFiles(File cacheRoot) {
@@ -222,13 +260,119 @@ final class RequestFormSourceCache {
             if (child == null || !child.isFile() || !child.getName().endsWith(".json")) {
                 continue;
             }
-            if (isStaleParseCacheFile(child)) {
+            if (isStaleParseCacheFile(child) || isFileOlderThanMaxAge(child)) {
                 if (deleteFileQuietly(child)) {
                     deleted++;
                 }
             }
         }
         return deleted;
+    }
+
+    static int pruneStalePreviewCacheFiles(File cacheRoot) {
+        File dir = pdfDir(cacheRoot);
+        File[] children = dir.listFiles();
+        if (children == null) {
+            return 0;
+        }
+        int deleted = 0;
+        for (File child : children) {
+            if (child == null || !child.isFile()) {
+                continue;
+            }
+            String name = child.getName();
+            if (!name.endsWith(".meta.json")) {
+                continue;
+            }
+            File pdf =
+                    new File(child.getParentFile(), name.substring(0, name.length() - ".meta.json".length()));
+            if (isStalePreviewMetaFile(child) || isFileOlderThanMaxAge(pdf)) {
+                if (deleteFileQuietly(pdf)) {
+                    deleted++;
+                }
+                if (deleteFileQuietly(child)) {
+                    deleted++;
+                }
+            } else if (name.endsWith(".pdf") && isFileOlderThanMaxAge(child)) {
+                File meta = previewMetaFile(child);
+                if (deleteFileQuietly(child)) {
+                    deleted++;
+                }
+                if (deleteFileQuietly(meta)) {
+                    deleted++;
+                }
+            }
+        }
+        return deleted;
+    }
+
+    static int pruneStaleTpiSplitCacheFiles(File cacheRoot) {
+        File dir = splitDir(cacheRoot);
+        File[] children = dir.listFiles();
+        if (children == null) {
+            return 0;
+        }
+        int deleted = 0;
+        for (File child : children) {
+            if (child == null || !child.isFile()) {
+                continue;
+            }
+            String name = child.getName();
+            if (name.endsWith(".meta.json")) {
+                if (isStaleSplitMetaFile(child)) {
+                    File pdf =
+                            new File(
+                                    child.getParentFile(),
+                                    name.substring(0, name.length() - ".meta.json".length()));
+                    if (deleteFileQuietly(pdf)) {
+                        deleted++;
+                    }
+                    if (deleteFileQuietly(child)) {
+                        deleted++;
+                    }
+                }
+            } else if (name.endsWith(".pdf")) {
+                File meta = splitMetaFile(child);
+                if (!meta.isFile() || isStaleSplitMetaFile(meta) || isFileOlderThanMaxAge(child)) {
+                    if (deleteFileQuietly(child)) {
+                        deleted++;
+                    }
+                    if (deleteFileQuietly(meta)) {
+                        deleted++;
+                    }
+                }
+            }
+        }
+        return deleted;
+    }
+
+    /** parse キャッシュと、TPI 束ね PDF に紐づく split 成果物を削除する。 */
+    static void invalidateParseCacheForSource(File cacheRoot, File sourceFile) {
+        deleteFileQuietly(parseCacheFile(cacheRoot, sourceFile));
+        if (sourceFile != null
+                && sourceFile.getName().toLowerCase(java.util.Locale.ROOT).endsWith(".pdf")) {
+            deleteTpiSplitArtifactsForSourcePdf(cacheRoot, sourceFile);
+        }
+    }
+
+    static void deleteTpiSplitArtifactsForSourcePdf(File cacheRoot, File sourcePdf) {
+        if (cacheRoot == null || sourcePdf == null) {
+            return;
+        }
+        String prefix = safeBaseName(sourcePdf.getName()) + "__";
+        File dir = splitDir(cacheRoot);
+        File[] children = dir.listFiles();
+        if (children == null) {
+            return;
+        }
+        for (File child : children) {
+            if (child == null || !child.isFile()) {
+                continue;
+            }
+            if (child.getName().startsWith(prefix)) {
+                deleteFileQuietly(child);
+            }
+        }
     }
 
     static int pruneOrphanTpiSplitArtifacts(File cacheRoot) {
@@ -322,8 +466,9 @@ final class RequestFormSourceCache {
             if (payload == null
                     || payload.entries() == null
                     || !parseSchemaVersionFor(sourceFile).equals(payload.schemaVersion())
-                    || !matches(sourceFile, payload.source())) {
-                deleteFileQuietly(cacheFile);
+                    || !matches(sourceFile, payload.source())
+                    || isCacheExpired(payload.cachedAtMillis())) {
+                invalidateParseCacheForSource(cacheRoot, sourceFile);
                 return Optional.empty();
             }
             List<Map<String, String>> copy = new ArrayList<>(payload.entries().size());
@@ -332,7 +477,7 @@ final class RequestFormSourceCache {
             }
             return Optional.of(copy);
         } catch (IOException ex) {
-            deleteFileQuietly(cacheFile);
+            invalidateParseCacheForSource(cacheRoot, sourceFile);
             return Optional.empty();
         }
     }
@@ -349,24 +494,80 @@ final class RequestFormSourceCache {
         }
         ParseCachePayload payload =
                 new ParseCachePayload(
-                        fingerprint(sourceFile), parseSchemaVersionFor(sourceFile), stored);
+                        fingerprint(sourceFile),
+                        parseSchemaVersionFor(sourceFile),
+                        nowMillis(),
+                        stored);
         JSON.writerWithDefaultPrettyPrinter().writeValue(cacheFile, payload);
+    }
+
+    private static boolean isStalePreviewMetaFile(File metaFile) {
+        try {
+            PreviewMeta meta = JSON.readValue(metaFile, PreviewMeta.class);
+            if (meta == null) {
+                return true;
+            }
+            return !PREVIEW_SCHEMA_VERSION.equals(meta.schemaVersion())
+                    || !RequestFormSheetPreviewRenderer.PREVIEW_RANGE_SPEC.equals(meta.range())
+                    || !RequestFormSheetPreviewPdfRenderer.rendererSpec().equals(meta.renderer())
+                    || isCacheExpired(meta.cachedAtMillis());
+        } catch (IOException ex) {
+            return true;
+        }
+    }
+
+    private static boolean isStaleSplitMetaFile(File metaFile) {
+        try {
+            SplitCacheMeta meta = JSON.readValue(metaFile, SplitCacheMeta.class);
+            if (meta == null) {
+                return true;
+            }
+            return !TPI_PDF_PARSE_SCHEMA_VERSION.equals(meta.schemaVersion())
+                    || isCacheExpired(meta.cachedAtMillis());
+        } catch (IOException ex) {
+            return true;
+        }
+    }
+
+    static boolean isCacheExpired(long cachedAtMillis) {
+        if (cachedAtMillis <= 0L) {
+            return true;
+        }
+        return nowMillis() - cachedAtMillis > CACHE_MAX_AGE_MILLIS;
+    }
+
+    static boolean isFileOlderThanMaxAge(File file) {
+        if (file == null || !file.isFile()) {
+            return false;
+        }
+        return nowMillis() - file.lastModified() > CACHE_MAX_AGE_MILLIS;
+    }
+
+    private static long nowMillis() {
+        return System.currentTimeMillis();
+    }
+
+    private static boolean isStaleParseCacheFileByPayload(ParseCachePayload payload) {
+        if (payload == null || payload.schemaVersion() == null) {
+            return true;
+        }
+        if (isCacheExpired(payload.cachedAtMillis())) {
+            return true;
+        }
+        String schema = payload.schemaVersion();
+        if (schema.startsWith("request-form-tpi-pdf-")) {
+            return !TPI_PDF_PARSE_SCHEMA_VERSION.equals(schema);
+        }
+        if (schema.startsWith("request-form-cell-layout-")) {
+            return !PARSE_SCHEMA_VERSION.equals(schema);
+        }
+        return true;
     }
 
     private static boolean isStaleParseCacheFile(File cacheFile) {
         try {
             ParseCachePayload payload = JSON.readValue(cacheFile, ParseCachePayload.class);
-            if (payload == null || payload.schemaVersion() == null) {
-                return true;
-            }
-            String schema = payload.schemaVersion();
-            if (schema.startsWith("request-form-tpi-pdf-")) {
-                return !TPI_PDF_PARSE_SCHEMA_VERSION.equals(schema);
-            }
-            if (schema.startsWith("request-form-cell-layout-")) {
-                return !PARSE_SCHEMA_VERSION.equals(schema);
-            }
-            return true;
+            return isStaleParseCacheFileByPayload(payload);
         } catch (IOException ex) {
             return true;
         }

@@ -16,6 +16,7 @@ import javafx.scene.control.CheckBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.Spinner;
 import javafx.scene.control.SpinnerValueFactory;
+import javafx.scene.control.ProgressIndicator;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextField;
@@ -41,7 +42,7 @@ public final class RequestFormPipelineCheckTabController {
             AladdinShapedPlanQtyLookup.PIPELINE_CHECK_PLAN_DAY_COLUMNS;
 
     private static final String HINT_TEXT =
-            "依頼書原本フォルダ内の Excel 原本を走査し、受注ファイルへの転記状況と"
+            "依頼書原本フォルダ内の Excel 原本と TPI PDF を走査し、受注ファイルへの転記状況と"
                     + " shaped_aladdin_plan.json 上のアラジン加工計画を照合します。"
                     + " 転記率は原本に値がある転記対象列を分母とします。"
                     + " ①〜⑦列は依頼ごとの加工計画日（昇順・最大7日）を表示（セル例: 7/3 100m）。"
@@ -315,6 +316,9 @@ public final class RequestFormPipelineCheckTabController {
     private Button refreshButton;
 
     @FXML
+    private ProgressIndicator refreshProgressIndicator;
+
+    @FXML
     private TextField filterField;
 
     @FXML
@@ -372,6 +376,7 @@ public final class RequestFormPipelineCheckTabController {
         filteredRows = new FilteredList<>(allRows, row -> true);
         mainTable.setItems(filteredRows);
         mismatchTable.setItems(mismatchRows);
+        mismatchTable.setPlaceholder(new Label("相違なし"));
         planTable.setItems(planRows);
         VBox.setVgrow(mainTable, Priority.ALWAYS);
 
@@ -437,8 +442,8 @@ public final class RequestFormPipelineCheckTabController {
             statusLabel.setText("シェル未接続");
             return;
         }
-        refreshButton.setDisable(true);
-        statusLabel.setText("走査中...");
+        setRefreshing(true);
+        statusLabel.setText("走査中…");
         JuchuHeaderAliasRegistry registry = shell.snapshotJuchuHeaderAliasRegistryForExport();
         Thread worker =
                 new Thread(
@@ -448,13 +453,23 @@ public final class RequestFormPipelineCheckTabController {
                                             shell.snapshotUiEnv(), registry);
                             Platform.runLater(
                                     () -> {
-                                        refreshButton.setDisable(false);
+                                        setRefreshing(false);
                                         applyScanResult(result);
                                     });
                         },
                         "request-form-pipeline-check");
         worker.setDaemon(true);
         worker.start();
+    }
+
+    private void setRefreshing(boolean on) {
+        if (refreshProgressIndicator != null) {
+            refreshProgressIndicator.setVisible(on);
+            refreshProgressIndicator.setManaged(on);
+        }
+        if (refreshButton != null) {
+            refreshButton.setDisable(on);
+        }
     }
 
     private void applyScanResult(ScanResult result) {

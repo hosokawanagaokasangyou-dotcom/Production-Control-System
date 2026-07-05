@@ -191,6 +191,19 @@ class JuchuTransferCoverageCheckTest {
     }
 
     @Test
+    void compare_genpanQuantityIgnoresThousandsSeparator() {
+        Map<String, String> orig = Map.of("原反数量", "1,050");
+        Map<String, String> juchu = Map.of("原反数量", "1050");
+
+        JuchuTransferCoverageCheck.CoverageResult result =
+                JuchuTransferCoverageCheck.compare(orig, juchu, null, null);
+
+        assertEquals(1, result.totalWithOriginalValue());
+        assertEquals(1, result.matchedCount());
+        assertTrue(result.details().get(0).matched());
+    }
+
+    @Test
     void compare_excludedColumnSkipped() {
         Map<String, String> orig = Map.of("品名", "A", "製品", "B");
         Map<String, String> juchu = Map.of("品名", "A", "製品", "WRONG");

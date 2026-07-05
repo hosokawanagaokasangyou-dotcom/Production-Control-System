@@ -104,7 +104,7 @@ class RequestFormTpiPdfExtractorTest {
         assertEquals("200", raw.get("原反数量"));
         assertEquals("ナチュラル", raw.get("色1"));
         assertEquals("ナチュラル", raw.get("原反色"));
-        assertEquals("X000080855", raw.get("契約Ｎｏ"));
+        assertEquals("P000075425", raw.get("契約Ｎｏ"));
         assertEquals("ECOWD", raw.get(RequestFormTpiPdfFieldLayout.META_TPI_LAYOUT));
         assertEquals(
                 RequestFormTpiPdfFieldLayout.META_SOURCE_KIND_TPI_PDF,
@@ -137,6 +137,7 @@ class RequestFormTpiPdfExtractorTest {
         assertEquals(
                 "入庫お願いします。『P000075424』　EL原反は6/10(水)投入します。",
                 raw.get("特記事項2"));
+        assertEquals("P000075424", raw.get("契約Ｎｏ"));
     }
 
     @Test
@@ -157,7 +158,32 @@ class RequestFormTpiPdfExtractorTest {
         assertEquals("500", raw.get("原反数量"));
         assertEquals("ﾗｲﾄｸﾞﾚｰ", raw.get("原反色"));
         assertTrue(raw.get("特記事項2").contains("入庫お願いします。『P000075424』"));
+        assertEquals("P000075424", raw.get("契約Ｎｏ"));
         assertTrue(raw.get("特記事項2").contains("EL原反は6/10"));
+    }
+
+    @Test
+    void extractFromText_ecowdJr260605_prefersNyukoPOverTableX() throws IOException {
+        String text =
+                Files.readString(
+                        Path.of("src/test/resources/tpi-request-forms/ecowd-jr260605-clean.txt"),
+                        StandardCharsets.UTF_8);
+        Map<String, String> raw =
+                RequestFormTpiPdfExtractor.extractFromTextForTest(
+                        "ECOWDシート加工注文書（JR260605).pdf", text);
+
+        assertEquals("JR260605", raw.get("依頼Ｎｏ"));
+        assertEquals("P000075558", raw.get("契約Ｎｏ"));
+        assertTrue(raw.get("特記事項2").contains("P000075558"));
+    }
+
+    @Test
+    void extractFromPdf_pn06_01_contractNoFromTableColumn() throws Exception {
+        Path pdf = Path.of("src/test/resources/tpi-request-forms/PN06-01.pdf");
+        assertTrue(Files.isRegularFile(pdf));
+        Map<String, String> raw = RequestFormTpiPdfExtractor.extractEntries(pdf.toFile()).get(0);
+        assertEquals("PN06-01", raw.get("依頼Ｎｏ"));
+        assertEquals("P000075287", raw.get("契約Ｎｏ"));
     }
 
     @Test
@@ -174,7 +200,7 @@ class RequestFormTpiPdfExtractorTest {
         assertEquals("2026-04-30", raw.get("希望納期"));
         assertEquals("7C8", raw.get("品名"));
         assertEquals("FEL3002BY05WDLG-EC", raw.get("製品"));
-        assertEquals("X000079828", raw.get("契約Ｎｏ"));
+        assertEquals("P000074932", raw.get("契約Ｎｏ"));
         assertEquals("PN", raw.get(RequestFormTpiPdfFieldLayout.META_TPI_LAYOUT));
 
         Map<String, String> db = RequestFormOriginalExtractor.buildTpiDbDefaultsFromRaw(raw);
