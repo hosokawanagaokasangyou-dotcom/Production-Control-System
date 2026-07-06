@@ -6,6 +6,8 @@
 
 ' 〇月カレンダー: 日付・勤怠入力の有効列は A（メンバー名）～ AG（日付列は B～AG）
 Private Const CALENDAR_LAST_DATA_COL As Long = 33  ' AG列
+Private Const CALENDAR_DAY_COL_FIRST As Long = 3   ' C列（日付グリッドの列幅固定の先頭。B列は対象外）
+Private Const CALENDAR_DAY_COL_WIDTH As Double = 3#  ' C～AG の列幅（文字数単位）
 
 ' メンバー別出勤簿（WriteMemberAttendanceSheet）: 1 行目見出し・データは A 列「日付」～ K 列
 ' （再生成時は Clear 前に A2（無ければ A1）のフォント名・サイズを退避し、罫線・見出し整形の後に復元）
@@ -569,6 +571,31 @@ Private Function IsMonthlyCalendarSheet(ByVal ws As Worksheet) As Boolean
     If StrComp(nm, SHEET_MACHINE_CALENDAR, vbTextCompare) = 0 Then Exit Function
     IsMonthlyCalendarSheet = True
 End Function
+
+' 月次カレンダー（*カレンダー）の C～AG 列幅を CALENDAR_DAY_COL_WIDTH に固定（B列は触らない）
+Private Sub SetMonthlyCalendarDayColumnWidths(ByVal ws As Worksheet)
+    If Not IsMonthlyCalendarSheet(ws) Then Exit Sub
+    On Error Resume Next
+    ws.Range(ws.Cells(1, CALENDAR_DAY_COL_FIRST), ws.Cells(1, CALENDAR_LAST_DATA_COL)).EntireColumn.ColumnWidth = CALENDAR_DAY_COL_WIDTH
+    Err.Clear
+    On Error GoTo 0
+End Sub
+
+' 月次カレンダーは A:B のみ AutoFit し、日付列 C～AG は固定幅。それ以外は UsedRange 全体を AutoFit
+Private Sub AutoFitWorksheetColumns(ByVal ws As Worksheet)
+    Dim ur As Range
+    On Error Resume Next
+    If ws.ProtectContents Then Exit Sub
+    If IsMonthlyCalendarSheet(ws) Then
+        ws.Columns("A:B").AutoFit
+        Call SetMonthlyCalendarDayColumnWidths(ws)
+    Else
+        Set ur = ws.UsedRange
+        If Not ur Is Nothing Then ur.Columns.AutoFit
+    End If
+    Err.Clear
+    On Error GoTo 0
+End Sub
 
 ' 条件付き書式の「見えている」塗りをセルに反映し、その後シート上の条件付き書式をすべて削除する
 Private Sub FlattenConditionalFormattingToInterior(ByVal ws As Worksheet, ByVal lastRow As Long, ByVal lastCol As Long)
@@ -1785,20 +1812,13 @@ Private Sub ReprotectSheetBlankPwdUI(ByVal ws As Worksheet)
     On Error GoTo 0
 End Sub
 
-' ブック内の各ワークシートで UsedRange の列幅をオートフィット
+' ブック内の各ワークシートで列幅を調整（月次カレンダーは C～AG を 3.0 固定）
 Private Sub AutoFitAllWorksheetColumns()
     Dim ws As Worksheet
-    Dim ur As Range
     Dim unlk As Boolean
     For Each ws In ThisWorkbook.Worksheets
         unlk = TryTempUnprotectBlank(ws)
-        On Error Resume Next
-        If Not ws.ProtectContents Then
-            Set ur = ws.UsedRange
-            If Not ur Is Nothing Then ur.Columns.AutoFit
-        End If
-        Err.Clear
-        On Error GoTo 0
+        Call AutoFitWorksheetColumns(ws)
         If unlk Then ReprotectSheetBlankPwdUI ws
     Next ws
 End Sub
@@ -1887,7 +1907,9 @@ Private Sub ApplyFontToAllSheetCells(ByVal fontName As String, ByRef skippedOut 
                     If Not AssignFontNameToRange(ur, fontName) Then
                         skippedOut = skippedOut & "・" & ws.Name & "（フォント適用失敗）" & vbCrLf
                     Else
-                        If StrComp(Trim$(ws.Name), SHEET_RESULT_EQUIP_GANTT, vbBinaryCompare) <> 0 _
+                        If IsMonthlyCalendarSheet(ws) Then
+                            Call AutoFitWorksheetColumns(ws)
+                        ElseIf StrComp(Trim$(ws.Name), SHEET_RESULT_EQUIP_GANTT, vbBinaryCompare) <> 0 _
                             And StrComp(Trim$(ws.Name), SHEET_RESULT_EQUIP_GANTT_ACTUAL_DETAIL, vbBinaryCompare) <> 0 Then
                             ur.Columns.AutoFit
                         End If
