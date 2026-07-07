@@ -425,6 +425,7 @@ final class Stage2NextDayRollDispatchDialogSupport {
             StackPane tableHost) {
         Region overlay = new Region();
         overlay.setMouseTransparent(true);
+        overlay.setManaged(false);
         overlay.getStyleClass().add("pm-next-day-roll-column-overlay-frame");
         tableHost.getChildren().add(overlay);
 
@@ -435,31 +436,35 @@ final class Stage2NextDayRollDispatchDialogSupport {
         }
         table.widthProperty().addListener((o, a, b) -> reposition.run());
         table.heightProperty().addListener((o, a, b) -> reposition.run());
+        table.layoutXProperty().addListener((o, a, b) -> reposition.run());
+        table.layoutYProperty().addListener((o, a, b) -> reposition.run());
         table.skinProperty().addListener((o, a, b) -> Platform.runLater(reposition));
         return overlay;
     }
 
     private static void repositionRollColumnOverlay(
             TableView<?> table, TableColumn<?, ?> rollsColumn, Region overlay) {
-        if (table.getWidth() <= 0 || rollsColumn.getWidth() <= 0) {
+        if (table.getWidth() <= 0 || table.getSkin() == null) {
             overlay.setVisible(false);
             return;
         }
         double x = 0;
-        boolean found = false;
-        for (TableColumn<?, ?> c : table.getColumns()) {
+        double columnW = -1;
+        for (TableColumn<?, ?> c : table.getVisibleLeafColumns()) {
             if (c == rollsColumn) {
-                found = true;
+                columnW = c.getWidth();
                 break;
             }
             x += c.getWidth();
         }
-        if (!found) {
+        if (columnW <= 0) {
             overlay.setVisible(false);
             return;
         }
         overlay.setVisible(true);
-        overlay.resizeRelocate(x, 0, rollsColumn.getWidth(), table.getHeight());
+        overlay.setManaged(false);
+        overlay.resizeRelocate(
+                table.getLayoutX() + x, table.getLayoutY(), columnW, table.getHeight());
     }
 
     private static String formatM(double v) {
