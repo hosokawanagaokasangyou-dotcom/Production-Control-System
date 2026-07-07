@@ -268,7 +268,7 @@ public final class DispatchAladdinEntryWorkbookExporter {
             sh.setColumnWidth(c, 256 * fixedWidths[c]);
         }
         for (int i = 0; i < dates.size(); i++) {
-            sh.setColumnWidth(FIXED_COLUMN_COUNT + i, 256 * 13);
+            sh.setColumnWidth(FIXED_COLUMN_COUNT + i, 256 * 16);
         }
     }
 
