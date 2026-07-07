@@ -1011,6 +1011,17 @@ function Remove-DirRobust {
     return $true
 }
 
+# Copy version.txt content without inheriting the source LastWriteTime (Copy-Item preserves it).
+function Write-VersionTxtFromRepo {
+    param(
+        [Parameter(Mandatory = $true)][string] $SourcePath,
+        [Parameter(Mandatory = $true)][string] $DestPath
+    )
+    $utf8 = [System.Text.UTF8Encoding]::new($false)
+    $content = [System.IO.File]::ReadAllText($SourcePath, $utf8)
+    [System.IO.File]::WriteAllText($DestPath, $content, $utf8)
+}
+
 # Remove only prior jpackage app folder and bundle outputs (Cash_PMD is not removed here).
 $bundleOutInitial = Join-Path $ReleaseRoot $BundleInitialName
 $bundleOutUpgrade = Join-Path $ReleaseRoot $BundleUpgradeName
@@ -1284,7 +1295,7 @@ Write-Host "First-launch marker (Initial only): $firstLaunchMarker" -ForegroundC
 foreach ($bd in @($bundleOutInitial, $bundleOutUpgrade)) {
     if (Test-Path -LiteralPath $VersionTxtPath) {
         $bundleVer = Join-Path $bd 'version.txt'
-        Copy-Item -LiteralPath $VersionTxtPath -Destination $bundleVer -Force
+        Write-VersionTxtFromRepo -SourcePath $VersionTxtPath -DestPath $bundleVer
         Write-Host "Bundle version.txt (portable sync baseline): $bundleVer" -ForegroundColor DarkGray
     }
 }
@@ -1302,8 +1313,9 @@ foreach ($p in @($releaseVersionTxt, $zipInitial, $zipUpgrade)) {
 }
 
 if (Test-Path -LiteralPath $VersionTxtPath) {
-    Copy-Item -LiteralPath $VersionTxtPath -Destination $releaseVersionTxt -Force
-    Write-Host "Generated: $releaseVersionTxt" -ForegroundColor DarkGray
+    Write-VersionTxtFromRepo -SourcePath $VersionTxtPath -DestPath $releaseVersionTxt
+    $verLineForLog = (Get-Content -LiteralPath $releaseVersionTxt -Raw -Encoding UTF8).Trim()
+    Write-Host "Generated: $releaseVersionTxt (version $verLineForLog from repo root; bumps on git commit only)" -ForegroundColor DarkGray
 }
 else {
     Write-Warning "Repo version.txt missing; skipped copy to $ReleaseRoot"
