@@ -88,6 +88,20 @@ class DispatchAladdinEntrySheetBuilderTest {
     }
 
     @Test
+    void quantityCheckOkWhenDispatchTotalPlusCompletedMatchesConversionQty() {
+        List<Map<String, String>> rows = new ArrayList<>();
+        Map<String, String> r = row("W7-3", "EC", "M1", "2026-07-08", "1500");
+        r.put("換算数量", "6000");
+        r.put("実加工数", "4500");
+        rows.add(r);
+
+        DispatchAladdinEntrySheetBuilder.EntryRow out = buildSingleRow(rows);
+
+        assertTrue(out.quantityOk());
+        assertEquals("OK", out.quantityCheckText());
+    }
+
+    @Test
     void quantityCheckNgShowsSignedDifference() {
         List<Map<String, String>> rows = new ArrayList<>();
         Map<String, String> r = row("W1", "巻返し", "M1", "2026-07-08", "100");

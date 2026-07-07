@@ -75,16 +75,17 @@ public final class DispatchAladdinEntrySheetBuilder {
             Map<LocalDate, EntryCell> cells,
             LocalDate earliestDispatchDate) {
 
+        /** 配台合計 + 加工完了数量 が 換算数量 と一致（誤差 {@link #QTY_MATCH_EPS} 未満）なら OK。 */
         public boolean quantityOk() {
-            return Math.abs(dispatchTotal - conversionQty) < QTY_MATCH_EPS;
+            return Math.abs(dispatchTotal + completedQty - conversionQty) < QTY_MATCH_EPS;
         }
 
-        /** 数量チェックセル文字列（{@code OK} / {@code NG (差 -200)}）。 */
+        /** 数量チェックセル文字列（{@code OK} / {@code NG (差 -200)}）。差 = 配台合計+加工完了−換算数量。 */
         public String quantityCheckText() {
             if (quantityOk()) {
                 return "OK";
             }
-            double diff = dispatchTotal - conversionQty;
+            double diff = dispatchTotal + completedQty - conversionQty;
             String signed =
                     (diff > 0 ? "+" : "") + ResultDispatchNormalizer.formatQty(diff);
             return "NG (差 " + signed + ")";
