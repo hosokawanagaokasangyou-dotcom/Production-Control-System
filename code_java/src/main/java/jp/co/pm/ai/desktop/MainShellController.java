@@ -4545,15 +4545,35 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                                 }
                                 Runnable afterDispatchReload =
                                         () -> {
-                                            MacroCompleteChime.playIfAvailable(collectUiEnv());
-                                            selectMainShellTab(MainShellTabId.DISPATCH_INTERACTIVE);
+                                            selectMainShellTab(
+                                                    MainShellTabId.DELIVERY_CALENDAR_VIEW);
+                                            Runnable afterDeliveryCalendarReload =
+                                                    () -> {
+                                                        MacroCompleteChime.playIfAvailable(
+                                                                collectUiEnv());
+                                                        showStageCompletionDialogAndWait(
+                                                                "段階2 完了",
+                                                                "段階2 の処理が正常終了しました。",
+                                                                () -> {
+                                                                    selectMainShellTab(
+                                                                            MainShellTabId
+                                                                                    .DELIVERY_CALENDAR_VIEW);
+                                                                    if (deliveryCalendarViewTabController
+                                                                            != null) {
+                                                                        deliveryCalendarViewTabController
+                                                                                .selectDispatchResultInnerTab(
+                                                                                        true);
+                                                                    }
+                                                                });
+                                                        showRawInputMorningDispatchRateWarningAfterStage2();
+                                                    };
                                             if (deliveryCalendarViewTabController != null) {
                                                 deliveryCalendarViewTabController
-                                                        .reloadInBackgroundAfterStage2Success();
+                                                        .reloadInBackgroundAfterStage2Success(
+                                                                afterDeliveryCalendarReload);
+                                            } else {
+                                                afterDeliveryCalendarReload.run();
                                             }
-                                            showStageCompletionDialog(
-                                                    "段階2 完了", "段階2 の処理が正常終了しました。");
-                                            showRawInputMorningDispatchRateWarningAfterStage2();
                                         };
                                 if (dispatchInteractiveTabController != null) {
                                     dispatchInteractiveTabController.reloadTableFromDiskAfterStage2Success(
@@ -4984,6 +5004,23 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         alert.setHeaderText(null);
         alert.setContentText(contentText);
         alert.show();
+    }
+
+    /**
+     * 段階2 完了など: 納期管理ビュー更新後に OK 待ちし、閉じたあと {@code afterOk} を実行する。
+     */
+    private void showStageCompletionDialogAndWait(
+            String title, String contentText, Runnable afterOk) {
+        Alert alert = new Alert(AlertType.INFORMATION);
+        initDialogOwnerIfSceneReady(alert);
+        applyAlertStylesheetsFromOwner(alert);
+        alert.setTitle(title);
+        alert.setHeaderText(null);
+        alert.setContentText(contentText);
+        alert.showAndWait();
+        if (afterOk != null) {
+            afterOk.run();
+        }
     }
 
     /** 配台試行（段階3）正常終了後: 完了音・配台タブへ切替・完了ダイアログ（段階2と同趣旨）。 */
@@ -6982,6 +7019,13 @@ public PlanInputTabController planInputTabControllerForDispatchRollUnit() {
                     this::exportSummaryAiDispatchWorkbookAfterStage3DispatchReload);
         } else {
             exportSummaryAiDispatchWorkbookAfterStage3DispatchReload();
+        }
+    }
+
+    /** 納期管理ビュー内アラジン加工計画タブをソースから再読込する。JavaFX スレッドから呼ぶこと。 */
+    void refreshAladdinProcessingPlanTabFromDisk() {
+        if (deliveryCalendarViewTabController != null) {
+            deliveryCalendarViewTabController.refreshAladdinProcessingPlanTabFromDisk();
         }
     }
 

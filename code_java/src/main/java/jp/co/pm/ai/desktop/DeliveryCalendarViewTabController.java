@@ -82,6 +82,9 @@ import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
  */
 public final class DeliveryCalendarViewTabController {
 
+    /** 内側 {@link TabPane} の「配台結果」タブ index（FXML / {@link MainShellInnerTabCatalog} と一致）。 */
+    public static final int INNER_TAB_INDEX_DISPATCH_RESULT = 1;
+
     private static final ObjectMapper JSON = new ObjectMapper();
 
     /** 「本日」および日付列ウィンドウの基準（日本の業務日）。 */
@@ -134,6 +137,9 @@ public final class DeliveryCalendarViewTabController {
      * {@link #runDeliveryCalendarDataReload} の第2引数が true のときのみ、完了・警告・一部エラーをダイアログ表示する。
      */
     private boolean pendingUserDeliveryRefreshCompletionDialog;
+
+    /** 段階2 正常完了後のパイプライン再読込が成功したあと FX スレッドで実行する（例: 段階2 完了ダイアログ）。 */
+    private Runnable pendingAfterPipelineReloadSuccess;
 
     /** 段階3試行済みのとき比較表の (段階3前) 行を非表示にする。 */
     private boolean compareHideStage3PlanLine;
@@ -586,6 +592,9 @@ public final class DeliveryCalendarViewTabController {
                                 return;
                             }
                             shell.persistDesktopSessionNow();
+                            if (b != null && b.intValue() == INNER_TAB_INDEX_DISPATCH_RESULT) {
+                                scheduleDispatchResultTabPresentation(false);
+                            }
                         });
     }
 
@@ -611,6 +620,32 @@ public final class DeliveryCalendarViewTabController {
         } finally {
             suppressInnerTabSessionPersistence.set(false);
         }
+    }
+
+    /** メインシェル「納期管理ビュー」内の「配台結果」子タブを選択する。 */
+    public void selectDispatchResultInnerTab() {
+        selectDispatchResultInnerTab(false);
+    }
+
+    /**
+     * @param promptExcelExportAttention 段階2 完了直後など Excel 出力ボタンのグロー誘導を付ける
+     */
+    public void selectDispatchResultInnerTab(boolean promptExcelExportAttention) {
+        applyInnerTabSelectedIndex(INNER_TAB_INDEX_DISPATCH_RESULT);
+        scheduleDispatchResultTabPresentation(promptExcelExportAttention);
+    }
+
+    private void scheduleDispatchResultTabPresentation(boolean promptExcelExportAttention) {
+        Platform.runLater(
+                () ->
+                        Platform.runLater(
+                                () -> {
+                                    if (deliveryCalendarResultDispatchTableTabController != null) {
+                                        deliveryCalendarResultDispatchTableTabController
+                                                .onEmbeddedDispatchResultTabShown(
+                                                        promptExcelExportAttention);
+                                    }
+                                }));
     }
 
     /**
@@ -948,12 +983,36 @@ public final class DeliveryCalendarViewTabController {
     }
 
     /**
-     * 段階2 正常完了後、または配台計画修正タブの配台試行（段階3インタラクティブ）正常終了後に、手動の「再読み込み」と
-     * 同じデータ取得を開始する。他メインタブの無効化・進行パネル・完了時の情報ダイアログは出さない（JavaFX
-     * スレッドから呼ぶこと）。
+     * 段階2 正常完了後: 手動「再読み込み」と同様の進行 UI で納期管理ビューを更新する（JavaFX スレッドから呼ぶこと）。
      */
     public void reloadInBackgroundAfterStage2Success() {
-        runDeliveryCalendarDataReload(false, false, true);
+        reloadInBackgroundAfterStage2Success(null);
+    }
+
+    /**
+     * 段階2 正常完了後: 納期管理ビュー再読込（進行 UI 表示）。完了後 {@code afterSuccessOnFxThread} を FX スレッドで実行する。
+     */
+    public void reloadInBackgroundAfterStage2Success(Runnable afterSuccessOnFxThread) {
+        pendingAfterPipelineReloadSuccess = afterSuccessOnFxThread;
+        runDeliveryCalendarDataReload(true, false, true);
+    }
+
+    private void completePendingPipelineReloadSuccess() {
+        Runnable after = pendingAfterPipelineReloadSuccess;
+        pendingAfterPipelineReloadSuccess = null;
+        if (after != null) {
+            after.run();
+        }
+    }
+
+    private void failPendingPipelineReload(String message) {
+        boolean hadPending = pendingAfterPipelineReloadSuccess != null;
+        pendingAfterPipelineReloadSuccess = null;
+        if (hadPending && shell != null) {
+            shell.showErrorDialog(
+                    "段階2 完了後の納期管理更新",
+                    message != null && !message.isBlank() ? message : "納期管理ビューの更新に失敗しました。");
+        }
     }
 
     /**
@@ -1062,6 +1121,11 @@ public final class DeliveryCalendarViewTabController {
                                                                 err.getMessage() != null
                                                                         ? err.getMessage()
                                                                         : err.toString());
+                                                    } else {
+                                                        failPendingPipelineReload(
+                                                                err.getMessage() != null
+                                                                        ? err.getMessage()
+                                                                        : err.toString());
                                                     }
                                                 }
                                                 return;
@@ -1078,6 +1142,9 @@ public final class DeliveryCalendarViewTabController {
                                                         pendingUserDeliveryRefreshCompletionDialog = false;
                                                         shell.showWarningDialog(
                                                                 "再読み込み", "結果を取得できませんでした（no result）。");
+                                                    } else {
+                                                        failPendingPipelineReload(
+                                                                "結果を取得できませんでした（no result）。");
                                                     }
                                                 }
                                                 return;
@@ -1223,6 +1290,8 @@ public final class DeliveryCalendarViewTabController {
                 if (pendingUserDeliveryRefreshCompletionDialog) {
                     pendingUserDeliveryRefreshCompletionDialog = false;
                     shell.showWarningDialog("再読み込み", "子プロセスの出力が空です（exit=" + exitCode + "）。");
+                } else {
+                    failPendingPipelineReload("子プロセスの出力が空です（exit=" + exitCode + "）。");
                 }
             }
             return;
@@ -1340,6 +1409,12 @@ public final class DeliveryCalendarViewTabController {
                                 ? "ペイロードの ok が false です（exit=" + exitCode + "）。"
                                 : err0;
                 shell.showWarningDialog("再読み込み", "取得結果に問題があります。メイン表のみ反映しました。\n" + detail);
+            } else if (pendingAfterPipelineReloadSuccess != null) {
+                String detail =
+                        err0.isEmpty()
+                                ? "ペイロードの ok が false です（exit=" + exitCode + "）。"
+                                : err0;
+                failPendingPipelineReload("取得結果に問題があります。メイン表のみ反映しました。\n" + detail);
             }
 
         } catch (Exception e) {
@@ -1350,6 +1425,10 @@ public final class DeliveryCalendarViewTabController {
                     pendingUserDeliveryRefreshCompletionDialog = false;
                     shell.showErrorDialog(
                             "再読み込みエラー",
+                            "ペイロードの解析に失敗しました。\n"
+                                    + (e.getMessage() != null ? e.getMessage() : e.toString()));
+                } else {
+                    failPendingPipelineReload(
                             "ペイロードの解析に失敗しました。\n"
                                     + (e.getMessage() != null ? e.getMessage() : e.toString()));
                 }
@@ -1376,6 +1455,10 @@ public final class DeliveryCalendarViewTabController {
                     pendingUserDeliveryRefreshCompletionDialog = false;
                     shell.showErrorDialog(
                             "再読み込みエラー",
+                            "アラジン加工計画タブへの反映中に失敗しました。\n"
+                                    + (t.getMessage() != null ? t.getMessage() : t.toString()));
+                } else {
+                    failPendingPipelineReload(
                             "アラジン加工計画タブへの反映中に失敗しました。\n"
                                     + (t.getMessage() != null ? t.getMessage() : t.toString()));
                 }
@@ -1417,6 +1500,10 @@ public final class DeliveryCalendarViewTabController {
                             "再読み込みエラー",
                             "加工実績タブへの反映中に失敗しました。\n"
                                     + (t.getMessage() != null ? t.getMessage() : t.toString()));
+                } else {
+                    failPendingPipelineReload(
+                            "加工実績タブへの反映中に失敗しました。\n"
+                                    + (t.getMessage() != null ? t.getMessage() : t.toString()));
                 }
             }
             statusLabel.setText("error: " + t.getMessage());
@@ -1452,6 +1539,10 @@ public final class DeliveryCalendarViewTabController {
                                             "再読み込みエラー",
                                             "メイン表の反映中に失敗しました。\n"
                                                     + (t.getMessage() != null ? t.getMessage() : t.toString()));
+                                } else {
+                                    failPendingPipelineReload(
+                                            "メイン表の反映中に失敗しました。\n"
+                                                    + (t.getMessage() != null ? t.getMessage() : t.toString()));
                                 }
                             }
                             statusLabel.setText("error: " + t.getMessage());
@@ -1465,6 +1556,8 @@ public final class DeliveryCalendarViewTabController {
                                                                 shell.snapshotUiEnv())
                                                         .getFileName()
                                                 + " の出力はバックグラウンドで行います。");
+                            } else {
+                                completePendingPipelineReloadSuccess();
                             }
                             scheduleHideDeliveryReloadProgress();
                         }
@@ -1476,6 +1569,10 @@ public final class DeliveryCalendarViewTabController {
                     pendingUserDeliveryRefreshCompletionDialog = false;
                     shell.showErrorDialog(
                             "再読み込みエラー",
+                            "配台結果タブへの反映中に失敗しました。\n"
+                                    + (t.getMessage() != null ? t.getMessage() : t.toString()));
+                } else {
+                    failPendingPipelineReload(
                             "配台結果タブへの反映中に失敗しました。\n"
                                     + (t.getMessage() != null ? t.getMessage() : t.toString()));
                 }
@@ -1527,6 +1624,13 @@ public final class DeliveryCalendarViewTabController {
 
     private PlanInputTabularIo.TabularSheet snapshotAladdinTabularForExport(Map<String, String> ui) {
         return tabularSheetFromShapedAladdinPlan(snapshotShapedAladdinPlanTable(ui, false));
+    }
+
+    /** アラジン加工計画タブの表をソースから再読込する（キャッシュ利用可）。JavaFX スレッドから呼ぶこと。 */
+    public void refreshAladdinProcessingPlanTabFromDisk() {
+        if (aladdinProcessingPlanDataTabController != null) {
+            aladdinProcessingPlanDataTabController.reloadAladdinProcessingPlanFromDisk();
+        }
     }
 
     /**

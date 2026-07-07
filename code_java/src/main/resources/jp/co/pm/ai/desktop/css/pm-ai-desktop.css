@@ -298,6 +298,47 @@
     -fx-border-color: rgba(255, 255, 255, 0.72);
 }
 
+/* 配台結果タブ: アラジン入力用 Excel 出力ボタン（段階2 後の誘導グロー） */
+.button.pm-aladdin-entry-export-button {
+    -fx-font-weight: bold;
+}
+
+.button.pm-aladdin-entry-export-attention {
+    -fx-background-color: rgba(14, 165, 233, 0.28);
+    -fx-border-color: #38bdf8;
+    -fx-border-width: 2;
+    -fx-border-radius: 6;
+    -fx-background-radius: 6;
+    -fx-text-fill: #e0f2fe;
+}
+
+.button.pm-aladdin-entry-open-button {
+    -fx-font-weight: bold;
+}
+
+/* 段階2 翌日ロール入力ダイアログ — 「翌日(ロール)」列の確認枠 */
+.table-view.pm-next-day-roll-dialog-table .table-column.pm-next-day-roll-input-column .label {
+    -fx-text-fill: #38bdf8;
+    -fx-font-weight: bold;
+}
+
+.table-view.pm-next-day-roll-dialog-table .table-cell.pm-next-day-roll-input-cell {
+    -fx-background-color: rgba(56, 189, 248, 0.08);
+}
+
+.table-view.pm-next-day-roll-dialog-table .table-cell.pm-next-day-roll-input-cell:selected {
+    -fx-background-color: rgba(56, 189, 248, 0.22);
+}
+
+.pm-next-day-roll-column-overlay-frame {
+    -fx-background-color: transparent;
+    -fx-border-color: #38bdf8;
+    -fx-border-width: 2;
+    -fx-border-radius: 4;
+    -fx-background-radius: 4;
+    -fx-effect: dropshadow(gaussian, rgba(56, 189, 248, 0.45), 12, 0.35, 0, 0);
+}
+
 .button.pm-stage-run-button.pm-button-press-flash {
     -fx-translate-y: 3;
     -fx-scale-x: 0.97;

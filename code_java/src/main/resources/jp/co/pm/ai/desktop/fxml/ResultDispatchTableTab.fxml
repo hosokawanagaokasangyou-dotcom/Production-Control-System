@@ -19,7 +19,7 @@
         <Insets bottom="12.0" left="12.0" right="12.0" top="12.0"/>
     </padding>
     <!-- 2 TitledPane（同時展開可）。納期管理ビューに埋め込んだときは再読みボタンを非表示にし親の再読込に一本化 -->
-    <TitledPane animated="true" expanded="true"
+    <TitledPane fx:id="operationsSourceTitledPane" animated="true" expanded="true"
                 text="&#x64cd;&#x4f5c;&#x30fb;&#x30bd;&#x30fc;&#x30b9;">
         <content>
             <VBox fillWidth="true" spacing="8.0">
@@ -34,11 +34,20 @@
                     <Button mnemonicParsing="false" text="列フィルタ・並べ替え解除"
                             onAction="#onClearColumnFiltersAction"/>
                     <Button fx:id="aladdinEntryExportButton" mnemonicParsing="false"
+                            styleClass="pm-aladdin-entry-export-button"
                             text="アラジン入力用Excel出力"
                             onAction="#onExportAladdinEntryWorkbookAction"/>
-                    <Button mnemonicParsing="false" text="最新を開く"
+                    <Button fx:id="aladdinEntryReloadExportButton" mnemonicParsing="false"
+                            styleClass="pm-aladdin-entry-export-button"
+                            text="アラジン加工計画読込→Excel出力"
+                            onAction="#onReloadAladdinPlanAndExportEntryWorkbookAction"/>
+                    <Button fx:id="aladdinEntryOpenLatestButton" mnemonicParsing="false"
+                            styleClass="pm-aladdin-entry-open-button"
+                            text="最新を開く"
                             onAction="#onOpenLatestAladdinEntryWorkbookAction"/>
-                    <Button mnemonicParsing="false" text="世代を開く…"
+                    <Button fx:id="aladdinEntryOpenGenerationsButton" mnemonicParsing="false"
+                            styleClass="pm-aladdin-entry-open-button"
+                            text="世代を開く…"
                             onAction="#onOpenAladdinEntryGenerationsAction"/>
                     <ProgressBar fx:id="aladdinEntryExportProgress" prefWidth="140.0"
                                  visible="false" managed="false"/>

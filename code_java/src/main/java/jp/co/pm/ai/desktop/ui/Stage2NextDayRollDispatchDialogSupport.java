@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.function.Function;
 
+import javafx.application.Platform;
 import javafx.beans.property.StringProperty;
 import javafx.collections.FXCollections;
 import javafx.geometry.Insets;
@@ -12,6 +13,7 @@ import javafx.scene.Parent;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.Dialog;
 import javafx.scene.control.Label;
+import javafx.scene.control.TableCell;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TablePosition;
 import javafx.scene.control.TableRow;
@@ -19,9 +21,12 @@ import javafx.scene.control.TableView;
 import javafx.scene.control.TextField;
 import javafx.scene.control.cell.TextFieldTableCell;
 import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
+import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.stage.Modality;
 import javafx.stage.Window;
+import javafx.util.Callback;
 
 import jp.co.pm.ai.desktop.dispatch.DispatchInteractiveRollUnitSupport;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchNormalizer;
@@ -233,8 +238,16 @@ final class Stage2NextDayRollDispatchDialogSupport {
         cUnit.setPrefWidth(64);
 
         TableColumn<RowModel, String> cRolls = new TableColumn<>(theme.rollsColumnLabel());
+        cRolls.getStyleClass().add("pm-next-day-roll-input-column");
         cRolls.setCellValueFactory(cd -> cd.getValue().rollCountProperty());
-        cRolls.setCellFactory(TextFieldTableCell.forTableColumn());
+        Callback<TableColumn<RowModel, String>, TableCell<RowModel, String>> rollCellFactory =
+                TextFieldTableCell.forTableColumn();
+        cRolls.setCellFactory(
+                col -> {
+                    TableCell<RowModel, String> cell = rollCellFactory.call(col);
+                    cell.getStyleClass().add("pm-next-day-roll-input-cell");
+                    return cell;
+                });
         cRolls.setOnEditCommit(
                 ev -> {
                     if (ev.getNewValue() != null) {
@@ -279,6 +292,7 @@ final class Stage2NextDayRollDispatchDialogSupport {
         cols.add(cRolls);
         cols.add(cMeters);
         table.getColumns().setAll(cols);
+        table.getStyleClass().add("pm-next-day-roll-dialog-table");
         int prefW = 640;
         if (theme.showAladdinTodayPlanColumn()) {
             prefW = 720;
@@ -289,14 +303,19 @@ final class Stage2NextDayRollDispatchDialogSupport {
         dialog.getDialogPane().setPrefWidth(prefW);
         table.getItems().forEach(r -> r.rollCountProperty().addListener((o, a, b) -> table.refresh()));
 
-        VBox content = new VBox(10, hint, table);
-        VBox.setVgrow(table, Priority.ALWAYS);
+        StackPane tableHost = new StackPane(table);
+        Region rollColumnOverlay = installRollColumnOverlay(table, cRolls, tableHost);
+
+        VBox content = new VBox(10, hint, tableHost);
+        VBox.setVgrow(tableHost, Priority.ALWAYS);
         content.setPadding(new Insets(4, 0, 0, 0));
         dialog.getDialogPane().setContent(content);
         if (theme.dialogPaneStyle() != null && !theme.dialogPaneStyle().isBlank()) {
             dialog.getDialogPane().setStyle(theme.dialogPaneStyle());
         }
         dialog.getDialogPane().getButtonTypes().setAll(ButtonType.OK, ButtonType.CANCEL);
+        dialog.setOnShown(
+                ev -> Platform.runLater(() -> repositionRollColumnOverlay(table, cRolls, rollColumnOverlay)));
         dialog.getDialogPane()
                 .lookupButton(ButtonType.OK)
                 .addEventFilter(
@@ -397,6 +416,50 @@ final class Stage2NextDayRollDispatchDialogSupport {
         err.setContentText(content);
         err.getDialogPane().getButtonTypes().setAll(ButtonType.OK);
         err.showAndWait();
+    }
+
+    /** 「翌日(ロール)」列に確認用の枠オーバーレイを載せ、列幅・テーブルサイズに追従させる。 */
+    private static Region installRollColumnOverlay(
+            TableView<RowModel> table,
+            TableColumn<RowModel, String> rollsColumn,
+            StackPane tableHost) {
+        Region overlay = new Region();
+        overlay.setMouseTransparent(true);
+        overlay.getStyleClass().add("pm-next-day-roll-column-overlay-frame");
+        tableHost.getChildren().add(overlay);
+
+        Runnable reposition = () -> repositionRollColumnOverlay(table, rollsColumn, overlay);
+        rollsColumn.widthProperty().addListener((o, a, b) -> reposition.run());
+        for (TableColumn<RowModel, ?> c : table.getColumns()) {
+            c.widthProperty().addListener((o, a, b) -> reposition.run());
+        }
+        table.widthProperty().addListener((o, a, b) -> reposition.run());
+        table.heightProperty().addListener((o, a, b) -> reposition.run());
+        table.skinProperty().addListener((o, a, b) -> Platform.runLater(reposition));
+        return overlay;
+    }
+
+    private static void repositionRollColumnOverlay(
+            TableView<?> table, TableColumn<?, ?> rollsColumn, Region overlay) {
+        if (table.getWidth() <= 0 || rollsColumn.getWidth() <= 0) {
+            overlay.setVisible(false);
+            return;
+        }
+        double x = 0;
+        boolean found = false;
+        for (TableColumn<?, ?> c : table.getColumns()) {
+            if (c == rollsColumn) {
+                found = true;
+                break;
+            }
+            x += c.getWidth();
+        }
+        if (!found) {
+            overlay.setVisible(false);
+            return;
+        }
+        overlay.setVisible(true);
+        overlay.resizeRelocate(x, 0, rollsColumn.getWidth(), table.getHeight());
     }
 
     private static String formatM(double v) {
