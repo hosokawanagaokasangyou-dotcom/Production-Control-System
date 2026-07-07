@@ -24,6 +24,8 @@ import javafx.fxml.FXML;
 import javafx.geometry.Pos;
 import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
+import javafx.scene.control.RadioButton;
+import javafx.scene.control.ToggleGroup;
 import javafx.scene.control.Label;
 import javafx.scene.control.SelectionMode;
 import javafx.scene.control.TablePosition;
@@ -68,7 +70,11 @@ import jp.co.pm.ai.planning.stage2.Stage2InProgressNextDayDispatchIo;
 import jp.co.pm.ai.planning.stage2.core.Stage2PlanRowDispatchQtyMetrics;
 import jp.co.pm.ai.planning.stage2.core.Stage2PlanRowDispatchQtyMetricsResult;
 import jp.co.pm.ai.planning.stage2.core.Stage2RollUnitLengthTables;
+import jp.co.pm.ai.desktop.dispatch.AladdinShapedPlanQtyLookup;
+import jp.co.pm.ai.desktop.ui.Stage2AladdinTodayExcludeNextDayDispatchDialog;
 import jp.co.pm.ai.desktop.ui.Stage2InProgressNextDayDispatchDialog;
+import jp.co.pm.ai.planning.stage2.Stage2NextDayDialogMode;
+import jp.co.pm.ai.planning.stage2.Stage2PlanRunDateResolver;
 
 /**
  * 配台計画_タスク入力タブ。レイアウトは {@code PlanInputTab.fxml}。
@@ -139,7 +145,14 @@ public final class PlanInputTabController {
     private CheckBox stage2SkipTodayDispatchCheckBox;
 
     @FXML
-    private CheckBox stage2InProgressNextDayPromptCheckBox;
+    private CheckBox stage2SkipGeminiApiCheckBox;
+
+    @FXML private RadioButton stage2NextDayDialogInProgressRadio;
+    @FXML private RadioButton stage2NextDayDialogAladdinExcludeRadio;
+    @FXML private RadioButton stage2NextDayDialogBothRadio;
+    @FXML private RadioButton stage2NextDayDialogNoneRadio;
+
+    private ToggleGroup stage2NextDayDialogModeGroup;
 
     @FXML
     private CheckBox comboSheetMayExceedNeedCheckBox;
@@ -222,9 +235,8 @@ public final class PlanInputTabController {
                                 }
                             });
         }
-        if (stage2InProgressNextDayPromptCheckBox != null) {
-            stage2InProgressNextDayPromptCheckBox.setSelected(true);
-            stage2InProgressNextDayPromptCheckBox
+        if (stage2SkipGeminiApiCheckBox != null) {
+            stage2SkipGeminiApiCheckBox
                     .selectedProperty()
                     .addListener(
                             (o, a, b) -> {
@@ -232,6 +244,14 @@ public final class PlanInputTabController {
                                     shell.scheduleDesktopSessionSave();
                                 }
                             });
+        }
+        stage2NextDayDialogModeGroup = new ToggleGroup();
+        wireStage2NextDayDialogModeRadio(stage2NextDayDialogInProgressRadio);
+        wireStage2NextDayDialogModeRadio(stage2NextDayDialogAladdinExcludeRadio);
+        wireStage2NextDayDialogModeRadio(stage2NextDayDialogBothRadio);
+        wireStage2NextDayDialogModeRadio(stage2NextDayDialogNoneRadio);
+        if (stage2NextDayDialogAladdinExcludeRadio != null) {
+            stage2NextDayDialogAladdinExcludeRadio.setSelected(true);
         }
         if (comboSheetMayExceedNeedCheckBox != null) {
             comboSheetMayExceedNeedCheckBox.setSelected(true);
@@ -496,14 +516,56 @@ public final class PlanInputTabController {
         }
     }
 
-    boolean snapshotStage2InProgressNextDayPrompt() {
-        return stage2InProgressNextDayPromptCheckBox == null
-                || stage2InProgressNextDayPromptCheckBox.isSelected();
+    /** 段階2/2.1 子プロセスへ渡す {@code PM_AI_SKIP_GEMINI_API}（チェックは本タブ）。 */
+    boolean snapshotStage2SkipGeminiApi() {
+        return stage2SkipGeminiApiCheckBox != null && stage2SkipGeminiApiCheckBox.isSelected();
     }
 
-    void applyStage2InProgressNextDayPromptFromSession(boolean prompt) {
-        if (stage2InProgressNextDayPromptCheckBox != null) {
-            stage2InProgressNextDayPromptCheckBox.setSelected(prompt);
+    void applyStage2SkipGeminiApiFromSession(boolean skip) {
+        if (stage2SkipGeminiApiCheckBox != null) {
+            stage2SkipGeminiApiCheckBox.setSelected(skip);
+        }
+    }
+
+    private void wireStage2NextDayDialogModeRadio(RadioButton radio) {
+        if (radio == null) {
+            return;
+        }
+        radio.setToggleGroup(stage2NextDayDialogModeGroup);
+        radio.selectedProperty()
+                .addListener(
+                        (o, a, b) -> {
+                            if (Boolean.TRUE.equals(b) && shell != null) {
+                                shell.scheduleDesktopSessionSave();
+                            }
+                        });
+    }
+
+    Stage2NextDayDialogMode snapshotStage2NextDayDialogMode() {
+        if (stage2NextDayDialogInProgressRadio != null
+                && stage2NextDayDialogInProgressRadio.isSelected()) {
+            return Stage2NextDayDialogMode.IN_PROGRESS;
+        }
+        if (stage2NextDayDialogBothRadio != null && stage2NextDayDialogBothRadio.isSelected()) {
+            return Stage2NextDayDialogMode.BOTH;
+        }
+        if (stage2NextDayDialogNoneRadio != null && stage2NextDayDialogNoneRadio.isSelected()) {
+            return Stage2NextDayDialogMode.NONE;
+        }
+        return Stage2NextDayDialogMode.ALADDIN_TODAY_EXCLUDE;
+    }
+
+    void applyStage2NextDayDialogModeFromSession(String modeName) {
+        Stage2NextDayDialogMode mode = Stage2NextDayDialogMode.parse(modeName);
+        RadioButton target =
+                switch (mode) {
+                    case IN_PROGRESS -> stage2NextDayDialogInProgressRadio;
+                    case BOTH -> stage2NextDayDialogBothRadio;
+                    case NONE -> stage2NextDayDialogNoneRadio;
+                    case ALADDIN_TODAY_EXCLUDE -> stage2NextDayDialogAladdinExcludeRadio;
+                };
+        if (target != null) {
+            target.setSelected(true);
         }
     }
 
@@ -521,7 +583,8 @@ public final class PlanInputTabController {
     /**
      * 段階2直前ダイアログ用: 実加工数が正の行（加工途中相当）。配台計画除外・完了キーワード行は除く。
      */
-    List<Stage2InProgressNextDayDispatchDialog.Row> collectInProgressRowsForNextDayDialog() {
+    List<Stage2InProgressNextDayDispatchDialog.Row> collectInProgressRowsForNextDayDialog(
+            Map<String, String> ui) {
         Map<String, String> rowMap = new java.util.LinkedHashMap<>();
         int colTask = headersRef.indexOf("依頼NO");
         int colProcess = headersRef.indexOf("工程名");
@@ -538,6 +601,8 @@ public final class PlanInputTabController {
         if (tables == null) {
             tables = Stage2RollUnitLengthTables.empty();
         }
+        Map<String, String> env = ui != null ? ui : (shell != null ? shell.snapshotUiEnv() : Map.of());
+        Optional<AladdinTodayPlanLookup> aladdinLookup = resolveAladdinTodayPlanLookup(env);
         List<Stage2InProgressNextDayDispatchDialog.Row> out = new ArrayList<>();
         for (ObservableList<String> cells : rows) {
             rowMap.clear();
@@ -560,6 +625,119 @@ public final class PlanInputTabController {
             if (taskId.isBlank()) {
                 continue;
             }
+            double aladdinToday =
+                    aladdinLookup
+                            .map(
+                                    lk ->
+                                            AladdinShapedPlanQtyLookup.lookup(
+                                                    lk.lookup(),
+                                                    machine,
+                                                    taskId,
+                                                    lk.planDateKey(),
+                                                    process))
+                            .orElse(0.0);
+            var metrics = Stage2PlanRowDispatchQtyMetrics.compute(rowMap, tables);
+            double remaining = metrics.map(Stage2PlanRowDispatchQtyMetricsResult::remainingM).orElse(0.0);
+            double convertedQty =
+                    Stage2RollUnitLengthTables.parseFloatSafe(
+                            rowMap.getOrDefault("換算数量", ""), 0.0);
+            double dispatchQty =
+                    metrics.map(Stage2PlanRowDispatchQtyMetricsResult::qtyTotalForDispatchM)
+                            .orElse(convertedQty);
+            Stage2PlanRowDispatchQtyMetrics.DispatchSimulatorUnitM unitInfo =
+                    Stage2PlanRowDispatchQtyMetrics.dispatchSimulatorUnitMFromPlanRow(
+                            rowMap, tables);
+            out.add(
+                    new Stage2InProgressNextDayDispatchDialog.Row(
+                            taskId,
+                            process,
+                            machine,
+                            actual,
+                            convertedQty,
+                            dispatchQty,
+                            aladdinToday,
+                            remaining,
+                            unitInfo));
+        }
+        return out;
+    }
+
+    private record AladdinTodayPlanLookup(
+            Map<String, Map<String, Map<String, Map<String, Double>>>> lookup, String planDateKey) {}
+
+    private Optional<AladdinTodayPlanLookup> resolveAladdinTodayPlanLookup(Map<String, String> env) {
+        AladdinShapedPlanQtyLookup.ShapedTable shaped =
+                shell != null
+                        ? shell.snapshotShapedAladdinPlanTable(env)
+                        : AladdinShapedPlanQtyLookup.loadShapedTable(
+                                AppPaths.resolveShapedAladdinPlanJsonPath(env));
+        if (shaped.headers().isEmpty()) {
+            return Optional.empty();
+        }
+        var lookup = AladdinShapedPlanQtyLookup.buildLookup(shaped.headers(), shaped.rows());
+        if (lookup.isEmpty()) {
+            return Optional.empty();
+        }
+        return Optional.of(
+                new AladdinTodayPlanLookup(
+                        lookup, Stage2PlanRunDateResolver.planDateColumnKey(env)));
+    }
+
+    /**
+     * 段階2直前ダイアログ②用: アラジン当日配台あり・実加工数≦0（①対象外）。配台計画除外・完了キーワード行は除く。
+     */
+    List<Stage2AladdinTodayExcludeNextDayDispatchDialog.Row>
+            collectAladdinTodayExcludeRowsForNextDayDialog(Map<String, String> ui) {
+        Map<String, String> rowMap = new LinkedHashMap<>();
+        int colTask = headersRef.indexOf("依頼NO");
+        int colProcess = headersRef.indexOf("工程名");
+        int colMachine = headersRef.indexOf("機械名");
+        Stage2RollUnitLengthTables tables = cachedRollUnitHighlightTables.get();
+        if (tables == null && shell != null) {
+            try {
+                tables = Stage2RollUnitLengthTables.load(shell.snapshotUiEnv());
+                cachedRollUnitHighlightTables.set(tables);
+            } catch (Exception ignored) {
+                tables = Stage2RollUnitLengthTables.empty();
+            }
+        }
+        if (tables == null) {
+            tables = Stage2RollUnitLengthTables.empty();
+        }
+        Map<String, String> env = ui != null ? ui : (shell != null ? shell.snapshotUiEnv() : Map.of());
+        Optional<AladdinTodayPlanLookup> aladdinLookup = resolveAladdinTodayPlanLookup(env);
+        if (aladdinLookup.isEmpty()) {
+            return List.of();
+        }
+        String planDateKey = aladdinLookup.get().planDateKey();
+        var lookup = aladdinLookup.get().lookup();
+        List<Stage2AladdinTodayExcludeNextDayDispatchDialog.Row> out = new ArrayList<>();
+        for (ObservableList<String> cells : rows) {
+            rowMap.clear();
+            for (int c = 0; c < headersRef.size(); c++) {
+                String h = headersRef.get(c);
+                String v = c < cells.size() && cells.get(c) != null ? cells.get(c) : "";
+                rowMap.put(h, v);
+            }
+            if (isPlanRowExcludedFromStage2Queue(rowMap)) {
+                continue;
+            }
+            double actual =
+                    Stage2RollUnitLengthTables.parseFloatSafe(rowMap.getOrDefault("実加工数", ""), 0.0);
+            if (actual > 1e-12) {
+                continue;
+            }
+            String taskId = colTask >= 0 ? cellAt(cells, colTask) : rowMap.getOrDefault("依頼NO", "");
+            String process = colProcess >= 0 ? cellAt(cells, colProcess) : rowMap.getOrDefault("工程名", "");
+            String machine = colMachine >= 0 ? cellAt(cells, colMachine) : rowMap.getOrDefault("機械名", "");
+            if (taskId.isBlank() || machine.isBlank()) {
+                continue;
+            }
+            double aladdinToday =
+                    AladdinShapedPlanQtyLookup.lookup(lookup, machine, taskId, planDateKey, process);
+            if (aladdinToday <= 1e-12) {
+                continue;
+            }
             double remaining =
                     Stage2PlanRowDispatchQtyMetrics.compute(rowMap, tables)
                             .map(Stage2PlanRowDispatchQtyMetricsResult::remainingM)
@@ -568,8 +746,8 @@ public final class PlanInputTabController {
                     Stage2PlanRowDispatchQtyMetrics.dispatchSimulatorUnitMFromPlanRow(
                             rowMap, tables);
             out.add(
-                    new Stage2InProgressNextDayDispatchDialog.Row(
-                            taskId, process, machine, actual, remaining, unitInfo));
+                    new Stage2AladdinTodayExcludeNextDayDispatchDialog.Row(
+                            taskId, process, machine, aladdinToday, remaining, unitInfo));
         }
         return out;
     }

@@ -3536,307 +3536,8 @@ def record_gemini_response_usage(res, model_id: str) -> None:
         _append_gemini_cumulative_one_call(mid, pt, ct, th, tt)
     except Exception as ex:
         logging.debug("Gemini 累計の更新で例外（続行）: %s", ex)
-def _workbook_file_has_gemini_target_main_sheet(path: str) -> bool:
-    """ディスク上のブックにメイン相当シートが無ければ書き込めない。Excel を起動しないための事前判定。"""
-    p = (path or "").strip()
-    if not p or not os.path.isfile(p):
-        return False
-    if _ooxml_workbook_missing_shared_strings(p):
-        for nm in _ooxml_workbook_sheet_names(p) or []:
-            sn = str(nm or "")
-            if sn in ("メイン", "メイン_", "Main") or "メイン" in sn:
-                return True
-        return False
-    try:
-        wbr = load_workbook(p, read_only=True, data_only=True)
-    except Exception:
-        return True
-    try:
-        for nm in wbr.sheetnames:
-            sn = str(nm or "")
-            if sn in ("メイン", "メイン_", "Main") or "メイン" in sn:
-                return True
-        return False
-    finally:
-        try:
-            wbr.close()
-        except Exception:
-            pass
-def _openpyxl_chart_title_str(chart_obj) -> str:
-    if chart_obj is None:
-        return ""
-    try:
-        t = getattr(chart_obj, "title", None)
-        if t is None:
-            return ""
-        if isinstance(t, str):
-            return t
-        tx = getattr(t, "tx", None)
-        if tx is not None:
-            return str(tx)
-        return str(t)
-    except Exception:
-        return ""
-def _strip_gemini_usage_charts_openpyxl(ws) -> None:
-    """メインシート上の当機能が管理する折れ線グラフ（名前またはタイトル一致）を削除する。"""
-    managed_names = (
-        GEMINI_USAGE_XLW_CHART_NAME,
-        GEMINI_USAGE_XLW_CHART_TOKENS_NAME,
-    )
-    title_markers = (
-        "Gemini API 日次推移",
-        "Gemini API 日次トークン",
-    )
-    charts = getattr(ws, "_charts", None)
-    if not charts:
-        return
-    keep: list = []
-    for anc in list(charts):
-        drop = False
-        try:
-            ch = getattr(anc, "chart", None)
-            if ch is None:
-                ch = anc
-            tit_s = _openpyxl_chart_title_str(ch)
-            for mk in title_markers:
-                if mk in tit_s:
-                    drop = True
-                    break
-            if not drop:
-                vchart = getattr(ch, "vchart", None) or ch
-                nm = str(getattr(vchart, "name", "") or "")
-                if nm in managed_names:
-                    drop = True
-        except Exception:
-            pass
-        if not drop:
-            keep.append(anc)
-    try:
-        ws._charts = keep  # type: ignore[attr-defined]
-    except Exception:
-        return
-def _apply_main_sheet_gemini_usage_chart_openpyxl(ws, cum: dict) -> None:
-    """Q〜R・S〜T を埋め、折れ線グラフを最大 2 本まで置く（openpyxl・ディスク保存前提）。"""
-    hr = GEMINI_USAGE_CHART_HEADER_ROW
-    cdt = GEMINI_USAGE_CHART_COL_DATE
-    cvl = GEMINI_USAGE_CHART_COL_VALUE
-    cts = GEMINI_USAGE_CHART_COL_TOK_DATE
-    ctv = GEMINI_USAGE_CHART_COL_TOK_VALUE
-    nclear = GEMINI_USAGE_CHART_CLEAR_ROWS
-
-    for i in range(nclear):
-        r = hr + i
-        for c in (cdt, cvl, cts, ctv):
-            try:
-                ws.cell(row=r, column=c).value = None
-            except Exception:
-                pass
-
-    _strip_gemini_usage_charts_openpyxl(ws)
-    ser = _gemini_daily_trend_series(cum)
-    if ser is None:
-        return
-    day_keys, values, val_label = ser
-    n = len(day_keys)
-    if n <= 0:
-        return
-
-    ws.cell(row=hr, column=cdt, value="日付")
-    ws.cell(row=hr, column=cvl, value=val_label)
-    for i, (dk, val) in enumerate(zip(day_keys, values)):
-        r = hr + 1 + i
-        ws.cell(row=r, column=cdt, value=dk)
-        ws.cell(row=r, column=cvl, value=val)
-    nf = "0.000000" if val_label == "推定USD" else "0"
-    for r in range(hr + 1, hr + n + 1):
-        try:
-            ws.cell(row=r, column=cvl).number_format = nf
-        except Exception:
-            pass
-
-    try:
-        chart1 = LineChart()
-        chart1.title = "Gemini API 日次推移"
-        chart1.legend = None
-        data = Reference(ws, min_col=cdt, min_row=hr, max_col=cvl, max_row=hr + n)
-        chart1.add_data(data, titles_from_data=True)
-        chart1.set_categories(
-            Reference(ws, min_col=cdt, min_row=hr + 1, max_row=hr + n)
-        )
-        ws.add_chart(chart1, GEMINI_USAGE_CHART_ANCHOR_CELL)
-    except Exception:
-        pass
-
-    tok_vals = _gemini_daily_total_tokens_for_days(cum, day_keys)
-    if not tok_vals or max(tok_vals) <= 0:
-        return
-
-    tok_label = "合計トークン"
-    ws.cell(row=hr, column=cts, value="日付")
-    ws.cell(row=hr, column=ctv, value=tok_label)
-    for i, dk in enumerate(day_keys):
-        r = hr + 1 + i
-        ws.cell(row=r, column=cts, value=dk)
-        ws.cell(row=r, column=ctv, value=int(tok_vals[i]))
-    for r in range(hr + 1, hr + n + 1):
-        try:
-            ws.cell(row=r, column=ctv).number_format = "#,##0"
-        except Exception:
-            pass
-
-    try:
-        chart2 = LineChart()
-        chart2.title = "Gemini API 日次トークン"
-        chart2.legend = None
-        data2 = Reference(ws, min_col=cts, min_row=hr, max_col=ctv, max_row=hr + n)
-        chart2.add_data(data2, titles_from_data=True)
-        chart2.set_categories(
-            Reference(ws, min_col=cts, min_row=hr + 1, max_row=hr + n)
-        )
-        ws.add_chart(chart2, GEMINI_USAGE_CHART_TOKENS_ANCHOR_CELL)
-    except Exception:
-        pass
-def _write_main_sheet_gemini_usage_via_openpyxl(
-    macro_wb_path: str, text: str, log_prefix: str
-) -> bool:
-    """openpyxl でメイン P 列・Q〜T・推移グラフ（最大2本）を更新し wb.save する。"""
-    abs_wb = os.path.abspath((macro_wb_path or "").strip())
-    if not abs_wb or not os.path.isfile(abs_wb):
-        logging.info(
-            "%s: Gemini メイン反映: 対象ブックがありません。%s",
-            log_prefix,
-            macro_wb_path,
-        )
-        return False
-    if _ooxml_workbook_missing_shared_strings(abs_wb):
-        logging.info(
-            "%s: OOXML に xl/sharedStrings.xml が無いブックのため、"
-            "メイン AI サマリ（openpyxl）をスキップしました。"
-            "Excel で対象ブックを開いて通常保存すると解消することがあります。",
-            log_prefix,
-        )
-        return False
-    if not _workbook_file_has_gemini_target_main_sheet(abs_wb):
-        logging.info(
-            "%s: メイン相当シートが無いため Gemini の反映をスキップしました（Excel 起動なし）。%s",
-            log_prefix,
-            os.path.basename(abs_wb),
-        )
-        return False
-
-    keep_vba = abs_wb.lower().endswith(".xlsm")
-    wb = None
-    try:
-        wb = load_workbook(abs_wb, keep_vba=keep_vba)
-        ws_main = _gemini_resolve_main_sheet_openpyxl(wb)
-        if ws_main is None:
-            logging.info(
-                "%s: メインシートが見つからないため、AI サマリをスキップしました。",
-                log_prefix,
-            )
-            return False
-
-        start_r, col_p, clear_n = 16, 16, 120
-        for i in range(clear_n):
-            try:
-                ws_main.cell(row=start_r + i, column=col_p).value = None
-            except Exception:
-                pass
-        lines_list = text.split("\n") if (text or "").strip() else []
-        wrap = Alignment(wrap_text=True, vertical="top")
-        for i in range(clear_n):
-            v = lines_list[i] if i < len(lines_list) else None
-            try:
-                c = ws_main.cell(row=start_r + i, column=col_p, value=v)
-                c.alignment = wrap
-            except Exception:
-                pass
-
-        _apply_main_sheet_gemini_usage_chart_openpyxl(
-            ws_main, _load_gemini_cumulative_payload()
-        )
-        wb.save(abs_wb)
-        logging.info(
-            "%s: メインシート P%d 以降・Gemini 推移グラフ（料金/呼出し・トークン）を openpyxl で保存しました。",
-            log_prefix,
-            start_r,
-        )
-        return True
-    except Exception as ex:
-        logging.warning(
-            "%s: メイン AI サマリの openpyxl 保存に失敗: %s", log_prefix, ex
-        )
-        return False
-    finally:
-        try:
-            if wb is not None:
-                wb.close()
-        except Exception:
-            pass
-def _export_gemini_buckets_csv_for_charts(cum: dict) -> None:
-    """Excel 折れ線・棒グラフ坑けに長形式 CSV を log に書き出す。"""
-    b = cum.get("buckets")
-    if not isinstance(b, dict):
-        return
-    mapping = (
-        ("year", "by_year"),
-        ("month", "by_month"),
-        ("week_iso", "by_week"),
-        ("day", "by_day"),
-        ("hour", "by_hour"),
-    )
-    rows_out: list[dict[str, object]] = []
-    for gran_label, sub in mapping:
-        subd = b.get(sub)
-        if not isinstance(subd, dict):
-            continue
-        for pk in sorted(subd.keys()):
-            ent = subd.get(pk)
-            if not isinstance(ent, dict):
-                continue
-            calls = int(ent.get("calls") or 0)
-            pt = int(ent.get("prompt") or 0)
-            cc = int(ent.get("candidates") or 0)
-            th = int(ent.get("thoughts") or 0)
-            tt = int(ent.get("total_tokens") or 0)
-            usd = float(ent.get("estimated_cost_usd") or 0.0)
-            rows_out.append(
-                {
-                    "granularity": gran_label,
-                    "period_key": pk,
-                    "calls": calls,
-                    "prompt_tokens": pt,
-                    "candidates_tokens": cc,
-                    "thoughts_tokens": th,
-                    "total_tokens": tt,
-                    "estimated_cost_usd": round(usd, 8),
-                    "estimated_cost_jpy": round(usd * GEMINI_JPY_PER_USD, 4),
-                }
-            )
-    if not rows_out:
-        return
-    path = os.path.join(log_dir, GEMINI_USAGE_BUCKETS_CSV_FILE)
-    fieldnames = [
-        "granularity",
-        "period_key",
-        "calls",
-        "prompt_tokens",
-        "candidates_tokens",
-        "thoughts_tokens",
-        "total_tokens",
-        "estimated_cost_usd",
-        "estimated_cost_jpy",
-    ]
-    try:
-        os.makedirs(log_dir, exist_ok=True)
-        with open(path, "w", encoding="utf-8-sig", newline="") as f:
-            w = csv.DictWriter(f, fieldnames=fieldnames)
-            w.writeheader()
-            w.writerows(rows_out)
-    except OSError as ex:
-        logging.debug("Gemini ポケット CSV の保存に失敗: %s", ex)
 def build_gemini_usage_summary_text() -> str:
-    """メイン表示・結果ログ用の複数行テキスト（この実行分＋累計 JSON）。"""
+    """結果ログ用の複数行テキスト（この実行分＋累計 JSON）。"""
     cum = _load_gemini_cumulative_payload()
     ct_tot = int(cum.get("calls_total") or 0)
     if not _gemini_usage_session and ct_tot <= 0:
@@ -3973,54 +3674,6 @@ def build_gemini_usage_summary_text() -> str:
             lines.append("")
             lines.extend(trend)
     return "\n".join(lines)
-def write_main_sheet_gemini_usage_summary(wb_path: str, log_prefix: str) -> None:
-    """Gemini 利用サマリを log に書き、openpyxl でメイン P 列・推移グラフへ保存する。"""
-    text = build_gemini_usage_summary_text()
-    path = os.path.join(log_dir, GEMINI_USAGE_SUMMARY_FOR_MAIN_FILE)
-    sheet_ok = False
-    if wb_path and os.path.isfile(wb_path):
-        try:
-            sheet_ok = _write_main_sheet_gemini_usage_via_openpyxl(
-                wb_path, text, log_prefix
-            )
-        except Exception as ex:
-            logging.warning(
-                "%s: AI サマリの openpyxl 書き込みで例外: %s", log_prefix, ex
-            )
-    try:
-        os.makedirs(log_dir, exist_ok=True)
-        with open(path, "w", encoding="utf-8", newline="\n") as f:
-            f.write(text)
-    except OSError:
-        pass
-    try:
-        cum2 = _load_gemini_cumulative_payload()
-        if int(cum2.get("calls_total") or 0) > 0:
-            _export_gemini_buckets_csv_for_charts(cum2)
-    except Exception as ex:
-        logging.debug("Gemini ポケット CSV 出力で例外（続行）: %s", ex)
-    if sheet_ok:
-        return
-    if text.strip():
-        logging.info(
-            "%s: メイン P 列・グラフをブックへ保存できませんでした。"
-            " %s に出力済み → マクロ「メインシート_Gemini利用サマリをP列に反映」で P 列のみ反映できます。",
-            log_prefix,
-            path,
-        )
-    else:
-        logging.info(
-            "%s: Gemini 未使用: サマリを空で %s に出力。",
-            log_prefix,
-            path,
-        )
-def _try_write_main_sheet_gemini_usage_summary(phase: str) -> None:
-    try:
-        write_main_sheet_gemini_usage_summary(_excel_plan_input_wb(), phase)
-    except Exception as ex:
-        logging.warning(
-            "%s: メインシートへの AI 利用サマリ書き込みで例外（続行）: %s", phase, ex
-        )
 def _plan_sheet_write_global_parse_block_to_ws(
     ws,
     global_priority_override: dict,
@@ -5241,6 +4894,45 @@ def _load_stage2_in_progress_next_day_dispatch_overrides() -> dict[str, float]:
     if out:
         logging.info(
             "段階2: 加工途中の翌日配台量を %s 行分 JSON から読み込みました（%s）。",
+            len(out),
+            path,
+        )
+    return out
+def _load_stage2_aladdin_today_exclude_next_day_overrides() -> dict[str, float]:
+    """
+    JavaFX 段階2直前ダイアログ②が書く JSON（entries[].exclude_next_day_m）。
+    """
+    path = (os.environ.get(ENV_STAGE2_ALADDIN_TODAY_EXCLUDE_NEXT_DAY_JSON) or "").strip()
+    if not path or not os.path.isfile(path):
+        return {}
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+    except Exception as e:
+        logging.warning(
+            "段階2: アラジン当日・翌日除外 JSON の読込に失敗（%s）: %s", path, e
+        )
+        return {}
+    entries = data.get("entries") if isinstance(data, dict) else data
+    if not isinstance(entries, list):
+        return {}
+    out: dict[str, float] = {}
+    for ent in entries:
+        if not isinstance(ent, dict):
+            continue
+        tid = planning_task_id_str_from_scalar(ent.get("task_id"))
+        proc = str(ent.get("process") or "").strip()
+        mname = str(ent.get("machine_name") or "").strip()
+        if not tid:
+            continue
+        try:
+            m = _sanitize_dispatch_qty_m(float(ent.get("exclude_next_day_m")))
+        except (TypeError, ValueError):
+            m = 0.0
+        out[_stage2_in_progress_next_day_dispatch_key(tid, proc, mname)] = m
+    if out:
+        logging.info(
+            "段階2: アラジン当日・翌日除外量を %s 行分 JSON から読み込みました（%s）。",
             len(out),
             path,
         )

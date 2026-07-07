@@ -349,7 +349,6 @@ def _generate_plan_impl(
     sorted_dates = [d for d in sorted_dates if d >= run_date]
     if not sorted_dates:
         logging.error("当日以降の処理対象日付はありません。")
-        _try_write_main_sheet_gemini_usage_summary("段階2")
         return
 
     # タスク入力: ブック内「配台計画_タスク入力」（段階1で出力→取り込み後に編集）
@@ -362,7 +361,6 @@ def _generate_plan_impl(
         raise
     except Exception as e:
         logging.error(f"配台計画タスクシート読み込みエラー: {e}")
-        _try_write_main_sheet_gemini_usage_summary("段階2")
         return
 
     if DEBUG_DISPATCH_ONLY_TASK_IDS:
@@ -384,7 +382,6 @@ def _generate_plan_impl(
             logging.error(
                 "デバッグ配台: B3:B26 の依頼NOに一致する行はありません。段階2を中断しました。"
             )
-            _try_write_main_sheet_gemini_usage_summary("段階2")
             return
 
     if global_priority_raw.strip():
@@ -635,6 +632,10 @@ def _generate_plan_impl(
             _iter_plan_dates_extending(sorted_dates, attendance_data, task_queue)
             if _stage2_extend_attendance_calendar_enabled()
             else sorted_dates
+        )
+        global _STAGE2_ALADDIN_EXCLUDE_APPLY_DATE
+        _STAGE2_ALADDIN_EXCLUDE_APPLY_DATE = _first_working_day_strictly_after(
+            run_date, sorted_dates
         )
         _full_calendar_without_deadline_restart = True
         for current_date in _plan_day_iter:
@@ -2410,7 +2411,6 @@ def _generate_plan_impl(
             os.makedirs(stage2_output_root, exist_ok=True)
         except OSError as e:
             logging.error("段階2: 出力先ディレクトリを作成できません: %s (%s)", stage2_output_root, e)
-            _try_write_main_sheet_gemini_usage_summary("段階2")
             return
     _t_rm_prior0 = time_module.perf_counter()
     if not skip_remove_prior_stage2_workbooks:
@@ -3814,7 +3814,6 @@ def _generate_plan_impl(
                     _rm_mem_err,
                 )
 
-    _try_write_main_sheet_gemini_usage_summary("段階2")
     if return_output_paths:
         _pp_json = normalized_workbook_json_path(plan_xlsx_final)
         _ms_json = normalized_workbook_json_path(member_xlsx_final)

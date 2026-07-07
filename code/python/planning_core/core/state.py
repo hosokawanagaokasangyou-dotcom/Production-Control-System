@@ -15,6 +15,7 @@ _LAST_INTERACTIVE_REMAINING_TASKS_AT_CALENDAR_END: list[dict] = []
 _LAST_INTERACTIVE_STAGE3_META: dict = {}
 _PLAN_IMPL_INTERACTIVE_DISPATCH_TARGETS: dict | None = None
 _PLAN_IMPL_INTERACTIVE_TRIAL_METERS_DONE: dict | None = None
+_STAGE2_ALADDIN_EXCLUDE_APPLY_DATE: date | None = None
 def interactive_stage3_last_run_meta_snapshot() -> dict:
     """直近の配台試行メタ（例: mode=single_phase）。試行未実行時は空 dict。"""
     return dict(_LAST_INTERACTIVE_STAGE3_META or {})
@@ -39,20 +40,7 @@ if os.path.isfile(_ai_cache_legacy) and not os.path.isfile(_ai_cache_new):
 ai_cache_path = _ai_cache_new
 exclude_rules_sheet_debug_log_path = os.path.join(log_dir, "exclude_rules_sheet_debug.txt")
 SUMMARY_AI_DISPATCH_XLSX = "サマリ_AI配台.xlsx"
-GEMINI_USAGE_SUMMARY_FOR_MAIN_FILE = "gemini_usage_summary_for_main.txt"
 GEMINI_USAGE_CUMULATIVE_JSON_FILE = "gemini_usage_cumulative.json"
-GEMINI_USAGE_BUCKETS_CSV_FILE = "gemini_usage_buckets_for_chart.csv"
-GEMINI_USAGE_CHART_COL_DATE = 17  # Q
-GEMINI_USAGE_CHART_COL_VALUE = 18  # R
-GEMINI_USAGE_CHART_COL_TOK_DATE = 19  # S（グラフ用に日付を複製）
-GEMINI_USAGE_CHART_COL_TOK_VALUE = 20  # T（total_tokens 相当）
-GEMINI_USAGE_CHART_HEADER_ROW = 16
-GEMINI_USAGE_CHART_ANCHOR_CELL = "T16"
-GEMINI_USAGE_CHART_TOKENS_ANCHOR_CELL = "AA16"
-GEMINI_USAGE_CHART_MAX_DAYS = 14
-GEMINI_USAGE_CHART_CLEAR_ROWS = 36
-GEMINI_USAGE_XLW_CHART_NAME = "_GeminiApiDailyTrend"
-GEMINI_USAGE_XLW_CHART_TOKENS_NAME = "_GeminiApiDailyTokens"
 def interactive_trial_shortages_snapshot() -> dict:
     snap = {
         "op_shortage": list(_INTERACTIVE_TRIAL_OP_SHORTAGE),

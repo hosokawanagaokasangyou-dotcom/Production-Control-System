@@ -1772,6 +1772,36 @@ def _interactive_trial_meters_done_by_timeline_calendar_date(
         kk = (tid, proc_n, mach_n, d)
         acc[kk] = acc.get(kk, 0.0) + add_m
     return acc
+def _stage2_aladdin_next_day_exclude_consumes_roll(task: dict, current_date: date) -> bool:
+    """翌稼働日のみ、アラジン当日除外 m を消費し当該ロール割当をスキップする。"""
+    apply_d = _STAGE2_ALADDIN_EXCLUDE_APPLY_DATE
+    if apply_d is None or current_date != apply_d:
+        return False
+    if not task.get("aladdin_today_exclude_next_day_dialog"):
+        return False
+    try:
+        rem = float(task.get("aladdin_next_day_exclude_remaining_m") or 0)
+    except (TypeError, ValueError):
+        rem = 0.0
+    if rem <= 1e-12:
+        return False
+    try:
+        um = float(task.get("unit_m") or 0)
+    except (TypeError, ValueError):
+        um = 0.0
+    if um <= 1e-12:
+        return False
+    skip_m = min(rem, um)
+    task["aladdin_next_day_exclude_remaining_m"] = max(0.0, rem - skip_m)
+    logging.info(
+        "段階2: アラジン当日・翌日除外を適用 依頼NO=%s 工程=%s 機械名=%s → 除外 %s m（配台日=%s）",
+        task.get("task_id"),
+        _log_plain_label(task.get("machine")),
+        _log_plain_label(task.get("machine_name")),
+        skip_m,
+        current_date.isoformat(),
+    )
+    return True
 def _trial_order_first_schedule_pass(
     current_date: date,
     tasks_today: list,
@@ -2054,6 +2084,8 @@ def _trial_order_first_schedule_pass(
         while float(task.get("remaining_units") or 0) > 1e-12:
             if max_rolls is not None and rolls_done >= max_rolls:
                 break
+            if _stage2_aladdin_next_day_exclude_consumes_roll(task, current_date):
+                continue
             stage35_overtime_only = False
             _iv_cap = (
                 _interactive_dispatch_cap_enforced_in_schedule_loop()

@@ -395,7 +395,6 @@ def run_stage1_extract():
     _apply_excel_date_columns_date_only_display(out_path, STAGE1_PLAN_OUTPUT_SHEET)
     _apply_plan_input_visual_format(out_path, STAGE1_PLAN_OUTPUT_SHEET)
     logging.info(f"段階1完了: '{out_path}' を出力しました。マクロで '{PLAN_INPUT_SHEET_NAME}' に坖り込んでしてさい。")
-    _try_write_main_sheet_gemini_usage_summary("段階1")
     logging.info(
         "段階1: 製品厚みテーブル追記サマリ build=%s 追記先=%s 追記キー数=%s",
         _STAGE1_MATERIAL_TABLE_APPEND_BUILD,

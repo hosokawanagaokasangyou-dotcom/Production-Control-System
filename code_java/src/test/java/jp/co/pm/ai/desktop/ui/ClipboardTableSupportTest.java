@@ -45,6 +45,12 @@ class ClipboardTableSupportTest {
     }
 
     @Test
+    void copyHtmlTableOnly_doesNotThrow() {
+        String table = "<table><tr><td>A</td></tr></table>";
+        ClipboardTableSupport.copyHtmlTableOnly(table);
+    }
+
+    @Test
     void htmlTransferFlavors_doesNotThrowOnClassInit() {
         DataFlavor[] flavors = ClipboardTableSupport.htmlTransferFlavors();
         assertTrue(flavors.length >= 1);

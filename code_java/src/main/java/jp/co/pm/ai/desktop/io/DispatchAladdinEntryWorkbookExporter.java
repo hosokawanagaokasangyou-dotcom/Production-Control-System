@@ -56,6 +56,9 @@ public final class DispatchAladdinEntryWorkbookExporter {
 
     private static final int FIXED_COLUMN_COUNT = FIXED_HEADERS.length;
 
+    /** 日付列幅（Excel 文字数）。POI は 1/256 文字単位。 */
+    private static final double DATE_COLUMN_WIDTH_CHARS = 16.8;
+
     private static final String[] WEEKDAY_JA = {"月", "火", "水", "木", "金", "土", "日"};
 
     private static final String EMPTY_SHEET_NAME = "データなし";
@@ -268,7 +271,8 @@ public final class DispatchAladdinEntryWorkbookExporter {
             sh.setColumnWidth(c, 256 * fixedWidths[c]);
         }
         for (int i = 0; i < dates.size(); i++) {
-            sh.setColumnWidth(FIXED_COLUMN_COUNT + i, 256 * 16);
+            sh.setColumnWidth(
+                    FIXED_COLUMN_COUNT + i, (int) Math.round(256 * DATE_COLUMN_WIDTH_CHARS));
         }
     }
 

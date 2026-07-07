@@ -19,6 +19,7 @@ import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import jp.co.pm.ai.desktop.reconciliation.RequestFormComboChoices;
+import jp.co.pm.ai.planning.stage2.Stage2NextDayDialogMode;
 
 /**
  * Persists last-used paths under {@code ~/.pm-ai-desktop/session-state.json} so tabs reload the same files on
@@ -239,12 +240,11 @@ public final class DesktopSessionStateStore {
         put(root, "mainRunStage2ProductionPlan", state.mainRunStage2ProductionPlan());
         put(root, "mainRunStage2MemberSchedule", state.mainRunStage2MemberSchedule());
         root.put("mainRunStage2SkipTodayDispatch", state.mainRunStage2SkipTodayDispatch());
-        root.put(
-                "planInputStage2InProgressNextDayPrompt",
-                state.planInputStage2InProgressNextDayPrompt());
+        put(root, "planInputStage2NextDayDialogMode", state.planInputStage2NextDayDialogMode());
         root.put(
                 "planInputComboSheetMayExceedNeed",
                 state.planInputComboSheetMayExceedNeed());
+        root.put("planInputStage2SkipGeminiApi", state.planInputStage2SkipGeminiApi());
         put(root, "mainRunStage2ResultBookFont", state.mainRunStage2ResultBookFont());
         root.put("mainRunSkipGeminiApi", state.mainRunSkipGeminiApi());
         root.put("mainRunStage1MarkAllExcludeAfterRun", state.mainRunStage1MarkAllExcludeAfterRun());
@@ -388,10 +388,11 @@ public final class DesktopSessionStateStore {
                 text(root, "mainRunStage2ProductionPlan"),
                 text(root, "mainRunStage2MemberSchedule"),
                 optionalBoolean(root, "mainRunStage2SkipTodayDispatch", false),
-                optionalBoolean(root, "planInputStage2InProgressNextDayPrompt", true),
+                loadPlanInputStage2NextDayDialogMode(root),
                 optionalBoolean(root, "planInputComboSheetMayExceedNeed", true),
+                optionalBoolean(root, "planInputStage2SkipGeminiApi", false),
                 text(root, "mainRunStage2ResultBookFont"),
-                optionalBoolean(root, "mainRunSkipGeminiApi", false),
+                optionalBoolean(root, "mainRunSkipGeminiApi", true),
                 optionalBoolean(root, "mainRunStage1MarkAllExcludeAfterRun", false),
                 optionalBoolean(root, "mainRunApplyLearnedSpeedFromActuals", false),
                 loadUiEnvRows(root),
@@ -772,6 +773,19 @@ public final class DesktopSessionStateStore {
         o.put("chartStyle", p.chartStyle());
         o.put("chartShadowEnabled", p.chartShadowEnabled());
         o.put("fullscreenTheme", p.fullscreenTheme());
+    }
+
+    private static String loadPlanInputStage2NextDayDialogMode(JsonNode root) {
+        JsonNode modeNode = root.get("planInputStage2NextDayDialogMode");
+        if (modeNode != null && modeNode.isTextual() && !modeNode.asText("").isBlank()) {
+            return Stage2NextDayDialogMode.parse(modeNode.asText()).name();
+        }
+        if (root.has("planInputStage2InProgressNextDayPrompt")) {
+            return optionalBoolean(root, "planInputStage2InProgressNextDayPrompt", true)
+                    ? Stage2NextDayDialogMode.IN_PROGRESS.name()
+                    : Stage2NextDayDialogMode.NONE.name();
+        }
+        return Stage2NextDayDialogMode.defaultMode().name();
     }
 
     private static boolean optionalBoolean(JsonNode root, String key, boolean defaultValue) {

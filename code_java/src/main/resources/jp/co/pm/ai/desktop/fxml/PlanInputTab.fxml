@@ -3,8 +3,10 @@
 <?import javafx.geometry.Insets?>
 <?import javafx.scene.control.Button?>
 <?import javafx.scene.control.CheckBox?>
+<?import javafx.scene.control.RadioButton?>
 <?import javafx.scene.control.Label?>
 <?import javafx.scene.control.TitledPane?>
+<?import javafx.scene.control.Tooltip?>
 <?import javafx.scene.control.TextField?>
 <?import javafx.scene.layout.ColumnConstraints?>
 <?import javafx.scene.layout.GridPane?>
@@ -53,11 +55,25 @@
                                 styleClass="pm-stage-run-button,pm-stage-run-2" text="段階2.0 実行" />
                         <Button fx:id="stage21RunButton" mnemonicParsing="false" onAction="#onStage21RunButtonAction"
                                 styleClass="pm-stage-run-button,pm-stage-run-2-1" text="段階2.1(時間外)" />
+                        <CheckBox fx:id="stage2SkipGeminiApiCheckBox" mnemonicParsing="false" selected="false"
+                                text="AI API 呼び出しをスキップ（開発用）">
+                            <tooltip>
+                                <Tooltip text="ON のとき段階2/2.1 で Gemini への HTTP 呼び出しを行いません。本番運用では OFF にしてください。" />
+                            </tooltip>
+                        </CheckBox>
                         <CheckBox fx:id="stage2SkipTodayDispatchCheckBox" mnemonicParsing="false"
                                 text="当日は配台しない（翌日以降から計画）" />
                     </HBox>
-                    <CheckBox fx:id="stage2InProgressNextDayPromptCheckBox" mnemonicParsing="false" selected="true"
-                            text="加工途中タスクの翌日配台量を設定してから段階2を実行" />
+                    <VBox spacing="4.0">
+                        <RadioButton fx:id="stage2NextDayDialogInProgressRadio" mnemonicParsing="false"
+                                text="加工途中タスクの翌日配台量を設定" />
+                        <RadioButton fx:id="stage2NextDayDialogAladdinExcludeRadio" mnemonicParsing="false" selected="true"
+                                text="アラジン当日配台の翌日除外量を設定" />
+                        <RadioButton fx:id="stage2NextDayDialogBothRadio" mnemonicParsing="false"
+                                text="①と②の両方を設定" />
+                        <RadioButton fx:id="stage2NextDayDialogNoneRadio" mnemonicParsing="false"
+                                text="ダイアログを表示しない" />
+                    </VBox>
                     <CheckBox fx:id="comboSheetMayExceedNeedCheckBox" mnemonicParsing="false" selected="true"
                             text="組み合わせ表の人数が need より多い場合も有効にする" />
                 </VBox>

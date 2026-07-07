@@ -114,8 +114,7 @@ public final class EquipmentStatusDashboardTabController {
                                 if (suppressUiEvents.get() || cur == null) {
                                     return;
                                 }
-                                actualDate = cur;
-                                rebuildFromCache();
+                                setActualDate(cur);
                             });
         }
         if (planDatePicker != null) {
@@ -249,9 +248,7 @@ public final class EquipmentStatusDashboardTabController {
 
     /** アプリ起動時: 実績日・予定日を当日に揃える（前回セッションの日付は復元しない）。 */
     public void resetDashboardDatesToToday() {
-        LocalDate today = LocalDate.now();
-        setActualDate(today);
-        setPlanDate(today);
+        setActualDate(LocalDate.now());
     }
 
     public String snapshotActualDateIso() {
@@ -376,10 +373,14 @@ public final class EquipmentStatusDashboardTabController {
             return;
         }
         actualDate = date;
+        planDate = date;
         suppressUiEvents.set(true);
         try {
             if (actualDatePicker != null) {
                 actualDatePicker.setValue(date);
+            }
+            if (planDatePicker != null) {
+                planDatePicker.setValue(date);
             }
         } finally {
             suppressUiEvents.set(false);

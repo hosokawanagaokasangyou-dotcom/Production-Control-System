@@ -8,8 +8,9 @@
 <?import javafx.scene.control.Label?>
 <?import javafx.scene.control.ListView?>
 <?import javafx.scene.control.ScrollPane?>
-<?import javafx.scene.control.TitledPane?>
 <?import javafx.scene.control.TextField?>
+<?import javafx.scene.control.TitledPane?>
+<?import javafx.scene.control.Tooltip?>
 <?import javafx.scene.image.ImageView?>
 <?import javafx.scene.layout.BorderPane?>
 <?import javafx.scene.layout.ColumnConstraints?>
@@ -44,7 +45,11 @@
             <HBox alignment="CENTER_LEFT" spacing="12.0" styleClass="pm-run-primary-bar">
                 <StackPane fx:id="stage1NetworkCacheBadgeHost" alignment="CENTER_LEFT" managed="false" styleClass="pm-stage1-network-cache-badge-host" visible="false" />
                 <Button fx:id="stage1RunButton" mnemonicParsing="false" onAction="#onStage1RunButtonAction" styleClass="pm-stage-run-button,pm-stage-run-1" text="段階1 実行" />
-                <CheckBox fx:id="stage1ClearCacheAndRunCheckBox" mnemonicParsing="false" text="キャッシュをクリアして実行" />
+                <CheckBox fx:id="skipGeminiApiCheckBox" mnemonicParsing="false" selected="true" text="AI API 呼び出しをスキップ（開発用）">
+                    <tooltip>
+                        <Tooltip text="ON のとき Gemini への HTTP 呼び出しを行いません（段階1/2・配台不要ロジック等）。本番運用では必ず OFF にしてください。" />
+                    </tooltip>
+                </CheckBox>
                 <HBox alignment="CENTER_LEFT" spacing="8.0" styleClass="pm-run-book-open-inline">
                     <Label fx:id="masterWorkbookOpenHintLabel" text="master.xlsm" />
                     <Button mnemonicParsing="false" onAction="#onOpenMasterWorkbookAction" text="エクセルを開く" />
@@ -117,10 +122,6 @@
                                     <Label wrapText="true" text="OFF（既定）のとき master 等の速度のみ使用します。速度収集の不具合修正まで OFF 推奨。" />
                                 </VBox>
                                 <Label styleClass="pm-section-title" text="開発用" />
-                                <VBox spacing="4.0">
-                                    <CheckBox fx:id="skipGeminiApiCheckBox" mnemonicParsing="false" selected="false" text="AI API 呼び出しをスキップ（開発用）" />
-                                    <Label wrapText="true" text="ON のとき Gemini への HTTP 呼び出しを行いません（段階1/2・配台不要ロジック等）。本番運用では必ず OFF にしてください。" />
-                                </VBox>
                                 <VBox spacing="4.0">
                                     <CheckBox fx:id="stage1MarkAllExcludeAfterRunCheckBox" mnemonicParsing="false" selected="false" text="段階1実行後、全依頼を配台不要にする（開発用）" />
                                     <Label wrapText="true" text="ON のとき段階1正常終了後、配台計画_タスク入力の全行「配台不要」を yes にします。少数タスクだけ手動で外してから段階2を実行するデバッグ用途です。" />

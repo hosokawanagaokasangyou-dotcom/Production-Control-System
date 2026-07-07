@@ -17,7 +17,7 @@
     </padding>
     <Label styleClass="pm-section-title" text="キャッシュ退避・復元"
            wrapText="true"/>
-    <Label text="段階1の「キャッシュをクリアして実行」、または本タブの操作で、AI 備考キャッシュ・結果_配台表.json・納期ビュー用 shaped JSON 等を退避してから削除します。履歴から選択して復元できます。"
+    <Label text="段階1実行時、または本タブの操作で、AI 備考キャッシュ・結果_配台表.json・納期ビュー用 shaped JSON 等を退避してから削除します。履歴から選択して復元できます。"
            wrapText="true"/>
     <Separator/>
     <HBox spacing="8.0" alignment="CENTER_LEFT">

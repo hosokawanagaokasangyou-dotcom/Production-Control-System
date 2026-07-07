@@ -61,4 +61,56 @@ class Stage2InProgressNextDayRollInputTest {
                         .orElse(-1.0),
                 1e-9);
     }
+
+    @Test
+    void maxRollsForCapUsesMinOfAladdinTodayAndRemaining() {
+        assertEquals(2, Stage2InProgressNextDayRollInput.maxRollsForCap(6090, 10660, 3045));
+        assertEquals(1, Stage2InProgressNextDayRollInput.maxRollsForCap(4000, 10660, 3045));
+        assertEquals(0, Stage2InProgressNextDayRollInput.maxRollsForCap(3000, 10660, 3045));
+    }
+
+    @Test
+    void nextDayTargetAssumesAladdinTodayCompletes() {
+        assertEquals(
+                3000.0,
+                Stage2InProgressNextDayRollInput.nextDayTargetMetersAssumingAladdinTodayComplete(
+                        5700, 300, 3000),
+                1e-9);
+        assertEquals(
+                600.0,
+                Stage2InProgressNextDayRollInput.nextDayTargetMetersAssumingAladdinTodayComplete(
+                        600, 900, 0),
+                1e-9);
+        assertEquals(
+                10,
+                Stage2InProgressNextDayRollInput.defaultRollCountAssumingAladdinTodayComplete(
+                        5700, 300, 3000, 300));
+        assertEquals(
+                2,
+                Stage2InProgressNextDayRollInput.defaultRollCountAssumingAladdinTodayComplete(
+                        600, 900, 0, 300));
+    }
+
+    @Test
+    void validateExcludeRollInputRejectsExcessRolls() {
+        Map<String, String> rowMap =
+                Map.of(
+                        "換算数量", "8000",
+                        "実加工数", "0",
+                        "未加工", "8000",
+                        "配台使用残数量", "8000",
+                        "(原反)ロール単位長さ", "3045");
+        Stage2PlanRowDispatchQtyMetrics.DispatchSimulatorUnitM unitInfo =
+                Stage2PlanRowDispatchQtyMetrics.dispatchSimulatorUnitMFromPlanRow(
+                        rowMap, Stage2RollUnitLengthTables.empty());
+        double aladdinTodayM = 6090.0;
+        assertTrue(
+                Stage2InProgressNextDayRollInput.validateExcludeRollInput(
+                                "3", aladdinTodayM, 8000, unitInfo)
+                        .isPresent());
+        assertTrue(
+                Stage2InProgressNextDayRollInput.validateExcludeRollInput(
+                                "2", aladdinTodayM, 8000, unitInfo)
+                        .isEmpty());
+    }
 }

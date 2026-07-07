@@ -28,10 +28,11 @@ import java.util.Map;
  * @param mainRunStage2MemberSchedule last shown stage-2 member_schedule xlsx path on run tab (empty if none)
  * @param mainRunStage2SkipTodayDispatch when true, stage-2 skips dispatch on the data-extraction calendar day
  *     (UI checkbox is on 配台計画_タスク入力 tab; session key name unchanged)
- * @param planInputStage2InProgressNextDayPrompt when true, stage-2 shows the in-progress next-day dispatch dialog
+ * @param planInputStage2NextDayDialogMode {@link jp.co.pm.ai.planning.stage2.Stage2NextDayDialogMode} 名（段階2直前ダイアログ）
  *     (配台計画_タスク入力 tab; default on)
  * @param planInputComboSheetMayExceedNeed when true, combo-sheet presets may exceed need basic headcount (default on;
  *     配台計画_タスク入力 tab checkbox)
+ * @param planInputStage2SkipGeminiApi when true, stage-2/2.1 skip Gemini API (配台計画_タスク入力 tab; default off)
  * @param mainRunStage2ResultBookFont stage-2 result Excel font family; empty with system default in UI means Python
  *     built-in default
  * @param mainRunSkipGeminiApi when true, skip Gemini generateContent calls (development; run tab checkbox)
@@ -126,8 +127,9 @@ public record DesktopSessionState(
         String mainRunStage2ProductionPlan,
         String mainRunStage2MemberSchedule,
         boolean mainRunStage2SkipTodayDispatch,
-        boolean planInputStage2InProgressNextDayPrompt,
+        String planInputStage2NextDayDialogMode,
         boolean planInputComboSheetMayExceedNeed,
+        boolean planInputStage2SkipGeminiApi,
         String mainRunStage2ResultBookFont,
         boolean mainRunSkipGeminiApi,
         boolean mainRunStage1MarkAllExcludeAfterRun,
@@ -438,10 +440,11 @@ public record DesktopSessionState(
                 "",
                 "",
                 false,
+                "ALADDIN_TODAY_EXCLUDE",
                 true,
-                true,
-                "",
                 false,
+                "",
+                true,
                 false,
                 false,
                 List.of(),
@@ -537,8 +540,9 @@ public record DesktopSessionState(
                 bootstrap.mainRunStage2ProductionPlan(),
                 bootstrap.mainRunStage2MemberSchedule(),
                 bootstrap.mainRunStage2SkipTodayDispatch(),
-                bootstrap.planInputStage2InProgressNextDayPrompt(),
+                bootstrap.planInputStage2NextDayDialogMode(),
                 bootstrap.planInputComboSheetMayExceedNeed(),
+                bootstrap.planInputStage2SkipGeminiApi(),
                 bootstrap.mainRunStage2ResultBookFont(),
                 bootstrap.mainRunSkipGeminiApi(),
                 bootstrap.mainRunStage1MarkAllExcludeAfterRun(),

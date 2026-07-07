@@ -395,6 +395,11 @@ public final class NetworkSourceDirResolver {
         return pickNewestTaskInputInDir(taskInputSourceDir);
     }
 
+    /** {@link AppPaths#resolveActualDetailSourceDir(Map)} 直下の最新 Excel（xlsx/xlsm）。 */
+    public static Optional<Path> newestExcelFileInDirectory(Path actualDetailSourceDir) {
+        return pickNewestExcelInDir(actualDetailSourceDir);
+    }
+
     private static Optional<Path> pickNewestTaskInputInDir(Path dir) {
         if (!isAccessibleDir(dir)) {
             return Optional.empty();

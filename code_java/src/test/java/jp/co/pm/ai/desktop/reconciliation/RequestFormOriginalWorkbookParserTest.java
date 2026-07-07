@@ -28,9 +28,12 @@ class RequestFormOriginalWorkbookParserTest {
             index.createRow(1).createCell(0).setCellValue("加工依頼NO");
             var dataRow = index.createRow(2);
             dataRow.createCell(0).setCellValue("T6-20");
+            dataRow.createCell(8).setCellValue("6/9");
             dataRow.createCell(9).setCellValue("6/10");
             dataRow.createCell(10).setCellValue("6/22");
+            dataRow.createCell(11).setCellValue("L備考");
             dataRow.createCell(13).setCellValue("185821Z");
+            dataRow.createCell(14).setCellValue("O備考");
 
             XSSFSheet sheet = wb.createSheet("T6-20");
             sheet.createRow(4).createCell(17).setCellValue("T6-20");
@@ -54,6 +57,12 @@ class RequestFormOriginalWorkbookParserTest {
         assertEquals("6/15", raw.get("希望納期"));
         assertEquals("6/22", raw.get("納期回答"));
         assertEquals("185821Z", raw.get("契約Ｎｏ"));
+        assertEquals("6/9", raw.get(RequestFormOriginalIndexSheetMeta.KEY_RESPONSE_DATE));
+        assertEquals("6/10", raw.get(RequestFormOriginalIndexSheetMeta.KEY_INPUT_DATE));
+        assertEquals("6/22", raw.get(RequestFormOriginalIndexSheetMeta.KEY_DELIVERY_DATE));
+        assertEquals("L備考", raw.get(RequestFormOriginalIndexSheetMeta.KEY_DELIVERY_REMARKS));
+        assertEquals("185821Z", raw.get(RequestFormOriginalIndexSheetMeta.KEY_CONTRACT_NO));
+        assertEquals("O備考", raw.get(RequestFormOriginalIndexSheetMeta.KEY_CONTRACT_REMARKS));
         assertEquals("true", raw.get(RequestFormOriginalIndexSheetMerger.META_INDEX_APPLIED));
         assertTrue(raw.containsKey(RequestFormOriginalIndexSheetMerger.META_INDEX_CONFLICTS));
         String conflicts = raw.get(RequestFormOriginalIndexSheetMerger.META_INDEX_CONFLICTS);

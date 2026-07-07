@@ -219,6 +219,11 @@ public final class DialogExcelLikeSpreadsheetFilter implements Filter {
                                                     } else {
                                                         copySet.remove(item);
                                                     }
+                                                    SpreadsheetMultiColumnFilterCoordinator
+                                                            .retainSelectionToSearchVisible(
+                                                                    copySet,
+                                                                    displayedItems,
+                                                                    searchField.getText());
                                                 });
                                 setGraphic(checkBox);
                             }
@@ -240,6 +245,8 @@ public final class DialogExcelLikeSpreadsheetFilter implements Filter {
         selectAllBtn.setMaxWidth(Double.MAX_VALUE);
         selectAllBtn.setOnAction(
                 e -> {
+                    SpreadsheetMultiColumnFilterCoordinator.retainSelectionToSearchVisible(
+                            copySet, displayedItems, searchField.getText());
                     copySet.addAll(displayedItems);
                     listView.refresh();
                 });
@@ -258,9 +265,12 @@ public final class DialogExcelLikeSpreadsheetFilter implements Filter {
         snapshotHidden.or(spv.getHiddenRows());
 
         Runnable commit =
-                () ->
-                        SpreadsheetMultiColumnFilterCoordinator.commitColumnSelection(
-                                spv, column, new HashSet<>(copySet));
+                () -> {
+                    SpreadsheetMultiColumnFilterCoordinator.retainSelectionToSearchVisible(
+                            copySet, displayedItems, searchField.getText());
+                    SpreadsheetMultiColumnFilterCoordinator.commitColumnSelection(
+                            spv, column, new HashSet<>(copySet));
+                };
 
         Runnable restore =
                 () -> {

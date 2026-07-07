@@ -82,6 +82,7 @@ import jp.co.pm.ai.desktop.audio.UiClickSound;
 import jp.co.pm.ai.desktop.bridge.PythonProcessRunner;
 import jp.co.pm.ai.desktop.bridge.PythonProcessRunner.RunRequest;
 import jp.co.pm.ai.desktop.bridge.Stage2PythonChildEnv;
+import jp.co.pm.ai.desktop.dispatch.AladdinShapedPlanQtyLookup;
 import jp.co.pm.ai.desktop.dispatch.AttendanceOvertimePreview;
 import jp.co.pm.ai.desktop.dispatch.AttendanceOvertimePreviewPython;
 import jp.co.pm.ai.desktop.dispatch.rules.paths.DispatchRulePaths;
@@ -91,6 +92,7 @@ import jp.co.pm.ai.desktop.dispatch.rules.trace.DispatchRuleTraceLoader;
 import jp.co.pm.ai.desktop.bridge.StagePythonExecutable;
 import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.config.PipelineDownstreamResultsClearer;
+import jp.co.pm.ai.desktop.config.PlanningCoreMaterialTableAppendProbe;
 import jp.co.pm.ai.desktop.config.Stage1AiCacheClearer;
 import jp.co.pm.ai.desktop.config.WorkspaceCacheArchiveStore;
 import jp.co.pm.ai.desktop.debug.AgentDebugLog;
@@ -572,6 +574,9 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
 
     /** Python child process while stage 1/2 is running; cleared on completion or interrupt. */
     private final AtomicReference<Process> activeStageChildProcess = new AtomicReference<>();
+
+    /** 「中断」ボタンで {@link Process#destroyForcibly()} した直後は true（子の exit=1 を cancel 扱いにする）。 */
+    private final AtomicBoolean activeStageRunUserCancelled = new AtomicBoolean(false);
 
     /** {@link #childEnvForPython(Map)} の直近結果（実行タブのキャッシュ表示・ログ用）。 */
     private NetworkSourceDirResolver.Result lastNetworkSourceResolution;
@@ -1102,14 +1107,16 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                     nz(s.mainRunStage2MemberSchedule()));
         }
         planInputTabController.applyStage2SkipTodayDispatchFromSession(s.mainRunStage2SkipTodayDispatch());
-        planInputTabController.applyStage2InProgressNextDayPromptFromSession(
-                s.planInputStage2InProgressNextDayPrompt());
+        planInputTabController.applyStage2SkipGeminiApiFromSession(s.planInputStage2SkipGeminiApi());
+        planInputTabController.applyStage2NextDayDialogModeFromSession(
+                s.planInputStage2NextDayDialogMode());
         planInputTabController.applyComboSheetMayExceedNeedFromSession(
                 s.planInputComboSheetMayExceedNeed());
         mainRunTabController.applyStage2ResultBookFontFromSession(s.mainRunStage2ResultBookFont());
         mainRunTabController.applyApplyLearnedSpeedFromActualsFromSession(
                 s.mainRunApplyLearnedSpeedFromActuals());
-        // 開発用チェックは通常 OFF。段階1実行後も OFF に戻し、セッション復元しない。
+        // AI API スキップはセッション復元する（変更時に保存）。全配台不要チェックのみ常に OFF 起動。
+        mainRunTabController.applySkipGeminiApiFromSession(s.mainRunSkipGeminiApi());
         /*
          * 設備ガントの apply は末尾で Canvas を再構築し personBadgeStyleResolverForGantt を参照する。
          * 担当バッジのセッション（グロー等）を先に適用しないと、起動直後の帯は既定スタイルで描かれる。
@@ -1218,10 +1225,11 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                 mainRunTabController.snapshotStage2ProductionPlanPath(),
                 mainRunTabController.snapshotStage2MemberSchedulePath(),
                 planInputTabController.snapshotStage2SkipTodayDispatch(),
-                planInputTabController.snapshotStage2InProgressNextDayPrompt(),
+                planInputTabController.snapshotStage2NextDayDialogMode().name(),
                 planInputTabController.snapshotComboSheetMayExceedNeed(),
+                planInputTabController.snapshotStage2SkipGeminiApi(),
                 mainRunTabController.snapshotStage2ResultBookFont(),
-                false,
+                mainRunTabController.snapshotSkipGeminiApi(),
                 false,
                 mainRunTabController.snapshotApplyLearnedSpeedFromActuals(),
                 snapshotUiEnvRows(),
@@ -4190,6 +4198,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
             return;
         }
         activeRunStageScript = script;
+        activeStageRunUserCancelled.set(false);
         selectMainShellTab(MainShellTabId.RUN);
         applyRunTabGating();
         mainRunTabController.beginLogTailFollowForRun();
@@ -4221,6 +4230,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                 pendingStage21OvertimeJsonPath = null;
                 pendingStage31OvertimeJsonPath = null;
                 pendingStage2InProgressNextDayJsonPath = null;
+                pendingStage2AladdinTodayExcludeJsonPath = null;
                 syncUiAfterDownstreamPipelineResultsCleared();
             }
             if (STAGE2.equals(script)) {
@@ -4229,8 +4239,9 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                         AppPaths.KEY_PM_AI_STAGE2_SKIP_TODAY_DISPATCH,
                         planInputTabController.snapshotStage2SkipTodayDispatch() ? "1" : "0");
                 uiRun.put(AppPaths.KEY_PM_AI_STAGE2_SKIP_IN_PROGRESS_DISPATCH, "0");
-                applyStage2InProgressNextDayDispatchEnv(uiRun);
+                applyStage2NextDayDialogEnvs(uiRun);
                 overlayPlanInputComboSheetMayExceedNeedEnv(uiRun);
+                overlayPlanInputStage2SkipGeminiApiEnv(uiRun);
                 String resultFont = mainRunTabController.snapshotStage2ResultBookFont();
                 if (resultFont != null && !resultFont.isBlank()) {
                     uiRun.put(AppPaths.KEY_PM_AI_RESULT_BOOK_FONT, resultFont.trim());
@@ -4258,12 +4269,19 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                 java.nio.file.Path ot = pendingStage21OvertimeJsonPath;
                 Map<String, String> stage21Snap = snapshotStage21PythonEnv(ot);
                 uiRun.putAll(stage21Snap);
+                overlayPlanInputStage2SkipGeminiApiEnv(uiRun);
             }
             String wb = effectiveTaskInputWorkbookPath();
             appendLog("--- start: " + script + " ---");
-            if (mainRunTabController.snapshotSkipGeminiApi()) {
+            if (STAGE1.equals(script) && mainRunTabController.snapshotSkipGeminiApi()) {
                 appendLog(
-                        "[dev] PM_AI_SKIP_GEMINI_API=1 — Gemini API 呼び出しをスキップします（開発用）。");
+                        "[dev] PM_AI_SKIP_GEMINI_API=1 — Gemini API 呼び出しをスキップします（開発用・段階1）。");
+            }
+            if ((STAGE2.equals(script) || STAGE2_1.equals(script))
+                    && planInputTabController != null
+                    && planInputTabController.snapshotStage2SkipGeminiApi()) {
+                appendLog(
+                        "[dev] PM_AI_SKIP_GEMINI_API=1 — Gemini API 呼び出しをスキップします（開発用・段階2）。");
             }
             if (mainRunTabController.snapshotApplyLearnedSpeedFromActuals()) {
                 appendLog(
@@ -4275,43 +4293,33 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                         "[dev] 段階1正常終了後、配台計画_タスク入力の全行を配台不要 yes に更新します（開発用）。");
             }
             if (STAGE1.equals(script)) {
-                if (mainRunTabController.snapshotStage1ClearCacheAndRun()) {
-                    appendLog("[stage1] キャッシュをクリアして実行します。");
-                    try {
-                        Stage1AiCacheClearer.ClearResult cacheClear =
-                                Stage1AiCacheClearer.archiveAndClearBeforeStage1Run(
-                                        uiRun, "段階1実行前");
-                        for (String line : cacheClear.detailLines()) {
-                            appendLog(line);
-                        }
-                        if (cacheClear.anyFailed()) {
-                            appendLog("[stage1] キャッシュの一部を削除できませんでした。");
-                        } else {
-                            appendLog("[stage1] キャッシュをクリアしました。");
-                        }
-                        if (workspaceCacheHistoryTabController != null) {
-                            workspaceCacheHistoryTabController.refreshListQuietly();
-                        }
-                        clearPlanInputTableForStage1CacheClear();
-                    } catch (IOException archiveEx) {
-                        appendLog(
-                                "[stage1] キャッシュ退避に失敗したためクリアを中止しました: "
-                                        + archiveEx.getMessage());
-                        runLock.set(false);
-                        activeRunStageScript = null;
-                        activeStageChildProcess.set(null);
-                        mainRunTabController.getStatusLabel().setText("キャッシュ退避失敗");
-                        applyRunTabGating();
-                        return;
+                appendLog("[stage1] キャッシュをクリアして実行します。");
+                try {
+                    Stage1AiCacheClearer.ClearResult cacheClear =
+                            Stage1AiCacheClearer.archiveAndClearBeforeStage1Run(
+                                    uiRun, "段階1実行前");
+                    for (String line : cacheClear.detailLines()) {
+                        appendLog(line);
                     }
-                } else {
-                    List<String> cacheKinds = Stage1AiCacheClearer.existingCacheKindLabelsJa(uiRun);
-                    if (!cacheKinds.isEmpty()) {
-                        appendLog(
-                                "[stage1] キャッシュを使用します（"
-                                        + String.join("・", cacheKinds)
-                                        + "）。");
+                    if (cacheClear.anyFailed()) {
+                        appendLog("[stage1] キャッシュの一部を削除できませんでした。");
+                    } else {
+                        appendLog("[stage1] キャッシュをクリアしました。");
                     }
+                    if (workspaceCacheHistoryTabController != null) {
+                        workspaceCacheHistoryTabController.refreshListQuietly();
+                    }
+                    clearPlanInputTableForStage1CacheClear();
+                } catch (IOException archiveEx) {
+                    appendLog(
+                            "[stage1] キャッシュ退避に失敗したためクリアを中止しました: "
+                                    + archiveEx.getMessage());
+                    runLock.set(false);
+                    activeRunStageScript = null;
+                    activeStageChildProcess.set(null);
+                    mainRunTabController.getStatusLabel().setText("キャッシュ退避失敗");
+                    applyRunTabGating();
+                    return;
                 }
             }
             if (STAGE1.equals(script) || STAGE2.equals(script) || STAGE2_1.equals(script)) {
@@ -4354,25 +4362,24 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                                 + " path="
                                 + corePy.toAbsolutePath().normalize());
                 try {
-                    if (java.nio.file.Files.isRegularFile(corePy)) {
-                        String coreText =
-                                java.nio.file.Files.readString(
-                                        corePy, java.nio.charset.StandardCharsets.UTF_8);
-                        boolean newMaterialTableAppend =
-                                coreText.contains("材料テーブルへ追記し製品厚みは空欄で出力")
-                                        || coreText.contains("_STAGE1_MATERIAL_TABLE_APPEND_BUILD");
+                    PlanningCoreMaterialTableAppendProbe.Result materialAppend =
+                            PlanningCoreMaterialTableAppendProbe.detect(dir);
+                    appendLog(
+                            "[stage1] planning_core 材料テーブル追記仕様="
+                                    + materialAppend.spec().logLabel()
+                                    + materialAppend
+                                            .buildId()
+                                            .map(id -> " build=" + id)
+                                            .orElse(""));
+                    if (materialAppend.spec()
+                            == PlanningCoreMaterialTableAppendProbe.Spec.LEGACY) {
                         appendLog(
-                                "[stage1] planning_core 材料テーブル追記仕様="
-                                        + (newMaterialTableAppend ? "新（空欄追記・行は残す）" : "旧（要 code/python 更新）"));
-                        if (!newMaterialTableAppend) {
-                            appendLog(
-                                    "[stage1] 警告: 同梱 pm-ai-data 等の古い _core.py です。"
-                                            + "英字開始の製品名は plan_input_tasks から除外され、材料テーブルにも追記されません。"
-                                            + "環境変数 PM_AI_CODE_PYTHON_DIR をリポジトリの code\\python に設定し、JavaFX を再ビルドしてください。");
-                        }
+                                "[stage1] 警告: 同梱 pm-ai-data 等の古い planning_core です。"
+                                        + "英字開始の製品名は plan_input_tasks から除外され、材料テーブルにも追記されません。"
+                                        + "環境変数 PM_AI_CODE_PYTHON_DIR をリポジトリの code\\python に設定し、JavaFX を再ビルドしてください。");
                     }
-                } catch (IOException ioEx) {
-                    appendLog("[stage1] planning_core/_core.py 読取失敗: " + ioEx.getMessage());
+                } catch (Exception ex) {
+                    appendLog("[stage1] planning_core 材料テーブル追記仕様の判定失敗: " + ex.getMessage());
                 }
             }
             appendStageChildResolvedEnvForRun(script, childEnv);
@@ -4442,7 +4449,6 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                             dispatchInteractiveTabController.reloadTableFromDiskAfterExternalUpdate();
                         }
                         if (stage1) {
-                            mainRunTabController.resetStage1ClearCacheAndRunCheckbox();
                             mainRunTabController.resetDevCheckboxesAfterStage1Run();
                         }
                         if (stage1 || stage2) {
@@ -4455,6 +4461,11 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
 
     private void completeStageRunOnFx(String script, Integer code, Throwable err, List<String> tailSnap) {
         mainRunTabController.flushPendingLogAppends();
+        if (activeStageRunUserCancelled.getAndSet(false)) {
+            code = 9;
+            err = null;
+            appendLog("[interrupt] ユーザー操作により段階処理を中断しました。");
+        }
         DispatchRuleBuilderRunContext.get().clearActiveRun();
         PipelineExecutionTimingKind stageTimingKind = pipelineTimingKindForStageScript(script);
         if (stageTimingKind != null) {
@@ -4709,7 +4720,9 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                         || STAGE2.equals(script)
                         || STAGE2_1.equals(script)
                         || isStage3Script(script);
-        boolean failed = err != null || (code != null && code.intValue() != 0);
+        boolean failed =
+                err != null
+                        || (code != null && code.intValue() != 0 && code.intValue() != 9);
         if (stage12 && failed) {
             appendLog("[ui] 段階処理が異常終了しました。エラーダイアログを表示します。");
             selectMainShellTab(MainShellTabId.RUN);
@@ -4720,7 +4733,6 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
             }
         }
         if (STAGE1.equals(script)) {
-            mainRunTabController.resetStage1ClearCacheAndRunCheckbox();
             mainRunTabController.resetDevCheckboxesAfterStage1Run();
         }
         mainRunTabController.flushPendingLogAppends();
@@ -4733,6 +4745,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         boolean didSomething = false;
         Process child = activeStageChildProcess.get();
         if (child != null && child.isAlive()) {
+            activeStageRunUserCancelled.set(true);
             appendLog("[interrupt] 段階処理の子プロセスを終了します…");
             try {
                 child.destroyForcibly();
@@ -5248,6 +5261,16 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                                 mainRunTabController.getScriptDirField().getText().trim()));
         String wb = effectiveTaskInputWorkbookPath();
         return new RunRequest(py, dir, "pm_ai_delivery_calendar_view.py", wb, childEnvForPython(uiRun));
+    }
+
+    /** 配台計画_タスク入力タブの段階2用 Gemini スキップを子プロセス環境へ反映する（段階2/2.1/3 試行で段階1設定を上書き）。 */
+    private void overlayPlanInputStage2SkipGeminiApiEnv(Map<String, String> ui) {
+        if (planInputTabController == null) {
+            return;
+        }
+        ui.put(
+                AppPaths.KEY_PM_AI_SKIP_GEMINI_API,
+                planInputTabController.snapshotStage2SkipGeminiApi() ? "1" : "0");
     }
 
     /** 実行・ログタブ「その他」のチェックを子プロセス環境へ反映する。 */
@@ -6204,9 +6227,10 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                 AppPaths.KEY_PM_AI_STAGE2_SKIP_TODAY_DISPATCH,
                 planInputTabController.snapshotStage2SkipTodayDispatch() ? "1" : "0");
         ui.put(AppPaths.KEY_PM_AI_STAGE2_SKIP_IN_PROGRESS_DISPATCH, "0");
-        applyStage2InProgressNextDayDispatchEnv(ui);
+        applyStage2NextDayDialogEnvs(ui);
         overlayPlanInputComboSheetMayExceedNeedEnv(ui);
         overlayMainRunSkipGeminiApiEnv(ui);
+        overlayPlanInputStage2SkipGeminiApiEnv(ui);
         String resultFont = mainRunTabController.snapshotStage2ResultBookFont();
         if (resultFont != null && !resultFont.isBlank()) {
             ui.put(AppPaths.KEY_PM_AI_RESULT_BOOK_FONT, resultFont.trim());
@@ -6226,9 +6250,10 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                 AppPaths.KEY_PM_AI_STAGE2_SKIP_TODAY_DISPATCH,
                 planInputTabController.snapshotStage2SkipTodayDispatch() ? "1" : "0");
         ui.put(AppPaths.KEY_PM_AI_STAGE2_SKIP_IN_PROGRESS_DISPATCH, "0");
-        applyStage2InProgressNextDayDispatchEnv(ui);
+        applyStage2NextDayDialogEnvs(ui);
         overlayPlanInputComboSheetMayExceedNeedEnv(ui);
         overlayMainRunSkipGeminiApiEnv(ui);
+        overlayPlanInputStage2SkipGeminiApiEnv(ui);
         String resultFont = mainRunTabController.snapshotStage2ResultBookFont();
         if (resultFont != null && !resultFont.isBlank()) {
             ui.put(AppPaths.KEY_PM_AI_RESULT_BOOK_FONT, resultFont.trim());
@@ -6391,35 +6416,121 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                     "[stage2] 配台計画_タスク入力タブの表に未保存の変更があります。「保存」または「再読み」で確定してから実行してください。");
             return;
         }
-        if (planInputTabController != null
-                && planInputTabController.snapshotStage2InProgressNextDayPrompt()) {
-            var inProgress = planInputTabController.collectInProgressRowsForNextDayDialog();
+        if (planInputTabController != null) {
+            if (!prepareStage2NextDayDialogJsonPaths(collectUiEnv())) {
+                return;
+            }
+        } else {
+            pendingStage2InProgressNextDayJsonPath = null;
+            pendingStage2AladdinTodayExcludeJsonPath = null;
+        }
+        runStage(STAGE2);
+    }
+
+    /**
+     * 段階2直前ダイアログ（①加工途中 / ②アラジン除外 / ③両方）の確定と JSON 書込。
+     *
+     * @return false なら段階2を中止（キャンセルまたは保存失敗）
+     */
+    private boolean prepareStage2NextDayDialogJsonPaths(Map<String, String> ui) {
+        jp.co.pm.ai.planning.stage2.Stage2NextDayDialogMode mode =
+                planInputTabController.snapshotStage2NextDayDialogMode();
+        pendingStage2InProgressNextDayJsonPath = null;
+        pendingStage2AladdinTodayExcludeJsonPath = null;
+
+        java.nio.file.Path inProgressCache =
+                jp.co.pm.ai.planning.stage2.Stage2InProgressNextDayDispatchIo.defaultCachePath(ui);
+        java.nio.file.Path aladdinCache =
+                jp.co.pm.ai.planning.stage2.Stage2AladdinTodayExcludeNextDayDispatchIo.defaultCachePath(
+                        ui);
+
+        if (mode == jp.co.pm.ai.planning.stage2.Stage2NextDayDialogMode.NONE) {
+            jp.co.pm.ai.planning.stage2.Stage2InProgressNextDayDispatchIo.deleteIfExists(inProgressCache);
+            jp.co.pm.ai.planning.stage2.Stage2AladdinTodayExcludeNextDayDispatchIo.deleteIfExists(
+                    aladdinCache);
+            return true;
+        }
+
+        if (mode.runsInProgressDialog()) {
+            var inProgress = planInputTabController.collectInProgressRowsForNextDayDialog(ui);
             if (!inProgress.isEmpty()) {
                 var entries =
                         jp.co.pm.ai.desktop.ui.Stage2InProgressNextDayDispatchDialog.prompt(
                                 primaryStage, inProgress);
                 if (entries.isEmpty()) {
                     appendLog("[stage2] 加工途中の翌日配台量設定をキャンセルしました。");
-                    return;
+                    return false;
                 }
                 try {
-                    java.nio.file.Path jsonPath =
-                            jp.co.pm.ai.planning.stage2.Stage2InProgressNextDayDispatchIo
-                                    .defaultCachePath(collectUiEnv());
                     jp.co.pm.ai.planning.stage2.Stage2InProgressNextDayDispatchIo.write(
-                            jsonPath, entries.get());
-                    pendingStage2InProgressNextDayJsonPath = jsonPath.toAbsolutePath().normalize();
+                            inProgressCache, entries.get());
+                    pendingStage2InProgressNextDayJsonPath =
+                            inProgressCache.toAbsolutePath().normalize();
                 } catch (Exception ex) {
                     appendLog("[stage2] 翌日配台量 JSON の保存に失敗: " + ex.getMessage());
-                    return;
+                    return false;
                 }
-            } else {
-                pendingStage2InProgressNextDayJsonPath = null;
+            } else if (mode == jp.co.pm.ai.planning.stage2.Stage2NextDayDialogMode.IN_PROGRESS) {
+                jp.co.pm.ai.planning.stage2.Stage2InProgressNextDayDispatchIo.deleteIfExists(
+                        inProgressCache);
             }
-        } else {
-            pendingStage2InProgressNextDayJsonPath = null;
         }
-        runStage(STAGE2);
+        if (!mode.runsInProgressDialog()) {
+            jp.co.pm.ai.planning.stage2.Stage2InProgressNextDayDispatchIo.deleteIfExists(
+                    inProgressCache);
+        }
+
+        if (mode.runsAladdinExcludeDialog()) {
+            var aladdinRows =
+                    planInputTabController.collectAladdinTodayExcludeRowsForNextDayDialog(ui);
+            if (mode == jp.co.pm.ai.planning.stage2.Stage2NextDayDialogMode.ALADDIN_TODAY_EXCLUDE
+                    || mode == jp.co.pm.ai.planning.stage2.Stage2NextDayDialogMode.BOTH) {
+                var inProgressForHint =
+                        mode == jp.co.pm.ai.planning.stage2.Stage2NextDayDialogMode.ALADDIN_TODAY_EXCLUDE
+                                ? planInputTabController.collectInProgressRowsForNextDayDialog(ui)
+                                : List.<jp.co.pm.ai.desktop.ui.Stage2InProgressNextDayDispatchDialog.Row>of();
+                if (!inProgressForHint.isEmpty()
+                        && mode
+                                == jp.co.pm.ai.planning.stage2.Stage2NextDayDialogMode
+                                        .ALADDIN_TODAY_EXCLUDE) {
+                    appendLog(
+                            "[stage2] 加工途中 "
+                                    + inProgressForHint.size()
+                                    + " 件は②には表示しません（実加工数>0）。"
+                                    + " 設定する場合はラジオ「加工途中…」または「①と②の両方」を選んでください。");
+                }
+            }
+            if (!aladdinRows.isEmpty()) {
+                var entries =
+                        jp.co.pm.ai.desktop.ui.Stage2AladdinTodayExcludeNextDayDispatchDialog
+                                .prompt(primaryStage, aladdinRows);
+                if (entries.isEmpty()) {
+                    appendLog("[stage2] アラジン当日配台の翌日除外量設定をキャンセルしました。");
+                    return false;
+                }
+                try {
+                    jp.co.pm.ai.planning.stage2.Stage2AladdinTodayExcludeNextDayDispatchIo.write(
+                            aladdinCache, entries.get());
+                    pendingStage2AladdinTodayExcludeJsonPath =
+                            aladdinCache.toAbsolutePath().normalize();
+                } catch (Exception ex) {
+                    appendLog("[stage2] アラジン翌日除外 JSON の保存に失敗: " + ex.getMessage());
+                    return false;
+                }
+            } else if (mode == jp.co.pm.ai.planning.stage2.Stage2NextDayDialogMode.ALADDIN_TODAY_EXCLUDE) {
+                appendLog(
+                        "[stage2] アラジン翌日除外ダイアログ: 対象行0件のため省略"
+                                + "（shaped_aladdin_plan 未読込・当日列なし・実加工>0 の行のみ等）。");
+                jp.co.pm.ai.planning.stage2.Stage2AladdinTodayExcludeNextDayDispatchIo.deleteIfExists(
+                        aladdinCache);
+            }
+        }
+        if (!mode.runsAladdinExcludeDialog()) {
+            jp.co.pm.ai.planning.stage2.Stage2AladdinTodayExcludeNextDayDispatchIo.deleteIfExists(
+                    aladdinCache);
+        }
+
+        return true;
     }
 
     /** 段階2.1（残業/休出シミュ）: 時間外ウィザードを起動し、確定後に {@link #triggerStage21} へ進む。 */
@@ -6799,6 +6910,8 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
     /** 直前の段階2ダイアログで確定した JSON。{@link #runStage} の段階2のみで子プロセスへ渡す。 */
     private java.nio.file.Path pendingStage2InProgressNextDayJsonPath;
 
+    private java.nio.file.Path pendingStage2AladdinTodayExcludeJsonPath;
+
     private void applyStage2InProgressNextDayDispatchEnv(Map<String, String> ui) {
         java.nio.file.Path p = pendingStage2InProgressNextDayJsonPath;
         if (p != null && java.nio.file.Files.isRegularFile(p)) {
@@ -6808,6 +6921,23 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
             jp.co.pm.ai.planning.stage2.Stage2InProgressNextDayDispatchIo.deleteIfExists(
                     jp.co.pm.ai.planning.stage2.Stage2InProgressNextDayDispatchIo.defaultCachePath(ui));
         }
+    }
+
+    private void applyStage2AladdinTodayExcludeNextDayEnv(Map<String, String> ui) {
+        java.nio.file.Path p = pendingStage2AladdinTodayExcludeJsonPath;
+        if (p != null && java.nio.file.Files.isRegularFile(p)) {
+            ui.put(AppPaths.KEY_PM_AI_STAGE2_ALADDIN_TODAY_EXCLUDE_NEXT_DAY_JSON, p.toString());
+        } else {
+            ui.remove(AppPaths.KEY_PM_AI_STAGE2_ALADDIN_TODAY_EXCLUDE_NEXT_DAY_JSON);
+            jp.co.pm.ai.planning.stage2.Stage2AladdinTodayExcludeNextDayDispatchIo.deleteIfExists(
+                    jp.co.pm.ai.planning.stage2.Stage2AladdinTodayExcludeNextDayDispatchIo
+                            .defaultCachePath(ui));
+        }
+    }
+
+    private void applyStage2NextDayDialogEnvs(Map<String, String> ui) {
+        applyStage2InProgressNextDayDispatchEnv(ui);
+        applyStage2AladdinTodayExcludeNextDayEnv(ui);
     }
 
     /**
@@ -6853,6 +6983,17 @@ public PlanInputTabController planInputTabControllerForDispatchRollUnit() {
         } else {
             exportSummaryAiDispatchWorkbookAfterStage3DispatchReload();
         }
+    }
+
+    /**
+     * 段階2直前ダイアログ②: アラジン shaped 表（JSON → 納期管理ビュー内タブ → ソース再読込）。
+     */
+    AladdinShapedPlanQtyLookup.ShapedTable snapshotShapedAladdinPlanTable(Map<String, String> ui) {
+        if (deliveryCalendarViewTabController != null) {
+            return deliveryCalendarViewTabController.snapshotShapedAladdinPlanTable(ui);
+        }
+        return AladdinShapedPlanQtyLookup.loadShapedTable(
+                AppPaths.resolveShapedAladdinPlanJsonPath(ui != null ? ui : Map.of()));
     }
 
     /** 段階3 配台のみ反映後のサマリ xlsx 出力（メイン表は JavaFX スレッドでスナップショットし、POI はバックグラウンド）。 */

@@ -13,7 +13,7 @@ import java.util.Set;
 import jp.co.pm.ai.desktop.io.NetworkSourceFileReloadCache;
 
 /**
- * 段階1「キャッシュをクリアして実行」で削除するワークスペースキャッシュ。
+ * 段階1実行前に削除するワークスペースキャッシュ。
  *
  * <ul>
  *   <li>AI 備考: {@value #AI_REMARKS_CACHE_FILENAME}（Excel マクロの AI 解析キャッシュ削除と同趣旨）

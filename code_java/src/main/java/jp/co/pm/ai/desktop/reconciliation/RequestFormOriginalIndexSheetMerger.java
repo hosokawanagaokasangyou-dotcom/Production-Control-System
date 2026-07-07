@@ -54,6 +54,8 @@ final class RequestFormOriginalIndexSheetMerger {
         } else {
             rawMap.put(META_INDEX_CONFLICTS, formatConflictBanner(conflicts));
         }
+
+        RequestFormOriginalIndexSheetMeta.writeIndexMetaToRawMap(rawMap, indexEntry);
     }
 
     private static void applyField(

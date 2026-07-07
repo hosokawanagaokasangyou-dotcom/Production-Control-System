@@ -115,9 +115,6 @@ public final class MainRunTabController {
             "段階1（納期管理ビュー更新中）";
 
     @FXML
-    private CheckBox stage1ClearCacheAndRunCheckBox;
-
-    @FXML
     private ComboBox<String> stage2ResultBookFontCombo;
 
     @FXML
@@ -1457,35 +1454,14 @@ public final class MainRunTabController {
         return stage2MemberScheduleField.getText().trim();
     }
 
-    /**
-     * When {@code true}, stage-1 deletes {@code ai_remarks_cache.json} (and legacy {@code output/} copy) before
-     * spawning Python.
-     */
-    boolean snapshotStage1ClearCacheAndRun() {
-        return stage1ClearCacheAndRunCheckBox != null
-                && stage1ClearCacheAndRunCheckBox.isSelected();
-    }
-
-    /** 段階1実行後は毎回オフ（ワンショット）。セッションには保存しない。 */
-    void resetStage1ClearCacheAndRunCheckbox() {
-        if (stage1ClearCacheAndRunCheckBox != null) {
-            stage1ClearCacheAndRunCheckBox.setSelected(false);
-        }
-    }
-
-    /** 開発用チェック（Gemini スキップ・全配台不要）は段階1実行後に毎回オフ。セッションには保存しない。 */
+    /** 開発用チェックのうち「全依頼を配台不要」は段階1実行後に毎回オフ。AI API スキップはユーザー選択を保持（セッション永続化）。 */
     void resetDevCheckboxesAfterStage1Run() {
-        suppressSkipGeminiApiEvents.set(true);
         suppressStage1MarkAllExcludeAfterRunEvents.set(true);
         try {
-            if (skipGeminiApiCheckBox != null) {
-                skipGeminiApiCheckBox.setSelected(false);
-            }
             if (stage1MarkAllExcludeAfterRunCheckBox != null) {
                 stage1MarkAllExcludeAfterRunCheckBox.setSelected(false);
             }
         } finally {
-            suppressSkipGeminiApiEvents.set(false);
             suppressStage1MarkAllExcludeAfterRunEvents.set(false);
         }
         if (shell != null) {

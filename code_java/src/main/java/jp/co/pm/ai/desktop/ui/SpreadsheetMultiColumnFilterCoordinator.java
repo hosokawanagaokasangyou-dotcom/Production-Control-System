@@ -290,4 +290,27 @@ public final class SpreadsheetMultiColumnFilterCoordinator {
         }
         spv.setHiddenRows(hidden);
     }
+
+    /**
+     * 値検索で候補一覧が絞られているとき、一覧に出ていない値を選択集合から除外する。
+     * 例: 「W7-7」で検索し当該行だけが見えてチェックされている状態で OK したとき、
+     * 非表示の他値が選択集合に残らないようにする。
+     */
+    static void retainSelectionToSearchVisible(
+            Set<String> copySet, Iterable<String> displayedItems, String searchQuery) {
+        if (copySet == null || displayedItems == null) {
+            return;
+        }
+        String q = searchQuery != null ? searchQuery.trim() : "";
+        if (q.isEmpty()) {
+            return;
+        }
+        Set<String> visible = new HashSet<>();
+        for (String item : displayedItems) {
+            if (item != null) {
+                visible.add(item);
+            }
+        }
+        copySet.removeIf(item -> !visible.contains(item));
+    }
 }

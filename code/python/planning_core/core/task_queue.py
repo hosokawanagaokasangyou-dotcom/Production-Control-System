@@ -25,6 +25,7 @@ def build_task_queue_from_planning_df(
     if (os.environ.get("PM_AI_PLAN_INPUT_STAGE3") or "").strip() == "1":
         _stage3_reg_shift_start = stage3_regular_shift_start_time()
     in_progress_next_day_m = _load_stage2_in_progress_next_day_dispatch_overrides()
+    aladdin_exclude_next_day_m = _load_stage2_aladdin_today_exclude_next_day_overrides()
     task_queue = []
     n_exclude_plan = 0
     seq_by_tid = _collect_process_content_order_by_task_id(tasks_df)
@@ -83,6 +84,8 @@ def build_task_queue_from_planning_df(
 
         qty = max(0.0, float(dispatch_m))
         qty_from_in_progress_next_day_dialog = False
+        aladdin_today_exclude_next_day_m = 0.0
+        aladdin_today_exclude_next_day_dialog = False
         if in_progress and in_progress_next_day_m:
             ov_key = _stage2_in_progress_next_day_dispatch_key(
                 task_id, machine, machine_name
@@ -98,6 +101,30 @@ def build_task_queue_from_planning_df(
                     qty,
                     dispatch_m,
                 )
+
+        if (
+            not in_progress
+            and aladdin_exclude_next_day_m
+            and done_qty <= 1e-12
+        ):
+            ov_key = _stage2_in_progress_next_day_dispatch_key(
+                task_id, machine, machine_name
+            )
+            if ov_key in aladdin_exclude_next_day_m:
+                aladdin_today_exclude_next_day_m = _sanitize_dispatch_qty_m(
+                    float(aladdin_exclude_next_day_m[ov_key])
+                )
+                aladdin_today_exclude_next_day_dialog = (
+                    aladdin_today_exclude_next_day_m > 1e-12
+                )
+                if aladdin_today_exclude_next_day_dialog:
+                    logging.info(
+                        "段階2: アラジン当日・翌日除外を登録 依頼NO=%s 工程=%s 機械名=%s → %s m",
+                        task_id,
+                        _log_plain_label(machine),
+                        _log_plain_label(machine_name),
+                        aladdin_today_exclude_next_day_m,
+                    )
 
         speed = parse_float_safe(speed_raw, 1.0)
         if speed <= 0:
@@ -369,6 +396,9 @@ def build_task_queue_from_planning_df(
                 "task_special_ai_note": ai_note,
                 "in_progress": in_progress,
                 "qty_from_in_progress_next_day_dialog": qty_from_in_progress_next_day_dialog,
+                "aladdin_today_exclude_next_day_m": aladdin_today_exclude_next_day_m,
+                "aladdin_today_exclude_next_day_dialog": aladdin_today_exclude_next_day_dialog,
+                "aladdin_next_day_exclude_remaining_m": aladdin_today_exclude_next_day_m,
                 "has_special_remark": has_special_remark,
                 "has_done_deadline_override": has_done_deadline_override,
                 "done_qty_reported": done_qty,

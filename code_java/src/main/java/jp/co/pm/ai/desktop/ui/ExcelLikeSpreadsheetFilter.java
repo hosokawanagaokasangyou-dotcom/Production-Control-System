@@ -172,6 +172,13 @@ public final class ExcelLikeSpreadsheetFilter implements Filter {
                                 if (Boolean.TRUE.equals(newVal)) {
                                     prepareMenuSession();
                                 } else {
+                                    SpreadsheetMultiColumnFilterCoordinator
+                                            .retainSelectionToSearchVisible(
+                                                    copySet,
+                                                    displayedItems,
+                                                    searchField != null
+                                                            ? searchField.getText()
+                                                            : "");
                                     SpreadsheetMultiColumnFilterCoordinator.commitColumnSelection(
                                             spv, column, new HashSet<>(copySet));
                                 }
@@ -236,6 +243,8 @@ public final class ExcelLikeSpreadsheetFilter implements Filter {
         selectAllBtn.setMaxWidth(Double.MAX_VALUE);
         selectAllBtn.setOnAction(
                 e -> {
+                    SpreadsheetMultiColumnFilterCoordinator.retainSelectionToSearchVisible(
+                            copySet, displayedItems, searchField.getText());
                     copySet.addAll(displayedItems);
                     if (listView != null) {
                         listView.refresh();
@@ -284,6 +293,11 @@ public final class ExcelLikeSpreadsheetFilter implements Filter {
                                                             } else {
                                                                 copySet.remove(item);
                                                             }
+                                                            SpreadsheetMultiColumnFilterCoordinator
+                                                                    .retainSelectionToSearchVisible(
+                                                                            copySet,
+                                                                            displayedItems,
+                                                                            searchField.getText());
                                                         });
                                 setGraphic(checkBox);
                             }

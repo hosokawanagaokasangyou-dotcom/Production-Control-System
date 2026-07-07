@@ -398,6 +398,12 @@ public final class AppPaths {
             "PM_AI_STAGE2_IN_PROGRESS_NEXT_DAY_DISPATCH_JSON";
 
     /**
+     * 段階2: アラジン当日配台行の翌日除外量 (m) を載せた UTF-8 JSON。JavaFX が段階2直前に書き、配台ループが翌稼働日の割当上限から差し引く。
+     */
+    public static final String KEY_PM_AI_STAGE2_ALADDIN_TODAY_EXCLUDE_NEXT_DAY_JSON =
+            "PM_AI_STAGE2_ALADDIN_TODAY_EXCLUDE_NEXT_DAY_JSON";
+
+    /**
      * 段階2.1 残業シミュレーション: JavaFX が書く UTF-8 JSON（working_overrides / overtime_minutes）。
      * 段階2.1 子プロセス起動時のみ載せ、master.xlsm は変更しない。
      */

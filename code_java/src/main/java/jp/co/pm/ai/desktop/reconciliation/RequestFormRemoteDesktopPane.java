@@ -17,10 +17,13 @@ import java.util.function.Consumer;
 import java.util.function.IntConsumer;
 import java.util.function.Supplier;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import javafx.application.Platform;
+import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.FXCollections;
+import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
 import javafx.geometry.Orientation;
 import javafx.geometry.Pos;
@@ -35,8 +38,12 @@ import javafx.scene.control.Dialog;
 import javafx.scene.control.ListCell;
 import javafx.scene.control.Label;
 import javafx.scene.control.Spinner;
+import javafx.scene.control.OverrunStyle;
 import javafx.scene.control.SpinnerValueFactory;
 import javafx.scene.control.SplitPane;
+import javafx.scene.control.TableCell;
+import javafx.scene.control.TableColumn;
+import javafx.scene.control.TableView;
 import javafx.scene.control.PasswordField;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.TextArea;
@@ -67,6 +74,7 @@ import jp.co.pm.ai.desktop.io.RdpLaunchDisplaySettings.LaunchDisplay;
 import jp.co.pm.ai.desktop.io.RdpLaunchProfile;
 import jp.co.pm.ai.desktop.io.RdpLaunchProfileCatalog;
 import jp.co.pm.ai.desktop.io.RdpLaunchProfileQuickLaunch;
+import jp.co.pm.ai.desktop.io.RdpLaunchProfileSequentialRun;
 import jp.co.pm.ai.desktop.io.RdpMstscSessionMonitor;
 import jp.co.pm.ai.desktop.io.RdpPreviewSettings;
 import jp.co.pm.ai.desktop.io.RdpRemoteLauncherDeployer;
@@ -147,7 +155,13 @@ public final class RequestFormRemoteDesktopPane {
         AtomicBoolean launcherDeployReady = new AtomicBoolean(false);
         AtomicReference<Runnable> pendingLaunchAfterDeploy = new AtomicReference<>();
         AtomicBoolean rdpSessionActive = new AtomicBoolean(false);
+        AtomicBoolean sequentialRunActive = new AtomicBoolean(false);
+        AtomicReference<List<Integer>> sequentialQueue = new AtomicReference<>(List.of());
+        AtomicInteger sequentialIndex = new AtomicInteger(0);
+        List<Integer> sequentialSelectionOrder = new ArrayList<>();
         Runnable[] refreshDisplayPreview = new Runnable[1];
+        Runnable[] refreshFetchedFilesTable = new Runnable[1];
+        Runnable[] scrollToFetchedFilesSection = new Runnable[1];
         final RdpRightPanePreviewController[] rightPanePreviewHolder = new RdpRightPanePreviewController[1];
 
         Label title = new Label("リモートデスクトップ");
@@ -165,7 +179,12 @@ public final class RequestFormRemoteDesktopPane {
         subtitle.setWrapText(true);
         subtitle.setMaxWidth(CARD_WIDTH);
 
-        VBox headerBlock = new VBox(6, title, subtitle);
+        Button btnJumpToFetchedFiles = new Button("取得ファイル一覧へ ↓");
+        styleSecondaryButton(btnJumpToFetchedFiles);
+        btnJumpToFetchedFiles.setTooltip(
+                new Tooltip("RPA 取得先フォルダの最新ファイル一覧（ページ最下部）へスクロールします。"));
+
+        VBox headerBlock = new VBox(6, title, subtitle, btnJumpToFetchedFiles);
         headerBlock.getStyleClass().add("pm-rdp-header");
         headerBlock.setMaxWidth(CARD_WIDTH);
 
@@ -259,7 +278,76 @@ public final class RequestFormRemoteDesktopPane {
             GridPane.setHgrow(quickBtn, Priority.ALWAYS);
         }
 
+        CheckBox chkSequentialMode = new CheckBox("連続実行モード");
+        chkSequentialMode.setTooltip(
+                new Tooltip(
+                        "オンにするとクイック起動ボタンで実行順を選び、"
+                                + "接続が終了するたびに次のタスクを自動起動します。"));
+        Button btnClearSequentialSelection = new Button("選択をクリア");
+        styleSecondaryButton(btnClearSequentialSelection);
+        btnClearSequentialSelection.setDisable(true);
+        btnClearSequentialSelection.setTooltip(
+                new Tooltip("連続実行の選択順をリセットします。"));
+        Label sequentialStatusLabel = new Label();
+        sequentialStatusLabel.getStyleClass().add("pm-rdp-page-subtitle");
+        sequentialStatusLabel.setWrapText(true);
+        sequentialStatusLabel.setMaxWidth(CARD_WIDTH);
+        HBox sequentialModeRow =
+                new HBox(8, chkSequentialMode, btnClearSequentialSelection);
+        sequentialModeRow.setAlignment(Pos.CENTER_LEFT);
+        sequentialModeRow.setMaxWidth(CARD_WIDTH);
+
         Runnable[] updateLaunchButtonState = new Runnable[1];
+
+        Runnable[] refreshQuickLaunchSequentialLabels = new Runnable[1];
+        refreshQuickLaunchSequentialLabels[0] =
+                () -> {
+                    for (Button quickBtn : quickLaunchProfileButtons) {
+                        if (!quickBtn.isVisible()) {
+                            continue;
+                        }
+                        Object baseObj = quickBtn.getProperties().get("pmQuickBaseLabel");
+                        String baseLabel = baseObj instanceof String s ? s : quickBtn.getText();
+                        Integer profileNumber = (Integer) quickBtn.getUserData();
+                        int orderIdx =
+                                profileNumber != null
+                                        ? RdpLaunchProfileSequentialRun.selectionOrderIndex(
+                                                sequentialSelectionOrder, profileNumber)
+                                        : -1;
+                        quickBtn.setText(
+                                RdpLaunchProfileSequentialRun.quickButtonLabel(
+                                        baseLabel, orderIdx));
+                        quickBtn.getStyleClass().remove("pm-rdp-quick-launch-selected");
+                        if (orderIdx > 0) {
+                            quickBtn.getStyleClass().add("pm-rdp-quick-launch-selected");
+                        }
+                    }
+                    btnClearSequentialSelection.setDisable(sequentialSelectionOrder.isEmpty());
+                    if (!sequentialRunActive.get()) {
+                        if (chkSequentialMode.isSelected() && !sequentialSelectionOrder.isEmpty()) {
+                            sequentialStatusLabel.setText(
+                                    "実行順: "
+                                            + sequentialSelectionOrder.stream()
+                                                    .map(
+                                                            n ->
+                                                                    RdpLaunchProfileSequentialRun
+                                                                            .selectionOrderMarker(
+                                                                                    sequentialSelectionOrder
+                                                                                            .indexOf(
+                                                                                                    n)
+                                                                                            + 1)
+                                                                            + " プロファイル "
+                                                                            + n)
+                                                    .reduce((a, b) -> a + " → " + b)
+                                                    .orElse(""));
+                        } else if (!chkSequentialMode.isSelected()) {
+                            sequentialStatusLabel.setText("");
+                        }
+                    }
+                    if (updateLaunchButtonState[0] != null) {
+                        updateLaunchButtonState[0].run();
+                    }
+                };
 
         Runnable[] updateProfileManageButtons = new Runnable[1];
 
@@ -307,6 +395,7 @@ public final class RequestFormRemoteDesktopPane {
                                             ? profileComboLabel(row, meta)
                                             : meta.displayLabel();
                             quickBtn.setText(RdpLaunchProfileQuickLaunch.buttonLabel(label));
+                            quickBtn.getProperties().put("pmQuickBaseLabel", quickBtn.getText());
                             quickBtn.setUserData(profileNumber);
                             quickBtn.setTooltip(new Tooltip(label));
                             quickBtn.setVisible(true);
@@ -323,6 +412,9 @@ public final class RequestFormRemoteDesktopPane {
                     }
                     if (updateProfileManageButtons[0] != null) {
                         updateProfileManageButtons[0].run();
+                    }
+                    if (refreshQuickLaunchSequentialLabels[0] != null) {
+                        refreshQuickLaunchSequentialLabels[0].run();
                     }
                 };
 
@@ -1068,6 +1160,27 @@ public final class RequestFormRemoteDesktopPane {
 
         Button[] btnLaunchRef = new Button[1];
 
+        chkSequentialMode
+                .selectedProperty()
+                .addListener(
+                        (obs, was, selected) -> {
+                            if (!selected) {
+                                sequentialSelectionOrder.clear();
+                                sequentialStatusLabel.setText("");
+                            }
+                            if (refreshQuickLaunchSequentialLabels[0] != null) {
+                                refreshQuickLaunchSequentialLabels[0].run();
+                            }
+                        });
+        btnClearSequentialSelection.setOnAction(
+                e -> {
+                    sequentialSelectionOrder.clear();
+                    sequentialStatusLabel.setText("");
+                    if (refreshQuickLaunchSequentialLabels[0] != null) {
+                        refreshQuickLaunchSequentialLabels[0].run();
+                    }
+                });
+
         Button btnLaunch = new Button("リモートデスクトップを起動");
         btnLaunchRef[0] = btnLaunch;
         for (Button quickBtn : quickLaunchProfileButtons) {
@@ -1075,6 +1188,21 @@ public final class RequestFormRemoteDesktopPane {
                     e -> {
                         Integer profileNumber = (Integer) quickBtn.getUserData();
                         if (profileNumber == null || btnLaunchRef[0] == null) {
+                            return;
+                        }
+                        if (chkSequentialMode.isSelected()) {
+                            if (sequentialRunActive.get() || rdpSessionActive.get()) {
+                                return;
+                            }
+                            List<Integer> nextSelection =
+                                    RdpLaunchProfileSequentialRun.toggleSelection(
+                                            List.copyOf(sequentialSelectionOrder),
+                                            profileNumber);
+                            sequentialSelectionOrder.clear();
+                            sequentialSelectionOrder.addAll(nextSelection);
+                            if (refreshQuickLaunchSequentialLabels[0] != null) {
+                                refreshQuickLaunchSequentialLabels[0].run();
+                            }
                             return;
                         }
                         launchProfileCombo.setValue(profileNumber);
@@ -1139,7 +1267,40 @@ public final class RequestFormRemoteDesktopPane {
                                 credEx.getMessage());
                         return;
                     }
-                    Integer selectedLaunchProfile = launchProfileCombo.getValue();
+                    Integer selectedLaunchProfile;
+                    List<Integer> sequentialStartQueue = null;
+                    if (sequentialRunActive.get()) {
+                        List<Integer> queue = sequentialQueue.get();
+                        int idx = sequentialIndex.get();
+                        if (queue == null || queue.isEmpty() || idx < 0 || idx >= queue.size()) {
+                            sequentialRunActive.set(false);
+                            sequentialQueue.set(List.of());
+                            showAlert(
+                                    Alert.AlertType.ERROR,
+                                    "連続実行エラー",
+                                    "連続実行のキューが不正です。最初からやり直してください。");
+                            return;
+                        }
+                        selectedLaunchProfile = queue.get(idx);
+                    } else if (chkSequentialMode.isSelected()) {
+                        List<Integer> queue =
+                                RdpLaunchProfileSequentialRun.normalizeSelection(
+                                        sequentialSelectionOrder);
+                        if (queue.isEmpty()) {
+                            showAlert(
+                                    Alert.AlertType.WARNING,
+                                    "タスク未選択",
+                                    "連続実行モードでは、クイック起動ボタンを実行順にクリックして"
+                                            + "タスクを選んでから起動してください。");
+                            return;
+                        }
+                        sequentialStartQueue = queue;
+                        sequentialIndex.set(0);
+                        selectedLaunchProfile = queue.getFirst();
+                    } else {
+                        selectedLaunchProfile = launchProfileCombo.getValue();
+                    }
+                    launchProfileCombo.setValue(selectedLaunchProfile);
                     if (selectedLaunchProfile == null) {
                         showAlert(
                                 Alert.AlertType.WARNING,
@@ -1263,9 +1424,27 @@ public final class RequestFormRemoteDesktopPane {
                         return;
                     }
 
+                    final List<Integer> sequentialStartQueueFinal = sequentialStartQueue;
+
                     Runnable performLaunch =
                             () -> {
                                 try {
+                                    if (sequentialStartQueueFinal != null
+                                            && !sequentialRunActive.get()) {
+                                        sequentialQueue.set(sequentialStartQueueFinal);
+                                        sequentialRunActive.set(true);
+                                    }
+                                    if (sequentialRunActive.get()) {
+                                        List<Integer> activeQueue = sequentialQueue.get();
+                                        int activeIdx = sequentialIndex.get();
+                                        if (activeQueue != null && !activeQueue.isEmpty()) {
+                                            sequentialStatusLabel.setText(
+                                                    RdpLaunchProfileSequentialRun.progressStatusText(
+                                                            activeIdx + 1,
+                                                            activeQueue.size(),
+                                                            launchProfileLabel));
+                                        }
+                                    }
                                     Path configured = configuredProfile;
                                     Path preferred =
                                             RdpFileSigner.resolvePreferredSignedProfilePath(
@@ -1319,6 +1498,19 @@ public final class RequestFormRemoteDesktopPane {
                                     } else {
                                         msg += "\n接続終了を監視中…";
                                     }
+                                    if (sequentialRunActive.get()) {
+                                        List<Integer> activeQueue = sequentialQueue.get();
+                                        int activeIdx = sequentialIndex.get();
+                                        if (activeQueue != null && !activeQueue.isEmpty()) {
+                                            msg +=
+                                                    "\n"
+                                                            + RdpLaunchProfileSequentialRun
+                                                                    .progressStatusText(
+                                                                            activeIdx + 1,
+                                                                            activeQueue.size(),
+                                                                            launchProfileLabel);
+                                        }
+                                    }
                                     status.accept(msg);
                                     statusLabel.setText(msg);
                                     if (previewEnabled && rightPanePreviewHolder[0] != null) {
@@ -1370,9 +1562,68 @@ public final class RequestFormRemoteDesktopPane {
                                                                                 event);
                                                                 status.accept(endMsg);
                                                                 statusLabel.setText(endMsg);
+                                                                if (refreshFetchedFilesTable[0]
+                                                                        != null) {
+                                                                    refreshFetchedFilesTable[0]
+                                                                            .run();
+                                                                }
+                                                                if (scrollToFetchedFilesSection[0]
+                                                                        != null) {
+                                                                    scrollToFetchedFilesSection[0]
+                                                                            .run();
+                                                                }
+                                                                if (sequentialRunActive.get()) {
+                                                                    List<Integer> activeQueue =
+                                                                            sequentialQueue.get();
+                                                                    int nextIdx =
+                                                                            sequentialIndex.get()
+                                                                                    + 1;
+                                                                    if (activeQueue != null
+                                                                            && nextIdx
+                                                                                    < activeQueue
+                                                                                            .size()) {
+                                                                        sequentialIndex.set(
+                                                                                nextIdx);
+                                                                        status.accept(
+                                                                                endMsg
+                                                                                        + "\n連続実行: 次のタスク（"
+                                                                                        + (nextIdx
+                                                                                                + 1)
+                                                                                        + "/"
+                                                                                        + activeQueue
+                                                                                                .size()
+                                                                                        + "）を起動します…");
+                                                                        btnLaunchRef[0].fire();
+                                                                    } else {
+                                                                        sequentialRunActive.set(
+                                                                                false);
+                                                                        sequentialQueue.set(
+                                                                                List.of());
+                                                                        sequentialSelectionOrder
+                                                                                .clear();
+                                                                        sequentialStatusLabel
+                                                                                .setText(
+                                                                                        "連続実行が完了しました。");
+                                                                        if (refreshQuickLaunchSequentialLabels
+                                                                                        [0]
+                                                                                != null) {
+                                                                            refreshQuickLaunchSequentialLabels
+                                                                                    [0]
+                                                                                    .run();
+                                                                        }
+                                                                        status.accept(
+                                                                                endMsg
+                                                                                        + "\n連続実行が完了しました。");
+                                                                        statusLabel.setText(
+                                                                                endMsg
+                                                                                        + "\n連続実行が完了しました。");
+                                                                    }
+                                                                }
                                                             }));
                                 } catch (IOException ex) {
                                     rdpSessionActive.set(false);
+                                    sequentialRunActive.set(false);
+                                    sequentialQueue.set(List.of());
                                     updateLaunchButtonState[0].run();
                                     if (rightPanePreviewHolder[0] != null) {
                                         rightPanePreviewHolder[0].removePreviewPane();
@@ -1639,7 +1890,9 @@ public final class RequestFormRemoteDesktopPane {
                         fieldCaption("起動プロファイル"),
                         launchProfileCombo,
                         launchProfileManageRow,
+                        sequentialModeRow,
                         quickLaunchProfileGrid,
+                        sequentialStatusLabel,
                         launchProfileDetail,
                         fieldCaption("RDP プロファイル (.rdp)"),
                         profileRow,
@@ -1714,7 +1967,12 @@ public final class RequestFormRemoteDesktopPane {
                                 quickLaunchProfileButtons,
                                 launcherDeployInProgress,
                                 launcherDeployReady,
-                                rdpSessionActive);
+                                rdpSessionActive,
+                                chkSequentialMode,
+                                sequentialSelectionOrder,
+                                sequentialRunActive,
+                                sequentialIndex,
+                                sequentialQueue.get());
         refreshAladdinCredentialsUi[0].run();
 
         VBox policyContent =
@@ -1729,7 +1987,137 @@ public final class RequestFormRemoteDesktopPane {
         policyPane.setMaxWidth(CARD_WIDTH);
         policyPane.getStyleClass().add("pm-rdp-section-pane");
 
-        VBox card = new VBox(16, headerBlock, connectHero, rapPane, policyPane);
+        Label fetchedFilesTitle = new Label("取得データ最新ファイル");
+        fetchedFilesTitle.getStyleClass().add("pm-rdp-section-title");
+
+        Label fetchedFilesHint =
+                new Label(
+                        "RPA 取得先フォルダ内の更新時刻が最新のファイルを表示します。"
+                                + " 取得日時はファイルの更新日時（ローカル時刻）です。"
+                                + " 接続終了後に自動更新されます。");
+        fetchedFilesHint.getStyleClass().add("pm-rdp-page-subtitle");
+        fetchedFilesHint.setWrapText(true);
+        fetchedFilesHint.setMaxWidth(CARD_WIDTH);
+
+        Label fetchedFilesMetaLabel = new Label("未確認");
+        fetchedFilesMetaLabel.getStyleClass().add("pm-rdp-meta-label");
+        fetchedFilesMetaLabel.setWrapText(true);
+        fetchedFilesMetaLabel.setMaxWidth(CARD_WIDTH);
+
+        TableView<RemoteDesktopLatestSourceFiles.Row> fetchedFilesTable = new TableView<>();
+        fetchedFilesTable.getStyleClass().add("pm-rdp-fetched-files-table");
+        fetchedFilesTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
+        fetchedFilesTable.setFixedCellSize(-1);
+        fetchedFilesTable.setMinHeight(120);
+        fetchedFilesTable.setPrefHeight(360);
+        fetchedFilesTable.setMaxHeight(640);
+        fetchedFilesTable.setPlaceholder(new Label("一覧を読込中…"));
+
+        TableColumn<RemoteDesktopLatestSourceFiles.Row, String> fetchedCategoryCol =
+                new TableColumn<>("種別");
+        fetchedCategoryCol.setCellValueFactory(
+                data ->
+                        new SimpleStringProperty(
+                                data.getValue().category().label()));
+        fetchedCategoryCol.setPrefWidth(108);
+        fetchedCategoryCol.setMinWidth(88);
+        fetchedCategoryCol.setMaxWidth(140);
+
+        TableColumn<RemoteDesktopLatestSourceFiles.Row, String> fetchedAcquiredAtCol =
+                new TableColumn<>("取得日時");
+        fetchedAcquiredAtCol.setCellValueFactory(
+                data -> new SimpleStringProperty(data.getValue().displayAcquiredAt()));
+        fetchedAcquiredAtCol.setPrefWidth(148);
+        fetchedAcquiredAtCol.setMinWidth(132);
+        fetchedAcquiredAtCol.setMaxWidth(180);
+
+        TableColumn<RemoteDesktopLatestSourceFiles.Row, String> fetchedPathCol =
+                new TableColumn<>("フルパス");
+        fetchedPathCol.setCellValueFactory(
+                data -> new SimpleStringProperty(data.getValue().displayPath()));
+        fetchedPathCol.setPrefWidth(480);
+        installWrappingReadOnlyTableCell(fetchedPathCol);
+
+        fetchedFilesTable
+                .getColumns()
+                .addAll(fetchedCategoryCol, fetchedAcquiredAtCol, fetchedPathCol);
+        ObservableList<RemoteDesktopLatestSourceFiles.Row> fetchedFilesItems =
+                FXCollections.observableArrayList();
+        fetchedFilesTable.setItems(fetchedFilesItems);
+
+        Button btnRefreshFetchedFiles = new Button("最新を再確認");
+        styleSecondaryButton(btnRefreshFetchedFiles);
+        btnRefreshFetchedFiles.setTooltip(
+                new Tooltip("共有フォルダを再スキャンして一覧を更新します。"));
+
+        Button btnJumpToTop = new Button("↑ 先頭へ戻る");
+        styleSecondaryButton(btnJumpToTop);
+        btnJumpToTop.setTooltip(new Tooltip("ページ先頭へスクロールします。"));
+
+        HBox fetchedFilesToolbar = new HBox(8, btnRefreshFetchedFiles, btnJumpToTop);
+        fetchedFilesToolbar.setAlignment(Pos.CENTER_LEFT);
+        fetchedFilesToolbar.setMaxWidth(CARD_WIDTH);
+
+        VBox fetchedFilesSection =
+                new VBox(
+                        8,
+                        fetchedFilesTitle,
+                        fetchedFilesHint,
+                        fetchedFilesMetaLabel,
+                        fetchedFilesTable,
+                        fetchedFilesToolbar);
+        fetchedFilesSection.getStyleClass().add("pm-rdp-fetched-files-section");
+        fetchedFilesSection.setFillWidth(true);
+        fetchedFilesSection.setMaxWidth(CARD_WIDTH);
+
+        refreshFetchedFilesTable[0] =
+                () ->
+                        Thread.ofVirtual()
+                                .name("rdp-fetched-files-refresh")
+                                .start(
+                                        () -> {
+                                            List<RemoteDesktopLatestSourceFiles.Row> rows =
+                                                    RemoteDesktopLatestSourceFiles.resolveAll(
+                                                            uiEnv.get());
+                                            int found =
+                                                    (int)
+                                                            rows.stream()
+                                                                    .filter(
+                                                                            r ->
+                                                                                    !r.fullPath()
+                                                                                            .isBlank())
+                                                                    .count();
+                                            String meta =
+                                                    "更新: "
+                                                            + java.time.LocalDateTime.now()
+                                                                    .format(
+                                                                            java.time.format
+                                                                                    .DateTimeFormatter
+                                                                                    .ofPattern(
+                                                                                            "yyyy-MM-dd HH:mm:ss"))
+                                                            + " ／ 検出 "
+                                                            + found
+                                                            + " / "
+                                                            + rows.size()
+                                                            + " 件";
+                                            Platform.runLater(
+                                                    () -> {
+                                                        fetchedFilesItems.setAll(rows);
+                                                        fetchedFilesMetaLabel.setText(meta);
+                                                        fetchedFilesTable.refresh();
+                                                    });
+                                        });
+
+        btnRefreshFetchedFiles.setOnAction(e -> refreshFetchedFilesTable[0].run());
+
+        VBox card =
+                new VBox(
+                        16,
+                        headerBlock,
+                        connectHero,
+                        rapPane,
+                        policyPane,
+                        fetchedFilesSection);
         card.getStyleClass().add("pm-rdp-settings-stack");
         card.setPadding(new Insets(16));
         card.setMaxWidth(CARD_WIDTH);
@@ -1914,6 +2302,12 @@ public final class RequestFormRemoteDesktopPane {
         leftScroll.setFitToWidth(true);
         leftScroll.getStyleClass().add("pm-rdp-form-scroll");
 
+        btnJumpToFetchedFiles.setOnAction(
+                e -> scrollScrollPaneToNode(leftScroll, fetchedFilesSection));
+        btnJumpToTop.setOnAction(e -> leftScroll.setVvalue(0));
+        scrollToFetchedFilesSection[0] =
+                () -> scrollScrollPaneToNode(leftScroll, fetchedFilesSection);
+
         SplitPane splitPane = new SplitPane(leftScroll, rightPaneSplit);
         splitPane.setDividerPositions(0.52);
         SplitPane.setResizableWithParent(leftScroll, Boolean.TRUE);
@@ -1921,7 +2315,7 @@ public final class RequestFormRemoteDesktopPane {
         splitPane.getStyleClass().add("pm-remote-desktop-split");
 
         Runnable scheduleInitialRefresh =
-                () ->
+                () -> {
                         scheduleSharedSettingsRefresh(
                                 uiEnv,
                                 profileField,
@@ -1948,6 +2342,8 @@ public final class RequestFormRemoteDesktopPane {
                                 refreshIniFilePreview[0],
                                 refreshLauncherLog[0],
                                 refreshLaunchProfileCombo[0]);
+                        refreshFetchedFilesTable[0].run();
+                };
 
         return new TabContent(splitPane, scheduleInitialRefresh, onSessionOperatorChanged);
     }
@@ -2592,13 +2988,23 @@ public final class RequestFormRemoteDesktopPane {
             List<Button> quickLaunchProfileButtons,
             AtomicBoolean deployInProgress,
             AtomicBoolean deployReady,
-            AtomicBoolean sessionActive) {
+            AtomicBoolean sessionActive,
+            CheckBox sequentialMode,
+            List<Integer> sequentialSelection,
+            AtomicBoolean sequentialRunActive,
+            AtomicInteger sequentialIndex,
+            List<Integer> sequentialQueue) {
         btnLaunch
                 .getStyleClass()
                 .removeAll(
                         "pm-rdp-connect-pending",
                         "pm-rdp-connect-deploying",
                         "pm-rdp-connect-active");
+        boolean sequentialModeOn = sequentialMode != null && sequentialMode.isSelected();
+        boolean sequentialRunning = sequentialRunActive != null && sequentialRunActive.get();
+        if (sequentialMode != null) {
+            sequentialMode.setDisable(deployInProgress.get() || sessionActive.get() || sequentialRunning);
+        }
         if (deployInProgress.get()) {
             btnLaunch.getStyleClass().add("pm-rdp-connect-deploying");
             btnLaunch.setDisable(true);
@@ -2609,22 +3015,48 @@ public final class RequestFormRemoteDesktopPane {
         if (sessionActive.get()) {
             btnLaunch.getStyleClass().add("pm-rdp-connect-active");
             btnLaunch.setDisable(true);
-            btnLaunch.setText("リモートデスクトップ接続中");
+            if (sequentialRunning
+                    && sequentialQueue != null
+                    && !sequentialQueue.isEmpty()
+                    && sequentialIndex != null) {
+                btnLaunch.setText(
+                        RdpLaunchProfileSequentialRun.launchButtonTextActive(
+                                sequentialIndex.get() + 1, sequentialQueue.size()));
+            } else if (sequentialModeOn) {
+                btnLaunch.setText(
+                        RdpLaunchProfileSequentialRun.launchButtonTextActive(1, Math.max(1, sequentialSelection != null ? sequentialSelection.size() : 1)));
+            } else {
+                btnLaunch.setText("リモートデスクトップ接続中");
+            }
             applyQuickLaunchButtonDisabled(quickLaunchProfileButtons, true);
             return;
         }
         if (!deployReady.get()) {
             btnLaunch.getStyleClass().add("pm-rdp-connect-pending");
             btnLaunch.setDisable(false);
-            btnLaunch.setText("ランチャー転送してから起動");
+            btnLaunch.setText(
+                    sequentialModeOn
+                            ? RdpLaunchProfileSequentialRun.launchButtonTextIdle(
+                                    sequentialSelection != null ? sequentialSelection.size() : 0)
+                            : "ランチャー転送してから起動");
             applyQuickLaunchButtonDisabled(quickLaunchProfileButtons, false);
             return;
         }
         if (!rdpLaunchCredentialsReady(uiEnv)) {
             btnLaunch.getStyleClass().add("pm-rdp-connect-pending");
             btnLaunch.setDisable(true);
-            btnLaunch.setText("アラジン資格情報を保存してください");
+            btnLaunch.setText(
+                    sequentialModeOn
+                            ? "アラジン資格情報を保存してください"
+                            : "アラジン資格情報を保存してください");
             applyQuickLaunchButtonDisabled(quickLaunchProfileButtons, true);
+            return;
+        }
+        if (sequentialModeOn) {
+            int selectedCount = sequentialSelection != null ? sequentialSelection.size() : 0;
+            btnLaunch.setDisable(selectedCount <= 0);
+            btnLaunch.setText(RdpLaunchProfileSequentialRun.launchButtonTextIdle(selectedCount));
+            applyQuickLaunchButtonDisabled(quickLaunchProfileButtons, false);
             return;
         }
         btnLaunch.setDisable(false);
@@ -3521,6 +3953,65 @@ public final class RequestFormRemoteDesktopPane {
         if (status != null) {
             status.accept(subject + " 存在確認 NG\n" + message);
         }
+    }
+
+    private static <T> void installWrappingReadOnlyTableCell(TableColumn<T, String> column) {
+        column.setCellFactory(
+                col ->
+                        new TableCell<>() {
+                            private final Label label = new Label();
+
+                            {
+                                label.setWrapText(true);
+                                label.setTextOverrun(OverrunStyle.CLIP);
+                                label.getStyleClass().add("pm-rdp-fetched-files-path-label");
+                                label.maxWidthProperty().bind(col.widthProperty().subtract(14));
+                                label.prefWidthProperty().bind(label.maxWidthProperty());
+                                label.setMaxHeight(Double.MAX_VALUE);
+                                setAlignment(Pos.TOP_LEFT);
+                            }
+
+                            @Override
+                            protected void updateItem(String item, boolean empty) {
+                                super.updateItem(item, empty);
+                                if (empty || item == null) {
+                                    label.setText(null);
+                                    setGraphic(null);
+                                    setText(null);
+                                    return;
+                                }
+                                label.setText(item);
+                                setGraphic(label);
+                                setText(null);
+                            }
+                        });
+    }
+
+    private static void scrollScrollPaneToNode(ScrollPane scrollPane, javafx.scene.Node target) {
+        Platform.runLater(
+                () -> {
+                    if (scrollPane.getContent() == null || target == null) {
+                        return;
+                    }
+                    javafx.geometry.Bounds viewport = scrollPane.getViewportBounds();
+                    javafx.geometry.Bounds content = scrollPane.getContent().getBoundsInLocal();
+                    double contentHeight = content.getHeight();
+                    if (contentHeight <= viewport.getHeight() + 1) {
+                        scrollPane.setVvalue(scrollPane.getVmax());
+                        return;
+                    }
+                    javafx.geometry.Bounds targetBounds =
+                            scrollPane.getContent()
+                                    .sceneToLocal(target.localToScene(target.getBoundsInLocal()));
+                    double offset = targetBounds.getMinY();
+                    double range = contentHeight - viewport.getHeight();
+                    if (range <= 0) {
+                        return;
+                    }
+                    double v = offset / range;
+                    scrollPane.setVvalue(
+                            Math.min(scrollPane.getVmax(), Math.max(0, v)));
+                });
     }
 
     private static void showAlert(Alert.AlertType type, String title, String message) {

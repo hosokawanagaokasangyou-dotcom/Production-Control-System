@@ -455,6 +455,11 @@ public final class EnvVarDocs {
                         + " build_task_queue_from_planning_df が実加工数>0 の行の配台量を上書きする。"
                         + " 未設定・ファイル無しのときはシートの配台使用残数量を用いる。");
         put(
+                "PM_AI_STAGE2_ALADDIN_TODAY_EXCLUDE_NEXT_DAY_JSON",
+                "段階2直前に JavaFX が書く UTF-8 JSON（アラジン当日配台行の翌日除外量 m）。"
+                        + " 実加工数≦0 の行について、翌稼働日の配台割当上限から差し引く。"
+                        + " 未設定・ファイル無しのときは除外なし。");
+        put(
                 "PM_AI_OVERTIME_SIMULATION_JSON",
                 "段階2.1 残業/休出シミュ: ウィザード確定時に JavaFX が書く UTF-8 JSON。"
                         + " working_overrides（休日出勤○/グレー）と overtime_minutes（分）を段階2.1 フル再配台に適用する。"

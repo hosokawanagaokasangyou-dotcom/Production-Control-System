@@ -42,6 +42,25 @@ public final class ClipboardTableSupport {
         copyJavaFxHtmlAndPlain(htmlDoc, plainTsv);
     }
 
+    /**
+     * HTML 表のみをクリップボードへ載せる（プレーンテキスト TSV は載せない）。
+     */
+    public static void copyHtmlTableOnly(String tableHtml) {
+        if (tableHtml == null || tableHtml.isBlank()) {
+            return;
+        }
+        String htmlDoc = buildHtmlClipboardDocument(tableHtml);
+        String cfHtml = buildCfHtmlClipboardString(htmlDoc);
+        if (isWindows()) {
+            if (copyWindowsCfHtmlOnly(cfHtml)) {
+                return;
+            }
+        }
+        ClipboardContent content = new ClipboardContent();
+        content.putHtml(htmlDoc);
+        javafx.scene.input.Clipboard.getSystemClipboard().setContent(content);
+    }
+
     public static String escapeHtml(String text) {
         if (text == null || text.isEmpty()) {
             return "";
@@ -117,6 +136,16 @@ public final class ClipboardTableSupport {
         try {
             Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
             clipboard.setContents(new HtmlAndPlainTransferable(plainTsv, cfHtml), null);
+            return true;
+        } catch (Exception ex) {
+            return false;
+        }
+    }
+
+    private static boolean copyWindowsCfHtmlOnly(String cfHtml) {
+        try {
+            Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
+            clipboard.setContents(new HtmlOnlyTransferable(cfHtml), null);
             return true;
         } catch (Exception ex) {
             return false;
@@ -262,6 +291,38 @@ public final class ClipboardTableSupport {
             if (DataFlavor.stringFlavor.equals(flavor)) {
                 return plain;
             }
+            return htmlTransferData(flavor, cfHtml);
+        }
+    }
+
+    private static final class HtmlOnlyTransferable implements Transferable {
+        private final String cfHtml;
+        private final DataFlavor[] flavors;
+
+        private HtmlOnlyTransferable(String cfHtml) {
+            this.cfHtml = cfHtml != null ? cfHtml : "";
+            List<DataFlavor> list = new ArrayList<>();
+            for (DataFlavor flavor : htmlTransferFlavors()) {
+                if (!DataFlavor.stringFlavor.equals(flavor)) {
+                    list.add(flavor);
+                }
+            }
+            this.flavors = list.toArray(DataFlavor[]::new);
+        }
+
+        @Override
+        public DataFlavor[] getTransferDataFlavors() {
+            return flavors.clone();
+        }
+
+        @Override
+        public boolean isDataFlavorSupported(DataFlavor flavor) {
+            return isHtmlClipboardFlavor(flavor);
+        }
+
+        @Override
+        public Object getTransferData(DataFlavor flavor)
+                throws UnsupportedFlavorException, IOException {
             return htmlTransferData(flavor, cfHtml);
         }
     }

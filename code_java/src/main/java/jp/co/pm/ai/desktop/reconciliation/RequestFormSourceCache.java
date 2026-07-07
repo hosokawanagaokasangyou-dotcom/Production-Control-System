@@ -32,7 +32,7 @@ final class RequestFormSourceCache {
      * {@link RequestFormOriginalCellLayout} ベースのセル読取に合わせて上げる。
      * 抽出ロジック変更時は必ずインクリメントし、古い parse キャッシュを無効化する。
      */
-    static final String PARSE_SCHEMA_VERSION = "request-form-cell-layout-v6";
+    static final String PARSE_SCHEMA_VERSION = "request-form-cell-layout-v7";
 
     /** TPI 依頼書 PDF 用 parse キャッシュ schema（Excel 原本とは別バージョン）。 */
     static final String TPI_PDF_PARSE_SCHEMA_VERSION = "request-form-tpi-pdf-v19";

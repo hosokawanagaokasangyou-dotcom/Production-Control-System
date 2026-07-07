@@ -27,7 +27,9 @@
 #   .\fast_package_app.ps1 -ZipParallel   # Step 8: zip Initial + Upgrade at once via Start-Job (experimental; may IOException on some PCs)
 #   .\fast_package_app.ps1 -PackageReleaseParent G:\   # e.g. G:\pm-ai-package-release (folder created)
 #   .\fast_package_app.ps1 -PackageReleaseDir G:\pm-ai-package-release   # exact output folder
+#   .\fast_package_app.ps1 -SkipVersionBump   # do not +0.01 repo version.txt before build
 #   When release output is not the repo default, download cache (JDK/JavaFX/Python) uses <release>\Cash_PMD instead of code_java\Cash_PMD.
+#   Default: repo-root version.txt is bumped +0.01 at package start (scripts/bump_version_txt.py; same as git pre-commit).
 #   Override cache only: -CashPmdDir or PM_AI_CASH_PMD (wins over co-located / code_java rules).
 # Env: PM_AI_JPACKAGE_DEST, PM_AI_JDK_RUNTIME_IMAGE (optional)
 # Env: PM_AI_PACKAGE_RELEASE_DIR (full path), PM_AI_PACKAGE_RELEASE_PARENT (parent of pm-ai-package-release folder)
@@ -72,7 +74,10 @@ param(
     [string]$PackageReleaseParent = '',
 
     # JDK/JavaFX/Python download cache folder (optional). Overrides code_java\Cash_PMD and <release>\Cash_PMD. Env: PM_AI_CASH_PMD.
-    [string]$CashPmdDir = ''
+    [string]$CashPmdDir = '',
+
+    # Skip repo-root version.txt +0.01 at package start (default: bump every run).
+    [switch]$SkipVersionBump
 )
 
 $ErrorActionPreference = 'Stop'
@@ -610,7 +615,7 @@ PythonEmbedSourceDir: $PythonEmbedSourceDir
     }
     $rmLines.Add('Excluded files (all profiles): *.log, ~$* (Excel lock), *.hprof, *.hprof.* (JVM heap dumps), *.heapsnapshot, *.dump, *.mdmp, *.tmp, Thumbs.db, desktop.ini.')
     $rmLines.Add("This folder sits next to $($AppExeBaseName).exe.")
-    $rmLines.Add('Release: Step 8 deletes existing version.txt and same-name ZIPs in pm-ai-package-release, then writes fresh copies; ZIPs omit pm-ai-data/version.txt. Interim bundle folders are removed after zipping.')
+    $rmLines.Add('Release: package start bumps repo version.txt +0.01 (unless -SkipVersionBump). Step 8 deletes existing version.txt and same-name ZIPs in pm-ai-package-release, then writes fresh copies; ZIPs omit pm-ai-data/version.txt. Interim bundle folders are removed after zipping.')
     $rmLines.Add('First launch: if the empty marker file next to this app exe exists, the desktop resets env-tab defaults once then deletes it (Initial install bundle only). See Java AppPaths.PORTABLE_FIRST_LAUNCH_MARKER_FILE.')
     $rmLines.Add('Portable sync: PM_AI_PORTABLE_BUNDLE_SOURCE_DIR may be a folder (repo root layout under pm-ai-data on share) or a path to PMD_version_upgrade.zip with version.txt and build-manifest.json beside the zip. Local version: version.txt next to PMD.exe. VersionUpgrade applies pm-ai-data in-process then stages PMD.exe/app/runtime and runs pmd-apply-portable-update.ps1 after exit.')
     $cacheReadme = if (-not [string]::IsNullOrWhiteSpace($PackagingCacheRoot)) { $PackagingCacheRoot } else { 'code_java\Cash_PMD (default)' }
@@ -658,6 +663,68 @@ PythonEmbedSourceDir: $PythonEmbedSourceDir
             Write-Warning "Bundle ($BundleKind): missing code\json\stage1_exclude_rules.json and bundled_exclude_rules.json — code\exclude_rules.json not materialized."
         }
     }
+}
+
+# Copy version.txt content without inheriting the source LastWriteTime (Copy-Item preserves it).
+function Write-VersionTxtFromRepo {
+    param(
+        [Parameter(Mandatory = $true)][string] $SourcePath,
+        [Parameter(Mandatory = $true)][string] $DestPath
+    )
+    $utf8 = [System.Text.UTF8Encoding]::new($false)
+    $content = [System.IO.File]::ReadAllText($SourcePath, $utf8)
+    [System.IO.File]::WriteAllText($DestPath, $content, $utf8)
+}
+
+function Invoke-RepoVersionTxtBump {
+    param(
+        [Parameter(Mandatory = $true)][string] $WorkspaceRoot,
+        [Parameter(Mandatory = $true)][string] $VersionTxtPath
+    )
+    if (-not (Test-Path -LiteralPath $VersionTxtPath)) {
+        throw "version.txt not found: $VersionTxtPath"
+    }
+    $bumpScript = Join-Path $WorkspaceRoot 'scripts\bump_version_txt.py'
+    if (-not (Test-Path -LiteralPath $bumpScript)) {
+        throw "bump_version_txt.py not found: $bumpScript"
+    }
+    $before = (Get-Content -LiteralPath $VersionTxtPath -Raw -Encoding UTF8).Trim()
+    $ran = $false
+    foreach ($candidate in @(
+            @{ Exe = 'py'; Args = @('-3', $bumpScript, $VersionTxtPath) },
+            @{ Exe = 'python3'; Args = @($bumpScript, $VersionTxtPath) },
+            @{ Exe = 'python'; Args = @($bumpScript, $VersionTxtPath) }
+        )) {
+        if (-not (Get-Command $candidate.Exe -ErrorAction SilentlyContinue)) {
+            continue
+        }
+        & $candidate.Exe @($candidate.Args)
+        if ($LASTEXITCODE -eq 0) {
+            $ran = $true
+            break
+        }
+    }
+    if (-not $ran) {
+        $gitBash = 'C:\Program Files\Git\bin\bash.exe'
+        if (Test-Path -LiteralPath $gitBash) {
+            $rootEsc = ($WorkspaceRoot -replace '\\', '/')
+            & $gitBash -lc "cd '$rootEsc' && scripts/run_python3.sh scripts/bump_version_txt.py version.txt"
+            if ($LASTEXITCODE -eq 0) {
+                $ran = $true
+            }
+        }
+    }
+    if (-not $ran) {
+        throw 'Cannot run bump_version_txt.py (install Python 3 or Git Bash with scripts/run_python3.sh).'
+    }
+    $launcherVt = Join-Path $WorkspaceRoot 'code_java\src\main\resources\jp\co\pm\ai\desktop\rdp-launcher\PmAiRdpRemoteLauncher.version.txt'
+    $launcherDir = Split-Path -Parent $launcherVt
+    if (Test-Path -LiteralPath $launcherDir) {
+        Write-VersionTxtFromRepo -SourcePath $VersionTxtPath -DestPath $launcherVt
+    }
+    $after = (Get-Content -LiteralPath $VersionTxtPath -Raw -Encoding UTF8).Trim()
+    Write-Host "version.txt bumped: $before -> $after" -ForegroundColor Cyan
+    return $after
 }
 
 function Compress-PortableBundleFolderToZip {
@@ -813,6 +880,15 @@ $proj = Get-MavenProjectInfo -PomPath $POM
 
 $APP_NAME = 'PMD'
 $VersionTxtPath = Join-Path $WorkspaceRoot 'version.txt'
+if (-not $SkipVersionBump) {
+    if (Test-Path -LiteralPath $VersionTxtPath) {
+        Write-Host '--- Step 0: bump repo version.txt (+0.01) ---' -ForegroundColor Cyan
+        [void](Invoke-RepoVersionTxtBump -WorkspaceRoot $WorkspaceRoot -VersionTxtPath $VersionTxtPath)
+    }
+    else {
+        Write-Warning "Repo version.txt missing; skipped bump before packaging."
+    }
+}
 $APP_VERSION = $proj.Version -replace '-SNAPSHOT$', '.0'
 if (Test-Path -LiteralPath $VersionTxtPath) {
     $rawTxt = Get-Content -LiteralPath $VersionTxtPath -Raw -Encoding UTF8
@@ -1009,17 +1085,6 @@ function Remove-DirRobust {
         }
     }
     return $true
-}
-
-# Copy version.txt content without inheriting the source LastWriteTime (Copy-Item preserves it).
-function Write-VersionTxtFromRepo {
-    param(
-        [Parameter(Mandatory = $true)][string] $SourcePath,
-        [Parameter(Mandatory = $true)][string] $DestPath
-    )
-    $utf8 = [System.Text.UTF8Encoding]::new($false)
-    $content = [System.IO.File]::ReadAllText($SourcePath, $utf8)
-    [System.IO.File]::WriteAllText($DestPath, $content, $utf8)
 }
 
 # Remove only prior jpackage app folder and bundle outputs (Cash_PMD is not removed here).
@@ -1315,7 +1380,7 @@ foreach ($p in @($releaseVersionTxt, $zipInitial, $zipUpgrade)) {
 if (Test-Path -LiteralPath $VersionTxtPath) {
     Write-VersionTxtFromRepo -SourcePath $VersionTxtPath -DestPath $releaseVersionTxt
     $verLineForLog = (Get-Content -LiteralPath $releaseVersionTxt -Raw -Encoding UTF8).Trim()
-    Write-Host "Generated: $releaseVersionTxt (version $verLineForLog from repo root; bumps on git commit only)" -ForegroundColor DarkGray
+    Write-Host "Generated: $releaseVersionTxt (version $verLineForLog from repo root)" -ForegroundColor DarkGray
 }
 else {
     Write-Warning "Repo version.txt missing; skipped copy to $ReleaseRoot"

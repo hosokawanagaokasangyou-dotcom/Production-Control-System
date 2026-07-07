@@ -1165,7 +1165,7 @@ def _gemini_daily_trend_series(
     cum: dict, *, max_days: int | None = None
 ) -> tuple[list[str], list[float], str] | None:
     """累計 JSON の by_day から」日付キー（坤→新）・値・系列名。無ければ None。"""
-    lim = GEMINI_USAGE_CHART_MAX_DAYS if max_days is None else max_days
+    lim = 14 if max_days is None else max_days
     b = cum.get("buckets")
     if not isinstance(b, dict):
         return None
@@ -1188,56 +1188,21 @@ def _gemini_daily_trend_series(
     series = [float(c) for c in calls] if use_calls else usds
     label = "呼出し回数" if use_calls else "推定USD"
     return (keys, series, label)
-def _gemini_daily_total_tokens_for_days(cum: dict, day_keys: list[str]) -> list[int]:
-    """by_day の坄キーについで」total_tokens（無ければ prompt+candidates+thoughts）を返す。"""
-    b = cum.get("buckets")
-    if not isinstance(b, dict):
-        return [0] * len(day_keys)
-    subd = b.get("by_day")
-    if not isinstance(subd, dict):
-        return [0] * len(day_keys)
-    out: list[int] = []
-    for pk in day_keys:
-        ent = subd.get(pk)
-        if not isinstance(ent, dict):
-            out.append(0)
-            continue
-        tt = int(ent.get("total_tokens") or 0)
-        if tt <= 0:
-            tt = (
-                int(ent.get("prompt") or 0)
-                + int(ent.get("candidates") or 0)
-                + int(ent.get("thoughts") or 0)
-            )
-        out.append(tt)
-    return out
 def _gemini_usage_trend_caption_lines(cum: dict) -> list[str]:
-    """テキスト坴はグラフ参照と CSV 案内のみ（ASCII スパークラインは出さない）。"""
+    """累計 JSON の日次推移をテキストサマリ用に要約する。"""
     ser = _gemini_daily_trend_series(cum)
     if ser is None:
         return []
     keys, _, label = ser
     b = cum.get("buckets")
     lines = [
-        "」推移グラフ】料金・呼出し: Q〜R 列＝トークン量: S〜T 列（坄グラフ・自動更新）を参照",
-        f"  系列1: 日次 {label}（{keys[0]} ～ {keys[-1]}）",
-        "  系列2: 日次 合計トークン（API 報告 total または内訳合計）",
-        f"  年・月・週・時などの内訳: log\\{GEMINI_USAGE_BUCKETS_CSV_FILE}（Excel でグラフ坯）",
+        f"【日次推移】{label}（{keys[0]} ～ {keys[-1]}）",
     ]
     if isinstance(b, dict):
         note = b.get("timezone_note")
         if note:
             lines.append(f"  （{note}）")
     return lines
-def _gemini_resolve_main_sheet_openpyxl(wb) -> object | None:
-    """openpyxl Workbook からメイン相当シートを返す。無ければ None。"""
-    for name in ("メイン", "メイン_", "Main"):
-        if name in wb.sheetnames:
-            return wb[name]
-    for sn in wb.sheetnames:
-        if "メイン" in str(sn):
-            return wb[sn]
-    return None
 def _gemini_kv_table_lines(title: str, rows: list[tuple[str, str]]) -> list[str]:
     """累計・当実行坑けの 2 列テキスト表（履歴行は含まない）。"""
     out = [title]

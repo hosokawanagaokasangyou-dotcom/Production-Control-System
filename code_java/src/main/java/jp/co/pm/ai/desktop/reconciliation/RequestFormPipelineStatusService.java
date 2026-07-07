@@ -59,13 +59,20 @@ public final class RequestFormPipelineStatusService {
             String juchuInputOperatorDisplay,
             LocalDate juchuAdjustDeliveryDate,
             String juchuAdjustDeliveryDateDisplay,
-            String rawInputDateDisplay) {}
+            String rawInputDateDisplay,
+            String indexResponseDate,
+            String indexInputDate,
+            String indexDeliveryDate,
+            String indexDeliveryRemarks,
+            String indexContractNo,
+            String indexContractRemarks) {}
 
     public record ScanResult(
             List<PipelineStatusRow> rows,
             List<String> warnings,
             boolean aladdinJsonAvailable,
-            List<String> planDateHeaders) {}
+            List<String> planDateHeaders,
+            KonanDailyReportLookup dailyReportLookup) {}
 
     public static ScanResult scan(Map<String, String> ui, JuchuHeaderAliasRegistry registry) {
         Map<String, String> env = ui != null ? ui : Map.of();
@@ -97,6 +104,7 @@ public final class RequestFormPipelineStatusService {
         List<Map<String, String>> rawRequests = loadOriginalRequests(env, warnings);
         Path parseCacheRootPath = AppPaths.resolveRepoRoot(env).resolve("preview_cache");
         File parseCacheRoot = parseCacheRootPath.toFile();
+        KonanDailyReportLookup dailyReport = KonanDailyReportLookup.load(env, warnings);
         List<PipelineStatusRow> rows = new ArrayList<>();
         Set<String> processedOriginalKeys = new HashSet<>();
         for (Map<String, String> raw : rawRequests) {
@@ -118,7 +126,8 @@ public final class RequestFormPipelineStatusService {
                             juchuPath,
                             aladdinJsonAvailable,
                             shaped,
-                            planDateHeaders));
+                            planDateHeaders,
+                            RequestFormOriginalIndexSheetMeta.IndexSheetDisplay.fromRaw(raw)));
         }
         for (Map.Entry<String, Map<String, String>> entry : dbRows.entrySet()) {
             if (processedOriginalKeys.contains(entry.getKey())) {
@@ -147,7 +156,8 @@ public final class RequestFormPipelineStatusService {
                                 juchuPath,
                                 aladdinJsonAvailable,
                                 shaped,
-                                planDateHeaders));
+                                planDateHeaders,
+                                RequestFormOriginalIndexSheetMeta.IndexSheetDisplay.fromRaw(raw)));
                 continue;
             }
             rows.add(
@@ -161,7 +171,8 @@ public final class RequestFormPipelineStatusService {
                             juchuPath,
                             aladdinJsonAvailable,
                             shaped,
-                            planDateHeaders));
+                            planDateHeaders,
+                            RequestFormOriginalIndexSheetMeta.IndexSheetDisplay.empty()));
         }
         rows.sort(
                 (a, b) -> {
@@ -172,7 +183,11 @@ public final class RequestFormPipelineStatusService {
                     return a.originalFileName().compareToIgnoreCase(b.originalFileName());
                 });
         return new ScanResult(
-                List.copyOf(rows), List.copyOf(warnings), aladdinJsonAvailable, planDateHeaders);
+                List.copyOf(rows),
+                List.copyOf(warnings),
+                aladdinJsonAvailable,
+                planDateHeaders,
+                dailyReport);
     }
 
     private static PipelineStatusRow buildRow(
@@ -185,7 +200,8 @@ public final class RequestFormPipelineStatusService {
             String juchuPath,
             boolean aladdinJsonAvailable,
             AladdinShapedPlanQtyLookup.ShapedTable shaped,
-            List<String> planDateHeaders) {
+            List<String> planDateHeaders,
+            RequestFormOriginalIndexSheetMeta.IndexSheetDisplay indexSheet) {
         JuchuTransferCoverageCheck.CoverageResult coverage =
                 JuchuTransferCoverageCheck.compare(originalDb, juchuDb, reg, juchuPath);
         String originalContractNoDisplay =
@@ -217,6 +233,10 @@ public final class RequestFormPipelineStatusService {
                 formatJuchuDateFieldDisplay(juchuDb, Col.CHOSEI_NOKI.dbKey());
         String rawInputDateDisplay =
                 formatRawInputDateDisplay(originalDb, originalPresent, juchuDb);
+        RequestFormOriginalIndexSheetMeta.IndexSheetDisplay idx =
+                indexSheet != null
+                        ? indexSheet
+                        : RequestFormOriginalIndexSheetMeta.IndexSheetDisplay.empty();
         return new PipelineStatusRow(
                 iraiNo,
                 originalFileName,
@@ -237,7 +257,13 @@ public final class RequestFormPipelineStatusService {
                 juchuInputOperatorDisplay,
                 juchuAdjustDeliveryDate,
                 juchuAdjustDeliveryDateDisplay,
-                rawInputDateDisplay);
+                rawInputDateDisplay,
+                idx.responseDate(),
+                idx.inputDate(),
+                idx.deliveryDate(),
+                idx.deliveryRemarks(),
+                idx.contractNo(),
+                idx.contractRemarks());
     }
 
     /** 原反（材料）投入日の表示。受注「投入日」優先、なければ原本「投入日」。 */

@@ -1,8 +1,11 @@
 package jp.co.pm.ai.desktop;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import javafx.application.Platform;
 import javafx.beans.binding.Bindings;
@@ -11,7 +14,10 @@ import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.collections.transformation.FilteredList;
 import javafx.fxml.FXML;
+import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
+import javafx.scene.control.ButtonBar;
+import javafx.scene.control.ButtonType;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.Spinner;
@@ -23,14 +29,21 @@ import javafx.scene.control.TextField;
 import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.input.Clipboard;
 import javafx.scene.input.ClipboardContent;
+import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
+import javafx.stage.Window;
 
 import jp.co.pm.ai.desktop.dispatch.AladdinShapedPlanQtyLookup;
 import jp.co.pm.ai.desktop.dispatch.AladdinShapedPlanQtyLookup.PlanEntry;
 import jp.co.pm.ai.desktop.ui.ClipboardTableSupport;
+import jp.co.pm.ai.desktop.ui.ColumnVisibilitySupport;
+import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
+import jp.co.pm.ai.desktop.ui.TableViewColumnSettingsStrip;
 import jp.co.pm.ai.desktop.reconciliation.JuchuTransferCoverageCheck.ColumnCheck;
 import jp.co.pm.ai.desktop.reconciliation.JuchuHeaderAliasRegistry;
+import jp.co.pm.ai.desktop.reconciliation.KonanDailyReportLookup;
+import jp.co.pm.ai.desktop.reconciliation.RemoteDesktopLatestSourceFiles;
 import jp.co.pm.ai.desktop.reconciliation.RequestFormPipelineStatusService;
 import jp.co.pm.ai.desktop.reconciliation.RequestFormPipelineStatusService.PipelineStatusRow;
 import jp.co.pm.ai.desktop.reconciliation.RequestFormPipelineStatusService.ScanResult;
@@ -47,11 +60,51 @@ public final class RequestFormPipelineCheckTabController {
                     + " 転記率は原本に値がある転記対象列を分母とします。"
                     + " ①〜⑦列は依頼ごとの加工計画日（昇順・最大7日）を表示（セル例: 7/3 100m）。"
                     + " JSON表の日付列順とは無関係。"
-                    + " 受注入力日フィルタは既定30日（変更可）。";
+                    + " 受注入力日フィルタは既定30日（変更可）。"
+                    + " 「日報」列は加工日報の完了区分を依頼単位で集約（完了/未了/―）。"
+                    + " 「日報未了のみ表示」は既定オン（完了済み依頼を非表示）。"
+                    + " 下段表はアラジン計画が無い場合、加工日報の工程行を表示。";
+
+    private record MainColDef(String title, String property, double defaultWidth) {}
+
+    private static List<MainColDef> defaultMainColumnDefs() {
+        List<MainColDef> defs = new ArrayList<>();
+        defs.add(new MainColDef("依頼No", "iraiNo", 90));
+        defs.add(new MainColDef("原本", "originalFile", 140));
+        defs.add(new MainColDef("回答日", "indexResponseDate", 88));
+        defs.add(new MainColDef("原反投入日", "indexInputDate", 88));
+        defs.add(new MainColDef("納期", "indexDeliveryDate", 88));
+        defs.add(new MainColDef("納期備考", "indexDeliveryRemarks", 120));
+        defs.add(new MainColDef("目次契約NO", "indexContractNo", 120));
+        defs.add(new MainColDef("契約備考", "indexContractRemarks", 120));
+        defs.add(new MainColDef("入力日", "juchuInputDate", 88));
+        defs.add(new MainColDef("入力者", "juchuInputOperator", 88));
+        defs.add(new MainColDef("調整納期", "juchuAdjustDeliveryDate", 88));
+        defs.add(new MainColDef("転記率", "rateDisplay", 100));
+        defs.add(new MainColDef("未一致", "mismatchCount", 52));
+        defs.add(new MainColDef("原本契約NO", "originalContractNo", 120));
+        defs.add(new MainColDef("契約NO", "contractNoStatus", 120));
+        defs.add(new MainColDef("Aladdin", "aladdinStatus", 64));
+        defs.add(new MainColDef("日報", "dailyReportOrderStatus", 52));
+        for (int i = 0; i < PLAN_DAY_COLUMNS; i++) {
+            defs.add(
+                    new MainColDef(
+                            AladdinShapedPlanQtyLookup.circledSlotColumnLabel(i),
+                            "planDay" + i,
+                            88));
+        }
+        return List.copyOf(defs);
+    }
 
     public static final class MainRow {
         private String iraiNo;
         private String originalFile;
+        private String indexResponseDate;
+        private String indexInputDate;
+        private String indexDeliveryDate;
+        private String indexDeliveryRemarks;
+        private String indexContractNo;
+        private String indexContractRemarks;
         private String juchuInputDate;
         private String juchuInputOperator;
         private String juchuAdjustDeliveryDate;
@@ -60,6 +113,8 @@ public final class RequestFormPipelineCheckTabController {
         private String originalContractNo;
         private String contractNoStatus;
         private String aladdinStatus;
+        /** 加工日報の依頼単位ステータス: 完了 / 未了 / ― */
+        private String dailyReportOrderStatus;
         private final List<String> planDayValues = new ArrayList<>(PLAN_DAY_COLUMNS);
         private PipelineStatusRow source;
 
@@ -83,6 +138,54 @@ public final class RequestFormPipelineCheckTabController {
 
         public void setOriginalFile(String originalFile) {
             this.originalFile = originalFile;
+        }
+
+        public String getIndexResponseDate() {
+            return indexResponseDate;
+        }
+
+        public void setIndexResponseDate(String indexResponseDate) {
+            this.indexResponseDate = indexResponseDate;
+        }
+
+        public String getIndexInputDate() {
+            return indexInputDate;
+        }
+
+        public void setIndexInputDate(String indexInputDate) {
+            this.indexInputDate = indexInputDate;
+        }
+
+        public String getIndexDeliveryDate() {
+            return indexDeliveryDate;
+        }
+
+        public void setIndexDeliveryDate(String indexDeliveryDate) {
+            this.indexDeliveryDate = indexDeliveryDate;
+        }
+
+        public String getIndexDeliveryRemarks() {
+            return indexDeliveryRemarks;
+        }
+
+        public void setIndexDeliveryRemarks(String indexDeliveryRemarks) {
+            this.indexDeliveryRemarks = indexDeliveryRemarks;
+        }
+
+        public String getIndexContractNo() {
+            return indexContractNo;
+        }
+
+        public void setIndexContractNo(String indexContractNo) {
+            this.indexContractNo = indexContractNo;
+        }
+
+        public String getIndexContractRemarks() {
+            return indexContractRemarks;
+        }
+
+        public void setIndexContractRemarks(String indexContractRemarks) {
+            this.indexContractRemarks = indexContractRemarks;
         }
 
         public String getJuchuInputDate() {
@@ -147,6 +250,14 @@ public final class RequestFormPipelineCheckTabController {
 
         public void setAladdinStatus(String aladdinStatus) {
             this.aladdinStatus = aladdinStatus;
+        }
+
+        public String getDailyReportOrderStatus() {
+            return dailyReportOrderStatus;
+        }
+
+        public void setDailyReportOrderStatus(String dailyReportOrderStatus) {
+            this.dailyReportOrderStatus = dailyReportOrderStatus;
         }
 
         public String getPlanDay0() {
@@ -241,12 +352,15 @@ public final class RequestFormPipelineCheckTabController {
         private final SimpleStringProperty processName = new SimpleStringProperty();
         private final SimpleStringProperty dateYmd = new SimpleStringProperty();
         private final SimpleStringProperty planMeters = new SimpleStringProperty();
+        private final SimpleStringProperty dailyReportCompletion = new SimpleStringProperty();
 
-        PlanRow(PlanEntry entry) {
+        PlanRow(PlanEntry entry, String dailyReportCompletionDisplay) {
             machineName.set(entry.machineName());
             processName.set(entry.processName());
             dateYmd.set(entry.dateYmd());
             planMeters.set(formatMeters(entry.planMeters()));
+            dailyReportCompletion.set(
+                    dailyReportCompletionDisplay != null ? dailyReportCompletionDisplay : "");
         }
 
         public String getMachineName() {
@@ -279,6 +393,14 @@ public final class RequestFormPipelineCheckTabController {
 
         public SimpleStringProperty planMetersProperty() {
             return planMeters;
+        }
+
+        public String getDailyReportCompletion() {
+            return dailyReportCompletion.get();
+        }
+
+        public SimpleStringProperty dailyReportCompletionProperty() {
+            return dailyReportCompletion;
         }
 
         private static String formatMeters(double m) {
@@ -337,13 +459,34 @@ public final class RequestFormPipelineCheckTabController {
     private CheckBox showAdjustDeliveryFromTodayCheck;
 
     @FXML
+    private CheckBox showDailyReportIncompleteOnlyCheck;
+
+    @FXML
     private Label statusLabel;
 
     @FXML
     private Label hintLabel;
 
     @FXML
+    private Label dailyReportSourceLabel;
+
+    @FXML
     private TableView<MainRow> mainTable;
+
+    @FXML
+    private Button copyMainTableButton;
+
+    @FXML
+    private Button copyMainTableForEmailButton;
+
+    @FXML
+    private Button copyMainTableHtmlButton;
+
+    @FXML
+    private Button copyMainTableCsvButton;
+
+    @FXML
+    private HBox mainColumnStripHost;
 
     @FXML
     private TableView<MismatchRow> mismatchTable;
@@ -367,15 +510,26 @@ public final class RequestFormPipelineCheckTabController {
     /** 下段アラジン計画表の表示元（コピー時の依頼ヘッダ）。 */
     private MainRow planContextRow;
 
+    private KonanDailyReportLookup dailyReportLookup = KonanDailyReportLookup.empty();
+
     private boolean aladdinJsonAvailable = true;
     private String lastScanWarnings = "";
     /** 起動後に一度でも走査結果を反映したら true（手動「更新」は常に可）。 */
     private boolean scanApplied;
     private boolean refreshInProgress;
 
+    private final List<MainColDef> mainColumnDefs = new ArrayList<>(defaultMainColumnDefs());
+
+    private final Map<String, String> mainColumnTitleToProperty = new LinkedHashMap<>();
+
+    private final AtomicBoolean suppressColumnPersistence = new AtomicBoolean(false);
+
+    private boolean mainColumnsInitialized;
+
     @FXML
     private void initialize() {
         hintLabel.setText(HINT_TEXT);
+        updateDailyReportSourceLabel();
         filteredRows = new FilteredList<>(allRows, row -> true);
         mainTable.setItems(filteredRows);
         mismatchTable.setItems(mismatchRows);
@@ -383,10 +537,21 @@ public final class RequestFormPipelineCheckTabController {
         planTable.setItems(planRows);
         VBox.setVgrow(mainTable, Priority.ALWAYS);
 
-        setupMainColumns();
         setupMismatchColumns();
         setupPlanColumns();
 
+        if (copyMainTableButton != null) {
+            copyMainTableButton.disableProperty().bind(Bindings.isEmpty(filteredRows));
+        }
+        if (copyMainTableForEmailButton != null) {
+            copyMainTableForEmailButton.disableProperty().bind(Bindings.isEmpty(filteredRows));
+        }
+        if (copyMainTableHtmlButton != null) {
+            copyMainTableHtmlButton.disableProperty().bind(Bindings.isEmpty(filteredRows));
+        }
+        if (copyMainTableCsvButton != null) {
+            copyMainTableCsvButton.disableProperty().bind(Bindings.isEmpty(filteredRows));
+        }
         if (copyPlanTableButton != null) {
             copyPlanTableButton.disableProperty().bind(Bindings.isEmpty(planRows));
         }
@@ -401,6 +566,11 @@ public final class RequestFormPipelineCheckTabController {
         }
         if (showAdjustDeliveryFromTodayCheck != null) {
             showAdjustDeliveryFromTodayCheck
+                    .selectedProperty()
+                    .addListener((obs, o, n) -> applyFilter());
+        }
+        if (showDailyReportIncompleteOnlyCheck != null) {
+            showDailyReportIncompleteOnlyCheck
                     .selectedProperty()
                     .addListener((obs, o, n) -> applyFilter());
         }
@@ -437,6 +607,7 @@ public final class RequestFormPipelineCheckTabController {
 
     void bindShell(MainShellController shell) {
         this.shell = shell;
+        setupMainColumnsOnce();
     }
 
     /** メインシェルで当該タブが選択されたとき。起動後未走査なら自動更新する。 */
@@ -453,7 +624,50 @@ public final class RequestFormPipelineCheckTabController {
 
     @FXML
     private void onRefreshButtonAction() {
+        if (!confirmRefreshDespiteStaleSources()) {
+            return;
+        }
         startRefresh();
+    }
+
+    /**
+     * 加工計画・加工日報の取得元が {@link RemoteDesktopLatestSourceFiles#PIPELINE_CHECK_MAX_SOURCE_AGE_MS}
+     * より古いとき警告し、続行可否を返す。
+     */
+    private boolean confirmRefreshDespiteStaleSources() {
+        if (shell == null) {
+            return true;
+        }
+        List<RemoteDesktopLatestSourceFiles.Row> stale =
+                RemoteDesktopLatestSourceFiles.pipelineCheckSourcesOlderThan(
+                        shell.snapshotUiEnv(),
+                        RemoteDesktopLatestSourceFiles.PIPELINE_CHECK_MAX_SOURCE_AGE_MS,
+                        System.currentTimeMillis());
+        if (stale.isEmpty()) {
+            return true;
+        }
+        StringBuilder body = new StringBuilder();
+        body.append("加工計画または加工日報の取得元が1時間以上更新されていません。");
+        body.append(" リモートデスクトップで RPA 取得後に更新することを推奨します。");
+        body.append("\n\n");
+        for (RemoteDesktopLatestSourceFiles.Row row : stale) {
+            body.append("■ ").append(row.category().label()).append('\n');
+            body.append("  取得日時: ").append(row.displayAcquiredAt()).append('\n');
+            body.append("  ").append(row.displayPath()).append("\n\n");
+        }
+        body.append("このまま走査を続行しますか？");
+
+        ButtonType proceed = new ButtonType("更新を続行", ButtonBar.ButtonData.OK_DONE);
+        ButtonType cancel = new ButtonType("中止", ButtonBar.ButtonData.CANCEL_CLOSE);
+        Alert alert = new Alert(Alert.AlertType.WARNING, "", proceed, cancel);
+        alert.setTitle("取得データが古い可能性");
+        alert.setHeaderText("加工計画／加工日報の取得元が1時間以上前です");
+        Label message = new Label(body.toString());
+        message.setWrapText(true);
+        message.setMaxWidth(560);
+        message.setMinWidth(400);
+        alert.getDialogPane().setContent(message);
+        return alert.showAndWait().orElse(cancel) == proceed;
     }
 
     private void startRefresh() {
@@ -514,7 +728,10 @@ public final class RequestFormPipelineCheckTabController {
         scanApplied = true;
         allRows.clear();
         aladdinJsonAvailable = result.aladdinJsonAvailable();
-        setupMainColumns();
+        dailyReportLookup =
+                result.dailyReportLookup() != null
+                        ? result.dailyReportLookup()
+                        : KonanDailyReportLookup.empty();
 
         for (PipelineStatusRow row : result.rows()) {
             MainRow ui = new MainRow();
@@ -523,6 +740,12 @@ public final class RequestFormPipelineCheckTabController {
                     row.originalPresent()
                             ? row.originalFileName()
                             : "（依頼書原本なし）");
+            ui.setIndexResponseDate(nullToEmpty(row.indexResponseDate()));
+            ui.setIndexInputDate(nullToEmpty(row.indexInputDate()));
+            ui.setIndexDeliveryDate(nullToEmpty(row.indexDeliveryDate()));
+            ui.setIndexDeliveryRemarks(nullToEmpty(row.indexDeliveryRemarks()));
+            ui.setIndexContractNo(nullToEmpty(row.indexContractNo()));
+            ui.setIndexContractRemarks(nullToEmpty(row.indexContractRemarks()));
             ui.setJuchuInputDate(
                     row.juchuInputDateDisplay() != null ? row.juchuInputDateDisplay() : "");
             ui.setJuchuInputOperator(
@@ -543,6 +766,8 @@ public final class RequestFormPipelineCheckTabController {
             } else {
                 ui.setAladdinStatus(row.aladdinPresent() ? "あり" : "なし");
             }
+            ui.setDailyReportOrderStatus(
+                    dailyReportLookup.orderCompletionStatus(row.iraiNo()));
             ui.setPlanDayValues(row.planDayValues());
             ui.setSource(row);
             allRows.add(ui);
@@ -551,6 +776,7 @@ public final class RequestFormPipelineCheckTabController {
                 result.warnings().isEmpty() ? "" : String.join(" | ", result.warnings());
         applyFilter();
         updateStatusLabel();
+        updateDailyReportSourceLabel();
 
         if (shell != null) {
             shell.appendLog(
@@ -583,7 +809,96 @@ public final class RequestFormPipelineCheckTabController {
             }
         }
         for (PlanEntry entry : src.planEntries()) {
-            planRows.add(new PlanRow(entry));
+            String completion =
+                    dailyReportLookup.completionDisplay(
+                            src.iraiNo(), entry.processName(), entry.machineName());
+            planRows.add(new PlanRow(entry, completion));
+        }
+        if (planRows.isEmpty()) {
+            for (KonanDailyReportLookup.OrderDailyReportEntry dr :
+                    dailyReportLookup.entriesForOrder(src.iraiNo())) {
+                planRows.add(
+                        new PlanRow(
+                                new PlanEntry(
+                                        dr.machineName(),
+                                        dr.processName(),
+                                        "",
+                                        0.0),
+                                dr.completionStatus()));
+            }
+        }
+    }
+
+    @FXML
+    private void onCopyMainTableButtonAction() {
+        if (filteredRows.isEmpty()) {
+            return;
+        }
+        List<MainRow> rows = List.copyOf(filteredRows);
+        List<String> titles = mainTableVisibleColumnTitles();
+        String tsv = formatMainTableTsv(rows, titles);
+        ClipboardContent content = new ClipboardContent();
+        content.putString(tsv);
+        Clipboard.getSystemClipboard().setContent(content);
+        if (shell != null) {
+            shell.appendLog(
+                    "[pipeline-check] 一覧 "
+                            + rows.size()
+                            + " 行をクリップボードへ表としてコピー");
+        }
+    }
+
+    @FXML
+    private void onCopyMainTableForEmailButtonAction() {
+        if (filteredRows.isEmpty()) {
+            return;
+        }
+        List<MainRow> rows = List.copyOf(filteredRows);
+        List<String> titles = mainTableVisibleColumnTitles();
+        String tsv = formatMainTableTsv(rows, titles);
+        String html = formatMainTableHtml(rows, titles);
+        ClipboardTableSupport.copyTabularForRichTextPaste(tsv, html);
+        if (shell != null) {
+            shell.appendLog(
+                    "[pipeline-check] 一覧 "
+                            + rows.size()
+                            + " 行をメール貼り付け用（HTML表）でクリップボードへコピー");
+        }
+    }
+
+    @FXML
+    private void onCopyMainTableHtmlButtonAction() {
+        if (filteredRows.isEmpty()) {
+            return;
+        }
+        List<MainRow> rows = List.copyOf(filteredRows);
+        List<String> titles = mainTableVisibleColumnTitles();
+        String html = formatMainTableHtml(rows, titles);
+        ClipboardTableSupport.copyHtmlTableOnly(html);
+        if (shell != null) {
+            shell.appendLog(
+                    "[pipeline-check] 一覧 "
+                            + rows.size()
+                            + " 行を HTML形式でクリップボードへコピー");
+        }
+    }
+
+    @FXML
+    private void onCopyMainTableCsvButtonAction() {
+        if (filteredRows.isEmpty()) {
+            return;
+        }
+        List<MainRow> rows = List.copyOf(filteredRows);
+        List<String> titles = mainTableVisibleColumnTitles();
+        String csv = formatMainTableCsv(rows, titles);
+        ClipboardContent content = new ClipboardContent();
+        content.putString(csv);
+        Clipboard.getSystemClipboard().setContent(content);
+        if (shell != null) {
+            shell.appendLog(
+                    "[pipeline-check] 一覧 "
+                            + rows.size()
+                            + " 行をカンマ区切りでクリップボードへコピー");
         }
     }
 
@@ -638,7 +953,7 @@ public final class RequestFormPipelineCheckTabController {
                 "<table border=\"1\" cellspacing=\"0\" cellpadding=\"4\""
                         + " style=\"border-collapse:collapse;font-family:'Meiryo UI',sans-serif;font-size:11pt;\">");
         sb.append("<thead><tr>");
-        for (String columnTitle : List.of("機械名", "工程名", "日付", "計画m")) {
+        for (String columnTitle : List.of("機械名", "工程名", "日付", "計画m", "日報完了")) {
             sb.append("<th style=\"background:#D9E1F2;padding:4px 8px;text-align:left;\">")
                     .append(ClipboardTableSupport.escapeHtml(columnTitle))
                     .append("</th>");
@@ -650,6 +965,7 @@ public final class RequestFormPipelineCheckTabController {
             appendHtmlCell(sb, row.getProcessName());
             appendHtmlCell(sb, row.getDateYmd());
             appendHtmlCell(sb, row.getPlanMeters());
+            appendHtmlCell(sb, row.getDailyReportCompletion());
             sb.append("</tr>");
         }
         sb.append("</tbody></table>");
@@ -660,6 +976,153 @@ public final class RequestFormPipelineCheckTabController {
         sb.append("<td style=\"padding:4px 8px;\">")
                 .append(ClipboardTableSupport.escapeHtml(value != null ? value : ""))
                 .append("</td>");
+    }
+
+    static String formatMainTableTsv(List<MainRow> rows) {
+        return formatMainTableTsv(rows, mainTableColumnTitles());
+    }
+
+    static String formatMainTableTsv(List<MainRow> rows, List<String> titles) {
+        List<String> headers = titles != null && !titles.isEmpty() ? titles : mainTableColumnTitles();
+        StringBuilder sb = new StringBuilder();
+        appendMainTableTsvRow(sb, headers);
+        for (MainRow row : rows) {
+            sb.append('\n');
+            appendMainTableTsvRow(sb, mainTableRowCells(row, headers));
+        }
+        return sb.toString();
+    }
+
+    static String formatMainTableHtml(List<MainRow> rows) {
+        return formatMainTableHtml(rows, mainTableColumnTitles());
+    }
+
+    static String formatMainTableHtml(List<MainRow> rows, List<String> titles) {
+        List<String> headers = titles != null && !titles.isEmpty() ? titles : mainTableColumnTitles();
+        StringBuilder sb = new StringBuilder();
+        sb.append(
+                "<table border=\"1\" cellspacing=\"0\" cellpadding=\"4\""
+                        + " style=\"border-collapse:collapse;font-family:'Meiryo UI',sans-serif;font-size:11pt;\">");
+        sb.append("<thead><tr>");
+        for (String columnTitle : headers) {
+            sb.append("<th style=\"background:#D9E1F2;padding:4px 8px;text-align:left;\">")
+                    .append(ClipboardTableSupport.escapeHtml(columnTitle))
+                    .append("</th>");
+        }
+        sb.append("</tr></thead><tbody>");
+        for (MainRow row : rows) {
+            sb.append("<tr>");
+            for (String cell : mainTableRowCells(row, headers)) {
+                appendHtmlCell(sb, cell);
+            }
+            sb.append("</tr>");
+        }
+        sb.append("</tbody></table>");
+        return sb.toString();
+    }
+
+    static String formatMainTableCsv(List<MainRow> rows) {
+        return formatMainTableCsv(rows, mainTableColumnTitles());
+    }
+
+    static String formatMainTableCsv(List<MainRow> rows, List<String> titles) {
+        List<String> headers = titles != null && !titles.isEmpty() ? titles : mainTableColumnTitles();
+        StringBuilder sb = new StringBuilder();
+        appendMainTableCsvRow(sb, headers);
+        for (MainRow row : rows) {
+            sb.append('\n');
+            appendMainTableCsvRow(sb, mainTableRowCells(row, headers));
+        }
+        return sb.toString();
+    }
+
+    static List<String> mainTableColumnTitles() {
+        List<String> titles = new ArrayList<>();
+        for (MainColDef def : defaultMainColumnDefs()) {
+            titles.add(def.title());
+        }
+        return List.copyOf(titles);
+    }
+
+    static List<String> mainTableRowCells(MainRow row) {
+        return mainTableRowCells(row, mainTableColumnTitles());
+    }
+
+    static List<String> mainTableRowCells(MainRow row, List<String> titles) {
+        if (row == null) {
+            return List.of();
+        }
+        Map<String, String> titleToProperty = defaultMainColumnTitleToProperty();
+        List<String> cells = new ArrayList<>();
+        for (String title : titles) {
+            String property = titleToProperty.get(title);
+            cells.add(property != null ? mainRowCellByProperty(row, property) : "");
+        }
+        return List.copyOf(cells);
+    }
+
+    private static Map<String, String> defaultMainColumnTitleToProperty() {
+        Map<String, String> map = new LinkedHashMap<>();
+        for (MainColDef def : defaultMainColumnDefs()) {
+            map.put(def.title(), def.property());
+        }
+        return map;
+    }
+
+    static String mainRowCellByProperty(MainRow row, String property) {
+        if (row == null || property == null) {
+            return "";
+        }
+        return nullToEmpty(
+                switch (property) {
+                    case "iraiNo" -> row.getIraiNo();
+                    case "originalFile" -> row.getOriginalFile();
+                    case "indexResponseDate" -> row.getIndexResponseDate();
+                    case "indexInputDate" -> row.getIndexInputDate();
+                    case "indexDeliveryDate" -> row.getIndexDeliveryDate();
+                    case "indexDeliveryRemarks" -> row.getIndexDeliveryRemarks();
+                    case "indexContractNo" -> row.getIndexContractNo();
+                    case "indexContractRemarks" -> row.getIndexContractRemarks();
+                    case "juchuInputDate" -> row.getJuchuInputDate();
+                    case "juchuInputOperator" -> row.getJuchuInputOperator();
+                    case "juchuAdjustDeliveryDate" -> row.getJuchuAdjustDeliveryDate();
+                    case "rateDisplay" -> row.getRateDisplay();
+                    case "mismatchCount" -> row.getMismatchCount();
+                    case "originalContractNo" -> row.getOriginalContractNo();
+                    case "contractNoStatus" -> row.getContractNoStatus();
+                    case "aladdinStatus" -> row.getAladdinStatus();
+                    case "dailyReportOrderStatus" -> row.getDailyReportOrderStatus();
+                    case "planDay0" -> row.getPlanDay0();
+                    case "planDay1" -> row.getPlanDay1();
+                    case "planDay2" -> row.getPlanDay2();
+                    case "planDay3" -> row.getPlanDay3();
+                    case "planDay4" -> row.getPlanDay4();
+                    case "planDay5" -> row.getPlanDay5();
+                    case "planDay6" -> row.getPlanDay6();
+                    default -> "";
+                });
+    }
+
+    private static String nullToEmpty(String value) {
+        return value != null ? value : "";
+    }
+
+    private static void appendMainTableTsvRow(StringBuilder sb, List<String> cells) {
+        for (int i = 0; i < cells.size(); i++) {
+            if (i > 0) {
+                sb.append('\t');
+            }
+            appendTsvCell(sb, cells.get(i));
+        }
+    }
+
+    private static void appendMainTableCsvRow(StringBuilder sb, List<String> cells) {
+        for (int i = 0; i < cells.size(); i++) {
+            if (i > 0) {
+                sb.append(',');
+            }
+            appendCsvCell(sb, cells.get(i));
+        }
     }
 
     static String formatPlanTableTsv(PlanCopyHeader header, List<PlanRow> rows) {
@@ -674,7 +1137,9 @@ public final class RequestFormPipelineCheckTabController {
                 .append('\t')
                 .append("日付")
                 .append('\t')
-                .append("計画m");
+                .append("計画m")
+                .append('\t')
+                .append("日報完了");
         for (PlanRow row : rows) {
             sb.append('\n');
             appendTsvCell(sb, row.getMachineName());
@@ -684,6 +1149,8 @@ public final class RequestFormPipelineCheckTabController {
             appendTsvCell(sb, row.getDateYmd());
             sb.append('\t');
             appendTsvCell(sb, row.getPlanMeters());
+            sb.append('\t');
+            appendTsvCell(sb, row.getDailyReportCompletion());
         }
         return sb.toString();
     }
@@ -739,8 +1206,20 @@ public final class RequestFormPipelineCheckTabController {
     }
 
     private static void appendTsvCell(StringBuilder sb, String value) {
+        appendDelimitedCell(sb, value, '\t');
+    }
+
+    static void appendCsvCell(StringBuilder sb, String value) {
+        appendDelimitedCell(sb, value, ',');
+    }
+
+    private static void appendDelimitedCell(StringBuilder sb, String value, char delimiter) {
         String text = value != null ? value : "";
-        if (text.indexOf('\t') >= 0 || text.indexOf('\n') >= 0 || text.indexOf('\r') >= 0) {
+        if (text.indexOf(delimiter) >= 0
+                || text.indexOf('"') >= 0
+                || text.indexOf('\t') >= 0
+                || text.indexOf('\n') >= 0
+                || text.indexOf('\r') >= 0) {
             sb.append('"').append(text.replace("\"", "\"\"")).append('"');
         } else {
             sb.append(text);
@@ -761,6 +1240,9 @@ public final class RequestFormPipelineCheckTabController {
         boolean showAdjustDeliveryFromTodayOnly =
                 showAdjustDeliveryFromTodayCheck != null
                         && showAdjustDeliveryFromTodayCheck.isSelected();
+        boolean showDailyReportIncompleteOnly =
+                showDailyReportIncompleteOnlyCheck == null
+                        || showDailyReportIncompleteOnlyCheck.isSelected();
 
         filteredRows.setPredicate(
                 row -> {
@@ -783,6 +1265,10 @@ public final class RequestFormPipelineCheckTabController {
                             && RequestFormPipelineStatusService
                                     .shouldHideByAdjustDeliveryBeforeToday(
                                             src.juchuAdjustDeliveryDate())) {
+                        return false;
+                    }
+                    if (showDailyReportIncompleteOnly
+                            && "完了".equals(nullToEmpty(row.getDailyReportOrderStatus()))) {
                         return false;
                     }
                     if (q.isEmpty()) {
@@ -854,6 +1340,20 @@ public final class RequestFormPipelineCheckTabController {
         return count;
     }
 
+    private int countHiddenByDailyReportComplete() {
+        if (showDailyReportIncompleteOnlyCheck != null
+                && !showDailyReportIncompleteOnlyCheck.isSelected()) {
+            return 0;
+        }
+        int count = 0;
+        for (MainRow row : allRows) {
+            if ("完了".equals(nullToEmpty(row.getDailyReportOrderStatus()))) {
+                count++;
+            }
+        }
+        return count;
+    }
+
     private void updateStatusLabel() {
         int visible = filteredRows.size();
         int total = allRows.size();
@@ -879,6 +1379,12 @@ public final class RequestFormPipelineCheckTabController {
                     .append(hiddenByAdjustDelivery)
                     .append("件（調整納期が当日より前または未設定）");
         }
+        int hiddenByDailyReportComplete = countHiddenByDailyReportComplete();
+        if (hiddenByDailyReportComplete > 0) {
+            status.append(" | 非表示: ")
+                    .append(hiddenByDailyReportComplete)
+                    .append("件（日報完了）");
+        }
         if (aladdinJsonAvailable) {
             status.append(" | ①〜⑦=依頼ごとの計画日（昇順・最大7日）");
         }
@@ -888,23 +1394,121 @@ public final class RequestFormPipelineCheckTabController {
         statusLabel.setText(status.toString());
     }
 
-    private void setupMainColumns() {
-        List<TableColumn<MainRow, String>> cols = new ArrayList<>();
-        cols.add(col("依頼No", "iraiNo", 90));
-        cols.add(col("原本", "originalFile", 140));
-        cols.add(col("入力日", "juchuInputDate", 88));
-        cols.add(col("入力者", "juchuInputOperator", 88));
-        cols.add(col("調整納期", "juchuAdjustDeliveryDate", 88));
-        cols.add(col("転記率", "rateDisplay", 100));
-        cols.add(col("未一致", "mismatchCount", 52));
-        cols.add(col("原本契約NO", "originalContractNo", 120));
-        cols.add(col("契約NO", "contractNoStatus", 120));
-        cols.add(col("Aladdin", "aladdinStatus", 64));
-        for (int i = 0; i < PLAN_DAY_COLUMNS; i++) {
-            String title = AladdinShapedPlanQtyLookup.circledSlotColumnLabel(i);
-            cols.add(col(title, "planDay" + i, 88));
+    private void updateDailyReportSourceLabel() {
+        if (dailyReportSourceLabel == null) {
+            return;
         }
-        mainTable.getColumns().setAll(cols);
+        String path = dailyReportLookup != null ? dailyReportLookup.sourcePath() : "";
+        if (path.isBlank()) {
+            dailyReportSourceLabel.setText("加工日報: （未読込）");
+            dailyReportSourceLabel.setManaged(true);
+            dailyReportSourceLabel.setVisible(true);
+            return;
+        }
+        dailyReportSourceLabel.setText("加工日報: " + path);
+        dailyReportSourceLabel.setManaged(true);
+        dailyReportSourceLabel.setVisible(true);
+    }
+
+    private List<String> mainTableVisibleColumnTitles() {
+        if (mainTable == null) {
+            return mainTableColumnTitles();
+        }
+        List<String> titles = new ArrayList<>();
+        for (TableColumn<MainRow, ?> column : mainTable.getColumns()) {
+            if (column.isVisible()) {
+                titles.add(column.getText() != null ? column.getText() : "");
+            }
+        }
+        return titles.isEmpty() ? mainTableColumnTitles() : List.copyOf(titles);
+    }
+
+    private void setupMainColumnsOnce() {
+        if (mainColumnsInitialized || mainTable == null) {
+            return;
+        }
+        mainColumnsInitialized = true;
+        mainColumnTitleToProperty.clear();
+        for (MainColDef def : mainColumnDefs) {
+            mainColumnTitleToProperty.put(def.title(), def.property());
+        }
+
+        List<TableColumn<MainRow, String>> columns = new ArrayList<>();
+        for (MainColDef def : mainColumnDefs) {
+            TableColumn<MainRow, String> column = new TableColumn<>(def.title());
+            column.setCellValueFactory(new PropertyValueFactory<>(def.property()));
+            column.setMinWidth(def.defaultWidth() * 0.6);
+            column.setPrefWidth(def.defaultWidth());
+            column.setReorderable(true);
+            column.setUserData(def.property());
+            columns.add(column);
+        }
+        suppressColumnPersistence.set(true);
+        try {
+            mainTable.getColumns().setAll(columns);
+            mainTable.setColumnResizePolicy(TableView.UNCONSTRAINED_RESIZE_POLICY);
+            List<TableColumnOrderPersistence.ColumnSpec> layout =
+                    TableColumnOrderPersistence.loadLayout(
+                            TableColumnOrderPersistence.TableId.REQUEST_FORM_PIPELINE_CHECK);
+            if (!layout.isEmpty()) {
+                TableColumnOrderPersistence.applyOrderToTableColumns(
+                        mainTable,
+                        layout.stream()
+                                .map(TableColumnOrderPersistence.ColumnSpec::title)
+                                .toList());
+                TableColumnOrderPersistence.applyWidthsToTableColumns(mainTable, layout, 112);
+            }
+        } finally {
+            suppressColumnPersistence.set(false);
+        }
+
+        TableColumnOrderPersistence.installColumnLayoutWatcher(
+                mainTable,
+                TableColumnOrderPersistence.TableId.REQUEST_FORM_PIPELINE_CHECK,
+                suppressColumnPersistence::get);
+
+        Runnable resetMainColumns =
+                () -> {
+                    suppressColumnPersistence.set(true);
+                    try {
+                        for (int i = 0; i < columns.size() && i < mainColumnDefs.size(); i++) {
+                            double w = mainColumnDefs.get(i).defaultWidth();
+                            columns.get(i).setMinWidth(w * 0.6);
+                            columns.get(i).setPrefWidth(w);
+                        }
+                    } finally {
+                        suppressColumnPersistence.set(false);
+                    }
+                };
+
+        Window owner = shell != null ? shell.getPrimaryStage() : null;
+        if (mainColumnStripHost != null) {
+            mainColumnStripHost
+                    .getChildren()
+                    .setAll(
+                            TableViewColumnSettingsStrip.create(
+                                    mainTable,
+                                    resetMainColumns,
+                                    false,
+                                    TableColumnOrderPersistence.TableId.REQUEST_FORM_PIPELINE_CHECK,
+                                    null,
+                                    () ->
+                                            ColumnVisibilitySupport
+                                                    .openTableViewColumnVisibilityDialog(
+                                                            owner,
+                                                            TableColumnOrderPersistence.TableId
+                                                                    .REQUEST_FORM_PIPELINE_CHECK,
+                                                            mainTable)));
+        }
+
+        Platform.runLater(
+                () ->
+                        ColumnVisibilitySupport.applyColumnVisibilityToTableView(
+                                mainTable,
+                                TableColumnOrderPersistence.loadColumnVisibility(
+                                        TableColumnOrderPersistence.TableId
+                                                .REQUEST_FORM_PIPELINE_CHECK,
+                                        mainTable.getColumns().size())));
     }
 
     private void setupMismatchColumns() {
@@ -919,15 +1523,8 @@ public final class RequestFormPipelineCheckTabController {
                 colPlan("機械名", "machineName", 140),
                 colPlan("工程名", "processName", 100),
                 colPlan("日付", "dateYmd", 100),
-                colPlan("計画m", "planMeters", 80));
-    }
-
-    private static TableColumn<MainRow, String> col(String title, String prop, double width) {
-        TableColumn<MainRow, String> c = new TableColumn<>(title);
-        c.setCellValueFactory(new PropertyValueFactory<>(prop));
-        c.setPrefWidth(width);
-        c.setMinWidth(width * 0.6);
-        return c;
+                colPlan("計画m", "planMeters", 80),
+                colPlan("日報完了", "dailyReportCompletion", 72));
     }
 
     private static TableColumn<MismatchRow, String> colMismatch(
