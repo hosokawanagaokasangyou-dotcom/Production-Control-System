@@ -4,6 +4,7 @@
 <?import javafx.scene.control.Button?>
 <?import javafx.scene.control.CheckBox?>
 <?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ProgressBar?>
 <?import javafx.scene.control.Slider?>
 <?import javafx.scene.control.TitledPane?>
 <?import javafx.scene.layout.HBox?>
@@ -39,6 +40,10 @@
                             onAction="#onOpenLatestAladdinEntryWorkbookAction"/>
                     <Button mnemonicParsing="false" text="世代を開く…"
                             onAction="#onOpenAladdinEntryGenerationsAction"/>
+                    <ProgressBar fx:id="aladdinEntryExportProgress" prefWidth="140.0"
+                                 visible="false" managed="false"/>
+                    <Label fx:id="aladdinEntryExportProgressLabel"
+                           visible="false" managed="false"/>
                     <Label fx:id="statusLabel"/>
                 </HBox>
                 <Label fx:id="pathLabel" wrapText="true"/>

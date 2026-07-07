@@ -24,6 +24,12 @@ public final class RequestFormOriginalIndexLookup {
 
     private RequestFormOriginalIndexLookup() {}
 
+    /** 走査の進捗通知（{@code processed} / {@code total} ファイル）。 */
+    @FunctionalInterface
+    public interface ScanProgressListener {
+        void onProgress(int processed, int total);
+    }
+
     /**
      * 依頼NO 正規化キー → 目次情報。フォルダ未到達・目次なしのときは空 Map（警告を {@code warnings} へ追記）。
      *
@@ -31,6 +37,14 @@ public final class RequestFormOriginalIndexLookup {
      */
     public static Map<String, DispatchAladdinEntrySheetBuilder.IndexInfo> loadByIraiNoKey(
             Map<String, String> ui, List<String> warnings) {
+        return loadByIraiNoKey(ui, warnings, null);
+    }
+
+    /**
+     * 進捗通知付き。{@code progress} はワーカースレッドから呼ばれる（UI 更新側で {@code Platform.runLater} すること）。
+     */
+    public static Map<String, DispatchAladdinEntrySheetBuilder.IndexInfo> loadByIraiNoKey(
+            Map<String, String> ui, List<String> warnings, ScanProgressListener progress) {
         Map<String, DispatchAladdinEntrySheetBuilder.IndexInfo> out = new LinkedHashMap<>();
         Path dir = AppPaths.resolveRequestFormOriginalDir(ui);
         if (!NetworkSourceDirResolver.isRequestFormOriginalDirReachable(ui)) {
@@ -48,6 +62,7 @@ public final class RequestFormOriginalIndexLookup {
             warn(warnings, "Excel 依頼書原本が見つかりません: " + dir);
             return out;
         }
+        int processed = 0;
         for (File file : files) {
             try (Workbook wb = PoiWorkbookOpener.open(file)) {
                 Sheet index = wb.getSheet(RequestFormOriginalIndexSheetLayout.SHEET_NAME);
@@ -64,6 +79,10 @@ public final class RequestFormOriginalIndexLookup {
                 }
             } catch (Exception ex) {
                 warn(warnings, "原本目次読込エラー " + file.getName() + ": " + ex.getMessage());
+            }
+            processed++;
+            if (progress != null) {
+                progress.onProgress(processed, files.length);
             }
         }
         return out;

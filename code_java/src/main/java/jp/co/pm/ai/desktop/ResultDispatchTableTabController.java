@@ -22,6 +22,7 @@ import javafx.geometry.Pos;
 import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.Label;
+import javafx.scene.control.ProgressBar;
 import javafx.scene.control.SelectionMode;
 import javafx.scene.control.Slider;
 import javafx.scene.layout.HBox;
@@ -74,6 +75,12 @@ public final class ResultDispatchTableTabController {
 
     @FXML
     private Button aladdinEntryExportButton;
+
+    @FXML
+    private ProgressBar aladdinEntryExportProgress;
+
+    @FXML
+    private Label aladdinEntryExportProgressLabel;
 
     @FXML
     private Label dataStageBadgeLabel;
@@ -595,13 +602,33 @@ public final class ResultDispatchTableTabController {
         if (aladdinEntryExportButton != null) {
             aladdinEntryExportButton.setDisable(true);
         }
+        showAladdinEntryExportProgress(ProgressBar.INDETERMINATE_PROGRESS, "依頼書原本 目次読込中…");
         Thread worker =
                 new Thread(
                         () -> {
                             List<String> warnings = new ArrayList<>();
                             try {
                                 Map<String, DispatchAladdinEntrySheetBuilder.IndexInfo> index =
-                                        RequestFormOriginalIndexLookup.loadByIraiNoKey(ui, warnings);
+                                        RequestFormOriginalIndexLookup.loadByIraiNoKey(
+                                                ui,
+                                                warnings,
+                                                (processed, total) ->
+                                                        Platform.runLater(
+                                                                () ->
+                                                                        showAladdinEntryExportProgress(
+                                                                                total > 0
+                                                                                        ? (double) processed / total
+                                                                                        : ProgressBar.INDETERMINATE_PROGRESS,
+                                                                                "依頼書原本 目次読込中… ("
+                                                                                        + processed
+                                                                                        + "/"
+                                                                                        + total
+                                                                                        + ")")));
+                                Platform.runLater(
+                                        () ->
+                                                showAladdinEntryExportProgress(
+                                                        ProgressBar.INDETERMINATE_PROGRESS,
+                                                        "Excel 作成中…"));
                                 DispatchAladdinEntryWorkbookExporter.ExportResult result =
                                         DispatchAladdinEntryWorkbookExporter.writeFromCachedSources(
                                                 ui, index);
@@ -617,6 +644,30 @@ public final class ResultDispatchTableTabController {
         worker.start();
     }
 
+    private void showAladdinEntryExportProgress(double progress, String text) {
+        if (aladdinEntryExportProgress != null) {
+            aladdinEntryExportProgress.setVisible(true);
+            aladdinEntryExportProgress.setManaged(true);
+            aladdinEntryExportProgress.setProgress(progress);
+        }
+        if (aladdinEntryExportProgressLabel != null) {
+            aladdinEntryExportProgressLabel.setVisible(true);
+            aladdinEntryExportProgressLabel.setManaged(true);
+            aladdinEntryExportProgressLabel.setText(text);
+        }
+    }
+
+    private void hideAladdinEntryExportProgress() {
+        if (aladdinEntryExportProgress != null) {
+            aladdinEntryExportProgress.setVisible(false);
+            aladdinEntryExportProgress.setManaged(false);
+        }
+        if (aladdinEntryExportProgressLabel != null) {
+            aladdinEntryExportProgressLabel.setVisible(false);
+            aladdinEntryExportProgressLabel.setManaged(false);
+        }
+    }
+
     private void finishAladdinEntryExport(
             DispatchAladdinEntryWorkbookExporter.ExportResult result,
             List<String> warnings,
@@ -624,6 +675,7 @@ public final class ResultDispatchTableTabController {
         if (aladdinEntryExportButton != null) {
             aladdinEntryExportButton.setDisable(false);
         }
+        hideAladdinEntryExportProgress();
         for (String w : warnings) {
             shell.appendLog("[aladdin-entry-export] warn: " + w);
         }
