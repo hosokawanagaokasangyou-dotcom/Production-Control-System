@@ -3911,6 +3911,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
             appendLog("[env] 工場既定の選択をキャンセルしたため湖南工場の既定を適用します。");
         }
         applyEnvRowsFullBundledResetAndPersist(true, site);
+        maybePromptRequestFormOriginalDirIfUnset("[env]", site);
         requireOperatorSelectionForFactory(site, false);
     }
 
@@ -4017,14 +4018,16 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
     }
 
     private void maybePromptRequestFormOriginalDirAtStartup() {
-        maybePromptRequestFormOriginalDirIfUnset("[startup]");
+        maybePromptRequestFormOriginalDirIfUnset("[startup]", null);
     }
 
     /**
      * {@link AppPaths#KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR} が空のとき、BOX ドライブ上の依頼書原本フォルダ選択を1回案内する。
      * キャンセル・未選択でも起動を続行する（実行時は {@link AppPaths#resolveRequestFormOriginalDir} の工場既定へフォールバック）。
+     *
+     * @param factorySiteHint 環境変数初期化直後など、工場既定の説明を出すときに渡す（起動時案内では {@code null}）
      */
-    private void maybePromptRequestFormOriginalDirIfUnset(String logPrefix) {
+    private void maybePromptRequestFormOriginalDirIfUnset(String logPrefix, FactorySite factorySiteHint) {
         if (primaryStage == null || envRows == null) {
             return;
         }
@@ -4036,11 +4039,24 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         applyAlertStylesheetsFromOwner(intro);
         intro.setTitle("依頼書原本フォルダ（任意）");
         intro.setHeaderText(null);
+        String unsetReason =
+                factorySiteHint != null
+                        ? "環境変数の初期化により "
+                                + AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR
+                                + " が未設定になりました。\n"
+                        : AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR + " が未設定です。\n";
+        String factoryFallback =
+                factorySiteHint != null
+                        ? "スキップした場合は "
+                                + factorySiteHint.displayLabelJa()
+                                + " の工場既定（"
+                                + factorySiteHint.requestFormOriginalDir()
+                                + "）で動作します。"
+                        : "スキップした場合は工場既定（受注ファイル既定の親フォルダ）で動作します。";
         intro.setContentText(
-                AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR
-                        + " が未設定です。\n"
+                unsetReason
                         + "BOX ドライブ上の依頼書原本フォルダ（*加工依頼書*.xlsm 等を含むフォルダ）を指定できます。\n"
-                        + "スキップした場合は工場既定（受注ファイル既定の親フォルダ）で動作します。");
+                        + factoryFallback);
         intro.showAndWait();
 
         DirectoryChooser dc = new DirectoryChooser();
