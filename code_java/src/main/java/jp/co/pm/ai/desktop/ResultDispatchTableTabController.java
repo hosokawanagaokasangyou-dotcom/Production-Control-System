@@ -34,16 +34,22 @@ import org.controlsfx.control.spreadsheet.GridBase;
 import org.controlsfx.control.spreadsheet.SpreadsheetView;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
+import jp.co.pm.ai.desktop.dispatch.DispatchAladdinEntrySheetBuilder;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchDeadlineJudgment;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchNormalizer;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchInteractiveConsolidator;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchSchema;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchStage3Support;
+import jp.co.pm.ai.desktop.io.DesktopFileOpener;
+import jp.co.pm.ai.desktop.io.DispatchAladdinEntryWorkbookExporter;
+import jp.co.pm.ai.desktop.reconciliation.RequestFormOriginalIndexLookup;
+import jp.co.pm.ai.desktop.ui.DispatchAladdinEntryGenerationDialog;
 import jp.co.pm.ai.desktop.ui.ColumnVisibilitySupport;
 import jp.co.pm.ai.desktop.ui.SliderCommittedChangeSupport;
 import jp.co.pm.ai.desktop.ui.SpreadsheetColumnDragReorderSupport;
 import jp.co.pm.ai.desktop.ui.SpreadsheetColumnReorderDialog;
 import jp.co.pm.ai.desktop.ui.SpreadsheetColumnSettingsStrip;
+import jp.co.pm.ai.desktop.ui.SpreadsheetRequestFormOriginalHeaderStyle;
 import jp.co.pm.ai.desktop.ui.SpreadsheetTabularSupport;
 import jp.co.pm.ai.desktop.ui.SpreadsheetThemeBridge;
 import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
@@ -65,6 +71,9 @@ public final class ResultDispatchTableTabController {
 
     @FXML
     private Button refreshButton;
+
+    @FXML
+    private Button aladdinEntryExportButton;
 
     @FXML
     private Label dataStageBadgeLabel;
@@ -381,6 +390,8 @@ public final class ResultDispatchTableTabController {
                                 () ->
                                         SpreadsheetTabularSupport.reapplySpreadsheetColumnChrome(
                                                 spreadsheetView, headerColumnCount.get()));
+                        SpreadsheetRequestFormOriginalHeaderStyle.applyWhenReady(
+                                spreadsheetView, new ArrayList<>(headersRef));
                     });
         } finally {
             suppressColumnPersistence.set(false);
@@ -573,6 +584,96 @@ public final class ResultDispatchTableTabController {
             return t;
         }
         return n.asText("");
+    }
+
+    @FXML
+    private void onExportAladdinEntryWorkbookAction() {
+        if (shell == null) {
+            return;
+        }
+        Map<String, String> ui = shell.snapshotUiEnv();
+        if (aladdinEntryExportButton != null) {
+            aladdinEntryExportButton.setDisable(true);
+        }
+        Thread worker =
+                new Thread(
+                        () -> {
+                            List<String> warnings = new ArrayList<>();
+                            try {
+                                Map<String, DispatchAladdinEntrySheetBuilder.IndexInfo> index =
+                                        RequestFormOriginalIndexLookup.loadByIraiNoKey(ui, warnings);
+                                DispatchAladdinEntryWorkbookExporter.ExportResult result =
+                                        DispatchAladdinEntryWorkbookExporter.writeFromCachedSources(
+                                                ui, index);
+                                Platform.runLater(
+                                        () -> finishAladdinEntryExport(result, warnings, null));
+                            } catch (Exception ex) {
+                                Platform.runLater(
+                                        () -> finishAladdinEntryExport(null, warnings, ex));
+                            }
+                        },
+                        "aladdin-entry-export");
+        worker.setDaemon(true);
+        worker.start();
+    }
+
+    private void finishAladdinEntryExport(
+            DispatchAladdinEntryWorkbookExporter.ExportResult result,
+            List<String> warnings,
+            Exception error) {
+        if (aladdinEntryExportButton != null) {
+            aladdinEntryExportButton.setDisable(false);
+        }
+        for (String w : warnings) {
+            shell.appendLog("[aladdin-entry-export] warn: " + w);
+        }
+        if (error != null) {
+            shell.appendLog("[aladdin-entry-export] error: " + error.getMessage());
+            shell.showErrorDialog(
+                    "アラジン入力用Excel出力",
+                    error.getMessage() != null ? error.getMessage() : error.toString());
+            return;
+        }
+        shell.appendLog("[aladdin-entry-export] " + result.latestPath());
+        StringBuilder sb =
+                new StringBuilder("アラジン入力用配台計画を出力しました。\n\n最新: ")
+                        .append(result.latestPath())
+                        .append("\n世代: ")
+                        .append(result.generationPath());
+        if (!warnings.isEmpty()) {
+            sb.append("\n\n警告:\n").append(String.join("\n", warnings));
+        }
+        shell.showInformationDialog("アラジン入力用Excel出力", sb.toString());
+    }
+
+    @FXML
+    private void onOpenLatestAladdinEntryWorkbookAction() {
+        if (shell == null) {
+            return;
+        }
+        Path latest = AppPaths.aladdinEntryDispatchPlanXlsxPath(shell.snapshotUiEnv());
+        if (!Files.isRegularFile(latest)) {
+            shell.showWarningDialog(
+                    "最新を開く",
+                    "ファイルがまだありません。先に「アラジン入力用Excel出力」を実行してください。\n" + latest);
+            return;
+        }
+        try {
+            DesktopFileOpener.openFileReadOnly(latest);
+        } catch (Exception ex) {
+            shell.showErrorDialog(
+                    "最新を開く", "ファイルを開けませんでした。\n" + latest + "\n" + ex.getMessage());
+        }
+    }
+
+    @FXML
+    private void onOpenAladdinEntryGenerationsAction() {
+        if (shell == null) {
+            return;
+        }
+        Map<String, String> ui = shell.snapshotUiEnv();
+        DispatchAladdinEntryGenerationDialog.show(
+                ownerStage, ui, DispatchAladdinEntryWorkbookExporter.currentOperatorDirName(ui));
     }
 
     void clearColumnFiltersAndSort() {

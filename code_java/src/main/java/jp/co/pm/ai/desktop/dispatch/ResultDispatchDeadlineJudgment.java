@@ -72,7 +72,7 @@ public final class ResultDispatchDeadlineJudgment {
         return d != null ? d.atStartOfDay() : null;
     }
 
-    static LocalDateTime parseDispatchDateTime(String raw) {
+    public static LocalDateTime parseDispatchDateTime(String raw) {
         if (raw == null || raw.isBlank()) {
             return null;
         }

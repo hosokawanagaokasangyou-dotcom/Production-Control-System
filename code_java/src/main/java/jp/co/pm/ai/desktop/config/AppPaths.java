@@ -2391,6 +2391,30 @@ public final class AppPaths {
         return siblingOfSummaryAiDispatchWorkbookForFactory(ui, null, fileName);
     }
 
+    /**
+     * アラジン入力用配台計画 Excel の格納サブフォルダ名（親は {@link #summaryAiDispatchXlsxPath(Map)} と同一）。
+     */
+    public static final String ALADDIN_ENTRY_DISPATCH_PLAN_DIR_NAME = "アラジン入力用配台計画";
+
+    /** アラジン入力用配台計画 Excel の最新固定ファイル名。 */
+    public static final String ALADDIN_ENTRY_DISPATCH_PLAN_XLSX = "アラジン入力用_配台計画.xlsx";
+
+    /**
+     * アラジン入力用配台計画の格納フォルダ（{@link #summaryAiDispatchXlsxPath(Map)} の親 +
+     * {@link #ALADDIN_ENTRY_DISPATCH_PLAN_DIR_NAME}）。直下に最新固定名、配下に操作者別世代フォルダ。
+     */
+    public static Path aladdinEntryDispatchPlanDir(Map<String, String> ui) {
+        return siblingOfSummaryAiDispatchWorkbook(ui, ALADDIN_ENTRY_DISPATCH_PLAN_DIR_NAME);
+    }
+
+    /** アラジン入力用配台計画 Excel の最新固定パス（{@link #aladdinEntryDispatchPlanDir} 直下）。 */
+    public static Path aladdinEntryDispatchPlanXlsxPath(Map<String, String> ui) {
+        return aladdinEntryDispatchPlanDir(ui)
+                .resolve(ALADDIN_ENTRY_DISPATCH_PLAN_XLSX)
+                .toAbsolutePath()
+                .normalize();
+    }
+
     private static Path siblingOfSummaryAiDispatchWorkbookForFactory(
             Map<String, String> ui, FactorySite site, String fileName) {
         Path summary = summaryAiDispatchXlsxPathForFactory(ui, site);

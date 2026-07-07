@@ -72,6 +72,24 @@
     -fx-text-fill: black;
 }
 
+/* 結果_配台表: 依頼書原本→受注転記由来の列見出し */
+.pm-ai-readable-spreadsheet HorizontalHeaderColumn > TableColumnHeader.column-header.table-column.pm-request-form-original-column-header,
+.pm-ai-readable-spreadsheet HorizontalHeaderColumn > TableColumnHeader.column-header.table-column.fixed.pm-request-form-original-column-header {
+    -fx-background-color: #e1bee7;
+    -fx-text-fill: black;
+}
+
+.pm-ai-readable-spreadsheet HorizontalHeaderColumn > TableColumnHeader.column-header.table-column.pm-request-form-original-column-header .label,
+.pm-ai-readable-spreadsheet HorizontalHeaderColumn > TableColumnHeader.column-header.table-column.fixed.pm-request-form-original-column-header .label {
+    -fx-text-fill: black;
+}
+
+.pm-ai-readable-spreadsheet HorizontalHeaderColumn > TableColumnHeader.column-header.table-column.pm-request-form-original-column-header.selected,
+.pm-ai-readable-spreadsheet HorizontalHeaderColumn > TableColumnHeader.column-header.table-column.pm-request-form-original-column-header.selected > Label {
+    -fx-background-color: #ce93d8;
+    -fx-text-fill: black;
+}
+
 .pm-ai-readable-spreadsheet .spreadsheet-cell:filled:selected,
 .pm-ai-readable-spreadsheet .spreadsheet-cell:filled:focused:selected,
 .pm-ai-readable-spreadsheet .spreadsheet-cell:filled:focused:selected:hover {

@@ -772,7 +772,11 @@ public final class TableColumnOrderPersistence {
         /** 納期管理ビュー「カレンダー」メイン表 */
         DELIVERY_CALENDAR_MAIN("deliveryCalendarMain"),
         /** 納期管理ビュー「計画比較」別表 */
-        DELIVERY_CALENDAR_COMPARE("deliveryCalendarCompare");
+        DELIVERY_CALENDAR_COMPARE("deliveryCalendarCompare"),
+        /** 依頼書パイプライン確認タブ上段一覧 */
+        REQUEST_FORM_PIPELINE_CHECK("requestFormPipelineCheck"),
+        /** 納期管理ビュー「配台結果（タスク集約）」 */
+        DELIVERY_CALENDAR_DISPATCH_TASK_SUMMARY("deliveryCalendarDispatchTaskSummary");
 
         private final String jsonKey;
 

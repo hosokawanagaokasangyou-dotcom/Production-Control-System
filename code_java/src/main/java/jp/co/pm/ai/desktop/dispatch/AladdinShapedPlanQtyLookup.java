@@ -203,6 +203,20 @@ public final class AladdinShapedPlanQtyLookup {
     }
 
     /**
+     * shaped JSON を優先し、未存在・空のとき {@code uiFallback}（アラジン加工計画タブの表）へフォールバックする。
+     */
+    public static ShapedTable resolveShapedTable(Path shapedJsonPath, ShapedTable uiFallback) {
+        ShapedTable fromJson = loadShapedTable(shapedJsonPath);
+        if (!fromJson.headers().isEmpty()) {
+            return fromJson;
+        }
+        if (uiFallback != null && !uiFallback.headers().isEmpty()) {
+            return uiFallback;
+        }
+        return new ShapedTable(List.of(), List.of());
+    }
+
+    /**
      * Key: {@code normalizedMk -> tid -> yyyy/MM/dd -> processKey -> qty}. {@code processKey} は
      * {@link #normalizeProcessNameForRuleMatch}（工程名列があるとき）。無いときは {@code ""}。
      */
@@ -267,7 +281,11 @@ public final class AladdinShapedPlanQtyLookup {
         if (byDate == null) {
             return 0.0;
         }
-        Map<String, Double> byProc = byDate.get(dateStr);
+        String dateKey = normaliseDateStr(dateStr);
+        if (dateKey == null) {
+            dateKey = dateStr;
+        }
+        Map<String, Double> byProc = byDate.get(dateKey);
         if (byProc == null) {
             return 0.0;
         }

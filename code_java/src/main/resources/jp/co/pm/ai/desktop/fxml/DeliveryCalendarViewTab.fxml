@@ -150,6 +150,13 @@
                                 source="ResultDispatchTableTab.fxml"/>
                 </content>
             </Tab>
+            <Tab closable="false"
+                 text="&#x914d;&#x53f0;&#x7d50;&#x679c;&#xff08;&#x30bf;&#x30b9;&#x30af;&#x96c6;&#x7d04;&#xff09;">
+                <content>
+                    <fx:include fx:id="deliveryCalendarDispatchTaskSummaryTab"
+                                source="DeliveryCalendarDispatchTaskSummaryTab.fxml"/>
+                </content>
+            </Tab>
             <Tab closable="false" text="&#x52a0;&#x5de5;&#x5b9f;&#x7e3e;">
                 <content>
                     <fx:include fx:id="processingActualsDataTab" source="ProcessingActualsDataTab.fxml"/>

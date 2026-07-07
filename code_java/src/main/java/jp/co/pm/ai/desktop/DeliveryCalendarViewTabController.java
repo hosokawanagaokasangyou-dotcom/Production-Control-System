@@ -196,6 +196,9 @@ public final class DeliveryCalendarViewTabController {
     private ProcessingActualsDataTabController processingActualsDataTabController;
 
     @FXML
+    private DeliveryCalendarDispatchTaskSummaryTabController deliveryCalendarDispatchTaskSummaryTabController;
+
+    @FXML
     private ResultDispatchTableTabController deliveryCalendarResultDispatchTableTabController;
 
     @FXML
@@ -555,6 +558,10 @@ public final class DeliveryCalendarViewTabController {
             deliveryCalendarResultDispatchTableTabController.bindShell(shell);
             deliveryCalendarResultDispatchTableTabController.setResultDispatchRefreshButtonVisible(false);
             deliveryCalendarResultDispatchTableTabController.setEmbeddedInDeliveryCalendar(true);
+        }
+        if (deliveryCalendarDispatchTaskSummaryTabController != null) {
+            deliveryCalendarDispatchTaskSummaryTabController.bindShell(shell);
+            deliveryCalendarDispatchTaskSummaryTabController.setRefreshButtonVisible(false);
         }
         ensureInnerTabPersistenceWired();
         refreshSummaryExportLockPresentation();
@@ -1425,6 +1432,9 @@ public final class DeliveryCalendarViewTabController {
             if (deliveryCalendarResultDispatchTableTabController != null) {
                 deliveryCalendarResultDispatchTableTabController.reloadResultDispatchTableFromDisk();
             }
+            if (deliveryCalendarDispatchTaskSummaryTabController != null) {
+                deliveryCalendarDispatchTaskSummaryTabController.reloadFromDisk();
+            }
             refreshPlanningStageBadgeFromDispatchJson();
             setDeliveryReloadSegmentProgress(
                     deliveryReloadProgressDispatch, deliveryReloadPctDispatch, 1.0);
@@ -1516,24 +1526,49 @@ public final class DeliveryCalendarViewTabController {
     }
 
     private PlanInputTabularIo.TabularSheet snapshotAladdinTabularForExport(Map<String, String> ui) {
-        Path json = AppPaths.resolveShapedAladdinPlanJsonPath(ui);
-        if (Files.isRegularFile(json)) {
-            try {
-                JsonTableIo.ArrayTable t = JsonTableIo.loadArrayTable(json);
-                if (!t.columns().isEmpty()) {
-                    return new PlanInputTabularIo.TabularSheet(t.columns(), t.rows());
-                }
-            } catch (IOException ignored) {
-                // fall through to UI
+        return tabularSheetFromShapedAladdinPlan(snapshotShapedAladdinPlanTable(ui, false));
+    }
+
+    /**
+     * 段階2直前ダイアログ②等: {@code shaped_aladdin_plan.json} → アラジン加工計画タブ → 未読込ならソース再読込。
+     */
+    AladdinShapedPlanQtyLookup.ShapedTable snapshotShapedAladdinPlanTable(Map<String, String> ui) {
+        AladdinShapedPlanQtyLookup.ShapedTable shaped = snapshotShapedAladdinPlanTable(ui, false);
+        if (!shaped.headers().isEmpty()) {
+            return shaped;
+        }
+        if (aladdinProcessingPlanDataTabController != null) {
+            aladdinProcessingPlanDataTabController.reloadAladdinProcessingPlanFromDisk();
+            shaped = snapshotShapedAladdinPlanTable(ui, true);
+        }
+        return shaped;
+    }
+
+    private AladdinShapedPlanQtyLookup.ShapedTable snapshotShapedAladdinPlanTable(
+            Map<String, String> ui, boolean skipJson) {
+        if (!skipJson) {
+            Path json = AppPaths.resolveShapedAladdinPlanJsonPath(ui);
+            AladdinShapedPlanQtyLookup.ShapedTable fromJson =
+                    AladdinShapedPlanQtyLookup.loadShapedTable(json);
+            if (!fromJson.headers().isEmpty()) {
+                return fromJson;
             }
         }
         if (aladdinProcessingPlanDataTabController != null
                 && !aladdinProcessingPlanDataTabController.getShapedHeaders().isEmpty()) {
-            return new PlanInputTabularIo.TabularSheet(
+            return new AladdinShapedPlanQtyLookup.ShapedTable(
                     aladdinProcessingPlanDataTabController.getShapedHeaders(),
                     aladdinProcessingPlanDataTabController.getShapedRows());
         }
-        return new PlanInputTabularIo.TabularSheet(List.of(), List.of());
+        return new AladdinShapedPlanQtyLookup.ShapedTable(List.of(), List.of());
+    }
+
+    private static PlanInputTabularIo.TabularSheet tabularSheetFromShapedAladdinPlan(
+            AladdinShapedPlanQtyLookup.ShapedTable shaped) {
+        if (shaped == null || shaped.headers().isEmpty()) {
+            return new PlanInputTabularIo.TabularSheet(List.of(), List.of());
+        }
+        return new PlanInputTabularIo.TabularSheet(shaped.headers(), shaped.rows());
     }
 
     private PlanInputTabularIo.TabularSheet snapshotActualsTabularForExport(Map<String, String> ui) {
@@ -1595,6 +1630,9 @@ public final class DeliveryCalendarViewTabController {
             statusLabel.setText("反映中… 配台結果（段階3）");
             if (deliveryCalendarResultDispatchTableTabController != null) {
                 deliveryCalendarResultDispatchTableTabController.reloadResultDispatchTableFromDisk();
+            }
+            if (deliveryCalendarDispatchTaskSummaryTabController != null) {
+                deliveryCalendarDispatchTaskSummaryTabController.reloadFromDisk();
             }
             refreshPlanningStageBadgeFromDispatchJson();
             overlayDispatchValuesOnly();
