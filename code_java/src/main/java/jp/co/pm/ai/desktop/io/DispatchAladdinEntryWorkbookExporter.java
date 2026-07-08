@@ -19,6 +19,7 @@ import org.apache.poi.ss.usermodel.CellStyle;
 import org.apache.poi.ss.usermodel.FillPatternType;
 import org.apache.poi.ss.usermodel.Font;
 import org.apache.poi.ss.usermodel.HorizontalAlignment;
+import org.apache.poi.ss.usermodel.PrintSetup;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.VerticalAlignment;
@@ -206,6 +207,25 @@ public final class DispatchAladdinEntryWorkbookExporter {
         cell.setCellValue("（データなし: 配台結果を再読み込みしてから出力してください）");
         cell.setCellStyle(styles.data());
         sh.setColumnWidth(0, 256 * 60);
+        applyPrintSetup(sh);
+    }
+
+    /** ページ設定: 用紙 A3・横向き・1 ページに収める・余白は「狭い」。 */
+    private static void applyPrintSetup(Sheet sh) {
+        PrintSetup ps = sh.getPrintSetup();
+        ps.setPaperSize(PrintSetup.A3_PAPERSIZE);
+        ps.setLandscape(true);
+        ps.setFitWidth((short) 1);
+        ps.setFitHeight((short) 1);
+        sh.setFitToPage(true);
+        sh.setAutobreaks(true);
+        // Excel の「狭い」余白プリセット相当（インチ）。
+        sh.setMargin(Sheet.LeftMargin, 0.25);
+        sh.setMargin(Sheet.RightMargin, 0.25);
+        sh.setMargin(Sheet.TopMargin, 0.75);
+        sh.setMargin(Sheet.BottomMargin, 0.75);
+        sh.setMargin(Sheet.HeaderMargin, 0.3);
+        sh.setMargin(Sheet.FooterMargin, 0.3);
     }
 
     private static void writeMachineSheet(
@@ -288,6 +308,7 @@ public final class DispatchAladdinEntryWorkbookExporter {
             sh.setColumnWidth(
                     FIXED_COLUMN_COUNT + i, (int) Math.round(256 * DATE_COLUMN_WIDTH_CHARS));
         }
+        applyPrintSetup(sh);
     }
 
     private static void writeFixedCell(Row row, int col, String value, CellStyle style) {

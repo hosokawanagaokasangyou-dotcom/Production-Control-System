@@ -1,9 +1,0 @@
-{
-  "version" : 1,
-  "entries" : [ {
-    "task_id" : "Y6-25",
-    "process" : "スライス",
-    "machine_name" : "スライス機1　湖南",
-    "exclude_next_day_m" : 1000.0
-  } ]
-}
