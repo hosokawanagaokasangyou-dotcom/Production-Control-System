@@ -9,6 +9,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -156,6 +157,9 @@ public final class DeliveryCalendarDispatchTaskSummaryTabController {
 
     private final AtomicBoolean suppressPrefixTabEvents = new AtomicBoolean(false);
 
+    /** 直前に表へ反映した接頭辞（タブ切替時の列フィルタ解除判定）。 */
+    private String lastAppliedPrefixFilter;
+
     private volatile boolean presentationHooksInstalled;
 
     @FXML
@@ -185,10 +189,10 @@ public final class DeliveryCalendarDispatchTaskSummaryTabController {
         if (prefixTabPane != null) {
             prefixTabPane
                     .getSelectionModel()
-                    .selectedIndexProperty()
+                    .selectedItemProperty()
                     .addListener(
-                            (obs, a, b) -> {
-                                if (suppressPrefixTabEvents.get()) {
+                            (obs, oldTab, newTab) -> {
+                                if (suppressPrefixTabEvents.get() || newTab == null) {
                                     return;
                                 }
                                 applyPrefixFilterAndSort();
@@ -363,16 +367,19 @@ public final class DeliveryCalendarDispatchTaskSummaryTabController {
         spreadsheetView.setGrid(new GridBase(0, 0));
         updateDailyScheduleTitle(null);
         rebuildPrefixTabs();
+        applyPrefixFilterAndSort();
     }
 
     private void rebuildPrefixTabs() {
         if (prefixTabPane == null) {
             return;
         }
+        String preservePrefix = selectedPrefixLabel();
         suppressPrefixTabEvents.set(true);
         try {
             prefixTabPane.getTabs().clear();
             if (consolidatedRows.isEmpty()) {
+                lastAppliedPrefixFilter = null;
                 return;
             }
             Set<String> prefixes = new LinkedHashSet<>();
@@ -399,25 +406,44 @@ public final class DeliveryCalendarDispatchTaskSummaryTabController {
                                                         TaskIdLeadingAlphaPrefix.extract(
                                                                 r.get(COL_TID))))
                                 .count();
-                Tab tab = new Tab(prefix + " (" + count + ")");
+                Tab tab = new Tab(TaskIdLeadingAlphaPrefix.formatTabLabel(prefix, count));
+                tab.setUserData(prefix);
                 tab.setClosable(false);
                 prefixTabPane.getTabs().add(tab);
             }
-            if (!prefixTabPane.getTabs().isEmpty()) {
-                prefixTabPane.getSelectionModel().select(0);
-            }
+            selectPrefixTab(preservePrefix);
         } finally {
             suppressPrefixTabEvents.set(false);
         }
     }
 
+    private void selectPrefixTab(String prefix) {
+        if (prefixTabPane == null || prefixTabPane.getTabs().isEmpty()) {
+            return;
+        }
+        if (prefix != null) {
+            for (Tab tab : prefixTabPane.getTabs()) {
+                if (prefix.equals(tab.getUserData())) {
+                    prefixTabPane.getSelectionModel().select(tab);
+                    return;
+                }
+            }
+        }
+        prefixTabPane.getSelectionModel().selectFirst();
+    }
+
     private void applyPrefixFilterAndSort() {
         if (headersRef.isEmpty()) {
             rows.clear();
+            lastAppliedPrefixFilter = null;
             rebuildSpreadsheet();
             return;
         }
         String selectedPrefix = selectedPrefixLabel();
+        if (!Objects.equals(selectedPrefix, lastAppliedPrefixFilter)) {
+            SpreadsheetTabularSupport.clearAllFiltersAndSort(spreadsheetView);
+            lastAppliedPrefixFilter = selectedPrefix;
+        }
         String sortCol =
                 sortColumnCombo != null && sortColumnCombo.getValue() != null
                         ? sortColumnCombo.getValue()
@@ -603,13 +629,18 @@ public final class DeliveryCalendarDispatchTaskSummaryTabController {
         if (prefixTabPane == null || prefixTabPane.getTabs().isEmpty()) {
             return null;
         }
-        Tab tab = prefixTabPane.getSelectionModel().getSelectedItem();
-        if (tab == null || tab.getText() == null || tab.getText().isBlank()) {
+        return prefixFromTab(prefixTabPane.getSelectionModel().getSelectedItem());
+    }
+
+    private static String prefixFromTab(Tab tab) {
+        if (tab == null) {
             return null;
         }
-        String text = tab.getText().strip();
-        int paren = text.indexOf(" (");
-        return paren > 0 ? text.substring(0, paren) : text;
+        Object userData = tab.getUserData();
+        if (userData instanceof String prefix && !prefix.isBlank()) {
+            return prefix;
+        }
+        return TaskIdLeadingAlphaPrefix.parsePrefixFromTabLabel(tab.getText());
     }
 
     private static Comparator<Map<String, String>> buildRowComparator(String sortCol, boolean desc) {
@@ -847,6 +878,7 @@ public final class DeliveryCalendarDispatchTaskSummaryTabController {
         }
         suppressColumnPersistence.set(true);
         try {
+            SpreadsheetTabularSupport.resetSpreadsheetRowVisibilityAfterGridRebuild(spreadsheetView);
             final List<Double> widths =
                     TableColumnOrderPersistence.resolveWidthsForHeaders(
                             headersRef, persistedLayout.get(), 112);

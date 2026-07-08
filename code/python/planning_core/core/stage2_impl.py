@@ -1327,6 +1327,38 @@ def _generate_plan_impl(
                             if (team_combo_presets and combo_key)
                             else None
                         )
+                        if TEAM_ASSIGN_COMBO_SHEET_RESTRICT_TO_PRESET_MEMBERS and preset_rows:
+                            _allowed_members = set()
+                            for _p, _r, _pteam, _cid in preset_rows:
+                                for _m in _pteam:
+                                    _allowed_members.add(_m)
+                            for _m in (fixed_team_anchor or []):
+                                _allowed_members.add(_m)
+                            if pref_mem:
+                                _allowed_members.add(pref_mem)
+                            _dropped = [
+                                m for m in capable_members if m not in _allowed_members
+                            ]
+                            if _dropped:
+                                logging.info(
+                                    "組み合わせ表限定(legacy): %s/%s は表記載メンバーのみに配台探索を限定（除外=%s）。",
+                                    _log_plain_label(machine),
+                                    _log_plain_label(machine_name),
+                                    ",".join(_log_plain_label(m) for m in _dropped),
+                                )
+                            capable_members = [
+                                m for m in capable_members if m in _allowed_members
+                            ]
+                            op_today = [
+                                m
+                                for m in capable_members
+                                if skill_role_priority(m)[0] == "OP"
+                            ]
+                            max_team_size = min(
+                                req_num + extra_max, len(capable_members)
+                            )
+                            if max_team_size < req_num:
+                                max_team_size = req_num
                         _prev_mach_raw_legacy = machine_avail_dt.get(
                             machine_occ_key, _machine_day_start
                         )

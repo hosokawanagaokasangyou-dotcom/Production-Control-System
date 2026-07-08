@@ -226,6 +226,7 @@ public final class PlanInputTabController {
         installStageRunButtonDepth(stage2RunButton, Color.rgb(194, 65, 12, 0.35));
         installStageRunButtonDepth(stage21RunButton, Color.rgb(194, 65, 12, 0.35));
         if (stage2SkipTodayDispatchCheckBox != null) {
+            stage2SkipTodayDispatchCheckBox.setSelected(true);
             stage2SkipTodayDispatchCheckBox
                     .selectedProperty()
                     .addListener(
@@ -236,6 +237,7 @@ public final class PlanInputTabController {
                             });
         }
         if (stage2SkipGeminiApiCheckBox != null) {
+            stage2SkipGeminiApiCheckBox.setSelected(true);
             stage2SkipGeminiApiCheckBox
                     .selectedProperty()
                     .addListener(
@@ -250,8 +252,8 @@ public final class PlanInputTabController {
         wireStage2NextDayDialogModeRadio(stage2NextDayDialogAladdinExcludeRadio);
         wireStage2NextDayDialogModeRadio(stage2NextDayDialogBothRadio);
         wireStage2NextDayDialogModeRadio(stage2NextDayDialogNoneRadio);
-        if (stage2NextDayDialogAladdinExcludeRadio != null) {
-            stage2NextDayDialogAladdinExcludeRadio.setSelected(true);
+        if (stage2NextDayDialogBothRadio != null) {
+            stage2NextDayDialogBothRadio.setSelected(true);
         }
         if (comboSheetMayExceedNeedCheckBox != null) {
             comboSheetMayExceedNeedCheckBox.setSelected(true);
@@ -552,7 +554,7 @@ public final class PlanInputTabController {
         if (stage2NextDayDialogNoneRadio != null && stage2NextDayDialogNoneRadio.isSelected()) {
             return Stage2NextDayDialogMode.NONE;
         }
-        return Stage2NextDayDialogMode.ALADDIN_TODAY_EXCLUDE;
+        return Stage2NextDayDialogMode.defaultMode();
     }
 
     void applyStage2NextDayDialogModeFromSession(String modeName) {

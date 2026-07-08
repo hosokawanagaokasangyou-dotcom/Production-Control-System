@@ -37,6 +37,8 @@ public final class RequestFormInputTabController {
     private MainShellController shell;
     private ReconciliationApp reconciliationApp;
     private boolean embeddedBuilt;
+    /** 工場切替後、タブ表示時に {@link ReconciliationApp#reloadAfterFactoryWorkspaceChange()} が必要。 */
+    private boolean factoryWorkspaceStale;
     private Parent tabLoadingPane;
     private RequestFormComboChoices pendingComboChoices = RequestFormComboChoices.empty();
 
@@ -75,6 +77,10 @@ public final class RequestFormInputTabController {
         }
         Map<String, String> ui = shell.snapshotUiEnv();
         reconciliationApp.onEmbeddedTabActivated(ui);
+        if (factoryWorkspaceStale) {
+            factoryWorkspaceStale = false;
+            reconciliationApp.reloadAfterFactoryWorkspaceChange();
+        }
         logRequestFormPaths(ui);
     }
 
@@ -285,5 +291,27 @@ public final class RequestFormInputTabController {
                         + AppPaths.juchuHeaderAliasesJsonPath(ui)
                         + " TPI依頼書PDF="
                         + AppPaths.resolveRequestFormTpiPdfDir(ui).map(Path::toString).orElse(""));
+    }
+
+    /** 工場切替後: env 正本をメモリへ反映し、表示時に原本フォルダ再走査する。 */
+    void onFactorySiteChanged(boolean lightweight) {
+        if (shell == null) {
+            return;
+        }
+        factoryWorkspaceStale = true;
+        Map<String, String> ui = shell.snapshotUiEnv();
+        FactorySite site = GlobalInitSettingTarget.loadEffective(ui);
+        if (reconciliationApp != null) {
+            reconciliationApp.configureFromUiEnv(ui);
+        }
+        reloadJuchuHeaderAliasRegistry(site, ui, false);
+        refreshSessionInputTantoLabel();
+        if (reconciliationApp != null && embeddedBuilt) {
+            factoryWorkspaceStale = false;
+            reconciliationApp.reloadAfterFactoryWorkspaceChange();
+        }
+        if (!lightweight) {
+            logRequestFormPaths(ui);
+        }
     }
 }

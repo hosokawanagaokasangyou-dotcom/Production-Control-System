@@ -4,9 +4,9 @@ package jp.co.pm.ai.planning.stage2;
 public enum Stage2NextDayDialogMode {
     /** ① 加工途中タスクの翌日配台量のみ。 */
     IN_PROGRESS,
-    /** ② アラジン当日配台の翌日除外量のみ（既定）。 */
+    /** ② アラジン当日配台の翌日除外量のみ。 */
     ALADDIN_TODAY_EXCLUDE,
-    /** ③ ①→② を連続表示。 */
+    /** ③ ①→② を連続表示（既定）。 */
     BOTH,
     /** ダイアログを表示しない。 */
     NONE;
@@ -33,6 +33,6 @@ public enum Stage2NextDayDialogMode {
     }
 
     public static Stage2NextDayDialogMode defaultMode() {
-        return ALADDIN_TODAY_EXCLUDE;
+        return BOTH;
     }
 }

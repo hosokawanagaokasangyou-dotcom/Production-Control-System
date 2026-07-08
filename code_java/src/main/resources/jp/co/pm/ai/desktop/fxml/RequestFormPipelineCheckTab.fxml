@@ -43,6 +43,8 @@
                   text="原反投入日不一致のみ表示"/>
     </HBox>
     <Label fx:id="hintLabel" wrapText="true"/>
+    <Label fx:id="aladdinPlanSourceLabel" wrapText="true"
+           style="-fx-font-size: 10px; -fx-text-fill: #555555;"/>
     <Label fx:id="dailyReportSourceLabel" wrapText="true"
            style="-fx-font-size: 10px; -fx-text-fill: #555555;"/>
     <VBox spacing="4.0" VBox.vgrow="ALWAYS">
@@ -61,7 +63,13 @@
     </VBox>
     <SplitPane dividerPositions="0.5" minHeight="160.0" prefHeight="200.0" VBox.vgrow="ALWAYS">
         <VBox spacing="4.0">
-            <Label text="原反投入日 4ソース照合（アラジン／受注／目次／依頼シート）"/>
+            <HBox alignment="CENTER_LEFT" spacing="8.0">
+                <Label text="原反投入日 4ソース照合（アラジン／受注／目次／依頼シート）"/>
+                <Button fx:id="copyCrossSourceTableButton" mnemonicParsing="false"
+                        text="表としてコピー" onAction="#onCopyCrossSourceTableButtonAction"/>
+                <Button fx:id="copyCrossSourceTableForEmailButton" mnemonicParsing="false"
+                        text="メール貼り付け用" onAction="#onCopyCrossSourceTableForEmailButtonAction"/>
+            </HBox>
             <TableView fx:id="crossSourceTable" minHeight="120.0"/>
             <Label text="未一致・未転記項目"/>
             <TableView fx:id="mismatchTable" VBox.vgrow="ALWAYS"/>

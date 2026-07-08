@@ -140,7 +140,17 @@ public final class SpreadsheetPlanInputCellEditSupport {
                                         e.getScreenY())
                                 .ifPresent(
                                         newVal -> {
-                                            row.set(colIndex, newVal);
+                                            if (PlanInputRawInputDateShift.COL_RAW_INPUT_DATE.equals(
+                                                    columnTitle)) {
+                                                PlanInputRawInputDateShift
+                                                        .propagateRawInputDateToSameTaskIdRows(
+                                                                headersRef,
+                                                                rows,
+                                                                dataIndex,
+                                                                newVal);
+                                            } else {
+                                                row.set(colIndex, newVal);
+                                            }
                                             rebuildSpreadsheet.run();
                                         });
                         e.consume();

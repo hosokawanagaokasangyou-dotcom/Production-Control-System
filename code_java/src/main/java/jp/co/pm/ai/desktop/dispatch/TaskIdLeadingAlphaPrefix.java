@@ -28,4 +28,24 @@ public final class TaskIdLeadingAlphaPrefix {
         }
         return OTHER;
     }
+
+    /** 接頭辞タブ見出し（例: {@code V (10)}）を組み立てる。 */
+    public static String formatTabLabel(String prefix, long count) {
+        return prefix + " (" + count + ")";
+    }
+
+    /**
+     * 接頭辞タブ見出しから接頭辞キーを取り出す。{@link Tab#getUserData()} が無いときのフォールバック用。
+     */
+    public static String parsePrefixFromTabLabel(String tabText) {
+        if (tabText == null || tabText.isBlank()) {
+            return null;
+        }
+        String text = tabText.strip();
+        int paren = text.indexOf(" (");
+        if (paren < 0) {
+            paren = text.indexOf('(');
+        }
+        return paren > 0 ? text.substring(0, paren).strip() : text;
+    }
 }

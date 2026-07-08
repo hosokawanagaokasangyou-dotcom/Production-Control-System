@@ -65,6 +65,14 @@ public final class DesktopSessionStateStore {
         }
     }
 
+    /** 工場ワークスペース JSON の session 断片をパース。 */
+    public static DesktopSessionState parseSessionFragment(JsonNode root) {
+        if (root == null || root.isNull() || !root.isObject()) {
+            return DesktopSessionState.empty();
+        }
+        return parseDesktopSessionState(root);
+    }
+
     /**
      * {@code session-state.json} が無いときの JSON ルート。クラスパス・{@code pm-ai-data/config}・{@code init_setting}
      * をマージした UI フラグメント。
@@ -387,10 +395,10 @@ public final class DesktopSessionStateStore {
                 optionalDouble(root, "mainRunLogScroll", Double.NaN),
                 text(root, "mainRunStage2ProductionPlan"),
                 text(root, "mainRunStage2MemberSchedule"),
-                optionalBoolean(root, "mainRunStage2SkipTodayDispatch", false),
+                optionalBoolean(root, "mainRunStage2SkipTodayDispatch", true),
                 loadPlanInputStage2NextDayDialogMode(root),
                 optionalBoolean(root, "planInputComboSheetMayExceedNeed", true),
-                optionalBoolean(root, "planInputStage2SkipGeminiApi", false),
+                optionalBoolean(root, "planInputStage2SkipGeminiApi", true),
                 text(root, "mainRunStage2ResultBookFont"),
                 optionalBoolean(root, "mainRunSkipGeminiApi", true),
                 optionalBoolean(root, "mainRunStage1MarkAllExcludeAfterRun", false),

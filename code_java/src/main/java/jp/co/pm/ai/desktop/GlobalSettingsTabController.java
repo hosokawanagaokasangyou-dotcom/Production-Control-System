@@ -1,5 +1,6 @@
 package jp.co.pm.ai.desktop;
 
+import java.util.Map;
 import java.util.Optional;
 
 import javafx.fxml.FXML;
@@ -14,6 +15,7 @@ import jp.co.pm.ai.desktop.config.FactorySite;
 import jp.co.pm.ai.desktop.config.GlobalInitSettingTarget;
 import jp.co.pm.ai.desktop.config.InitSettingPaths;
 import jp.co.pm.ai.desktop.config.InitSettingPersistence;
+import jp.co.pm.ai.desktop.ui.FactorySiteComboPresentation;
 
 /** Global settings tab (factory UI reset and saving package defaults to init_setting). */
 public final class GlobalSettingsTabController {
@@ -61,22 +63,37 @@ public final class GlobalSettingsTabController {
         if (initSettingTargetCombo == null) {
             return;
         }
-        initSettingTargetCombo.getItems().setAll(FactorySite.values());
+        initSettingTargetCombo.getItems().setAll(FactorySite.dispatchProductionSites());
+        FactorySiteComboPresentation.wire(
+                initSettingTargetCombo, () -> shell != null ? shell.snapshotUiEnv() : Map.of());
         initSettingTargetCombo
                 .valueProperty()
                 .addListener(
                         (obs, oldV, newV) -> {
-                            if (suppressInitSettingTargetComboEvents || newV == null) {
+                            if (suppressInitSettingTargetComboEvents || newV == null || shell == null) {
                                 return;
                             }
-                            GlobalInitSettingTarget.save(newV);
-                            if (shell != null) {
-                                shell.applyFactoryRequestFormGlobalSettings(newV, false);
-                                shell.refreshMainRunTabFactoryLogo();
-                                shell.requireOperatorSelectionForFactory(newV, false);
+                            Map<String, String> ui = shell.snapshotUiEnv();
+                            if (!FactorySiteComboPresentation.isSelectable(newV, ui)) {
+                                refreshInitSettingTargetComboFromStore();
+                                return;
                             }
+                            shell.switchActiveFactorySite(newV);
                         });
         setInitSettingTargetComboValueSilently(GlobalInitSettingTarget.load());
+    }
+
+    void refreshInitSettingTargetComboPresentation() {
+        if (initSettingTargetCombo != null) {
+            initSettingTargetCombo.requestLayout();
+            initSettingTargetCombo.getSelectionModel().select(initSettingTargetCombo.getValue());
+        }
+    }
+
+    void setInitSettingTargetComboDisabled(boolean disabled) {
+        if (initSettingTargetCombo != null) {
+            initSettingTargetCombo.setDisable(disabled);
+        }
     }
 
     @FXML

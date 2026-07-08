@@ -56,6 +56,7 @@ import jp.co.pm.ai.desktop.config.FactoryOperatorUserStore;
 import jp.co.pm.ai.desktop.config.FactorySite;
 import jp.co.pm.ai.desktop.config.FactorySiteLogoSupport;
 import jp.co.pm.ai.desktop.config.GlobalInitSettingTarget;
+import jp.co.pm.ai.desktop.ui.FactorySiteComboPresentation;
 import jp.co.pm.ai.desktop.config.PersonBadgeStyle;
 import jp.co.pm.ai.desktop.io.DesktopFileOpener;
 import jp.co.pm.ai.desktop.io.SummaryAiDispatchExportLock;
@@ -171,6 +172,12 @@ public final class MainRunTabController {
 
     @FXML
     private Label factoryLogoCaptionLabel;
+
+    @FXML
+    private ComboBox<FactorySite> factorySiteCombo;
+
+    /** {@link ComboBox#setValue} によるリスナー発火を抑止（工場切替の双方向同期用）。 */
+    private boolean suppressFactorySiteComboEvents;
 
     @FXML
     private Label operatorUserLabel;
@@ -827,6 +834,7 @@ public final class MainRunTabController {
             this.shell.pipelineExecutionTimingHistory().removeChangeListener(pipelineTimingHistoryListener);
         }
         this.shell = shell;
+        wireFactorySiteCombo();
         refreshAppVersionLabel();
         refreshOpenWorkbookHintLabels();
         refreshFactorySiteLogo();
@@ -929,7 +937,59 @@ public final class MainRunTabController {
         }
         Tooltip.install(
                 factoryLogoHost,
-                new Tooltip(site.displayLabelJa() + "（init_setting 対象工場）"));
+                new Tooltip(site.displayLabelJa() + "（利用工場）"));
+    }
+
+    private void wireFactorySiteCombo() {
+        if (factorySiteCombo == null) {
+            return;
+        }
+        factorySiteCombo.getItems().setAll(FactorySite.dispatchProductionSites());
+        FactorySiteComboPresentation.wire(factorySiteCombo, () -> shell != null ? shell.snapshotUiEnv() : Map.of());
+        factorySiteCombo
+                .valueProperty()
+                .addListener(
+                        (obs, oldV, newV) -> {
+                            if (suppressFactorySiteComboEvents || newV == null || shell == null) {
+                                return;
+                            }
+                            Map<String, String> ui = shell.snapshotUiEnv();
+                            if (!FactorySiteComboPresentation.isSelectable(newV, ui)) {
+                                refreshFactorySiteComboFromStore();
+                                return;
+                            }
+                            shell.switchActiveFactorySite(newV);
+                        });
+        refreshFactorySiteComboFromStore();
+    }
+
+    void refreshFactorySiteComboPresentation() {
+        if (factorySiteCombo != null) {
+            factorySiteCombo.requestLayout();
+            factorySiteCombo.getSelectionModel().select(factorySiteCombo.getValue());
+        }
+    }
+
+    void setFactorySiteComboDisabled(boolean disabled) {
+        if (factorySiteCombo != null) {
+            factorySiteCombo.setDisable(disabled);
+        }
+    }
+
+    /** {@link GlobalInitSettingTarget} の永続値に合わせて工場コンボを更新する（リスナーは発火しない）。 */
+    void refreshFactorySiteComboFromStore() {
+        if (factorySiteCombo == null) {
+            return;
+        }
+        FactorySite disk = GlobalInitSettingTarget.load();
+        if (factorySiteCombo.getValue() != disk) {
+            suppressFactorySiteComboEvents = true;
+            try {
+                factorySiteCombo.setValue(disk);
+            } finally {
+                suppressFactorySiteComboEvents = false;
+            }
+        }
     }
 
     /** 起動時選択した操作者名をヘッダーに表示する。 */

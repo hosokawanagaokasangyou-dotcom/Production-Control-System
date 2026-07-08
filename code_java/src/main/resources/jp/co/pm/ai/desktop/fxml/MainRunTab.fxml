@@ -32,6 +32,11 @@
                     <ImageView fx:id="factoryLogoImageView" fitHeight="18.0" fitWidth="72.0" mouseTransparent="true" preserveRatio="true" />
                     <Label fx:id="factoryLogoCaptionLabel" alignment="CENTER" contentDisplay="CENTER" maxWidth="80.0" mouseTransparent="true" styleClass="pm-run-factory-logo-caption" text="" textAlignment="CENTER" wrapText="false" />
                 </StackPane>
+                <ComboBox fx:id="factorySiteCombo" prefHeight="25.0" prefWidth="132.0">
+                    <tooltip>
+                        <Tooltip text="利用工場を切り替えます。計画／実績フォルダ・マスタ・受注ファイル等の環境変数既定と操作者選択が更新されます。" />
+                    </tooltip>
+                </ComboBox>
                 <Label fx:id="operatorUserLabel" styleClass="pm-muted-label" text="操作者: （未選択）" />
                 <Button fx:id="changeOperatorPinButton" mnemonicParsing="false" onAction="#onChangeOperatorPinAction" text="PIN変更" />
                 <Region HBox.hgrow="ALWAYS" />

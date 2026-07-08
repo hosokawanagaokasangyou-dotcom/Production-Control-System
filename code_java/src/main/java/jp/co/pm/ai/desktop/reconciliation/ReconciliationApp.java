@@ -928,6 +928,15 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         scheduleComboChoicesReloadFromSummarySettings();
     }
 
+    /**
+     * 工場切替・工場別 workspace 復元後: 受注ファイル・原本フォルダを再スキャンする。
+     * 未転記の一時保存があるときは {@link #requestReloadData} の確認ダイアログに従う。
+     */
+    public void reloadAfterFactoryWorkspaceChange() {
+        reloadMasterProductListFromDisk();
+        requestReloadData("利用工場を切り替えたため、依頼書データを読み直します。", null);
+    }
+
     /** 依頼書入力タブを離れたとき: バックグラウンド監視を停止。 */
     public void onEmbeddedTabDeactivated() {
         stopEmbeddedTabPolling();

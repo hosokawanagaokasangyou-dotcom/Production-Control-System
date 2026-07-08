@@ -72,6 +72,11 @@ public enum FactorySite {
         this.summaryAiDispatchWorkbookCodeFilename = summaryAiDispatchWorkbookCodeFilename;
     }
 
+    /** 配台デスクトップで切り替え可能な工場（湖南・国分）。 */
+    public static List<FactorySite> dispatchProductionSites() {
+        return List.of(KONAN, KOKUBU);
+    }
+
     /** UI 表示用（ダイアログの選択肢文言）。 */
     public String displayLabelJa() {
         return displayLabelJa;

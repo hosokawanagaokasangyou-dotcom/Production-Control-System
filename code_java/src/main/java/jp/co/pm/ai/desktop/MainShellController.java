@@ -105,6 +105,11 @@ import jp.co.pm.ai.desktop.config.MainShellTabLayoutDefaults;
 import jp.co.pm.ai.desktop.config.MainShellTabLayoutNode;
 import jp.co.pm.ai.desktop.config.FactoryOperatorUserStore;
 import jp.co.pm.ai.desktop.config.FactorySite;
+import jp.co.pm.ai.desktop.config.FactorySiteOperatorAccess;
+import jp.co.pm.ai.desktop.config.FactorySiteWorkspaceMigrator;
+import jp.co.pm.ai.desktop.config.FactorySiteWorkspaceSnapshot;
+import jp.co.pm.ai.desktop.config.FactorySiteWorkspaceStore;
+import jp.co.pm.ai.desktop.config.PortableBundleUpgradeUiSnapshot;
 import jp.co.pm.ai.desktop.config.GeminiDispatchModelTryOrderDefaults;
 import jp.co.pm.ai.desktop.config.GlobalInitSettingTarget;
 import jp.co.pm.ai.desktop.config.DesktopTheme;
@@ -628,6 +633,11 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
             new AtomicReference<>(1.0);
 
     private final PauseTransition uiEnvSaveDebounce = new PauseTransition(Duration.millis(400));
+
+    /** 工場切替後の session-state.json 保存 debounce（§7）。 */
+    private final PauseTransition sessionPersistDebounce = new PauseTransition(Duration.millis(300));
+
+    private volatile boolean factorySiteSwitchInProgress;
     /** Assigned in {@link #installUiEnvAutoSave()} for debounced {@link #scheduleDesktopSessionSave()}. */
     private Runnable uiEnvPersistSchedule;
     private final AtomicBoolean envResetInProgress = new AtomicBoolean(false);
@@ -1803,7 +1813,14 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         }
         JvmMemoryLogStore.persistSnapshot(
                 MemoryJvmRingLog.getMaxLines(), MemoryJvmRingLog.snapshotLines());
-        DesktopSessionStateStore.save(collectDesktopSession());
+        String operator = FactoryOperatorUserStore.sessionOperatorName();
+        FactorySite current = GlobalInitSettingTarget.load();
+        if (!operator.isBlank() && current != null && current != FactorySite.RDP_LAUNCHER) {
+            FactorySiteWorkspaceStore.save(operator, current, buildFactorySiteWorkspaceSnapshot());
+            FactorySiteWorkspaceStore.saveLastFactorySite(operator, current);
+            FactorySiteWorkspaceStore.flushMemoryCacheToDisk(operator);
+        }
+        DesktopSessionStateStore.save(collectDesktopSessionForGlobalPersistence());
     }
 
     private void showThemedAlert(AlertType type, String title, String headerText, String message) {
@@ -2660,6 +2677,32 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
             suppressLazyMainShellTabContentSwap.set(false);
             suppressMainShellTabChromeRefresh.set(false);
             installLazyMainShellTabContentForStartup();
+            restoreActiveMainShellTabHeavyContentAfterLazyInstall();
+        }
+    }
+
+    /**
+     * {@link #installLazyMainShellTabContentForStartup()} 直後に、現在選択中タブの実コンテンツを載せ直す。
+     * 起動時 {@link Stage#setOnShown} 以外（工場切替・セッション再適用等）でも空白表示にならないようにする。
+     */
+    private void restoreActiveMainShellTabHeavyContentAfterLazyInstall() {
+        if (tabPane == null) {
+            return;
+        }
+        Tab selected = tabPane.getSelectionModel().getSelectedItem();
+        if (selected == null && !tabPane.getTabs().isEmpty()) {
+            tabPane.getSelectionModel().selectFirst();
+            selected = tabPane.getSelectionModel().getSelectedItem();
+        }
+        if (selected == null) {
+            return;
+        }
+        boolean prev = suppressLazyMainShellTabContentSwap.get();
+        suppressLazyMainShellTabContentSwap.set(true);
+        try {
+            activateMainShellTabHeavyContentRecursive(selected);
+        } finally {
+            suppressLazyMainShellTabContentSwap.set(false);
         }
     }
 
@@ -3649,11 +3692,18 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
     }
 
     private void applyUiEnvRowsFromSession(DesktopSessionState s) {
-        if (s == null || s.uiEnvRows() == null || s.uiEnvRows().isEmpty() || envRows == null) {
+        if (s == null || s.uiEnvRows() == null || s.uiEnvRows().isEmpty()) {
             return;
         }
-        List<EnvVarRow> restored = new ArrayList<>(s.uiEnvRows().size());
-        for (UiEnvRowSnapshot snap : s.uiEnvRows()) {
+        applyUiEnvRowSnapshots(s.uiEnvRows());
+    }
+
+    private void applyUiEnvRowSnapshots(List<UiEnvRowSnapshot> snapshots) {
+        if (snapshots == null || snapshots.isEmpty() || envRows == null) {
+            return;
+        }
+        List<EnvVarRow> restored = new ArrayList<>(snapshots.size());
+        for (UiEnvRowSnapshot snap : snapshots) {
             String nm = snap.name() != null ? snap.name().trim() : "";
             if (omitEnvRowKey(nm)) {
                 continue;
@@ -3823,16 +3873,173 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
 
     /** Debounced session flush when run-tab log font changes. */
     void scheduleDesktopSessionSave() {
+        schedulePersistSessionDebounced();
+    }
+
+    private void schedulePersistSessionDebounced() {
         if (!suppressEnvSessionPersistence.get()) {
-            uiEnvSaveDebounce.playFromStart();
+            sessionPersistDebounce.playFromStart();
         }
     }
 
+    /** session-state.json 用: 工場スコープ項目を omit し端末共通 UI のみ保存（§10e）。 */
+    private DesktopSessionState collectDesktopSessionForGlobalPersistence() {
+        return collectDesktopSession()
+                .mergeFactoryScopedFrom(DesktopSessionState.empty().extractFactoryScopedFields());
+    }
+
+    private FactorySiteWorkspaceSnapshot buildFactorySiteWorkspaceSnapshot() {
+        return new FactorySiteWorkspaceSnapshot(
+                snapshotUiEnvRows(), collectDesktopSession().extractFactoryScopedFields());
+    }
+
+    private void applyFactoryWorkspaceSnapshot(FactorySiteWorkspaceSnapshot snapshot) {
+        if (snapshot == null) {
+            return;
+        }
+        applyUiEnvRowSnapshots(snapshot.uiEnvRows());
+        mergeMissingBootstrapEnvRows();
+        stripRemovedEnvVarRows(envRows);
+        ensureBootstrapDefaultValuesVisible(collectUiEnv());
+        ensureUiRefOptionalDisplayDefaultsVisible(collectUiEnv());
+        DesktopSessionState merged =
+                collectDesktopSession().mergeFactoryScopedFrom(snapshot.sessionFragment());
+        applyDesktopSession(merged, false, false);
+    }
+
+    private void applyInitSettingFactorySessionFragment(FactorySite site) {
+        DesktopSessionState initFragment =
+                DesktopSessionStateStore.buildFactoryResetSession(
+                                DesktopSessionState.empty(), collectUiEnv())
+                        .extractFactoryScopedFields();
+        DesktopSessionState merged = collectDesktopSession().mergeFactoryScopedFrom(initFragment);
+        applyDesktopSession(merged, false, false);
+        applyFactoryRequestFormGlobalSettings(site, false);
+    }
+
+    private void notifyActiveMainShellTabAfterWorkspaceChange() {
+        if (tabPane == null) {
+            return;
+        }
+        restoreActiveMainShellTabHeavyContentAfterLazyInstall();
+        refreshMainShellTabHeaderChromeFromStoredColors();
+        refreshDesktopSessionDependentUi();
+        Tab effective = resolveEffectiveLeafTab(tabPane.getSelectionModel().getSelectedItem());
+        if (effective == mainShellTabEquipmentStatusDashboard
+                && equipmentStatusDashboardTabController != null) {
+            equipmentStatusDashboardTabController.onMainShellTabSelected();
+        }
+        if (effective == mainShellTabRequestFormInput && requestFormInputTabController != null) {
+            requestFormInputTabController.onMainShellTabSelected();
+        }
+        if (effective == mainShellTabRequestFormPipelineCheck
+                && requestFormPipelineCheckTabController != null) {
+            requestFormPipelineCheckTabController.onMainShellTabSelected();
+        }
+        if (effective == mainShellTabRemoteDesktop && remoteDesktopTabController != null) {
+            remoteDesktopTabController.onMainShellTabSelected();
+        }
+        if (effective == mainShellTabEquipmentGanttGraphic
+                && equipmentGanttGraphicTabController != null) {
+            equipmentGanttGraphicTabController.flushPendingGraphicRebuildAfterSessionApply();
+        }
+        if (effective == mainShellTabDispatchInteractive && dispatchInteractiveTabController != null) {
+            dispatchInteractiveTabController.onMainShellDispatchTabSelected();
+        }
+    }
+
+    private void refreshFactoryDependentTabs(FactorySite site, boolean lightweight) {
+        if (requestFormInputTabController != null) {
+            requestFormInputTabController.onFactorySiteChanged(lightweight);
+        }
+        if (requestFormPipelineCheckTabController != null) {
+            requestFormPipelineCheckTabController.onFactorySiteChanged(lightweight);
+        }
+        if (remoteDesktopTabController != null) {
+            remoteDesktopTabController.onFactorySiteChanged(lightweight);
+        }
+        if (mainRunTabController != null) {
+            mainRunTabController.refreshOpenWorkbookHintLabels();
+            mainRunTabController.refreshFactorySiteLogo();
+        }
+        if (globalSettingsTabController != null) {
+            globalSettingsTabController.refreshInitSettingTargetComboFromStore();
+        }
+        refreshFactorySiteComboPresentation();
+    }
+
+    void refreshFactorySiteComboPresentation() {
+        if (mainRunTabController != null) {
+            mainRunTabController.refreshFactorySiteComboPresentation();
+        }
+        if (globalSettingsTabController != null) {
+            globalSettingsTabController.refreshInitSettingTargetComboPresentation();
+        }
+    }
+
+    private void setFactorySiteCombosDisabled(boolean disabled) {
+        if (mainRunTabController != null) {
+            mainRunTabController.setFactorySiteComboDisabled(disabled);
+        }
+        if (globalSettingsTabController != null) {
+            globalSettingsTabController.setInitSettingTargetComboDisabled(disabled);
+        }
+    }
+
+    private void finalizeOperatorLocalWorkspaceAfterSessionEstablished() {
+        String operator = FactoryOperatorUserStore.sessionOperatorName();
+        if (operator.isBlank() || FactoryOperatorUserStore.isGuestOperator(operator)) {
+            return;
+        }
+        FactorySite current = GlobalInitSettingTarget.load();
+        FactorySiteWorkspaceMigrator.migrateIfNeeded(
+                operator,
+                current,
+                snapshotUiEnvRows(),
+                DesktopSessionStateStore.load(),
+                collectUiEnv());
+        FactorySiteWorkspaceStore.warmMemoryCacheFromDisk(operator);
+        Optional<FactorySite> last = FactorySiteWorkspaceStore.loadLastFactorySite(operator);
+        if (last.isEmpty() || last.get() == current) {
+            return;
+        }
+        FactorySite target = last.get();
+        Map<String, String> ui = collectUiEnv();
+        FactoryOperatorUserStore.configureForCurrentApp(ui, target);
+        if (!FactorySiteOperatorAccess.isSessionOperatorAllowedForFactory(ui, target)) {
+            String reason = FactorySiteOperatorAccess.comboBlockReasonJa(ui, target);
+            if (!reason.isBlank()) {
+                appendLog("[startup] 前回工場の復元をスキップ: " + reason);
+            }
+            FactoryOperatorUserStore.configureForCurrentApp(ui, current);
+            return;
+        }
+        switchActiveFactorySite(target, true);
+    }
+
+    private void applyPortableUpgradeShellUiSnapshotIfPresent() {
+        DesktopSessionState snap = PortableBundleUpgradeUiSnapshot.loadIfPresent();
+        if (snap == null) {
+            return;
+        }
+        DesktopSessionState merged = collectDesktopSession().mergeShellTabUiFrom(snap);
+        applyDesktopSession(merged, false, false);
+        refreshDesktopSessionDependentUi();
+        PortableBundleUpgradeUiSnapshot.clear();
+        appendLog("[startup] バージョンアップ: メインシェルタブ配置を前回状態から復元しました。");
+    }
+
     private void installUiEnvAutoSave() {
+        sessionPersistDebounce.setOnFinished(
+                e -> {
+                    if (!suppressEnvSessionPersistence.get()) {
+                        DesktopSessionStateStore.save(collectDesktopSessionForGlobalPersistence());
+                    }
+                });
         uiEnvSaveDebounce.setOnFinished(
                 e -> {
                     if (!suppressEnvSessionPersistence.get()) {
-                        DesktopSessionStateStore.save(collectDesktopSession());
+                        DesktopSessionStateStore.save(collectDesktopSessionForGlobalPersistence());
                     }
                     if (mainRunTabController != null) {
                         mainRunTabController.refreshOpenWorkbookHintLabels();
@@ -3892,25 +4099,30 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
      * Shows a confirmation dialog first.
      */
     public void confirmAndResetEnvRowsToDefaults() {
+        FactorySite site = GlobalInitSettingTarget.load();
+        if (site == null || site == FactorySite.RDP_LAUNCHER) {
+            site = FactorySite.KONAN;
+        }
         Alert alert = new Alert(AlertType.CONFIRMATION);
         initDialogOwnerIfSceneReady(alert);
         applyAlertStylesheetsFromOwner(alert);
         alert.setTitle("環境変数を初期値に戻す");
         alert.setHeaderText(null);
         alert.setContentText(
-                "ui_ref_env_defaults.json の既定行に戻します。"
+                site.displayLabelJa()
+                        + "（現在の利用工場）の環境変数を ui_ref 既定に戻します。"
                         + "未保存の編集と、セッションに保存していた各タブの値（Python パス等）も失われます。"
                         + "続行しますか？");
         Optional<ButtonType> ans = alert.showAndWait();
         if (ans.isEmpty() || ans.get() != ButtonType.OK) {
             return;
         }
-        Optional<FactorySite> siteOpt = promptFactorySiteChoiceForEnvDefaults();
-        FactorySite site = siteOpt.orElse(FactorySite.KONAN);
-        if (siteOpt.isEmpty()) {
-            appendLog("[env] 工場既定の選択をキャンセルしたため湖南工場の既定を適用します。");
-        }
         applyEnvRowsFullBundledResetAndPersist(true, site);
+        String operator = FactoryOperatorUserStore.sessionOperatorName();
+        if (!operator.isBlank()) {
+            FactorySiteWorkspaceStore.save(operator, site, buildFactorySiteWorkspaceSnapshot());
+        }
+        appendLog("[env] " + site.displayLabelJa() + "の環境変数を ui_ref 既定に戻しました。");
         maybePromptRequestFormOriginalDirIfUnset("[env]", site);
         requireOperatorSelectionForFactory(site, false);
     }
@@ -3985,7 +4197,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         ensureUiRefOptionalDisplayDefaultsVisible(collectUiEnv());
         applyRepoFolderPathNormalization();
         if (persistSession) {
-            DesktopSessionStateStore.save(collectDesktopSession());
+            DesktopSessionStateStore.save(collectDesktopSessionForGlobalPersistence());
         }
         refreshPersonBadgeSkillsMembersFromMaster();
         mainRunTabController.refreshOpenWorkbookHintLabels();
@@ -5662,6 +5874,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         }
         if (mainRunTabController != null) {
             mainRunTabController.refreshFactorySiteLogo();
+            mainRunTabController.refreshFactorySiteComboFromStore();
         }
     }
 
@@ -5811,6 +6024,82 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
     void refreshMainRunTabFactoryLogo() {
         if (mainRunTabController != null) {
             mainRunTabController.refreshFactorySiteLogo();
+        }
+    }
+
+    /**
+     * 配台デスクトップの利用工場を切り替える。工場別ワークスペース（env + session 断片）を save→restore する。
+     */
+    public void switchActiveFactorySite(FactorySite newSite) {
+        switchActiveFactorySite(newSite, false);
+    }
+
+    private void switchActiveFactorySite(FactorySite newSite, boolean startup) {
+        if (newSite == null || newSite == FactorySite.RDP_LAUNCHER) {
+            return;
+        }
+        FactorySite oldSite = GlobalInitSettingTarget.load();
+        if (oldSite == newSite) {
+            return;
+        }
+        if (factorySiteSwitchInProgress) {
+            return;
+        }
+        Map<String, String> ui = collectUiEnv();
+        FactoryOperatorUserStore.configureForCurrentApp(ui, newSite);
+        if (!FactorySiteOperatorAccess.isSessionOperatorAllowedForFactory(ui, newSite)) {
+            String reason = FactorySiteOperatorAccess.comboBlockReasonJa(ui, newSite);
+            if (!reason.isBlank()) {
+                appendLog("[factory] 切替不可: " + reason);
+            }
+            refreshFactorySiteComboPresentation();
+            if (mainRunTabController != null) {
+                mainRunTabController.refreshFactorySiteComboFromStore();
+            }
+            if (globalSettingsTabController != null) {
+                globalSettingsTabController.refreshInitSettingTargetComboFromStore();
+            }
+            return;
+        }
+        long t0 = System.nanoTime();
+        factorySiteSwitchInProgress = true;
+        setFactorySiteCombosDisabled(true);
+        try {
+            String operator = FactoryOperatorUserStore.sessionOperatorName();
+            if (!operator.isBlank() && oldSite != null && oldSite != FactorySite.RDP_LAUNCHER) {
+                FactorySiteWorkspaceStore.save(
+                        operator, oldSite, buildFactorySiteWorkspaceSnapshot());
+            }
+            GlobalInitSettingTarget.save(newSite);
+            if (!operator.isBlank()) {
+                FactorySiteWorkspaceStore.saveLastFactorySite(operator, newSite);
+            }
+            Optional<FactorySiteWorkspaceSnapshot> loaded =
+                    operator.isBlank()
+                            ? Optional.empty()
+                            : FactorySiteWorkspaceStore.load(operator, newSite);
+            if (loaded.isPresent()) {
+                applyFactoryWorkspaceSnapshot(loaded.get());
+            } else {
+                applyEnvRowsFullBundledResetAndPersist(false, newSite);
+                applyInitSettingFactorySessionFragment(newSite);
+            }
+            applyRepoFolderPathNormalization();
+            refreshFactoryDependentTabs(newSite, true);
+            schedulePersistSessionDebounced();
+            requireOperatorSelectionForFactory(newSite, startup);
+            Platform.runLater(this::notifyActiveMainShellTabAfterWorkspaceChange);
+            long ms = (System.nanoTime() - t0) / 1_000_000L;
+            appendLog(
+                    "[factory] 切替完了 "
+                            + oldSite.displayLabelJa()
+                            + "→"
+                            + newSite.displayLabelJa()
+                            + " ms="
+                            + ms);
+        } finally {
+            factorySiteSwitchInProgress = false;
+            setFactorySiteCombosDisabled(false);
         }
     }
 
@@ -6115,6 +6404,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                             + "）。グローバル設定の工場と環境変数のサマリパスを確認してください。");
         }
         requireOperatorSelectionForFactory(factory, true);
+        finalizeOperatorLocalWorkspaceAfterSessionEstablished();
     }
 
     private Optional<String> promptOperatorUserChoice(FactorySite site, boolean startup) {
@@ -7852,6 +8142,8 @@ public PlanInputTabController planInputTabControllerForDispatchRollUnit() {
             return;
         }
 
+        PortableBundleUpgradeUiSnapshot.capture(collectDesktopSession());
+
         final FactorySite upgradeFactorySite = resolveFactorySiteForPortableUpgrade(Optional.of(canonical));
         deferOperatorPromptForPortableUpgrade.set(true);
 
@@ -8086,7 +8378,6 @@ public PlanInputTabController planInputTabControllerForDispatchRollUnit() {
                     if (deferredDesktopRelaunch.get()) {
                         try {
                             applyPortableUpgradeBundledPolicyFromPmAiData(localData);
-                            performGlobalUiFactoryResetWithoutConfirmation(upgradeFactorySite);
                             applyBundledPortableDefaultsIfPresent();
                             PortableBundleUpgradeFollowUp.writePending(cwd, canonVerStr, upgradeFactorySite);
                             showPortableUpgradeDeferredRestartDialog(canonVerStr);
@@ -8119,7 +8410,6 @@ public PlanInputTabController planInputTabControllerForDispatchRollUnit() {
                         return;
                     }
                     applyPortableUpgradeBundledPolicyFromPmAiData(localData);
-                    performGlobalUiFactoryResetWithoutConfirmation(upgradeFactorySite);
                     applyBundledPortableDefaultsIfPresent();
                     String doneBanner =
                             "[startup] --- ポータルバージョンアップ完了（同期ファイル約 "
@@ -8214,24 +8504,47 @@ public PlanInputTabController planInputTabControllerForDispatchRollUnit() {
             PortableBundleUpgradeLog fileLog,
             String completionNoteSuffix,
             Optional<Path> canonicalOpt) {
-        applyRepoFolderPathNormalization();
+        applyPortableUpgradeBundledPolicyFromPmAiData(localData);
         FactorySite siteAfterUpgrade = resolveFactorySiteForPortableUpgrade(canonicalOpt);
-        applyFactorySitePortableAndNetworkDefaults(siteAfterUpgrade);
+        GlobalInitSettingTarget.save(siteAfterUpgrade);
         restoreOperatorAfterPortableUpgrade(siteAfterUpgrade);
         skipOperatorPromptAfterPortableUpgrade.set(true);
         deferOperatorPromptForPortableUpgrade.set(false);
+        String operator = FactoryOperatorUserStore.sessionOperatorName();
+        if (!operator.isBlank()) {
+            FactorySiteWorkspaceMigrator.migrateIfNeeded(
+                    operator,
+                    siteAfterUpgrade,
+                    snapshotUiEnvRows(),
+                    DesktopSessionStateStore.load(),
+                    collectUiEnv());
+            FactorySiteWorkspaceStore.warmMemoryCacheFromDisk(operator);
+            Optional<FactorySiteWorkspaceSnapshot> workspace =
+                    FactorySiteWorkspaceStore.load(operator, siteAfterUpgrade);
+            if (workspace.isPresent()) {
+                applyFactoryWorkspaceSnapshot(workspace.get());
+            } else {
+                applyEnvRowsFullBundledResetAndPersist(false, siteAfterUpgrade);
+                applyInitSettingFactorySessionFragment(siteAfterUpgrade);
+            }
+        } else {
+            applyFactorySitePortableAndNetworkDefaults(siteAfterUpgrade);
+        }
+        applyPortableUpgradeShellUiSnapshotIfPresent();
+        applyRepoFolderPathNormalization();
         ensureBootstrapDefaultValuesVisible(collectUiEnv());
         ensureUiRefOptionalDisplayDefaultsVisible(collectUiEnv());
         applyRepoFolderPathNormalization();
         int badgeMembers = refreshPersonBadgeSkillsMembersFromMaster();
-        DesktopSessionStateStore.save(collectDesktopSession());
+        DesktopSessionStateStore.save(collectDesktopSessionForGlobalPersistence());
         mainRunTabController.refreshAppVersionLabel();
         mainRunTabController.refreshOpenWorkbookHintLabels();
         mainRunTabController.refreshFactorySiteLogo();
+        refreshFactorySiteComboPresentation();
         PortableBundleUpgradeFollowUp.clear();
         String completion =
                 "[startup] ポータル同期が完了しました（version.txt・pm-ai-data／init_setting をリポジトリへ反映）。"
-                        + "グローバル設定「デフォルトに戻す」相当で UI をバンドル既定へ揃えました。"
+                        + "タブ配置を維持して環境を反映しました。"
                         + " 工場既定: "
                         + siteAfterUpgrade.displayLabelJa()
                         + "（アップデート前の利用工場を維持）。"

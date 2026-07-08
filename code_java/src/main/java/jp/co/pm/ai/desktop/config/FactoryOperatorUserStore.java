@@ -1929,6 +1929,21 @@ public final class FactoryOperatorUserStore {
         return t;
     }
 
+    /** {@code operator-local/} 永続化用ディレクトリ名（ゲスト・空は empty）。 */
+    public static Optional<String> operatorLocalStorageSlug(String raw) {
+        String normalized = normalizeName(raw);
+        if (normalized.isEmpty() || isGuestOperator(normalized)) {
+            return Optional.empty();
+        }
+        String slug = normalized.replaceAll("[\\\\/:*?\"<>|]", "_");
+        return slug.isBlank() ? Optional.empty() : Optional.of(slug);
+    }
+
+    /** セッション操作者が当該工場のユーザー管理一覧に含まれるか（ゲスト・空は true）。 */
+    public static boolean isSessionOperatorRegisteredForFactory(FactorySite site) {
+        return FactorySiteOperatorAccess.isSessionOperatorInFactoryUserManagement(site);
+    }
+
     public static String normalizePin(String raw) {
         if (raw == null) {
             return null;

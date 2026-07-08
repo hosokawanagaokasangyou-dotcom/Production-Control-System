@@ -5572,10 +5572,16 @@ def _dispatch_table_cell_from_sources(
     """結果_配台表の静的列を補完。
 
     既定は 加工計画DATA → 配台計画入力 → task_queue。
-    ``_RESULT_DISPATCH_PLAN_INPUT_OVERRIDE_SRC_COLS``（実加工数・換算数量・実出来高など）は
-    配台計画入力を優先（Aladdin 側の実加工数が受注数と同値で残るケースを避ける）。
+    ``_RESULT_DISPATCH_PLAN_INPUT_OVERRIDE_SRC_COLS``（実加工数・換算数量・実出来高・原反投入日など）は
+    配台計画入力を優先（Aladdin 側の実加工数が受注数と同値で残るケース、およびタスク入力で編集した原反投入日を避ける）。
+    ``_RESULT_DISPATCH_PROCESSING_PLAN_ONLY_SRC_COLS``（回答納期）は加工計画DATA のみ。無ければ空欄。
     """
     if col_name in ("加工開始日時", "加工終了日時", "メンバー名"):
+        return ""
+    if col_name in _RESULT_DISPATCH_PROCESSING_PLAN_ONLY_SRC_COLS:
+        v = _dispatch_table_scalar_from_dataframe_row(src_row, col_name)
+        if v is not None:
+            return v
         return ""
     plan_first = col_name in _RESULT_DISPATCH_PLAN_INPUT_OVERRIDE_SRC_COLS
     row_order = (
@@ -5616,11 +5622,6 @@ def _dispatch_table_cell_from_sources(
         if rid is not None and hasattr(rid, "strftime"):
             return rid.strftime("%Y/%m/%d")
         return rid or ""
-    if col_name == TASK_COL_ANSWER_DUE:
-        ad = t.get("answer_due_date")
-        if ad is not None and hasattr(ad, "strftime"):
-            return ad.strftime("%Y/%m/%d")
-        return ad or ""
     if col_name == TASK_COL_SPECIFIED_DUE:
         sd = t.get("specified_due_date")
         if sd is not None and hasattr(sd, "strftime"):
@@ -6644,8 +6645,24 @@ def fill_interactive_result_dispatch_json_rows_from_planning_sources(
         for h in RESULT_DISPATCH_TABLE_STATIC_HEADERS:
             if h in skip_cols:
                 continue
-            force_plan = h in _RESULT_DISPATCH_PLAN_INPUT_OVERRIDE_SRC_COLS
             cur = r.get(h)
+            if h in _RESULT_DISPATCH_PROCESSING_PLAN_ONLY_SRC_COLS:
+                cell = _dispatch_table_cell_from_sources(
+                    src_row=src_row, plan_row=plan_row, task_dict=None, col_name=h
+                )
+                new_s = (
+                    ""
+                    if cell is None
+                    or (isinstance(cell, float) and pd.isna(cell))
+                    or (isinstance(cell, str) and not cell.strip())
+                    else str(cell).strip()
+                )
+                cur_s = "" if cur is None else str(cur).strip()
+                if cur_s != new_s:
+                    r[h] = new_s
+                    filled += 1
+                continue
+            force_plan = h in _RESULT_DISPATCH_PLAN_INPUT_OVERRIDE_SRC_COLS
             if not force_plan and cur is not None and str(cur).strip() != "":
                 continue
             cell = _dispatch_table_cell_from_sources(

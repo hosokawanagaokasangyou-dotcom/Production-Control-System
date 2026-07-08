@@ -88,6 +88,56 @@ class RdpRemoteLauncherDeployerTest {
     }
 
     @Test
+    void ensureDeployed_skipsWhenExeHashMatchesDespiteOlderSharedVersion(@TempDir Path tmp)
+            throws Exception {
+        var bundledVer = RdpRemoteLauncherDeployer.readBundledVersion();
+        if (bundledVer.isEmpty()) {
+            return;
+        }
+        Path deployDir = tmp.resolve("deploy");
+        Files.createDirectories(deployDir);
+        Path exe = deployDir.resolve(AppPaths.RDP_LAUNCHER_EXE_BASENAME);
+        Path version = deployDir.resolve(AppPaths.RDP_LAUNCHER_VERSION_BASENAME);
+
+        try (InputStream in =
+                RdpRemoteLauncherDeployer.class.getResourceAsStream(
+                        "/jp/co/pm/ai/desktop/rdp-launcher/" + AppPaths.RDP_LAUNCHER_EXE_BASENAME)) {
+            if (in == null) {
+                return;
+            }
+            Files.copy(in, exe, StandardCopyOption.REPLACE_EXISTING);
+        }
+        BigDecimal olderShared = bundledVer.get().subtract(new BigDecimal("0.01"));
+        Files.writeString(version, olderShared.toPlainString() + "\n", StandardCharsets.UTF_8);
+
+        Map<String, String> ui =
+                Map.of(
+                        AppPaths.KEY_PM_AI_RDP_LAUNCHER_EXE,
+                        exe.toString(),
+                        AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK,
+                        deployDir.resolve("summary.xlsx").toString());
+
+        assertFalse(RdpRemoteLauncherDeployer.needsExeDeploy(ui));
+
+        RdpRemoteLauncherDeployer.DeployOutcome outcome =
+                RdpRemoteLauncherDeployer.ensureDeployed(ui);
+        assertTrue(outcome.upToDate());
+        assertFalse(outcome.copied());
+        assertTrue(
+                outcome.message().orElse("").contains("最新")
+                        || RdpRemoteLauncherDeployer.parseVersionFile(version)
+                                .map(v -> v.compareTo(bundledVer.get()) >= 0)
+                                .orElse(false));
+    }
+
+    @Test
+    void needsExeDeploy_falseWhenAutoDeployDisabled() {
+        assertFalse(
+                RdpRemoteLauncherDeployer.needsExeDeploy(
+                        Map.of(AppPaths.KEY_PM_AI_RDP_LAUNCHER_AUTO_DEPLOY, "0")));
+    }
+
+    @Test
     void forceDeploy_overwritesUpToDateVersion(@TempDir Path tmp) throws Exception {
         var bundledVer = RdpRemoteLauncherDeployer.readBundledVersion();
         if (bundledVer.isEmpty()) {

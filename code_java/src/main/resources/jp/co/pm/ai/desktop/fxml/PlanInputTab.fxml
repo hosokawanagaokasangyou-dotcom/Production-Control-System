@@ -55,21 +55,21 @@
                                 styleClass="pm-stage-run-button,pm-stage-run-2" text="段階2.0 実行" />
                         <Button fx:id="stage21RunButton" mnemonicParsing="false" onAction="#onStage21RunButtonAction"
                                 styleClass="pm-stage-run-button,pm-stage-run-2-1" text="段階2.1(時間外)" />
-                        <CheckBox fx:id="stage2SkipGeminiApiCheckBox" mnemonicParsing="false" selected="false"
+                        <CheckBox fx:id="stage2SkipGeminiApiCheckBox" mnemonicParsing="false" selected="true"
                                 text="AI API 呼び出しをスキップ（開発用）">
                             <tooltip>
                                 <Tooltip text="ON のとき段階2/2.1 で Gemini への HTTP 呼び出しを行いません。本番運用では OFF にしてください。" />
                             </tooltip>
                         </CheckBox>
-                        <CheckBox fx:id="stage2SkipTodayDispatchCheckBox" mnemonicParsing="false"
+                        <CheckBox fx:id="stage2SkipTodayDispatchCheckBox" mnemonicParsing="false" selected="true"
                                 text="当日は配台しない（翌日以降から計画）" />
                     </HBox>
                     <VBox spacing="4.0">
                         <RadioButton fx:id="stage2NextDayDialogInProgressRadio" mnemonicParsing="false"
                                 text="加工途中タスクの翌日配台量を設定" />
-                        <RadioButton fx:id="stage2NextDayDialogAladdinExcludeRadio" mnemonicParsing="false" selected="true"
+                        <RadioButton fx:id="stage2NextDayDialogAladdinExcludeRadio" mnemonicParsing="false"
                                 text="アラジン当日配台の翌日除外量を設定" />
-                        <RadioButton fx:id="stage2NextDayDialogBothRadio" mnemonicParsing="false"
+                        <RadioButton fx:id="stage2NextDayDialogBothRadio" mnemonicParsing="false" selected="true"
                                 text="①と②の両方を設定" />
                         <RadioButton fx:id="stage2NextDayDialogNoneRadio" mnemonicParsing="false"
                                 text="ダイアログを表示しない" />

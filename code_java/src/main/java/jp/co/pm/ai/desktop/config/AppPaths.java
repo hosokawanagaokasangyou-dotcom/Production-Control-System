@@ -997,16 +997,24 @@ public final class AppPaths {
      */
     public static Optional<Path> resolveRequestFormTpiPdfDir(Map<String, String> ui) {
         Map<String, String> u = ui != null ? ui : Map.of();
+        FactorySite effective = GlobalInitSettingTarget.loadEffective(u);
+        if (!isRequestFormTpiPdfEnabledForFactory(effective)) {
+            return Optional.empty();
+        }
         String override = trim(u.get(KEY_PM_AI_REQUEST_FORM_TPI_PDF_DIR));
         if (!override.isEmpty()) {
             return Optional.of(Path.of(override).toAbsolutePath().normalize());
         }
-        String factoryDefault =
-                defaultRequestFormTpiPdfDirForFactory(GlobalInitSettingTarget.load());
+        String factoryDefault = defaultRequestFormTpiPdfDirForFactory(effective);
         if (factoryDefault.isEmpty()) {
             return Optional.empty();
         }
         return Optional.of(Path.of(factoryDefault));
+    }
+
+    /** TPI 依頼書 PDF は湖南工場のみ（国分は常に無効）。 */
+    public static boolean isRequestFormTpiPdfEnabledForFactory(FactorySite site) {
+        return site != null && site != FactorySite.KOKUBU && site != FactorySite.RDP_LAUNCHER;
     }
 
     /** Tesseract OCR 設定（画像スキャン TPI PDF 用）。{@code jpn.traineddata} が存在する tessdata のみ返す。 */
@@ -2317,6 +2325,47 @@ public final class AppPaths {
                 .resolve("last-factory-operator-" + suffix + ".txt")
                 .toAbsolutePath()
                 .normalize();
+    }
+
+    /** 操作者別ローカルワークスペースルート（{@code operator-local/{slug}/}）。ゲスト・空操作者は empty。 */
+    public static Optional<Path> operatorLocalWorkspaceDir(String operatorName) {
+        return FactoryOperatorUserStore.operatorLocalStorageSlug(operatorName)
+                .map(
+                        slug ->
+                                resolveDesktopAppHomeDir()
+                                        .resolve("operator-local")
+                                        .resolve(slug)
+                                        .toAbsolutePath()
+                                        .normalize());
+    }
+
+    public static Path operatorLastFactorySitePath(String operatorName) {
+        return operatorLocalWorkspaceDir(operatorName)
+                .orElseThrow(
+                        () ->
+                                new IllegalArgumentException(
+                                        "operator-local scope unavailable for: " + operatorName))
+                .resolve("last-factory-site.txt");
+    }
+
+    public static Path operatorFactoryWorkspacePath(String operatorName, FactorySite site) {
+        FactorySite effective = site != null ? site : FactorySite.KONAN;
+        String suffix = effective.name().toLowerCase(Locale.ROOT);
+        return operatorLocalWorkspaceDir(operatorName)
+                .orElseThrow(
+                        () ->
+                                new IllegalArgumentException(
+                                        "operator-local scope unavailable for: " + operatorName))
+                .resolve("factory-workspace-" + suffix + ".json");
+    }
+
+    public static Path operatorLocalMigrationMarkerPath(String operatorName) {
+        return operatorLocalWorkspaceDir(operatorName)
+                .orElseThrow(
+                        () ->
+                                new IllegalArgumentException(
+                                        "operator-local scope unavailable for: " + operatorName))
+                .resolve(".migrated-v1");
     }
 
     /** 工場別ユーザー管理 PDF のファイル名（{@link FactorySite#name()} を含む）。 */

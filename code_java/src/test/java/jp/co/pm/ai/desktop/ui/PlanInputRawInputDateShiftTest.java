@@ -41,4 +41,38 @@ class PlanInputRawInputDateShiftTest {
                 PlanInputRawInputDateShift.MISSING_RAW_INPUT_DATE_COLUMN,
                 PlanInputRawInputDateShift.applyMinusOneDayToAllRows(headers, rows));
     }
+
+    @Test
+    void propagateRawInputDate_updatesAllRowsWithSameTaskId() {
+        List<String> headers =
+                List.of(
+                        PlanInputRawInputDateShift.COL_TASK_ID,
+                        "工程名",
+                        PlanInputRawInputDateShift.COL_RAW_INPUT_DATE);
+        ObservableList<ObservableList<String>> rows = FXCollections.observableArrayList();
+        rows.add(FXCollections.observableArrayList("C7-4", "51C", "2025/7/10"));
+        rows.add(FXCollections.observableArrayList("C7-4", "SEC", "2025/7/10"));
+        rows.add(FXCollections.observableArrayList("C7-5", "51C", "2025/7/10"));
+        int n =
+                PlanInputRawInputDateShift.propagateRawInputDateToSameTaskIdRows(
+                        headers, rows, 0, "2025/7/8");
+        assertEquals(2, n);
+        assertEquals("2025/7/8", rows.get(0).get(2));
+        assertEquals("2025/7/8", rows.get(1).get(2));
+        assertEquals("2025/7/10", rows.get(2).get(2));
+    }
+
+    @Test
+    void propagateRawInputDate_blankTaskId_updatesEditedRowOnly() {
+        List<String> headers = List.of(PlanInputRawInputDateShift.COL_RAW_INPUT_DATE);
+        ObservableList<ObservableList<String>> rows = FXCollections.observableArrayList();
+        rows.add(FXCollections.observableArrayList("2025/7/10"));
+        rows.add(FXCollections.observableArrayList("2025/7/10"));
+        assertEquals(
+                1,
+                PlanInputRawInputDateShift.propagateRawInputDateToSameTaskIdRows(
+                        headers, rows, 0, "2025/7/8"));
+        assertEquals("2025/7/8", rows.get(0).get(0));
+        assertEquals("2025/7/10", rows.get(1).get(0));
+    }
 }

@@ -13,6 +13,8 @@ public final class PlanInputRawInputDateShift {
 
     public static final String COL_RAW_INPUT_DATE = "原反投入日";
 
+    public static final String COL_TASK_ID = "依頼NO";
+
     /** 列が無いときの戻り値（{@link #applyMinusOneDayToAllRows}）。 */
     public static final int MISSING_RAW_INPUT_DATE_COLUMN = -1;
 
@@ -51,6 +53,51 @@ public final class PlanInputRawInputDateShift {
             row.set(
                     idxBase,
                     PlanInputDateColumnSupport.formatCellValue(effective.get().minusDays(1)));
+            updated++;
+        }
+        return updated;
+    }
+
+    /**
+     * {@code editedRowIndex} 行と同じ依頼NOの全行の {@link #COL_RAW_INPUT_DATE} を {@code newValue} に揃える。
+     * 依頼NO が空のときは編集行のみ更新する。
+     *
+     * @return 値を書き換えた行数
+     */
+    public static int propagateRawInputDateToSameTaskIdRows(
+            List<String> headers,
+            ObservableList<ObservableList<String>> rows,
+            int editedRowIndex,
+            String newValue) {
+        if (headers == null || rows == null || editedRowIndex < 0 || editedRowIndex >= rows.size()) {
+            return 0;
+        }
+        int idxTid = headers.indexOf(COL_TASK_ID);
+        int idxDate = headers.indexOf(COL_RAW_INPUT_DATE);
+        if (idxDate < 0) {
+            return 0;
+        }
+        String normalizedNew = newValue != null ? newValue : "";
+        ObservableList<String> editedRow = rows.get(editedRowIndex);
+        String taskId = idxTid >= 0 ? cellAt(editedRow, idxTid) : "";
+        if (taskId.isBlank()) {
+            ensureSize(editedRow, idxDate + 1);
+            if (cellAt(editedRow, idxDate).equals(normalizedNew)) {
+                return 0;
+            }
+            editedRow.set(idxDate, normalizedNew);
+            return 1;
+        }
+        int updated = 0;
+        for (ObservableList<String> row : rows) {
+            if (idxTid >= 0 && !taskId.equals(cellAt(row, idxTid))) {
+                continue;
+            }
+            ensureSize(row, idxDate + 1);
+            if (cellAt(row, idxDate).equals(normalizedNew)) {
+                continue;
+            }
+            row.set(idxDate, normalizedNew);
             updated++;
         }
         return updated;

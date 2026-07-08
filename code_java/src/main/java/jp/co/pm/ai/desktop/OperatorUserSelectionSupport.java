@@ -19,12 +19,16 @@ import javafx.stage.Stage;
 
 import jp.co.pm.ai.desktop.config.FactoryOperatorUserStore;
 import jp.co.pm.ai.desktop.config.FactorySite;
+import jp.co.pm.ai.desktop.config.FactorySiteOperatorAccess;
 import jp.co.pm.ai.desktop.config.GlobalInitSettingTarget;
 
 /** 操作者名選択・PIN 認証フロー（PMD / リモートデスクトップ配布用シェル共通）。 */
 public final class OperatorUserSelectionSupport {
 
     private OperatorUserSelectionSupport() {}
+
+    /** 操作者 ChoiceDialog 用: 当該工場のユーザー管理に未登録であることを示す疑似行。 */
+    static final String UNREGISTERED_OPERATOR_PLACEHOLDER = "【ユーザー登録無し】";
 
     private static String operatorEventLogPrefix(boolean startup) {
         return startup ? "[startup]" : "[operator]";
@@ -88,6 +92,29 @@ public final class OperatorUserSelectionSupport {
             host.refreshOperatorUserPresentation();
             return;
         }
+        if (!startup && !rdpActive) {
+            try {
+                String current = FactoryOperatorUserStore.sessionOperatorName();
+                if (!current.isBlank()) {
+                    if (FactoryOperatorUserStore.loginChoicesForFactory(factory).contains(current)) {
+                        host.refreshOperatorUserPresentation();
+                        return;
+                    }
+                }
+                if (FactoryOperatorUserStore.tryRestoreSessionFromLocalLastSelected(factory)) {
+                    host.appendLog(
+                            "[factory] 操作者: "
+                                    + FactoryOperatorUserStore.sessionOperatorName()
+                                    + " （前回選択を復元）");
+                    host.refreshOperatorUserPresentation();
+                    return;
+                }
+            } catch (IOException ex) {
+                host.appendLog(
+                        "[factory] 操作者の復元をスキップ: "
+                                + (ex.getMessage() != null ? ex.getMessage() : ex.toString()));
+            }
+        }
         if (rdpActive) {
             while (FactoryOperatorUserStore.sessionRdpDepartmentKey().isBlank()) {
                 if (startup) {
@@ -142,6 +169,12 @@ public final class OperatorUserSelectionSupport {
                 continue;
             }
             String name = chosen.get();
+            if ("【ユーザー登録無し】".equals(name) || UNREGISTERED_OPERATOR_PLACEHOLDER.equals(name)) {
+                host.showWarningDialog(
+                        "操作者名",
+                        "当該工場のユーザー管理に登録された操作者名を選んでください。");
+                continue;
+            }
             if (!confirmSelectedOperatorWithPin(host, factory, name)) {
                 continue;
             }
@@ -420,6 +453,15 @@ public final class OperatorUserSelectionSupport {
         }
         if (pref.isBlank() || !names.contains(pref)) {
             pref = names.get(0);
+        }
+        String session = FactoryOperatorUserStore.sessionOperatorName();
+        if (!session.isBlank()
+                && !names.contains(session)
+                && FactorySiteOperatorAccess.isFactorySummaryFolderReachable(
+                        host.snapshotUiEnv(), site)) {
+            names = new ArrayList<>(names);
+            names.add(0, UNREGISTERED_OPERATOR_PLACEHOLDER);
+            pref = UNREGISTERED_OPERATOR_PLACEHOLDER;
         }
         String appLabel =
                 RemoteDesktopStandaloneBootstrap.isActivated()

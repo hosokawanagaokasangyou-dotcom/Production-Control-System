@@ -2318,3 +2318,7 @@
     -fx-wrap-text: true;
     -fx-text-overrun: clip;
 }
+
+.combo-box .list-cell.pm-ai-factory-site-unregistered {
+    -fx-opacity: 0.55;
+}

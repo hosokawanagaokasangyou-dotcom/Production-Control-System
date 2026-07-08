@@ -8,9 +8,10 @@ import java.nio.file.CopyOption;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.security.MessageDigest;
+import java.util.HexFormat;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Consumer;
 
@@ -20,6 +21,7 @@ import jp.co.pm.ai.desktop.config.AppPaths;
  * 同梱 {@link AppPaths#RDP_LAUNCHER_EXE_BASENAME} をサマリ Excel 同階層 UNC へ自動再配備する。
  * <p>同梱 {@link AppPaths#RDP_LAUNCHER_VERSION_BASENAME} の版数はリポジトリ直下 {@code version.txt} と同一。
  * 正本は {@code version.txt}。{@code scripts/build-rdp-remote-launcher.ps1} および pre-commit で同期する。
+ * <p>版数だけが先行して上がった場合（exe 未再ビルド）は、共有先 exe の SHA-256 と同梱 exe を照合し転送を抑止する。
  */
 public final class RdpRemoteLauncherDeployer {
 
@@ -27,6 +29,8 @@ public final class RdpRemoteLauncherDeployer {
             new CopyOption[] {StandardCopyOption.REPLACE_EXISTING};
 
     private static final String BUNDLED_RESOURCE_PREFIX = "/jp/co/pm/ai/desktop/rdp-launcher/";
+
+    private static final int HASH_BUFFER_SIZE = 8192;
 
     private RdpRemoteLauncherDeployer() {}
 
@@ -70,6 +74,15 @@ public final class RdpRemoteLauncherDeployer {
         return deployIfNeeded(env, log, true);
     }
 
+    /** 同梱 exe の実体コピーが必要か（版数のみの差分では false）。強制転送は含まない。 */
+    public static boolean needsExeDeploy(Map<String, String> ui) {
+        Map<String, String> env = ui != null ? ui : Map.of();
+        if (!isAutoDeployEnabled(env)) {
+            return false;
+        }
+        return needsExeCopy(env, false);
+    }
+
     private static DeployOutcome deployIfNeeded(
             Map<String, String> env, Consumer<String> log, boolean force) {
         Path deployExe = AppPaths.resolveRdpLauncherExe(env);
@@ -87,14 +100,26 @@ public final class RdpRemoteLauncherDeployer {
 
         Optional<BigDecimal> sharedVer = parseVersionFile(deployVersion);
         boolean missingExe = !Files.isRegularFile(deployExe);
-        boolean needsCopy =
-                force
-                        || missingExe
-                        || sharedVer.isEmpty()
-                        || bundledVer.get().compareTo(sharedVer.orElse(BigDecimal.ZERO)) > 0;
+        boolean needsCopy = force || needsExeCopy(env, force);
 
         if (!needsCopy) {
-            String msg = "ランチャーは最新です（" + formatVersion(sharedVer) + "）。";
+            String msg;
+            if (needsVersionSync(bundledVer, sharedVer)) {
+                try {
+                    if (deployDir != null) {
+                        Files.createDirectories(deployDir);
+                    }
+                    copyBundledResource(AppPaths.RDP_LAUNCHER_VERSION_BASENAME, deployVersion);
+                    msg =
+                            "ランチャーは最新です（版数 "
+                                    + formatVersion(bundledVer)
+                                    + " を同期しました）。";
+                } catch (IOException ex) {
+                    msg = "ランチャーは最新です（" + formatVersion(sharedVer) + "）。";
+                }
+            } else {
+                msg = "ランチャーは最新です（" + formatVersion(sharedVer) + "）。";
+            }
             if (log != null) {
                 log.accept(msg);
             }
@@ -158,6 +183,76 @@ public final class RdpRemoteLauncherDeployer {
                 || msg.contains("使用中")
                 || msg.contains("別のプロセス")
                 || msg.contains("共有違反");
+    }
+
+    private static boolean needsExeCopy(Map<String, String> env, boolean force) {
+        if (force) {
+            return true;
+        }
+        Path deployExe = AppPaths.resolveRdpLauncherExe(env);
+        Path deployVersion = AppPaths.resolveRdpLauncherVersionFile(env);
+        if (!Files.isRegularFile(deployExe)) {
+            return true;
+        }
+        Optional<BigDecimal> bundledVer = readBundledVersion();
+        if (bundledVer.isEmpty()) {
+            return false;
+        }
+        Optional<BigDecimal> sharedVer = parseVersionFile(deployVersion);
+        if (sharedVer.isPresent() && sharedVer.get().compareTo(bundledVer.get()) >= 0) {
+            return false;
+        }
+        Optional<String> bundledHash =
+                sha256HexBundledResource(AppPaths.RDP_LAUNCHER_EXE_BASENAME);
+        Optional<String> sharedHash = sha256HexFile(deployExe);
+        if (bundledHash.isPresent()
+                && sharedHash.isPresent()
+                && bundledHash.get().equals(sharedHash.get())) {
+            return false;
+        }
+        return sharedVer.isEmpty()
+                || bundledVer.get().compareTo(sharedVer.orElse(BigDecimal.ZERO)) > 0;
+    }
+
+    private static boolean needsVersionSync(
+            Optional<BigDecimal> bundledVer, Optional<BigDecimal> sharedVer) {
+        if (bundledVer.isEmpty()) {
+            return false;
+        }
+        return sharedVer.isEmpty() || bundledVer.get().compareTo(sharedVer.get()) != 0;
+    }
+
+    static Optional<String> sha256HexFile(Path file) {
+        if (!Files.isRegularFile(file)) {
+            return Optional.empty();
+        }
+        try (InputStream in = Files.newInputStream(file)) {
+            return sha256Hex(in);
+        } catch (Exception ex) {
+            return Optional.empty();
+        }
+    }
+
+    static Optional<String> sha256HexBundledResource(String basename) {
+        String resourcePath = BUNDLED_RESOURCE_PREFIX + basename;
+        try (InputStream in = RdpRemoteLauncherDeployer.class.getResourceAsStream(resourcePath)) {
+            if (in == null) {
+                return Optional.empty();
+            }
+            return sha256Hex(in);
+        } catch (Exception ex) {
+            return Optional.empty();
+        }
+    }
+
+    private static Optional<String> sha256Hex(InputStream in) throws Exception {
+        MessageDigest digest = MessageDigest.getInstance("SHA-256");
+        byte[] buffer = new byte[HASH_BUFFER_SIZE];
+        int read;
+        while ((read = in.read(buffer)) > 0) {
+            digest.update(buffer, 0, read);
+        }
+        return Optional.of(HexFormat.of().formatHex(digest.digest()));
     }
 
     private static void copyLauncherFiles(Path deployExe, Path deployVersion, Path deployDir)

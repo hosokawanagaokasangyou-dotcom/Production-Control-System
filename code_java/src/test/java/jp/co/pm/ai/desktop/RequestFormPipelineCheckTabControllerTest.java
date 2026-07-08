@@ -88,6 +88,27 @@ class RequestFormPipelineCheckTabControllerTest {
     }
 
     @Test
+    void formatCrossSourceTableTsv_includesHeaderAndRows() {
+        var rows =
+                List.of(
+                        new RequestFormPipelineCheckTabController.CrossSourceRow(
+                                "アラジン", "2026/7/6", "不一致"),
+                        new RequestFormPipelineCheckTabController.CrossSourceRow(
+                                "受注ファイル", "2026/7/6", "不一致"));
+        var header =
+                new RequestFormPipelineCheckTabController.CrossSourceCopyHeader("W7-14", "不一致");
+        String tsv =
+                RequestFormPipelineCheckTabController.formatCrossSourceTableTsv(header, rows);
+        assertEquals(
+                "依頼No\tW7-14\n"
+                        + "投入日一致\t不一致\n"
+                        + "ソース\t原反投入日\t照合\n"
+                        + "アラジン\t2026/7/6\t不一致\n"
+                        + "受注ファイル\t2026/7/6\t不一致",
+                tsv);
+    }
+
+    @Test
     void formatPlanTableTsv_includesRequestHeaderAndRows() {
         var row =
                 new RequestFormPipelineCheckTabController.PlanRow(

@@ -472,6 +472,12 @@ TEAM_ASSIGN_COMBO_SHEET_MAY_EXCEED_NEED = (
     .lower()
     not in ("0", "false", "no", "off", "いいえ")
 )
+TEAM_ASSIGN_COMBO_SHEET_RESTRICT_TO_PRESET_MEMBERS = (
+    os.environ.get("TEAM_ASSIGN_COMBO_SHEET_RESTRICT_TO_PRESET_MEMBERS", "1")
+    .strip()
+    .lower()
+    not in ("0", "false", "no", "off", "いいえ")
+)
 PLANNING_B1_INSPECTION_EXCLUSIVE_MACHINE = (
     os.environ.get("PLANNING_B1_INSPECTION_EXCLUSIVE_MACHINE", "1")
     .strip()
@@ -542,6 +548,13 @@ _RESULT_DISPATCH_PLAN_INPUT_OVERRIDE_SRC_COLS: frozenset[str] = frozenset(
         TASK_COL_ACTUAL_DONE,
         TASK_COL_ACTUAL_OUTPUT,
         TASK_COL_QTY,
+        TASK_COL_RAW_INPUT_DATE,
+    }
+)
+# 結果_配台表: 加工計画DATA に無いときは空欄（配台計画入力・task_queue へフォールバックしない）
+_RESULT_DISPATCH_PROCESSING_PLAN_ONLY_SRC_COLS: frozenset[str] = frozenset(
+    {
+        TASK_COL_ANSWER_DUE,
     }
 )
 RESULT_DISPATCH_TABLE_STATIC_HEADERS: tuple[str, ...] = (

@@ -2374,14 +2374,6 @@ public final class RequestFormRemoteDesktopPane {
             Runnable refreshIniFilePreview,
             Runnable refreshLauncherLog,
             Runnable refreshLaunchProfileCombo) {
-        Platform.runLater(
-                () -> {
-                    if (launcherDeployInProgress.compareAndSet(false, true)) {
-                        deployStatusLabel.setText("ランチャーを転送中…");
-                        btnForceDeployLauncher.setDisable(true);
-                        updateLaunchButtonState.run();
-                    }
-                });
         runBackgroundThenFx(
                 () -> {
                     Map<String, String> ui = uiEnv.get();
@@ -2397,6 +2389,17 @@ public final class RequestFormRemoteDesktopPane {
                                     status.accept("ランチャー配備先が未設定のため転送をスキップしました。");
                                 });
                         return;
+                    }
+                    boolean willCopyExe = RdpRemoteLauncherDeployer.needsExeDeploy(ui);
+                    if (willCopyExe) {
+                        Platform.runLater(
+                                () -> {
+                                    if (launcherDeployInProgress.compareAndSet(false, true)) {
+                                        deployStatusLabel.setText("ランチャーを転送中…");
+                                        btnForceDeployLauncher.setDisable(true);
+                                        updateLaunchButtonState.run();
+                                    }
+                                });
                     }
                     RdpRemoteLauncherDeployer.DeployOutcome deploy =
                             RdpRemoteLauncherDeployer.ensureDeployed(ui, null);
@@ -2949,31 +2952,36 @@ public final class RequestFormRemoteDesktopPane {
             Runnable updateLaunchButtonState,
             Consumer<String> status,
             Runnable whenDone) {
-        if (!deployInProgress.compareAndSet(false, true)) {
+        Map<String, String> ui = uiEnv.get();
+        boolean willCopyExe = force || RdpRemoteLauncherDeployer.needsExeDeploy(ui);
+        if (willCopyExe) {
+            if (!deployInProgress.compareAndSet(false, true)) {
+                Platform.runLater(
+                        () -> deployStatusLabel.setText("ランチャー転送が既に実行中です。"));
+                return;
+            }
             Platform.runLater(
-                    () -> deployStatusLabel.setText("ランチャー転送が既に実行中です。"));
-            return;
+                    () -> {
+                        deployStatusLabel.setText("ランチャーを転送中…");
+                        btnForceDeployLauncher.setDisable(true);
+                        updateLaunchButtonState.run();
+                    });
         }
-        Platform.runLater(
-                () -> {
-                    deployStatusLabel.setText("ランチャーを転送中…");
-                    btnForceDeployLauncher.setDisable(true);
-                    updateLaunchButtonState.run();
-                });
         runBackgroundThenFx(
                 () -> {
-                    Map<String, String> ui = uiEnv.get();
                     RdpRemoteLauncherDeployer.DeployOutcome outcome =
                             force
                                     ? RdpRemoteLauncherDeployer.forceDeploy(ui)
                                     : RdpRemoteLauncherDeployer.ensureDeployed(ui);
                     Platform.runLater(
                             () -> {
-                                deployInProgress.set(false);
+                                if (willCopyExe) {
+                                    deployInProgress.set(false);
+                                    btnForceDeployLauncher.setDisable(false);
+                                }
                                 deployReady.set(outcome.succeeded());
                                 outcome.message().ifPresent(deployStatusLabel::setText);
                                 outcome.message().ifPresent(status::accept);
-                                btnForceDeployLauncher.setDisable(false);
                                 updateLaunchButtonState.run();
                                 if (whenDone != null) {
                                     whenDone.run();

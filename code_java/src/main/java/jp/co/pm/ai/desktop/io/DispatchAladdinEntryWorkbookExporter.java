@@ -26,9 +26,11 @@ import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.ss.util.WorkbookUtil;
 import org.apache.poi.xssf.usermodel.XSSFCellStyle;
 import org.apache.poi.xssf.usermodel.XSSFColor;
+import org.apache.poi.xssf.usermodel.XSSFRichTextString;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
+import jp.co.pm.ai.desktop.config.SummaryAiDispatchExportPrefs;
 import jp.co.pm.ai.desktop.dispatch.AladdinShapedPlanQtyLookup;
 import jp.co.pm.ai.desktop.dispatch.DispatchAladdinEntrySheetBuilder;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchInteractiveConsolidator;
@@ -62,6 +64,12 @@ public final class DispatchAladdinEntryWorkbookExporter {
     private static final String[] WEEKDAY_JA = {"月", "火", "水", "木", "金", "土", "日"};
 
     private static final String EMPTY_SHEET_NAME = "データなし";
+
+    /** 日付セル上段（現アラ計）のフォントサイズ（pt）。 */
+    private static final short ALADDIN_LINE_FONT_SIZE_PT = 9;
+
+    /** 日付セル下段（シス計）のフォントサイズ（pt）。 */
+    private static final short SYSTEM_LINE_FONT_SIZE_PT = 12;
 
     private DispatchAladdinEntryWorkbookExporter() {}
 
@@ -254,8 +262,14 @@ public final class DispatchAladdinEntryWorkbookExporter {
                     cell.setCellValue("");
                     cell.setCellStyle(styles.dateCellFor(d, false));
                 } else {
-                    cell.setCellValue(ec.cellText());
+                    String cellText = ec.cellText();
                     cell.setCellStyle(styles.dateCellFor(d, ec.mismatch()));
+                    XSSFRichTextString rich = styles.dateCellRichText(cellText);
+                    if (rich != null) {
+                        cell.setCellValue(rich);
+                    } else {
+                        cell.setCellValue(cellText);
+                    }
                 }
             }
         }
@@ -292,6 +306,28 @@ public final class DispatchAladdinEntryWorkbookExporter {
                 + ")";
     }
 
+    /**
+     * 日付セル 2 段表示: 上段（現アラ計）= {@link #ALADDIN_LINE_FONT_SIZE_PT}、
+     * 下段（シス計）= {@link #SYSTEM_LINE_FONT_SIZE_PT}。
+     */
+    static XSSFRichTextString buildDateCellRichText(
+            String text, Font aladdinLineFont, Font systemLineFont) {
+        if (text == null
+                || text.isBlank()
+                || aladdinLineFont == null
+                || systemLineFont == null) {
+            return null;
+        }
+        int newline = text.indexOf('\n');
+        if (newline < 0) {
+            return null;
+        }
+        XSSFRichTextString rich = new XSSFRichTextString(text);
+        rich.applyFont(0, newline, aladdinLineFont);
+        rich.applyFont(newline + 1, text.length(), systemLineFont);
+        return rich;
+    }
+
     /** シート内スタイル一式。 */
     private record Styles(
             CellStyle header,
@@ -305,7 +341,13 @@ public final class DispatchAladdinEntryWorkbookExporter {
             CellStyle checkNg,
             CellStyle dateCell,
             CellStyle dateCellMismatch,
-            CellStyle dateCellWeekend) {
+            CellStyle dateCellWeekend,
+            Font aladdinLineFont,
+            Font systemLineFont) {
+
+        XSSFRichTextString dateCellRichText(String text) {
+            return buildDateCellRichText(text, aladdinLineFont, systemLineFont);
+        }
 
         CellStyle dateHeaderFor(LocalDate d, boolean isToday) {
             if (isToday) {
@@ -331,12 +373,28 @@ public final class DispatchAladdinEntryWorkbookExporter {
         }
 
         static Styles of(XSSFWorkbook wb) {
+            String fontName = SummaryAiDispatchExportPrefs.DEFAULT_FONT_FAMILY;
+            short defaultPt = (short) SummaryAiDispatchExportPrefs.DEFAULT_FONT_SIZE_PT;
+
             Font headerFont = wb.createFont();
+            headerFont.setFontName(fontName);
+            headerFont.setFontHeightInPoints(defaultPt);
             headerFont.setBold(true);
             Font dataFont = wb.createFont();
+            dataFont.setFontName(fontName);
+            dataFont.setFontHeightInPoints(defaultPt);
             Font ngFont = wb.createFont();
+            ngFont.setFontName(fontName);
+            ngFont.setFontHeightInPoints(defaultPt);
             ngFont.setBold(true);
             ngFont.setColor(org.apache.poi.ss.usermodel.IndexedColors.DARK_RED.getIndex());
+
+            Font aladdinLineFont = wb.createFont();
+            aladdinLineFont.setFontName(fontName);
+            aladdinLineFont.setFontHeightInPoints(ALADDIN_LINE_FONT_SIZE_PT);
+            Font systemLineFont = wb.createFont();
+            systemLineFont.setFontName(fontName);
+            systemLineFont.setFontHeightInPoints(SYSTEM_LINE_FONT_SIZE_PT);
 
             CellStyle header = borderedStyle(wb, headerFont, HorizontalAlignment.CENTER, true);
             fill(header, new byte[] {(byte) 0xD9, (byte) 0xE1, (byte) 0xF2}); // 薄青グレー
@@ -374,7 +432,9 @@ public final class DispatchAladdinEntryWorkbookExporter {
                     checkNg,
                     dateCell,
                     dateCellMismatch,
-                    dateCellWeekend);
+                    dateCellWeekend,
+                    aladdinLineFont,
+                    systemLineFont);
         }
 
         private static CellStyle borderedStyle(

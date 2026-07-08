@@ -45,6 +45,7 @@ import jp.co.pm.ai.desktop.reconciliation.JuchuHeaderAliasRegistry;
 import jp.co.pm.ai.desktop.reconciliation.KonanDailyReportLookup;
 import jp.co.pm.ai.desktop.reconciliation.RawInputDateCrossSourceCheck;
 import jp.co.pm.ai.desktop.reconciliation.RemoteDesktopLatestSourceFiles;
+import jp.co.pm.ai.desktop.io.AladdinProcessingPlanSourceReloader;
 import jp.co.pm.ai.desktop.reconciliation.RequestFormPipelineStatusService;
 import jp.co.pm.ai.desktop.reconciliation.RequestFormPipelineStatusService.PipelineStatusRow;
 import jp.co.pm.ai.desktop.reconciliation.RequestFormPipelineStatusService.ScanResult;
@@ -56,7 +57,8 @@ public final class RequestFormPipelineCheckTabController {
             AladdinShapedPlanQtyLookup.PIPELINE_CHECK_PLAN_DAY_COLUMNS;
 
     private static final String HINT_TEXT =
-            "依頼書原本フォルダ内の Excel 原本と TPI PDF を走査し、受注ファイルへの転記状況と"
+            "「更新」でタスク入力ソースからアラジン加工計画を再読込し、"
+                    + "依頼書原本フォルダ内の Excel 原本と TPI PDF を走査して受注ファイルへの転記状況と"
                     + " shaped_aladdin_plan.json 上のアラジン加工計画を照合します。"
                     + " 転記率は原本に値がある転記対象列を分母とします。"
                     + " ①〜⑦列は依頼ごとの加工計画日（昇順・最大7日）を表示（セル例: 7/3 100m）。"
@@ -522,6 +524,9 @@ public final class RequestFormPipelineCheckTabController {
     private Label hintLabel;
 
     @FXML
+    private Label aladdinPlanSourceLabel;
+
+    @FXML
     private Label dailyReportSourceLabel;
 
     @FXML
@@ -544,6 +549,12 @@ public final class RequestFormPipelineCheckTabController {
 
     @FXML
     private TableView<CrossSourceRow> crossSourceTable;
+
+    @FXML
+    private Button copyCrossSourceTableButton;
+
+    @FXML
+    private Button copyCrossSourceTableForEmailButton;
 
     @FXML
     private TableView<MismatchRow> mismatchTable;
@@ -570,6 +581,9 @@ public final class RequestFormPipelineCheckTabController {
 
     private KonanDailyReportLookup dailyReportLookup = KonanDailyReportLookup.empty();
 
+    /** 直近の「更新」で読み込んだアラジン加工計画ソースの絶対パス。 */
+    private String aladdinPlanSourcePath = "";
+
     private boolean aladdinJsonAvailable = true;
     private String lastScanWarnings = "";
     /** 起動後に一度でも走査結果を反映したら true（手動「更新」は常に可）。 */
@@ -587,6 +601,7 @@ public final class RequestFormPipelineCheckTabController {
     @FXML
     private void initialize() {
         hintLabel.setText(HINT_TEXT);
+        updateAladdinPlanSourceLabel();
         updateDailyReportSourceLabel();
         filteredRows = new FilteredList<>(allRows, row -> true);
         mainTable.setItems(filteredRows);
@@ -618,6 +633,13 @@ public final class RequestFormPipelineCheckTabController {
         }
         if (copyPlanTableForEmailButton != null) {
             copyPlanTableForEmailButton.disableProperty().bind(Bindings.isEmpty(planRows));
+        }
+        if (copyCrossSourceTableButton != null) {
+            copyCrossSourceTableButton.disableProperty().bind(Bindings.isEmpty(crossSourceRows));
+        }
+        if (copyCrossSourceTableForEmailButton != null) {
+            copyCrossSourceTableForEmailButton.disableProperty()
+                    .bind(Bindings.isEmpty(crossSourceRows));
         }
 
         filterField.textProperty().addListener((obs, oldVal, newVal) -> applyFilter());
@@ -680,6 +702,7 @@ public final class RequestFormPipelineCheckTabController {
     void onFactorySiteChanged(boolean lightweight) {
         scanApplied = false;
         lastScanWarnings = "";
+        aladdinPlanSourcePath = "";
         allRows.clear();
         mismatchRows.clear();
         crossSourceRows.clear();
@@ -688,6 +711,7 @@ public final class RequestFormPipelineCheckTabController {
         if (statusLabel != null) {
             statusLabel.setText("工場切替: タブを開くと再走査します");
         }
+        updateAladdinPlanSourceLabel();
     }
 
     /** メインシェルで当該タブが選択されたとき。起動後未走査なら自動更新する。 */
@@ -760,19 +784,60 @@ public final class RequestFormPipelineCheckTabController {
         }
         refreshInProgress = true;
         setRefreshing(true);
-        statusLabel.setText("走査中…");
+        statusLabel.setText("アラジン加工計画読込中…");
         JuchuHeaderAliasRegistry registry = shell.snapshotJuchuHeaderAliasRegistryForExport();
         Thread worker =
                 new Thread(
                         () -> {
+                            Map<String, String> ui = shell.snapshotUiEnv();
+                            List<String> reloadWarnings = new ArrayList<>();
+                            String loadedPlanSourcePath = aladdinPlanSourcePath;
                             try {
+                                try {
+                                    AladdinProcessingPlanSourceReloader.ReloadResult reload =
+                                            AladdinProcessingPlanSourceReloader
+                                                    .reloadNewestFromDiskAndSaveShapedJson(ui);
+                                    loadedPlanSourcePath =
+                                            reload.sourceFile().toAbsolutePath().normalize().toString();
+                                    shell.appendLog(
+                                            "[pipeline-check] アラジン加工計画再読込: "
+                                                    + reload.sourceFile()
+                                                    + " ("
+                                                    + reload.rowCount()
+                                                    + " 行 × "
+                                                    + reload.columnCount()
+                                                    + " 列)");
+                                    Platform.runLater(shell::refreshAladdinProcessingPlanTabFromDisk);
+                                } catch (Exception reloadEx) {
+                                    String msg =
+                                            "アラジン加工計画の再読込に失敗: "
+                                                    + (reloadEx.getMessage() != null
+                                                            ? reloadEx.getMessage()
+                                                            : reloadEx.toString());
+                                    reloadWarnings.add(msg);
+                                    shell.appendLog("[pipeline-check] " + msg);
+                                }
+                                Platform.runLater(() -> statusLabel.setText("走査中…"));
                                 ScanResult result =
-                                        RequestFormPipelineStatusService.scan(
-                                                shell.snapshotUiEnv(), registry);
+                                        RequestFormPipelineStatusService.scan(ui, registry);
+                                if (!reloadWarnings.isEmpty()) {
+                                    List<String> mergedWarnings = new ArrayList<>(reloadWarnings);
+                                    mergedWarnings.addAll(result.warnings());
+                                    result =
+                                            new ScanResult(
+                                                    result.rows(),
+                                                    mergedWarnings,
+                                                    result.aladdinJsonAvailable(),
+                                                    result.planDateHeaders(),
+                                                    result.dailyReportLookup());
+                                }
+                                ScanResult scanResult = result;
+                                String planSourcePath = loadedPlanSourcePath;
                                 Platform.runLater(
                                         () -> {
                                             setRefreshing(false);
-                                            applyScanResult(result);
+                                            aladdinPlanSourcePath = planSourcePath;
+                                            applyScanResult(scanResult);
                                         });
                             } catch (Exception ex) {
                                 Platform.runLater(
@@ -860,6 +925,7 @@ public final class RequestFormPipelineCheckTabController {
                 result.warnings().isEmpty() ? "" : String.join(" | ", result.warnings());
         applyFilter();
         updateStatusLabel();
+        updateAladdinPlanSourceLabel();
         updateDailyReportSourceLabel();
 
         if (shell != null) {
@@ -1024,6 +1090,145 @@ public final class RequestFormPipelineCheckTabController {
                             + " 行をメール貼り付け用（HTML表）でクリップボードへコピー"
                             + headerLogSuffix(header));
         }
+    }
+
+    @FXML
+    private void onCopyCrossSourceTableButtonAction() {
+        if (crossSourceRows.isEmpty()) {
+            return;
+        }
+        CrossSourceCopyHeader header = CrossSourceCopyHeader.from(planContextRow);
+        List<CrossSourceRow> rows = List.copyOf(crossSourceRows);
+        String tsv = formatCrossSourceTableTsv(header, rows);
+        ClipboardContent content = new ClipboardContent();
+        content.putString(tsv);
+        Clipboard.getSystemClipboard().setContent(content);
+        if (shell != null) {
+            shell.appendLog(
+                    "[pipeline-check] 原反投入日4ソース照合 "
+                            + rows.size()
+                            + " 行をクリップボードへ表としてコピー"
+                            + crossSourceHeaderLogSuffix(header));
+        }
+    }
+
+    @FXML
+    private void onCopyCrossSourceTableForEmailButtonAction() {
+        if (crossSourceRows.isEmpty()) {
+            return;
+        }
+        CrossSourceCopyHeader header = CrossSourceCopyHeader.from(planContextRow);
+        List<CrossSourceRow> rows = List.copyOf(crossSourceRows);
+        String tsv = formatCrossSourceTableTsv(header, rows);
+        String html = formatCrossSourceTableHtml(header, rows);
+        ClipboardTableSupport.copyTabularForRichTextPaste(tsv, html);
+        if (shell != null) {
+            shell.appendLog(
+                    "[pipeline-check] 原反投入日4ソース照合 "
+                            + rows.size()
+                            + " 行をメール貼り付け用（HTML表）でクリップボードへコピー"
+                            + crossSourceHeaderLogSuffix(header));
+        }
+    }
+
+    private static String crossSourceHeaderLogSuffix(CrossSourceCopyHeader header) {
+        if (header == null || header.iraiNo().isBlank()) {
+            return "";
+        }
+        return "（依頼No: " + header.iraiNo() + "）";
+    }
+
+    /** 4ソース照合表クリップボード用ヘッダ（選択行）。 */
+    record CrossSourceCopyHeader(String iraiNo, String matchStatus) {
+
+        static CrossSourceCopyHeader from(MainRow row) {
+            if (row == null) {
+                return new CrossSourceCopyHeader("", "");
+            }
+            return new CrossSourceCopyHeader(
+                    nullToEmpty(row.getIraiNo()), nullToEmpty(row.getRawInputDateMatchStatus()));
+        }
+    }
+
+    static String formatCrossSourceTableTsv(
+            CrossSourceCopyHeader header, List<CrossSourceRow> rows) {
+        StringBuilder sb = new StringBuilder();
+        appendCrossSourceCopyHeaderTsv(sb, header);
+        if (!sb.isEmpty()) {
+            sb.append('\n');
+        }
+        sb.append("ソース").append('\t').append("原反投入日").append('\t').append("照合");
+        for (CrossSourceRow row : rows) {
+            sb.append('\n');
+            appendTsvCell(sb, row.getSource());
+            sb.append('\t');
+            appendTsvCell(sb, row.getValue());
+            sb.append('\t');
+            appendTsvCell(sb, row.getStatus());
+        }
+        return sb.toString();
+    }
+
+    static String formatCrossSourceTableHtml(
+            CrossSourceCopyHeader header, List<CrossSourceRow> rows) {
+        StringBuilder sb = new StringBuilder();
+        appendCrossSourceCopyHeaderHtml(sb, header);
+        sb.append(
+                "<table border=\"1\" cellspacing=\"0\" cellpadding=\"4\""
+                        + " style=\"border-collapse:collapse;font-family:'Meiryo UI',sans-serif;font-size:11pt;\">");
+        sb.append("<thead><tr>");
+        for (String columnTitle : List.of("ソース", "原反投入日", "照合")) {
+            sb.append("<th style=\"background:#D9E1F2;padding:4px 8px;text-align:left;\">")
+                    .append(ClipboardTableSupport.escapeHtml(columnTitle))
+                    .append("</th>");
+        }
+        sb.append("</tr></thead><tbody>");
+        for (CrossSourceRow row : rows) {
+            sb.append("<tr>");
+            appendHtmlCell(sb, row.getSource());
+            appendHtmlCell(sb, row.getValue());
+            appendHtmlCell(sb, row.getStatus());
+            sb.append("</tr>");
+        }
+        sb.append("</tbody></table>");
+        return sb.toString();
+    }
+
+    private static void appendCrossSourceCopyHeaderTsv(
+            StringBuilder sb, CrossSourceCopyHeader header) {
+        if (header == null) {
+            return;
+        }
+        appendHeaderTsvLineRequired(sb, "依頼No", header.iraiNo());
+        appendHeaderTsvLineRequired(sb, "投入日一致", header.matchStatus());
+    }
+
+    private static void appendCrossSourceCopyHeaderHtml(
+            StringBuilder sb, CrossSourceCopyHeader header) {
+        if (header == null) {
+            return;
+        }
+        List<String[]> lines = new ArrayList<>();
+        if (!header.iraiNo().isBlank()) {
+            lines.add(new String[] {"依頼No", header.iraiNo()});
+        }
+        if (!header.matchStatus().isBlank()) {
+            lines.add(new String[] {"投入日一致", header.matchStatus()});
+        }
+        if (lines.isEmpty()) {
+            return;
+        }
+        sb.append(
+                "<table border=\"0\" cellspacing=\"0\" cellpadding=\"2\""
+                        + " style=\"border-collapse:collapse;font-family:'Meiryo UI',sans-serif;font-size:11pt;margin-bottom:8px;\">");
+        for (String[] line : lines) {
+            sb.append("<tr><td style=\"padding:2px 12px 2px 0;font-weight:bold;white-space:nowrap;\">")
+                    .append(ClipboardTableSupport.escapeHtml(line[0]))
+                    .append("</td><td style=\"padding:2px 0;\">")
+                    .append(ClipboardTableSupport.escapeHtml(line[1]))
+                    .append("</td></tr>");
+        }
+        sb.append("</table>");
     }
 
     private static String headerLogSuffix(PlanCopyHeader header) {
@@ -1490,6 +1695,19 @@ public final class RequestFormPipelineCheckTabController {
         statusLabel.setText(status.toString());
     }
 
+    private void updateAladdinPlanSourceLabel() {
+        if (aladdinPlanSourceLabel == null) {
+            return;
+        }
+        if (aladdinPlanSourcePath == null || aladdinPlanSourcePath.isBlank()) {
+            aladdinPlanSourceLabel.setText("加工計画: （未読込）");
+        } else {
+            aladdinPlanSourceLabel.setText("加工計画: " + aladdinPlanSourcePath);
+        }
+        aladdinPlanSourceLabel.setManaged(true);
+        aladdinPlanSourceLabel.setVisible(true);
+    }
+
     private void updateDailyReportSourceLabel() {
         if (dailyReportSourceLabel == null) {
             return;
@@ -1635,26 +1853,21 @@ public final class RequestFormPipelineCheckTabController {
                 colCrossSource("ソース", "source", 150),
                 colCrossSource("原反投入日", "value", 160),
                 colCrossSource("照合", "status", 72));
-        crossSourceTable.setRowFactory(
-                tv ->
-                        new javafx.scene.control.TableRow<>() {
-                            @Override
-                            protected void updateItem(CrossSourceRow item, boolean empty) {
-                                super.updateItem(item, empty);
-                                if (empty || item == null) {
-                                    setStyle("");
-                                    return;
-                                }
-                                String st = item.getStatus();
-                                if (RawInputDateCrossSourceCheck.STATUS_MATCH.equals(st)) {
-                                    setStyle("-fx-background-color: #E2EFDA;");
-                                } else if (RawInputDateCrossSourceCheck.STATUS_MISMATCH.equals(st)) {
-                                    setStyle("-fx-background-color: #FCE4E4;");
-                                } else {
-                                    setStyle("");
-                                }
-                            }
-                        });
+    }
+
+    private static void applyRawInputDateMatchStatusCellStyle(
+            javafx.scene.control.TableCell<?, ?> cell, String status) {
+        if (RawInputDateCrossSourceCheck.STATUS_MISMATCH.equals(status)) {
+            cell.setStyle(
+                    "-fx-background-color: #FCE4E4; -fx-control-inner-background: #FCE4E4;"
+                            + " -fx-text-fill: #C00000;");
+        } else if (RawInputDateCrossSourceCheck.STATUS_MATCH.equals(status)) {
+            cell.setStyle(
+                    "-fx-background-color: #E2EFDA; -fx-control-inner-background: #E2EFDA;"
+                            + " -fx-text-fill: #375623;");
+        } else {
+            cell.setStyle("");
+        }
     }
 
     private static void installRawInputMatchCellFactory(TableColumn<MainRow, String> column) {
@@ -1670,13 +1883,7 @@ public final class RequestFormPipelineCheckTabController {
                                     return;
                                 }
                                 setText(item);
-                                if (RawInputDateCrossSourceCheck.STATUS_MISMATCH.equals(item)) {
-                                    setStyle("-fx-background-color: #FCE4E4; -fx-text-fill: #C00000;");
-                                } else if (RawInputDateCrossSourceCheck.STATUS_MATCH.equals(item)) {
-                                    setStyle("-fx-background-color: #E2EFDA; -fx-text-fill: #375623;");
-                                } else {
-                                    setStyle("");
-                                }
+                                applyRawInputDateMatchStatusCellStyle(this, item);
                             }
                         });
     }
@@ -1710,6 +1917,24 @@ public final class RequestFormPipelineCheckTabController {
         TableColumn<CrossSourceRow, String> c = new TableColumn<>(title);
         c.setCellValueFactory(new PropertyValueFactory<>(prop));
         c.setPrefWidth(width);
+        c.setCellFactory(
+                col ->
+                        new javafx.scene.control.TableCell<>() {
+                            @Override
+                            protected void updateItem(String item, boolean empty) {
+                                super.updateItem(item, empty);
+                                if (empty) {
+                                    setText(null);
+                                    setStyle("");
+                                    return;
+                                }
+                                setText(item);
+                                CrossSourceRow row =
+                                        getTableRow() != null ? getTableRow().getItem() : null;
+                                applyRawInputDateMatchStatusCellStyle(
+                                        this, row != null ? row.getStatus() : "");
+                            }
+                        });
         return c;
     }
 

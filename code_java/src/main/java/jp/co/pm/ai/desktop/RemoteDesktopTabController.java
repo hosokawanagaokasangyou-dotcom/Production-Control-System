@@ -43,6 +43,11 @@ public final class RemoteDesktopTabController {
         }
     }
 
+    /** 工場切替後: 走査結果を破棄し、タブ選択時まで再走査を遅延する。 */
+    void onFactorySiteChanged(boolean lightweight) {
+        refreshForSessionOperatorChange();
+    }
+
     void onMainShellTabSelected() {
         if (contentBuilt) {
             return;

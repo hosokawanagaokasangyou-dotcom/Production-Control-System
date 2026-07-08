@@ -759,6 +759,34 @@ def _assign_one_roll_trial_order_flow(
         else None
     )
 
+    # 組み合わせ表プリセットが存在する工程+機械は、探索で表外メンバーを混ぜず
+    # プリセット記載メンバー（＋担当OP指定・グローバル日付×工程指定の明示メンバー）に限定する。
+    if TEAM_ASSIGN_COMBO_SHEET_RESTRICT_TO_PRESET_MEMBERS and preset_rows_assign:
+        _allowed_members: set = set()
+        for _prio, _req, _preset_team, _cid in preset_rows_assign:
+            for _m in _preset_team:
+                _allowed_members.add(_m)
+        for _m in (fixed_team_anchor or []):
+            _allowed_members.add(_m)
+        if pref_mem:
+            _allowed_members.add(pref_mem)
+        _restricted = [m for m in capable_members if m in _allowed_members]
+        _dropped = [m for m in capable_members if m not in _allowed_members]
+        if _dropped:
+            logging.info(
+                "組み合わせ表限定: %s/%s は表記載メンバーのみに配台探索を限定（除外=%s）。",
+                _log_plain_label(machine),
+                _log_plain_label(machine_name),
+                ",".join(_log_plain_label(m) for m in _dropped),
+            )
+        capable_members = _restricted
+        op_today = [
+            m for m in capable_members if skill_role_priority(m)[0] == "OP"
+        ]
+        max_team_size = min(req_num + extra_max, len(capable_members))
+        if max_team_size < req_num:
+            max_team_size = req_num
+
     _dto_head = task.get("dispatch_trial_order")
     if _dto_head is not None and _dto_head not in _need_headcount_logged_orders:
         _need_headcount_logged_orders.add(_dto_head)

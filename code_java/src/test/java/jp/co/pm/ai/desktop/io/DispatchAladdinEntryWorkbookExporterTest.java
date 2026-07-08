@@ -2,6 +2,7 @@ package jp.co.pm.ai.desktop.io;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
@@ -10,13 +11,46 @@ import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
 import java.time.Instant;
 
+import org.apache.poi.ss.usermodel.Font;
+import org.apache.poi.xssf.usermodel.XSSFRichTextString;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+
+import jp.co.pm.ai.desktop.config.SummaryAiDispatchExportPrefs;
+import jp.co.pm.ai.desktop.dispatch.DispatchAladdinEntrySheetBuilder;
 
 class DispatchAladdinEntryWorkbookExporterTest {
 
     @TempDir
     Path tempDir;
+
+    @Test
+    void dateCellRichTextAppliesPerLineFontSizes() throws IOException {
+        try (XSSFWorkbook wb = new XSSFWorkbook()) {
+            String fontName = SummaryAiDispatchExportPrefs.DEFAULT_FONT_FAMILY;
+            Font aladdinLineFont = wb.createFont();
+            aladdinLineFont.setFontName(fontName);
+            aladdinLineFont.setFontHeightInPoints((short) 9);
+            Font systemLineFont = wb.createFont();
+            systemLineFont.setFontName(fontName);
+            systemLineFont.setFontHeightInPoints((short) 12);
+
+            String text =
+                    DispatchAladdinEntrySheetBuilder.ALADDIN_LINE_PREFIX
+                            + "4400\n"
+                            + DispatchAladdinEntrySheetBuilder.SYSTEM_LINE_PREFIX
+                            + "0";
+            XSSFRichTextString rich =
+                    DispatchAladdinEntryWorkbookExporter.buildDateCellRichText(
+                            text, aladdinLineFont, systemLineFont);
+
+            assertNotNull(rich);
+            assertEquals(text, rich.getString());
+            assertTrue(rich.hasFormatting());
+            assertEquals(2, rich.numFormattingRuns());
+        }
+    }
 
     @Test
     void pruneKeepsAtMostMaxGenerationsDeletingOldest() throws IOException {

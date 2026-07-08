@@ -25,4 +25,14 @@ class TaskIdLeadingAlphaPrefixTest {
         assertEquals(TaskIdLeadingAlphaPrefix.OTHER, TaskIdLeadingAlphaPrefix.extract(""));
         assertEquals(TaskIdLeadingAlphaPrefix.OTHER, TaskIdLeadingAlphaPrefix.extract("123"));
     }
+
+    @Test
+    void formatAndParseTabLabel() {
+        assertEquals("V (10)", TaskIdLeadingAlphaPrefix.formatTabLabel("V", 10));
+        assertEquals("V", TaskIdLeadingAlphaPrefix.parsePrefixFromTabLabel("V (10)"));
+        assertEquals("JR", TaskIdLeadingAlphaPrefix.parsePrefixFromTabLabel("JR (2)"));
+        assertEquals(
+                TaskIdLeadingAlphaPrefix.OTHER,
+                TaskIdLeadingAlphaPrefix.parsePrefixFromTabLabel("（その他） (5)"));
+    }
 }

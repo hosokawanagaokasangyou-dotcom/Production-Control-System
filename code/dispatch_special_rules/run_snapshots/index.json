@@ -1,0 +1,16 @@
+{
+  "version" : 1,
+  "entries" : [ {
+    "run_id" : "stage2_2026-07-08T0036_2b8c0671",
+    "stage" : "stage2",
+    "capturedAt" : "2026-07-08T00:36:10.837582400Z",
+    "sourceHash" : "2b8c0671",
+    "path" : "C:\\システム開発\\工程管理AIプロジェクト_JAVA\\code\\dispatch_special_rules\\run_snapshots\\stage2_2026-07-08T0036_2b8c0671.json"
+  }, {
+    "run_id" : "stage1_2026-07-08T0035_2b8c0671",
+    "stage" : "stage1",
+    "capturedAt" : "2026-07-08T00:35:17.131063700Z",
+    "sourceHash" : "2b8c0671",
+    "path" : "C:\\システム開発\\工程管理AIプロジェクト_JAVA\\code\\dispatch_special_rules\\run_snapshots\\stage1_2026-07-08T0035_2b8c0671.json"
+  } ]
+}
