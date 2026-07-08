@@ -300,7 +300,7 @@ public final class DispatchAladdinEntryWorkbookExporter {
         }
         sh.createFreezePane(FIXED_COLUMN_COUNT, 1);
 
-        int[] fixedWidths = {14, 12, 10, 12, 12, 9, 9, 9, 13};
+        int[] fixedWidths = {14, 12, 10, 16, 12, 9, 9, 9, 13};
         for (int c = 0; c < FIXED_COLUMN_COUNT; c++) {
             sh.setColumnWidth(c, 256 * fixedWidths[c]);
         }
