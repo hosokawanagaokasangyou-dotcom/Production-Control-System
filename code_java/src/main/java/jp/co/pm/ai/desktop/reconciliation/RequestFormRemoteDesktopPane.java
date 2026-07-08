@@ -20,6 +20,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
+import javafx.animation.KeyFrame;
+import javafx.animation.Timeline;
 import javafx.application.Platform;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.FXCollections;
@@ -59,6 +61,7 @@ import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import javafx.scene.text.Font;
 import javafx.stage.DirectoryChooser;
+import javafx.util.Duration;
 import javafx.util.StringConverter;
 import javafx.stage.FileChooser;
 import javafx.stage.Window;
@@ -123,11 +126,19 @@ public final class RequestFormRemoteDesktopPane {
 
     private static final double RIGHT_PANE_MIN_HEIGHT = 72;
 
-    /** 構築結果。{@link #scheduleInitialRefresh()} はタブ初回表示時のみ呼ぶ（UNC I/O を初回マウントから分離）。 */
+    /** 「取得データ最新ファイル」自動更新の間隔（リモートデスクトップタブを開いている間のみ動作）。 */
+    private static final Duration FETCHED_FILES_AUTO_REFRESH_INTERVAL = Duration.seconds(5);
+
+    /**
+     * 構築結果。{@link #scheduleInitialRefresh()} はタブ初回表示時のみ呼ぶ（UNC I/O を初回マウントから分離）。
+     * {@link #setTabActive(boolean)} はメインタブの選択・非選択に合わせて呼び、
+     * リモートデスクトップタブを開いている間だけ「取得データ最新ファイル」を5秒おきに自動更新する。
+     */
     public record TabContent(
             SplitPane root,
             Runnable scheduleInitialRefresh,
-            Runnable onSessionOperatorChanged) {}
+            Runnable onSessionOperatorChanged,
+            Consumer<Boolean> setTabActive) {}
 
     private RequestFormRemoteDesktopPane() {}
 
@@ -2110,6 +2121,25 @@ public final class RequestFormRemoteDesktopPane {
 
         btnRefreshFetchedFiles.setOnAction(e -> refreshFetchedFilesTable[0].run());
 
+        Timeline[] fetchedFilesAutoRefreshTimeline = new Timeline[1];
+        Consumer<Boolean> setTabActive =
+                active -> {
+                    if (fetchedFilesAutoRefreshTimeline[0] != null) {
+                        fetchedFilesAutoRefreshTimeline[0].stop();
+                        fetchedFilesAutoRefreshTimeline[0] = null;
+                    }
+                    if (active != null && active) {
+                        Timeline timeline =
+                                new Timeline(
+                                        new KeyFrame(
+                                                FETCHED_FILES_AUTO_REFRESH_INTERVAL,
+                                                e -> refreshFetchedFilesTable[0].run()));
+                        timeline.setCycleCount(Timeline.INDEFINITE);
+                        timeline.play();
+                        fetchedFilesAutoRefreshTimeline[0] = timeline;
+                    }
+                };
+
         VBox card =
                 new VBox(
                         16,
@@ -2345,7 +2375,7 @@ public final class RequestFormRemoteDesktopPane {
                         refreshFetchedFilesTable[0].run();
                 };
 
-        return new TabContent(splitPane, scheduleInitialRefresh, onSessionOperatorChanged);
+        return new TabContent(splitPane, scheduleInitialRefresh, onSessionOperatorChanged, setTabActive);
     }
 
     private static void scheduleSharedSettingsRefresh(

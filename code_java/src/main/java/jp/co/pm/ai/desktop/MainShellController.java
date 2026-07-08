@@ -933,6 +933,10 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                                     && requestFormInputTabController != null) {
                                 requestFormInputTabController.onMainShellTabDeselected();
                             }
+                            if (prevTab == mainShellTabRemoteDesktop
+                                    && remoteDesktopTabController != null) {
+                                remoteDesktopTabController.onMainShellTabDeselected();
+                            }
                             if (newTab == mainShellTabEquipmentGanttGraphic
                                     && equipmentGanttGraphicTabController != null) {
                                 equipmentGanttGraphicTabController

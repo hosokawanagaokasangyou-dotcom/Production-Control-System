@@ -104,6 +104,11 @@ public final class RemoteDesktopShellController implements DesktopShellHost, Env
                             if (now == remoteDesktopTab && remoteDesktopTabContentController != null) {
                                 Platform.runLater(remoteDesktopTabContentController::onMainShellTabSelected);
                             }
+                            if (prev == remoteDesktopTab
+                                    && now != remoteDesktopTab
+                                    && remoteDesktopTabContentController != null) {
+                                remoteDesktopTabContentController.onMainShellTabDeselected();
+                            }
                             emitTabNavigationGuard(prev, now);
                         });
 

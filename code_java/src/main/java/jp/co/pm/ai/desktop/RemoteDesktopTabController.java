@@ -1,6 +1,7 @@
 package jp.co.pm.ai.desktop;
 
 import java.util.Map;
+import java.util.function.Consumer;
 
 import javafx.application.Platform;
 import javafx.fxml.FXML;
@@ -23,6 +24,8 @@ public final class RemoteDesktopTabController {
     private DesktopShellHost shell;
     private boolean contentBuilt;
     private Runnable remoteDesktopOperatorContextRefresh;
+    private Consumer<Boolean> fetchedFilesTabActiveNotifier;
+    private boolean tabActive;
 
     @FXML
     private StackPane contentHost;
@@ -49,7 +52,11 @@ public final class RemoteDesktopTabController {
     }
 
     void onMainShellTabSelected() {
+        tabActive = true;
         if (contentBuilt) {
+            if (fetchedFilesTabActiveNotifier != null) {
+                fetchedFilesTabActiveNotifier.accept(true);
+            }
             return;
         }
         showLoadingPane();
@@ -62,6 +69,14 @@ public final class RemoteDesktopTabController {
                         "remote-desktop-tab-mount");
         preload.setDaemon(true);
         preload.start();
+    }
+
+    /** メインシェルで他タブへ切り替えたとき: 「取得データ最新ファイル」の5秒おき自動更新を止める。 */
+    void onMainShellTabDeselected() {
+        tabActive = false;
+        if (fetchedFilesTabActiveNotifier != null) {
+            fetchedFilesTabActiveNotifier.accept(false);
+        }
     }
 
     private static String preloadClasses() {
@@ -149,8 +164,12 @@ public final class RemoteDesktopTabController {
         built.root().getStyleClass().add("pm-rdp-form-tab-container");
         contentHost.getChildren().setAll(built.root());
         remoteDesktopOperatorContextRefresh = built.onSessionOperatorChanged();
+        fetchedFilesTabActiveNotifier = built.setTabActive();
         built.scheduleInitialRefresh().run();
         contentBuilt = true;
+        if (tabActive) {
+            fetchedFilesTabActiveNotifier.accept(true);
+        }
     }
 
     private void showLoadingPane() {
