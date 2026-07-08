@@ -14,6 +14,9 @@ public final class RequestFormOriginalIndexSheetMeta {
     public static final String KEY_CONTRACT_NO = "_indexSheetContractNo";
     public static final String KEY_CONTRACT_REMARKS = "_indexSheetContractRemarks";
 
+    /** 目次マージ前の依頼シート単体の投入日（原反投入日4ソース照合用）。 */
+    public static final String KEY_SHEET_INPUT_DATE = "_sheetInputDate";
+
     /** 目次 1 行分の表示用値（strip 済み、空は {@code ""}）。 */
     public record IndexSheetDisplay(
             String responseDate,

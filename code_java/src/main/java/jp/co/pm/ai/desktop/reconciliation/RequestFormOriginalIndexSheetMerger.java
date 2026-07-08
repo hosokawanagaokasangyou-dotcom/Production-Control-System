@@ -25,6 +25,12 @@ final class RequestFormOriginalIndexSheetMerger {
         rawMap.put(META_INDEX_APPLIED, "true");
         List<String> conflicts = new ArrayList<>();
 
+        // 目次値で上書きする前に依頼シート単体の投入日を保持（原反投入日4ソース照合用）。
+        String sheetInputDate = nullToEmpty(rawMap.get(KEY_INPUT_DATE)).strip();
+        if (!sheetInputDate.isEmpty()) {
+            rawMap.put(RequestFormOriginalIndexSheetMeta.KEY_SHEET_INPUT_DATE, sheetInputDate);
+        }
+
         applyField(
                 rawMap,
                 conflicts,

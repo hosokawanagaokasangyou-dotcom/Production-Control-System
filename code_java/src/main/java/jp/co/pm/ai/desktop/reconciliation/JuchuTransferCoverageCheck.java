@@ -1,6 +1,5 @@
 package jp.co.pm.ai.desktop.reconciliation;
 
-import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
@@ -275,7 +274,7 @@ public final class JuchuTransferCoverageCheck {
             return normalizeProcessContent(original).equals(normalizeProcessContent(juchu));
         }
         if (DATE_COLUMNS.contains(col)) {
-            return datesMatch(original, juchu);
+            return JuchuTransferDateMatcher.datesMatch(original, juchu);
         }
         if (NUMERIC_COLUMNS.contains(col)) {
             return Math.abs(
@@ -285,100 +284,6 @@ public final class JuchuTransferCoverageCheck {
         }
         return JuchuTransferValueNormalizer.normalizeText(original)
                 .equals(JuchuTransferValueNormalizer.normalizeText(juchu));
-    }
-
-    private static boolean datesMatch(String original, String juchu) {
-        List<String> origLines = splitDateLines(original);
-        List<String> juchuLines = splitDateLines(juchu);
-        if (origLines.isEmpty() && juchuLines.isEmpty()) {
-            return true;
-        }
-        if (origLines.isEmpty() || juchuLines.isEmpty()) {
-            return false;
-        }
-        if (origLines.size() == juchuLines.size()) {
-            for (int i = 0; i < origLines.size(); i++) {
-                if (!singleDateMatch(origLines.get(i), juchuLines.get(i))) {
-                    return false;
-                }
-            }
-            return true;
-        }
-        // 原反複数行で原本のみ M/D が複数行・受注が1行（同一日）など
-        if (juchuLines.size() == 1) {
-            String juchuDate = juchuLines.get(0);
-            return origLines.stream().allMatch(o -> singleDateMatch(o, juchuDate));
-        }
-        if (origLines.size() == 1) {
-            String origDate = origLines.get(0);
-            return juchuLines.stream().allMatch(j -> singleDateMatch(origDate, j));
-        }
-        return datesMatchSameUniqueResolvedDate(origLines, juchuLines);
-    }
-
-    /** 行数は異なるが、解決後の日付がいずれも同一なら一致。 */
-    private static boolean datesMatchSameUniqueResolvedDate(
-            List<String> origLines, List<String> juchuLines) {
-        LocalDate juchuRef =
-                juchuLines.stream()
-                        .map(JuchuTransferValueNormalizer::parseLocalDate)
-                        .filter(d -> d != null)
-                        .findFirst()
-                        .orElse(LocalDate.now());
-        LocalDate origRef =
-                origLines.stream()
-                        .map(JuchuTransferValueNormalizer::parseLocalDate)
-                        .filter(d -> d != null)
-                        .findFirst()
-                        .orElse(juchuRef);
-        List<LocalDate> origResolved = resolveDateLines(origLines, juchuRef);
-        List<LocalDate> juchuResolved = resolveDateLines(juchuLines, origRef);
-        if (origResolved.contains(null) || juchuResolved.contains(null)) {
-            return false;
-        }
-        if (origResolved.stream().distinct().count() != 1
-                || juchuResolved.stream().distinct().count() != 1) {
-            return false;
-        }
-        return origResolved.get(0).equals(juchuResolved.get(0));
-    }
-
-    private static List<LocalDate> resolveDateLines(List<String> lines, LocalDate yearReference) {
-        List<LocalDate> resolved = new ArrayList<>();
-        for (String line : lines) {
-            resolved.add(JuchuTransferValueNormalizer.parseLocalDate(line, yearReference));
-        }
-        return resolved;
-    }
-
-    private static List<String> splitDateLines(String val) {
-        if (JuchuTransferValueNormalizer.isBlank(val)) {
-            return List.of();
-        }
-        List<String> lines = new ArrayList<>();
-        for (String line : val.split("\\n", -1)) {
-            String t = line != null ? line.strip() : "";
-            if (!t.isEmpty()) {
-                lines.add(t);
-            }
-        }
-        return List.copyOf(lines);
-    }
-
-    private static boolean singleDateMatch(String original, String juchu) {
-        LocalDate juchuFull = JuchuTransferValueNormalizer.parseLocalDate(juchu);
-        LocalDate originalFull = JuchuTransferValueNormalizer.parseLocalDate(original);
-        LocalDate origResolved =
-                JuchuTransferValueNormalizer.parseLocalDate(
-                        original, juchuFull != null ? juchuFull : LocalDate.now());
-        LocalDate juchuResolved =
-                JuchuTransferValueNormalizer.parseLocalDate(
-                        juchu, originalFull != null ? originalFull : LocalDate.now());
-        if (origResolved != null && juchuResolved != null) {
-            return origResolved.equals(juchuResolved);
-        }
-        return JuchuTransferValueNormalizer.normalizeDateVal(original)
-                .equals(JuchuTransferValueNormalizer.normalizeDateVal(juchu));
     }
 
     private static boolean userValuesMatch(String original, String juchu) {

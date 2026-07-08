@@ -43,6 +43,7 @@ import jp.co.pm.ai.desktop.ui.TableViewColumnSettingsStrip;
 import jp.co.pm.ai.desktop.reconciliation.JuchuTransferCoverageCheck.ColumnCheck;
 import jp.co.pm.ai.desktop.reconciliation.JuchuHeaderAliasRegistry;
 import jp.co.pm.ai.desktop.reconciliation.KonanDailyReportLookup;
+import jp.co.pm.ai.desktop.reconciliation.RawInputDateCrossSourceCheck;
 import jp.co.pm.ai.desktop.reconciliation.RemoteDesktopLatestSourceFiles;
 import jp.co.pm.ai.desktop.reconciliation.RequestFormPipelineStatusService;
 import jp.co.pm.ai.desktop.reconciliation.RequestFormPipelineStatusService.PipelineStatusRow;
@@ -63,7 +64,9 @@ public final class RequestFormPipelineCheckTabController {
                     + " 受注入力日フィルタは既定30日（変更可）。"
                     + " 「日報」列は加工日報の完了区分を依頼単位で集約（完了/未了/―）。"
                     + " 「日報未了のみ表示」は既定オン（完了済み依頼を非表示）。"
-                    + " 下段表はアラジン計画が無い場合、加工日報の工程行を表示。";
+                    + " 下段表はアラジン計画が無い場合、加工日報の工程行を表示。"
+                    + " 「投入日一致」列は原反投入日をアラジン・受注・目次・依頼シートの4ソースで厳格照合し、"
+                    + " 4ソースすべてに値がありすべて等価なときのみ「一致」（欠落・相違は「不一致」）。";
 
     private record MainColDef(String title, String property, double defaultWidth) {}
 
@@ -73,6 +76,7 @@ public final class RequestFormPipelineCheckTabController {
         defs.add(new MainColDef("原本", "originalFile", 140));
         defs.add(new MainColDef("回答日", "indexResponseDate", 88));
         defs.add(new MainColDef("原反投入日", "indexInputDate", 88));
+        defs.add(new MainColDef("投入日一致", "rawInputDateMatchStatus", 72));
         defs.add(new MainColDef("納期", "indexDeliveryDate", 88));
         defs.add(new MainColDef("納期備考", "indexDeliveryRemarks", 120));
         defs.add(new MainColDef("目次契約NO", "indexContractNo", 120));
@@ -113,6 +117,8 @@ public final class RequestFormPipelineCheckTabController {
         private String originalContractNo;
         private String contractNoStatus;
         private String aladdinStatus;
+        /** 原反投入日4ソース照合ステータス: 一致 / 不一致 / ― */
+        private String rawInputDateMatchStatus;
         /** 加工日報の依頼単位ステータス: 完了 / 未了 / ― */
         private String dailyReportOrderStatus;
         private final List<String> planDayValues = new ArrayList<>(PLAN_DAY_COLUMNS);
@@ -252,6 +258,14 @@ public final class RequestFormPipelineCheckTabController {
             this.aladdinStatus = aladdinStatus;
         }
 
+        public String getRawInputDateMatchStatus() {
+            return rawInputDateMatchStatus;
+        }
+
+        public void setRawInputDateMatchStatus(String rawInputDateMatchStatus) {
+            this.rawInputDateMatchStatus = rawInputDateMatchStatus;
+        }
+
         public String getDailyReportOrderStatus() {
             return dailyReportOrderStatus;
         }
@@ -308,6 +322,43 @@ public final class RequestFormPipelineCheckTabController {
 
         private static String nullToEmpty(String val) {
             return val != null ? val : "";
+        }
+    }
+
+    /** 下段「原反投入日 4ソース照合」表の1行（ソース・値・状態）。 */
+    public static final class CrossSourceRow {
+        private final SimpleStringProperty source = new SimpleStringProperty();
+        private final SimpleStringProperty value = new SimpleStringProperty();
+        private final SimpleStringProperty status = new SimpleStringProperty();
+
+        CrossSourceRow(String source, String value, String status) {
+            this.source.set(source != null ? source : "");
+            this.value.set(value != null ? value : "");
+            this.status.set(status != null ? status : "");
+        }
+
+        public String getSource() {
+            return source.get();
+        }
+
+        public SimpleStringProperty sourceProperty() {
+            return source;
+        }
+
+        public String getValue() {
+            return value.get();
+        }
+
+        public SimpleStringProperty valueProperty() {
+            return value;
+        }
+
+        public String getStatus() {
+            return status.get();
+        }
+
+        public SimpleStringProperty statusProperty() {
+            return status;
         }
     }
 
@@ -462,6 +513,9 @@ public final class RequestFormPipelineCheckTabController {
     private CheckBox showDailyReportIncompleteOnlyCheck;
 
     @FXML
+    private CheckBox showRawInputMismatchOnlyCheck;
+
+    @FXML
     private Label statusLabel;
 
     @FXML
@@ -489,6 +543,9 @@ public final class RequestFormPipelineCheckTabController {
     private HBox mainColumnStripHost;
 
     @FXML
+    private TableView<CrossSourceRow> crossSourceTable;
+
+    @FXML
     private TableView<MismatchRow> mismatchTable;
 
     @FXML
@@ -505,6 +562,7 @@ public final class RequestFormPipelineCheckTabController {
     private final ObservableList<MainRow> allRows = FXCollections.observableArrayList();
     private FilteredList<MainRow> filteredRows;
     private final ObservableList<MismatchRow> mismatchRows = FXCollections.observableArrayList();
+    private final ObservableList<CrossSourceRow> crossSourceRows = FXCollections.observableArrayList();
     private final ObservableList<PlanRow> planRows = FXCollections.observableArrayList();
 
     /** 下段アラジン計画表の表示元（コピー時の依頼ヘッダ）。 */
@@ -534,9 +592,12 @@ public final class RequestFormPipelineCheckTabController {
         mainTable.setItems(filteredRows);
         mismatchTable.setItems(mismatchRows);
         mismatchTable.setPlaceholder(new Label("相違なし"));
+        crossSourceTable.setItems(crossSourceRows);
+        crossSourceTable.setPlaceholder(new Label("行を選択すると原反投入日の照合結果を表示"));
         planTable.setItems(planRows);
         VBox.setVgrow(mainTable, Priority.ALWAYS);
 
+        setupCrossSourceColumns();
         setupMismatchColumns();
         setupPlanColumns();
 
@@ -574,6 +635,11 @@ public final class RequestFormPipelineCheckTabController {
                     .selectedProperty()
                     .addListener((obs, o, n) -> applyFilter());
         }
+        if (showRawInputMismatchOnlyCheck != null) {
+            showRawInputMismatchOnlyCheck
+                    .selectedProperty()
+                    .addListener((obs, o, n) -> applyFilter());
+        }
         if (juchuInputHideDaysSpinner != null) {
             juchuInputHideDaysSpinner.setValueFactory(
                     new SpinnerValueFactory.IntegerSpinnerValueFactory(
@@ -608,6 +674,20 @@ public final class RequestFormPipelineCheckTabController {
     void bindShell(MainShellController shell) {
         this.shell = shell;
         setupMainColumnsOnce();
+    }
+
+    /** 工場切替後: 走査結果を破棄し、タブ選択時まで再走査を遅延する。 */
+    void onFactorySiteChanged(boolean lightweight) {
+        scanApplied = false;
+        lastScanWarnings = "";
+        allRows.clear();
+        mismatchRows.clear();
+        crossSourceRows.clear();
+        planRows.clear();
+        planContextRow = null;
+        if (statusLabel != null) {
+            statusLabel.setText("工場切替: タブを開くと再走査します");
+        }
     }
 
     /** メインシェルで当該タブが選択されたとき。起動後未走査なら自動更新する。 */
@@ -766,6 +846,10 @@ public final class RequestFormPipelineCheckTabController {
             } else {
                 ui.setAladdinStatus(row.aladdinPresent() ? "あり" : "なし");
             }
+            ui.setRawInputDateMatchStatus(
+                    row.rawInputDateCrossCheck() != null
+                            ? row.rawInputDateCrossCheck().status()
+                            : RawInputDateCrossSourceCheck.STATUS_NA);
             ui.setDailyReportOrderStatus(
                     dailyReportLookup.orderCompletionStatus(row.iraiNo()));
             ui.setPlanDayValues(row.planDayValues());
@@ -789,18 +873,21 @@ public final class RequestFormPipelineCheckTabController {
         }
         mainTable.getSelectionModel().clearSelection();
         mismatchRows.clear();
+        crossSourceRows.clear();
         planRows.clear();
         planContextRow = null;
     }
 
     private void showDetail(MainRow row) {
         mismatchRows.clear();
+        crossSourceRows.clear();
         planRows.clear();
         planContextRow = row;
         if (row == null || row.source() == null) {
             return;
         }
         PipelineStatusRow src = row.source();
+        populateCrossSourceRows(src.rawInputDateCrossCheck());
         if (src.coverage() != null) {
             for (ColumnCheck check : src.coverage().details()) {
                 if (!check.matched()) {
@@ -1091,6 +1178,7 @@ public final class RequestFormPipelineCheckTabController {
                     case "originalContractNo" -> row.getOriginalContractNo();
                     case "contractNoStatus" -> row.getContractNoStatus();
                     case "aladdinStatus" -> row.getAladdinStatus();
+                    case "rawInputDateMatchStatus" -> row.getRawInputDateMatchStatus();
                     case "dailyReportOrderStatus" -> row.getDailyReportOrderStatus();
                     case "planDay0" -> row.getPlanDay0();
                     case "planDay1" -> row.getPlanDay1();
@@ -1243,6 +1331,9 @@ public final class RequestFormPipelineCheckTabController {
         boolean showDailyReportIncompleteOnly =
                 showDailyReportIncompleteOnlyCheck == null
                         || showDailyReportIncompleteOnlyCheck.isSelected();
+        boolean showRawInputMismatchOnly =
+                showRawInputMismatchOnlyCheck != null
+                        && showRawInputMismatchOnlyCheck.isSelected();
 
         filteredRows.setPredicate(
                 row -> {
@@ -1269,6 +1360,11 @@ public final class RequestFormPipelineCheckTabController {
                     }
                     if (showDailyReportIncompleteOnly
                             && "完了".equals(nullToEmpty(row.getDailyReportOrderStatus()))) {
+                        return false;
+                    }
+                    if (showRawInputMismatchOnly
+                            && !RawInputDateCrossSourceCheck.STATUS_MISMATCH.equals(
+                                    nullToEmpty(row.getRawInputDateMatchStatus()))) {
                         return false;
                     }
                     if (q.isEmpty()) {
@@ -1441,6 +1537,9 @@ public final class RequestFormPipelineCheckTabController {
             column.setPrefWidth(def.defaultWidth());
             column.setReorderable(true);
             column.setUserData(def.property());
+            if ("rawInputDateMatchStatus".equals(def.property())) {
+                installRawInputMatchCellFactory(column);
+            }
             columns.add(column);
         }
         suppressColumnPersistence.set(true);
@@ -1511,6 +1610,77 @@ public final class RequestFormPipelineCheckTabController {
                                         mainTable.getColumns().size())));
     }
 
+    private void populateCrossSourceRows(RawInputDateCrossSourceCheck.CrossSourceResult result) {
+        if (result == null) {
+            return;
+        }
+        String status = result.status();
+        RawInputDateCrossSourceCheck.SourceValues v = result.values();
+        crossSourceRows.add(
+                new CrossSourceRow(
+                        RawInputDateCrossSourceCheck.Source.ALADDIN.label(), v.aladdin(), status));
+        crossSourceRows.add(
+                new CrossSourceRow(
+                        RawInputDateCrossSourceCheck.Source.JUCHU.label(), v.juchu(), status));
+        crossSourceRows.add(
+                new CrossSourceRow(
+                        RawInputDateCrossSourceCheck.Source.INDEX.label(), v.index(), status));
+        crossSourceRows.add(
+                new CrossSourceRow(
+                        RawInputDateCrossSourceCheck.Source.SHEET.label(), v.sheet(), status));
+    }
+
+    private void setupCrossSourceColumns() {
+        crossSourceTable.getColumns().setAll(
+                colCrossSource("ソース", "source", 150),
+                colCrossSource("原反投入日", "value", 160),
+                colCrossSource("照合", "status", 72));
+        crossSourceTable.setRowFactory(
+                tv ->
+                        new javafx.scene.control.TableRow<>() {
+                            @Override
+                            protected void updateItem(CrossSourceRow item, boolean empty) {
+                                super.updateItem(item, empty);
+                                if (empty || item == null) {
+                                    setStyle("");
+                                    return;
+                                }
+                                String st = item.getStatus();
+                                if (RawInputDateCrossSourceCheck.STATUS_MATCH.equals(st)) {
+                                    setStyle("-fx-background-color: #E2EFDA;");
+                                } else if (RawInputDateCrossSourceCheck.STATUS_MISMATCH.equals(st)) {
+                                    setStyle("-fx-background-color: #FCE4E4;");
+                                } else {
+                                    setStyle("");
+                                }
+                            }
+                        });
+    }
+
+    private static void installRawInputMatchCellFactory(TableColumn<MainRow, String> column) {
+        column.setCellFactory(
+                col ->
+                        new javafx.scene.control.TableCell<>() {
+                            @Override
+                            protected void updateItem(String item, boolean empty) {
+                                super.updateItem(item, empty);
+                                if (empty || item == null || item.isBlank()) {
+                                    setText("");
+                                    setStyle("");
+                                    return;
+                                }
+                                setText(item);
+                                if (RawInputDateCrossSourceCheck.STATUS_MISMATCH.equals(item)) {
+                                    setStyle("-fx-background-color: #FCE4E4; -fx-text-fill: #C00000;");
+                                } else if (RawInputDateCrossSourceCheck.STATUS_MATCH.equals(item)) {
+                                    setStyle("-fx-background-color: #E2EFDA; -fx-text-fill: #375623;");
+                                } else {
+                                    setStyle("");
+                                }
+                            }
+                        });
+    }
+
     private void setupMismatchColumns() {
         mismatchTable.getColumns().setAll(
                 colMismatch("フォーム項目", "formLabel", 220),
@@ -1530,6 +1700,14 @@ public final class RequestFormPipelineCheckTabController {
     private static TableColumn<MismatchRow, String> colMismatch(
             String title, String prop, double width) {
         TableColumn<MismatchRow, String> c = new TableColumn<>(title);
+        c.setCellValueFactory(new PropertyValueFactory<>(prop));
+        c.setPrefWidth(width);
+        return c;
+    }
+
+    private static TableColumn<CrossSourceRow, String> colCrossSource(
+            String title, String prop, double width) {
+        TableColumn<CrossSourceRow, String> c = new TableColumn<>(title);
         c.setCellValueFactory(new PropertyValueFactory<>(prop));
         c.setPrefWidth(width);
         return c;

@@ -65,7 +65,8 @@ public final class RequestFormPipelineStatusService {
             String indexDeliveryDate,
             String indexDeliveryRemarks,
             String indexContractNo,
-            String indexContractRemarks) {}
+            String indexContractRemarks,
+            RawInputDateCrossSourceCheck.CrossSourceResult rawInputDateCrossCheck) {}
 
     public record ScanResult(
             List<PipelineStatusRow> rows,
@@ -127,7 +128,8 @@ public final class RequestFormPipelineStatusService {
                             aladdinJsonAvailable,
                             shaped,
                             planDateHeaders,
-                            RequestFormOriginalIndexSheetMeta.IndexSheetDisplay.fromRaw(raw)));
+                            RequestFormOriginalIndexSheetMeta.IndexSheetDisplay.fromRaw(raw),
+                            resolveSheetInputDateRaw(raw)));
         }
         for (Map.Entry<String, Map<String, String>> entry : dbRows.entrySet()) {
             if (processedOriginalKeys.contains(entry.getKey())) {
@@ -157,7 +159,8 @@ public final class RequestFormPipelineStatusService {
                                 aladdinJsonAvailable,
                                 shaped,
                                 planDateHeaders,
-                                RequestFormOriginalIndexSheetMeta.IndexSheetDisplay.fromRaw(raw)));
+                                RequestFormOriginalIndexSheetMeta.IndexSheetDisplay.fromRaw(raw),
+                                resolveSheetInputDateRaw(raw)));
                 continue;
             }
             rows.add(
@@ -172,7 +175,8 @@ public final class RequestFormPipelineStatusService {
                             aladdinJsonAvailable,
                             shaped,
                             planDateHeaders,
-                            RequestFormOriginalIndexSheetMeta.IndexSheetDisplay.empty()));
+                            RequestFormOriginalIndexSheetMeta.IndexSheetDisplay.empty(),
+                            ""));
         }
         rows.sort(
                 (a, b) -> {
@@ -201,7 +205,8 @@ public final class RequestFormPipelineStatusService {
             boolean aladdinJsonAvailable,
             AladdinShapedPlanQtyLookup.ShapedTable shaped,
             List<String> planDateHeaders,
-            RequestFormOriginalIndexSheetMeta.IndexSheetDisplay indexSheet) {
+            RequestFormOriginalIndexSheetMeta.IndexSheetDisplay indexSheet,
+            String sheetInputDateRaw) {
         JuchuTransferCoverageCheck.CoverageResult coverage =
                 JuchuTransferCoverageCheck.compare(originalDb, juchuDb, reg, juchuPath);
         String originalContractNoDisplay =
@@ -237,6 +242,19 @@ public final class RequestFormPipelineStatusService {
                 indexSheet != null
                         ? indexSheet
                         : RequestFormOriginalIndexSheetMeta.IndexSheetDisplay.empty();
+        String aladdinRawInputDate =
+                aladdinJsonAvailable
+                        ? AladdinShapedPlanQtyLookup.resolveRawInputDateDisplayForTaskId(
+                                shaped.headers(), shaped.rows(), iraiNo)
+                        : "";
+        String juchuRawInputDate = formatJuchuDateFieldDisplay(juchuDb, Col.TONYU_BI.dbKey());
+        RawInputDateCrossSourceCheck.CrossSourceResult rawInputDateCrossCheck =
+                RawInputDateCrossSourceCheck.evaluate(
+                        aladdinRawInputDate,
+                        juchuRawInputDate,
+                        idx.inputDate(),
+                        sheetInputDateRaw,
+                        aladdinJsonAvailable);
         return new PipelineStatusRow(
                 iraiNo,
                 originalFileName,
@@ -263,7 +281,21 @@ public final class RequestFormPipelineStatusService {
                 idx.deliveryDate(),
                 idx.deliveryRemarks(),
                 idx.contractNo(),
-                idx.contractRemarks());
+                idx.contractRemarks(),
+                rawInputDateCrossCheck);
+    }
+
+    /** 目次マージ前の依頼シート投入日。メタ未設定時は原本 rawMap の「投入日」を使う。 */
+    private static String resolveSheetInputDateRaw(Map<String, String> raw) {
+        if (raw == null) {
+            return "";
+        }
+        String meta = raw.get(RequestFormOriginalIndexSheetMeta.KEY_SHEET_INPUT_DATE);
+        if (!JuchuTransferValueNormalizer.isBlank(meta)) {
+            return meta.strip();
+        }
+        String direct = raw.get("投入日");
+        return direct != null ? direct.strip() : "";
     }
 
     /** 原反（材料）投入日の表示。受注「投入日」優先、なければ原本「投入日」。 */

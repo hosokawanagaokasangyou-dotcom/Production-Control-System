@@ -39,6 +39,8 @@
                   text="調整納期が当日以降のみ表示" selected="true"/>
         <CheckBox fx:id="showDailyReportIncompleteOnlyCheck" mnemonicParsing="false"
                   text="日報未了のみ表示" selected="true"/>
+        <CheckBox fx:id="showRawInputMismatchOnlyCheck" mnemonicParsing="false"
+                  text="原反投入日不一致のみ表示"/>
     </HBox>
     <Label fx:id="hintLabel" wrapText="true"/>
     <Label fx:id="dailyReportSourceLabel" wrapText="true"
@@ -59,6 +61,8 @@
     </VBox>
     <SplitPane dividerPositions="0.5" minHeight="160.0" prefHeight="200.0" VBox.vgrow="ALWAYS">
         <VBox spacing="4.0">
+            <Label text="原反投入日 4ソース照合（アラジン／受注／目次／依頼シート）"/>
+            <TableView fx:id="crossSourceTable" minHeight="120.0"/>
             <Label text="未一致・未転記項目"/>
             <TableView fx:id="mismatchTable" VBox.vgrow="ALWAYS"/>
         </VBox>

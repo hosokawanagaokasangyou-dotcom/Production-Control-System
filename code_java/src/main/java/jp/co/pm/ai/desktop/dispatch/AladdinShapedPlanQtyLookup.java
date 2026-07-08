@@ -30,6 +30,7 @@ public final class AladdinShapedPlanQtyLookup {
     private static final String COL_TID = "依頼NO";
     private static final String[] COL_TID_ALIASES = {"依頼NO", "依頼No", "依頼Ｎｏ", "依頼ＮＯ"};
     private static final String COL_PROCESS = "工程名";
+    private static final String[] COL_RAW_INPUT_DATE_ALIASES = {"原反投入日", "原板投入日"};
 
     private AladdinShapedPlanQtyLookup() {}
 
@@ -432,6 +433,34 @@ public final class AladdinShapedPlanQtyLookup {
                     return a.processName().compareTo(b.processName());
                 });
         return List.copyOf(out);
+    }
+
+    /**
+     * shaped 表から依頼NO 一致行の {@code 原反投入日}（別名 {@code 原板投入日}）を収集し、
+     * 非空のユニーク値を改行結合して返す。列・一致行が無いときは空文字。
+     */
+    public static String resolveRawInputDateDisplayForTaskId(
+            List<String> headers, List<List<String>> rows, String taskId) {
+        if (headers == null || rows == null || taskId == null || taskId.isBlank()) {
+            return "";
+        }
+        int tidIdx = colIdx(headers, COL_TID_ALIASES);
+        int dateIdx = colIdx(headers, COL_RAW_INPUT_DATE_ALIASES);
+        if (tidIdx < 0 || dateIdx < 0) {
+            return "";
+        }
+        String tidKey = normalizeTaskIdKey(taskId);
+        LinkedHashSet<String> values = new LinkedHashSet<>();
+        for (List<String> row : rows) {
+            if (!tidKey.equals(normalizeTaskIdKey(cellAt(row, tidIdx)))) {
+                continue;
+            }
+            String v = cellAt(row, dateIdx).strip();
+            if (!v.isEmpty()) {
+                values.add(v);
+            }
+        }
+        return String.join("\n", values);
     }
 
     /** {@code yyyy/MM/dd} または {@code yyyy-MM-dd} 形式の日付列キーを {@link LocalDate} に変換。 */

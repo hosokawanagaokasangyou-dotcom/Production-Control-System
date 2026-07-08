@@ -31,6 +31,16 @@ class RequestFormPipelineCheckTabControllerTest {
     }
 
     @Test
+    void formatMainTableTsv_includesRawInputDateMatchColumn() {
+        MainRow row = sampleMainRow();
+        row.setRawInputDateMatchStatus("不一致");
+
+        String tsv = RequestFormPipelineCheckTabController.formatMainTableTsv(List.of(row));
+        assertTrue(tsv.contains("投入日一致"));
+        assertTrue(tsv.contains("不一致"));
+    }
+
+    @Test
     void formatMainTableCsv_quotesCommaInCell() {
         MainRow row = sampleMainRow();
         row.setIndexDeliveryRemarks("A,B");
