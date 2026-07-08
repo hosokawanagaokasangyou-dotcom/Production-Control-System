@@ -210,13 +210,13 @@ public final class DispatchAladdinEntryWorkbookExporter {
         applyPrintSetup(sh);
     }
 
-    /** ページ設定: 用紙 A3・横向き・1 ページに収める・余白は「狭い」。 */
+    /** ページ設定: 用紙 A4・横向き・横 2 ページ・縦は自動・印刷タイトルは 1 行目と A〜I 列・余白は「狭い」。 */
     private static void applyPrintSetup(Sheet sh) {
         PrintSetup ps = sh.getPrintSetup();
-        ps.setPaperSize(PrintSetup.A3_PAPERSIZE);
+        ps.setPaperSize(PrintSetup.A4_PAPERSIZE);
         ps.setLandscape(true);
-        ps.setFitWidth((short) 1);
-        ps.setFitHeight((short) 1);
+        ps.setFitWidth((short) 2);
+        ps.setFitHeight((short) 0);
         sh.setFitToPage(true);
         sh.setAutobreaks(true);
         // Excel の「狭い」余白プリセット相当（インチ）。
@@ -226,6 +226,9 @@ public final class DispatchAladdinEntryWorkbookExporter {
         sh.setMargin(Sheet.BottomMargin, 0.75);
         sh.setMargin(Sheet.HeaderMargin, 0.3);
         sh.setMargin(Sheet.FooterMargin, 0.3);
+        // 印刷タイトル: 1 行目（タイトル行）・A〜I 列（タイトル列）。
+        sh.setRepeatingRows(new CellRangeAddress(0, 0, -1, -1));
+        sh.setRepeatingColumns(new CellRangeAddress(-1, -1, 0, FIXED_COLUMN_COUNT - 1));
     }
 
     private static void writeMachineSheet(
