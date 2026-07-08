@@ -241,7 +241,7 @@ public final class DispatchAladdinEntryWorkbookExporter {
         LocalDate today = dates.isEmpty() ? LocalDate.now() : dates.getFirst();
 
         Row header = sh.createRow(0);
-        header.setHeightInPoints(30f);
+        header.setHeightInPoints(33f);
         for (int c = 0; c < FIXED_COLUMN_COUNT; c++) {
             Cell cell = header.createCell(c);
             cell.setCellValue(FIXED_HEADERS[c]);
@@ -257,7 +257,7 @@ public final class DispatchAladdinEntryWorkbookExporter {
         int r = 1;
         for (DispatchAladdinEntrySheetBuilder.EntryRow entry : machineSheet.rows()) {
             Row row = sh.createRow(r++);
-            row.setHeightInPoints(30f);
+            row.setHeightInPoints(33f);
             writeFixedCell(row, 0, entry.taskId(), styles.data());
             writeFixedCell(row, 1, entry.contractNo(), styles.data());
             writeFixedCell(row, 2, entry.processName(), styles.data());
