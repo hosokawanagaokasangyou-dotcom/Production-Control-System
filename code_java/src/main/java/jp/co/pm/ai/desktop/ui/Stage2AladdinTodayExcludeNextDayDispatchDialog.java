@@ -19,8 +19,9 @@ public final class Stage2AladdinTodayExcludeNextDayDispatchDialog {
                             + " 実加工数>0 の加工途中行は、ラジオで「①」または「③」を選ぶと別ダイアログで設定します。"
                             + " 0 の行は除外しません。",
                     "配台計画手動修正タブと同様、配台ロール単位 (m) の整数倍で指定します。"
-                            + " 初期値はアラジン当日量以内の最大ロール本数です。"
-                            + " 除外量は 0 以上・残量およびアラジン当日量に収まるロール整数倍のみ。OK で未確定の入力も反映します。",
+                            + " 初期値はアラジン当日量以内の最大ロール本数です（アラジンが当日計画した分を目安に設定）。"
+                            + " 除外量は 0 以上・残量に収まるロール整数倍まで指定できます（アラジン当日量を超えて除外することも可能です）。"
+                            + " OK で未確定の入力も反映します。",
                     "アラジン当日",
                     "翌日除外(ロール)",
                     "-fx-background-color: #E3F2FD;",
@@ -102,13 +103,7 @@ public final class Stage2AladdinTodayExcludeNextDayDispatchDialog {
 
         @Override
         public int maxRolls() {
-            return Stage2InProgressNextDayRollInput.maxRollsForCap(
-                    aladdinTodayM, remainingM, unitM());
-        }
-
-        @Override
-        public double effectiveCapM() {
-            return Math.min(Math.max(0.0, aladdinTodayM), Math.max(0.0, remainingM));
+            return Stage2InProgressNextDayRollInput.maxRolls(remainingM, unitM());
         }
 
         @Override
@@ -136,18 +131,13 @@ public final class Stage2AladdinTodayExcludeNextDayDispatchDialog {
                                             row.excludeRollCount.get())
                                     .orElse(0);
                     double exclude =
-                            Stage2InProgressNextDayRollInput.resolveMetersForCap(
-                                            rolls, row.aladdinTodayM(), row.remainingM(), row.unitM())
+                            Stage2InProgressNextDayRollInput.resolveNextDayMeters(
+                                            rolls, row.remainingM(), row.unitM())
                                     .orElse(0.0);
                     return row.toEntry(Math.max(0.0, exclude));
                 },
-                r -> {
-                    Row row = (Row) r;
-                    return Stage2InProgressNextDayRollInput.validateExcludeRollInput(
-                            r.rollCountProperty().get(),
-                            row.aladdinTodayM(),
-                            r.remainingM(),
-                            r.unitInfo());
-                });
+                r ->
+                        Stage2InProgressNextDayRollInput.validateExcludeRollInput(
+                                r.rollCountProperty().get(), r.remainingM(), r.unitInfo()));
     }
 }

@@ -76,13 +76,6 @@ public final class Stage2InProgressNextDayRollInput {
         return maxRollsForCap(capM, remainingM, unitM);
     }
 
-    /** 上限 capM・残量 remainingM の両方を満たす m 換算。 */
-    public static Optional<Double> resolveMetersForCap(
-            int rolls, double capM, double remainingM, double unitM) {
-        double effectiveCap = Math.min(Math.max(0.0, capM), Math.max(0.0, remainingM));
-        return resolveNextDayMeters(rolls, effectiveCap, unitM);
-    }
-
     /**
      * ロール本数から翌日配台 m を解決する。
      *
@@ -155,13 +148,11 @@ public final class Stage2InProgressNextDayRollInput {
         return Optional.empty();
     }
 
-    /** アラジン翌日除外ダイアログ用。上限は min(残量, アラジン当日m)。 */
+    /** アラジン翌日除外ダイアログ用。上限は残量のみ（アラジン当日量には上限を設けない）。 */
     public static Optional<String> validateExcludeRollInput(
             String rollCountRaw,
-            double aladdinTodayM,
             double remainingM,
             Stage2PlanRowDispatchQtyMetrics.DispatchSimulatorUnitM unitInfo) {
-        double capM = Math.min(Math.max(0.0, aladdinTodayM), Math.max(0.0, remainingM));
         Optional<Integer> rollsOpt = parseNonNegativeRollCount(rollCountRaw);
         if (rollsOpt.isEmpty()) {
             return Optional.of("翌日除外 (ロール) に 0 以上の整数を入力してください。");
@@ -175,19 +166,18 @@ public final class Stage2InProgressNextDayRollInput {
             return Optional.of(
                     "配台ロール単位 (m) を決定できません。配台計画_タスク入力の行または使用原反テーブルを確認してください。");
         }
-        int maxRolls = maxRollsForCap(aladdinTodayM, remainingM, unitM);
+        int maxRolls = maxRolls(remainingM, unitM);
         if (rolls > maxRolls) {
             return Optional.of(
                     String.format(
                             java.util.Locale.ROOT,
-                            "最大 %d ロールまでです（アラジン当日 %s m、残量 %s m、1 ロール = %s m）。",
+                            "最大 %d ロールまでです（残量 %s m、1 ロール = %s m）。",
                             maxRolls,
-                            formatPlainM(capM),
                             formatPlainM(remainingM),
                             ResultDispatchNormalizer.formatQty(unitM)));
         }
-        if (resolveMetersForCap(rolls, aladdinTodayM, remainingM, unitM).isEmpty()) {
-            return Optional.of("翌日除外量が上限を超えています。");
+        if (resolveNextDayMeters(rolls, remainingM, unitM).isEmpty()) {
+            return Optional.of("翌日除外量が残量を超えています。");
         }
         return Optional.empty();
     }

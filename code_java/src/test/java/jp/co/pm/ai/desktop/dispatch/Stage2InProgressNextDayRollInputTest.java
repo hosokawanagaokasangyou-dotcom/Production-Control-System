@@ -92,7 +92,7 @@ class Stage2InProgressNextDayRollInputTest {
     }
 
     @Test
-    void validateExcludeRollInputRejectsExcessRolls() {
+    void validateExcludeRollInputCapsOnlyByRemainingNotAladdinToday() {
         Map<String, String> rowMap =
                 Map.of(
                         "換算数量", "8000",
@@ -103,14 +103,34 @@ class Stage2InProgressNextDayRollInputTest {
         Stage2PlanRowDispatchQtyMetrics.DispatchSimulatorUnitM unitInfo =
                 Stage2PlanRowDispatchQtyMetrics.dispatchSimulatorUnitMFromPlanRow(
                         rowMap, Stage2RollUnitLengthTables.empty());
-        double aladdinTodayM = 6090.0;
+        // アラジン当日量(6090m=2ロール)を超える3ロール(9135m)は残量(8000m)超過のため拒否。
         assertTrue(
-                Stage2InProgressNextDayRollInput.validateExcludeRollInput(
-                                "3", aladdinTodayM, 8000, unitInfo)
+                Stage2InProgressNextDayRollInput.validateExcludeRollInput("3", 8000, unitInfo)
                         .isPresent());
+        // 残量(8000m)に収まる2ロール(6090m)はアラジン当日量と一致するため許可（従来どおり）。
         assertTrue(
-                Stage2InProgressNextDayRollInput.validateExcludeRollInput(
-                                "2", aladdinTodayM, 8000, unitInfo)
+                Stage2InProgressNextDayRollInput.validateExcludeRollInput("2", 8000, unitInfo)
                         .isEmpty());
+    }
+
+    @Test
+    void validateExcludeRollInputAllowsExcludingFullRemainingBeyondAladdinToday() {
+        Map<String, String> rowMap =
+                Map.of(
+                        "換算数量", "10000",
+                        "実加工数", "0",
+                        "未加工", "10000",
+                        "配台使用残数量", "10000",
+                        "(原反)ロール単位長さ", "200");
+        Stage2PlanRowDispatchQtyMetrics.DispatchSimulatorUnitM unitInfo =
+                Stage2PlanRowDispatchQtyMetrics.dispatchSimulatorUnitMFromPlanRow(
+                        rowMap, Stage2RollUnitLengthTables.empty());
+        // アラジン当日量は5000m(25ロール)だが、上限は残量(10000m=50ロール)まで。
+        assertTrue(
+                Stage2InProgressNextDayRollInput.validateExcludeRollInput("50", 10000, unitInfo)
+                        .isEmpty());
+        assertTrue(
+                Stage2InProgressNextDayRollInput.validateExcludeRollInput("51", 10000, unitInfo)
+                        .isPresent());
     }
 }
