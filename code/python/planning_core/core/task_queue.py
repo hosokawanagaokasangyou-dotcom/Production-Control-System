@@ -279,7 +279,9 @@ def build_task_queue_from_planning_df(
 
         # 開始日ルール:
         # 1) 原反投入日があるときは「原反投入日 12:45 以降」を開始可能日時の下限にする。
-        #    （日付下限: max(run_date, raw_input_date)」同日時間下限: DISPATCHABLE_FROM_TIME=12:45）
+        #    （日付下限: max(run_date, raw_input_date)」同日時間下限: DISPATCHABLE_FROM_TIME=12:45。
+        #    湖南工場かつ在庫場所「湖南」は DISPATCHABLE_FROM_TIME_KONAN_STOCK=9:30、
+        #    dispatchable_from_time_for() 参照）
         # 2) 特別指定（セル/AI）の開始日があっても原反投入日より前倒しにはしない（date 下限を維持）
         # 3) 原反投入日が無いときは run_date
         if raw_input_date:
@@ -301,8 +303,9 @@ def build_task_queue_from_planning_df(
                     effective_start_date,
                 )
 
+        _stock_location_for_dispatch = _planning_df_cell_scalar(row, TASK_COL_STOCK_LOCATION)
         same_day_raw_start_limit = (
-            DISPATCHABLE_FROM_TIME
+            dispatchable_from_time_for(_stock_location_for_dispatch)
             if (raw_input_date and effective_start_date == raw_input_date)
             else None
         )
@@ -374,6 +377,7 @@ def build_task_queue_from_planning_df(
                 "due_source_rank": due_source_rank,
                 "due_urgent": due_urgent,
                 "raw_input_date": raw_input_date,
+                "stock_location": _stock_location_for_dispatch,
                 "dispatchable_datetime": dispatchable_dt,
                 "parent_task_id": parent_task_id,
                 "rule_task_id": parent_task_id,

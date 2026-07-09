@@ -5869,6 +5869,8 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
             } else if (AppPaths.KEY_PM_AI_RPA_LAUNCHER_OPERATOR_USERS_STORE_DIR.equals(name)
                     && site == FactorySite.KONAN) {
                 r.setValue(AppPaths.DEFAULT_KONAN_SHARED_DATA_DIR_M);
+            } else if (AppPaths.KEY_PM_AI_FACTORY_SITE.equals(name)) {
+                r.setValue(site.name());
             }
         }
         GlobalInitSettingTarget.save(site);

@@ -304,6 +304,33 @@ PLAN_COL_RAW_INPUT_DATE_OVERRIDE = "原反投入日_上書き"
 PLAN_COL_DISPATCHABLE_DATETIME = "配台可能日時"
 PLAN_COL_DISPATCHABLE_DATETIME_OVERRIDE = "配台可能日時_上書き"
 DISPATCHABLE_FROM_TIME = time(12, 45)
+def _parse_hhmm_env_or_default(name: str, default_hhmm: str) -> time:
+    """``HH:MM`` 形式の環境変数を time へ。未設定・不正時は default_hhmm を使う。"""
+    raw = (os.environ.get(name) or default_hhmm).strip()
+    for candidate in (raw, default_hhmm):
+        try:
+            return datetime.strptime(candidate, "%H:%M").time()
+        except (TypeError, ValueError):
+            continue
+    return time(0, 0)
+DISPATCHABLE_FROM_TIME_KONAN_STOCK = _parse_hhmm_env_or_default(
+    "DISPATCHABLE_FROM_TIME_KONAN_STOCK", "09:30"
+)
+def _current_factory_is_konan() -> bool:
+    """選択中の利用工場が湖南工場か（``PM_AI_FACTORY_SITE``。未設定時は KONAN 扱い）。"""
+    v = (os.environ.get("PM_AI_FACTORY_SITE") or "KONAN").strip().upper()
+    return v == "KONAN"
+def _stock_location_is_konan(value) -> bool:
+    """受注ファイル「在庫場所」の値が湖南を指すか（「湖南」を含む値を対象）。"""
+    s = str(value or "").strip()
+    return "湖南" in s
+def dispatchable_from_time_for(stock_location=None) -> time:
+    """原反投入日同日の配台開始下限。湖南工場かつ在庫場所「湖南」のタスクのみ
+    ``DISPATCHABLE_FROM_TIME_KONAN_STOCK``（既定9:30）を使い、他は既定の
+    ``DISPATCHABLE_FROM_TIME``（12:45）を使う。"""
+    if _current_factory_is_konan() and _stock_location_is_konan(stock_location):
+        return DISPATCHABLE_FROM_TIME_KONAN_STOCK
+    return DISPATCHABLE_FROM_TIME
 PLAN_COL_PARENT_TASK_ID = "元依頼NO"
 PLAN_COL_BRANCH_SEQ = "配台枝番"
 PLAN_COL_PREFERRED_OP = "担当OP_指定"

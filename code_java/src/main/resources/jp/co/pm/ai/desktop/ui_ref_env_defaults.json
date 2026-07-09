@@ -438,5 +438,13 @@
     "key" : "PM_AI_RDP_EMBED_STARTUP_IN_PROFILE",
     "value" : "",
     "description" : "1 で .rdp へ alternate shell 書込。既定 off。"
+  }, {
+    "key" : "PM_AI_FACTORY_SITE",
+    "value" : "KONAN",
+    "description" : "現在選択中の利用工場（KONAN / KOKUBU）。工場切替コンボ（実行タブ）に追従して自動更新。C# ランチャーの資格情報選択、および段階1の湖南工場限定ロジック（DISPATCHABLE_FROM_TIME_KONAN_STOCK 等）の判定に使用。未設定時は KONAN。"
+  }, {
+    "key" : "DISPATCHABLE_FROM_TIME_KONAN_STOCK",
+    "value" : "09:30",
+    "description" : "湖南工場（PM_AI_FACTORY_SITE=KONAN）かつ受注ファイル「在庫場所」列に「湖南」を含むタスクのみ: 原反投入日と同日の配台開始下限（HH:MM）。既定 09:30。他タスクは従来通り DISPATCHABLE_FROM_TIME(12:45) を使用。"
   } ]
 }

@@ -269,7 +269,9 @@ def run_stage1_extract():
             rec[PLAN_COL_PROCESS_FACTOR] = f"{machine}+"
         _raw_for_dispatch = parse_optional_date(rec.get(TASK_COL_RAW_INPUT_DATE))
         rec[PLAN_COL_DISPATCHABLE_DATETIME] = format_dispatchable_datetime_cell(
-            compute_dispatchable_datetime(_raw_for_dispatch)
+            compute_dispatchable_datetime(
+                _raw_for_dispatch, stock_location=rec.get(TASK_COL_STOCK_LOCATION)
+            )
         )
         rec[PLAN_COL_PREFERRED_OP] = ""
         rec[PLAN_COL_SPECIAL_REMARK] = ""

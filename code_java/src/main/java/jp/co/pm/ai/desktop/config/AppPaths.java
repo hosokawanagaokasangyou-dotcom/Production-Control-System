@@ -78,6 +78,13 @@ public final class AppPaths {
      */
     public static final String KEY_PM_AI_OPERATOR_USER = "PM_AI_OPERATOR_USER";
 
+    /**
+     * 現在選択中の利用工場（{@code KONAN} / {@code KOKUBU}）。工場切替コンボの選択に追従して
+     * {@code MainShellController#applyFactorySitePortableAndNetworkDefaults} が更新する。子プロセス env に載せ、
+     * Python 側（{@code planning_core.core.columns}）が湖南工場限定ロジックの判定に使う。未設定時は {@code KONAN} 扱い。
+     */
+    public static final String KEY_PM_AI_FACTORY_SITE = "PM_AI_FACTORY_SITE";
+
     public static final String KEY_PM_AI_TASK_INPUT_SOURCE_DIR = "PM_AI_TASK_INPUT_SOURCE_DIR";
 
     /** Folder for machining actual-detail Excel exports (PQ plan/02 {@code Folder.Files}). */

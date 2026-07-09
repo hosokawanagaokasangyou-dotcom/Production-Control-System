@@ -256,7 +256,12 @@ def _trial_order_flow_day_start_floor(
         and rid == current_date
         and not _has_disp_col
     ):
-        floor = max(floor, datetime.combine(current_date, DISPATCHABLE_FROM_TIME))
+        floor = max(
+            floor,
+            datetime.combine(
+                current_date, dispatchable_from_time_for(task.get("stock_location"))
+            ),
+        )
     sdl = task.get("same_day_raw_start_limit")
     s_req = task.get("start_date_req")
     if (

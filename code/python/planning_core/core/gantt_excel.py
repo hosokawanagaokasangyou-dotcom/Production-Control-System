@@ -1463,18 +1463,21 @@ def parse_optional_datetime(val):
         return pd.to_datetime(val).to_pydatetime()
     except Exception:
         return None
-def compute_dispatchable_datetime(raw_input_date, run_date=None):
+def compute_dispatchable_datetime(raw_input_date, run_date=None, stock_location=None):
     """原反投入日（上書き優先で解決済みの date）から配台可能日時を算出。
 
     日付 = max(run_date, raw_input_date)（run_date 指定時のみ）、時刻 = DISPATCHABLE_FROM_TIME。
     raw_input_date が None のときは None（原反投入日が無い行は配台可能日時を持たない）。
+
+    湖南工場（PM_AI_FACTORY_SITE=KONAN）かつ ``stock_location`` が「湖南」を含むときは、
+    時刻に DISPATCHABLE_FROM_TIME_KONAN_STOCK（既定9:30）を使う。
     """
     if raw_input_date is None:
         return None
     base_date = raw_input_date
     if run_date is not None and run_date > base_date:
         base_date = run_date
-    return datetime.combine(base_date, DISPATCHABLE_FROM_TIME)
+    return datetime.combine(base_date, dispatchable_from_time_for(stock_location))
 def format_dispatchable_datetime_cell(dt) -> str:
     """配台可能日時セルの出力文字列（YYYY/MM/DD HH:MM）。None は空文字。"""
     if dt is None:
@@ -1506,7 +1509,8 @@ def resolve_dispatchable_datetime_from_plan_row(
             base_d = max(run_date, raw) if run_date is not None else raw
         return datetime.combine(base_d, regular_shift_start)
     raw = parse_optional_date(_planning_df_cell_scalar(row, TASK_COL_RAW_INPUT_DATE))
-    return compute_dispatchable_datetime(raw, run_date=run_date)
+    stock_location = _planning_df_cell_scalar(row, TASK_COL_STOCK_LOCATION)
+    return compute_dispatchable_datetime(raw, run_date=run_date, stock_location=stock_location)
 def stage3_regular_shift_start_time() -> time:
     """段階3: master メイン A15（定常開始）。読めないときは ``DEFAULT_START_TIME``。"""
     try:
