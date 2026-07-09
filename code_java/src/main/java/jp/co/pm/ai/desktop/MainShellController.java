@@ -6705,6 +6705,53 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         }
     }
 
+    /**
+     * 配台計画_タスク入力タブの「段階2 キャッシュクリア」ボタン: 確認ダイアログ後、段階2〜3.2 の成果物（結果_配台表・
+     * 段階2/2.1 計画・人員ブック・翌日配台キャッシュ等）を削除する。入力1表本体は維持する。
+     */
+    public void confirmAndClearStage2Caches() {
+        if (blockIfPipelineRunLocked("段階2 キャッシュクリア")) {
+            showWarningDialog("段階2 キャッシュクリア", "他の処理が実行中のため、完了後に実行してください。");
+            return;
+        }
+        Alert alert = new Alert(AlertType.CONFIRMATION);
+        initDialogOwnerIfSceneReady(alert);
+        applyAlertStylesheetsFromOwner(alert);
+        alert.setTitle("段階2 キャッシュクリア");
+        alert.setHeaderText(null);
+        alert.setContentText(
+                "段階2〜3.2 の成果物（結果_配台表・段階2/2.1 の計画・人員ブック・翌日配台キャッシュ等）を削除し、"
+                        + "入力3表シートの行を空にします。配台計画_タスク入力（入力1表）は維持されます。"
+                        + "\n\n続行しますか？");
+        Optional<ButtonType> ans = alert.showAndWait();
+        if (ans.isEmpty() || ans.get() != ButtonType.OK) {
+            return;
+        }
+        Map<String, String> ui = collectUiEnv();
+        PipelineDownstreamResultsClearer.ClearResult cleared =
+                PipelineDownstreamResultsClearer.clearStage2ThroughStage32(ui);
+        for (String line : cleared.detailLines()) {
+            appendLog(line);
+        }
+        if (cleared.anyFailed()) {
+            appendLog("[stage2-cache-clear] 段階2〜3.2 成果物の一部を削除できませんでした。");
+        } else {
+            appendLog("[stage2-cache-clear] 段階2 キャッシュをクリアしました。");
+        }
+        pendingStage21OvertimeJsonPath = null;
+        pendingStage31OvertimeJsonPath = null;
+        pendingStage2InProgressNextDayJsonPath = null;
+        pendingStage2AladdinTodayExcludeJsonPath = null;
+        syncUiAfterDownstreamPipelineResultsCleared();
+        if (cleared.anyFailed()) {
+            showWarningDialog(
+                    "段階2 キャッシュクリア",
+                    "一部のファイルを削除できませんでした。詳細はログを確認してください。");
+        } else {
+            showInformationDialog("段階2 キャッシュクリア", "段階2 キャッシュをクリアしました。");
+        }
+    }
+
     /** 段階1開始時: 段階2〜3.2 成果物削除後に関連タブの表示を初期化する。 */
     private void syncUiAfterDownstreamPipelineResultsCleared() {
         if (dispatchInteractiveTabController != null) {

@@ -133,6 +133,9 @@ public final class PlanInputTabController {
     @FXML
     private Button stage21RunButton;
 
+    @FXML
+    private Button stage2ClearCacheButton;
+
     private static final String STAGE2_RUN_BUTTON_TEXT_DEFAULT = "段階2 実行";
 
     private static final String STAGE2_RUN_BUTTON_TEXT_SUMMARY_LOCKED =
@@ -439,6 +442,9 @@ public final class PlanInputTabController {
         }
         if (stage21RunButton != null) {
             stage21RunButton.setDisable(disable);
+        }
+        if (stage2ClearCacheButton != null) {
+            stage2ClearCacheButton.setDisable(stage2RunPipelineBusy);
         }
         if (stage2RunPipelineBusy) {
             if (stage2RunButton != null) {
@@ -918,6 +924,13 @@ public final class PlanInputTabController {
     private void onStage21RunButtonAction() {
         if (shell != null) {
             shell.launchStage21OvertimeSimulationWizard();
+        }
+    }
+
+    @FXML
+    private void onStage2ClearCacheButtonAction() {
+        if (shell != null) {
+            shell.confirmAndClearStage2Caches();
         }
     }
 
