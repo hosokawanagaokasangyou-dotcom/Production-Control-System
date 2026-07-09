@@ -66,6 +66,9 @@ public final class DispatchAladdinEntryWorkbookExporter {
 
     private static final String EMPTY_SHEET_NAME = "データなし";
 
+    /** 各シートの表示ズーム（%）。 */
+    private static final int SHEET_VIEW_ZOOM_PERCENT = 75;
+
     /** 日付セル上段（現アラ計）のフォントサイズ（pt）。 */
     private static final short ALADDIN_LINE_FONT_SIZE_PT = 9;
 
@@ -210,7 +213,7 @@ public final class DispatchAladdinEntryWorkbookExporter {
         applyPrintSetup(sh);
     }
 
-    /** ページ設定: 用紙 A4・横向き・横 2 ページ・縦は自動・印刷タイトルは 1 行目と A〜I 列・余白は「狭い」。 */
+    /** ページ設定: 用紙 A4・横向き・横 2 ページ・縦は自動・印刷タイトルは 1 行目と A〜I 列・余白は「狭い」・表示ズーム 75%。 */
     private static void applyPrintSetup(Sheet sh) {
         PrintSetup ps = sh.getPrintSetup();
         ps.setPaperSize(PrintSetup.A4_PAPERSIZE);
@@ -219,6 +222,7 @@ public final class DispatchAladdinEntryWorkbookExporter {
         ps.setFitHeight((short) 0);
         sh.setFitToPage(true);
         sh.setAutobreaks(true);
+        sh.setZoom(SHEET_VIEW_ZOOM_PERCENT);
         // Excel の「狭い」余白プリセット相当（インチ）。
         sh.setMargin(Sheet.LeftMargin, 0.25);
         sh.setMargin(Sheet.RightMargin, 0.25);
