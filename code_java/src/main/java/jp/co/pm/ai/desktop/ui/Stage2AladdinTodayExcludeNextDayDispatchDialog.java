@@ -107,6 +107,11 @@ public final class Stage2AladdinTodayExcludeNextDayDispatchDialog {
         }
 
         @Override
+        public double effectiveCapM() {
+            return Math.min(Math.max(0.0, aladdinTodayM), Math.max(0.0, remainingM));
+        }
+
+        @Override
         public javafx.beans.property.StringProperty rollCountProperty() {
             return excludeRollCount;
         }

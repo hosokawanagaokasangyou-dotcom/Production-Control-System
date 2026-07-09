@@ -70,6 +70,16 @@ final class Stage2NextDayRollDispatchDialogSupport {
 
         int maxRolls();
 
+        /**
+         * 上限本数 {@link #maxRolls()} に対応する m 換算の上限（既定は残量そのもの）。
+         *
+         * <p>アラジン除外ダイアログのように「残量」と「上限」が異なる実装は、この値と
+         * {@link #maxRolls()} を整合させて上書きする（{@code rowDetail} の表示とエラー文言の不一致を防ぐ）。
+         */
+        default double effectiveCapM() {
+            return remainingM();
+        }
+
         StringProperty rollCountProperty();
     }
 
@@ -347,7 +357,7 @@ final class Stage2NextDayRollDispatchDialogSupport {
         String unitLine =
                 row.unitM() > 1e-9
                         ? DispatchInteractiveRollUnitSupport.rollUnitDialogHeader(
-                                row.remainingM(), row.unitInfo(), row.taskId() + " / " + row.machineName())
+                                row.effectiveCapM(), row.unitInfo(), row.taskId() + " / " + row.machineName())
                         : "依頼NO "
                                 + row.taskId()
                                 + " / "
