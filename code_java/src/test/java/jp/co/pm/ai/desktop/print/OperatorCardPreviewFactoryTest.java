@@ -91,6 +91,89 @@ class OperatorCardPreviewFactoryTest {
                 "グリッド幅（" + grid.getWidth() + "）が可印刷幅（" + printableWidth + "）を超えている");
     }
 
+    private static OperatorCardDaySection dayWithRows(LocalDate date, int rowCount) {
+        List<OperatorCardTaskRow> rows = new java.util.ArrayList<>();
+        for (int i = 0; i < rowCount; i++) {
+            rows.add(
+                    new OperatorCardTaskRow(
+                            "08:%02d-09:%02d".formatted(i, i), "工程" + i, "機械" + i, "NO-" + i, "100", "100",
+                            "メンバー" + i));
+        }
+        return new OperatorCardDaySection(date, date.toString(), rows);
+    }
+
+    private static double measuredHeightForTest(VBox root, double width) {
+        new Scene(root, width, 1, Color.WHITE);
+        OperatorCardPreviewFactory.attachDesktopStylesheet(root.getScene());
+        root.applyCss();
+        return root.prefHeight(width);
+    }
+
+    @Test
+    void buildPrintPagesReturnsSinglePageWhenEverythingFits() {
+        OperatorCardPage page =
+                new OperatorCardPage(
+                        "図司 智子",
+                        List.of(
+                                dayWithRows(LocalDate.of(2026, 7, 10), 2),
+                                dayWithRows(LocalDate.of(2026, 7, 11), 1)));
+        List<Parent> pages =
+                OperatorCardPreviewFactory.buildPrintPages(page, "SansSerif", 555.0, 5000.0);
+        assertEquals(1, pages.size());
+        assertEquals(2, totalDayBoxCount(pages));
+    }
+
+    @Test
+    void buildPrintPagesSplitsAcrossMultiplePagesWhenDaysOverflowPrintableHeight() {
+        OperatorCardPage page =
+                new OperatorCardPage(
+                        "図司 智子",
+                        List.of(
+                                dayWithRows(LocalDate.of(2026, 7, 10), 6),
+                                dayWithRows(LocalDate.of(2026, 7, 11), 6),
+                                dayWithRows(LocalDate.of(2026, 7, 12), 6),
+                                dayWithRows(LocalDate.of(2026, 7, 13), 6),
+                                dayWithRows(LocalDate.of(2026, 7, 14), 6),
+                                dayWithRows(LocalDate.of(2026, 7, 15), 6)));
+        double printableWidth = 555.0;
+        double printableHeight = 500.0;
+
+        List<Parent> pages =
+                OperatorCardPreviewFactory.buildPrintPages(page, "SansSerif", printableWidth, printableHeight);
+
+        assertTrue(pages.size() > 1, "6日分・各6行は1ページに収まらず複数ページへ分割されるはず");
+        assertEquals(6, totalDayBoxCount(pages), "分割後もページ全体で日数の合計は変わらない（欠落しない）");
+
+        for (Parent p : pages) {
+            VBox root = (VBox) p;
+            double h = measuredHeightForTest(root, printableWidth);
+            assertTrue(
+                    h <= printableHeight + 0.5 || dayBoxCount(root) <= 1,
+                    "1日だけで既に用紙を超える場合を除き、各ページは可印刷高さ内に収まるはず（実測 " + h + ")");
+        }
+    }
+
+    @Test
+    void buildPrintPagesFallsBackToSinglePageWhenPrintableHeightInvalid() {
+        OperatorCardPage page =
+                new OperatorCardPage("図司 智子", List.of(dayWithRows(LocalDate.of(2026, 7, 10), 3)));
+        List<Parent> pages =
+                OperatorCardPreviewFactory.buildPrintPages(page, "SansSerif", 555.0, 0.0);
+        assertEquals(1, pages.size());
+    }
+
+    private static int totalDayBoxCount(List<Parent> pages) {
+        int total = 0;
+        for (Parent p : pages) {
+            total += dayBoxCount((VBox) p);
+        }
+        return total;
+    }
+
+    private static int dayBoxCount(VBox root) {
+        return Math.max(0, root.getChildren().size() - 4);
+    }
+
     private static GridPane findFirstGrid(javafx.scene.Parent parent) {
         for (javafx.scene.Node child : parent.getChildrenUnmodifiable()) {
             if (child instanceof GridPane gp) {

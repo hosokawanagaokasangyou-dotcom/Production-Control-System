@@ -583,24 +583,34 @@ public final class OperatorCardTabController {
                 printer.createPageLayout(
                         Paper.A4, PageOrientation.PORTRAIT, Printer.MarginType.DEFAULT);
         double printableWidth = layout.getPrintableWidth();
+        double printableHeight = layout.getPrintableHeight();
 
+        boolean aborted = false;
         try {
+            outer:
             for (String opName : operators) {
                 OperatorCardPage page =
                         OperatorCardDocumentBuilder.buildPage(
                                 opName, cachedMemberSheets, dispatchRows, start, dayCount);
-                Parent root = OperatorCardPreviewFactory.buildRoot(page, font, printableWidth);
-                if (root.getScene() == null) {
-                    double sceneHeight =
-                            Math.max(layout.getPrintableHeight(), root.prefHeight(printableWidth));
-                    new Scene(root, printableWidth, sceneHeight, Color.WHITE);
-                }
-                root.applyCss();
-                root.layout();
-                boolean ok = job.printPage(layout, root);
-                if (!ok) {
-                    shell.appendLog("[operator-card] printPage returned false for " + opName);
-                    break;
+                // 選択日数・当日配台の行数が多いと 1 枚に収まらないため、可印刷高さで複数ページへ分割する
+                // （分割しないと末尾の日が用紙からクリップされ、画面プレビューより印刷結果の日数が少なく見える）。
+                List<Parent> pages =
+                        OperatorCardPreviewFactory.buildPrintPages(
+                                page, font, printableWidth, printableHeight);
+                for (Parent root : pages) {
+                    if (root.getScene() == null) {
+                        double sceneHeight = Math.max(printableHeight, root.prefHeight(printableWidth));
+                        Scene printScene = new Scene(root, printableWidth, sceneHeight, Color.WHITE);
+                        OperatorCardPreviewFactory.attachDesktopStylesheet(printScene);
+                    }
+                    root.applyCss();
+                    root.layout();
+                    boolean ok = job.printPage(layout, root);
+                    if (!ok) {
+                        shell.appendLog("[operator-card] printPage returned false for " + opName);
+                        aborted = true;
+                        break outer;
+                    }
                 }
             }
         } catch (Exception ex) {
@@ -611,6 +621,8 @@ public final class OperatorCardTabController {
             job.endJob();
         }
         statusLabel.setText(
-                "印刷完了: " + operators.size() + " 名分");
+                aborted
+                        ? "印刷を中断しました"
+                        : "印刷完了: " + operators.size() + " 名分");
     }
 }
