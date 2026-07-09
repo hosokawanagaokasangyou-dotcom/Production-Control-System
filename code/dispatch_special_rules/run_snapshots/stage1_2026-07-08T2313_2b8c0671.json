@@ -1,0 +1,178 @@
+{
+  "schemaVersion": 1,
+  "engineMinVersion": "1.0.0",
+  "savedAt": "2026-05-26T00:00:00+09:00",
+  "rules": [
+    {
+      "id": "L13",
+      "name": "接続→SEC WIP",
+      "enabled": true,
+      "applyOrder": 40,
+      "executionMode": "auto",
+      "legacyFallback": true,
+      "graph": {
+        "nodes": [
+          {
+            "id": "n1",
+            "type": "scope.process_machine",
+            "label": "接続×熱融着",
+            "x": 40,
+            "y": 60,
+            "params": {
+              "process_name": "接続",
+              "machine_name": "熱融着機"
+            }
+          },
+          {
+            "id": "n2",
+            "type": "metric.wip_total_rolls",
+            "label": "WIP合計",
+            "x": 220,
+            "y": 60,
+            "params": {
+              "upstream_process": "接続",
+              "downstream_process": "SEC",
+              "count_mode": "done_minus_done"
+            }
+          },
+          {
+            "id": "n3",
+            "type": "compare.threshold",
+            "label": "WIP ≥",
+            "x": 400,
+            "y": 60,
+            "params": {
+              "operator": ">="
+            }
+          },
+          {
+            "id": "n4",
+            "type": "const.number",
+            "label": "20",
+            "x": 400,
+            "y": 140,
+            "params": {
+              "value": 20,
+              "env_key": "WIP_LIMIT_CONNECTION_BEFORE_SEC_ROLLS"
+            }
+          },
+          {
+            "id": "n5",
+            "type": "action.block_candidate",
+            "label": "接続を候補から除外",
+            "x": 580,
+            "y": 60,
+            "params": {
+              "reason_code": "H-SR-B6",
+              "summary_ja": "WIP上限により接続を当日候補から除外"
+            }
+          },
+          {
+            "id": "n6",
+            "type": "metric.request_roll_diff",
+            "label": "同一依頼ロール差",
+            "x": 220,
+            "y": 200,
+            "params": {
+              "upstream_process": "接続",
+              "downstream_process": "SEC"
+            }
+          },
+          {
+            "id": "n7",
+            "type": "compare.threshold",
+            "label": "差 ＜",
+            "x": 400,
+            "y": 200,
+            "params": {
+              "operator": "<"
+            }
+          },
+          {
+            "id": "n8",
+            "type": "const.number",
+            "label": "5",
+            "x": 400,
+            "y": 280,
+            "params": {
+              "value": 5,
+              "env_key": "CONNECTION_BEFORE_SEC_MIN_CONNECTION_ROLLS"
+            }
+          },
+          {
+            "id": "n9",
+            "type": "action.block_downstream",
+            "label": "SECを候補から除外",
+            "x": 580,
+            "y": 200,
+            "params": {
+              "downstream_process": "SEC",
+              "reason_code": "H-SR-B61",
+              "summary_ja": "接続完了が不足のためSECを候補から除外"
+            }
+          }
+        ],
+        "edges": [
+          {"id": "e1", "from": "n1", "to": "n2", "fromPort": "out", "toPort": "in"},
+          {"id": "e2", "from": "n2", "to": "n3", "fromPort": "out", "toPort": "in"},
+          {"id": "e3", "from": "n4", "to": "n3", "fromPort": "out", "toPort": "threshold"},
+          {"id": "e4", "from": "n3", "to": "n5", "fromPort": "true", "toPort": "in"},
+          {"id": "e5", "from": "n1", "to": "n6", "fromPort": "out", "toPort": "in"},
+          {"id": "e6", "from": "n6", "to": "n7", "fromPort": "out", "toPort": "in"},
+          {"id": "e7", "from": "n8", "to": "n7", "fromPort": "out", "toPort": "threshold"},
+          {"id": "e8", "from": "n7", "to": "n9", "fromPort": "true", "toPort": "in"}
+        ]
+      }
+    },
+    {
+      "id": "L4",
+      "name": "SEC 製品幅935 速度20",
+      "enabled": true,
+      "applyOrder": 20,
+      "executionMode": "legacy",
+      "legacyFallback": true,
+      "graph": {
+        "nodes": [
+          {
+            "id": "n1",
+            "type": "scope.process_machine",
+            "label": "SEC×SEC機",
+            "x": 40,
+            "y": 60,
+            "params": {
+              "process_name": "SEC",
+              "machine_name": "SEC機　湖南"
+            }
+          },
+          {
+            "id": "n2",
+            "type": "filter.row_conditions",
+            "label": "製品幅=935",
+            "x": 220,
+            "y": 60,
+            "params": {
+              "require_all": true,
+              "conditions": [
+                {"column": "製品幅", "op": "eq", "value": 935}
+              ]
+            }
+          },
+          {
+            "id": "n3",
+            "type": "action.set_speed_mpm",
+            "label": "速度20m/分",
+            "x": 400,
+            "y": 60,
+            "params": {
+              "speed_mpm": 20
+            }
+          }
+        ],
+        "edges": [
+          {"id": "e1", "from": "n1", "to": "n2", "fromPort": "out", "toPort": "in"},
+          {"id": "e2", "from": "n2", "to": "n3", "fromPort": "true", "toPort": "in"}
+        ]
+      }
+    }
+  ]
+}

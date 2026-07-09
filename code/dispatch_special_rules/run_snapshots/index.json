@@ -1,6 +1,30 @@
 {
   "version" : 1,
   "entries" : [ {
+    "run_id" : "stage1_2026-07-09T0206_2b8c0671",
+    "stage" : "stage1",
+    "capturedAt" : "2026-07-09T02:06:26.205626300Z",
+    "sourceHash" : "2b8c0671",
+    "path" : "C:\\システム開発\\工程管理AIプロジェクト_JAVA\\code\\dispatch_special_rules\\run_snapshots\\stage1_2026-07-09T0206_2b8c0671.json"
+  }, {
+    "run_id" : "stage2_2026-07-08T2342_2b8c0671",
+    "stage" : "stage2",
+    "capturedAt" : "2026-07-08T23:42:07.576957600Z",
+    "sourceHash" : "2b8c0671",
+    "path" : "C:\\システム開発\\工程管理AIプロジェクト_JAVA\\code\\dispatch_special_rules\\run_snapshots\\stage2_2026-07-08T2342_2b8c0671.json"
+  }, {
+    "run_id" : "stage1_2026-07-08T2341_2b8c0671",
+    "stage" : "stage1",
+    "capturedAt" : "2026-07-08T23:41:21.256063100Z",
+    "sourceHash" : "2b8c0671",
+    "path" : "C:\\システム開発\\工程管理AIプロジェクト_JAVA\\code\\dispatch_special_rules\\run_snapshots\\stage1_2026-07-08T2341_2b8c0671.json"
+  }, {
+    "run_id" : "stage1_2026-07-08T2313_2b8c0671",
+    "stage" : "stage1",
+    "capturedAt" : "2026-07-08T23:13:18.895372800Z",
+    "sourceHash" : "2b8c0671",
+    "path" : "C:\\システム開発\\工程管理AIプロジェクト_JAVA\\code\\dispatch_special_rules\\run_snapshots\\stage1_2026-07-08T2313_2b8c0671.json"
+  }, {
     "run_id" : "stage2_2026-07-08T0036_2b8c0671",
     "stage" : "stage2",
     "capturedAt" : "2026-07-08T00:36:10.837582400Z",
