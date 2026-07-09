@@ -42,13 +42,24 @@ public final class OperatorCardPreviewFactory {
     private OperatorCardPreviewFactory() {}
 
     public static Parent buildRoot(OperatorCardPage page, String fontFamily) {
+        return buildRoot(page, fontFamily, A4_PREF_WIDTH);
+    }
+
+    /**
+     * 印刷用に、用紙の可印刷幅（{@code javafx.print.PageLayout#getPrintableWidth()} 等）へ
+     * ルート幅を合わせて組み立てる。画面プレビューは {@link ScrollPane}（fitToWidth）で縮小表示するため
+     * 見た目上は全列表示されるが、{@code PrinterJob#printPage} は Node をそのままの寸法で用紙に描画する
+     * ため、固定幅（{@link #A4_PREF_WIDTH}）のままだと A4 の可印刷幅を超えて右側の列がクリップされる。
+     */
+    public static Parent buildRoot(OperatorCardPage page, String fontFamily, double rootWidth) {
         String ff = cssFontFamily(fontFamily);
+        double width = rootWidth > 0 ? rootWidth : A4_PREF_WIDTH;
 
         VBox root = new VBox(10);
         root.setPadding(new Insets(16, 20, 16, 20));
-        root.setPrefWidth(A4_PREF_WIDTH);
-        root.setMinWidth(A4_PREF_WIDTH);
-        root.setMaxWidth(A4_PREF_WIDTH);
+        root.setPrefWidth(width);
+        root.setMinWidth(width);
+        root.setMaxWidth(width);
         root.setPrefHeight(prefHeightForDayCount(page.days().size()));
         root.setStyle("-fx-font-family: " + ff + ";");
         root.getStyleClass().add("pm-operator-card-root");

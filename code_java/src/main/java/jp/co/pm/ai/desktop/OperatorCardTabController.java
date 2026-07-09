@@ -15,6 +15,7 @@ import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
 import javafx.geometry.Pos;
 import javafx.scene.Parent;
+import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
@@ -26,6 +27,7 @@ import javafx.scene.control.SpinnerValueFactory;
 import javafx.scene.control.TextField;
 import javafx.scene.control.TextFormatter;
 import javafx.scene.layout.StackPane;
+import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import javafx.print.PageLayout;
 import javafx.print.PageOrientation;
@@ -580,13 +582,21 @@ public final class OperatorCardTabController {
         PageLayout layout =
                 printer.createPageLayout(
                         Paper.A4, PageOrientation.PORTRAIT, Printer.MarginType.DEFAULT);
+        double printableWidth = layout.getPrintableWidth();
 
         try {
             for (String opName : operators) {
                 OperatorCardPage page =
                         OperatorCardDocumentBuilder.buildPage(
                                 opName, cachedMemberSheets, dispatchRows, start, dayCount);
-                Parent root = OperatorCardPreviewFactory.buildRoot(page, font);
+                Parent root = OperatorCardPreviewFactory.buildRoot(page, font, printableWidth);
+                if (root.getScene() == null) {
+                    double sceneHeight =
+                            Math.max(layout.getPrintableHeight(), root.prefHeight(printableWidth));
+                    new Scene(root, printableWidth, sceneHeight, Color.WHITE);
+                }
+                root.applyCss();
+                root.layout();
                 boolean ok = job.printPage(layout, root);
                 if (!ok) {
                     shell.appendLog("[operator-card] printPage returned false for " + opName);
