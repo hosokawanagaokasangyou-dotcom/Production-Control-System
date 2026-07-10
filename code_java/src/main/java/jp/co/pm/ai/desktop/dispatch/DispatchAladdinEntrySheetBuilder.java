@@ -103,7 +103,7 @@ public final class DispatchAladdinEntrySheetBuilder {
             return "NG (差 " + signed + ")";
         }
 
-        /** 加工完了日が回答納期の一日前と一致するか。 */
+        /** 加工完了日が回答納期の一日前以前か。 */
         public boolean completionDateCheckOk() {
             return "OK".equals(completionDateCheckText());
         }
@@ -271,7 +271,7 @@ public final class DispatchAladdinEntrySheetBuilder {
     }
 
     /**
-     * 加工完了日が回答納期の一日前か（{@code OK} / {@code NG}）。日付が取れないときは空文字。
+     * 加工完了日が回答納期の一日前以前か（{@code OK} / {@code NG}）。日付が取れないときは空文字。
      *
      * <p>依頼書目次の {@code M/d} や {@code yyyy/M/d} なども解釈する。
      */
@@ -283,7 +283,7 @@ public final class DispatchAladdinEntrySheetBuilder {
         if (complete == null || answer == null) {
             return "";
         }
-        return complete.equals(answer.minusDays(1)) ? "OK" : "NG";
+        return !complete.isAfter(answer.minusDays(1)) ? "OK" : "NG";
     }
 
     /**

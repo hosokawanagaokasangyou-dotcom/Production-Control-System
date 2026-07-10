@@ -199,7 +199,7 @@ class DispatchAladdinEntrySheetBuilderTest {
     }
 
     @Test
-    void completionDateCheckNgWhenNotOneDayBeforeAnswerNoki() {
+    void completionDateCheckOkWhenEarlierThanOneDayBeforeAnswerNoki() {
         List<Map<String, String>> rows = new ArrayList<>();
         Map<String, String> r = row("W1", "巻返し", "M1", "2026-07-08", "100");
         r.put("回答納期", "2026-07-30");
@@ -208,8 +208,27 @@ class DispatchAladdinEntrySheetBuilderTest {
 
         DispatchAladdinEntrySheetBuilder.EntryRow out = buildSingleRow(rows);
 
+        assertTrue(out.completionDateCheckOk());
+        assertEquals("OK", out.completionDateCheckText());
+    }
+
+    @Test
+    void completionDateCheckNgWhenOnOrAfterAnswerNoki() {
+        List<Map<String, String>> rows = new ArrayList<>();
+        Map<String, String> r = row("W1", "巻返し", "M1", "2026-07-08", "100");
+        r.put("回答納期", "2026-07-30");
+        r.put("加工完了日", "2026-07-30");
+        rows.add(r);
+
+        DispatchAladdinEntrySheetBuilder.EntryRow out = buildSingleRow(rows);
+
         assertFalse(out.completionDateCheckOk());
         assertEquals("NG", out.completionDateCheckText());
+
+        assertEquals(
+                "NG",
+                DispatchAladdinEntrySheetBuilder.completionDateOneDayBeforeAnswerCheck(
+                        "2026-07-31", "2026-07-30", 2026));
     }
 
     @Test
