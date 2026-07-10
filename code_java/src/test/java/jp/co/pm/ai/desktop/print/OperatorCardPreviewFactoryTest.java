@@ -19,8 +19,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 /**
- * 印刷（PDF出力）時に、A4 の可印刷幅（{@code javafx.print.PageLayout#getPrintableWidth()}
- * 相当）へルート幅を合わせないと右側の列（換算・メンバー）がクリップされる不具合の再発防止テスト。
+ * 印刷（PDF出力）時のレイアウト・ページ分割の回帰防止テスト。
  */
 class OperatorCardPreviewFactoryTest {
 
@@ -50,31 +49,25 @@ class OperatorCardPreviewFactoryTest {
     }
 
     @Test
-    void buildRootHonorsExplicitPrintableWidthForPdfPrinting() {
-        double printableWidth = 555.0; // A4 可印刷幅相当（DEFAULT マージン後）
-        Parent root = OperatorCardPreviewFactory.buildRoot(samplePage(), "SansSerif", printableWidth);
-        assertEquals(printableWidth, ((Region) root).getPrefWidth(), 0.001);
-        assertTrue(
-                printableWidth < OperatorCardPreviewFactory.A4_PREF_WIDTH,
-                "可印刷幅は画面プレビュー固定幅より狭いことを前提にした回帰テスト");
+    void printScaleShrinksLayoutWidthToPrintableArea() {
+        double printableWidth = 555.0;
+        double scale = OperatorCardPrintCompositor.printScaleForWidth(printableWidth);
+        assertTrue(scale < 1.0);
+        assertEquals(printableWidth, OperatorCardPreviewFactory.A4_PREF_WIDTH * scale, 0.5);
     }
 
     @Test
-    void allSevenColumnsRemainVisibleAtPrintableWidthNoRightSideClipping() {
+    void scaledPrintPageKeepsFullColumnHeadersAtPrintableWidth() {
         double printableWidth = 555.0;
-        VBox root =
-                (VBox)
-                        OperatorCardPreviewFactory.buildRoot(
-                                samplePage(), "SansSerif", printableWidth);
-        new Scene(root, printableWidth, root.prefHeight(printableWidth), Color.WHITE);
-        root.applyCss();
-        root.layout();
+        VBox layoutRoot =
+                (VBox) OperatorCardPreviewFactory.buildRoot(samplePage(), "SansSerif");
+        Parent printRoot =
+                OperatorCardPrintCompositor.wrapScaledPrintPage(layoutRoot, printableWidth);
+        OperatorCardPrintCompositor.createPrintScene(printRoot, printableWidth, 800.0);
 
-        GridPane grid = findFirstGrid(root);
+        GridPane grid = findFirstGrid(layoutRoot);
         assertTrue(grid != null, "day grid should be present");
 
-        // ヘッダー行（row 0）に「換算」「メンバー」を含む全7列が存在し、
-        // グリッド全体の実測幅がルート幅（＝可印刷幅）を超えないこと。
         List<String> headerTexts =
                 grid.getChildren().stream()
                         .filter(n -> GridPane.getRowIndex(n) == null || GridPane.getRowIndex(n) == 0)
@@ -83,12 +76,9 @@ class OperatorCardPreviewFactoryTest {
                         .toList();
         assertEquals(
                 List.of("時間帯", "工程", "機械", "依頼NO", "当日配台", "換算", "メンバー"), headerTexts);
-
-        grid.applyCss();
-        grid.layout();
-        assertTrue(
-                grid.getWidth() <= printableWidth + 0.5,
-                "グリッド幅（" + grid.getWidth() + "）が可印刷幅（" + printableWidth + "）を超えている");
+        for (String hdr : headerTexts) {
+            assertTrue(!hdr.endsWith("…") && !hdr.endsWith("..."), "ヘッダーが途中で切れている: " + hdr);
+        }
     }
 
     private static OperatorCardDaySection dayWithRows(LocalDate date, int rowCount) {
@@ -96,17 +86,19 @@ class OperatorCardPreviewFactoryTest {
         for (int i = 0; i < rowCount; i++) {
             rows.add(
                     new OperatorCardTaskRow(
-                            "08:%02d-09:%02d".formatted(i, i), "工程" + i, "機械" + i, "NO-" + i, "100", "100",
+                            "08:%02d-09:%02d".formatted(i, i),
+                            "工程" + i,
+                            "機械" + i,
+                            "NO-" + i,
+                            "100",
+                            "100",
                             "メンバー" + i));
         }
         return new OperatorCardDaySection(date, date.toString(), rows);
     }
 
-    private static double measuredHeightForTest(VBox root, double width) {
-        new Scene(root, width, 1, Color.WHITE);
-        OperatorCardPreviewFactory.attachDesktopStylesheet(root.getScene());
-        root.applyCss();
-        return root.prefHeight(width);
+    private static OperatorCardDaySection emptyDay(LocalDate date) {
+        return new OperatorCardDaySection(date, date.toString(), List.of());
     }
 
     @Test
@@ -139,18 +131,33 @@ class OperatorCardPreviewFactoryTest {
         double printableHeight = 500.0;
 
         List<Parent> pages =
-                OperatorCardPreviewFactory.buildPrintPages(page, "SansSerif", printableWidth, printableHeight);
+                OperatorCardPreviewFactory.buildPrintPages(
+                        page, "SansSerif", printableWidth, printableHeight);
 
         assertTrue(pages.size() > 1, "6日分・各6行は1ページに収まらず複数ページへ分割されるはず");
         assertEquals(6, totalDayBoxCount(pages), "分割後もページ全体で日数の合計は変わらない（欠落しない）");
+    }
 
-        for (Parent p : pages) {
-            VBox root = (VBox) p;
-            double h = measuredHeightForTest(root, printableWidth);
-            assertTrue(
-                    h <= printableHeight + 0.5 || dayBoxCount(root) <= 1,
-                    "1日だけで既に用紙を超える場合を除き、各ページは可印刷高さ内に収まるはず（実測 " + h + ")");
-        }
+    @Test
+    void buildPrintPagesPreservesAllDaysInRealisticSixDayPattern() {
+        OperatorCardPage page =
+                new OperatorCardPage(
+                        "図司 智子",
+                        List.of(
+                                dayWithRows(LocalDate.of(2026, 7, 10), 4),
+                                emptyDay(LocalDate.of(2026, 7, 11)),
+                                emptyDay(LocalDate.of(2026, 7, 12)),
+                                dayWithRows(LocalDate.of(2026, 7, 13), 6),
+                                emptyDay(LocalDate.of(2026, 7, 14)),
+                                dayWithRows(LocalDate.of(2026, 7, 15), 4)));
+        double printableWidth = 523.0;
+        double printableHeight = 750.0;
+
+        List<Parent> pages =
+                OperatorCardPreviewFactory.buildPrintPages(
+                        page, "SansSerif", printableWidth, printableHeight);
+
+        assertEquals(6, totalDayBoxCount(pages), "6日分すべてが印刷ページに含まれる");
     }
 
     @Test

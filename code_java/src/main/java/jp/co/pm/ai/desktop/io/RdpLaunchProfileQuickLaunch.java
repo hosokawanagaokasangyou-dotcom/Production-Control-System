@@ -12,7 +12,7 @@ import java.util.Objects;
 public final class RdpLaunchProfileQuickLaunch {
 
     /** クイック起動ボタンの最大数。 */
-    public static final int BUTTON_SLOT_COUNT = 6;
+    public static final int BUTTON_SLOT_COUNT = 8;
 
     /** ボタン表示ラベルの最大文字数（超過時は末尾を「…」で省略）。 */
     public static final int BUTTON_LABEL_MAX_LENGTH = 36;

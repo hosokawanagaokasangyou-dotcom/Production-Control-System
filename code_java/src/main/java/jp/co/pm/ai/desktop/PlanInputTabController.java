@@ -148,6 +148,9 @@ public final class PlanInputTabController {
     private CheckBox stage2SkipTodayDispatchCheckBox;
 
     @FXML
+    private CheckBox todayDispatchCheckBox;
+
+    @FXML
     private CheckBox stage2SkipGeminiApiCheckBox;
 
     @FXML private RadioButton stage2NextDayDialogInProgressRadio;
@@ -234,6 +237,19 @@ public final class PlanInputTabController {
                     .selectedProperty()
                     .addListener(
                             (o, a, b) -> {
+                                refreshNextDayDialogRadioCoupling();
+                                if (shell != null) {
+                                    shell.scheduleDesktopSessionSave();
+                                }
+                            });
+        }
+        if (todayDispatchCheckBox != null) {
+            todayDispatchCheckBox.setSelected(false);
+            todayDispatchCheckBox
+                    .selectedProperty()
+                    .addListener(
+                            (o, a, b) -> {
+                                refreshNextDayDialogRadioCoupling();
                                 if (shell != null) {
                                     shell.scheduleDesktopSessionSave();
                                 }
@@ -258,6 +274,7 @@ public final class PlanInputTabController {
         if (stage2NextDayDialogBothRadio != null) {
             stage2NextDayDialogBothRadio.setSelected(true);
         }
+        refreshNextDayDialogRadioCoupling();
         if (comboSheetMayExceedNeedCheckBox != null) {
             comboSheetMayExceedNeedCheckBox.setSelected(true);
             comboSheetMayExceedNeedCheckBox
@@ -518,10 +535,52 @@ public final class PlanInputTabController {
         return stage2SkipTodayDispatchCheckBox != null && stage2SkipTodayDispatchCheckBox.isSelected();
     }
 
+    /** 当日配台（朝運用・ソース固定）チェックボックス。 */
+    boolean snapshotTodayDispatch() {
+        return todayDispatchCheckBox != null && todayDispatchCheckBox.isSelected();
+    }
+
+    void applyTodayDispatchFromSession(boolean todayDispatch) {
+        if (todayDispatchCheckBox != null) {
+            todayDispatchCheckBox.setSelected(todayDispatch);
+        }
+        refreshNextDayDialogRadioCoupling();
+    }
+
+    /**
+     * 当日配台かつ skip_today OFF のとき、加工途中ダイアログ(①/③)用ラジオを無効化する。
+     */
+    void refreshNextDayDialogRadioCoupling() {
+        boolean coupleOff =
+                snapshotTodayDispatch() && !snapshotStage2SkipTodayDispatch();
+        if (stage2NextDayDialogInProgressRadio != null) {
+            stage2NextDayDialogInProgressRadio.setDisable(coupleOff);
+        }
+        if (stage2NextDayDialogBothRadio != null) {
+            stage2NextDayDialogBothRadio.setDisable(coupleOff);
+        }
+        if (coupleOff) {
+            if (stage2NextDayDialogInProgressRadio != null
+                    && stage2NextDayDialogInProgressRadio.isSelected()) {
+                if (stage2NextDayDialogNoneRadio != null) {
+                    stage2NextDayDialogNoneRadio.setSelected(true);
+                }
+            }
+            if (stage2NextDayDialogBothRadio != null && stage2NextDayDialogBothRadio.isSelected()) {
+                if (stage2NextDayDialogAladdinExcludeRadio != null) {
+                    stage2NextDayDialogAladdinExcludeRadio.setSelected(true);
+                } else if (stage2NextDayDialogNoneRadio != null) {
+                    stage2NextDayDialogNoneRadio.setSelected(true);
+                }
+            }
+        }
+    }
+
     void applyStage2SkipTodayDispatchFromSession(boolean skipToday) {
         if (stage2SkipTodayDispatchCheckBox != null) {
             stage2SkipTodayDispatchCheckBox.setSelected(skipToday);
         }
+        refreshNextDayDialogRadioCoupling();
     }
 
     /** 段階2/2.1 子プロセスへ渡す {@code PM_AI_SKIP_GEMINI_API}（チェックは本タブ）。 */

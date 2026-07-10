@@ -14,8 +14,11 @@ internal sealed class LauncherIni
     internal const string DisconnectOnChildExitEnvVar = "PM_AI_RDP_DISCONNECT_ON_CHILD_EXIT";
     internal const string SessionEndActionEnvVar = "PM_AI_RDP_SESSION_END_ACTION";
 
-    /** タスクスケジューラ経由の自動起動を抑止（RPA 起動・サインアウトともに行わない）。 */
-    internal const int DisabledSlot = 0;
+    /** slot=99（後方互換で 0 も可）のとき接続先でサインアウトを実行（タスクスケジューラ経由）。 */
+    internal const int SignOutSlot = 99;
+    internal const int LegacySignOutSlot = 0;
+    /** @deprecated SignOutSlot を使用 */
+    internal const int DisabledSlot = SignOutSlot;
 
     internal int SelectedSlot { get; set; } = 1;
 
@@ -197,9 +200,9 @@ internal sealed class LauncherIni
             var value = line[(eq + 1)..].Trim();
             if (key == SelectedSlotKey)
             {
-                if (int.TryParse(value, out var slot) && slot >= DisabledSlot)
+                if (int.TryParse(value, out var slot) && slot >= LegacySignOutSlot)
                 {
-                    ini.SelectedSlot = slot;
+                    ini.SelectedSlot = slot == LegacySignOutSlot ? SignOutSlot : slot;
                 }
                 continue;
             }
@@ -239,11 +242,14 @@ internal sealed class LauncherIni
         return ini;
     }
 
-    internal bool IsLauncherDisabled => SelectedSlot == DisabledSlot;
+    internal bool IsSignOutOnly =>
+        SelectedSlot == SignOutSlot || SelectedSlot == LegacySignOutSlot;
+
+    internal bool IsLauncherDisabled => IsSignOutOnly;
 
     internal string? ResolveSelectedCommand()
     {
-        if (IsLauncherDisabled)
+        if (IsSignOutOnly)
         {
             return null;
         }
@@ -278,9 +284,13 @@ internal sealed class LauncherIni
     /// </summary>
     internal static void WriteSelectedSlot(string path, int selectedSlot)
     {
-        if (selectedSlot < DisabledSlot)
+        if (selectedSlot < LegacySignOutSlot)
         {
             throw new ArgumentOutOfRangeException(nameof(selectedSlot), selectedSlot, "slot must be >= 0");
+        }
+        if (selectedSlot == LegacySignOutSlot)
+        {
+            selectedSlot = SignOutSlot;
         }
 
         var lines = File.ReadAllLines(path, Encoding.UTF8).ToList();
@@ -314,19 +324,7 @@ internal sealed class LauncherIni
 
     private static SessionEndAction ParseSessionEndAction(string raw, SessionEndAction defaultValue)
     {
-        if (string.IsNullOrWhiteSpace(raw))
-        {
-            return defaultValue;
-        }
-
-        var normalized = raw.Trim().ToLowerInvariant();
-        return normalized switch
-        {
-            "なし" or "none" or "off" or "0" => SessionEndAction.None,
-            "切断" or "disconnect" or "rdp切断" or "rdp_disconnect" => SessionEndAction.Disconnect,
-            "サインアウト" or "signout" or "sign_out" or "logoff" or "ログオフ" => SessionEndAction.SignOut,
-            _ => defaultValue,
-        };
+        return SessionEndActionParser.Parse(raw, defaultValue);
     }
 
     private static bool ParseBoolean(string raw, bool defaultValue)

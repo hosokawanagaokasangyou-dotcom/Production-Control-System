@@ -1,5 +1,5 @@
 {
-  "refreshedAtEpochMillis" : 1783482736654,
+  "refreshedAtEpochMillis" : 1783581245601,
   "modelIds" : [ "gemini-3.1-flash-lite", "gemini-3.1-flash-lite-image", "gemini-3.1-flash-lite-preview", "gemini-2.5-flash-lite", "gemini-2.0-flash-lite", "gemini-2.0-flash-lite-001", "gemini-flash-lite-latest" ],
   "source" : "generativelanguage.googleapis.com/v1beta/models"
 }

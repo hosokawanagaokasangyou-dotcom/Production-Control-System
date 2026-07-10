@@ -77,6 +77,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import jp.co.pm.ai.desktop.runtime.FxJvmMemoryStatusBar;
 
+import jp.co.pm.ai.desktop.ui.TodayDispatchSourceSelectionDialog;
+import jp.co.pm.ai.planning.stage2.source.Stage1SourceBundle;
+import jp.co.pm.ai.planning.stage2.source.Stage1SourceBundleIo;
+import jp.co.pm.ai.planning.stage2.source.Stage1SourcePairMatcher;
+import jp.co.pm.ai.planning.stage2.source.Stage2SkipTodayDispatchPolicy;
+import jp.co.pm.ai.planning.stage2.source.Stage2SourceConsistencyGuard;
+
 import jp.co.pm.ai.desktop.audio.MacroCompleteChime;
 import jp.co.pm.ai.desktop.audio.UiClickSound;
 import jp.co.pm.ai.desktop.bridge.PythonProcessRunner;
@@ -1121,6 +1128,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                     nz(s.mainRunStage2MemberSchedule()));
         }
         planInputTabController.applyStage2SkipTodayDispatchFromSession(s.mainRunStage2SkipTodayDispatch());
+        planInputTabController.applyTodayDispatchFromSession(s.planInputTodayDispatch());
         planInputTabController.applyStage2SkipGeminiApiFromSession(s.planInputStage2SkipGeminiApi());
         planInputTabController.applyStage2NextDayDialogModeFromSession(
                 s.planInputStage2NextDayDialogMode());
@@ -1242,6 +1250,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                 planInputTabController.snapshotStage2NextDayDialogMode().name(),
                 planInputTabController.snapshotComboSheetMayExceedNeed(),
                 planInputTabController.snapshotStage2SkipGeminiApi(),
+                planInputTabController.snapshotTodayDispatch(),
                 mainRunTabController.snapshotStage2ResultBookFont(),
                 mainRunTabController.snapshotSkipGeminiApi(),
                 false,
@@ -4463,6 +4472,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                 pendingStage31OvertimeJsonPath = null;
                 pendingStage2InProgressNextDayJsonPath = null;
                 pendingStage2AladdinTodayExcludeJsonPath = null;
+                pendingTodayDispatchSourcePair = null;
                 syncUiAfterDownstreamPipelineResultsCleared();
             }
             if (STAGE2.equals(script)) {
@@ -4557,6 +4567,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
             if (STAGE1.equals(script) || STAGE2.equals(script) || STAGE2_1.equals(script)) {
                 refreshNetworkSourceDirListingSkipsBeforeStageRun(uiRun);
             }
+            overlayTodayDispatchSourcesForStageRun(uiRun, script);
             Map<String, String> childEnv = childEnvForPython(uiRun);
             if (lastNetworkSourceResolution != null) {
                 for (String line : lastNetworkSourceResolution.logLines()) {
@@ -4761,6 +4772,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                 invalidateDeliveryCalendarAfterPipelineRun();
                 refreshEquipmentGanttGraphicAfterPipelineRun();
                 MacroCompleteChime.playIfAvailable(collectUiEnv());
+                persistStage1SourceBundleAfterSuccess();
                 selectMainShellTab(MainShellTabId.PLAN_INPUT);
                 String completionMsg = buildStage1CompletionMessage();
                 showStageCompletionDialog("段階1 完了", completionMsg);
@@ -6790,7 +6802,137 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
     }
 
     void triggerStage1() {
+        if (!prepareTodayDispatchSourceSelectionForStage1()) {
+            return;
+        }
         runStage(STAGE1);
+    }
+
+    /**
+     * 当日配台 ON のとき段階1直前に加工計画取得時刻を選び、skip_today を自動設定する。
+     *
+     * @return false なら段階1を中止
+     */
+    private boolean prepareTodayDispatchSourceSelectionForStage1() {
+        if (planInputTabController == null || !planInputTabController.snapshotTodayDispatch()) {
+            pendingTodayDispatchSourcePair = null;
+            return true;
+        }
+        Map<String, String> ui = collectUiEnv();
+        List<Stage1SourcePairMatcher.MatchedPair> rows =
+                Stage1SourcePairMatcher.buildSelectableRows(ui);
+        if (rows.isEmpty()) {
+            appendLog("[stage1] 当日配台: 加工計画の候補が見つかりません。");
+            showErrorDialog(
+                    "段階1",
+                    "当日配台 ON ですが、加工計画フォルダに候補ファイルがありません。\n"
+                            + "PM_AI_TASK_INPUT_SOURCE_DIR を確認するか、当日配台を OFF にしてください。");
+            return false;
+        }
+        Optional<Stage1SourcePairMatcher.MatchedPair> chosen =
+                TodayDispatchSourceSelectionDialog.prompt(primaryStage, rows);
+        if (chosen.isEmpty()) {
+            appendLog("[stage1] 当日配台: ソース選択をキャンセルしました。");
+            return false;
+        }
+        Stage1SourcePairMatcher.MatchedPair pair = chosen.get();
+        if (pair.dailyReport() == null) {
+            appendLog("[stage1] 当日配台: 同日の加工日報が無いため実行できません。");
+            showErrorDialog(
+                    "段階1",
+                    "選択した加工計画に対応する同日の加工日報がありません。\n"
+                            + "日報を取得するか、別の計画取得時刻を選んでください。");
+            return false;
+        }
+        pendingTodayDispatchSourcePair = pair;
+        if (pair.largeDeltaWarning()) {
+            appendLog(
+                    "[stage1] 当日配台: 計画と日報の取得時刻差が "
+                            + pair.deltaMinutes()
+                            + " 分です（警告のみ・実行は続行します）。");
+        }
+        boolean skipToday =
+                Stage2SkipTodayDispatchPolicy.shouldSkipTodayDispatch(
+                        pair.plan().extractionTime());
+        planInputTabController.applyStage2SkipTodayDispatchFromSession(skipToday);
+        appendLog(
+                "[stage1] 当日配台: 計画="
+                        + pair.plan().fileName()
+                        + " 日報="
+                        + pair.dailyReport().fileName()
+                        + " skip_today="
+                        + (skipToday ? "1" : "0"));
+        return true;
+    }
+
+    private boolean guardTodayDispatchSourceBundleBeforeStageRun(String stageLabel) {
+        if (planInputTabController == null || !planInputTabController.snapshotTodayDispatch()) {
+            return true;
+        }
+        Map<String, String> ui = collectUiEnv();
+        Optional<Stage1SourceBundle> bundle = Stage1SourceBundleIo.readIfPresent(ui);
+        Stage2SourceConsistencyGuard.Result guard =
+                Stage2SourceConsistencyGuard.verify(ui, bundle.orElse(null));
+        if (!guard.allowed()) {
+            appendLog("[" + stageLabel + "] " + guard.message().replace('\n', ' '));
+            showErrorDialog(stageLabel, guard.message());
+            return false;
+        }
+        bundle.ifPresent(
+                b ->
+                        planInputTabController.applyStage2SkipTodayDispatchFromSession(
+                                Stage2SkipTodayDispatchPolicy.shouldSkipTodayDispatch(
+                                        b.planExtractionTime())));
+        return true;
+    }
+
+    private void overlayTodayDispatchSourcesForStageRun(
+            Map<String, String> uiRun, String script) {
+        if (planInputTabController == null || !planInputTabController.snapshotTodayDispatch()) {
+            return;
+        }
+        if (STAGE1.equals(script) && pendingTodayDispatchSourcePair != null) {
+            overlayTodayDispatchPairToEnv(uiRun, pendingTodayDispatchSourcePair);
+            return;
+        }
+        if (STAGE2.equals(script) || STAGE2_1.equals(script)) {
+            Stage1SourceBundleIo.readIfPresent(uiRun)
+                    .ifPresent(b -> Stage2SourceConsistencyGuard.overlayBundlePaths(uiRun, b));
+        }
+    }
+
+    private static void overlayTodayDispatchPairToEnv(
+            Map<String, String> env, Stage1SourcePairMatcher.MatchedPair pair) {
+        if (env == null || pair == null || pair.plan() == null || pair.dailyReport() == null) {
+            return;
+        }
+        String planPath = pair.plan().path().toString();
+        env.put(AppPaths.KEY_PM_AI_PROCESSING_PLAN_PATH, planPath);
+        env.put(AppPaths.KEY_PM_AI_DATA_EXTRACTION_SOURCE_WORKBOOK, planPath);
+        env.put(
+                jp.co.pm.ai.desktop.reconciliation.KonanDailyReportLookup.KEY_DAILY_REPORT_CSV_PATH,
+                pair.dailyReport().path().toString());
+    }
+
+    private void persistStage1SourceBundleAfterSuccess() {
+        if (planInputTabController == null
+                || !planInputTabController.snapshotTodayDispatch()
+                || pendingTodayDispatchSourcePair == null
+                || pendingTodayDispatchSourcePair.dailyReport() == null) {
+            return;
+        }
+        try {
+            Stage1SourceBundle bundle =
+                    Stage1SourceBundle.fromMatchedPair(
+                            pendingTodayDispatchSourcePair, System.currentTimeMillis());
+            Stage1SourceBundleIo.writeDefault(collectUiEnv(), bundle);
+            appendLog(
+                    "[stage1] 当日配台: ソース束を固定しました（"
+                            + Stage1SourceBundleIo.CACHE_FILE_NAME
+                            + "）。");
+        } catch (Exception ex) {
+            appendLog("[stage1] 当日配台: ソース束の保存に失敗: " + ex.getMessage());
+        }
     }
 
     void triggerStage2() {
@@ -6812,6 +6954,9 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                     "[stage2] 配台計画_タスク入力タブの表に未保存の変更があります。「保存」または「再読み」で確定してから実行してください。");
             return;
         }
+        if (!guardTodayDispatchSourceBundleBeforeStageRun("段階2")) {
+            return;
+        }
         if (planInputTabController != null) {
             if (!prepareStage2NextDayDialogJsonPaths(collectUiEnv())) {
                 return;
@@ -6824,13 +6969,32 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
     }
 
     /**
+     * 当日配台（skip_today OFF）のとき加工途中ダイアログ ①/③ を実質省略する。
+     */
+    private jp.co.pm.ai.planning.stage2.Stage2NextDayDialogMode effectiveStage2NextDayDialogMode() {
+        if (planInputTabController == null) {
+            return jp.co.pm.ai.planning.stage2.Stage2NextDayDialogMode.defaultMode();
+        }
+        jp.co.pm.ai.planning.stage2.Stage2NextDayDialogMode mode =
+                planInputTabController.snapshotStage2NextDayDialogMode();
+        if (planInputTabController.snapshotStage2SkipTodayDispatch()) {
+            return mode;
+        }
+        return switch (mode) {
+            case IN_PROGRESS -> jp.co.pm.ai.planning.stage2.Stage2NextDayDialogMode.NONE;
+            case BOTH -> jp.co.pm.ai.planning.stage2.Stage2NextDayDialogMode.ALADDIN_TODAY_EXCLUDE;
+            default -> mode;
+        };
+    }
+
+    /**
      * 段階2直前ダイアログ（①加工途中 / ②アラジン除外 / ③両方）の確定と JSON 書込。
      *
      * @return false なら段階2を中止（キャンセルまたは保存失敗）
      */
     private boolean prepareStage2NextDayDialogJsonPaths(Map<String, String> ui) {
         jp.co.pm.ai.planning.stage2.Stage2NextDayDialogMode mode =
-                planInputTabController.snapshotStage2NextDayDialogMode();
+                effectiveStage2NextDayDialogMode();
         pendingStage2InProgressNextDayJsonPath = null;
         pendingStage2AladdinTodayExcludeJsonPath = null;
 
@@ -7025,6 +7189,9 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                 && planInputTabController.isPlanInputTableDirtySinceSave()) {
             appendLog(
                     "[stage2.1] 配台計画_タスク入力タブの表に未保存の変更があります。「保存」または「再読み」で確定してから実行してください。");
+            return;
+        }
+        if (!guardTodayDispatchSourceBundleBeforeStageRun("段階2.1")) {
             return;
         }
         if (overtimeSimulationJson == null
@@ -7307,6 +7474,9 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
     private java.nio.file.Path pendingStage2InProgressNextDayJsonPath;
 
     private java.nio.file.Path pendingStage2AladdinTodayExcludeJsonPath;
+
+    /** 当日配台 ON 時、段階1直前にユーザーが選んだ plan+daily ペア。 */
+    private Stage1SourcePairMatcher.MatchedPair pendingTodayDispatchSourcePair;
 
     private void applyStage2InProgressNextDayDispatchEnv(Map<String, String> ui) {
         java.nio.file.Path p = pendingStage2InProgressNextDayJsonPath;

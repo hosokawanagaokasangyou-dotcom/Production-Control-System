@@ -347,6 +347,36 @@ class AppPathsTest {
     }
 
     @Test
+    void resolveRdpLauncherExeForRemoteSession_mapsHonjoUncToMappedDrive() {
+        String unc =
+                "\\\\192.168.0.101\\共有フォルダ\\本所工場\\技術代表者\\002  加工G\\"
+                        + "●部出AIシステム\\共有DATA\\PmAiRdpRemoteLauncher.exe";
+        Path mapped = AppPaths.mapFactoryShareUncToDriveLetter(Path.of(unc));
+        assertEquals(
+                Path.of(
+                        "M:\\本所工場\\技術代表者\\002  加工G\\"
+                                + "●部出AIシステム\\共有DATA\\PmAiRdpRemoteLauncher.exe"),
+                mapped);
+        assertEquals(
+                mapped,
+                AppPaths.resolveRdpLauncherExeForRemoteSession(
+                        Map.of(
+                                AppPaths.KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR,
+                                "\\\\192.168.0.101\\共有フォルダ\\本所工場\\技術代表者\\002  加工G\\"
+                                        + "●部出AIシステム\\共有DATA",
+                                AppPaths.KEY_PM_AI_RDP_LAUNCHER_EXE,
+                                "")));
+    }
+
+    @Test
+    void resolveRdpLauncherExeForRemoteSession_prefersExplicitOverride() {
+        assertEquals(
+                Path.of("D:\\tools\\PmAiRdpRemoteLauncher.exe"),
+                AppPaths.resolveRdpLauncherExeForRemoteSession(
+                        Map.of(AppPaths.KEY_PM_AI_RDP_LAUNCHER_EXE, "D:\\tools\\PmAiRdpRemoteLauncher.exe")));
+    }
+
+    @Test
     void resolveRdpLauncherPaths_usesDefaultDeployDirWhenKeyEmpty() {
         Path deployDir = AppPaths.resolveRdpLauncherDeployDir(Map.of()).normalize();
         assertTrue(

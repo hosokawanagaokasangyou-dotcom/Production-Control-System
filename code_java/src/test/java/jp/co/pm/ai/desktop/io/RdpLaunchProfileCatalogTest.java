@@ -20,6 +20,12 @@ class RdpLaunchProfileCatalogTest {
         assertFalse(profiles.isEmpty());
         assertTrue(
                 profiles.stream()
+                        .anyMatch(
+                                p ->
+                                        p.number() == RdpRemoteLauncherIni.SLOT_SIGN_OUT
+                                                && p.isSignOutOnlyProfile()));
+        assertTrue(
+                profiles.stream()
                         .anyMatch(p -> p.number() == 2 && p.name().contains("工程マスタ")));
     }
 
@@ -42,8 +48,10 @@ class RdpLaunchProfileCatalogTest {
                                 null));
         RdpLaunchProfileCatalog.save(json, original);
         List<RdpLaunchProfile> loaded = RdpLaunchProfileCatalog.load(json);
-        assertEquals(1, loaded.size());
-        assertEquals(original.getFirst(), loaded.getFirst());
+        assertEquals(2, loaded.size());
+        RdpLaunchProfile loadedProfile1 =
+                loaded.stream().filter(p -> p.number() == 1).findFirst().orElseThrow();
+        assertEquals(original.getFirst(), loadedProfile1);
         assertTrue(Files.readString(json, StandardCharsets.UTF_8).contains("テスト"));
     }
 
@@ -58,8 +66,10 @@ class RdpLaunchProfileCatalogTest {
                                 3, "アラジン RPA", "説明", "マスタ更新", null, null, null, null, null, null, null));
         RdpLaunchProfileCatalog.save(json, original);
         List<RdpLaunchProfile> loaded = RdpLaunchProfileCatalog.load(json);
-        assertEquals(3, loaded.size());
-        assertEquals("アラジン RPA", loaded.get(2).name());
+        assertEquals(4, loaded.size());
+        assertEquals(
+                "アラジン RPA",
+                loaded.stream().filter(p -> p.number() == 3).findFirst().orElseThrow().name());
         assertTrue(Files.readString(json, StandardCharsets.UTF_8).contains("アラジン RPA"));
     }
 
@@ -68,9 +78,12 @@ class RdpLaunchProfileCatalogTest {
         List<RdpLaunchProfile> ensured =
                 RdpLaunchProfileCatalog.ensureCount(
                         List.of(new RdpLaunchProfile(2, "B", "", "", null, null, null, null, null, null, null)), 3);
-        assertEquals(3, ensured.size());
-        assertEquals(1, ensured.get(0).number());
-        assertEquals("B", ensured.get(1).name());
+        assertEquals(4, ensured.size());
+        assertEquals(99, ensured.get(0).number());
+        assertEquals(1, ensured.get(1).number());
+        assertEquals(2, ensured.get(2).number());
+        assertEquals("B", ensured.get(2).name());
+        assertEquals(3, ensured.get(3).number());
     }
 
     @Test
@@ -89,9 +102,13 @@ class RdpLaunchProfileCatalogTest {
                         new RdpLaunchProfile(2, "B", "", "", null, null, null, null, null, null, true));
         RdpLaunchProfileCatalog.save(json, original);
         List<RdpLaunchProfile> loaded = RdpLaunchProfileCatalog.load(json);
-        assertEquals(2, loaded.size());
-        assertFalse(loaded.get(0).isDeleted());
-        assertTrue(loaded.get(1).isDeleted());
+        assertEquals(3, loaded.size());
+        RdpLaunchProfile loaded1 =
+                loaded.stream().filter(p -> p.number() == 1).findFirst().orElseThrow();
+        RdpLaunchProfile loaded2 =
+                loaded.stream().filter(p -> p.number() == 2).findFirst().orElseThrow();
+        assertFalse(loaded1.isDeleted());
+        assertTrue(loaded2.isDeleted());
         assertTrue(Files.readString(json, StandardCharsets.UTF_8).contains("\"deleted\" : true"));
     }
 
@@ -102,8 +119,8 @@ class RdpLaunchProfileCatalogTest {
                         new RdpLaunchProfile(1, "A", "", "", null, null, null, null, null, null, null),
                         new RdpLaunchProfile(2, "B", "", "", null, null, null, null, null, null, true),
                         new RdpLaunchProfile(3, "C", "", "", null, null, null, null, null, null, null));
-        assertEquals(2, RdpLaunchProfileCatalog.countActive(all));
-        assertEquals(2, RdpLaunchProfileCatalog.activeProfiles(all).size());
+        assertEquals(3, RdpLaunchProfileCatalog.countActive(all));
+        assertEquals(3, RdpLaunchProfileCatalog.activeProfiles(all).size());
         assertEquals(1, RdpLaunchProfileCatalog.deletedProfiles(all).size());
         assertEquals(2, RdpLaunchProfileCatalog.deletedProfiles(all).getFirst().number());
     }
@@ -111,10 +128,13 @@ class RdpLaunchProfileCatalogTest {
     @Test
     void canSoftDelete_requiresMoreThanOneActive() {
         List<RdpLaunchProfile> oneActive =
-                List.of(new RdpLaunchProfile(1, "A", "", "", null, null, null, null, null, null, null));
+                List.of(
+                        RdpLaunchProfile.signOutOnlyDefault(),
+                        new RdpLaunchProfile(1, "A", "", "", null, null, null, null, null, null, null));
         assertFalse(RdpLaunchProfileCatalog.canSoftDelete(oneActive));
         List<RdpLaunchProfile> twoActive =
                 List.of(
+                        RdpLaunchProfile.signOutOnlyDefault(),
                         new RdpLaunchProfile(1, "A", "", "", null, null, null, null, null, null, null),
                         new RdpLaunchProfile(2, "B", "", "", null, null, null, null, null, null, null));
         assertTrue(RdpLaunchProfileCatalog.canSoftDelete(twoActive));

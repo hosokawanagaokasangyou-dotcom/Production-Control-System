@@ -1931,6 +1931,39 @@ public final class AppPaths {
     }
 
     /**
+     * alternate shell 用: 接続先 RDP セッションから起動できるランチャー exe パス。
+     *
+     * <p>操作者 PC から書き込む配備先 UNC（{@link #resolveRdpLauncherExe}）は、接続先 PC から
+     * 直接参照できないことがある。{@link #KEY_PM_AI_RDP_LAUNCHER_EXE} が未設定のときは
+     * {@code \\192.168.0.101\共有フォルダ\...} を {@code M:\...} に置換する（工場 PC の
+     * 共有マップ既定）。
+     */
+    public static Path resolveRdpLauncherExeForRemoteSession(Map<String, String> ui) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        String override = trim(u.get(KEY_PM_AI_RDP_LAUNCHER_EXE));
+        if (!override.isEmpty()) {
+            return Path.of(override).normalize();
+        }
+        return mapFactoryShareUncToDriveLetter(resolveRdpLauncherExe(u));
+    }
+
+    /**
+     * 工場共有 UNC（{@code \\192.168.0.101\共有フォルダ\}）を接続先 RDP セッション向け
+     * {@code M:\} パスへ変換する。既に {@code M:\} 等のローカル／マップ済みパスはそのまま。
+     */
+    public static Path mapFactoryShareUncToDriveLetter(Path path) {
+        if (path == null) {
+            return Path.of("");
+        }
+        String normalized = path.toString().replace('/', '\\');
+        String uncPrefix = "\\\\192.168.0.101\\共有フォルダ\\";
+        if (normalized.regionMatches(true, 0, uncPrefix, 0, uncPrefix.length())) {
+            return Path.of("M:\\" + normalized.substring(uncPrefix.length()));
+        }
+        return path.normalize();
+    }
+
+    /**
      * 操作者名から ini ファイル名を生成する（例: {@code 細川_RPA設定.ini}）。
      * 操作者名が空のときは {@link #RDP_LAUNCHER_INI_BASENAME}。
      */

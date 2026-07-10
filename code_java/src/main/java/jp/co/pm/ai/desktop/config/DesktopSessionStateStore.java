@@ -253,6 +253,7 @@ public final class DesktopSessionStateStore {
                 "planInputComboSheetMayExceedNeed",
                 state.planInputComboSheetMayExceedNeed());
         root.put("planInputStage2SkipGeminiApi", state.planInputStage2SkipGeminiApi());
+        root.put("planInputTodayDispatch", state.planInputTodayDispatch());
         put(root, "mainRunStage2ResultBookFont", state.mainRunStage2ResultBookFont());
         root.put("mainRunSkipGeminiApi", state.mainRunSkipGeminiApi());
         root.put("mainRunStage1MarkAllExcludeAfterRun", state.mainRunStage1MarkAllExcludeAfterRun());
@@ -399,6 +400,7 @@ public final class DesktopSessionStateStore {
                 loadPlanInputStage2NextDayDialogMode(root),
                 optionalBoolean(root, "planInputComboSheetMayExceedNeed", true),
                 optionalBoolean(root, "planInputStage2SkipGeminiApi", true),
+                optionalBoolean(root, "planInputTodayDispatch", false),
                 text(root, "mainRunStage2ResultBookFont"),
                 optionalBoolean(root, "mainRunSkipGeminiApi", true),
                 optionalBoolean(root, "mainRunStage1MarkAllExcludeAfterRun", false),

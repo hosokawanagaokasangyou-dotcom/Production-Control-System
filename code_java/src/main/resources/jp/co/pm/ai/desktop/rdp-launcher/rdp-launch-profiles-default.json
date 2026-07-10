@@ -2,6 +2,13 @@
   "schemaVersion": 1,
   "profiles": [
     {
+      "number": 99,
+      "name": "接続先サインアウトのみ",
+      "description": "接続先のタスクスケジューラが PmAiRdpRemoteLauncher.exe --signout を起動し、ini の起動プログラム番号=99 によりサインアウトのみ実行します。alternate shell は使いません。",
+      "category": "サインアウト",
+      "sessionEndAction": "サインアウト"
+    },
+    {
       "number": 1,
       "name": "（未設定）",
       "description": "RAP設定で RPA コマンド（exe・引数）を登録してください。RPA シナリオ本体は接続先 PC で別途設定します。",
@@ -24,6 +31,18 @@
       "fullScreen": false,
       "desktopWidth": 1920,
       "desktopHeight": 1080
+    },
+    {
+      "number": 4,
+      "name": "（未設定）",
+      "description": "RAP設定で RPA コマンド（exe・引数）を登録してください。",
+      "category": ""
+    },
+    {
+      "number": 5,
+      "name": "（未設定）",
+      "description": "RAP設定で RPA コマンド（exe・引数）を登録してください。",
+      "category": ""
     }
   ]
 }

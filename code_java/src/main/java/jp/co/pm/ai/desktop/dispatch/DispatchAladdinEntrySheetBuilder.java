@@ -7,6 +7,11 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import jp.co.pm.ai.desktop.io.ExcelCellReadSupport;
+import jp.co.pm.ai.desktop.ui.PlanInputDateColumnSupport;
 
 /**
  * アラジン入力用 Excel（機械名ごとのシート×日別2段セル）のモデルを、結果_配台表の日別行から組み立てる。
@@ -19,6 +24,7 @@ public final class DispatchAladdinEntrySheetBuilder {
     private static final String COL_TID = "依頼NO";
     private static final String COL_INPUT_DATE = "原反投入日";
     private static final String COL_KAITO_NOKI = "回答納期";
+    private static final String COL_PROCESS_COMPLETE = "加工完了日";
     private static final String COL_CONVERSION_QTY = "換算数量";
     private static final String COL_COMPLETED_QTY = "実加工数";
 
@@ -30,6 +36,10 @@ public final class DispatchAladdinEntrySheetBuilder {
 
     /** セル下段の接頭辞。 */
     public static final String SYSTEM_LINE_PREFIX = "（シス計）";
+
+    /** 依頼書目次の納期など、年なし {@code M/d} 表示。 */
+    private static final Pattern MONTH_DAY_SLASH =
+            Pattern.compile("^\\s*(\\d{1,2})/(\\d{1,2})\\s*$");
 
     private DispatchAladdinEntrySheetBuilder() {}
 
@@ -69,11 +79,13 @@ public final class DispatchAladdinEntrySheetBuilder {
             String processName,
             String inputDate,
             String kaitoNoki,
+            String processCompleteDate,
             double conversionQty,
             double completedQty,
             double dispatchTotal,
             Map<LocalDate, EntryCell> cells,
-            LocalDate earliestDispatchDate) {
+            LocalDate earliestDispatchDate,
+            int referenceYear) {
 
         /** 配台合計 + 加工完了数量 が 換算数量 と一致（誤差 {@link #QTY_MATCH_EPS} 未満）なら OK。 */
         public boolean quantityOk() {
@@ -89,6 +101,19 @@ public final class DispatchAladdinEntrySheetBuilder {
             String signed =
                     (diff > 0 ? "+" : "") + ResultDispatchNormalizer.formatQty(diff);
             return "NG (差 " + signed + ")";
+        }
+
+        /** 加工完了日が回答納期の一日前と一致するか。 */
+        public boolean completionDateCheckOk() {
+            return "OK".equals(completionDateCheckText());
+        }
+
+        /**
+         * 完了日チェック（{@code OK} / {@code NG}）。加工完了日または回答納期が取れないときは空文字。
+         */
+        public String completionDateCheckText() {
+            return completionDateOneDayBeforeAnswerCheck(
+                    processCompleteDate, kaitoNoki, referenceYear);
         }
     }
 
@@ -144,7 +169,7 @@ public final class DispatchAladdinEntrySheetBuilder {
             String machine = me.getKey();
             List<EntryRow> outRows = new ArrayList<>(me.getValue().size());
             for (List<Map<String, String>> group : me.getValue().values()) {
-                outRows.add(buildRow(machine, group, dates, al, idx));
+                outRows.add(buildRow(machine, group, dates, al, idx, today));
             }
             outRows.sort(
                     Comparator.comparing(
@@ -181,7 +206,8 @@ public final class DispatchAladdinEntrySheetBuilder {
             List<Map<String, String>> group,
             List<LocalDate> dates,
             Map<String, Map<String, Map<String, Map<String, Double>>>> aladdinLookup,
-            Map<String, IndexInfo> indexByTid) {
+            Map<String, IndexInfo> indexByTid,
+            LocalDate today) {
         Map<String, String> first = group.getFirst();
         String tid = nz(first.get(COL_TID)).strip();
         String proc = nz(first.get(ResultDispatchSchema.COL_PROCESS)).strip();
@@ -227,17 +253,110 @@ public final class DispatchAladdinEntrySheetBuilder {
         String contractNo =
                 info != null && info.contractNo() != null ? info.contractNo().strip() : "";
 
+        int referenceYear = resolveReferenceYear(first, today, earliest);
+
         return new EntryRow(
                 tid,
                 contractNo,
                 proc,
                 nz(first.get(COL_INPUT_DATE)).strip(),
                 kaitoNoki,
+                nz(first.get(COL_PROCESS_COMPLETE)).strip(),
                 ResultDispatchNormalizer.parseDouble(first.get(COL_CONVERSION_QTY)),
                 ResultDispatchNormalizer.parseDouble(first.get(COL_COMPLETED_QTY)),
                 dispatchTotal,
                 Map.copyOf(cells),
-                earliest);
+                earliest,
+                referenceYear);
+    }
+
+    /**
+     * 加工完了日が回答納期の一日前か（{@code OK} / {@code NG}）。日付が取れないときは空文字。
+     *
+     * <p>依頼書目次の {@code M/d} や {@code yyyy/M/d} なども解釈する。
+     */
+    static String completionDateOneDayBeforeAnswerCheck(
+            String processCompleteDate, String answerNoki, int referenceYear) {
+        LocalDate answer = parseAladdinEntryDate(answerNoki, referenceYear);
+        int completeYear = answer != null ? answer.getYear() : referenceYear;
+        LocalDate complete = parseAladdinEntryDate(processCompleteDate, completeYear);
+        if (complete == null || answer == null) {
+            return "";
+        }
+        return complete.equals(answer.minusDays(1)) ? "OK" : "NG";
+    }
+
+    /**
+     * 年なし {@code M/d} 補完用。原反投入日・受注日・加工完了日・最遅配台日の順で年を推定する。
+     */
+    static int resolveReferenceYear(
+            Map<String, String> row, LocalDate today, LocalDate earliestDispatch) {
+        int fallback = today != null ? today.getYear() : LocalDate.now().getYear();
+        if (row == null) {
+            return fallback;
+        }
+        for (String col : List.of(COL_INPUT_DATE, "受注日", COL_PROCESS_COMPLETE)) {
+            LocalDate d = parseAladdinEntryDate(nz(row.get(col)), fallback);
+            if (d != null) {
+                return d.getYear();
+            }
+        }
+        if (earliestDispatch != null) {
+            return earliestDispatch.getYear();
+        }
+        return fallback;
+    }
+
+    /**
+     * アラジン入力用 Excel の日付照合向けパース。
+     *
+     * <p>{@code yyyy-MM-dd} / {@code yyyy/MM/dd} / {@code yyyy/M/d} / 年なし {@code M/d} に対応。
+     */
+    static LocalDate parseAladdinEntryDate(String raw, int referenceYear) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        String t = ExcelCellReadSupport.stripMidnightDateTimeSuffix(raw.strip()).strip();
+        if (t.isEmpty()) {
+            return null;
+        }
+        int space = t.indexOf(' ');
+        if (space > 0) {
+            t = t.substring(0, space).strip();
+        }
+        LocalDate d = ResultDispatchPivot.parseIsoDate(t);
+        if (d != null) {
+            return d;
+        }
+        d = PlanInputDateColumnSupport.parseCellValue(t).orElse(null);
+        if (d != null) {
+            return d;
+        }
+        String[] parts = t.split("[/.\\-]");
+        if (parts.length == 3) {
+            try {
+                int y = Integer.parseInt(parts[0].strip());
+                int mo = Integer.parseInt(parts[1].strip());
+                int day = Integer.parseInt(parts[2].strip());
+                if (y >= 1900 && mo >= 1 && mo <= 12 && day >= 1 && day <= 31) {
+                    return LocalDate.of(y, mo, day);
+                }
+            } catch (Exception ignored) {
+                // fall through
+            }
+        }
+        Matcher m = MONTH_DAY_SLASH.matcher(t);
+        if (m.matches()) {
+            try {
+                return LocalDate.of(
+                        referenceYear,
+                        Integer.parseInt(m.group(1)),
+                        Integer.parseInt(m.group(2)));
+            } catch (Exception ignored) {
+                return null;
+            }
+        }
+        return null;
     }
 
     private static String isoSlash(LocalDate d) {

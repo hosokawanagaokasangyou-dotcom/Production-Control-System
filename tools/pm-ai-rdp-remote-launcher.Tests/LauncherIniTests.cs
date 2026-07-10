@@ -20,8 +20,33 @@ public class LauncherIniTests
         try
         {
             var ini = LauncherIni.Load(path);
-            Assert.True(ini.IsLauncherDisabled);
+            Assert.True(ini.IsSignOutOnly);
+            Assert.Equal(LauncherIni.SignOutSlot, ini.SelectedSlot);
             Assert.Null(ini.ResolveSelectedCommand());
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Load_parsesSignOutSlot99()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "rap-" + Guid.NewGuid().ToString("N") + ".ini");
+        File.WriteAllText(
+            path,
+            """
+            起動プログラム番号=99
+            終了時RDP切断=1
+            2="C:\app.exe"
+            """);
+
+        try
+        {
+            var ini = LauncherIni.Load(path);
+            Assert.True(ini.IsSignOutOnly);
+            Assert.Equal(99, ini.SelectedSlot);
         }
         finally
         {
@@ -44,13 +69,13 @@ public class LauncherIniTests
 
         try
         {
-            LauncherIni.WriteSelectedSlot(path, LauncherIni.DisabledSlot);
+            LauncherIni.WriteSelectedSlot(path, LauncherIni.SignOutSlot);
 
             var text = File.ReadAllText(path, System.Text.Encoding.UTF8);
-            Assert.Contains("起動プログラム番号=0", text);
+            Assert.Contains("起動プログラム番号=99", text);
             Assert.Contains("2=\"C:\\app.exe\" arg", text);
             var reloaded = LauncherIni.Load(path);
-            Assert.True(reloaded.IsLauncherDisabled);
+            Assert.True(reloaded.IsSignOutOnly);
             Assert.Equal("\"C:\\app.exe\" arg", reloaded.Slots[2]);
         }
         finally

@@ -53,51 +53,150 @@ public final class OperatorCardPreviewFactory {
 
     /**
      * 印刷用に、用紙の可印刷幅（{@code javafx.print.PageLayout#getPrintableWidth()} 等）へ
-     * ルート幅を合わせて組み立てる。画面プレビューは {@link ScrollPane}（fitToWidth）で縮小表示するため
-     * 見た目上は全列表示されるが、{@code PrinterJob#printPage} は Node をそのままの寸法で用紙に描画する
-     * ため、固定幅（{@link #A4_PREF_WIDTH}）のままだと A4 の可印刷幅を超えて右側の列がクリップされる。
+     * ルート幅を合わせて組み立てる。画面プレビュー用。印刷は {@link #buildPrintPages} が
+     * {@link #A4_PREF_WIDTH} で組み立て、{@link OperatorCardPrintCompositor} がスケールする。
      */
     public static Parent buildRoot(OperatorCardPage page, String fontFamily, double rootWidth) {
         return assembleRoot(page.operatorName(), page.days(), fontFamily, rootWidth);
     }
 
     /**
-     * 印刷用に、1 オペレーター分のカードを用紙の可印刷高さ（{@code PageLayout#getPrintableHeight()}）
-     * へ収まる単位で複数ページ（{@link Parent} のリスト）に分割する。
+     * 印刷用に、1 オペレーター分のカードを用紙の可印刷高さへ収まる単位で複数ページに分割する。
      *
-     * <p>{@link #buildRoot} は全日分を 1 枚のルートへ詰め込むため、選択日数が多い・当日配台の行数が
-     * 多い場合に、可印刷高さを超えた分（末尾の日）が用紙からクリップされて印刷結果に現れない不具合が
-     * あった。本メソッドは実際の CSS 適用後の必要高さを 1 日ずつ計測しながら、収まらなくなった時点で
-     * 新しいページ（見出し・オペレーター名を再掲）へ切り出す。
-     *
-     * @param printableHeight 用紙 1 枚の可印刷高さ（pt）。非正・非有限値のときは分割せず 1 ページのみ返す。
+     * <p>レイアウトは画面プレビューと同じ {@link #A4_PREF_WIDTH} で組み立て、高さ判定は
+     * {@code printableHeight / printScale}（スケール前のレイアウト高さ）で行う。
+     * 1 日の行数が多い場合は行単位でも分割する。
      */
     public static List<Parent> buildPrintPages(
-            OperatorCardPage page, String fontFamily, double rootWidth, double printableHeight) {
+            OperatorCardPage page, String fontFamily, double printableWidth, double printableHeight) {
         List<OperatorCardDaySection> days = page.days();
-        if (days.isEmpty() || !Double.isFinite(printableHeight) || printableHeight <= 0) {
-            return List.of(assembleRoot(page.operatorName(), days, fontFamily, rootWidth));
+        if (days.isEmpty()) {
+            return List.of(assembleRoot(page.operatorName(), days, fontFamily, A4_PREF_WIDTH));
+        }
+        if (!Double.isFinite(printableWidth)
+                || printableWidth <= 0
+                || !Double.isFinite(printableHeight)
+                || printableHeight <= 0) {
+            return List.of(assembleRoot(page.operatorName(), days, fontFamily, A4_PREF_WIDTH));
         }
 
+        double scale = OperatorCardPrintCompositor.printScaleForWidth(printableWidth);
+        double layoutHeightBudget = printableHeight / scale;
+        double pageHeaderHeight =
+                measuredLayoutHeight(
+                        assembleRoot(page.operatorName(), List.of(), fontFamily, A4_PREF_WIDTH),
+                        A4_PREF_WIDTH);
         String ff = cssFontFamily(fontFamily);
-        double width = rootWidth > 0 ? rootWidth : A4_PREF_WIDTH;
 
         List<Parent> pages = new ArrayList<>();
-        VBox current = assembleRoot(page.operatorName(), List.of(), fontFamily, rootWidth);
+        VBox current = assembleRoot(page.operatorName(), List.of(), fontFamily, A4_PREF_WIDTH);
+
         for (OperatorCardDaySection day : days) {
-            VBox dayBox = buildDayBox(day, ff);
-            current.getChildren().add(dayBox);
-            double height = measuredPrefHeight(current, width);
-            boolean overflowsWithMoreThanOneDay = height > printableHeight + 0.5 && dayCountOf(current) > 1;
-            if (overflowsWithMoreThanOneDay) {
-                current.getChildren().remove(dayBox);
-                pages.add(current);
-                current = assembleRoot(page.operatorName(), List.of(), fontFamily, rootWidth);
+            for (VBox dayBox :
+                    splitDayBoxesForPrint(day, ff, layoutHeightBudget, pageHeaderHeight)) {
                 current.getChildren().add(dayBox);
+                double height = measuredLayoutHeight(current, A4_PREF_WIDTH);
+                boolean overflows = height > layoutHeightBudget + 0.5 && dayCountOf(current) > 1;
+                if (overflows) {
+                    current.getChildren().remove(dayBox);
+                    pages.add(current);
+                    current = assembleRoot(page.operatorName(), List.of(), fontFamily, A4_PREF_WIDTH);
+                    current.getChildren().add(dayBox);
+                }
             }
         }
         pages.add(current);
         return pages;
+    }
+
+    /**
+     * 1 日分を 1 つ以上の {@link VBox}（日見出し＋表）へ分割する。1 ページに収まらない行数の日は
+     * 行チャンクへ切り出す（各チャンクは日見出しを繰り返す）。
+     */
+    private static List<VBox> splitDayBoxesForPrint(
+            OperatorCardDaySection day,
+            String ff,
+            double layoutHeightBudget,
+            double pageHeaderHeight) {
+        VBox full = buildDayBox(day, ff);
+        double maxDayHeight = Math.max(80.0, layoutHeightBudget - pageHeaderHeight);
+        if (measuredLayoutHeight(full, A4_PREF_WIDTH) <= maxDayHeight + 0.5) {
+            return List.of(full);
+        }
+
+        List<OperatorCardTaskRow> rows = day.rows();
+        if (rows.isEmpty()) {
+            return List.of(full);
+        }
+
+        List<VBox> chunks = new ArrayList<>();
+        int start = 0;
+        while (start < rows.size()) {
+            int end = start + 1;
+            while (end <= rows.size()) {
+                OperatorCardDaySection slice =
+                        new OperatorCardDaySection(
+                                day.date(),
+                                day.dateColumnHeader(),
+                                rows.subList(start, end));
+                VBox box = buildDayBox(slice, ff);
+                double h = measuredLayoutHeight(box, A4_PREF_WIDTH);
+                if (h > maxDayHeight + 0.5 && end - start > 1) {
+                    end--;
+                    slice =
+                            new OperatorCardDaySection(
+                                    day.date(),
+                                    day.dateColumnHeader(),
+                                    rows.subList(start, end));
+                    chunks.add(buildDayBox(slice, ff));
+                    start = end;
+                    break;
+                }
+                if (end == rows.size()) {
+                    chunks.add(box);
+                    start = end;
+                    break;
+                }
+                end++;
+            }
+        }
+        return chunks.isEmpty() ? List.of(full) : chunks;
+    }
+
+    /** CSS 適用後に {@code layout()} まで行い、内容に応じた高さを返す（Scene 高さに引き伸ばされない）。 */
+    public static void prepareForLayoutMeasure(VBox root, double layoutWidth) {
+        root.setMaxHeight(Region.USE_PREF_SIZE);
+        Scene scene = root.getScene();
+        if (scene == null) {
+            scene = new Scene(root, layoutWidth, 1, Color.WHITE);
+            attachDesktopStylesheet(scene);
+        } else {
+            attachDesktopStylesheet(scene);
+        }
+        root.applyCss();
+        root.layout();
+    }
+
+    static double measuredLayoutHeight(VBox root, double layoutWidth) {
+        root.setMaxHeight(Region.USE_PREF_SIZE);
+        Scene scene = root.getScene();
+        boolean tempScene = scene == null;
+        if (tempScene) {
+            scene = new Scene(root, layoutWidth, 1, Color.WHITE);
+            attachDesktopStylesheet(scene);
+        } else {
+            attachDesktopStylesheet(scene);
+        }
+        root.applyCss();
+        root.layout();
+        double h = root.prefHeight(layoutWidth);
+        if (h <= 0) {
+            h = root.getBoundsInLocal().getHeight();
+        }
+        if (tempScene) {
+            scene.setRoot(new javafx.scene.Group());
+        }
+        return h;
     }
 
     private static int dayCountOf(VBox root) {
@@ -163,30 +262,6 @@ public final class OperatorCardPreviewFactory {
         grid.getStyleClass().add("pm-operator-card-grid");
 
         return new VBox(6, dayTitle, grid);
-    }
-
-    /**
-     * {@code root} を（未接続なら）一時 {@link Scene} へ接続して {@code pm-ai-desktop.css} を適用し、
-     * CSS 反映後の必要高さ（ボーダー・パディング・フォントサイズを含む）を返す。
-     *
-     * <p>印刷は画面プレビューと違いアプリ本体の {@link Scene}（スタイルシート適用済み）を経由しないため、
-     * 明示的にスタイルシートを当てないと枠線・見出し背景色・行の詰め幅がプレビューと異なって見える。
-     */
-    private static double measuredPrefHeight(VBox root, double width) {
-        Scene scene = root.getScene();
-        boolean tempScene = scene == null;
-        if (tempScene) {
-            scene = new Scene(root, Math.max(1, width), 1, Color.WHITE);
-        }
-        attachDesktopStylesheet(scene);
-        root.applyCss();
-        double height = root.prefHeight(width);
-        if (tempScene) {
-            // 計測専用の Scene から root を解放し、呼び出し側が後で（可印刷高さぴったりの）
-            // 本番用 Scene を新規に割り当てられるようにする。
-            scene.setRoot(new javafx.scene.Group());
-        }
-        return height;
     }
 
     /**

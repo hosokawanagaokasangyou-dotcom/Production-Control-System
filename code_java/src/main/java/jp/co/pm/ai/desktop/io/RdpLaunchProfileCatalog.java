@@ -95,7 +95,7 @@ public final class RdpLaunchProfileCatalog {
         return new ArrayList<>(merged.values());
     }
 
-    /** ini のスロット数に合わせてプロファイル行数を確保する。 */
+    /** ini のスロット数に合わせてプロファイル行数を確保する（99 番は常に含む）。 */
     public static List<RdpLaunchProfile> ensureCount(List<RdpLaunchProfile> profiles, int count) {
         Map<Integer, RdpLaunchProfile> byNumber = new LinkedHashMap<>();
         if (profiles != null) {
@@ -105,6 +105,9 @@ public final class RdpLaunchProfileCatalog {
         }
         int target = Math.min(RdpRemoteLauncherIni.MAX_SLOTS, Math.max(1, count));
         List<RdpLaunchProfile> out = new ArrayList<>();
+        out.add(
+                byNumber.getOrDefault(
+                        RdpRemoteLauncherIni.SLOT_SIGN_OUT, RdpLaunchProfile.signOutOnlyDefault()));
         for (int n = 1; n <= target; n++) {
             out.add(byNumber.getOrDefault(n, RdpLaunchProfile.empty(n)));
         }
@@ -129,7 +132,15 @@ public final class RdpLaunchProfileCatalog {
         if (byNumber.isEmpty()) {
             return seedEmptyProfiles(3);
         }
-        int max = byNumber.keySet().stream().mapToInt(Integer::intValue).max().orElse(1);
+        if (!byNumber.containsKey(RdpRemoteLauncherIni.SLOT_SIGN_OUT)) {
+            byNumber.put(RdpRemoteLauncherIni.SLOT_SIGN_OUT, RdpLaunchProfile.signOutOnlyDefault());
+        }
+        int max =
+                byNumber.keySet().stream()
+                        .filter(n -> n >= 1 && n <= RdpRemoteLauncherIni.MAX_SLOTS)
+                        .mapToInt(Integer::intValue)
+                        .max()
+                        .orElse(1);
         return ensureCount(new ArrayList<>(byNumber.values()), max);
     }
 
@@ -142,7 +153,8 @@ public final class RdpLaunchProfileCatalog {
             return null;
         }
         int number = numberNode.intValue();
-        if (number < 1 || number > RdpRemoteLauncherIni.MAX_SLOTS) {
+        if (number != RdpRemoteLauncherIni.SLOT_SIGN_OUT
+                && (number < 1 || number > RdpRemoteLauncherIni.MAX_SLOTS)) {
             return null;
         }
         RdpSessionEndAction sessionEndAction = null;
@@ -220,21 +232,34 @@ public final class RdpLaunchProfileCatalog {
         return activeProfiles(profiles).size();
     }
 
-    /** 最後の1件は削除不可。 */
+    /** 最後の1件は削除不可（プロファイル 99 は常駐のためカウントしない）。 */
     public static boolean canSoftDelete(List<RdpLaunchProfile> profiles) {
-        return countActive(profiles) > 1;
+        int activeRpa = 0;
+        for (RdpLaunchProfile profile : activeProfiles(profiles)) {
+            if (!profile.isSignOutOnlyProfile()) {
+                activeRpa++;
+            }
+        }
+        return activeRpa > 1;
     }
 
     private static List<RdpLaunchProfile> normalizeList(List<RdpLaunchProfile> profiles) {
         if (profiles == null || profiles.isEmpty()) {
             return seedEmptyProfiles(1);
         }
-        int maxNumber = profiles.stream().mapToInt(RdpLaunchProfile::number).max().orElse(1);
+        int maxNumber =
+                profiles.stream()
+                        .filter(p -> !p.isSignOutOnlyProfile())
+                        .mapToInt(RdpLaunchProfile::number)
+                        .filter(n -> n >= 1 && n <= RdpRemoteLauncherIni.MAX_SLOTS)
+                        .max()
+                        .orElse(1);
         return ensureCount(profiles, maxNumber);
     }
 
     private static List<RdpLaunchProfile> seedEmptyProfiles(int count) {
         List<RdpLaunchProfile> out = new ArrayList<>();
+        out.add(RdpLaunchProfile.signOutOnlyDefault());
         for (int i = 1; i <= count; i++) {
             out.add(RdpLaunchProfile.empty(i));
         }

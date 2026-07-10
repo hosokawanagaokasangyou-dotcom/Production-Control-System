@@ -195,6 +195,7 @@ public record PlanWorkspaceSessionFragment(
                 base.planInputStage2NextDayDialogMode(),
                 base.planInputComboSheetMayExceedNeed(),
                 base.planInputStage2SkipGeminiApi(),
+                base.planInputTodayDispatch(),
                 base.mainRunStage2ResultBookFont(),
                 base.mainRunSkipGeminiApi(),
                 base.mainRunStage1MarkAllExcludeAfterRun(),

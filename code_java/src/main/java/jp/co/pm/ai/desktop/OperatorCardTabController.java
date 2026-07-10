@@ -15,7 +15,6 @@ import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
 import javafx.geometry.Pos;
 import javafx.scene.Parent;
-import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
@@ -27,7 +26,7 @@ import javafx.scene.control.SpinnerValueFactory;
 import javafx.scene.control.TextField;
 import javafx.scene.control.TextFormatter;
 import javafx.scene.layout.StackPane;
-import javafx.scene.paint.Color;
+import javafx.scene.layout.VBox;
 import javafx.scene.text.Font;
 import javafx.print.PageLayout;
 import javafx.print.PageOrientation;
@@ -44,6 +43,7 @@ import jp.co.pm.ai.desktop.io.JsonTableIo.SheetTable;
 import jp.co.pm.ai.desktop.print.OperatorCardDocumentBuilder;
 import jp.co.pm.ai.desktop.print.OperatorCardDocumentBuilder.OperatorCardBuildException;
 import jp.co.pm.ai.desktop.print.OperatorCardPage;
+import jp.co.pm.ai.desktop.print.OperatorCardPrintCompositor;
 import jp.co.pm.ai.desktop.print.OperatorCardPreviewFactory;
 
 /**
@@ -581,7 +581,7 @@ public final class OperatorCardTabController {
         Printer printer = job.getPrinter();
         PageLayout layout =
                 printer.createPageLayout(
-                        Paper.A4, PageOrientation.PORTRAIT, Printer.MarginType.DEFAULT);
+                        Paper.A4, PageOrientation.PORTRAIT, Printer.MarginType.HARDWARE_MINIMUM);
         double printableWidth = layout.getPrintableWidth();
         double printableHeight = layout.getPrintableHeight();
 
@@ -592,20 +592,16 @@ public final class OperatorCardTabController {
                 OperatorCardPage page =
                         OperatorCardDocumentBuilder.buildPage(
                                 opName, cachedMemberSheets, dispatchRows, start, dayCount);
-                // 選択日数・当日配台の行数が多いと 1 枚に収まらないため、可印刷高さで複数ページへ分割する
-                // （分割しないと末尾の日が用紙からクリップされ、画面プレビューより印刷結果の日数が少なく見える）。
-                List<Parent> pages =
+                List<Parent> layoutPages =
                         OperatorCardPreviewFactory.buildPrintPages(
                                 page, font, printableWidth, printableHeight);
-                for (Parent root : pages) {
-                    if (root.getScene() == null) {
-                        double sceneHeight = Math.max(printableHeight, root.prefHeight(printableWidth));
-                        Scene printScene = new Scene(root, printableWidth, sceneHeight, Color.WHITE);
-                        OperatorCardPreviewFactory.attachDesktopStylesheet(printScene);
-                    }
-                    root.applyCss();
-                    root.layout();
-                    boolean ok = job.printPage(layout, root);
+                for (Parent layoutRoot : layoutPages) {
+                    Parent printRoot =
+                            OperatorCardPrintCompositor.wrapScaledPrintPage(
+                                    (VBox) layoutRoot, printableWidth);
+                    OperatorCardPrintCompositor.createPrintScene(
+                            printRoot, printableWidth, printableHeight);
+                    boolean ok = job.printPage(layout, printRoot);
                     if (!ok) {
                         shell.appendLog("[operator-card] printPage returned false for " + opName);
                         aborted = true;

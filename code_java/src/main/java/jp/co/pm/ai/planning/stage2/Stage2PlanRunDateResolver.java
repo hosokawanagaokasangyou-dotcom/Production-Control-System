@@ -46,6 +46,17 @@ public final class Stage2PlanRunDateResolver {
         return d.format(DateTimeFormatter.ofPattern("yyyy/MM/dd"));
     }
 
+    /** 加工計画ブックからデータ抽出時刻を読む（段階2基準日・当日配台判定用）。 */
+    public static Optional<LocalDateTime> readExtractionDateTimeFromWorkbook(Path workbook) {
+        if (workbook == null || !Files.isRegularFile(workbook)) {
+            return Optional.empty();
+        }
+        return extractDataExtractionDateTime(
+                Map.of(
+                        AppPaths.KEY_PM_AI_DATA_EXTRACTION_SOURCE_WORKBOOK,
+                        workbook.toAbsolutePath().normalize().toString()));
+    }
+
     static Optional<LocalDateTime> extractDataExtractionDateTime(Map<String, String> ui) {
         Path workbook = resolveDataExtractionWorkbook(ui);
         if (workbook == null || !Files.isRegularFile(workbook)) {

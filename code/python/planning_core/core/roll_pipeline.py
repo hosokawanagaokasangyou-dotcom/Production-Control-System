@@ -5953,6 +5953,26 @@ def _first_working_day_strictly_after(
             if d > run_date:
                 return d
     return run_date + timedelta(days=1)
+
+
+def _stage2_dialog_target_plan_day(
+    run_date: date | None,
+    working_days: list[date] | None,
+    *,
+    skip_today: bool,
+) -> date | None:
+    """
+    段階2直前ダイアログ由来の「翌日配台」追補・アラジン除外適用日。
+
+    skip_today ON 時は run_date 自体が計画開始日のため +1 稼働日しない。
+    """
+    if run_date is None:
+        return None
+    if skip_today:
+        return run_date
+    return _first_working_day_strictly_after(run_date, working_days)
+
+
 def append_in_progress_next_day_dialog_rows_to_dispatch_table(
     df_dispatch: pd.DataFrame,
     tasks_df,
@@ -5975,7 +5995,12 @@ def append_in_progress_next_day_dialog_rows_to_dispatch_table(
     ):
         return df_dispatch
 
-    next_day = _first_working_day_strictly_after(run_date, working_days)
+    skip_today = _stage2_truthy_env("PM_AI_STAGE2_SKIP_TODAY_DISPATCH")
+    next_day = _stage2_dialog_target_plan_day(
+        run_date, working_days, skip_today=skip_today
+    )
+    if next_day is None:
+        return df_dispatch
     if next_day != run_date + timedelta(days=1):
         logging.info(
             "結果_配台表: 加工途中・翌日配台の配台日を稼働日に合わせました（%s → %s）。",

@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -34,7 +35,25 @@ public final class RemoteDesktopLauncher {
             /** 直接起動した mstsc の PID。 */
             OptionalLong mstscProcessId,
             /** セキュリティダイアログ自動操作時に mstsc PID を書き込むマーカーファイル。 */
-            Optional<Path> mstscPidMarkerFile) {}
+            Optional<Path> mstscPidMarkerFile,
+            /** サインアウト用一時 .rdp（終了後に削除すること）。 */
+            Optional<Path> signOutStagingFile) {
+
+        public LaunchOutcome(
+                Path rdpProfile,
+                Optional<String> remoteStartupSummary,
+                boolean signatureRemoved,
+                OptionalLong mstscProcessId,
+                Optional<Path> mstscPidMarkerFile) {
+            this(
+                    rdpProfile,
+                    remoteStartupSummary,
+                    signatureRemoved,
+                    mstscProcessId,
+                    mstscPidMarkerFile,
+                    Optional.empty());
+        }
+    }
 
     private RemoteDesktopLauncher() {}
 
@@ -60,7 +79,7 @@ public final class RemoteDesktopLauncher {
         if (mstsc == null) {
             throw new IOException("mstsc.exe が見つかりません。");
         }
-        Map<String, String> env = ui != null ? ui : Map.of();
+        Map<String, String> env = ui != null ? new HashMap<>(ui) : new HashMap<>();
         String remoteProgram =
                 RdpCompanionLauncher.resolveRemoteProgramPath(env).orElse("");
         String remoteArgs = RdpCompanionLauncher.resolveRemoteProgramArgs(env);
@@ -78,7 +97,8 @@ public final class RemoteDesktopLauncher {
         if (RdpSecurityDialogAutomator.isAutoConfirmEnabled(env)) {
             mstscPidMarker =
                     Optional.of(
-                            RdpSecurityDialogAutomator.launchWithAutomatedConfirm(mstsc, abs, env));
+                            RdpSecurityDialogAutomator.launchWithAutomatedConfirm(
+                                    mstsc, abs, env));
         } else {
             Process started = startDetached(List.of(mstsc.toString(), abs.toString()));
             mstscPidHint = OptionalLong.of(started.pid());
@@ -86,6 +106,57 @@ public final class RemoteDesktopLauncher {
         OptionalLong mstscPid =
                 mstscPidHint.isPresent() ? mstscPidHint : findLatestMstscPidForProfile(abs);
         return new LaunchOutcome(abs, summary, signatureRemoved, mstscPid, mstscPidMarker);
+    }
+
+    /**
+     * 接続先サインアウト用: ini を {@link RdpRemoteLauncherIni#INI_SIGN_OUT_SLOT} にしたうえで通常 mstsc 接続する。
+     *
+     * <p>接続先のタスクスケジューラが {@link AppPaths#RDP_LAUNCHER_EXE_BASENAME} を
+     * {@link RdpRemoteLauncherIni#SIGN_OUT_LAUNCHER_ARGS} 付きで起動し、サインアウトする。
+     * alternate shell は使わない。
+     *
+     * <p>ini の {@link RdpRemoteLauncherIni#writeTaskSchedulerSuppress} は呼び出し前に実行すること。
+     */
+    public static LaunchOutcome launchSignOutViaTaskScheduler(Path rdpProfile, Map<String, String> ui)
+            throws IOException {
+        Map<String, String> env = ui != null ? new HashMap<>(ui) : new HashMap<>();
+        env.put(AppPaths.KEY_PM_AI_RDP_EMBED_STARTUP_IN_PROFILE, "0");
+        LaunchOutcome outcome = launch(rdpProfile, env);
+        return new LaunchOutcome(
+                outcome.rdpProfile(),
+                Optional.of(
+                        "タスクスケジューラ + "
+                                + RdpRemoteLauncherIni.SELECTED_SLOT_KEY
+                                + "="
+                                + RdpRemoteLauncherIni.INI_SIGN_OUT_SLOT
+                                + " + "
+                                + RdpRemoteLauncherIni.SIGN_OUT_LAUNCHER_ARGS),
+                outcome.signatureRemoved(),
+                outcome.mstscProcessId(),
+                outcome.mstscPidMarkerFile(),
+                outcome.signOutStagingFile());
+    }
+
+    /** @deprecated {@link #launchSignOutViaTaskScheduler} を使用 */
+    @Deprecated
+    public static LaunchOutcome launchSignOutViaAlternateShell(Path rdpProfile, Map<String, String> ui)
+            throws IOException {
+        return launchSignOutViaTaskScheduler(rdpProfile, ui);
+    }
+
+    /** @deprecated {@link #launchSignOutViaTaskScheduler} を使用 */
+    @Deprecated
+    public static LaunchOutcome launchSignOutViaAlternateShell(
+            Path rdpProfile,
+            Map<String, String> ui,
+            String launcherProgram,
+            String launcherArgs)
+            throws IOException {
+        return launchSignOutViaTaskScheduler(rdpProfile, ui);
+    }
+
+    private static String trim(String raw) {
+        return raw != null ? raw.strip() : "";
     }
 
     /** 起動直後の mstsc PID（自動確認 OFF 時は Process#pid、ON 時はスキャン）。 */

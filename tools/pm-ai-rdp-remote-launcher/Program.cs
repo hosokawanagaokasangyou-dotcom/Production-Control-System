@@ -21,6 +21,18 @@ internal static class Program
                 + " BaseDirectory="
                 + AppContext.BaseDirectory);
 
+        if (HasSignOutFlag(args))
+        {
+            LauncherLog.Info(
+                "--signout 指定: 接続時サインアウトを実行します。");
+            var signOutOk = SessionEndExecutor.TryExecute(
+                SessionEndAction.SignOut,
+                out var signOutError);
+            return ExitWithLog(
+                signOutOk ? ExitOk : ExitError,
+                signOutOk ? "接続時サインアウト完了（--signout）" : signOutError ?? "接続時サインアウト失敗");
+        }
+
         string? suppressIniPath = null;
         var consumedSlot = 0;
         try
@@ -47,13 +59,19 @@ internal static class Program
             var ini = LauncherIni.Load(iniPath);
             consumedSlot = ini.SelectedSlot;
             LauncherLog.Info("起動プログラム番号=" + consumedSlot);
-            if (ini.IsLauncherDisabled)
+            if (ini.IsSignOutOnly)
             {
                 LauncherLog.Info(
                     "起動プログラム番号="
-                        + LauncherIni.DisabledSlot
-                        + " のため何もしません（RPA 起動・サインアウトなし）。");
-                return ExitWithLog(ExitOk, "抑止（起動プログラム番号=0）");
+                        + ini.SelectedSlot
+                        + ": 接続時サインアウトを実行します。");
+                suppressIniPath = null;
+                var signOutOk = SessionEndExecutor.TryExecute(
+                    SessionEndAction.SignOut,
+                    out var signOutError);
+                return ExitWithLog(
+                    signOutOk ? ExitOk : ExitError,
+                    signOutOk ? "接続時サインアウト完了" : signOutError ?? "接続時サインアウト失敗");
             }
 
             var startedSlot = consumedSlot;
@@ -103,7 +121,7 @@ internal static class Program
             }
 
             var sessionEndAction = ini.ResolveSessionEndAction();
-            LauncherLog.Info("終了時セッション操作: " + FormatSessionEndAction(sessionEndAction));
+            LauncherLog.Info("終了時セッション操作: " + SessionEndActionParser.Format(sessionEndAction));
             LauncherLog.Info(
                 "操作者="
                     + (string.IsNullOrWhiteSpace(ini.OperatorName) ? "(未設定)" : ini.OperatorName));
@@ -213,19 +231,7 @@ internal static class Program
 
             if (sessionEndAction != SessionEndAction.None)
             {
-                var sessionEndSucceeded = sessionEndAction switch
-                {
-                    SessionEndAction.Disconnect =>
-                        RdpSessionDisconnecter.TryDisconnectCurrentSession(out var disconnectError)
-                            ? LogSessionEndSuccess("RDP セッションを切断しました")
-                            : LogSessionEndFailure("RDP 切断失敗: " + disconnectError),
-                    SessionEndAction.SignOut =>
-                        RdpSessionSignOuter.TrySignOutCurrentSession(out var signOutError)
-                            ? LogSessionEndSuccess("RDP セッションをサインアウトしました")
-                            : LogSessionEndFailure("サインアウト失敗: " + signOutError),
-                    _ => true,
-                };
-                _ = sessionEndSucceeded;
+                SessionEndExecutor.TryExecute(sessionEndAction, out _);
             }
 
             return ExitWithLog(ExitOk, "正常終了");
@@ -237,7 +243,9 @@ internal static class Program
         }
         finally
         {
-            if (consumedSlot > LauncherIni.DisabledSlot && !string.IsNullOrWhiteSpace(suppressIniPath))
+            if (consumedSlot > LauncherIni.LegacySignOutSlot
+                && consumedSlot != LauncherIni.SignOutSlot
+                && !string.IsNullOrWhiteSpace(suppressIniPath))
             {
                 TrySuppressIniSlot(suppressIniPath, consumedSlot);
             }
@@ -248,39 +256,20 @@ internal static class Program
     {
         try
         {
-            LauncherIni.WriteSelectedSlot(iniPath, LauncherIni.DisabledSlot);
+            LauncherIni.WriteSelectedSlot(iniPath, LauncherIni.SignOutSlot);
             LauncherLog.Info(
-                "起動プログラム番号を 0 に設定しました（"
+                "起動プログラム番号を "
+                    + LauncherIni.SignOutSlot
+                    + " に設定しました（"
                     + startedSlot
-                    + " → 0）。タスクスケジューラ再実行時の二重起動を抑止します。");
+                    + " → "
+                    + LauncherIni.SignOutSlot
+                    + "）。タスクスケジューラ再実行時の二重起動を抑止します。");
         }
         catch (Exception ex)
         {
             LauncherLog.Error("起動プログラム番号の 0 設定に失敗: " + ex.Message);
         }
-    }
-
-    private static bool LogSessionEndSuccess(string message)
-    {
-        LauncherLog.Info(message);
-        return true;
-    }
-
-    private static bool LogSessionEndFailure(string message)
-    {
-        LauncherLog.Error(message);
-        return false;
-    }
-
-    private static string FormatSessionEndAction(SessionEndAction action)
-    {
-        return action switch
-        {
-            SessionEndAction.None => "なし",
-            SessionEndAction.Disconnect => "切断",
-            SessionEndAction.SignOut => "サインアウト",
-            _ => action.ToString(),
-        };
     }
 
     private static int ExitWithLog(int exitCode, string reason)
@@ -348,6 +337,19 @@ internal static class Program
         {
             return "(読取失敗)";
         }
+    }
+
+    private static bool HasSignOutFlag(string[] args)
+    {
+        foreach (var arg in args)
+        {
+            if (string.Equals(arg, "--signout", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static string? ResolveIniPath(string[] args, string? exeDir)

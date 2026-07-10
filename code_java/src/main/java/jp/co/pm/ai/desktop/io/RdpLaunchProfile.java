@@ -2,11 +2,13 @@ package jp.co.pm.ai.desktop.io;
 
 import java.util.Objects;
 
+import jp.co.pm.ai.desktop.config.AppPaths;
+
 /**
  * リモートデスクトップ接続時に選択する起動プロファイル。
  *
- * <p>プロファイル番号は {@link RdpRemoteLauncherIni} のスロット番号（1～{@link RdpRemoteLauncherIni#MAX_SLOTS}）と
- * 1:1 対応し、接続先 C# ランチャーが参照する {@code 起動プログラム番号} にそのまま渡される。
+ * <p>プロファイル番号は {@link RdpRemoteLauncherIni} のスロット番号（99＝接続先サインアウトのみ、
+ * 1～{@link RdpRemoteLauncherIni#MAX_SLOTS}＝RPA）と 1:1 対応する。
  *
  * <p>RPA の exe／引数は {@code RAP設定.ini} のスロット行に保存する（RPA 本体の設定は接続先で別途行う前提）。
  * 名称・説明・区分などのメタデータは {@link RdpLaunchProfileCatalog} が JSON で管理する。
@@ -25,9 +27,13 @@ public record RdpLaunchProfile(
         Boolean deleted) {
 
     public RdpLaunchProfile {
-        if (number < 1 || number > RdpRemoteLauncherIni.MAX_SLOTS) {
+        if (number != RdpRemoteLauncherIni.SLOT_SIGN_OUT
+                && (number < 1 || number > RdpRemoteLauncherIni.MAX_SLOTS)) {
             throw new IllegalArgumentException(
-                    "プロファイル番号は 1～" + RdpRemoteLauncherIni.MAX_SLOTS + " です: " + number);
+                    "プロファイル番号は 99 または 1～"
+                            + RdpRemoteLauncherIni.MAX_SLOTS
+                            + " です: "
+                            + number);
         }
         name = normalizeOptional(name);
         description = normalizeOptional(description);
@@ -36,6 +42,31 @@ public record RdpLaunchProfile(
 
     public static RdpLaunchProfile empty(int number) {
         return new RdpLaunchProfile(number, "", "", "", null, null, null, null, null, null, null);
+    }
+
+    /** 起動プロファイル 99（接続先サインアウトのみ）の既定メタデータ。 */
+    public static RdpLaunchProfile signOutOnlyDefault() {
+        return new RdpLaunchProfile(
+                RdpRemoteLauncherIni.SLOT_SIGN_OUT,
+                RdpRemoteLauncherIni.SIGN_OUT_ONLY_PROFILE_NAME,
+                "接続先のタスクスケジューラが "
+                        + AppPaths.RDP_LAUNCHER_EXE_BASENAME
+                        + " "
+                        + RdpRemoteLauncherIni.SIGN_OUT_LAUNCHER_ARGS
+                        + " を起動し、ini の起動プログラム番号=99 によりサインアウトのみ実行します。"
+                        + " alternate shell（接続先ランチャー path 埋め込み）は使いません。",
+                "サインアウト",
+                null,
+                RdpSessionEndAction.SIGN_OUT,
+                null,
+                null,
+                null,
+                null,
+                null);
+    }
+
+    public boolean isSignOutOnlyProfile() {
+        return number == RdpRemoteLauncherIni.SLOT_SIGN_OUT;
     }
 
     /** 論理削除済みか（JSON の {@code deleted: true}）。 */

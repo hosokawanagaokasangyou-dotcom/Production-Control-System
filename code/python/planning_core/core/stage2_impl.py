@@ -634,8 +634,10 @@ def _generate_plan_impl(
             else sorted_dates
         )
         global _STAGE2_ALADDIN_EXCLUDE_APPLY_DATE
-        _STAGE2_ALADDIN_EXCLUDE_APPLY_DATE = _first_working_day_strictly_after(
-            run_date, sorted_dates
+        _STAGE2_ALADDIN_EXCLUDE_APPLY_DATE = _stage2_dialog_target_plan_day(
+            run_date,
+            sorted_dates,
+            skip_today=_stage2_truthy_env("PM_AI_STAGE2_SKIP_TODAY_DISPATCH"),
         )
         _full_calendar_without_deadline_restart = True
         for current_date in _plan_day_iter:
@@ -3099,10 +3101,10 @@ def _generate_plan_impl(
         tasks_df,
         df_src_for_dispatch,
     )
-    _in_progress_dispatch_plan_day = (
-        _first_working_day_strictly_after(run_date, working_days)
-        if run_date is not None
-        else None
+    _in_progress_dispatch_plan_day = _stage2_dialog_target_plan_day(
+        run_date,
+        working_days,
+        skip_today=_stage2_truthy_env("PM_AI_STAGE2_SKIP_TODAY_DISPATCH"),
     )
     df_dispatch = append_in_progress_next_day_dialog_rows_to_dispatch_table(
         df_dispatch,

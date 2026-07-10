@@ -988,16 +988,16 @@
     ]
   },
   "packageFolders": {
-    "C:\\Users\\0585\\.nuget\\packages\\": {}
+    "C:\\Users\\0585\\AppData\\Local\\Temp\\cursor-sandbox-cache\\fcef9df85fff80dbca287eedc553a940\\nuget": {}
   },
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "C:\\工程管理AIプロジェクト_JAVA\\tools\\pm-ai-rdp-remote-launcher.Tests\\PmAiRdpRemoteLauncher.Tests.csproj",
+      "projectUniqueName": "C:\\システム開発\\工程管理AIプロジェクト_JAVA\\tools\\pm-ai-rdp-remote-launcher.Tests\\PmAiRdpRemoteLauncher.Tests.csproj",
       "projectName": "PmAiRdpRemoteLauncher.Tests",
-      "projectPath": "C:\\工程管理AIプロジェクト_JAVA\\tools\\pm-ai-rdp-remote-launcher.Tests\\PmAiRdpRemoteLauncher.Tests.csproj",
-      "packagesPath": "C:\\Users\\0585\\.nuget\\packages\\",
-      "outputPath": "C:\\工程管理AIプロジェクト_JAVA\\tools\\pm-ai-rdp-remote-launcher.Tests\\obj\\",
+      "projectPath": "C:\\システム開発\\工程管理AIプロジェクト_JAVA\\tools\\pm-ai-rdp-remote-launcher.Tests\\PmAiRdpRemoteLauncher.Tests.csproj",
+      "packagesPath": "C:\\Users\\0585\\AppData\\Local\\Temp\\cursor-sandbox-cache\\fcef9df85fff80dbca287eedc553a940\\nuget",
+      "outputPath": "C:\\システム開発\\工程管理AIプロジェクト_JAVA\\tools\\pm-ai-rdp-remote-launcher.Tests\\obj\\",
       "projectStyle": "PackageReference",
       "configFilePaths": [
         "C:\\Users\\0585\\AppData\\Roaming\\NuGet\\NuGet.Config"
@@ -1012,8 +1012,8 @@
         "net8.0-windows7.0": {
           "targetAlias": "net8.0-windows",
           "projectReferences": {
-            "C:\\工程管理AIプロジェクト_JAVA\\tools\\pm-ai-rdp-remote-launcher\\PmAiRdpRemoteLauncher.csproj": {
-              "projectPath": "C:\\工程管理AIプロジェクト_JAVA\\tools\\pm-ai-rdp-remote-launcher\\PmAiRdpRemoteLauncher.csproj"
+            "C:\\システム開発\\工程管理AIプロジェクト_JAVA\\tools\\pm-ai-rdp-remote-launcher\\PmAiRdpRemoteLauncher.csproj": {
+              "projectPath": "C:\\システム開発\\工程管理AIプロジェクト_JAVA\\tools\\pm-ai-rdp-remote-launcher\\PmAiRdpRemoteLauncher.csproj"
             }
           }
         }

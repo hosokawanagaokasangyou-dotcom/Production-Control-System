@@ -56,6 +56,8 @@ public final class PipelineDownstreamResultsClearer {
         targets.add(DispatchRuleTraceLoader.sidecarPath(u));
         targets.add(Stage2InProgressNextDayDispatchIo.defaultCachePath(u));
         targets.add(
+                jp.co.pm.ai.planning.stage2.source.Stage1SourceBundleIo.defaultCachePath(u));
+        targets.add(
                 jp.co.pm.ai.planning.stage2.Stage2AladdinTodayExcludeNextDayDispatchIo.defaultCachePath(
                         u));
         collectStage21DirectoryFiles(u, targets);

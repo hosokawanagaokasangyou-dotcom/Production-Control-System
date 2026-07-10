@@ -33,6 +33,7 @@ import java.util.Map;
  * @param planInputComboSheetMayExceedNeed when true, combo-sheet presets may exceed need basic headcount (default on;
  *     配台計画_タスク入力 tab checkbox)
  * @param planInputStage2SkipGeminiApi when true, stage-2/2.1 skip Gemini API (配台計画_タスク入力 tab; default on)
+ * @param planInputTodayDispatch when true, stage-1/2 use pinned morning sources (当日配台; default off)
  * @param mainRunStage2ResultBookFont stage-2 result Excel font family; empty with system default in UI means Python
  *     built-in default
  * @param mainRunSkipGeminiApi when true, skip Gemini generateContent calls (development; run tab checkbox)
@@ -130,6 +131,7 @@ public record DesktopSessionState(
         String planInputStage2NextDayDialogMode,
         boolean planInputComboSheetMayExceedNeed,
         boolean planInputStage2SkipGeminiApi,
+        boolean planInputTodayDispatch,
         String mainRunStage2ResultBookFont,
         boolean mainRunSkipGeminiApi,
         boolean mainRunStage1MarkAllExcludeAfterRun,
@@ -443,6 +445,7 @@ public record DesktopSessionState(
                 "BOTH",
                 true,
                 true,
+                false,
                 "",
                 true,
                 false,
@@ -543,6 +546,7 @@ public record DesktopSessionState(
                 bootstrap.planInputStage2NextDayDialogMode(),
                 bootstrap.planInputComboSheetMayExceedNeed(),
                 bootstrap.planInputStage2SkipGeminiApi(),
+                bootstrap.planInputTodayDispatch(),
                 bootstrap.mainRunStage2ResultBookFont(),
                 bootstrap.mainRunSkipGeminiApi(),
                 bootstrap.mainRunStage1MarkAllExcludeAfterRun(),
@@ -640,6 +644,7 @@ public record DesktopSessionState(
                 planInputStage2NextDayDialogMode(),
                 planInputComboSheetMayExceedNeed(),
                 planInputStage2SkipGeminiApi(),
+                planInputTodayDispatch(),
                 mainRunStage2ResultBookFont(),
                 mainRunSkipGeminiApi(),
                 mainRunStage1MarkAllExcludeAfterRun(),
@@ -740,6 +745,7 @@ public record DesktopSessionState(
                 factory.planInputStage2NextDayDialogMode(),
                 factory.planInputComboSheetMayExceedNeed(),
                 factory.planInputStage2SkipGeminiApi(),
+                factory.planInputTodayDispatch(),
                 factory.mainRunStage2ResultBookFont(),
                 factory.mainRunSkipGeminiApi(),
                 factory.mainRunStage1MarkAllExcludeAfterRun(),
@@ -838,6 +844,7 @@ public record DesktopSessionState(
                 e.planInputStage2NextDayDialogMode(),
                 e.planInputComboSheetMayExceedNeed(),
                 e.planInputStage2SkipGeminiApi(),
+                e.planInputTodayDispatch(),
                 e.mainRunStage2ResultBookFont(),
                 e.mainRunSkipGeminiApi(),
                 e.mainRunStage1MarkAllExcludeAfterRun(),
@@ -938,6 +945,7 @@ public record DesktopSessionState(
                 planInputStage2NextDayDialogMode(),
                 planInputComboSheetMayExceedNeed(),
                 planInputStage2SkipGeminiApi(),
+                planInputTodayDispatch(),
                 mainRunStage2ResultBookFont(),
                 mainRunSkipGeminiApi(),
                 mainRunStage1MarkAllExcludeAfterRun(),

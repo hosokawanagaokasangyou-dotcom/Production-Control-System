@@ -185,6 +185,106 @@ class DispatchAladdinEntrySheetBuilderTest {
     }
 
     @Test
+    void completionDateCheckOkWhenOneDayBeforeAnswerNoki() {
+        List<Map<String, String>> rows = new ArrayList<>();
+        Map<String, String> r = row("W1", "巻返し", "M1", "2026-07-08", "100");
+        r.put("回答納期", "2026-07-30");
+        r.put("加工完了日", "2026-07-29");
+        rows.add(r);
+
+        DispatchAladdinEntrySheetBuilder.EntryRow out = buildSingleRow(rows);
+
+        assertTrue(out.completionDateCheckOk());
+        assertEquals("OK", out.completionDateCheckText());
+    }
+
+    @Test
+    void completionDateCheckNgWhenNotOneDayBeforeAnswerNoki() {
+        List<Map<String, String>> rows = new ArrayList<>();
+        Map<String, String> r = row("W1", "巻返し", "M1", "2026-07-08", "100");
+        r.put("回答納期", "2026-07-30");
+        r.put("加工完了日", "2026-07-28");
+        rows.add(r);
+
+        DispatchAladdinEntrySheetBuilder.EntryRow out = buildSingleRow(rows);
+
+        assertFalse(out.completionDateCheckOk());
+        assertEquals("NG", out.completionDateCheckText());
+    }
+
+    @Test
+    void completionDateCheckUsesIndexKaitoNokiOverride() {
+        List<Map<String, String>> rows = new ArrayList<>();
+        Map<String, String> r = row("W1", "巻返し", "M1", "2026-07-08", "100");
+        r.put("回答納期", "2026-07-30");
+        r.put("加工完了日", "2026/07/24");
+        rows.add(r);
+        Map<String, DispatchAladdinEntrySheetBuilder.IndexInfo> index =
+                Map.of(
+                        AladdinShapedPlanQtyLookup.normalizeTaskIdKey("W1"),
+                        new DispatchAladdinEntrySheetBuilder.IndexInfo("2026/07/25", "K-123"));
+
+        DispatchAladdinEntrySheetBuilder.EntryWorkbook wb =
+                DispatchAladdinEntrySheetBuilder.build(COLUMNS, rows, Map.of(), index, TODAY);
+        DispatchAladdinEntrySheetBuilder.EntryRow out = wb.sheets().getFirst().rows().getFirst();
+
+        assertTrue(out.completionDateCheckOk());
+        assertEquals("OK", out.completionDateCheckText());
+    }
+
+    @Test
+    void completionDateCheckEmptyWhenDatesMissing() {
+        assertEquals(
+                "",
+                DispatchAladdinEntrySheetBuilder.completionDateOneDayBeforeAnswerCheck(
+                        "", "2026-07-30", 2026));
+        assertEquals(
+                "",
+                DispatchAladdinEntrySheetBuilder.completionDateOneDayBeforeAnswerCheck(
+                        "2026-07-29", "", 2026));
+    }
+
+    @Test
+    void completionDateCheckOkForIndexStyleMonthDayDates() {
+        List<Map<String, String>> rows = new ArrayList<>();
+        Map<String, String> r = row("C7-4", "SEC", "M1", "2026-07-08", "100");
+        r.put("回答納期", "2026-07-15");
+        r.put("加工完了日", "2026-07-14");
+        rows.add(r);
+        Map<String, DispatchAladdinEntrySheetBuilder.IndexInfo> index =
+                Map.of(
+                        AladdinShapedPlanQtyLookup.normalizeTaskIdKey("C7-4"),
+                        new DispatchAladdinEntrySheetBuilder.IndexInfo("7/15", "K-1"));
+
+        DispatchAladdinEntrySheetBuilder.EntryWorkbook wb =
+                DispatchAladdinEntrySheetBuilder.build(COLUMNS, rows, Map.of(), index, TODAY);
+        DispatchAladdinEntrySheetBuilder.EntryRow out = wb.sheets().getFirst().rows().getFirst();
+
+        assertEquals("7/15", out.kaitoNoki());
+        assertTrue(out.completionDateCheckOk());
+        assertEquals("OK", out.completionDateCheckText());
+    }
+
+    @Test
+    void completionDateCheckOkForFlexibleYmdAndMonthDayMix() {
+        assertEquals(
+                "OK",
+                DispatchAladdinEntrySheetBuilder.completionDateOneDayBeforeAnswerCheck(
+                        "2026/7/27", "2026-07-28", 2026));
+        assertEquals(
+                "OK",
+                DispatchAladdinEntrySheetBuilder.completionDateOneDayBeforeAnswerCheck(
+                        "7/27", "2026-07-28", 2026));
+    }
+
+    @Test
+    void parseAladdinEntryDateAcceptsMonthDayOnly() {
+        assertEquals(
+                LocalDate.of(2026, 7, 15),
+                DispatchAladdinEntrySheetBuilder.parseAladdinEntryDate("7/15", 2026));
+    }
+
+    @Test
     void rowsSortByEarliestDispatchDateThenTaskId() {
         List<Map<String, String>> rows = new ArrayList<>();
         rows.add(row("W9", "巻返し", "M1", "2026-07-10", "10"));

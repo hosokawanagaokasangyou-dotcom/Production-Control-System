@@ -53,7 +53,7 @@ public final class DispatchAladdinEntryWorkbookExporter {
     private static final String GEN_FILE_PREFIX = "アラジン入力用_配台計画_";
 
     private static final String[] FIXED_HEADERS = {
-        "依頼NO", "契約NO", "工程名", "原反投入日", "回答納期",
+        "依頼NO", "契約NO", "工程名", "原反投入日", "回答納期", "完了日チェック",
         "換算数量", "加工完了数量", "配台合計", "数量チェック",
     };
 
@@ -230,7 +230,7 @@ public final class DispatchAladdinEntryWorkbookExporter {
         sh.setMargin(Sheet.BottomMargin, 0.75);
         sh.setMargin(Sheet.HeaderMargin, 0.3);
         sh.setMargin(Sheet.FooterMargin, 0.3);
-        // 印刷タイトル: 1 行目（タイトル行）・A〜I 列（タイトル列）。
+        // 印刷タイトル: 1 行目（タイトル行）・固定列（タイトル列）。
         sh.setRepeatingRows(new CellRangeAddress(0, 0, -1, -1));
         sh.setRepeatingColumns(new CellRangeAddress(-1, -1, 0, FIXED_COLUMN_COUNT - 1));
     }
@@ -270,15 +270,25 @@ public final class DispatchAladdinEntryWorkbookExporter {
             writeFixedCell(row, 2, entry.processName(), styles.data());
             writeFixedCell(row, 3, entry.inputDate(), styles.data());
             writeFixedCell(row, 4, entry.kaitoNoki(), styles.data());
-            writeFixedCell(
-                    row, 5, ResultDispatchNormalizer.formatQty(entry.conversionQty()), styles.qty());
-            writeFixedCell(
-                    row, 6, ResultDispatchNormalizer.formatQty(entry.completedQty()), styles.qty());
-            writeFixedCell(
-                    row, 7, ResultDispatchNormalizer.formatQty(entry.dispatchTotal()), styles.qty());
+            String completionCheck = entry.completionDateCheckText();
             writeFixedCell(
                     row,
-                    8,
+                    5,
+                    completionCheck,
+                    completionCheck.isEmpty()
+                            ? styles.data()
+                            : entry.completionDateCheckOk()
+                                    ? styles.checkOk()
+                                    : styles.checkNg());
+            writeFixedCell(
+                    row, 6, ResultDispatchNormalizer.formatQty(entry.conversionQty()), styles.qty());
+            writeFixedCell(
+                    row, 7, ResultDispatchNormalizer.formatQty(entry.completedQty()), styles.qty());
+            writeFixedCell(
+                    row, 8, ResultDispatchNormalizer.formatQty(entry.dispatchTotal()), styles.qty());
+            writeFixedCell(
+                    row,
+                    9,
                     entry.quantityCheckText(),
                     entry.quantityOk() ? styles.checkOk() : styles.checkNg());
             for (int i = 0; i < dates.size(); i++) {
@@ -307,7 +317,7 @@ public final class DispatchAladdinEntryWorkbookExporter {
         }
         sh.createFreezePane(FIXED_COLUMN_COUNT, 1);
 
-        int[] fixedWidths = {14, 12, 10, 16, 12, 9, 9, 9, 13};
+        int[] fixedWidths = {14, 12, 10, 16, 12, 11, 9, 9, 9, 13};
         for (int c = 0; c < FIXED_COLUMN_COUNT; c++) {
             sh.setColumnWidth(c, 256 * fixedWidths[c]);
         }

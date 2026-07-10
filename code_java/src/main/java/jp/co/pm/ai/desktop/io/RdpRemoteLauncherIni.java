@@ -11,6 +11,7 @@ import java.util.Objects;
 import java.util.TreeMap;
 
 import jp.co.pm.ai.desktop.config.AladdinRpaLaunchArgs;
+import jp.co.pm.ai.desktop.config.AppPaths;
 
 /**
  * 共有 UNC 上の {@code RPA設定.ini}（接続先 RDP ランチャー向け）の読み書き。
@@ -24,9 +25,25 @@ public final class RdpRemoteLauncherIni {
     public static final String DISCONNECT_ON_CHILD_EXIT_KEY = "終了時RDP切断";
     /** 子プロセス終了後のセッション操作（C# ランチャーが参照）。値: なし / 切断 / サインアウト */
     public static final String SESSION_END_ACTION_KEY = "終了時セッション操作";
-    /** タスクスケジューラ経由の RPA 起動を抑止（配台から RDP 接続中）。 */
-    public static final int SLOT_DISABLED = 0;
+    /** 接続先サインアウト専用の UI 起動プロファイル番号。 */
+    public static final int SLOT_SIGN_OUT = 99;
+    /**
+     * ini の {@link #SELECTED_SLOT_KEY} に書くサインアウト値（接続先ランチャー互換）。
+     * 0 は「RPA を起動せずサインアウトのみ」。UI プロファイル {@link #SLOT_SIGN_OUT} とは別。
+     */
+    public static final int INI_SIGN_OUT_SLOT = 0;
+    /** {@link #INI_SIGN_OUT_SLOT} の別名（タスクスケジューラ抑止・サインアウト指定）。 */
+    public static final int SLOT_DISABLED = INI_SIGN_OUT_SLOT;
     public static final int MAX_SLOTS = 9;
+
+    /** UI 起動時に用意する RPA プロファイル行数（{@link #SLOT_SIGN_OUT} 除く）。 */
+    public static final int DEFAULT_INITIAL_RPA_PROFILE_ROWS = 5;
+
+    /** タスクスケジューラ起動時に付与するサインアウト専用引数。 */
+    public static final String SIGN_OUT_LAUNCHER_ARGS = "--signout";
+
+    /** 起動プロファイル 99（{@link #SLOT_SIGN_OUT}）の表示名。 */
+    public static final String SIGN_OUT_ONLY_PROFILE_NAME = "接続先サインアウトのみ";
 
     /** exe パスと引数。 */
     public record Command(String executable, String arguments) {}
@@ -47,6 +64,43 @@ public final class RdpRemoteLauncherIni {
             throw new IllegalArgumentException("起動プログラム番号は 1～" + MAX_SLOTS + " です: " + slot);
         }
         selectedSlot = slot;
+    }
+
+    /** 起動プロファイル ComboBox 向け（99 は接続先サインアウトのみ）。 */
+    public static boolean isSignOutOnlyProfile(int profileNumber) {
+        return profileNumber == SLOT_SIGN_OUT;
+    }
+
+    /** ini の起動プログラム番号がサインアウト専用か（99。後方互換で 0 も可）。 */
+    public static boolean isSignOutOnlyIniSlot(int iniSlot) {
+        return iniSlot == SLOT_SIGN_OUT || iniSlot == 0;
+    }
+
+    public static String signOutOnlyProfileComboLabel() {
+        return RdpLaunchProfile.signOutOnlyDefault().displayLabel();
+    }
+
+    public static String signOutOnlyProfileDetailText() {
+        return "接続先のタスクスケジューラが "
+                + AppPaths.RDP_LAUNCHER_EXE_BASENAME
+                + " "
+                + SIGN_OUT_LAUNCHER_ARGS
+                + "（または操作者名）を起動し、ini の "
+                + SELECTED_SLOT_KEY
+                + "="
+                + INI_SIGN_OUT_SLOT
+                + "（UI プロファイル "
+                + SLOT_SIGN_OUT
+                + "）を読んでサインアウトのみ実行します。alternate shell は使いません。";
+    }
+
+    /** 保存・読込で UI プロファイル 99（サインアウトのみ）を ini スロット 0 にマップする。 */
+    public void selectLaunchProfile(int profileNumber) {
+        if (isSignOutOnlyProfile(profileNumber)) {
+            selectedSlot = INI_SIGN_OUT_SLOT;
+            return;
+        }
+        setSelectedSlot(profileNumber);
     }
 
     /** 子プロセス終了後にセッション操作を行う（後方互換）。 */
@@ -83,6 +137,10 @@ public final class RdpRemoteLauncherIni {
     }
 
     public void setSlotCommand(int slot, String program, String arguments) {
+        if (isSignOutOnlyIniSlot(slot)) {
+            throw new IllegalArgumentException(
+                    "スロット " + SLOT_SIGN_OUT + " にはプログラムを設定しません: " + slot);
+        }
         if (slot < 1 || slot > MAX_SLOTS) {
             throw new IllegalArgumentException("スロット番号は 1～" + MAX_SLOTS + " です: " + slot);
         }
@@ -133,8 +191,8 @@ public final class RdpRemoteLauncherIni {
             if (SELECTED_SLOT_KEY.equals(key)) {
                 try {
                     int slot = Integer.parseInt(value);
-                    if (slot == SLOT_DISABLED || (slot >= 1 && slot <= MAX_SLOTS)) {
-                        ini.selectedSlot = slot;
+                    if (isSignOutOnlyIniSlot(slot) || (slot >= 1 && slot <= MAX_SLOTS)) {
+                        ini.selectedSlot = isSignOutOnlyIniSlot(slot) ? INI_SIGN_OUT_SLOT : slot;
                     }
                 } catch (NumberFormatException ignored) {
                     // keep default
@@ -308,11 +366,11 @@ public final class RdpRemoteLauncherIni {
     }
 
     /**
-     * ini の起動番号を 0 にする（タスクスケジューラ抑止）。
-     * サインアウト後の保険、または手動抑止用。スロット定義行は保持する。
+     * ini の起動番号を {@link #INI_SIGN_OUT_SLOT} にする（タスクスケジューラでサインアウト／抑止）。
+     * スロット定義行は保持する。alternate shell は使わない。
      */
     public static void writeTaskSchedulerSuppress(Path path) throws IOException {
-        mergeIniScalarKey(path, SELECTED_SLOT_KEY, String.valueOf(SLOT_DISABLED));
+        mergeIniScalarKey(path, SELECTED_SLOT_KEY, String.valueOf(INI_SIGN_OUT_SLOT));
     }
 
     /** @see #writeTaskSchedulerSuppress(Path) */
@@ -621,6 +679,9 @@ public final class RdpRemoteLauncherIni {
     }
 
     public String validateMessageForSave() {
+        if (isSignOutOnlyIniSlot(selectedSlot)) {
+            return validateDefinedSlotCommands();
+        }
         if (selectedSlot < 1 || selectedSlot > MAX_SLOTS) {
             return "起動プログラム番号は 1～" + MAX_SLOTS + " を指定してください。";
         }
@@ -628,6 +689,10 @@ public final class RdpRemoteLauncherIni {
         if (selected.executable().isBlank()) {
             return "起動プログラム番号 " + selectedSlot + " のプログラムパスが空です。";
         }
+        return validateDefinedSlotCommands();
+    }
+
+    private String validateDefinedSlotCommands() {
         for (Map.Entry<Integer, Command> entry : slots.entrySet()) {
             Command command = entry.getValue();
             if (command == null || command.executable().isBlank()) {
@@ -655,10 +720,25 @@ public final class RdpRemoteLauncherIni {
         return max;
     }
 
-    /** UI 向け: 1..max(3, highest) のスロット行数。 */
+    /** UI 向け: 1..max({@link #DEFAULT_INITIAL_RPA_PROFILE_ROWS}, highest) のスロット行数。 */
     public int visibleSlotCount() {
         int highest = highestDefinedSlot();
-        return Math.min(MAX_SLOTS, Math.max(3, highest == 0 ? 3 : highest));
+        int floor = DEFAULT_INITIAL_RPA_PROFILE_ROWS;
+        return Math.min(MAX_SLOTS, Math.max(floor, highest == 0 ? floor : highest));
+    }
+
+    /** 1～{@link #MAX_SLOTS} の RPA プロファイル番号の最大値（99 等は除外）。 */
+    public static int maxRpaProfileNumber(Iterable<Integer> profileNumbers) {
+        if (profileNumbers == null) {
+            return 0;
+        }
+        int max = 0;
+        for (Integer number : profileNumbers) {
+            if (number != null && number >= 1 && number <= MAX_SLOTS && number > max) {
+                max = number;
+            }
+        }
+        return max;
     }
 
     private static boolean parseBoolean(String raw, boolean defaultValue) {
