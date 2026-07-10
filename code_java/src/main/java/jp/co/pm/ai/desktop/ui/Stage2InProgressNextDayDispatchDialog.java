@@ -142,8 +142,11 @@ public final class Stage2InProgressNextDayDispatchDialog {
         }
 
         Stage2InProgressNextDayDispatchIo.Entry toEntry(double nextDayM) {
+            double shortfallM =
+                    Stage2InProgressNextDayRollInput.aladdinTodayShortfallMeters(
+                            remainingM, actualDoneM, aladdinTodayM);
             return new Stage2InProgressNextDayDispatchIo.Entry(
-                    taskId, process, machineName, nextDayM);
+                    taskId, process, machineName, nextDayM, shortfallM);
         }
     }
 

@@ -109,9 +109,13 @@ public final class DispatchAladdinEntrySheetBuilder {
         }
 
         /**
-         * 完了日チェック（{@code OK} / {@code NG}）。加工完了日または回答納期が取れないときは空文字。
+         * 完了日チェック（{@code OK} / {@code NG}）。
+         * 回答納期が空欄のときは空文字。加工完了日が取れないときも空文字。
          */
         public String completionDateCheckText() {
+            if (kaitoNoki == null || kaitoNoki.isBlank()) {
+                return "";
+            }
             return completionDateOneDayBeforeAnswerCheck(
                     processCompleteDate, kaitoNoki, referenceYear);
         }
@@ -271,12 +275,16 @@ public final class DispatchAladdinEntrySheetBuilder {
     }
 
     /**
-     * 加工完了日が回答納期の一日前以前か（{@code OK} / {@code NG}）。日付が取れないときは空文字。
+     * 加工完了日が回答納期の一日前以前か（{@code OK} / {@code NG}）。
+     * 回答納期が空欄、または加工完了日が取れないときは空文字。
      *
      * <p>依頼書目次の {@code M/d} や {@code yyyy/M/d} なども解釈する。
      */
     static String completionDateOneDayBeforeAnswerCheck(
             String processCompleteDate, String answerNoki, int referenceYear) {
+        if (answerNoki == null || answerNoki.isBlank()) {
+            return "";
+        }
         LocalDate answer = parseAladdinEntryDate(answerNoki, referenceYear);
         int completeYear = answer != null ? answer.getYear() : referenceYear;
         LocalDate complete = parseAladdinEntryDate(processCompleteDate, completeYear);

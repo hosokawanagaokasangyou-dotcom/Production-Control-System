@@ -4863,9 +4863,20 @@ def _load_stage2_in_progress_next_day_dispatch_overrides() -> dict[str, float]:
     """
     JavaFX 段階2直前ダイアログが書く JSON（entries[].task_id / process / machine_name / next_day_dispatch_m）。
     """
+    next_m, _ = _load_stage2_in_progress_next_day_dispatch_entry_maps()
+    return next_m
+
+
+def _load_stage2_in_progress_aladdin_today_shortfall_overrides() -> dict[str, float]:
+    """加工途中・翌日配台 JSON の aladdin_today_shortfall_m（当日完了前提分）。"""
+    _, shortfall_m = _load_stage2_in_progress_next_day_dispatch_entry_maps()
+    return shortfall_m
+
+
+def _load_stage2_in_progress_next_day_dispatch_entry_maps() -> tuple[dict[str, float], dict[str, float]]:
     path = (os.environ.get(ENV_STAGE2_IN_PROGRESS_NEXT_DAY_DISPATCH_JSON) or "").strip()
     if not path or not os.path.isfile(path):
-        return {}
+        return {}, {}
     try:
         with open(path, encoding="utf-8") as f:
             data = json.load(f)
@@ -4873,11 +4884,12 @@ def _load_stage2_in_progress_next_day_dispatch_overrides() -> dict[str, float]:
         logging.warning(
             "段階2: 加工途中・翌日配台量 JSON の読込に失敗（%s）: %s", path, e
         )
-        return {}
+        return {}, {}
     entries = data.get("entries") if isinstance(data, dict) else data
     if not isinstance(entries, list):
-        return {}
-    out: dict[str, float] = {}
+        return {}, {}
+    next_m: dict[str, float] = {}
+    shortfall_m: dict[str, float] = {}
     for ent in entries:
         if not isinstance(ent, dict):
             continue
@@ -4886,18 +4898,26 @@ def _load_stage2_in_progress_next_day_dispatch_overrides() -> dict[str, float]:
         mname = str(ent.get("machine_name") or "").strip()
         if not tid:
             continue
+        key = _stage2_in_progress_next_day_dispatch_key(tid, proc, mname)
         try:
             m = _sanitize_dispatch_qty_m(float(ent.get("next_day_dispatch_m")))
         except (TypeError, ValueError):
             m = 0.0
-        out[_stage2_in_progress_next_day_dispatch_key(tid, proc, mname)] = m
-    if out:
+        next_m[key] = m
+        if "aladdin_today_shortfall_m" in ent:
+            try:
+                sf = _sanitize_dispatch_qty_m(float(ent.get("aladdin_today_shortfall_m")))
+            except (TypeError, ValueError):
+                sf = 0.0
+            if sf > 1e-12:
+                shortfall_m[key] = sf
+    if next_m:
         logging.info(
             "段階2: 加工途中の翌日配台量を %s 行分 JSON から読み込みました（%s）。",
-            len(out),
+            len(next_m),
             path,
         )
-    return out
+    return next_m, shortfall_m
 def _load_stage2_aladdin_today_exclude_next_day_overrides() -> dict[str, float]:
     """
     JavaFX 段階2直前ダイアログ②が書く JSON（entries[].exclude_next_day_m）。

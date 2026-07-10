@@ -252,6 +252,21 @@ class DispatchAladdinEntrySheetBuilderTest {
     }
 
     @Test
+    void completionDateCheckEmptyWhenAnswerNokiBlank() {
+        List<Map<String, String>> rows = new ArrayList<>();
+        Map<String, String> r = row("W1", "巻返し", "M1", "2026-07-08", "100");
+        r.put("回答納期", "");
+        r.put("加工完了日", "2026-07-29");
+        rows.add(r);
+
+        DispatchAladdinEntrySheetBuilder.EntryRow out = buildSingleRow(rows);
+
+        assertEquals("", out.kaitoNoki());
+        assertEquals("", out.completionDateCheckText());
+        assertFalse(out.completionDateCheckOk());
+    }
+
+    @Test
     void completionDateCheckEmptyWhenDatesMissing() {
         assertEquals(
                 "",

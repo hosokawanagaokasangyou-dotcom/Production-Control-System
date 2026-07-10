@@ -293,6 +293,7 @@ def _generate_plan_impl(
                 _orig_macro.strftime("%Y/%m/%d %H:%M:%S"),
             )
     run_date = base_now_dt.date()
+    calendar_today = run_date
     if _stage2_truthy_env("PM_AI_STAGE2_SKIP_TODAY_DISPATCH"):
         run_date = run_date + timedelta(days=1)
         logging.info(
@@ -438,6 +439,19 @@ def _generate_plan_impl(
         d for d in sorted_dates
         if any(attendance_data[d][m]["is_working"] for m in attendance_data[d])
     ]
+    if _stage2_truthy_env("PM_AI_STAGE2_SKIP_TODAY_DISPATCH") and working_days:
+        if run_date not in working_days:
+            _orig_run_for_snap = run_date
+            for _wd_snap in working_days:
+                if _wd_snap >= run_date:
+                    run_date = _wd_snap
+                    logging.info(
+                        "段階2: 計画開始日 %s は非稼働のため %s に繰り上げました（SKIP_TODAY）。",
+                        _orig_run_for_snap.isoformat(),
+                        run_date.isoformat(),
+                    )
+                    break
+            sorted_dates = [d for d in sorted_dates if d >= run_date]
     if working_days:
         for t in task_queue:
             req_d = t.get("start_date_req")
@@ -3112,6 +3126,7 @@ def _generate_plan_impl(
         df_src_for_dispatch,
         run_date,
         working_days,
+        calendar_today=calendar_today,
         timeline_events=timeline_events,
         sorted_tasks_for_result=sorted_tasks_for_result,
     )

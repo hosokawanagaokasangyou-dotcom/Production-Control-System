@@ -26,9 +26,20 @@ public final class Stage2InProgressNextDayDispatchIo {
 
     private Stage2InProgressNextDayDispatchIo() {}
 
-    public record Entry(String taskId, String process, String machineName, double nextDayDispatchM) {
+    public record Entry(
+            String taskId,
+            String process,
+            String machineName,
+            double nextDayDispatchM,
+            double aladdinTodayShortfallM) {
+
+        public Entry(String taskId, String process, String machineName, double nextDayDispatchM) {
+            this(taskId, process, machineName, nextDayDispatchM, 0.0);
+        }
+
         public Entry {
             nextDayDispatchM = sanitizeMeters(nextDayDispatchM);
+            aladdinTodayShortfallM = sanitizeMeters(aladdinTodayShortfallM);
         }
     }
 
@@ -103,10 +114,21 @@ public final class Stage2InProgressNextDayDispatchIo {
                     meters = 0.0;
                 }
             }
+            double shortfallM = 0.0;
+            Object sfObj = entMap.get("aladdin_today_shortfall_m");
+            if (sfObj instanceof Number n) {
+                shortfallM = sanitizeMeters(n.doubleValue());
+            } else if (sfObj != null) {
+                try {
+                    shortfallM = sanitizeMeters(Double.parseDouble(String.valueOf(sfObj)));
+                } catch (NumberFormatException ignored) {
+                    shortfallM = 0.0;
+                }
+            }
             if (taskId.isEmpty()) {
                 continue;
             }
-            out.add(new Entry(taskId, process, machineName, meters));
+            out.add(new Entry(taskId, process, machineName, meters, shortfallM));
         }
         return List.copyOf(out);
     }
@@ -150,6 +172,9 @@ public final class Stage2InProgressNextDayDispatchIo {
             o.put("process", e.process());
             o.put("machine_name", e.machineName());
             o.put("next_day_dispatch_m", e.nextDayDispatchM());
+            if (e.aladdinTodayShortfallM() > 1e-12) {
+                o.put("aladdin_today_shortfall_m", e.aladdinTodayShortfallM());
+            }
             list.add(o);
         }
         Map<String, Object> root = new LinkedHashMap<>();

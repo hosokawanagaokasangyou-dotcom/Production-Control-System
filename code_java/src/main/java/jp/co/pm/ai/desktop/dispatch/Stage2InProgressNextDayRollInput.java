@@ -52,8 +52,16 @@ public final class Stage2InProgressNextDayRollInput {
         if (aladdinTodayM <= 1e-12) {
             return rem;
         }
-        double todayShortfall = Math.max(0.0, aladdinTodayM - Math.max(0.0, actualDoneM));
-        return Math.max(0.0, rem - todayShortfall);
+        return Math.max(0.0, rem - aladdinTodayShortfallMeters(remainingM, actualDoneM, aladdinTodayM));
+    }
+
+    /** アラジン当日計画が当日完了したとみなすとき、当日分として扱う m（実加工との差分）。 */
+    public static double aladdinTodayShortfallMeters(
+            double remainingM, double actualDoneM, double aladdinTodayM) {
+        if (aladdinTodayM <= 1e-12) {
+            return 0.0;
+        }
+        return Math.max(0.0, aladdinTodayM - Math.max(0.0, actualDoneM));
     }
 
     /** 上記対象 m をロール換算した初期本数（残量上限内）。 */

@@ -1287,9 +1287,9 @@ public final class RequestFormRemoteDesktopPane {
         btnLaunch.setTooltip(
                 new Tooltip(
                         "指定 .rdp で mstsc.exe を起動します。"
-                                + " 既存の接続ウィンドウがある場合は閉じたうえで、"
-                                + "接続先サインアウト後に RPA 用セッションへ再接続します。"
-                                + " 接続先の起動プログラムは RPA設定.ini + タスクスケジューラが参照します。"));
+                                + " 既存の接続ウィンドウがある場合は閉じます。"
+                                + " RPA タスク終了時は ini のセッション操作（サインアウト等）が接続先で実行されます。"
+                                + " 接続先サインアウトのみはプロファイル 99 で実行してください。"));
         btnLaunch.setOnAction(
                 e -> {
                     if (launcherDeployInProgress.get()) {
@@ -1545,12 +1545,12 @@ public final class RequestFormRemoteDesktopPane {
                                                                 + "）。接続先サインアウトを実行します。"
                                                         : "既存のリモートデスクトップ接続ウィンドウを閉じました（PID="
                                                                 + closedPid
-                                                                + "）。接続先サインアウト後に再接続します。";
+                                                                + "）。RPA セッションを起動します。";
                                         status.accept(closeMsg);
                                         statusLabel.setText(
                                                 signOutOnlyLaunchFinal
                                                         ? "既存接続を閉じました。接続先サインアウトを実行中…"
-                                                        : "既存接続を閉じました。接続先サインアウト準備中…");
+                                                        : "既存接続を閉じました。RPA セッションを起動中…");
                                     }
 
                                     if (!rdpSessionActive.compareAndSet(false, true)) {
@@ -1560,71 +1560,109 @@ public final class RequestFormRemoteDesktopPane {
                                                 "リモートデスクトップ接続シーケンスが既に実行中です。");
                                         return;
                                     }
-                                    rdpConnectPhase.set(RdpConnectPhase.REMOTE_SIGN_OUT);
                                     updateLaunchButtonState[0].run();
 
-                                    RdpRemoteLauncherIni.writeTaskSchedulerSuppress(
-                                            launcherIniPath, launchUi);
+                                    if (signOutOnlyLaunchFinal) {
+                                        rdpConnectPhase.set(RdpConnectPhase.REMOTE_SIGN_OUT);
 
-                                    RemoteDesktopLauncher.LaunchOutcome signOutOutcome =
-                                            RemoteDesktopLauncher.launchSignOutViaTaskScheduler(
-                                                    preferred, launchUi);
+                                        RdpRemoteLauncherIni.writeTaskSchedulerSuppress(
+                                                launcherIniPath, launchUi);
 
-                                    String signOutMsg =
-                                            "接続先サインアウトフェーズを起動しました: "
-                                                    + signOutOutcome.rdpProfile()
-                                                    + "\n（"
-                                                    + RdpRemoteLauncherIni.SELECTED_SLOT_KEY
-                                                    + "="
-                                                    + RdpRemoteLauncherIni.INI_SIGN_OUT_SLOT
-                                                    + " / タスクスケジューラ "
-                                                    + RdpRemoteLauncherIni.SIGN_OUT_LAUNCHER_ARGS
-                                                    + "）";
-                                    status.accept(signOutMsg);
-                                    statusLabel.setText(signOutMsg);
+                                        RemoteDesktopLauncher.LaunchOutcome signOutOutcome =
+                                                RemoteDesktopLauncher.launchSignOutViaTaskScheduler(
+                                                        preferred, launchUi);
 
-                                    RdpMstscSessionMonitor.watchAfterLaunch(
-                                            signOutOutcome.rdpProfile(),
-                                            signOutOutcome.mstscProcessId(),
-                                            signOutOutcome.mstscPidMarkerFile(),
-                                            rdpSessionWatchThread,
-                                            event ->
-                                                    Platform.runLater(
-                                                            () ->
-                                                                    onSignOutPhaseEnded(
-                                                                            event,
-                                                                            signOutOutcome,
-                                                                            preferred,
-                                                                            configured,
-                                                                            launchUi,
-                                                                            launcherIniPath,
-                                                                            launchSlot,
-                                                                            launchRow,
-                                                                            launchArgsFinal,
-                                                                            profileEndActionFinal,
-                                                                            launchProfileLabel,
-                                                                            resolvedDisplay,
-                                                                            previewEnabled,
-                                                                            profileChangeHandler,
-                                                                            profileField,
-                                                                            statusLabel,
-                                                                            status,
-                                                                            rdpSessionActive,
-                                                                            rdpConnectPhase,
-                                                                            rdpSessionWatchThread,
-                                                                            updateLaunchButtonState[0],
-                                                                            rightPanePreviewHolder,
-                                                                            refreshIniFilePreview[0],
-                                                                            refreshLauncherLog[0],
-                                                                            refreshFetchedFilesTable[0],
-                                                                            scrollToFetchedFilesSection[0],
-                                                                            sequentialRunActive,
-                                                                            sequentialQueue,
-                                                                            sequentialIndex,
-                                                                            sequentialSelectionOrder,
-                                                                            sequentialStatusLabel,
-                                                                            refreshQuickLaunchSequentialLabels[0],
-                                                                            btnLaunchRef)));
+                                        String signOutMsg =
+                                                "接続先サインアウトを起動しました: "
+                                                        + signOutOutcome.rdpProfile()
+                                                        + "\n（"
+                                                        + RdpRemoteLauncherIni.SELECTED_SLOT_KEY
+                                                        + "="
+                                                        + RdpRemoteLauncherIni.INI_SIGN_OUT_SLOT
+                                                        + " / タスクスケジューラ "
+                                                        + RdpRemoteLauncherIni.SIGN_OUT_LAUNCHER_ARGS
+                                                        + "）";
+                                        status.accept(signOutMsg);
+                                        statusLabel.setText(signOutMsg);
+
+                                        RdpMstscSessionMonitor.watchAfterLaunch(
+                                                signOutOutcome.rdpProfile(),
+                                                signOutOutcome.mstscProcessId(),
+                                                signOutOutcome.mstscPidMarkerFile(),
+                                                rdpSessionWatchThread,
+                                                event ->
+                                                        Platform.runLater(
+                                                                () ->
+                                                                        onSignOutOnlyLaunchEnded(
+                                                                                event,
+                                                                                signOutOutcome,
+                                                                                statusLabel,
+                                                                                status,
+                                                                                rdpSessionActive,
+                                                                                rdpConnectPhase,
+                                                                                updateLaunchButtonState[0],
+                                                                                rightPanePreviewHolder,
+                                                                                refreshIniFilePreview[0],
+                                                                                refreshLauncherLog[0],
+                                                                                refreshFetchedFilesTable[0],
+                                                                                scrollToFetchedFilesSection[0])));
+                                    } else {
+                                        try {
+                                            RdpRemoteLauncherIni.writeLaunchContextBeforeConnect(
+                                                    launcherIniPath,
+                                                    launchSlot,
+                                                    launchRow.programField().getText().trim(),
+                                                    launchArgsFinal,
+                                                    profileEndActionFinal);
+                                            refreshRightPanePreviews(
+                                                    refreshIniFilePreview[0], refreshLauncherLog[0]);
+                                        } catch (IOException iniEx) {
+                                            rdpConnectPhase.set(RdpConnectPhase.IDLE);
+                                            rdpSessionActive.set(false);
+                                            sequentialRunActive.set(false);
+                                            sequentialQueue.set(List.of());
+                                            updateLaunchButtonState[0].run();
+                                            String msg =
+                                                    "RPA 接続前の ini 更新に失敗: "
+                                                            + iniEx.getMessage();
+                                            status.accept(msg);
+                                            statusLabel.setText(msg);
+                                            showAlert(
+                                                    Alert.AlertType.ERROR,
+                                                    "RPA設定.ini の更新に失敗",
+                                                    msg);
+                                            return;
+                                        }
+                                        rdpConnectPhase.set(RdpConnectPhase.RPA_SESSION);
+                                        launchRpaSessionAndWatch(
+                                                preferred,
+                                                configured,
+                                                launchUi,
+                                                launchSlot,
+                                                launchProfileLabel,
+                                                resolvedDisplay,
+                                                previewEnabled,
+                                                profileChangeHandler,
+                                                profileField,
+                                                statusLabel,
+                                                status,
+                                                rdpSessionActive,
+                                                rdpConnectPhase,
+                                                rdpSessionWatchThread,
+                                                updateLaunchButtonState[0],
+                                                rightPanePreviewHolder,
+                                                refreshIniFilePreview[0],
+                                                refreshLauncherLog[0],
+                                                refreshFetchedFilesTable[0],
+                                                scrollToFetchedFilesSection[0],
+                                                sequentialRunActive,
+                                                sequentialQueue,
+                                                sequentialIndex,
+                                                sequentialSelectionOrder,
+                                                sequentialStatusLabel,
+                                                refreshQuickLaunchSequentialLabels[0],
+                                                btnLaunchRef);
+                                    }
                                 } catch (IOException ex) {
                                     rdpConnectPhase.set(RdpConnectPhase.IDLE);
                                     rdpSessionActive.set(false);
@@ -3063,7 +3101,7 @@ public final class RequestFormRemoteDesktopPane {
             btnLaunch.setDisable(true);
             if (connectPhase != null
                     && connectPhase.get() == RdpConnectPhase.REMOTE_SIGN_OUT) {
-                btnLaunch.setText("接続先サインアウト準備中…");
+                btnLaunch.setText("接続先サインアウト実行中…");
             } else if (sequentialRunning
                     && sequentialQueue != null
                     && !sequentialQueue.isEmpty()
@@ -3162,17 +3200,42 @@ public final class RequestFormRemoteDesktopPane {
         }
     }
 
-    private static void onSignOutPhaseEnded(
+    private static void onSignOutOnlyLaunchEnded(
             RdpMstscSessionMonitor.SessionEndEvent event,
             RemoteDesktopLauncher.LaunchOutcome signOutOutcome,
+            Label statusLabel,
+            Consumer<String> status,
+            AtomicBoolean rdpSessionActive,
+            AtomicReference<RdpConnectPhase> rdpConnectPhase,
+            Runnable updateLaunchButtonState,
+            RdpRightPanePreviewController[] rightPanePreviewHolder,
+            Runnable refreshIniFilePreview,
+            Runnable refreshLauncherLog,
+            Runnable refreshFetchedFilesTable,
+            Runnable scrollToFetchedFilesSection) {
+        deleteSignOutStagingQuietly(signOutOutcome);
+        if (rdpConnectPhase.get() != RdpConnectPhase.REMOTE_SIGN_OUT) {
+            return;
+        }
+        onSignOutOnlyPhaseEnded(
+                event,
+                statusLabel,
+                status,
+                rdpSessionActive,
+                rdpConnectPhase,
+                updateLaunchButtonState,
+                rightPanePreviewHolder,
+                refreshIniFilePreview,
+                refreshLauncherLog,
+                refreshFetchedFilesTable,
+                scrollToFetchedFilesSection);
+    }
+
+    private static void launchRpaSessionAndWatch(
             Path preferredProfile,
             Path configuredProfile,
             Map<String, String> launchUi,
-            Path launcherIniPath,
             int launchSlot,
-            ProfileRowFields launchRow,
-            String launchArgs,
-            RdpSessionEndAction profileEndAction,
             String launchProfileLabel,
             LaunchDisplay resolvedDisplay,
             boolean previewEnabled,
@@ -3196,57 +3259,6 @@ public final class RequestFormRemoteDesktopPane {
             Label sequentialStatusLabel,
             Runnable refreshQuickLaunchSequentialLabels,
             Button[] btnLaunchRef) {
-        deleteSignOutStagingQuietly(signOutOutcome);
-        if (rdpConnectPhase.get() != RdpConnectPhase.REMOTE_SIGN_OUT) {
-            return;
-        }
-        if (RdpRemoteLauncherIni.isSignOutOnlyProfile(launchSlot)) {
-            onSignOutOnlyPhaseEnded(
-                    event,
-                    statusLabel,
-                    status,
-                    rdpSessionActive,
-                    rdpConnectPhase,
-                    updateLaunchButtonState,
-                    rightPanePreviewHolder,
-                    refreshIniFilePreview,
-                    refreshLauncherLog,
-                    refreshFetchedFilesTable,
-                    scrollToFetchedFilesSection);
-            return;
-        }
-        if (event.reason() != RdpMstscSessionMonitor.EndReason.MSTSC_EXIT) {
-            rdpConnectPhase.set(RdpConnectPhase.IDLE);
-            rdpSessionActive.set(false);
-            updateLaunchButtonState.run();
-            String failMsg =
-                    "接続先サインアウトフェーズが完了しませんでした: "
-                            + formatRdpSessionEndMessage(event);
-            status.accept(failMsg);
-            statusLabel.setText(failMsg);
-            return;
-        }
-        status.accept("接続先サインアウトが完了しました。RPA 用セッションへ再接続します…");
-        statusLabel.setText("接続先サインアウト完了。RPA セッションを起動中…");
-        try {
-            RdpRemoteLauncherIni.writeLaunchContextBeforeConnect(
-                    launcherIniPath,
-                    launchSlot,
-                    launchRow.programField().getText().trim(),
-                    launchArgs,
-                    profileEndAction);
-            refreshRightPanePreviews(refreshIniFilePreview, refreshLauncherLog);
-        } catch (IOException iniEx) {
-            rdpConnectPhase.set(RdpConnectPhase.IDLE);
-            rdpSessionActive.set(false);
-            updateLaunchButtonState.run();
-            String msg = "RPA 接続前の ini 更新に失敗: " + iniEx.getMessage();
-            status.accept(msg);
-            statusLabel.setText(msg);
-            showAlert(Alert.AlertType.ERROR, "RPA設定.ini の更新に失敗", msg);
-            return;
-        }
-        rdpConnectPhase.set(RdpConnectPhase.RPA_SESSION);
         try {
             if (previewEnabled
                     && rightPanePreviewHolder[0] != null
@@ -3259,10 +3271,8 @@ public final class RequestFormRemoteDesktopPane {
                 profileChangeHandler.accept(preferredProfile.toString());
                 profileField.setText(preferredProfile.toString());
             }
-            String msg =
-                    "接続先サインアウト後、RPA 用セッションを起動しました: " + outcome.rdpProfile();
-            msg +=
-                    "\n表示: " + RdpLaunchDisplaySettings.formatSummary(resolvedDisplay);
+            String msg = "RPA 用セッションを起動しました: " + outcome.rdpProfile();
+            msg += "\n表示: " + RdpLaunchDisplaySettings.formatSummary(resolvedDisplay);
             msg +=
                     "\n起動プロファイル: "
                             + launchProfileLabel
@@ -3281,7 +3291,7 @@ public final class RequestFormRemoteDesktopPane {
             if (previewEnabled && rightPanePreviewHolder[0] != null) {
                 msg += "\n右ペインへプレビュー表示中…（操作は別ウィンドウ）";
             } else {
-                msg += "\n接続終了を監視中…";
+                msg += "\n接続終了を監視中…（タスク完了時に ini のセッション操作を実行）";
             }
             if (sequentialRunActive.get()) {
                 List<Integer> activeQueue = sequentialQueue.get();

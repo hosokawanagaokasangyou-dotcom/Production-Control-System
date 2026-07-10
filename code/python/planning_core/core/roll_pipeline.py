@@ -5955,6 +5955,17 @@ def _first_working_day_strictly_after(
     return run_date + timedelta(days=1)
 
 
+def _first_working_day_on_or_after(
+    run_date: date, working_days: list[date] | None
+) -> date:
+    """run_date 以降の最初の稼働日。無ければ run_date（従来フォールバック）。"""
+    if working_days:
+        for d in working_days:
+            if d >= run_date:
+                return d
+    return run_date
+
+
 def _stage2_dialog_target_plan_day(
     run_date: date | None,
     working_days: list[date] | None,
@@ -5965,12 +5976,27 @@ def _stage2_dialog_target_plan_day(
     段階2直前ダイアログ由来の「翌日配台」追補・アラジン除外適用日。
 
     skip_today ON 時は run_date 自体が計画開始日のため +1 稼働日しない。
+    いずれも run_date が非稼働なら直後の稼働日へ寄せる（土日休み工場で土曜に載らない）。
     """
     if run_date is None:
         return None
     if skip_today:
-        return run_date
+        return _first_working_day_on_or_after(run_date, working_days)
     return _first_working_day_strictly_after(run_date, working_days)
+
+
+def _resolve_in_progress_aladdin_today_shortfall_m(
+    ov_key: str,
+    next_day_m: float,
+    plan_ref,
+    shortfall_overrides: dict[str, float],
+) -> float:
+    if ov_key in shortfall_overrides:
+        return _sanitize_dispatch_qty_m(float(shortfall_overrides[ov_key]))
+    if plan_ref is None or next_day_m <= 1e-12:
+        return 0.0
+    rem, _, _, _ = _plan_row_dispatch_qty_metrics(plan_ref)
+    return _sanitize_dispatch_qty_m(max(0.0, float(rem) - float(next_day_m)))
 
 
 def append_in_progress_next_day_dialog_rows_to_dispatch_table(
@@ -5980,6 +6006,7 @@ def append_in_progress_next_day_dialog_rows_to_dispatch_table(
     run_date: date | None,
     working_days: list[date] | None = None,
     *,
+    calendar_today: date | None = None,
     timeline_events: list | None = None,
     sorted_tasks_for_result: list | None = None,
 ) -> pd.DataFrame:
@@ -5988,8 +6015,10 @@ def append_in_progress_next_day_dialog_rows_to_dispatch_table(
 
     タイムラインに載らなかった加工途中タスクも、手動修正タブで翌日目標量を編集できる。
     配台日は run_date より後の最初の稼働日（勤怠で is_working の日）。無いときのみ暦日 +1。
+    アラジン当日完了前提分（shortfall）は calendar_today（SKIP_TODAY 前の暦日）へ追補する。
     """
     overrides = _load_stage2_in_progress_next_day_dispatch_overrides()
+    shortfall_overrides = _load_stage2_in_progress_aladdin_today_shortfall_overrides()
     if not overrides or run_date is None or tasks_df is None or getattr(
         tasks_df, "empty", True
     ):
@@ -6039,7 +6068,9 @@ def append_in_progress_next_day_dialog_rows_to_dispatch_table(
     )
 
     added = 0
+    added_shortfall = 0
     skipped_timeline_covered = 0
+    today_plan_day = calendar_today if calendar_today is not None else run_date
     for ov_key, meters in overrides.items():
         try:
             m = _sanitize_dispatch_qty_m(float(meters))
@@ -6056,28 +6087,6 @@ def append_in_progress_next_day_dialog_rows_to_dispatch_table(
             str(parts[2] or "").strip(),
         )
         if not tid or not proc or not mach:
-            continue
-        if (tid, proc, mach, next_day) in filled:
-            continue
-        if _timeline_identity_planned_m_on_day(tl_qty_by, tid, proc, mach, next_day) + 1e-9 >= m:
-            skipped_timeline_covered += 1
-            continue
-        if (
-            run_date is not None
-            and _timeline_identity_planned_m_on_day(tl_qty_by, tid, proc, mach, run_date)
-            + 1e-9
-            >= m
-        ):
-            logging.info(
-                "段階2: 加工途中・翌日追補を省略（run_date=%s にタイムライン配台済 "
-                "依頼NO=%s 工程=%s 機械名=%s → %s m）",
-                run_date.isoformat(),
-                tid,
-                _log_plain_label(proc),
-                _log_plain_label(mach),
-                m,
-            )
-            skipped_timeline_covered += 1
             continue
         plan_ref = plan_lookup.get((tid, proc))
         if plan_ref is None:
@@ -6110,31 +6119,75 @@ def append_in_progress_next_day_dialog_rows_to_dispatch_table(
         src_row = _resolve_dispatch_table_src_row_for_plan(
             tid, proc, plan_ref, src_lookup3, src_lookup2
         )
-        r: dict = {}
-        for h in RESULT_DISPATCH_TABLE_STATIC_HEADERS:
-            r[h] = _dispatch_table_cell_from_sources(
-                src_row=src_row,
-                plan_row=plan_ref,
-                task_dict=None,
-                col_name=h,
+
+        def _build_dialog_row(dispatch_day: date, qty_m: float) -> dict:
+            row_out: dict = {}
+            for h in RESULT_DISPATCH_TABLE_STATIC_HEADERS:
+                row_out[h] = _dispatch_table_cell_from_sources(
+                    src_row=src_row,
+                    plan_row=plan_ref,
+                    task_dict=None,
+                    col_name=h,
+                )
+            if not str(row_out.get(TASK_COL_TASK_ID) or "").strip():
+                row_out[TASK_COL_TASK_ID] = tid
+            if not str(row_out.get(TASK_COL_MACHINE) or "").strip():
+                row_out[TASK_COL_MACHINE] = proc
+            if not str(row_out.get(TASK_COL_MACHINE_NAME) or "").strip():
+                row_out[TASK_COL_MACHINE_NAME] = mach
+            row_out["配台日"] = dispatch_day
+            row_out["当日配台数量"] = float(qty_m)
+            if "実配台数量" in out_cols:
+                row_out["実配台数量"] = 0.0
+            _dispatch_table_fill_row_timeline_meta_from_bounds(
+                row_out,
+                bound_min=tl_bound_min,
+                bound_max=tl_bound_max,
+                member_ops=tl_member_ops,
             )
-        if not str(r.get(TASK_COL_TASK_ID) or "").strip():
-            r[TASK_COL_TASK_ID] = tid
-        if not str(r.get(TASK_COL_MACHINE) or "").strip():
-            r[TASK_COL_MACHINE] = proc
-        if not str(r.get(TASK_COL_MACHINE_NAME) or "").strip():
-            r[TASK_COL_MACHINE_NAME] = mach
-        r["配台日"] = next_day
-        r["当日配台数量"] = float(m)
-        if "実配台数量" in out_cols:
-            r["実配台数量"] = 0.0
-        _dispatch_table_fill_row_timeline_meta_from_bounds(
-            r,
-            bound_min=tl_bound_min,
-            bound_max=tl_bound_max,
-            member_ops=tl_member_ops,
+            return row_out
+
+        shortfall_m = _resolve_in_progress_aladdin_today_shortfall_m(
+            ov_key, m, plan_ref, shortfall_overrides
         )
-        out_records.append(r)
+        if (
+            shortfall_m > 1e-12
+            and today_plan_day is not None
+            and today_plan_day != next_day
+        ):
+            if (tid, proc, mach, today_plan_day) not in filled:
+                tl_today = _timeline_identity_planned_m_on_day(
+                    tl_qty_by, tid, proc, mach, today_plan_day
+                )
+                if tl_today + 1e-9 < shortfall_m:
+                    out_records.append(_build_dialog_row(today_plan_day, shortfall_m))
+                    filled.add((tid, proc, mach, today_plan_day))
+                    added += 1
+                    added_shortfall += 1
+
+        if (tid, proc, mach, next_day) in filled:
+            continue
+        if _timeline_identity_planned_m_on_day(tl_qty_by, tid, proc, mach, next_day) + 1e-9 >= m:
+            skipped_timeline_covered += 1
+            continue
+        if (
+            run_date is not None
+            and _timeline_identity_planned_m_on_day(tl_qty_by, tid, proc, mach, run_date)
+            + 1e-9
+            >= m
+        ):
+            logging.info(
+                "段階2: 加工途中・翌日追補を省略（run_date=%s にタイムライン配台済 "
+                "依頼NO=%s 工程=%s 機械名=%s → %s m）",
+                run_date.isoformat(),
+                tid,
+                _log_plain_label(proc),
+                _log_plain_label(mach),
+                m,
+            )
+            skipped_timeline_covered += 1
+            continue
+        out_records.append(_build_dialog_row(next_day, m))
         filled.add((tid, proc, mach, next_day))
         added += 1
 
@@ -6142,9 +6195,10 @@ def append_in_progress_next_day_dialog_rows_to_dispatch_table(
         return df_dispatch
     if added > 0:
         logging.info(
-            "結果_配台表: 加工途中・翌日配台ダイアログから %s 行を追補しました（配台日=%s）。",
+            "結果_配台表: 加工途中・翌日配台ダイアログから %s 行を追補しました（配台日=%s、うちアラジン当日分=%s）。",
             added,
             next_day.isoformat(),
+            added_shortfall,
         )
     if skipped_timeline_covered > 0:
         logging.info(

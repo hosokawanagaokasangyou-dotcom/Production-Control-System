@@ -82,6 +82,15 @@ class Stage2InProgressNextDayRollInputTest {
                         600, 900, 0),
                 1e-9);
         assertEquals(
+                2000.0,
+                Stage2InProgressNextDayRollInput.nextDayTargetMetersAssumingAladdinTodayComplete(
+                        5600, 4400, 8000),
+                1e-9);
+        assertEquals(
+                3600.0,
+                Stage2InProgressNextDayRollInput.aladdinTodayShortfallMeters(5600, 4400, 8000),
+                1e-9);
+        assertEquals(
                 10,
                 Stage2InProgressNextDayRollInput.defaultRollCountAssumingAladdinTodayComplete(
                         5700, 300, 3000, 300));
