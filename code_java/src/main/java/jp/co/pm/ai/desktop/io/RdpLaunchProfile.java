@@ -49,12 +49,13 @@ public record RdpLaunchProfile(
         return new RdpLaunchProfile(
                 RdpRemoteLauncherIni.SLOT_SIGN_OUT,
                 RdpRemoteLauncherIni.SIGN_OUT_ONLY_PROFILE_NAME,
-                "接続先のタスクスケジューラが "
+                "通常 mstsc で接続し、接続先タスクスケジューラが "
                         + AppPaths.RDP_LAUNCHER_EXE_BASENAME
-                        + " "
+                        + " 操作者名 を起動したとき、ini の "
+                        + RdpRemoteLauncherIni.SELECTED_SLOT_KEY
+                        + "=99 とスロット 99="
                         + RdpRemoteLauncherIni.SIGN_OUT_LAUNCHER_ARGS
-                        + " を起動し、ini の起動プログラム番号=99 によりサインアウトのみ実行します。"
-                        + " alternate shell（接続先ランチャー path 埋め込み）は使いません。",
+                        + " で接続先サインアウトのみ実行します。alternate shell は使いません。",
                 "サインアウト",
                 null,
                 RdpSessionEndAction.SIGN_OUT,

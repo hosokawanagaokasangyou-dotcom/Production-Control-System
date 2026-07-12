@@ -15,8 +15,9 @@ public final class RdpLaunchProfileSequentialRun {
 
     /**
      * プロファイル番号を選択順でトグルする。
+     * プロファイル {@link RdpRemoteLauncherIni#SLOT_SIGN_OUT} は先頭（未選択時の追加）のみ可。
      *
-     * @return 変更後の選択順リスト（不変コピー）
+     * @return 変更後の選択順リスト（不変コピー）。追加不可のときは {@code currentOrder} のコピー。
      */
     public static List<Integer> toggleSelection(List<Integer> currentOrder, int profileNumber) {
         Objects.requireNonNull(currentOrder, "currentOrder");
@@ -27,8 +28,49 @@ public final class RdpLaunchProfileSequentialRun {
         if (next.remove(Integer.valueOf(profileNumber))) {
             return List.copyOf(next);
         }
+        if (!canAddProfileToSelection(currentOrder, profileNumber)) {
+            return List.copyOf(currentOrder);
+        }
         next.add(profileNumber);
         return List.copyOf(next);
+    }
+
+    /**
+     * 連続実行の選択にプロファイルを追加できるか。
+     * プロファイル 99 は選択が空のときのみ追加可（先頭限定）。
+     */
+    public static boolean canAddProfileToSelection(List<Integer> currentOrder, int profileNumber) {
+        Objects.requireNonNull(currentOrder, "currentOrder");
+        if (!RdpRemoteLauncherIni.isSignOutOnlyProfile(profileNumber)) {
+            return true;
+        }
+        return currentOrder.isEmpty();
+    }
+
+    /** プロファイル 99 を先頭以外に置けないことを検証する。問題なければ empty。 */
+    public static java.util.Optional<String> validateSignOutOnlyAtHead(List<Integer> selectionOrder) {
+        List<Integer> normalized = normalizeSelection(selectionOrder);
+        int signOutIdx = normalized.indexOf(RdpRemoteLauncherIni.SLOT_SIGN_OUT);
+        if (signOutIdx < 0) {
+            return java.util.Optional.empty();
+        }
+        if (signOutIdx != 0) {
+            return java.util.Optional.of(
+                    "起動プロファイル "
+                            + RdpRemoteLauncherIni.SLOT_SIGN_OUT
+                            + "（接続先サインアウトのみ）は連続実行の先頭のみ選択できます。");
+        }
+        return java.util.Optional.empty();
+    }
+
+    /** 連続実行キューに RPA プロファイル（1〜9）が含まれるか。 */
+    public static boolean selectionRequiresAladdinCredentials(Iterable<Integer> selectionOrder) {
+        for (Integer n : normalizeSelection(selectionOrder)) {
+            if (!RdpRemoteLauncherIni.isSignOutOnlyProfile(n)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** 選択順における 1 始まりの表示番号。未選択なら empty。 */

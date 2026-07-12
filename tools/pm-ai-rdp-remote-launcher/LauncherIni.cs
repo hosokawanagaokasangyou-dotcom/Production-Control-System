@@ -8,14 +8,18 @@ internal sealed class LauncherIni
     internal const string OperatorKey = "操作者";
     internal const string DisconnectOnChildExitKey = "終了時RDP切断";
     internal const string SessionEndActionKey = "終了時セッション操作";
+    /** 後方互換: 旧方式の接続時サインアウトフラグ（新方式は 99=--signout）。 */
+    internal const string SignOutOnConnectKey = "接続時サインアウト";
+    internal const string SignOutLauncherArgs = "--signout";
     internal const string DefaultIniFileName = "RPA設定.ini";
     internal const string LegacyIniFileName = "RAP設定.ini";
     internal const string IniPathEnvVar = "PM_AI_RDP_LAUNCHER_INI";
     internal const string DisconnectOnChildExitEnvVar = "PM_AI_RDP_DISCONNECT_ON_CHILD_EXIT";
     internal const string SessionEndActionEnvVar = "PM_AI_RDP_SESSION_END_ACTION";
 
-    /** slot=99（後方互換で 0 も可）のとき接続先でサインアウトを実行（タスクスケジューラ経由）。 */
+    /** 接続先サインアウト専用スロット（ini 起動プログラム番号・スロット定義とも 99）。 */
     internal const int SignOutSlot = 99;
+    /** タスクスケジューラ RPA 抑止専用（サインアウトしない）。 */
     internal const int LegacySignOutSlot = 0;
     /** @deprecated SignOutSlot を使用 */
     internal const int DisabledSlot = SignOutSlot;
@@ -30,6 +34,9 @@ internal sealed class LauncherIni
 
     /** 子プロセス終了後のセッション操作（既定サインアウト）。 */
     internal SessionEndAction SessionEndAction { get; set; } = SessionEndAction.SignOut;
+
+    /** 旧方式: {@link SignOutOnConnectKey}=1（後方互換読取のみ）。 */
+    internal bool SignOutOnConnectRequested { get; set; }
 
     internal Dictionary<int, string> Slots { get; } = new();
 
@@ -202,7 +209,7 @@ internal sealed class LauncherIni
             {
                 if (int.TryParse(value, out var slot) && slot >= LegacySignOutSlot)
                 {
-                    ini.SelectedSlot = slot == LegacySignOutSlot ? SignOutSlot : slot;
+                    ini.SelectedSlot = slot;
                 }
                 continue;
             }
@@ -226,7 +233,15 @@ internal sealed class LauncherIni
                 continue;
             }
 
-            if (int.TryParse(key, out var slotNumber) && slotNumber >= 1 && !string.IsNullOrWhiteSpace(value))
+            if (key == SignOutOnConnectKey)
+            {
+                ini.SignOutOnConnectRequested = ParseBoolean(value, defaultValue: false);
+                continue;
+            }
+
+            if (int.TryParse(key, out var slotNumber)
+                && (slotNumber >= 1 || slotNumber == SignOutSlot)
+                && !string.IsNullOrWhiteSpace(value))
             {
                 ini.Slots[slotNumber] = value;
             }
@@ -242,19 +257,56 @@ internal sealed class LauncherIni
         return ini;
     }
 
-    internal bool IsSignOutOnly =>
-        SelectedSlot == SignOutSlot || SelectedSlot == LegacySignOutSlot;
+    internal bool IsSuppressOnly => SelectedSlot == LegacySignOutSlot;
 
-    internal bool IsLauncherDisabled => IsSignOutOnly;
+    internal bool IsSignOutSlotSelected => SelectedSlot == SignOutSlot;
+
+    internal bool IsSignOutOnly => IsSuppressOnly || IsSignOutSlotSelected;
+
+    internal bool IsLauncherDisabled => IsSuppressOnly;
+
+    internal static bool IsSignOutSlotCommand(string? commandLine)
+    {
+        if (string.IsNullOrWhiteSpace(commandLine))
+        {
+            return false;
+        }
+
+        try
+        {
+            var parsed = CommandLineParser.Parse(commandLine);
+            return string.Equals(
+                parsed.Executable,
+                SignOutLauncherArgs,
+                StringComparison.OrdinalIgnoreCase);
+        }
+        catch (FormatException)
+        {
+            return string.Equals(
+                commandLine.Trim(),
+                SignOutLauncherArgs,
+                StringComparison.OrdinalIgnoreCase);
+        }
+    }
 
     internal string? ResolveSelectedCommand()
     {
-        if (IsSignOutOnly)
+        if (IsSuppressOnly)
         {
             return null;
         }
 
-        return Slots.TryGetValue(SelectedSlot, out var command) ? command : null;
+        if (Slots.TryGetValue(SelectedSlot, out var command) && !string.IsNullOrWhiteSpace(command))
+        {
+            return command;
+        }
+
+        if (IsSignOutSlotSelected)
+        {
+            return SignOutLauncherArgs;
+        }
+
+        return null;
     }
 
     internal bool ResolveDisconnectOnChildExit()
@@ -288,10 +340,6 @@ internal sealed class LauncherIni
         {
             throw new ArgumentOutOfRangeException(nameof(selectedSlot), selectedSlot, "slot must be >= 0");
         }
-        if (selectedSlot == LegacySignOutSlot)
-        {
-            selectedSlot = SignOutSlot;
-        }
 
         var lines = File.ReadAllLines(path, Encoding.UTF8).ToList();
         var keyPrefix = SelectedSlotKey + "=";
@@ -317,6 +365,76 @@ internal sealed class LauncherIni
         if (!replaced)
         {
             lines.Insert(0, SelectedSlotKey + "=" + selectedSlot);
+        }
+
+        File.WriteAllLines(path, lines, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+    }
+
+    /// <summary>
+    /// 抑止用に ini ファイルへ 0 をそのまま書く。
+    /// </summary>
+    internal static void WriteSuppressSlotLiteral(string path)
+    {
+        var lines = File.ReadAllLines(path, Encoding.UTF8).ToList();
+        var keyPrefix = SelectedSlotKey + "=";
+        var replaced = false;
+        for (var i = 0; i < lines.Count; i++)
+        {
+            var trimmed = lines[i].Trim();
+            if (trimmed.Length == 0 || trimmed.StartsWith('#') || trimmed.StartsWith(';'))
+            {
+                continue;
+            }
+
+            if (!trimmed.StartsWith(keyPrefix, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            lines[i] = SelectedSlotKey + "=" + LegacySignOutSlot;
+            replaced = true;
+            break;
+        }
+
+        if (!replaced)
+        {
+            lines.Insert(0, SelectedSlotKey + "=" + LegacySignOutSlot);
+        }
+
+        File.WriteAllLines(path, lines, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+    }
+
+    internal static void ClearSignOutOnConnectRequest(string path)
+    {
+        MergeIniScalarKey(path, SignOutOnConnectKey, "0");
+    }
+
+    private static void MergeIniScalarKey(string path, string key, string value)
+    {
+        var lines = File.ReadAllLines(path, Encoding.UTF8).ToList();
+        var keyPrefix = key + "=";
+        var replaced = false;
+        for (var i = 0; i < lines.Count; i++)
+        {
+            var trimmed = lines[i].Trim();
+            if (trimmed.Length == 0 || trimmed.StartsWith('#') || trimmed.StartsWith(';'))
+            {
+                continue;
+            }
+
+            if (!trimmed.StartsWith(keyPrefix, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            lines[i] = key + "=" + value;
+            replaced = true;
+            break;
+        }
+
+        if (!replaced)
+        {
+            lines.Add(key + "=" + value);
         }
 
         File.WriteAllLines(path, lines, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));

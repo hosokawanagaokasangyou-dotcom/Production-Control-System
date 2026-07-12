@@ -16,6 +16,7 @@ internal static class Program
             "PmAiRdpRemoteLauncher 開始"
                 + " version="
                 + ResolveLauncherVersionLabel()
+                + " signOutPolicy=slot99"
                 + " ProcessPath="
                 + (LauncherPaths.ResolveExecutablePath() ?? "(不明)")
                 + " BaseDirectory="
@@ -59,19 +60,42 @@ internal static class Program
             var ini = LauncherIni.Load(iniPath);
             consumedSlot = ini.SelectedSlot;
             LauncherLog.Info("起動プログラム番号=" + consumedSlot);
-            if (ini.IsSignOutOnly)
+            if (ini.SignOutOnConnectRequested)
+            {
+                try
+                {
+                    LauncherIni.ClearSignOutOnConnectRequest(iniPath);
+                }
+                catch (Exception ex)
+                {
+                    LauncherLog.Error("接続時サインアウトフラグのクリアに失敗: " + ex.Message);
+                }
+
+                suppressIniPath = null;
+                LauncherLog.Info(
+                    LauncherIni.SignOutOnConnectKey
+                        + "=1（後方互換）: 接続時サインアウトを実行します。");
+                var signOutOk = SessionEndExecutor.TryExecute(
+                    SessionEndAction.SignOut,
+                    out var signOutError);
+                TrySuppressIniSlot(iniPath, consumedSlot);
+                return ExitWithLog(
+                    signOutOk ? ExitOk : ExitError,
+                    signOutOk
+                        ? "接続時サインアウト完了（"
+                            + LauncherIni.SignOutOnConnectKey
+                            + "=1）"
+                        : signOutError ?? "接続時サインアウト失敗");
+            }
+
+            if (ini.IsSuppressOnly)
             {
                 LauncherLog.Info(
                     "起動プログラム番号="
                         + ini.SelectedSlot
-                        + ": 接続時サインアウトを実行します。");
+                        + ": RPA 抑止（サインアウトしません）。");
                 suppressIniPath = null;
-                var signOutOk = SessionEndExecutor.TryExecute(
-                    SessionEndAction.SignOut,
-                    out var signOutError);
-                return ExitWithLog(
-                    signOutOk ? ExitOk : ExitError,
-                    signOutOk ? "接続時サインアウト完了" : signOutError ?? "接続時サインアウト失敗");
+                return ExitWithLog(ExitOk, "RPA 抑止");
             }
 
             var startedSlot = consumedSlot;
@@ -80,6 +104,30 @@ internal static class Program
             {
                 LauncherLog.Error("起動プログラム番号 " + ini.SelectedSlot + " に対応するスロットが ini にありません: " + iniPath);
                 return ExitWithLog(ExitError, "スロット未定義");
+            }
+
+            if (LauncherIni.IsSignOutSlotCommand(commandLine))
+            {
+                suppressIniPath = null;
+                LauncherLog.Info(
+                    "起動プログラム番号="
+                        + ini.SelectedSlot
+                        + " スロット="
+                        + commandLine
+                        + ": 接続時サインアウトを実行します。");
+                var signOutOk = SessionEndExecutor.TryExecute(
+                    SessionEndAction.SignOut,
+                    out var signOutError);
+                TrySuppressIniSlot(iniPath, startedSlot);
+                return ExitWithLog(
+                    signOutOk ? ExitOk : ExitError,
+                    signOutOk
+                        ? "接続時サインアウト完了（スロット "
+                            + ini.SelectedSlot
+                            + "="
+                            + LauncherIni.SignOutLauncherArgs
+                            + "）"
+                        : signOutError ?? "接続時サインアウト失敗");
             }
 
             ParsedCommand parsed;
@@ -244,7 +292,6 @@ internal static class Program
         finally
         {
             if (consumedSlot > LauncherIni.LegacySignOutSlot
-                && consumedSlot != LauncherIni.SignOutSlot
                 && !string.IsNullOrWhiteSpace(suppressIniPath))
             {
                 TrySuppressIniSlot(suppressIniPath, consumedSlot);
@@ -256,14 +303,14 @@ internal static class Program
     {
         try
         {
-            LauncherIni.WriteSelectedSlot(iniPath, LauncherIni.SignOutSlot);
+            LauncherIni.WriteSuppressSlotLiteral(iniPath);
             LauncherLog.Info(
                 "起動プログラム番号を "
-                    + LauncherIni.SignOutSlot
+                    + LauncherIni.LegacySignOutSlot
                     + " に設定しました（"
                     + startedSlot
                     + " → "
-                    + LauncherIni.SignOutSlot
+                    + LauncherIni.LegacySignOutSlot
                     + "）。タスクスケジューラ再実行時の二重起動を抑止します。");
         }
         catch (Exception ex)

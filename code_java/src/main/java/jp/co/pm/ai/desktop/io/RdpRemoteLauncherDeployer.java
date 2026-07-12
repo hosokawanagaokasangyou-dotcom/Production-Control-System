@@ -190,16 +190,11 @@ public final class RdpRemoteLauncherDeployer {
             return true;
         }
         Path deployExe = AppPaths.resolveRdpLauncherExe(env);
-        Path deployVersion = AppPaths.resolveRdpLauncherVersionFile(env);
         if (!Files.isRegularFile(deployExe)) {
             return true;
         }
         Optional<BigDecimal> bundledVer = readBundledVersion();
         if (bundledVer.isEmpty()) {
-            return false;
-        }
-        Optional<BigDecimal> sharedVer = parseVersionFile(deployVersion);
-        if (sharedVer.isPresent() && sharedVer.get().compareTo(bundledVer.get()) >= 0) {
             return false;
         }
         Optional<String> bundledHash =
@@ -210,8 +205,7 @@ public final class RdpRemoteLauncherDeployer {
                 && bundledHash.get().equals(sharedHash.get())) {
             return false;
         }
-        return sharedVer.isEmpty()
-                || bundledVer.get().compareTo(sharedVer.orElse(BigDecimal.ZERO)) > 0;
+        return true;
     }
 
     private static boolean needsVersionSync(

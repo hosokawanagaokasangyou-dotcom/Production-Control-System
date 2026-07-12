@@ -58,6 +58,41 @@ class RdpLaunchProfileSequentialRunTest {
     }
 
     @Test
+    void toggleSelection_signOutOnlyAllowedOnlyWhenEmpty() {
+        List<Integer> order = new ArrayList<>();
+        order = new ArrayList<>(RdpLaunchProfileSequentialRun.toggleSelection(order, 99));
+        assertEquals(List.of(99), order);
+
+        order = new ArrayList<>(RdpLaunchProfileSequentialRun.toggleSelection(order, 2));
+        assertEquals(List.of(99, 2), order);
+
+        List<Integer> withRpa = List.of(2);
+        assertFalse(RdpLaunchProfileSequentialRun.canAddProfileToSelection(withRpa, 99));
+        assertEquals(
+                withRpa,
+                RdpLaunchProfileSequentialRun.toggleSelection(withRpa, 99));
+    }
+
+    @Test
+    void validateSignOutOnlyAtHead_rejectsWhenNotFirst() {
+        assertTrue(
+                RdpLaunchProfileSequentialRun.validateSignOutOnlyAtHead(List.of(2, 99))
+                        .isPresent());
+        assertTrue(
+                RdpLaunchProfileSequentialRun.validateSignOutOnlyAtHead(List.of(99, 2))
+                        .isEmpty());
+    }
+
+    @Test
+    void selectionRequiresAladdinCredentials_skipsSignOutOnly() {
+        assertFalse(
+                RdpLaunchProfileSequentialRun.selectionRequiresAladdinCredentials(List.of(99)));
+        assertTrue(
+                RdpLaunchProfileSequentialRun.selectionRequiresAladdinCredentials(
+                        List.of(99, 2)));
+    }
+
+    @Test
     void selectionOrderIndex_isOneBased() {
         List<Integer> order = List.of(3, 1, 5);
         assertEquals(2, RdpLaunchProfileSequentialRun.selectionOrderIndex(order, 1));

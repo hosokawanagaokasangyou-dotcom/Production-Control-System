@@ -4,7 +4,7 @@
     {
       "number": 99,
       "name": "接続先サインアウトのみ",
-      "description": "接続先のタスクスケジューラが PmAiRdpRemoteLauncher.exe --signout を起動し、ini の起動プログラム番号=99 によりサインアウトのみ実行します。alternate shell は使いません。",
+      "description": "通常 mstsc で接続し、接続先タスクスケジューラが PmAiRdpRemoteLauncher.exe 操作者名 を起動したとき、ini の 起動プログラム番号=99 とスロット 99=--signout でサインアウトします。alternate shell は使いません。",
       "category": "サインアウト",
       "sessionEndAction": "サインアウト"
     },

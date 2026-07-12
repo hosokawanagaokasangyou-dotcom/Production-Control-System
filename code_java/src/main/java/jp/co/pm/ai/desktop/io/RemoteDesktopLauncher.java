@@ -109,17 +109,14 @@ public final class RemoteDesktopLauncher {
     }
 
     /**
-     * 接続先サインアウト用: ini を {@link RdpRemoteLauncherIni#INI_SIGN_OUT_SLOT} にしたうえで通常 mstsc 接続する。
-     *
-     * <p>接続先のタスクスケジューラが {@link AppPaths#RDP_LAUNCHER_EXE_BASENAME} を
-     * {@link RdpRemoteLauncherIni#SIGN_OUT_LAUNCHER_ARGS} 付きで起動し、サインアウトする。
-     * alternate shell は使わない。
-     *
-     * <p>ini の {@link RdpRemoteLauncherIni#writeTaskSchedulerSuppress} は呼び出し前に実行すること。
+     * 接続先サインアウト用: ini に {@link RdpRemoteLauncherIni#SLOT_SIGN_OUT} と
+     * {@code 99=--signout} を書き、通常 mstsc で接続する。
      */
     public static LaunchOutcome launchSignOutViaTaskScheduler(Path rdpProfile, Map<String, String> ui)
             throws IOException {
         Map<String, String> env = ui != null ? new HashMap<>(ui) : new HashMap<>();
+        Path iniPath = AppPaths.resolveRdpLauncherIni(env);
+        RdpRemoteLauncherIni.writeSignOutSlotRequest(iniPath);
         env.put(AppPaths.KEY_PM_AI_RDP_EMBED_STARTUP_IN_PROFILE, "0");
         LaunchOutcome outcome = launch(rdpProfile, env);
         return new LaunchOutcome(
@@ -128,9 +125,12 @@ public final class RemoteDesktopLauncher {
                         "タスクスケジューラ + "
                                 + RdpRemoteLauncherIni.SELECTED_SLOT_KEY
                                 + "="
-                                + RdpRemoteLauncherIni.INI_SIGN_OUT_SLOT
-                                + " + "
-                                + RdpRemoteLauncherIni.SIGN_OUT_LAUNCHER_ARGS),
+                                + RdpRemoteLauncherIni.SLOT_SIGN_OUT
+                                + "（"
+                                + RdpRemoteLauncherIni.SLOT_SIGN_OUT
+                                + "="
+                                + RdpRemoteLauncherIni.SIGN_OUT_LAUNCHER_ARGS
+                                + "）"),
                 outcome.signatureRemoved(),
                 outcome.mstscProcessId(),
                 outcome.mstscPidMarkerFile(),

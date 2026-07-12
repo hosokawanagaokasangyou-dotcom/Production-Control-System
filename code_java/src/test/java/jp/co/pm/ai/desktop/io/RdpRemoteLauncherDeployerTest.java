@@ -131,6 +131,30 @@ class RdpRemoteLauncherDeployerTest {
     }
 
     @Test
+    void needsExeDeploy_trueWhenVersionMatchesButExeHashDiffers(@TempDir Path tmp) throws Exception {
+        var bundledVer = RdpRemoteLauncherDeployer.readBundledVersion();
+        if (bundledVer.isEmpty()) {
+            return;
+        }
+        Path deployDir = tmp.resolve("deploy");
+        Files.createDirectories(deployDir);
+        Path exe = deployDir.resolve(AppPaths.RDP_LAUNCHER_EXE_BASENAME);
+        Path version = deployDir.resolve(AppPaths.RDP_LAUNCHER_VERSION_BASENAME);
+
+        Files.writeString(exe, "stale-launcher-binary", StandardCharsets.UTF_8);
+        Files.writeString(version, bundledVer.get().toPlainString() + "\n", StandardCharsets.UTF_8);
+
+        Map<String, String> ui =
+                Map.of(
+                        AppPaths.KEY_PM_AI_RDP_LAUNCHER_EXE,
+                        exe.toString(),
+                        AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK,
+                        deployDir.resolve("summary.xlsx").toString());
+
+        assertTrue(RdpRemoteLauncherDeployer.needsExeDeploy(ui));
+    }
+
+    @Test
     void needsExeDeploy_falseWhenAutoDeployDisabled() {
         assertFalse(
                 RdpRemoteLauncherDeployer.needsExeDeploy(

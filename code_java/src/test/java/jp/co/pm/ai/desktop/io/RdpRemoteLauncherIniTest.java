@@ -211,6 +211,26 @@ class RdpRemoteLauncherIniTest {
     }
 
     @Test
+    void writeSignOutSlotRequest_setsSlot99AndSignOutCommand(@TempDir Path tmp) throws Exception {
+        Path iniPath = tmp.resolve("細川_RPA設定.ini");
+        Files.writeString(
+                iniPath,
+                """
+                起動プログラム番号=2
+                操作者=細川
+                2="Z:\\app.exe"
+                """,
+                StandardCharsets.UTF_8);
+        RdpRemoteLauncherIni.writeSignOutSlotRequest(iniPath);
+        String text = Files.readString(iniPath, StandardCharsets.UTF_8);
+        assertTrue(text.contains("起動プログラム番号=99"));
+        assertTrue(text.contains("99=" + RdpRemoteLauncherIni.SIGN_OUT_LAUNCHER_ARGS));
+        RdpRemoteLauncherIni loaded = RdpRemoteLauncherIni.load(iniPath);
+        assertEquals(RdpRemoteLauncherIni.SLOT_SIGN_OUT, loaded.selectedSlot());
+        assertTrue(RdpRemoteLauncherIni.isSignOutSlotCommand(loaded.getSlotCommand(99).executable()));
+    }
+
+    @Test
     void writeTaskSchedulerSuppress_setsSlotZeroPreservingSlots(@TempDir Path tmp) throws Exception {
         Path iniPath = tmp.resolve("RAP設定.ini");
         Files.writeString(
@@ -225,7 +245,7 @@ class RdpRemoteLauncherIniTest {
         RdpRemoteLauncherIni.writeTaskSchedulerSuppress(iniPath);
 
         RdpRemoteLauncherIni loaded = RdpRemoteLauncherIni.load(iniPath);
-        assertEquals(RdpRemoteLauncherIni.INI_SIGN_OUT_SLOT, loaded.selectedSlot());
+        assertEquals(RdpRemoteLauncherIni.INI_SUPPRESS_SLOT, loaded.selectedSlot());
         assertEquals("Z:\\portable\\Aladdin_RPA_Studio.exe", loaded.getSlotCommand(2).executable());
         assertTrue(Files.readString(iniPath, StandardCharsets.UTF_8).contains("起動プログラム番号=0"));
     }
@@ -282,22 +302,24 @@ class RdpRemoteLauncherIniTest {
                 StandardCharsets.UTF_8);
 
         RdpRemoteLauncherIni loaded = RdpRemoteLauncherIni.load(iniPath);
-        assertEquals(RdpRemoteLauncherIni.INI_SIGN_OUT_SLOT, loaded.selectedSlot());
+        assertEquals(RdpRemoteLauncherIni.INI_SUPPRESS_SLOT, loaded.selectedSlot());
     }
 
     @Test
-    void load_parsesSignOutSlot99_normalizesToZero(@TempDir Path tmp) throws Exception {
+    void load_parsesSignOutSlot99(@TempDir Path tmp) throws Exception {
         Path iniPath = tmp.resolve("RAP設定.ini");
         Files.writeString(
                 iniPath,
                 """
                 起動プログラム番号=99
+                99=--signout
                 2="C:\\app.exe"
                 """,
                 StandardCharsets.UTF_8);
 
         RdpRemoteLauncherIni loaded = RdpRemoteLauncherIni.load(iniPath);
-        assertEquals(RdpRemoteLauncherIni.INI_SIGN_OUT_SLOT, loaded.selectedSlot());
+        assertEquals(RdpRemoteLauncherIni.SLOT_SIGN_OUT, loaded.selectedSlot());
+        assertTrue(RdpRemoteLauncherIni.isSignOutSlotCommand(loaded.getSlotCommand(99).executable()));
     }
 
     @Test
@@ -316,10 +338,10 @@ class RdpRemoteLauncherIniTest {
     }
 
     @Test
-    void validateMessageForSave_signOutOnlyProfile_skipsSelectedSlotProgram() {
+    void validateMessageForSave_signOutOnlyProfile_requiresSignOutSlot() {
         RdpRemoteLauncherIni ini = new RdpRemoteLauncherIni();
         ini.selectLaunchProfile(RdpRemoteLauncherIni.SLOT_SIGN_OUT);
-        assertEquals(RdpRemoteLauncherIni.INI_SIGN_OUT_SLOT, ini.selectedSlot());
+        assertEquals(RdpRemoteLauncherIni.SLOT_SIGN_OUT, ini.selectedSlot());
         ini.setSlotCommand(1, "C:\\Windows\\System32\\notepad.exe", "");
         assertNull(ini.validateMessageForSave());
     }
@@ -328,12 +350,20 @@ class RdpRemoteLauncherIniTest {
     void isSignOutOnlyProfile_recognizesSlot99() {
         assertTrue(RdpRemoteLauncherIni.isSignOutOnlyProfile(99));
         assertFalse(RdpRemoteLauncherIni.isSignOutOnlyProfile(1));
-        assertTrue(RdpRemoteLauncherIni.isSignOutOnlyIniSlot(0));
+        assertTrue(RdpRemoteLauncherIni.isSuppressIniSlot(0));
+        assertTrue(RdpRemoteLauncherIni.isSignOutIniSlot(99));
         assertEquals("99: 接続先サインアウトのみ", RdpRemoteLauncherIni.signOutOnlyProfileComboLabel());
     }
 
     @Test
-    void setSlotCommand_rejectsSignOutSlot() {
+    void setSlotCommand_acceptsSignOutSlot() {
+        RdpRemoteLauncherIni ini = new RdpRemoteLauncherIni();
+        ini.setSlotCommand(99, "--signout", "");
+        assertTrue(RdpRemoteLauncherIni.isSignOutSlotCommand(ini.getSlotCommand(99).executable()));
+    }
+
+    @Test
+    void setSlotCommand_rejectsNonSignOutOnSlot99() {
         RdpRemoteLauncherIni ini = new RdpRemoteLauncherIni();
         assertThrows(
                 IllegalArgumentException.class,

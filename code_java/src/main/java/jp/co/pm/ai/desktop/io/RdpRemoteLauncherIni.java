@@ -25,15 +25,20 @@ public final class RdpRemoteLauncherIni {
     public static final String DISCONNECT_ON_CHILD_EXIT_KEY = "終了時RDP切断";
     /** 子プロセス終了後のセッション操作（C# ランチャーが参照）。値: なし / 切断 / サインアウト */
     public static final String SESSION_END_ACTION_KEY = "終了時セッション操作";
-    /** 接続先サインアウト専用の UI 起動プロファイル番号。 */
+    /**
+     * 後方互換: 旧方式の接続時サインアウトフラグ（新方式はスロット {@link #SLOT_SIGN_OUT}={@link #SIGN_OUT_LAUNCHER_ARGS}）。
+     */
+    public static final String SIGN_OUT_ON_CONNECT_KEY = "接続時サインアウト";
+    /** 接続先サインアウト専用の UI／ini 起動プロファイル番号。 */
     public static final int SLOT_SIGN_OUT = 99;
     /**
-     * ini の {@link #SELECTED_SLOT_KEY} に書くサインアウト値（接続先ランチャー互換）。
-     * 0 は「RPA を起動せずサインアウトのみ」。UI プロファイル {@link #SLOT_SIGN_OUT} とは別。
+     * ini の {@link #SELECTED_SLOT_KEY}=0 … タスクスケジューラの RPA 二重起動抑止のみ（サインアウトしない）。
      */
-    public static final int INI_SIGN_OUT_SLOT = 0;
-    /** {@link #INI_SIGN_OUT_SLOT} の別名（タスクスケジューラ抑止・サインアウト指定）。 */
-    public static final int SLOT_DISABLED = INI_SIGN_OUT_SLOT;
+    public static final int INI_SUPPRESS_SLOT = 0;
+    /** {@link #INI_SUPPRESS_SLOT} の別名。 */
+    public static final int INI_SIGN_OUT_SLOT = INI_SUPPRESS_SLOT;
+    /** {@link #INI_SUPPRESS_SLOT} の別名（タスクスケジューラ抑止）。 */
+    public static final int SLOT_DISABLED = INI_SUPPRESS_SLOT;
     public static final int MAX_SLOTS = 9;
 
     /** UI 起動時に用意する RPA プロファイル行数（{@link #SLOT_SIGN_OUT} 除く）。 */
@@ -60,6 +65,10 @@ public final class RdpRemoteLauncherIni {
     }
 
     public void setSelectedSlot(int slot) {
+        if (slot == INI_SUPPRESS_SLOT || slot == SLOT_SIGN_OUT) {
+            selectedSlot = slot;
+            return;
+        }
         if (slot < 1 || slot > MAX_SLOTS) {
             throw new IllegalArgumentException("起動プログラム番号は 1～" + MAX_SLOTS + " です: " + slot);
         }
@@ -71,9 +80,20 @@ public final class RdpRemoteLauncherIni {
         return profileNumber == SLOT_SIGN_OUT;
     }
 
-    /** ini の起動プログラム番号がサインアウト専用か（99。後方互換で 0 も可）。 */
+    /** ini の起動プログラム番号がタスクスケジューラ抑止専用か（0）。 */
+    public static boolean isSuppressIniSlot(int iniSlot) {
+        return iniSlot == INI_SUPPRESS_SLOT;
+    }
+
+    /** ini の起動プログラム番号が接続先サインアウト専用か（99）。 */
+    public static boolean isSignOutIniSlot(int iniSlot) {
+        return iniSlot == SLOT_SIGN_OUT;
+    }
+
+    /** @deprecated {@link #isSignOutIniSlot(int)} または {@link #isSuppressIniSlot(int)} を使用 */
+    @Deprecated
     public static boolean isSignOutOnlyIniSlot(int iniSlot) {
-        return iniSlot == SLOT_SIGN_OUT || iniSlot == 0;
+        return isSignOutIniSlot(iniSlot);
     }
 
     public static String signOutOnlyProfileComboLabel() {
@@ -81,26 +101,42 @@ public final class RdpRemoteLauncherIni {
     }
 
     public static String signOutOnlyProfileDetailText() {
-        return "接続先のタスクスケジューラが "
+        return "通常 mstsc で接続し、接続先タスクスケジューラが "
                 + AppPaths.RDP_LAUNCHER_EXE_BASENAME
-                + " "
-                + SIGN_OUT_LAUNCHER_ARGS
-                + "（または操作者名）を起動し、ini の "
+                + " 操作者名 を起動したとき、ini の "
                 + SELECTED_SLOT_KEY
                 + "="
-                + INI_SIGN_OUT_SLOT
-                + "（UI プロファイル "
                 + SLOT_SIGN_OUT
-                + "）を読んでサインアウトのみ実行します。alternate shell は使いません。";
+                + " とスロット "
+                + SLOT_SIGN_OUT
+                + "="
+                + SIGN_OUT_LAUNCHER_ARGS
+                + " によりサインアウトします。alternate shell は使いません。"
+                + " "
+                + SELECTED_SLOT_KEY
+                + "="
+                + INI_SUPPRESS_SLOT
+                + " だけではサインアウトしません。";
     }
 
-    /** 保存・読込で UI プロファイル 99（サインアウトのみ）を ini スロット 0 にマップする。 */
+    /** 保存・読込で UI プロファイル 99 を ini の起動プログラム番号 99 に対応させる。 */
     public void selectLaunchProfile(int profileNumber) {
         if (isSignOutOnlyProfile(profileNumber)) {
-            selectedSlot = INI_SIGN_OUT_SLOT;
+            selectedSlot = SLOT_SIGN_OUT;
+            setSignOutSlotCommand();
             return;
         }
         setSelectedSlot(profileNumber);
+    }
+
+    public static boolean isSignOutSlotCommand(String executable) {
+        return SIGN_OUT_LAUNCHER_ARGS.equalsIgnoreCase(
+                executable != null ? executable.strip() : "");
+    }
+
+    /** スロット {@link #SLOT_SIGN_OUT} に {@link #SIGN_OUT_LAUNCHER_ARGS} を設定する。 */
+    public void setSignOutSlotCommand() {
+        slots.put(SLOT_SIGN_OUT, new Command(SIGN_OUT_LAUNCHER_ARGS, ""));
     }
 
     /** 子プロセス終了後にセッション操作を行う（後方互換）。 */
@@ -137,9 +173,18 @@ public final class RdpRemoteLauncherIni {
     }
 
     public void setSlotCommand(int slot, String program, String arguments) {
-        if (isSignOutOnlyIniSlot(slot)) {
-            throw new IllegalArgumentException(
-                    "スロット " + SLOT_SIGN_OUT + " にはプログラムを設定しません: " + slot);
+        if (slot == SLOT_SIGN_OUT) {
+            if (!isSignOutSlotCommand(program)) {
+                throw new IllegalArgumentException(
+                        "スロット "
+                                + SLOT_SIGN_OUT
+                                + " には "
+                                + SIGN_OUT_LAUNCHER_ARGS
+                                + " のみ設定できます: "
+                                + program);
+            }
+            setSignOutSlotCommand();
+            return;
         }
         if (slot < 1 || slot > MAX_SLOTS) {
             throw new IllegalArgumentException("スロット番号は 1～" + MAX_SLOTS + " です: " + slot);
@@ -191,8 +236,10 @@ public final class RdpRemoteLauncherIni {
             if (SELECTED_SLOT_KEY.equals(key)) {
                 try {
                     int slot = Integer.parseInt(value);
-                    if (isSignOutOnlyIniSlot(slot) || (slot >= 1 && slot <= MAX_SLOTS)) {
-                        ini.selectedSlot = isSignOutOnlyIniSlot(slot) ? INI_SIGN_OUT_SLOT : slot;
+                    if (isSuppressIniSlot(slot)
+                            || isSignOutIniSlot(slot)
+                            || (slot >= 1 && slot <= MAX_SLOTS)) {
+                        ini.selectedSlot = slot;
                     }
                 } catch (NumberFormatException ignored) {
                     // keep default
@@ -215,6 +262,13 @@ public final class RdpRemoteLauncherIni {
             }
             try {
                 int slot = Integer.parseInt(key);
+                if (slot == SLOT_SIGN_OUT && !value.isEmpty()) {
+                    Command parsed = parseCommandLine(value);
+                    if (isSignOutSlotCommand(parsed.executable())) {
+                        ini.setSignOutSlotCommand();
+                    }
+                    continue;
+                }
                 if (slot >= 1 && slot <= MAX_SLOTS && !value.isEmpty()) {
                     Command parsed = parseCommandLine(value);
                     ini.setSlotCommand(slot, parsed.executable(), parsed.arguments());
@@ -255,12 +309,17 @@ public final class RdpRemoteLauncherIni {
         }
         for (Map.Entry<Integer, Command> entry : slots.entrySet()) {
             Command command = entry.getValue();
-            if (command != null && !command.executable().isBlank()) {
-                lines.add(
-                        entry.getKey()
-                                + "="
-                                + formatSlotIniValue(command.executable(), command.arguments()));
+            if (command == null || command.executable().isBlank()) {
+                continue;
             }
+            if (entry.getKey() == SLOT_SIGN_OUT) {
+                lines.add(SLOT_SIGN_OUT + "=" + SIGN_OUT_LAUNCHER_ARGS);
+                continue;
+            }
+            lines.add(
+                    entry.getKey()
+                            + "="
+                            + formatSlotIniValue(command.executable(), command.arguments()));
         }
         return lines;
     }
@@ -366,17 +425,39 @@ public final class RdpRemoteLauncherIni {
     }
 
     /**
-     * ini の起動番号を {@link #INI_SIGN_OUT_SLOT} にする（タスクスケジューラでサインアウト／抑止）。
-     * スロット定義行は保持する。alternate shell は使わない。
+     * ini の起動番号を {@link #INI_SUPPRESS_SLOT} にする（タスクスケジューラの RPA 二重起動抑止のみ）。
      */
     public static void writeTaskSchedulerSuppress(Path path) throws IOException {
-        mergeIniScalarKey(path, SELECTED_SLOT_KEY, String.valueOf(INI_SIGN_OUT_SLOT));
+        mergeIniScalarKey(path, SELECTED_SLOT_KEY, String.valueOf(INI_SUPPRESS_SLOT));
     }
 
     /** @see #writeTaskSchedulerSuppress(Path) */
     public static void writeTaskSchedulerSuppress(Path path, Map<String, String> ui)
             throws IOException {
         writeTaskSchedulerSuppress(path);
+    }
+
+    /**
+     * プロファイル 99 用: {@link #SELECTED_SLOT_KEY}={@link #SLOT_SIGN_OUT} と
+     * {@code 99=--signout} を書く。
+     */
+    public static void writeSignOutSlotRequest(Path path) throws IOException {
+        RdpRemoteLauncherIni ini = load(path);
+        ini.setSelectedSlot(SLOT_SIGN_OUT);
+        ini.setSignOutSlotCommand();
+        ini.save(path);
+        clearSignOutOnConnectRequest(path);
+    }
+
+    /** @deprecated {@link #writeSignOutSlotRequest(Path)} を使用 */
+    @Deprecated
+    public static void writeSignOutOnConnectRequest(Path path) throws IOException {
+        writeSignOutSlotRequest(path);
+    }
+
+    /** 旧方式フラグのクリア（後方互換）。 */
+    public static void clearSignOutOnConnectRequest(Path path) throws IOException {
+        mergeIniScalarKey(path, SIGN_OUT_ON_CONNECT_KEY, "0");
     }
 
     /**
@@ -679,7 +760,20 @@ public final class RdpRemoteLauncherIni {
     }
 
     public String validateMessageForSave() {
-        if (isSignOutOnlyIniSlot(selectedSlot)) {
+        if (isSuppressIniSlot(selectedSlot)) {
+            return validateDefinedSlotCommands();
+        }
+        if (isSignOutIniSlot(selectedSlot)) {
+            Command signOut = getSlotCommand(SLOT_SIGN_OUT);
+            if (!isSignOutSlotCommand(signOut.executable())) {
+                return "起動プログラム番号 "
+                        + SLOT_SIGN_OUT
+                        + " にはスロット "
+                        + SLOT_SIGN_OUT
+                        + "="
+                        + SIGN_OUT_LAUNCHER_ARGS
+                        + " が必要です。";
+            }
             return validateDefinedSlotCommands();
         }
         if (selectedSlot < 1 || selectedSlot > MAX_SLOTS) {

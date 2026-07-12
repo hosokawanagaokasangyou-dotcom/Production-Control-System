@@ -302,7 +302,8 @@ public final class RequestFormRemoteDesktopPane {
         chkSequentialMode.setTooltip(
                 new Tooltip(
                         "オンにするとクイック起動ボタンで実行順を選び、"
-                                + "接続が終了するたびに次のタスクを自動起動します。"));
+                                + "接続が終了するたびに次のタスクを自動起動します。"
+                                + " プロファイル 99（接続先サインアウト）は先頭のみ選択できます。"));
         Button btnClearSequentialSelection = new Button("選択をクリア");
         styleSecondaryButton(btnClearSequentialSelection);
         btnClearSequentialSelection.setDisable(true);
@@ -801,15 +802,13 @@ public final class RequestFormRemoteDesktopPane {
                     } else {
                         Label signOutInfo =
                                 new Label(
-                                        "接続先ランチャー path は不要です。タスクスケジューラが "
+                                        "通常 mstsc で接続し、接続先タスクスケジューラが "
                                                 + AppPaths.RDP_LAUNCHER_EXE_BASENAME
-                                                + " "
-                                                + RdpRemoteLauncherIni.SIGN_OUT_LAUNCHER_ARGS
-                                                + " を起動し、ini の "
+                                                + " 操作者名 を起動したとき、ini の "
                                                 + RdpRemoteLauncherIni.SELECTED_SLOT_KEY
-                                                + "="
-                                                + RdpRemoteLauncherIni.INI_SIGN_OUT_SLOT
-                                                + " でサインアウトします（alternate shell なし）。");
+                                                + "=99 とスロット 99="
+                                                + RdpRemoteLauncherIni.SIGN_OUT_LAUNCHER_ARGS
+                                                + " でサインアウトします。alternate shell は使いません。");
                         signOutInfo.setWrapText(true);
                         signOutInfo.setMaxWidth(CARD_WIDTH);
                         cardInner.getChildren().add(signOutInfo);
@@ -915,6 +914,7 @@ public final class RequestFormRemoteDesktopPane {
                                                 row.argsField().getText()),
                                         row.chkRpaEternal().isSelected()));
                     }
+                    ini.setSignOutSlotCommand();
                     String validation = ini.validateMessageForSave();
                     if (validation != null) {
                         showAlert(Alert.AlertType.WARNING, "保存できません", validation);
@@ -1072,7 +1072,7 @@ public final class RequestFormRemoteDesktopPane {
                         "RPA設定.ini の「"
                                 + RdpRemoteLauncherIni.SELECTED_SLOT_KEY
                                 + "」を 0 に書き込みます。"
-                                + " 次回 RDP 接続時は RPA ではなく接続先サインアウトのみ実行されます。"
+                                + " 次回タスクスケジューラ起動時は RPA を抑止します（サインアウトはしません）。"
                                 + " プロファイル定義（スロット行）は保持されます。"));
         btnSuppressLaunchSlot.setOnAction(
                 e -> {
@@ -1083,7 +1083,7 @@ public final class RequestFormRemoteDesktopPane {
                             "共有フォルダの RPA設定.ini に "
                                     + RdpRemoteLauncherIni.SELECTED_SLOT_KEY
                                     + "=0 を書き込みます。"
-                                    + " 次回 RDP 接続時は RPA ではなく接続先サインアウトのみ実行されます。続行しますか？");
+                                    + " 次回タスクスケジューラ起動時は RPA を抑止します（サインアウトはしません）。続行しますか？");
                     confirm.showAndWait()
                             .ifPresent(
                                     choice -> {
@@ -1267,6 +1267,18 @@ public final class RequestFormRemoteDesktopPane {
                             if (sequentialRunActive.get() || rdpSessionActive.get()) {
                                 return;
                             }
+                            if (!RdpLaunchProfileSequentialRun.canAddProfileToSelection(
+                                            sequentialSelectionOrder, profileNumber)
+                                    && !sequentialSelectionOrder.contains(profileNumber)) {
+                                showAlert(
+                                        Alert.AlertType.WARNING,
+                                        "連続実行の順序",
+                                        "起動プロファイル "
+                                                + RdpRemoteLauncherIni.SLOT_SIGN_OUT
+                                                + "（接続先サインアウトのみ）は、"
+                                                + "他のタスクを選ぶ前に先頭として選択してください。");
+                                return;
+                            }
                             List<Integer> nextSelection =
                                     RdpLaunchProfileSequentialRun.toggleSelection(
                                             List.copyOf(sequentialSelectionOrder),
@@ -1345,6 +1357,15 @@ public final class RequestFormRemoteDesktopPane {
                                             + "タスクを選んでから起動してください。");
                             return;
                         }
+                        var signOutOrderError =
+                                RdpLaunchProfileSequentialRun.validateSignOutOnlyAtHead(queue);
+                        if (signOutOrderError.isPresent()) {
+                            showAlert(
+                                    Alert.AlertType.WARNING,
+                                    "連続実行の順序",
+                                    signOutOrderError.get());
+                            return;
+                        }
                         sequentialStartQueue = queue;
                         sequentialIndex.set(0);
                         selectedLaunchProfile = queue.getFirst();
@@ -1362,12 +1383,36 @@ public final class RequestFormRemoteDesktopPane {
                     final boolean signOutOnlyLaunch =
                             RdpRemoteLauncherIni.isSignOutOnlyProfile(selectedLaunchProfile);
                     if (signOutOnlyLaunch
-                            && (chkSequentialMode.isSelected() || sequentialRunActive.get())) {
-                        showAlert(
-                                Alert.AlertType.WARNING,
-                                "連続実行不可",
-                                "起動プロファイル 99（接続先サインアウトのみ）は連続実行に使えません。");
-                        return;
+                            && chkSequentialMode.isSelected()
+                            && !sequentialRunActive.get()) {
+                        var signOutOrderError =
+                                RdpLaunchProfileSequentialRun.validateSignOutOnlyAtHead(
+                                        sequentialSelectionOrder);
+                        if (signOutOrderError.isPresent()) {
+                            showAlert(
+                                    Alert.AlertType.WARNING,
+                                    "連続実行の順序",
+                                    signOutOrderError.get());
+                            return;
+                        }
+                    }
+                    if (signOutOnlyLaunch
+                            && sequentialRunActive.get()) {
+                        List<Integer> activeQueue = sequentialQueue.get();
+                        int activeIdx = sequentialIndex.get();
+                        if (activeQueue == null
+                                || activeIdx != 0
+                                || activeQueue.isEmpty()
+                                || !RdpRemoteLauncherIni.isSignOutOnlyProfile(
+                                        activeQueue.getFirst())) {
+                            showAlert(
+                                    Alert.AlertType.ERROR,
+                                    "連続実行エラー",
+                                    "起動プロファイル "
+                                            + RdpRemoteLauncherIni.SLOT_SIGN_OUT
+                                            + " は連続実行の先頭ステップのみ実行できます。");
+                            return;
+                        }
                     }
                     if (!signOutOnlyLaunch) {
                         try {
@@ -1484,10 +1529,25 @@ public final class RequestFormRemoteDesktopPane {
                             signOutOnlyLaunch
                                     ? RdpSessionEndAction.SIGN_OUT
                                     : launchProfileMeta.resolvedSessionEndAction();
+                    final String launchArgsFinal =
+                            signOutOnlyLaunch
+                                    ? RdpRemoteLauncherIni.SIGN_OUT_LAUNCHER_ARGS
+                                    : RdpRemoteLauncherIni.mergeEternalFlag(
+                                            RdpRemoteLauncherIni.normalizeScenarioArguments(
+                                                    launchRow.argsField().getText().trim()),
+                                            launchRow.chkRpaEternal().isSelected());
                     try {
                         FactoryOperatorUserStore.syncLauncherCredentialsJsonToDeployDir(ui);
                         RdpRemoteLauncherIni.writeOperatorContext(
                                 launcherIniPath, sessionOperator);
+                        if (!signOutOnlyLaunch) {
+                            RdpRemoteLauncherIni.writeLaunchContextBeforeConnect(
+                                    launcherIniPath,
+                                    launchSlot,
+                                    launchRow.programField().getText().trim(),
+                                    launchArgsFinal,
+                                    profileEndAction);
+                        }
                         refreshRightPanePreviews(refreshIniFilePreview[0], refreshLauncherLog[0]);
                     } catch (IOException iniEx) {
                         showAlert(
@@ -1498,13 +1558,6 @@ public final class RequestFormRemoteDesktopPane {
                         return;
                     }
 
-                    final String launchArgsFinal =
-                            signOutOnlyLaunch
-                                    ? RdpRemoteLauncherIni.SIGN_OUT_LAUNCHER_ARGS
-                                    : RdpRemoteLauncherIni.mergeEternalFlag(
-                                            RdpRemoteLauncherIni.normalizeScenarioArguments(
-                                                    launchRow.argsField().getText().trim()),
-                                            launchRow.chkRpaEternal().isSelected());
                     final RdpSessionEndAction profileEndActionFinal = profileEndAction;
                     final boolean signOutOnlyLaunchFinal = signOutOnlyLaunch;
 
@@ -1565,9 +1618,6 @@ public final class RequestFormRemoteDesktopPane {
                                     if (signOutOnlyLaunchFinal) {
                                         rdpConnectPhase.set(RdpConnectPhase.REMOTE_SIGN_OUT);
 
-                                        RdpRemoteLauncherIni.writeTaskSchedulerSuppress(
-                                                launcherIniPath, launchUi);
-
                                         RemoteDesktopLauncher.LaunchOutcome signOutOutcome =
                                                 RemoteDesktopLauncher.launchSignOutViaTaskScheduler(
                                                         preferred, launchUi);
@@ -1575,13 +1625,24 @@ public final class RequestFormRemoteDesktopPane {
                                         String signOutMsg =
                                                 "接続先サインアウトを起動しました: "
                                                         + signOutOutcome.rdpProfile()
-                                                        + "\n（"
+                                                        + "\n（タスクスケジューラ + "
                                                         + RdpRemoteLauncherIni.SELECTED_SLOT_KEY
-                                                        + "="
-                                                        + RdpRemoteLauncherIni.INI_SIGN_OUT_SLOT
-                                                        + " / タスクスケジューラ "
+                                                        + "=99, 99="
                                                         + RdpRemoteLauncherIni.SIGN_OUT_LAUNCHER_ARGS
                                                         + "）";
+                                        if (sequentialRunActive.get()) {
+                                            List<Integer> activeQueue = sequentialQueue.get();
+                                            int activeIdx = sequentialIndex.get();
+                                            if (activeQueue != null && !activeQueue.isEmpty()) {
+                                                signOutMsg +=
+                                                        "\n"
+                                                                + RdpLaunchProfileSequentialRun
+                                                                        .progressStatusText(
+                                                                                activeIdx + 1,
+                                                                                activeQueue.size(),
+                                                                                launchProfileLabel);
+                                            }
+                                        }
                                         status.accept(signOutMsg);
                                         statusLabel.setText(signOutMsg);
 
@@ -1605,34 +1666,15 @@ public final class RequestFormRemoteDesktopPane {
                                                                                 refreshIniFilePreview[0],
                                                                                 refreshLauncherLog[0],
                                                                                 refreshFetchedFilesTable[0],
-                                                                                scrollToFetchedFilesSection[0])));
+                                                                                scrollToFetchedFilesSection[0],
+                                                                                sequentialRunActive,
+                                                                                sequentialQueue,
+                                                                                sequentialIndex,
+                                                                                sequentialSelectionOrder,
+                                                                                sequentialStatusLabel,
+                                                                                refreshQuickLaunchSequentialLabels[0],
+                                                                                btnLaunchRef)));
                                     } else {
-                                        try {
-                                            RdpRemoteLauncherIni.writeLaunchContextBeforeConnect(
-                                                    launcherIniPath,
-                                                    launchSlot,
-                                                    launchRow.programField().getText().trim(),
-                                                    launchArgsFinal,
-                                                    profileEndActionFinal);
-                                            refreshRightPanePreviews(
-                                                    refreshIniFilePreview[0], refreshLauncherLog[0]);
-                                        } catch (IOException iniEx) {
-                                            rdpConnectPhase.set(RdpConnectPhase.IDLE);
-                                            rdpSessionActive.set(false);
-                                            sequentialRunActive.set(false);
-                                            sequentialQueue.set(List.of());
-                                            updateLaunchButtonState[0].run();
-                                            String msg =
-                                                    "RPA 接続前の ini 更新に失敗: "
-                                                            + iniEx.getMessage();
-                                            status.accept(msg);
-                                            statusLabel.setText(msg);
-                                            showAlert(
-                                                    Alert.AlertType.ERROR,
-                                                    "RPA設定.ini の更新に失敗",
-                                                    msg);
-                                            return;
-                                        }
                                         rdpConnectPhase.set(RdpConnectPhase.RPA_SESSION);
                                         launchRpaSessionAndWatch(
                                                 preferred,
@@ -2879,7 +2921,7 @@ public final class RequestFormRemoteDesktopPane {
         int comboTarget;
         if (AppPaths.hasSavedRdpLaunchProfileNumber(ui)) {
             comboTarget = AppPaths.resolveRdpLaunchProfileNumber(ui);
-        } else if (RdpRemoteLauncherIni.isSignOutOnlyIniSlot(loadedSlot)) {
+        } else if (RdpRemoteLauncherIni.isSignOutIniSlot(loadedSlot)) {
             comboTarget = RdpRemoteLauncherIni.SLOT_SIGN_OUT;
         } else if (loadedSlot >= 1 && loadedSlot <= RdpRemoteLauncherIni.MAX_SLOTS) {
             comboTarget = loadedSlot;
@@ -2951,14 +2993,25 @@ public final class RequestFormRemoteDesktopPane {
             launchProfileCombo.setValue(comboTarget);
         }
 
-        if (RdpRemoteLauncherIni.isSignOutOnlyIniSlot(loadedSlot)) {
+        if (RdpRemoteLauncherIni.isSignOutIniSlot(loadedSlot)) {
             rapStatusLabel.setText(
                     "読込: "
                             + RdpRemoteLauncherIni.SELECTED_SLOT_KEY
                             + "="
-                                                    + RdpRemoteLauncherIni.INI_SIGN_OUT_SLOT
+                            + RdpRemoteLauncherIni.SLOT_SIGN_OUT
                             + "（接続先サインアウトのみ）。"
                             + " 起動プロファイル 99 を選択中: "
+                            + iniPath
+                            + " / "
+                            + profilesPath);
+        } else if (RdpRemoteLauncherIni.isSuppressIniSlot(loadedSlot)) {
+            rapStatusLabel.setText(
+                    "読込: "
+                            + RdpRemoteLauncherIni.SELECTED_SLOT_KEY
+                            + "="
+                            + RdpRemoteLauncherIni.INI_SUPPRESS_SLOT
+                            + "（タスクスケジューラ抑止）。"
+                            + " "
                             + iniPath
                             + " / "
                             + profilesPath);
@@ -2979,6 +3032,7 @@ public final class RequestFormRemoteDesktopPane {
                     IOException error = null;
                     try {
                         RdpRemoteLauncherIni.writeTaskSchedulerSuppress(iniPath, ui);
+                        RdpRemoteLauncherIni.clearSignOutOnConnectRequest(iniPath);
                     } catch (IOException ex) {
                         error = ex;
                     }
@@ -3129,7 +3183,10 @@ public final class RequestFormRemoteDesktopPane {
             applyQuickLaunchButtonDisabled(quickLaunchProfileButtons, false);
             return;
         }
-        if (!rdpLaunchCredentialsReady(uiEnv)) {
+        if (!rdpLaunchCredentialsReady(uiEnv)
+                && !(sequentialModeOn
+                        && !RdpLaunchProfileSequentialRun.selectionRequiresAladdinCredentials(
+                                sequentialSelection))) {
             btnLaunch.getStyleClass().add("pm-rdp-connect-pending");
             btnLaunch.setDisable(true);
             btnLaunch.setText(
@@ -3212,7 +3269,14 @@ public final class RequestFormRemoteDesktopPane {
             Runnable refreshIniFilePreview,
             Runnable refreshLauncherLog,
             Runnable refreshFetchedFilesTable,
-            Runnable scrollToFetchedFilesSection) {
+            Runnable scrollToFetchedFilesSection,
+            AtomicBoolean sequentialRunActive,
+            AtomicReference<List<Integer>> sequentialQueue,
+            AtomicInteger sequentialIndex,
+            List<Integer> sequentialSelectionOrder,
+            Label sequentialStatusLabel,
+            Runnable refreshQuickLaunchSequentialLabels,
+            Button[] btnLaunchRef) {
         deleteSignOutStagingQuietly(signOutOutcome);
         if (rdpConnectPhase.get() != RdpConnectPhase.REMOTE_SIGN_OUT) {
             return;
@@ -3228,7 +3292,14 @@ public final class RequestFormRemoteDesktopPane {
                 refreshIniFilePreview,
                 refreshLauncherLog,
                 refreshFetchedFilesTable,
-                scrollToFetchedFilesSection);
+                scrollToFetchedFilesSection,
+                sequentialRunActive,
+                sequentialQueue,
+                sequentialIndex,
+                sequentialSelectionOrder,
+                sequentialStatusLabel,
+                refreshQuickLaunchSequentialLabels,
+                btnLaunchRef);
     }
 
     private static void launchRpaSessionAndWatch(
@@ -3371,7 +3442,14 @@ public final class RequestFormRemoteDesktopPane {
             Runnable refreshIniFilePreview,
             Runnable refreshLauncherLog,
             Runnable refreshFetchedFilesTable,
-            Runnable scrollToFetchedFilesSection) {
+            Runnable scrollToFetchedFilesSection,
+            AtomicBoolean sequentialRunActive,
+            AtomicReference<List<Integer>> sequentialQueue,
+            AtomicInteger sequentialIndex,
+            List<Integer> sequentialSelectionOrder,
+            Label sequentialStatusLabel,
+            Runnable refreshQuickLaunchSequentialLabels,
+            Button[] btnLaunchRef) {
         rdpConnectPhase.set(RdpConnectPhase.IDLE);
         rdpSessionActive.set(false);
         updateLaunchButtonState.run();
@@ -3394,6 +3472,66 @@ public final class RequestFormRemoteDesktopPane {
         }
         if (scrollToFetchedFilesSection != null) {
             scrollToFetchedFilesSection.run();
+        }
+        advanceSequentialRunAfterStep(
+                msg,
+                status,
+                statusLabel,
+                sequentialRunActive,
+                sequentialQueue,
+                sequentialIndex,
+                sequentialSelectionOrder,
+                sequentialStatusLabel,
+                refreshQuickLaunchSequentialLabels,
+                btnLaunchRef);
+    }
+
+    private static void advanceSequentialRunAfterStep(
+            String endMsg,
+            Consumer<String> status,
+            Label statusLabel,
+            AtomicBoolean sequentialRunActive,
+            AtomicReference<List<Integer>> sequentialQueue,
+            AtomicInteger sequentialIndex,
+            List<Integer> sequentialSelectionOrder,
+            Label sequentialStatusLabel,
+            Runnable refreshQuickLaunchSequentialLabels,
+            Button[] btnLaunchRef) {
+        if (sequentialRunActive == null || !sequentialRunActive.get()) {
+            return;
+        }
+        List<Integer> activeQueue = sequentialQueue != null ? sequentialQueue.get() : null;
+        int nextIdx = sequentialIndex != null ? sequentialIndex.get() + 1 : 0;
+        if (activeQueue != null && nextIdx < activeQueue.size()) {
+            sequentialIndex.set(nextIdx);
+            status.accept(
+                    endMsg
+                            + "\n連続実行: 次のタスク（"
+                            + (nextIdx + 1)
+                            + "/"
+                            + activeQueue.size()
+                            + "）を起動します…");
+            if (btnLaunchRef != null && btnLaunchRef[0] != null) {
+                btnLaunchRef[0].fire();
+            }
+        } else {
+            sequentialRunActive.set(false);
+            if (sequentialQueue != null) {
+                sequentialQueue.set(List.of());
+            }
+            if (sequentialSelectionOrder != null) {
+                sequentialSelectionOrder.clear();
+            }
+            if (sequentialStatusLabel != null) {
+                sequentialStatusLabel.setText("連続実行が完了しました。");
+            }
+            if (refreshQuickLaunchSequentialLabels != null) {
+                refreshQuickLaunchSequentialLabels.run();
+            }
+            status.accept(endMsg + "\n連続実行が完了しました。");
+            if (statusLabel != null) {
+                statusLabel.setText(endMsg + "\n連続実行が完了しました。");
+            }
         }
     }
 
@@ -3426,6 +3564,7 @@ public final class RequestFormRemoteDesktopPane {
         try {
             Path iniPath = resolveRdpIniPath(launchUi);
             RdpRemoteLauncherIni.writeTaskSchedulerSuppress(iniPath, launchUi);
+            RdpRemoteLauncherIni.clearSignOutOnConnectRequest(iniPath);
             status.accept(
                     "RPA設定.ini の起動プログラム番号を "
                                                     + RdpRemoteLauncherIni.INI_SIGN_OUT_SLOT
@@ -3445,29 +3584,17 @@ public final class RequestFormRemoteDesktopPane {
             scrollToFetchedFilesSection.run();
         }
         if (sequentialRunActive.get()) {
-            List<Integer> activeQueue = sequentialQueue.get();
-            int nextIdx = sequentialIndex.get() + 1;
-            if (activeQueue != null && nextIdx < activeQueue.size()) {
-                sequentialIndex.set(nextIdx);
-                status.accept(
-                        endMsg
-                                + "\n連続実行: 次のタスク（"
-                                + (nextIdx + 1)
-                                + "/"
-                                + activeQueue.size()
-                                + "）を起動します…");
-                btnLaunchRef[0].fire();
-            } else {
-                sequentialRunActive.set(false);
-                sequentialQueue.set(List.of());
-                sequentialSelectionOrder.clear();
-                sequentialStatusLabel.setText("連続実行が完了しました。");
-                if (refreshQuickLaunchSequentialLabels != null) {
-                    refreshQuickLaunchSequentialLabels.run();
-                }
-                status.accept(endMsg + "\n連続実行が完了しました。");
-                statusLabel.setText(endMsg + "\n連続実行が完了しました。");
-            }
+            advanceSequentialRunAfterStep(
+                    endMsg,
+                    status,
+                    statusLabel,
+                    sequentialRunActive,
+                    sequentialQueue,
+                    sequentialIndex,
+                    sequentialSelectionOrder,
+                    sequentialStatusLabel,
+                    refreshQuickLaunchSequentialLabels,
+                    btnLaunchRef);
         }
     }
 
