@@ -133,9 +133,6 @@ public final class PlanInputTabController {
     @FXML
     private Button stage21RunButton;
 
-    @FXML
-    private Button stage2ClearCacheButton;
-
     private static final String STAGE2_RUN_BUTTON_TEXT_DEFAULT = "段階2 実行";
 
     private static final String STAGE2_RUN_BUTTON_TEXT_SUMMARY_LOCKED =
@@ -143,6 +140,9 @@ public final class PlanInputTabController {
 
     private static final String STAGE2_RUN_BUTTON_TEXT_DELIVERY_CALENDAR_RELOAD =
             "段階2（納期管理ビュー更新中）";
+
+    @FXML
+    private CheckBox stage2SkipCacheClearCheckBox;
 
     @FXML
     private CheckBox stage2SkipTodayDispatchCheckBox;
@@ -460,9 +460,6 @@ public final class PlanInputTabController {
         if (stage21RunButton != null) {
             stage21RunButton.setDisable(disable);
         }
-        if (stage2ClearCacheButton != null) {
-            stage2ClearCacheButton.setDisable(stage2RunPipelineBusy);
-        }
         if (stage2RunPipelineBusy) {
             if (stage2RunButton != null) {
                 stage2RunButton.setTooltip(null);
@@ -528,6 +525,11 @@ public final class PlanInputTabController {
                 stage2RunButton.setText(STAGE2_RUN_BUTTON_TEXT_DEFAULT);
             }
         }
+    }
+
+    /** 段階2.0 実行前に段階2〜3.2 キャッシュをクリアしない（チェックは本タブ）。 */
+    boolean snapshotStage2SkipCacheClearBeforeRun() {
+        return stage2SkipCacheClearCheckBox != null && stage2SkipCacheClearCheckBox.isSelected();
     }
 
     /** 段階2子プロセスへ渡す {@code PM_AI_STAGE2_SKIP_TODAY_DISPATCH}（チェックは本タブ）。 */
@@ -983,13 +985,6 @@ public final class PlanInputTabController {
     private void onStage21RunButtonAction() {
         if (shell != null) {
             shell.launchStage21OvertimeSimulationWizard();
-        }
-    }
-
-    @FXML
-    private void onStage2ClearCacheButtonAction() {
-        if (shell != null) {
-            shell.confirmAndClearStage2Caches();
         }
     }
 

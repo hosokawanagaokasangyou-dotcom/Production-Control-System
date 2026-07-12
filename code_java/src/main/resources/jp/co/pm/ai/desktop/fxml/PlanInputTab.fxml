@@ -55,12 +55,12 @@
                                 styleClass="pm-stage-run-button,pm-stage-run-2" text="段階2.0 実行" />
                         <Button fx:id="stage21RunButton" mnemonicParsing="false" onAction="#onStage21RunButtonAction"
                                 styleClass="pm-stage-run-button,pm-stage-run-2-1" text="段階2.1(時間外)" />
-                        <Button fx:id="stage2ClearCacheButton" mnemonicParsing="false" onAction="#onStage2ClearCacheButtonAction"
-                                text="段階2 キャッシュクリア">
+                        <CheckBox fx:id="stage2SkipCacheClearCheckBox" mnemonicParsing="false"
+                                text="段階2実行前にキャッシュをクリアしない">
                             <tooltip>
-                                <Tooltip text="結果_配台表・段階2/2.1 計画・人員ブック・翌日配台キャッシュ等を削除し、入力3表シートを空にします。入力1表は維持されます。" />
+                                <Tooltip text="ON のとき段階2.0 実行前に結果_配台表・段階2/2.1 計画・人員ブック・翌日配台キャッシュ等を残したまま実行します。既定は OFF（毎回クリア）。" />
                             </tooltip>
-                        </Button>
+                        </CheckBox>
                         <CheckBox fx:id="stage2SkipGeminiApiCheckBox" mnemonicParsing="false" selected="true"
                                 text="AI API 呼び出しをスキップ（開発用）">
                             <tooltip>
