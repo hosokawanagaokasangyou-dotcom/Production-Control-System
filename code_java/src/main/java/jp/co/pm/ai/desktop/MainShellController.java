@@ -4110,6 +4110,8 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
     /**
      * Resets the env-var table to bundled defaults ({@link UiRefEnvDefaults}) and reapplies bootstrap fills.
      * Shows a confirmation dialog first.
+     *
+     * <p>順序: 現在の利用工場のグローバル設定（{@code init_setting}）を適用 → 環境変数を初期化。
      */
     public void confirmAndResetEnvRowsToDefaults() {
         FactorySite site = GlobalInitSettingTarget.load();
@@ -4123,19 +4125,33 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         alert.setHeaderText(null);
         alert.setContentText(
                 site.displayLabelJa()
-                        + "（現在の利用工場）の環境変数を ui_ref 既定に戻します。"
+                        + "（現在の利用工場）のグローバル設定（init_setting）を適用したうえで、"
+                        + "環境変数を ui_ref 既定に戻します。"
                         + "未保存の編集と、セッションに保存していた各タブの値（Python パス等）も失われます。"
                         + "続行しますか？");
         Optional<ButtonType> ans = alert.showAndWait();
         if (ans.isEmpty() || ans.get() != ButtonType.OK) {
             return;
         }
+        // 1) 現在の工場のグローバル設定（init_setting session_defaults / 依頼書設定）を適用
+        suppressEnvSessionPersistence.set(true);
+        try {
+            applyInitSettingFactorySessionFragment(site);
+            applyFactoryRequestFormGlobalSettings(site, true);
+            refreshDesktopSessionDependentUi();
+        } finally {
+            suppressEnvSessionPersistence.set(false);
+        }
+        // 2) 環境変数を ui_ref 既定へ初期化（工場別 UNC 等も再適用）
         applyEnvRowsFullBundledResetAndPersist(true, site);
         String operator = FactoryOperatorUserStore.sessionOperatorName();
         if (!operator.isBlank()) {
             FactorySiteWorkspaceStore.save(operator, site, buildFactorySiteWorkspaceSnapshot());
         }
-        appendLog("[env] " + site.displayLabelJa() + "の環境変数を ui_ref 既定に戻しました。");
+        appendLog(
+                "[env] "
+                        + site.displayLabelJa()
+                        + "のグローバル設定を適用し、環境変数を ui_ref 既定に戻しました。");
         maybePromptRequestFormOriginalDirIfUnset("[env]", site);
         requireOperatorSelectionForFactory(site, false);
     }
@@ -6721,7 +6737,8 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
     private void clearStage2CachesBeforeStage2Run() {
         Map<String, String> ui = collectUiEnv();
         PipelineDownstreamResultsClearer.ClearResult cleared =
-                PipelineDownstreamResultsClearer.clearStage2ThroughStage32(ui);
+                PipelineDownstreamResultsClearer.clearStage2ThroughStage32(
+                        ui, true /* 当日配台ソース束は段階2で再利用する */);
         for (String line : cleared.detailLines()) {
             appendLog(line);
         }
@@ -6972,8 +6989,21 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
      * @return false なら段階2を中止（キャンセルまたは保存失敗）
      */
     private boolean prepareStage2NextDayDialogJsonPaths(Map<String, String> ui) {
+        jp.co.pm.ai.planning.stage2.Stage2NextDayDialogMode requestedMode =
+                planInputTabController != null
+                        ? planInputTabController.snapshotStage2NextDayDialogMode()
+                        : jp.co.pm.ai.planning.stage2.Stage2NextDayDialogMode.defaultMode();
         jp.co.pm.ai.planning.stage2.Stage2NextDayDialogMode mode =
                 effectiveStage2NextDayDialogMode();
+        if (planInputTabController != null
+                && planInputTabController.snapshotTodayDispatch()
+                && !planInputTabController.snapshotStage2SkipTodayDispatch()
+                && mode != requestedMode
+                && requestedMode.runsInProgressDialog()) {
+            appendLog(
+                    "[stage2] 当日配台 ON のため加工途中の翌日配台ダイアログ(①)を省略します。"
+                            + " 設定する場合は「当日は配台しない」を ON にするか、当日配台チェックを OFF にしてください。");
+        }
         pendingStage2InProgressNextDayJsonPath = null;
         pendingStage2AladdinTodayExcludeJsonPath = null;
 
