@@ -42,10 +42,11 @@ public final class PostProcessingPlanMachineLookup {
             boolean hasCodeColumn,
             boolean hasNameColumn,
             Map<String, String> machineCodeToName,
+            Map<String, String> machineNameToCode,
             List<String> machineComboLabels) {
 
         public static Snapshot empty() {
-            return new Snapshot(Path.of(""), -1L, false, false, Map.of(), List.of());
+            return new Snapshot(Path.of(""), -1L, false, false, Map.of(), Map.of(), List.of());
         }
 
         public boolean loaded() {
@@ -124,6 +125,29 @@ public final class PostProcessingPlanMachineLookup {
         return snap.machineCodeToName().getOrDefault(code, "");
     }
 
+    /** 機械名（正規化キー）から機械コードを逆引きする。見つからなければ空文字。 */
+    public static String resolveMachineCodeFromName(Snapshot snap, String machineName) {
+        if (snap == null || machineName == null || machineName.isBlank()) {
+            return "";
+        }
+        String norm = normalizeMachineNameKey(machineName);
+        if (norm.isEmpty()) {
+            return "";
+        }
+        return snap.machineNameToCode().getOrDefault(norm, "");
+    }
+
+    /** 機械名照合キー（全角スペース・NFKC 等を正規化）。 */
+    public static String normalizeMachineNameKey(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return "";
+        }
+        String t = java.text.Normalizer.normalize(raw, java.text.Normalizer.Form.NFKC);
+        t = t.replace('\u00a0', ' ').replace('\u3000', ' ');
+        t = t.replaceAll("[\u200b\u200c\u200d\ufeff]", "");
+        return t.replaceAll("\\s+", " ").strip();
+    }
+
     public static String resolveCodeFromComboInput(Snapshot snap, String text) {
         if (text == null) {
             return "";
@@ -155,7 +179,7 @@ public final class PostProcessingPlanMachineLookup {
         boolean hasCode = idxCode >= 0;
         boolean hasName = idxName >= 0;
         if (!hasCode && !hasName) {
-            return new Snapshot(abs, mtime, false, false, Map.of(), List.of());
+            return new Snapshot(abs, mtime, false, false, Map.of(), Map.of(), List.of());
         }
 
         Map<String, String> codeToName = new LinkedHashMap<>();
@@ -178,6 +202,14 @@ public final class PostProcessingPlanMachineLookup {
             codeToName.putIfAbsent(code, name);
         }
 
+        Map<String, String> nameToCode = new LinkedHashMap<>();
+        for (Map.Entry<String, String> e : codeToName.entrySet()) {
+            String normName = normalizeMachineNameKey(e.getValue());
+            if (!normName.isEmpty()) {
+                nameToCode.putIfAbsent(normName, e.getKey());
+            }
+        }
+
         List<String> labels = new ArrayList<>();
         for (Map.Entry<String, String> e : codeToName.entrySet()) {
             labels.add(PostProcessingKouteiNaiyoMasterLookup.displayLabel(e.getKey(), e.getValue()));
@@ -188,6 +220,7 @@ public final class PostProcessingPlanMachineLookup {
                 hasCode,
                 hasName,
                 Map.copyOf(codeToName),
+                Map.copyOf(nameToCode),
                 List.copyOf(labels));
     }
 

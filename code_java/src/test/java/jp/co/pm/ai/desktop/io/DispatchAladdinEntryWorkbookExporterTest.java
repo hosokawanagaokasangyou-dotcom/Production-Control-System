@@ -10,6 +10,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
 import java.time.Instant;
+import java.util.List;
+import java.util.Map;
 
 import org.apache.poi.ss.usermodel.Font;
 import org.apache.poi.xssf.usermodel.XSSFRichTextString;
@@ -19,11 +21,66 @@ import org.junit.jupiter.api.io.TempDir;
 
 import jp.co.pm.ai.desktop.config.SummaryAiDispatchExportPrefs;
 import jp.co.pm.ai.desktop.dispatch.DispatchAladdinEntrySheetBuilder;
+import jp.co.pm.ai.desktop.reconciliation.PostProcessingPlanMachineLookup;
 
 class DispatchAladdinEntryWorkbookExporterTest {
 
     @TempDir
     Path tempDir;
+
+    @Test
+    void sheetNameForMachine_prefixesMachineCodeWhenKnown() {
+        PostProcessingPlanMachineLookup.Snapshot snap =
+                new PostProcessingPlanMachineLookup.Snapshot(
+                        Path.of("plan.csv"),
+                        0L,
+                        true,
+                        true,
+                        Map.of("2011", "スライス機1 湖南"),
+                        Map.of("スライス機1 湖南", "2011"),
+                        List.of("2011 スライス機1 湖南"));
+        DispatchAladdinEntrySheetBuilder.MachineSheet ms =
+                new DispatchAladdinEntrySheetBuilder.MachineSheet("スライス機1 湖南", List.of());
+
+        assertEquals(
+                "2011 スライス機1 湖南",
+                DispatchAladdinEntryWorkbookExporter.sheetNameForMachine(ms, snap));
+    }
+
+    @Test
+    void sheetNameForMachine_fallsBackToMachineNameOnlyWhenCodeUnknown() {
+        DispatchAladdinEntrySheetBuilder.MachineSheet ms =
+                new DispatchAladdinEntrySheetBuilder.MachineSheet("EC機 湖南", List.of());
+
+        assertEquals(
+                "EC機 湖南",
+                DispatchAladdinEntryWorkbookExporter.sheetNameForMachine(
+                        ms, PostProcessingPlanMachineLookup.Snapshot.empty()));
+    }
+
+    @Test
+    void write_localDestination_usesRepoCodeAladdinFolder() throws IOException {
+        Path repo = tempDir.resolve("repo");
+        Files.createDirectories(repo.resolve("code"));
+        Map<String, String> ui =
+                Map.of(jp.co.pm.ai.desktop.config.AppPaths.KEY_PM_AI_REPO_ROOT, repo.toString());
+        DispatchAladdinEntrySheetBuilder.EntryWorkbook model =
+                new DispatchAladdinEntrySheetBuilder.EntryWorkbook(List.of(), List.of());
+
+        DispatchAladdinEntryWorkbookExporter.ExportResult result =
+                DispatchAladdinEntryWorkbookExporter.write(
+                        ui, model, DispatchAladdinEntryWorkbookExporter.Destination.LOCAL);
+
+        Path expectedLatest =
+                jp.co.pm.ai.desktop.config.AppPaths.aladdinEntryDispatchPlanLocalXlsxPath(ui);
+        assertEquals(expectedLatest, result.latestPath());
+        assertTrue(Files.isRegularFile(result.latestPath()));
+        assertTrue(
+                result.generationPath()
+                        .startsWith(
+                                jp.co.pm.ai.desktop.config.AppPaths.aladdinEntryDispatchPlanLocalDir(
+                                        ui)));
+    }
 
     @Test
     void dateCellRichTextAppliesPerLineFontSizes() throws IOException {
@@ -48,7 +105,8 @@ class DispatchAladdinEntryWorkbookExporterTest {
             assertNotNull(rich);
             assertEquals(text, rich.getString());
             assertTrue(rich.hasFormatting());
-            assertEquals(2, rich.numFormattingRuns());
+            // XSSFRichTextString は改行境界でもランを分割するため 2 以上
+            assertTrue(rich.numFormattingRuns() >= 2);
         }
     }
 
@@ -77,6 +135,23 @@ class DispatchAladdinEntryWorkbookExporterTest {
                 Files.exists(
                         tempDir.resolve(
                                 String.format("アラジン入力用_配台計画_%03d.xlsx", total - 1))));
+    }
+
+    @Test
+    void resolveMachineCodeFromName_normalizesWhitespace() throws Exception {
+        Path csv = tempDir.resolve("plan-ws.csv");
+        Files.writeString(
+                csv,
+                "機械,機械名,依頼NO\n" + "2011,スライス機1 湖南,R1\n");
+
+        PostProcessingPlanMachineLookup.invalidate();
+        PostProcessingPlanMachineLookup.Snapshot snap =
+                PostProcessingPlanMachineLookup.snapshotFromFile(csv);
+
+        assertEquals(
+                "2011",
+                PostProcessingPlanMachineLookup.resolveMachineCodeFromName(
+                        snap, "スライス機1　湖南"));
     }
 
     @Test

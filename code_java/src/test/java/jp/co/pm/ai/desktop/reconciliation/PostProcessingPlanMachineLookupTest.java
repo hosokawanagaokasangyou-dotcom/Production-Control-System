@@ -30,6 +30,7 @@ class PostProcessingPlanMachineLookupTest {
         assertTrue(snap.hasCodeColumn());
         assertTrue(snap.hasNameColumn());
         assertEquals("スライス機1　湖南", snap.machineCodeToName().get("M01"));
+        assertEquals("M01", PostProcessingPlanMachineLookup.resolveMachineCodeFromName(snap, "スライス機1　湖南"));
         assertEquals("M02", PostProcessingPlanMachineLookup.resolveCodeFromComboInput(snap, "M02 検査機"));
         assertTrue(PostProcessingPlanMachineLookup.isMachineCodeColumn("機械コード3"));
     }

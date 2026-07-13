@@ -37,6 +37,8 @@ import jp.co.pm.ai.desktop.dispatch.DispatchAladdinEntrySheetBuilder;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchInteractiveConsolidator;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchNormalizer;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchStage3Support;
+import jp.co.pm.ai.desktop.reconciliation.PostProcessingKouteiNaiyoMasterLookup;
+import jp.co.pm.ai.desktop.reconciliation.PostProcessingPlanMachineLookup;
 
 /**
  * アラジン入力用配台計画 Excel（機械名ごとのシート、日別2段セル）を
@@ -81,6 +83,15 @@ public final class DispatchAladdinEntryWorkbookExporter {
     public record ExportResult(Path latestPath, Path generationPath) {}
 
     /**
+     * 出力先。{@link #SHARED} はサマリ Excel と同フォルダ側（共有ドライブ想定）、
+     * {@link #LOCAL} はリポジトリ {@code code/アラジン入力用配台計画}。
+     */
+    public enum Destination {
+        SHARED,
+        LOCAL
+    }
+
+    /**
      * ディスク上の 結果_配台表.json / shaped_aladdin_plan.json と目次情報からブックを組み立てて出力する。
      *
      * @param indexByTid {@code RequestFormOriginalIndexLookup.loadByIraiNoKey} の結果（null 可）
@@ -88,6 +99,17 @@ public final class DispatchAladdinEntryWorkbookExporter {
     public static ExportResult writeFromCachedSources(
             Map<String, String> ui,
             Map<String, DispatchAladdinEntrySheetBuilder.IndexInfo> indexByTid)
+            throws IOException {
+        return writeFromCachedSources(ui, indexByTid, Destination.SHARED);
+    }
+
+    /**
+     * @param destination {@link Destination#SHARED}（既定）または {@link Destination#LOCAL}
+     */
+    public static ExportResult writeFromCachedSources(
+            Map<String, String> ui,
+            Map<String, DispatchAladdinEntrySheetBuilder.IndexInfo> indexByTid,
+            Destination destination)
             throws IOException {
         Map<String, String> u = ui != null ? ui : Map.of();
         Path dispatchJson = AppPaths.resolveResultDispatchTableJsonPath(u);
@@ -115,27 +137,42 @@ public final class DispatchAladdinEntryWorkbookExporter {
         DispatchAladdinEntrySheetBuilder.EntryWorkbook model =
                 DispatchAladdinEntrySheetBuilder.build(
                         columns, rows, aladdinLookup, indexByTid, LocalDate.now());
-        return write(u, model);
+        return write(u, model, destination);
     }
 
-    /** モデルを最新固定パスへ上書きし、操作者別世代フォルダへコピー・剪定する。 */
+    /** モデルを共有側の最新固定パスへ上書きし、操作者別世代フォルダへコピー・剪定する。 */
     public static ExportResult write(
             Map<String, String> ui, DispatchAladdinEntrySheetBuilder.EntryWorkbook model)
             throws IOException {
+        return write(ui, model, Destination.SHARED);
+    }
+
+    /** モデルを指定出力先の最新固定パスへ上書きし、操作者別世代フォルダへコピー・剪定する。 */
+    public static ExportResult write(
+            Map<String, String> ui,
+            DispatchAladdinEntrySheetBuilder.EntryWorkbook model,
+            Destination destination)
+            throws IOException {
         Map<String, String> u = ui != null ? ui : Map.of();
-        Path latest = AppPaths.aladdinEntryDispatchPlanXlsxPath(u);
+        Destination dest = destination != null ? destination : Destination.SHARED;
+        Path latest =
+                dest == Destination.LOCAL
+                        ? AppPaths.aladdinEntryDispatchPlanLocalXlsxPath(u)
+                        : AppPaths.aladdinEntryDispatchPlanXlsxPath(u);
         Path repoRoot = AppPaths.resolveRepoRoot(u);
+        String tmpSuffix = dest == Destination.LOCAL ? ".local.tmp" : ".tmp";
         Path stagingTmp =
-                repoRoot.resolve(AppPaths.ALADDIN_ENTRY_DISPATCH_PLAN_XLSX + ".tmp")
+                repoRoot.resolve(AppPaths.ALADDIN_ENTRY_DISPATCH_PLAN_XLSX + tmpSuffix)
                         .toAbsolutePath()
                         .normalize();
+        PostProcessingPlanMachineLookup.Snapshot machineSnap = loadMachineSnapshot(u);
         try (XSSFWorkbook wb = new XSSFWorkbook()) {
             Styles styles = Styles.of(wb);
             if (model == null || model.sheets().isEmpty()) {
                 writeEmptySheet(wb, styles);
             } else {
                 for (DispatchAladdinEntrySheetBuilder.MachineSheet ms : model.sheets()) {
-                    writeMachineSheet(wb, ms, model.dates(), styles);
+                    writeMachineSheet(wb, ms, model.dates(), styles, machineSnap);
                 }
             }
             try (var out = Files.newOutputStream(stagingTmp)) {
@@ -146,14 +183,15 @@ public final class DispatchAladdinEntryWorkbookExporter {
         } finally {
             Files.deleteIfExists(stagingTmp);
         }
-        Path generation = saveGenerationCopy(u, latest);
+        Path generation = saveGenerationCopy(u, latest, dest);
         return new ExportResult(latest, generation);
     }
 
     /** 最新ファイルを操作者別世代フォルダへコピーし、上限超過分を古い順に削除する。 */
-    private static Path saveGenerationCopy(Map<String, String> ui, Path latest) throws IOException {
+    private static Path saveGenerationCopy(
+            Map<String, String> ui, Path latest, Destination destination) throws IOException {
         String operator = SummaryAiDispatchGenerationStore.resolveOperatorUser(ui);
-        Path operatorDir = operatorGenerationDir(ui, operator);
+        Path operatorDir = operatorGenerationDir(ui, operator, destination);
         Files.createDirectories(operatorDir);
         String fileName =
                 GEN_FILE_PREFIX + GEN_TS.format(LocalDateTime.now()) + ".xlsx";
@@ -163,9 +201,19 @@ public final class DispatchAladdinEntryWorkbookExporter {
         return generation;
     }
 
-    /** 操作者別世代フォルダ（{@link AppPaths#aladdinEntryDispatchPlanDir} 配下）。 */
+    /** 操作者別世代フォルダ（共有側 {@link AppPaths#aladdinEntryDispatchPlanDir} 配下）。 */
     public static Path operatorGenerationDir(Map<String, String> ui, String operatorUser) {
-        return AppPaths.aladdinEntryDispatchPlanDir(ui)
+        return operatorGenerationDir(ui, operatorUser, Destination.SHARED);
+    }
+
+    /** 操作者別世代フォルダ（出力先に応じた親配下）。 */
+    public static Path operatorGenerationDir(
+            Map<String, String> ui, String operatorUser, Destination destination) {
+        Path parent =
+                destination == Destination.LOCAL
+                        ? AppPaths.aladdinEntryDispatchPlanLocalDir(ui)
+                        : AppPaths.aladdinEntryDispatchPlanDir(ui);
+        return parent
                 .resolve(SummaryAiDispatchGenerationStore.sanitizeOperatorDirName(operatorUser))
                 .toAbsolutePath()
                 .normalize();
@@ -235,12 +283,39 @@ public final class DispatchAladdinEntryWorkbookExporter {
         sh.setRepeatingColumns(new CellRangeAddress(-1, -1, 0, FIXED_COLUMN_COUNT - 1));
     }
 
+    private static PostProcessingPlanMachineLookup.Snapshot loadMachineSnapshot(
+            Map<String, String> ui) {
+        try {
+            return PostProcessingPlanMachineLookup.snapshot(ui);
+        } catch (IOException e) {
+            return PostProcessingPlanMachineLookup.Snapshot.empty();
+        }
+    }
+
+    /**
+     * シート名: 加工計画DATA の機械コードが取れるときは {@code コード 機械名}（コンボ表示と同形式）、
+     * 取れないときは機械名のみ。
+     */
+    static String sheetNameForMachine(
+            DispatchAladdinEntrySheetBuilder.MachineSheet machineSheet,
+            PostProcessingPlanMachineLookup.Snapshot machineSnap) {
+        String machineName = machineSheet.machineName();
+        String code =
+                PostProcessingPlanMachineLookup.resolveMachineCodeFromName(machineSnap, machineName);
+        String base =
+                code.isEmpty()
+                        ? machineName
+                        : PostProcessingKouteiNaiyoMasterLookup.displayLabel(code, machineName);
+        return WorkbookUtil.createSafeSheetName(base);
+    }
+
     private static void writeMachineSheet(
             XSSFWorkbook wb,
             DispatchAladdinEntrySheetBuilder.MachineSheet machineSheet,
             List<LocalDate> dates,
-            Styles styles) {
-        String name = WorkbookUtil.createSafeSheetName(machineSheet.machineName());
+            Styles styles,
+            PostProcessingPlanMachineLookup.Snapshot machineSnap) {
+        String name = sheetNameForMachine(machineSheet, machineSnap);
         if (wb.getSheet(name) != null) {
             name = WorkbookUtil.createSafeSheetName(name + " (" + (wb.getNumberOfSheets() + 1) + ")");
         }

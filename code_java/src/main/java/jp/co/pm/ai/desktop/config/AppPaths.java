@@ -2497,6 +2497,7 @@ public final class AppPaths {
     /**
      * アラジン入力用配台計画の格納フォルダ（{@link #summaryAiDispatchXlsxPath(Map)} の親 +
      * {@link #ALADDIN_ENTRY_DISPATCH_PLAN_DIR_NAME}）。直下に最新固定名、配下に操作者別世代フォルダ。
+     * 工場共有 DATA（共有ドライブ）側の既定出力先。
      */
     public static Path aladdinEntryDispatchPlanDir(Map<String, String> ui) {
         return siblingOfSummaryAiDispatchWorkbook(ui, ALADDIN_ENTRY_DISPATCH_PLAN_DIR_NAME);
@@ -2505,6 +2506,26 @@ public final class AppPaths {
     /** アラジン入力用配台計画 Excel の最新固定パス（{@link #aladdinEntryDispatchPlanDir} 直下）。 */
     public static Path aladdinEntryDispatchPlanXlsxPath(Map<String, String> ui) {
         return aladdinEntryDispatchPlanDir(ui)
+                .resolve(ALADDIN_ENTRY_DISPATCH_PLAN_XLSX)
+                .toAbsolutePath()
+                .normalize();
+    }
+
+    /**
+     * アラジン入力用配台計画のローカル格納フォルダ（{@link #resolveRepoRoot(Map)}/{@code code}/
+     * {@link #ALADDIN_ENTRY_DISPATCH_PLAN_DIR_NAME}）。共有ドライブとは独立。
+     */
+    public static Path aladdinEntryDispatchPlanLocalDir(Map<String, String> ui) {
+        return resolveRepoRoot(ui)
+                .resolve("code")
+                .resolve(ALADDIN_ENTRY_DISPATCH_PLAN_DIR_NAME)
+                .toAbsolutePath()
+                .normalize();
+    }
+
+    /** ローカル側の最新固定パス（{@link #aladdinEntryDispatchPlanLocalDir} 直下）。 */
+    public static Path aladdinEntryDispatchPlanLocalXlsxPath(Map<String, String> ui) {
+        return aladdinEntryDispatchPlanLocalDir(ui)
                 .resolve(ALADDIN_ENTRY_DISPATCH_PLAN_XLSX)
                 .toAbsolutePath()
                 .normalize();

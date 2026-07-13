@@ -41,6 +41,10 @@
                             styleClass="pm-aladdin-entry-export-button"
                             text="アラジン加工計画読込→Excel出力"
                             onAction="#onReloadAladdinPlanAndExportEntryWorkbookAction"/>
+                    <Button fx:id="aladdinEntryLocalExportButton" mnemonicParsing="false"
+                            styleClass="pm-aladdin-entry-local-export-button"
+                            text="ローカルへ出力"
+                            onAction="#onExportAladdinEntryWorkbookLocalAction"/>
                     <Button fx:id="aladdinEntryOpenLatestButton" mnemonicParsing="false"
                             styleClass="pm-aladdin-entry-open-button"
                             text="最新を開く"

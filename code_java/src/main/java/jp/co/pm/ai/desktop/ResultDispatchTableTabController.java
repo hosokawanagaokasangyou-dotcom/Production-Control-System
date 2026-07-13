@@ -83,6 +83,9 @@ public final class ResultDispatchTableTabController {
     private Button aladdinEntryReloadExportButton;
 
     @FXML
+    private Button aladdinEntryLocalExportButton;
+
+    @FXML
     private Button aladdinEntryOpenLatestButton;
 
     @FXML
@@ -680,18 +683,29 @@ public final class ResultDispatchTableTabController {
 
     @FXML
     private void onExportAladdinEntryWorkbookAction() {
-        runAladdinEntryExport(false);
+        runAladdinEntryExport(false, DispatchAladdinEntryWorkbookExporter.Destination.SHARED);
     }
 
     @FXML
     private void onReloadAladdinPlanAndExportEntryWorkbookAction() {
-        runAladdinEntryExport(true);
+        runAladdinEntryExport(true, DispatchAladdinEntryWorkbookExporter.Destination.SHARED);
     }
 
-    private void runAladdinEntryExport(boolean reloadAladdinPlanFromSource) {
+    @FXML
+    private void onExportAladdinEntryWorkbookLocalAction() {
+        runAladdinEntryExport(false, DispatchAladdinEntryWorkbookExporter.Destination.LOCAL);
+    }
+
+    private void runAladdinEntryExport(
+            boolean reloadAladdinPlanFromSource,
+            DispatchAladdinEntryWorkbookExporter.Destination destination) {
         if (shell == null) {
             return;
         }
+        DispatchAladdinEntryWorkbookExporter.Destination dest =
+                destination != null
+                        ? destination
+                        : DispatchAladdinEntryWorkbookExporter.Destination.SHARED;
         dismissAladdinExportAttentionGlow();
         dismissAladdinOpenAttentionGlow();
         Map<String, String> ui = shell.snapshotUiEnv();
@@ -740,17 +754,21 @@ public final class ResultDispatchTableTabController {
                                         () ->
                                                 showAladdinEntryExportProgress(
                                                         ProgressBar.INDETERMINATE_PROGRESS,
-                                                        "Excel 作成中…"));
+                                                        dest == DispatchAladdinEntryWorkbookExporter
+                                                                        .Destination.LOCAL
+                                                                ? "Excel 作成中（ローカル）…"
+                                                                : "Excel 作成中…"));
                                 DispatchAladdinEntryWorkbookExporter.ExportResult result =
                                         DispatchAladdinEntryWorkbookExporter.writeFromCachedSources(
-                                                ui, index);
+                                                ui, index, dest);
                                 Platform.runLater(
                                         () ->
                                                 finishAladdinEntryExport(
                                                         result,
                                                         warnings,
                                                         null,
-                                                        reloadAladdinPlanFromSource));
+                                                        reloadAladdinPlanFromSource,
+                                                        dest));
                             } catch (Exception ex) {
                                 Platform.runLater(
                                         () ->
@@ -758,12 +776,15 @@ public final class ResultDispatchTableTabController {
                                                         null,
                                                         warnings,
                                                         ex,
-                                                        reloadAladdinPlanFromSource));
+                                                        reloadAladdinPlanFromSource,
+                                                        dest));
                             }
                         },
                         reloadAladdinPlanFromSource
                                 ? "aladdin-entry-reload-export"
-                                : "aladdin-entry-export");
+                                : dest == DispatchAladdinEntryWorkbookExporter.Destination.LOCAL
+                                        ? "aladdin-entry-local-export"
+                                        : "aladdin-entry-export");
         worker.setDaemon(true);
         worker.start();
     }
@@ -774,6 +795,9 @@ public final class ResultDispatchTableTabController {
         }
         if (aladdinEntryReloadExportButton != null) {
             aladdinEntryReloadExportButton.setDisable(disabled);
+        }
+        if (aladdinEntryLocalExportButton != null) {
+            aladdinEntryLocalExportButton.setDisable(disabled);
         }
     }
 
@@ -805,13 +829,18 @@ public final class ResultDispatchTableTabController {
             DispatchAladdinEntryWorkbookExporter.ExportResult result,
             List<String> warnings,
             Exception error,
-            boolean reloadedAladdinPlan) {
+            boolean reloadedAladdinPlan,
+            DispatchAladdinEntryWorkbookExporter.Destination destination) {
         setAladdinEntryExportButtonsDisabled(false);
         hideAladdinEntryExportProgress();
+        boolean local =
+                destination == DispatchAladdinEntryWorkbookExporter.Destination.LOCAL;
         String dialogTitle =
-                reloadedAladdinPlan
-                        ? "アラジン加工計画読込→Excel出力"
-                        : "アラジン入力用Excel出力";
+                local
+                        ? "アラジン入力用Excel出力（ローカル）"
+                        : reloadedAladdinPlan
+                                ? "アラジン加工計画読込→Excel出力"
+                                : "アラジン入力用Excel出力";
         for (String w : warnings) {
             shell.appendLog("[aladdin-entry-export] warn: " + w);
         }
@@ -825,9 +854,11 @@ public final class ResultDispatchTableTabController {
         shell.appendLog("[aladdin-entry-export] " + result.latestPath());
         StringBuilder sb =
                 new StringBuilder(
-                                reloadedAladdinPlan
-                                        ? "アラジン加工計画を再読込し、入力用配台計画 Excel を出力しました。\n\n最新: "
-                                        : "アラジン入力用配台計画を出力しました。\n\n最新: ")
+                                local
+                                        ? "アラジン入力用配台計画をローカルへ出力しました。\n\n最新: "
+                                        : reloadedAladdinPlan
+                                                ? "アラジン加工計画を再読込し、入力用配台計画 Excel を出力しました。\n\n最新: "
+                                                : "アラジン入力用配台計画を出力しました。\n\n最新: ")
                         .append(result.latestPath())
                         .append("\n世代: ")
                         .append(result.generationPath());
@@ -835,7 +866,9 @@ public final class ResultDispatchTableTabController {
             sb.append("\n\n警告:\n").append(String.join("\n", warnings));
         }
         shell.showInformationDialog(dialogTitle, sb.toString());
-        startAladdinOpenAttentionGlow();
+        if (!local) {
+            startAladdinOpenAttentionGlow();
+        }
     }
 
     @FXML
