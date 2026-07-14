@@ -30,11 +30,12 @@ import javafx.stage.Window;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.io.DesktopFileOpener;
+import jp.co.pm.ai.desktop.io.DispatchAladdinEntryWorkbookExporter;
 
 /**
  * アラジン入力用配台計画の世代ファイル（操作者別フォルダ配下の xlsx）を選んで開く専用ダイアログ。
  *
- * <p>index ファイルは持たず、{@link AppPaths#aladdinEntryDispatchPlanDir} 配下のディレクトリ走査のみで一覧化する。
+ * <p>index ファイルは持たず、共有またはローカルの配台計画フォルダ配下のディレクトリ走査のみで一覧化する。
  */
 public final class DispatchAladdinEntryGenerationDialog {
 
@@ -57,21 +58,55 @@ public final class DispatchAladdinEntryGenerationDialog {
     }
 
     /**
-     * ダイアログを表示する。
+     * 世代一覧のルートフォルダ（共有 or ローカル）。
+     */
+    static Path generationRoot(
+            Map<String, String> ui, DispatchAladdinEntryWorkbookExporter.Destination destination) {
+        DispatchAladdinEntryWorkbookExporter.Destination dest =
+                destination != null
+                        ? destination
+                        : DispatchAladdinEntryWorkbookExporter.Destination.SHARED;
+        return dest == DispatchAladdinEntryWorkbookExporter.Destination.LOCAL
+                ? AppPaths.aladdinEntryDispatchPlanLocalDir(ui)
+                : AppPaths.aladdinEntryDispatchPlanDir(ui);
+    }
+
+    /**
+     * ダイアログを表示する（共有側ルート）。
      *
      * @param defaultOperator 既定選択の操作者名（自分）。一覧に無いときは「すべて」
      */
     public static void show(Window owner, Map<String, String> ui, String defaultOperator) {
-        Path root = AppPaths.aladdinEntryDispatchPlanDir(ui);
+        show(owner, ui, defaultOperator, DispatchAladdinEntryWorkbookExporter.Destination.SHARED);
+    }
+
+    /**
+     * ダイアログを表示する。
+     *
+     * @param destination {@link DispatchAladdinEntryWorkbookExporter.Destination#SHARED} または
+     *     {@link DispatchAladdinEntryWorkbookExporter.Destination#LOCAL}
+     * @param defaultOperator 既定選択の操作者名（自分）。一覧に無いときは「すべて」
+     */
+    public static void show(
+            Window owner,
+            Map<String, String> ui,
+            String defaultOperator,
+            DispatchAladdinEntryWorkbookExporter.Destination destination) {
+        Path root = generationRoot(ui, destination);
+        boolean local = destination == DispatchAladdinEntryWorkbookExporter.Destination.LOCAL;
 
         Stage stage = new Stage();
         stage.initModality(Modality.WINDOW_MODAL);
         if (owner != null) {
             stage.initOwner(owner);
         }
-        stage.setTitle("アラジン入力用配台計画 — 世代を開く");
+        stage.setTitle(
+                local
+                        ? "アラジン入力用配台計画 — ローカル世代を開く"
+                        : "アラジン入力用配台計画 — 世代を開く");
 
-        Label rootLabel = new Label("世代フォルダ: " + root);
+        Label rootLabel =
+                new Label((local ? "ローカル世代フォルダ: " : "世代フォルダ: ") + root);
         rootLabel.setWrapText(true);
 
         ComboBox<String> operatorCombo = new ComboBox<>();

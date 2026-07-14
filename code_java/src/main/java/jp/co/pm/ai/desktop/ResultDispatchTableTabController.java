@@ -86,6 +86,12 @@ public final class ResultDispatchTableTabController {
     private Button aladdinEntryLocalExportButton;
 
     @FXML
+    private Button aladdinEntryOpenLocalLatestButton;
+
+    @FXML
+    private Button aladdinEntryOpenLocalGenerationsButton;
+
+    @FXML
     private Button aladdinEntryOpenLatestButton;
 
     @FXML
@@ -893,6 +899,27 @@ public final class ResultDispatchTableTabController {
     }
 
     @FXML
+    private void onOpenLocalLatestAladdinEntryWorkbookAction() {
+        if (shell == null) {
+            return;
+        }
+        Path latest = AppPaths.aladdinEntryDispatchPlanLocalXlsxPath(shell.snapshotUiEnv());
+        if (!Files.isRegularFile(latest)) {
+            shell.showWarningDialog(
+                    "ローカル最新を開く",
+                    "ファイルがまだありません。先に「ローカルへ出力」を実行してください。\n" + latest);
+            return;
+        }
+        try {
+            DesktopFileOpener.openFileReadOnly(latest);
+        } catch (Exception ex) {
+            shell.showErrorDialog(
+                    "ローカル最新を開く",
+                    "ファイルを開けませんでした。\n" + latest + "\n" + ex.getMessage());
+        }
+    }
+
+    @FXML
     private void onOpenAladdinEntryGenerationsAction() {
         dismissAladdinOpenAttentionGlow();
         if (shell == null) {
@@ -901,6 +928,19 @@ public final class ResultDispatchTableTabController {
         Map<String, String> ui = shell.snapshotUiEnv();
         DispatchAladdinEntryGenerationDialog.show(
                 ownerStage, ui, DispatchAladdinEntryWorkbookExporter.currentOperatorDirName(ui));
+    }
+
+    @FXML
+    private void onOpenLocalAladdinEntryGenerationsAction() {
+        if (shell == null) {
+            return;
+        }
+        Map<String, String> ui = shell.snapshotUiEnv();
+        DispatchAladdinEntryGenerationDialog.show(
+                ownerStage,
+                ui,
+                DispatchAladdinEntryWorkbookExporter.currentOperatorDirName(ui),
+                DispatchAladdinEntryWorkbookExporter.Destination.LOCAL);
     }
 
     void clearColumnFiltersAndSort() {

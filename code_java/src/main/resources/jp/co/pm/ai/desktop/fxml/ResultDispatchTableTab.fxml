@@ -45,6 +45,14 @@
                             styleClass="pm-aladdin-entry-local-export-button"
                             text="ローカルへ出力"
                             onAction="#onExportAladdinEntryWorkbookLocalAction"/>
+                    <Button fx:id="aladdinEntryOpenLocalLatestButton" mnemonicParsing="false"
+                            styleClass="pm-aladdin-entry-open-button"
+                            text="ローカル最新を開く"
+                            onAction="#onOpenLocalLatestAladdinEntryWorkbookAction"/>
+                    <Button fx:id="aladdinEntryOpenLocalGenerationsButton" mnemonicParsing="false"
+                            styleClass="pm-aladdin-entry-open-button"
+                            text="ローカル世代を開く…"
+                            onAction="#onOpenLocalAladdinEntryGenerationsAction"/>
                     <Button fx:id="aladdinEntryOpenLatestButton" mnemonicParsing="false"
                             styleClass="pm-aladdin-entry-open-button"
                             text="最新を開く"
