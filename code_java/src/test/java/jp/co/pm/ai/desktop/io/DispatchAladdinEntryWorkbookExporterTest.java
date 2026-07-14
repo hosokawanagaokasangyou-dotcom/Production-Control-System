@@ -82,6 +82,109 @@ class DispatchAladdinEntryWorkbookExporterTest {
     }
 
     @Test
+    void write_insertsDailyProcessingTotalRowUnderHeader() throws IOException {
+        Path repo = tempDir.resolve("repo");
+        Files.createDirectories(repo.resolve("code"));
+        Map<String, String> ui =
+                Map.of(jp.co.pm.ai.desktop.config.AppPaths.KEY_PM_AI_REPO_ROOT, repo.toString());
+
+        LocalDate dMatch = LocalDate.of(2026, 7, 14); // 火
+        LocalDate dMismatch = LocalDate.of(2026, 7, 15); // 水
+        LocalDate dEmpty = LocalDate.of(2026, 7, 16); // 木
+
+        DispatchAladdinEntrySheetBuilder.EntryRow row1 =
+                new DispatchAladdinEntrySheetBuilder.EntryRow(
+                        "W7-4",
+                        "C1",
+                        "巻返し",
+                        "",
+                        "",
+                        "",
+                        1000,
+                        0,
+                        300,
+                        Map.of(
+                                dMatch, new DispatchAladdinEntrySheetBuilder.EntryCell(100, 100),
+                                dMismatch, new DispatchAladdinEntrySheetBuilder.EntryCell(50, 200)),
+                        dMatch,
+                        2026);
+        DispatchAladdinEntrySheetBuilder.EntryRow row2 =
+                new DispatchAladdinEntrySheetBuilder.EntryRow(
+                        "W7-5",
+                        "C2",
+                        "巻返し",
+                        "",
+                        "",
+                        "",
+                        2000,
+                        0,
+                        400,
+                        Map.of(
+                                dMatch, new DispatchAladdinEntrySheetBuilder.EntryCell(200, 200),
+                                dMismatch, new DispatchAladdinEntrySheetBuilder.EntryCell(100, 100)),
+                        dMatch,
+                        2026);
+
+        DispatchAladdinEntrySheetBuilder.EntryWorkbook model =
+                new DispatchAladdinEntrySheetBuilder.EntryWorkbook(
+                        List.of(dMatch, dMismatch, dEmpty),
+                        List.of(
+                                new DispatchAladdinEntrySheetBuilder.MachineSheet(
+                                        "テスト機", List.of(row1, row2))));
+
+        DispatchAladdinEntryWorkbookExporter.ExportResult result =
+                DispatchAladdinEntryWorkbookExporter.write(
+                        ui, model, DispatchAladdinEntryWorkbookExporter.Destination.LOCAL);
+
+        try (XSSFWorkbook wb =
+                new XSSFWorkbook(Files.newInputStream(result.latestPath()))) {
+            org.apache.poi.ss.usermodel.Sheet sh = wb.getSheetAt(0);
+            assertEquals("依頼NO", sh.getRow(0).getCell(0).getStringCellValue());
+            assertEquals(
+                    DispatchAladdinEntryWorkbookExporter.DAILY_PROCESSING_TOTAL_LABEL,
+                    sh.getRow(1).getCell(0).getStringCellValue());
+            assertEquals("", sh.getRow(1).getCell(1).getStringCellValue());
+            assertEquals("W7-4", sh.getRow(2).getCell(0).getStringCellValue());
+
+            assertEquals(
+                    "（現アラ計）300\n（シス計）300",
+                    sh.getRow(1).getCell(10).getStringCellValue());
+            assertEquals(
+                    "（現アラ計）150\n（シス計）300",
+                    sh.getRow(1).getCell(11).getStringCellValue());
+            assertEquals("", sh.getRow(1).getCell(12).getStringCellValue());
+
+            org.apache.poi.xssf.usermodel.XSSFCellStyle totalStyle =
+                    (org.apache.poi.xssf.usermodel.XSSFCellStyle)
+                            sh.getRow(1).getCell(11).getCellStyle();
+            org.apache.poi.xssf.usermodel.XSSFColor fill = totalStyle.getFillForegroundXSSFColor();
+            if (fill != null && fill.getRGB() != null) {
+                byte[] rgb = fill.getRGB();
+                assertFalse(
+                        rgb[0] == (byte) 0xFF && rgb[1] == (byte) 0xF2 && rgb[2] == (byte) 0xCC,
+                        "合計行に不一致色を付けてはならない");
+            }
+
+            org.apache.poi.xssf.usermodel.XSSFCellStyle dataMismatchStyle =
+                    (org.apache.poi.xssf.usermodel.XSSFCellStyle)
+                            sh.getRow(2).getCell(11).getCellStyle();
+            org.apache.poi.xssf.usermodel.XSSFColor dataFill =
+                    dataMismatchStyle.getFillForegroundXSSFColor();
+            assertNotNull(dataFill);
+            byte[] dataRgb = dataFill.getRGB();
+            assertEquals((byte) 0xFF, dataRgb[0]);
+            assertEquals((byte) 0xF2, dataRgb[1]);
+            assertEquals((byte) 0xCC, dataRgb[2]);
+
+            assertEquals(2, sh.getPaneInformation().getHorizontalSplitTopRow());
+            org.apache.poi.ss.util.CellRangeAddress repeating = sh.getRepeatingRows();
+            assertNotNull(repeating);
+            assertEquals(0, repeating.getFirstRow());
+            assertEquals(1, repeating.getLastRow());
+        }
+    }
+
+    @Test
     void sheetNameForMachine_prefixesMachineCodeWhenKnown() {
         PostProcessingPlanMachineLookup.Snapshot snap =
                 new PostProcessingPlanMachineLookup.Snapshot(

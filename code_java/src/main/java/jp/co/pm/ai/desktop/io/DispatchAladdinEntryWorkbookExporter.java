@@ -288,7 +288,7 @@ public final class DispatchAladdinEntryWorkbookExporter {
         applyPrintSetup(sh);
     }
 
-    /** ページ設定: 用紙 A4・横向き・横 2 ページ・縦は自動・印刷タイトルは 1 行目と A〜I 列・余白は「狭い」・表示ズーム 75%。 */
+    /** ページ設定: 用紙 A4・横向き・横 2 ページ・縦は自動・印刷タイトルは 1〜2 行目と固定列・余白は「狭い」・表示ズーム 75%。 */
     private static void applyPrintSetup(Sheet sh) {
         PrintSetup ps = sh.getPrintSetup();
         ps.setPaperSize(PrintSetup.A4_PAPERSIZE);
@@ -305,8 +305,8 @@ public final class DispatchAladdinEntryWorkbookExporter {
         sh.setMargin(Sheet.BottomMargin, 0.75);
         sh.setMargin(Sheet.HeaderMargin, 0.3);
         sh.setMargin(Sheet.FooterMargin, 0.3);
-        // 印刷タイトル: 1 行目（タイトル行）・固定列（タイトル列）。
-        sh.setRepeatingRows(new CellRangeAddress(0, 0, -1, -1));
+        // 印刷タイトル: 1〜2 行目（見出し＋日加工合計数）・固定列（タイトル列）。
+        sh.setRepeatingRows(new CellRangeAddress(0, 1, -1, -1));
         sh.setRepeatingColumns(new CellRangeAddress(-1, -1, 0, FIXED_COLUMN_COUNT - 1));
     }
 
@@ -363,7 +363,33 @@ public final class DispatchAladdinEntryWorkbookExporter {
             cell.setCellStyle(styles.dateHeaderFor(d, d.equals(today)));
         }
 
-        int r = 1;
+        Row totalRow = sh.createRow(1);
+        totalRow.setHeightInPoints(33f);
+        writeFixedCell(totalRow, 0, DAILY_PROCESSING_TOTAL_LABEL, styles.data());
+        for (int c = 1; c < FIXED_COLUMN_COUNT; c++) {
+            writeFixedCell(totalRow, c, "", styles.data());
+        }
+        for (int i = 0; i < dates.size(); i++) {
+            LocalDate d = dates.get(i);
+            DispatchAladdinEntrySheetBuilder.EntryCell ec =
+                    sumDateColumn(machineSheet.rows(), d);
+            Cell cell = totalRow.createCell(FIXED_COLUMN_COUNT + i);
+            if (ec.isEmpty()) {
+                cell.setCellValue("");
+                cell.setCellStyle(styles.dateCellFor(d, false));
+            } else {
+                String cellText = ec.cellText();
+                cell.setCellStyle(styles.dateCellFor(d, false));
+                XSSFRichTextString rich = styles.dateCellRichText(cellText);
+                if (rich != null) {
+                    cell.setCellValue(rich);
+                } else {
+                    cell.setCellValue(cellText);
+                }
+            }
+        }
+
+        int r = 2;
         for (DispatchAladdinEntrySheetBuilder.EntryRow entry : machineSheet.rows()) {
             Row row = sh.createRow(r++);
             row.setHeightInPoints(33f);
@@ -417,7 +443,7 @@ public final class DispatchAladdinEntryWorkbookExporter {
         if (lastCol >= 0) {
             sh.setAutoFilter(new CellRangeAddress(0, 0, 0, Math.max(lastCol, 0)));
         }
-        sh.createFreezePane(FIXED_COLUMN_COUNT, 1);
+        sh.createFreezePane(FIXED_COLUMN_COUNT, 2);
 
         int[] fixedWidths = {14, 12, 10, 15, 15, 11, 9, 9, 9, 13};
         for (int c = 0; c < FIXED_COLUMN_COUNT; c++) {
