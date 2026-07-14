@@ -77,7 +77,34 @@ public final class DispatchAladdinEntryWorkbookExporter {
     /** 日付セル下段（シス計）のフォントサイズ（pt）。 */
     private static final short SYSTEM_LINE_FONT_SIZE_PT = 12;
 
+    /** 機械シート 2 行目（見出し直下）のラベル。 */
+    static final String DAILY_PROCESSING_TOTAL_LABEL = "日加工合計数";
+
     private DispatchAladdinEntryWorkbookExporter() {}
+
+    /**
+     * シート内データ行について、指定日の（現アラ計）／（シス計）を合算する。
+     * セルが無い／null の行は 0 として扱う。
+     */
+    static DispatchAladdinEntrySheetBuilder.EntryCell sumDateColumn(
+            List<DispatchAladdinEntrySheetBuilder.EntryRow> rows, LocalDate date) {
+        double aladdin = 0;
+        double system = 0;
+        if (rows != null && date != null) {
+            for (DispatchAladdinEntrySheetBuilder.EntryRow row : rows) {
+                if (row == null || row.cells() == null) {
+                    continue;
+                }
+                DispatchAladdinEntrySheetBuilder.EntryCell cell = row.cells().get(date);
+                if (cell == null) {
+                    continue;
+                }
+                aladdin += cell.aladdinQty();
+                system += cell.systemQty();
+            }
+        }
+        return new DispatchAladdinEntrySheetBuilder.EntryCell(aladdin, system);
+    }
 
     /** 出力結果（最新固定パスと世代パス）。 */
     public record ExportResult(Path latestPath, Path generationPath) {}

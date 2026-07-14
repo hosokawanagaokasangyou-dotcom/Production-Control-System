@@ -10,6 +10,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
@@ -27,6 +28,58 @@ class DispatchAladdinEntryWorkbookExporterTest {
 
     @TempDir
     Path tempDir;
+
+    @Test
+    void sumDateColumn_sumsAladdinAndSystemAcrossRows() {
+        LocalDate d1 = LocalDate.of(2026, 7, 14);
+        LocalDate d2 = LocalDate.of(2026, 7, 15);
+        DispatchAladdinEntrySheetBuilder.EntryRow row1 =
+                new DispatchAladdinEntrySheetBuilder.EntryRow(
+                        "W1",
+                        "",
+                        "巻返し",
+                        "",
+                        "",
+                        "",
+                        0,
+                        0,
+                        0,
+                        Map.of(
+                                d1, new DispatchAladdinEntrySheetBuilder.EntryCell(100, 200),
+                                d2, new DispatchAladdinEntrySheetBuilder.EntryCell(50, 0)),
+                        d1,
+                        2026);
+        DispatchAladdinEntrySheetBuilder.EntryRow row2 =
+                new DispatchAladdinEntrySheetBuilder.EntryRow(
+                        "W2",
+                        "",
+                        "巻返し",
+                        "",
+                        "",
+                        "",
+                        0,
+                        0,
+                        0,
+                        Map.of(d1, new DispatchAladdinEntrySheetBuilder.EntryCell(10, 20)),
+                        d1,
+                        2026);
+
+        DispatchAladdinEntrySheetBuilder.EntryCell sum1 =
+                DispatchAladdinEntryWorkbookExporter.sumDateColumn(List.of(row1, row2), d1);
+        DispatchAladdinEntrySheetBuilder.EntryCell sum2 =
+                DispatchAladdinEntryWorkbookExporter.sumDateColumn(List.of(row1, row2), d2);
+        DispatchAladdinEntrySheetBuilder.EntryCell sumEmpty =
+                DispatchAladdinEntryWorkbookExporter.sumDateColumn(
+                        List.of(row1, row2), LocalDate.of(2026, 7, 16));
+
+        assertEquals(110d, sum1.aladdinQty(), 1e-9);
+        assertEquals(220d, sum1.systemQty(), 1e-9);
+        assertEquals(50d, sum2.aladdinQty(), 1e-9);
+        assertEquals(0d, sum2.systemQty(), 1e-9);
+        assertTrue(sumEmpty.isEmpty());
+        assertEquals("", sumEmpty.cellText());
+        assertEquals("（現アラ計）110\n（シス計）220", sum1.cellText());
+    }
 
     @Test
     void sheetNameForMachine_prefixesMachineCodeWhenKnown() {
