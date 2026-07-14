@@ -649,10 +649,14 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
     private Runnable uiEnvPersistSchedule;
     private final AtomicBoolean envResetInProgress = new AtomicBoolean(false);
 
-    /** ポータル自動バージョンアップ実行中は起動時操作者ダイアログを出さない。 */
+    /**
+     * ポータル自動バージョンアップ実行中は、起動時の操作者ダイアログと依頼書原本フォルダ案内を出さない。
+     */
     private final AtomicBoolean deferOperatorPromptForPortableUpgrade = new AtomicBoolean(false);
 
-    /** バージョンアップ後処理で操作者を復元済みなら {@link #maybePromptOperatorUserAtStartup()} を省略。 */
+    /**
+     * バージョンアップ後処理で操作者を復元済みなら、同起動での操作者ダイアログと依頼書原本フォルダ案内を省略する。
+     */
     private final AtomicBoolean skipOperatorPromptAfterPortableUpgrade = new AtomicBoolean(false);
 
     private DesktopTheme pendingTheme = DesktopTheme.LIGHT;
@@ -4248,17 +4252,33 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
     /**
      * 起動スプラッシュ（APPLICATION_MODAL・常に前面）を閉じたあとにポータブル自動バージョンアップを走らせる。
      * スプラッシュ表示中に {@link Alert#showAndWait()} すると確認ダイアログが背面に隠れて見えないことがある。
+     *
+     * <p>バージョンアップ確認直後〜同期中に依頼書原本フォルダ案内が重ならないよう、VU 実行中／完了後処理済みのときは
+     * {@link #maybePromptRequestFormOriginalDirAtStartup()} をスキップする（未設定時は工場既定へフォールバック）。
      */
     void schedulePortableBundleSelfUpdateAfterSplash() {
         Platform.runLater(
                 () -> {
                     maybePortableBundleSelfUpdate();
-                    maybePromptRequestFormOriginalDirAtStartup();
+                    if (!shouldSuppressStartupRequestFormOriginalDirPrompt()) {
+                        maybePromptRequestFormOriginalDirAtStartup();
+                    }
                     maybePromptOperatorUserAtStartup();
                 });
     }
 
+    /**
+     * ポータル VU 実行中、または VU 完了後処理で操作者復元済みのときは、起動時の依頼書原本フォルダ案内を出さない。
+     */
+    private boolean shouldSuppressStartupRequestFormOriginalDirPrompt() {
+        return deferOperatorPromptForPortableUpgrade.get()
+                || skipOperatorPromptAfterPortableUpgrade.get();
+    }
+
     private void maybePromptRequestFormOriginalDirAtStartup() {
+        if (shouldSuppressStartupRequestFormOriginalDirPrompt()) {
+            return;
+        }
         maybePromptRequestFormOriginalDirIfUnset("[startup]", null);
     }
 
@@ -8694,7 +8714,10 @@ public PlanInputTabController planInputTabControllerForDispatchRollUnit() {
                     er.setTitle("自動バージョンアップ");
                     er.setHeaderText(null);
                     er.setContentText("正本からの同期に失敗しました。\n" + errorDetail);
-                    er.show();
+                    er.showAndWait();
+                    /* VU 確認後にスキップしていた起動時案内を、失敗時のみ通常どおり出す */
+                    maybePromptRequestFormOriginalDirAtStartup();
+                    maybePromptOperatorUserAtStartup();
                 });
         Thread t = new Thread(task, "pm-ai-portable-sync");
         t.setDaemon(true);
