@@ -42,7 +42,12 @@ class TodayDispatchSourceSelectionDialogTest {
         Platform.runLater(
                 () -> {
                     try {
-                        var plan = entry(temp.resolve("加工計画DATA_20260716_080500.xlsx"));
+                        var plan =
+                                new NetworkSourceExtractionCatalog.SourceEntry(
+                                        temp.resolve("加工計画DATA_20260716_080500.xlsx"),
+                                        LocalDateTime.of(2026, 7, 16, 8, 5),
+                                        NetworkSourceExtractionTimeSupport.SourceKind.FILENAME,
+                                        "加工計画DATA_20260716_080500.xlsx");
                         var daily =
                                 new NetworkSourceExtractionCatalog.SourceEntry(
                                         temp.resolve("加工日報発行問合せ_20260716_164200.csv"),
@@ -53,11 +58,11 @@ class TodayDispatchSourceSelectionDialogTest {
                                 new Stage1SourcePairMatcher.MatchedPair(
                                         plan, daily, 517L, false, List.of(daily));
                         var row = new TodayDispatchSourceSelectionDialog.Row(pair, new ToggleGroup());
-                        assertEquals("08:00", row.getPlanTime());
+                        assertEquals("08:05", row.getPlanTime());
                         assertEquals("加工計画DATA_20260716_080500.xlsx", row.getPlanFile());
                         assertEquals("16:42", row.getDailyTime());
                         assertEquals("517分", row.getDelta());
-                        assertEquals("08:00", row.planTimeProperty().get());
+                        assertEquals("08:05", row.planTimeProperty().get());
                     } catch (AssertionError error) {
                         failure.set(error);
                     } finally {
