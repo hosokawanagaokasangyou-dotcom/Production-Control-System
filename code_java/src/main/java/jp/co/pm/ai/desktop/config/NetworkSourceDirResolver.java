@@ -1,8 +1,11 @@
 package jp.co.pm.ai.desktop.config;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -10,7 +13,11 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Stream;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
+import java.util.zip.ZipOutputStream;
 
 /**
  * {@link AppPaths#KEY_PM_AI_TASK_INPUT_SOURCE_DIR} / {@link AppPaths#KEY_PM_AI_ACTUAL_DETAIL_SOURCE_DIR}
@@ -26,6 +33,10 @@ public final class NetworkSourceDirResolver {
 
     private static final List<String> TASK_INPUT_SUFFIXES =
             List.of(".csv", ".parquet", ".pq", ".xlsx", ".xlsm", ".xltx", ".xltm");
+
+    /** Office Open XML（ZIP）系。中央ディレクトリ不整合を避けるためキャッシュ時に正規化する。 */
+    private static final Set<String> OFFICE_ZIP_EXTENSIONS =
+            Set.of(".xlsx", ".xlsm", ".xltx", ".xltm");
 
     /**
      * @param taskInputFromCache {@code true} iff ネットワークソース未到達などでキャッシュへフォールバックした
@@ -260,13 +271,79 @@ public final class NetworkSourceDirResolver {
             String name = liveFile.getFileName() != null ? liveFile.getFileName().toString() : "file";
             String ext = extensionOf(name);
             Path dest = root.resolve(stem + ext);
-            Files.copy(liveFile, dest, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            copyLiveFileToCache(liveFile, dest, logs);
             pruneSiblingCacheFiles(root, stem, dest.getFileName().toString());
             writeMeta(ui, stem + ext, liveFile.toString());
             return Optional.of(dest);
         } catch (IOException ex) {
             logs.add("[network-source] キャッシュ更新に失敗（無視して続行）: " + ex.getMessage());
             return Optional.empty();
+        }
+    }
+
+    /**
+     * ネットワーク元をローカルキャッシュへ複製する。xlsx 系は ZIP を正規化してから書く。
+     * 正規化に失敗したときだけ素の {@link Files#copy} にフォールバックする。
+     */
+    static void copyLiveFileToCache(Path liveFile, Path dest, List<String> logs) throws IOException {
+        String ext = extensionOf(dest.getFileName() != null ? dest.getFileName().toString() : "");
+        if (OFFICE_ZIP_EXTENSIONS.contains(ext)) {
+            try {
+                rewriteOfficeZipToCache(liveFile, dest);
+                return;
+            } catch (IOException ex) {
+                if (logs != null) {
+                    logs.add(
+                            "[network-source] xlsx ZIP正規化に失敗したため素コピーします: "
+                                    + ex.getMessage());
+                }
+            }
+        }
+        Files.copy(liveFile, dest, StandardCopyOption.REPLACE_EXISTING);
+    }
+
+    /** ローカルヘッダから読み直し、標準的な中央ディレクトリ付き ZIP として書き出す。 */
+    static void rewriteOfficeZipToCache(Path liveFile, Path dest) throws IOException {
+        Path tmp = dest.resolveSibling(dest.getFileName().toString() + ".normalize.tmp");
+        try {
+            try (InputStream in = Files.newInputStream(liveFile);
+                    ZipInputStream zin = new ZipInputStream(in);
+                    OutputStream out = Files.newOutputStream(tmp);
+                    ZipOutputStream zout = new ZipOutputStream(out)) {
+                byte[] buf = new byte[8192];
+                ZipEntry entry;
+                int count = 0;
+                while ((entry = zin.getNextEntry()) != null) {
+                    if (entry.isDirectory()) {
+                        zin.closeEntry();
+                        continue;
+                    }
+                    String entryName = entry.getName();
+                    if (entryName == null || entryName.isBlank()) {
+                        zin.closeEntry();
+                        continue;
+                    }
+                    ZipEntry outEntry = new ZipEntry(entryName);
+                    zout.putNextEntry(outEntry);
+                    int n;
+                    while ((n = zin.read(buf)) >= 0) {
+                        zout.write(buf, 0, n);
+                    }
+                    zout.closeEntry();
+                    zin.closeEntry();
+                    count++;
+                }
+                if (count == 0) {
+                    throw new IOException("ZIPエントリがありません: " + liveFile);
+                }
+            }
+            Files.move(tmp, dest, StandardCopyOption.REPLACE_EXISTING);
+        } finally {
+            try {
+                Files.deleteIfExists(tmp);
+            } catch (IOException ignored) {
+                // best effort
+            }
         }
     }
 

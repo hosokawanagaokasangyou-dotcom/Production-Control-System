@@ -1,11 +1,19 @@
 package jp.co.pm.ai.desktop.config;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
+import java.util.zip.ZipOutputStream;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -117,5 +125,32 @@ class NetworkSourceDirResolverTest {
 
         assertFalse(Files.exists(staleCsv));
         assertTrue(Files.exists(keepXlsx));
+    }
+
+    @Test
+    void copyLiveFileToCache_rewritesOfficeZipWithReadableCentralDirectory(@TempDir Path root)
+            throws Exception {
+        Path live = root.resolve("live.xlsx");
+        Path dest = root.resolve("task-input-newest.xlsx");
+        try (OutputStream out = Files.newOutputStream(live);
+                ZipOutputStream zout = new ZipOutputStream(out)) {
+            zout.putNextEntry(new ZipEntry("[Content_Types].xml"));
+            zout.write("<Types/>".getBytes(StandardCharsets.UTF_8));
+            zout.closeEntry();
+            zout.putNextEntry(new ZipEntry("xl/workbook.xml"));
+            zout.write("<workbook/>".getBytes(StandardCharsets.UTF_8));
+            zout.closeEntry();
+        }
+
+        List<String> logs = new ArrayList<>();
+        NetworkSourceDirResolver.copyLiveFileToCache(live, dest, logs);
+
+        assertTrue(Files.isRegularFile(dest));
+        try (ZipFile zip = new ZipFile(dest.toFile())) {
+            assertEquals(2, zip.size());
+            assertTrue(zip.getEntry("[Content_Types].xml") != null);
+            assertTrue(zip.getEntry("xl/workbook.xml") != null);
+        }
+        assertTrue(logs.stream().noneMatch(line -> line.contains("素コピー")));
     }
 }
