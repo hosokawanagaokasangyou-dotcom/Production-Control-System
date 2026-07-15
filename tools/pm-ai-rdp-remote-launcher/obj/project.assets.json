@@ -2,7 +2,7 @@
   "version": 3,
   "targets": {
     "net8.0-windows7.0": {
-      "Microsoft.NET.ILLink.Tasks/8.0.28": {
+      "Microsoft.NET.ILLink.Tasks/8.0.29": {
         "type": "package",
         "build": {
           "build/Microsoft.NET.ILLink.Tasks.props": {}
@@ -51,7 +51,7 @@
       }
     },
     "net8.0-windows7.0/win-x64": {
-      "Microsoft.NET.ILLink.Tasks/8.0.28": {
+      "Microsoft.NET.ILLink.Tasks/8.0.29": {
         "type": "package",
         "build": {
           "build/Microsoft.NET.ILLink.Tasks.props": {}
@@ -95,10 +95,10 @@
     }
   },
   "libraries": {
-    "Microsoft.NET.ILLink.Tasks/8.0.28": {
-      "sha512": "XMqgVjlLxLqWmEh3c49haXLQwsMNtvo6YscUaqfvEGfg1iA8hnYgkUVq3i9Zu9gKeNKMWiiZKVwZExc/qyEAsQ==",
+    "Microsoft.NET.ILLink.Tasks/8.0.29": {
+      "sha512": "HSBTfrkIZijz8z3ybLRKB7E8rHk4QQufFwpHa9fc5CMIgRhRzdn4mBGmlyXZqaueiMPtuJcnjresGvSTfaW8Mg==",
       "type": "package",
-      "path": "microsoft.net.illink.tasks/8.0.28",
+      "path": "microsoft.net.illink.tasks/8.0.29",
       "hasTools": true,
       "files": [
         ".nupkg.metadata",
@@ -112,7 +112,7 @@
         "build/Microsoft.NET.ILLink.Analyzers.props",
         "build/Microsoft.NET.ILLink.Tasks.props",
         "build/Microsoft.NET.ILLink.targets",
-        "microsoft.net.illink.tasks.8.0.28.nupkg.sha512",
+        "microsoft.net.illink.tasks.8.0.29.nupkg.sha512",
         "microsoft.net.illink.tasks.nuspec",
         "tools/net472/ILLink.Tasks.dll",
         "tools/net472/ILLink.Tasks.dll.config",
@@ -211,21 +211,21 @@
   },
   "projectFileDependencyGroups": {
     "net8.0-windows7.0": [
-      "Microsoft.NET.ILLink.Tasks >= 8.0.28",
+      "Microsoft.NET.ILLink.Tasks >= 8.0.29",
       "System.Management >= 8.0.0"
     ]
   },
   "packageFolders": {
-    "C:\\Users\\0585\\AppData\\Local\\Temp\\cursor-sandbox-cache\\fcef9df85fff80dbca287eedc553a940\\nuget": {}
+    "C:\\Users\\0585\\.nuget\\packages\\": {}
   },
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "C:\\システム開発\\工程管理AIプロジェクト_JAVA\\tools\\pm-ai-rdp-remote-launcher\\PmAiRdpRemoteLauncher.csproj",
+      "projectUniqueName": "c:\\システム開発\\工程管理AIプロジェクト_JAVA\\tools\\pm-ai-rdp-remote-launcher\\PmAiRdpRemoteLauncher.csproj",
       "projectName": "PmAiRdpRemoteLauncher",
-      "projectPath": "C:\\システム開発\\工程管理AIプロジェクト_JAVA\\tools\\pm-ai-rdp-remote-launcher\\PmAiRdpRemoteLauncher.csproj",
-      "packagesPath": "C:\\Users\\0585\\AppData\\Local\\Temp\\cursor-sandbox-cache\\fcef9df85fff80dbca287eedc553a940\\nuget",
-      "outputPath": "C:\\システム開発\\工程管理AIプロジェクト_JAVA\\tools\\pm-ai-rdp-remote-launcher\\obj\\",
+      "projectPath": "c:\\システム開発\\工程管理AIプロジェクト_JAVA\\tools\\pm-ai-rdp-remote-launcher\\PmAiRdpRemoteLauncher.csproj",
+      "packagesPath": "C:\\Users\\0585\\.nuget\\packages\\",
+      "outputPath": "c:\\システム開発\\工程管理AIプロジェクト_JAVA\\tools\\pm-ai-rdp-remote-launcher\\obj\\",
       "projectStyle": "PackageReference",
       "configFilePaths": [
         "C:\\Users\\0585\\AppData\\Roaming\\NuGet\\NuGet.Config"
@@ -260,7 +260,7 @@
           "Microsoft.NET.ILLink.Tasks": {
             "suppressParent": "All",
             "target": "Package",
-            "version": "[8.0.28, )",
+            "version": "[8.0.29, )",
             "autoReferenced": true
           },
           "System.Management": {
@@ -282,15 +282,15 @@
         "downloadDependencies": [
           {
             "name": "Microsoft.AspNetCore.App.Runtime.win-x64",
-            "version": "[8.0.28, 8.0.28]"
+            "version": "[8.0.29, 8.0.29]"
           },
           {
             "name": "Microsoft.NETCore.App.Runtime.win-x64",
-            "version": "[8.0.28, 8.0.28]"
+            "version": "[8.0.29, 8.0.29]"
           },
           {
             "name": "Microsoft.WindowsDesktop.App.Runtime.win-x64",
-            "version": "[8.0.28, 8.0.28]"
+            "version": "[8.0.29, 8.0.29]"
           }
         ],
         "frameworkReferences": {
@@ -298,7 +298,7 @@
             "privateAssets": "all"
           }
         },
-        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\8.0.422/PortableRuntimeIdentifierGraph.json"
+        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\8.0.423/PortableRuntimeIdentifierGraph.json"
       }
     },
     "runtimes": {

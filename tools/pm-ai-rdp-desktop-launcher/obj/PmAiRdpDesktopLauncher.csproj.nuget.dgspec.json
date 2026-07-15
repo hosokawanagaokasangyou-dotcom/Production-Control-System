@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "C:\\工程管理AIプロジェクト_JAVA\\tools\\pm-ai-rdp-desktop-launcher\\PmAiRdpDesktopLauncher.csproj": {}
+    "c:\\システム開発\\工程管理AIプロジェクト_JAVA\\tools\\pm-ai-rdp-desktop-launcher\\PmAiRdpDesktopLauncher.csproj": {}
   },
   "projects": {
-    "C:\\工程管理AIプロジェクト_JAVA\\tools\\pm-ai-rdp-desktop-launcher\\PmAiRdpDesktopLauncher.csproj": {
+    "c:\\システム開発\\工程管理AIプロジェクト_JAVA\\tools\\pm-ai-rdp-desktop-launcher\\PmAiRdpDesktopLauncher.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\工程管理AIプロジェクト_JAVA\\tools\\pm-ai-rdp-desktop-launcher\\PmAiRdpDesktopLauncher.csproj",
+        "projectUniqueName": "c:\\システム開発\\工程管理AIプロジェクト_JAVA\\tools\\pm-ai-rdp-desktop-launcher\\PmAiRdpDesktopLauncher.csproj",
         "projectName": "PmAiRdpDesktopLauncher",
-        "projectPath": "C:\\工程管理AIプロジェクト_JAVA\\tools\\pm-ai-rdp-desktop-launcher\\PmAiRdpDesktopLauncher.csproj",
+        "projectPath": "c:\\システム開発\\工程管理AIプロジェクト_JAVA\\tools\\pm-ai-rdp-desktop-launcher\\PmAiRdpDesktopLauncher.csproj",
         "packagesPath": "C:\\Users\\0585\\.nuget\\packages\\",
-        "outputPath": "C:\\工程管理AIプロジェクト_JAVA\\tools\\pm-ai-rdp-desktop-launcher\\obj\\",
+        "outputPath": "c:\\システム開発\\工程管理AIプロジェクト_JAVA\\tools\\pm-ai-rdp-desktop-launcher\\obj\\",
         "projectStyle": "PackageReference",
         "configFilePaths": [
           "C:\\Users\\0585\\AppData\\Roaming\\NuGet\\NuGet.Config"
@@ -46,7 +46,7 @@
             "Microsoft.NET.ILLink.Tasks": {
               "suppressParent": "All",
               "target": "Package",
-              "version": "[8.0.28, )",
+              "version": "[8.0.29, )",
               "autoReferenced": true
             }
           },
@@ -64,15 +64,15 @@
           "downloadDependencies": [
             {
               "name": "Microsoft.AspNetCore.App.Runtime.win-x64",
-              "version": "[8.0.28, 8.0.28]"
+              "version": "[8.0.29, 8.0.29]"
             },
             {
               "name": "Microsoft.NETCore.App.Runtime.win-x64",
-              "version": "[8.0.28, 8.0.28]"
+              "version": "[8.0.29, 8.0.29]"
             },
             {
               "name": "Microsoft.WindowsDesktop.App.Runtime.win-x64",
-              "version": "[8.0.28, 8.0.28]"
+              "version": "[8.0.29, 8.0.29]"
             }
           ],
           "frameworkReferences": {
@@ -80,7 +80,7 @@
               "privateAssets": "all"
             }
           },
-          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\8.0.422/PortableRuntimeIdentifierGraph.json"
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\8.0.423/PortableRuntimeIdentifierGraph.json"
         }
       },
       "runtimes": {

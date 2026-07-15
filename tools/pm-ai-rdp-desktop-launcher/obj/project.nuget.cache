@@ -1,13 +1,13 @@
 {
   "version": 2,
-  "dgSpecHash": "Ny99Isg1Ok0=",
+  "dgSpecHash": "78zozeO/yTk=",
   "success": true,
-  "projectFilePath": "C:\\工程管理AIプロジェクト_JAVA\\tools\\pm-ai-rdp-desktop-launcher\\PmAiRdpDesktopLauncher.csproj",
+  "projectFilePath": "c:\\システム開発\\工程管理AIプロジェクト_JAVA\\tools\\pm-ai-rdp-desktop-launcher\\PmAiRdpDesktopLauncher.csproj",
   "expectedPackageFiles": [
-    "C:\\Users\\0585\\.nuget\\packages\\microsoft.net.illink.tasks\\8.0.28\\microsoft.net.illink.tasks.8.0.28.nupkg.sha512",
-    "C:\\Users\\0585\\.nuget\\packages\\microsoft.netcore.app.runtime.win-x64\\8.0.28\\microsoft.netcore.app.runtime.win-x64.8.0.28.nupkg.sha512",
-    "C:\\Users\\0585\\.nuget\\packages\\microsoft.windowsdesktop.app.runtime.win-x64\\8.0.28\\microsoft.windowsdesktop.app.runtime.win-x64.8.0.28.nupkg.sha512",
-    "C:\\Users\\0585\\.nuget\\packages\\microsoft.aspnetcore.app.runtime.win-x64\\8.0.28\\microsoft.aspnetcore.app.runtime.win-x64.8.0.28.nupkg.sha512"
+    "C:\\Users\\0585\\.nuget\\packages\\microsoft.net.illink.tasks\\8.0.29\\microsoft.net.illink.tasks.8.0.29.nupkg.sha512",
+    "C:\\Users\\0585\\.nuget\\packages\\microsoft.netcore.app.runtime.win-x64\\8.0.29\\microsoft.netcore.app.runtime.win-x64.8.0.29.nupkg.sha512",
+    "C:\\Users\\0585\\.nuget\\packages\\microsoft.windowsdesktop.app.runtime.win-x64\\8.0.29\\microsoft.windowsdesktop.app.runtime.win-x64.8.0.29.nupkg.sha512",
+    "C:\\Users\\0585\\.nuget\\packages\\microsoft.aspnetcore.app.runtime.win-x64\\8.0.29\\microsoft.aspnetcore.app.runtime.win-x64.8.0.29.nupkg.sha512"
   ],
   "logs": []
 }
