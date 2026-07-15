@@ -4620,8 +4620,13 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
             overlayMainRunSkipGeminiApiEnv(uiRun);
             if (STAGE1.equals(script)) {
                 uiRun.put(AppPaths.KEY_PM_AI_STAGE2_SKIP_IN_PROGRESS_DISPATCH, "0");
+                /*
+                 * 当日配台ソース束は invalidate（開始時）/ persist（成功時）で管理する。
+                 * ここで消すと、完了時保存前に束が消えたまま段階2へ進む事故の温床になる。
+                 */
                 PipelineDownstreamResultsClearer.ClearResult downstreamClear =
-                        PipelineDownstreamResultsClearer.clearStage2ThroughStage32(uiRun);
+                        PipelineDownstreamResultsClearer.clearStage2ThroughStage32(
+                                uiRun, true /* preserveTodayDispatchSourceBundle */);
                 for (String line : downstreamClear.detailLines()) {
                     appendLog(line);
                 }
@@ -7091,6 +7096,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
             return;
         }
         if (planInputTabController == null || !planInputTabController.snapshotTodayDispatch()) {
+            stage1StartedWithTodayDispatch = false;
             pendingTodayDispatchSourcePair = null;
             startStage1AfterStrictBundleInvalidation();
             return;
@@ -7189,6 +7195,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                             + "日報を取得するか、別の計画取得時刻を選んでください。");
             return false;
         }
+        stage1StartedWithTodayDispatch = true;
         pendingTodayDispatchSourcePair = pair;
         if (pair.largeDeltaWarning()) {
             appendLog(
@@ -7281,10 +7288,30 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         }
         Optional<Stage1SourceBundle> bundle =
                 Stage1SourceBundleIo.readIfPresentStrict(guardEnvironment);
+        if (bundle.isEmpty()) {
+            bundle = recoverTodayDispatchSourceBundleFromPendingPair(guardEnvironment);
+        }
         Stage2SourceConsistencyGuard.Result guard =
                 Stage2SourceConsistencyGuard.verify(
                         guardEnvironment, bundle.orElse(null));
         return new StageSourceGuardOutcome(guard, guard.allowed() ? bundle.orElse(null) : null);
+    }
+
+    /**
+     * 段階1成功時にディスクへ書けなかった／消えた場合でも、同一セッションで選んだペアが残っていれば
+     * ソース束を再保存して段階2を継続できるようにする。
+     */
+    private Optional<Stage1SourceBundle> recoverTodayDispatchSourceBundleFromPendingPair(
+            Map<String, String> ui) throws IOException {
+        if (pendingTodayDispatchSourcePair == null
+                || pendingTodayDispatchSourcePair.dailyReport() == null) {
+            return Optional.empty();
+        }
+        Stage1SourceBundle recovered =
+                Stage1SourceBundle.fromMatchedPair(
+                        pendingTodayDispatchSourcePair, System.currentTimeMillis());
+        Stage1SourceBundleIo.writeDefault(ui, recovered);
+        return Optional.of(recovered);
     }
 
     private Stage2SourceGuardSnapshot captureStage2SourceGuardSnapshot(
@@ -7347,12 +7374,16 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
     }
 
     private Stage1SourceBundleCompletionGate.Result persistStage1SourceBundleAfterSuccess() {
-        boolean todayDispatch =
-                planInputTabController != null && planInputTabController.snapshotTodayDispatch();
+        /*
+         * 完了時点のチェックボックスではなく、段階1開始時の当日配台意図を使う。
+         * 実行中のセッション再適用で OFF になると、旧束削除だけして保存せず完了扱いになるため。
+         */
+        boolean todayDispatch = stage1StartedWithTodayDispatch;
         boolean bundleReady =
                 pendingTodayDispatchSourcePair != null
                         && pendingTodayDispatchSourcePair.dailyReport() != null;
         Map<String, String> ui = new HashMap<>(collectUiEnv());
+        Path bundlePath = Stage1SourceBundleIo.defaultCachePath(ui);
         Stage1SourceBundleCompletionGate.Result result =
                 Stage1SourceBundleCompletionGate.persist(
                         todayDispatch,
@@ -7364,12 +7395,20 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                                             pendingTodayDispatchSourcePair,
                                             System.currentTimeMillis());
                             Stage1SourceBundleIo.writeDefault(ui, bundle);
+                            if (!java.nio.file.Files.isRegularFile(bundlePath)) {
+                                throw new java.io.IOException(
+                                        "ソース束ファイルが作成されませんでした: " + bundlePath);
+                            }
                         });
         if (result.completionAllowed() && todayDispatch) {
             appendLog(
                     "[stage1] 当日配台: ソース束を固定しました（"
-                            + Stage1SourceBundleIo.CACHE_FILE_NAME
+                            + bundlePath.toAbsolutePath().normalize()
                             + "）。");
+        } else if (result.completionAllowed() && !todayDispatch) {
+            appendLog(
+                    "[stage1] 当日配台 OFF のためソース束は保存していません。"
+                            + " 段階2で当日配台を使う場合は ON にして段階1を再実行してください。");
         }
         return result;
     }
@@ -7947,6 +7986,12 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
 
     /** 当日配台 ON 時、段階1直前にユーザーが選んだ plan+daily ペア。 */
     private Stage1SourcePairMatcher.MatchedPair pendingTodayDispatchSourcePair;
+
+    /**
+     * 段階1開始時点の当日配台 ON/OFF。完了時のチェックボックスやセッション再適用で変わっても、
+     * ソース束の保存要否は開始時の意図に従う。
+     */
+    private boolean stage1StartedWithTodayDispatch;
 
     private boolean lastDispatchTableDirty;
     private long dispatchTableDirtyGeneration;

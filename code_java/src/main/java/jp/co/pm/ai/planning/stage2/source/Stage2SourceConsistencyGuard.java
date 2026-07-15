@@ -36,7 +36,8 @@ public final class Stage2SourceConsistencyGuard {
         }
         if (bundle == null) {
             return Result.blocked(
-                    "段階1のソース束が未保存です。当日配台 ON のときは段階1を先に正常終了してください。");
+                    "段階1のソース束が未保存です。当日配台 ON のときは、当日配台を ON にした状態で"
+                            + "段階1を実行し（ソース選択ダイアログで加工計画を選択）、正常終了させてから段階2を実行してください。");
         }
         var structural = bundle.validationError();
         if (structural.isPresent()) return Result.blocked("段階1bundleが不正です: " + structural.get());
