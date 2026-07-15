@@ -23,6 +23,16 @@ import org.controlsfx.control.spreadsheet.SpreadsheetView;
  */
 public final class SpreadsheetPlanInputCellEditSupport {
 
+    @FunctionalInterface
+    public interface LimitedOperatorEditor {
+        void edit(
+                ObservableList<String> row,
+                String currentValue,
+                double anchorScreenX,
+                double anchorScreenY,
+                Consumer<String> onConfirmed);
+    }
+
     private SpreadsheetPlanInputCellEditSupport() {}
 
     /**
@@ -43,6 +53,7 @@ public final class SpreadsheetPlanInputCellEditSupport {
                 headersRef,
                 rows,
                 rebuildSpreadsheet,
+                null,
                 null);
     }
 
@@ -57,6 +68,29 @@ public final class SpreadsheetPlanInputCellEditSupport {
             ObservableList<ObservableList<String>> rows,
             Runnable rebuildSpreadsheet,
             Consumer<String> afterColumnEdit) {
+        install(
+                spreadsheetView,
+                owner,
+                firstDataGridRow,
+                headersRef,
+                rows,
+                rebuildSpreadsheet,
+                afterColumnEdit,
+                null);
+    }
+
+    /**
+     * @param limitedOperatorEditor 「担当OP_限定」専用編集処理（{@code null} の場合は編集しない）
+     */
+    public static void install(
+            SpreadsheetView spreadsheetView,
+            Stage owner,
+            int firstDataGridRow,
+            List<String> headersRef,
+            ObservableList<ObservableList<String>> rows,
+            Runnable rebuildSpreadsheet,
+            Consumer<String> afterColumnEdit,
+            LimitedOperatorEditor limitedOperatorEditor) {
         if (spreadsheetView == null || owner == null || rebuildSpreadsheet == null) {
             return;
         }
@@ -114,6 +148,27 @@ public final class SpreadsheetPlanInputCellEditSupport {
                     @SuppressWarnings("rawtypes")
                     TableColumn col = tc.getTableColumn();
                     double colW = col != null ? col.getWidth() : 0;
+
+                    if (PlanInputCellEditRouting.editorFor(columnTitle)
+                            == PlanInputCellEditRouting.Editor.LIMITED_OPERATOR_CHECKLIST) {
+                        if (limitedOperatorEditor != null) {
+                            limitedOperatorEditor.edit(
+                                    row,
+                                    cur,
+                                    e.getScreenX(),
+                                    e.getScreenY(),
+                                    newVal ->
+                                            applyCellEditValue(
+                                                    columnTitle,
+                                                    colIndex,
+                                                    row,
+                                                    newVal,
+                                                    afterColumnEdit,
+                                                    rebuildSpreadsheet));
+                        }
+                        e.consume();
+                        return;
+                    }
 
                     if (PlanInputDateColumnSupport.isEditableDateTimeColumn(columnTitle)) {
                         SpreadsheetPlanInputCellEditDialog.editDateTime(

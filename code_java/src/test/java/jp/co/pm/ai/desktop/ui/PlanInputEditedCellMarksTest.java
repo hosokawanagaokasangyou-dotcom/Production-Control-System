@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -63,6 +64,26 @@ class PlanInputEditedCellMarksTest {
 
         PlanInputEditedCellMarks.recompute(headers, rows, baseline, persisted, edited);
         assertTrue(edited.contains(key), "保存済みマークは基準値一致でも保持する");
+    }
+
+    @Test
+    void unsavedEditMarkStaysInMemoryAndReloadDoesNotLeaveSidecar(@TempDir Path dir) {
+        Path planInput = dir.resolve("plan_input_tasks.xlsx");
+        List<String> headers = headers();
+        ObservableList<ObservableList<String>> rows = rows("2026/6/14");
+        Map<String, String> baseline =
+                PlanInputEditedCellMarks.captureBaseline(headers, rows);
+        Set<String> edited = new LinkedHashSet<>();
+
+        rows.get(0).set(3, "2026/6/13");
+        PlanInputEditedCellMarks.recompute(
+                headers, rows, baseline, Set.of(), edited);
+
+        assertFalse(edited.isEmpty());
+        assertFalse(Files.exists(PlanInputEditedCellMarks.sidecarPath(planInput)));
+
+        Set<String> reloadedMarks = PlanInputEditedCellMarks.load(planInput);
+        assertTrue(reloadedMarks.isEmpty(), "未保存編集を再読込で破棄してもマークだけ残らない");
     }
 
     @Test

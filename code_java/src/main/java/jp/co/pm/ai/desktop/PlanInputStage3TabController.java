@@ -211,7 +211,11 @@ public class PlanInputStage3TabController {
                         if (PlanInputProcessSequenceRowOrder.COL_DISPATCH_TRIAL_ORDER.equals(col)) {
                             renumberDispatchTrialOrderColumn();
                         }
-                    });
+                    },
+                    (row, currentValue, x, y, onConfirmed) ->
+                            shell.showInformationDialog(
+                                    "担当OP_限定",
+                                    "入力3表では「担当OP_限定」は読み取り専用です。入力1表（配台計画_タスク入力）で指定してください。"));
             cellEditHooksInstalled = true;
         }
 

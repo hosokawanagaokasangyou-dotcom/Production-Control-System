@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -51,6 +52,7 @@ import jp.co.pm.ai.desktop.dispatch.DispatchPlanInputInteractiveCoverageCheck.Ta
 import jp.co.pm.ai.desktop.io.ExcelCellReadSupport;
 import jp.co.pm.ai.desktop.io.PlanInputTabularIo;
 import jp.co.pm.ai.desktop.ui.ColumnVisibilitySupport;
+import jp.co.pm.ai.desktop.ui.LimitedOperatorCellEditor;
 import jp.co.pm.ai.desktop.ui.PlanInputDeprecatedOverrideColumnSupport;
 import jp.co.pm.ai.desktop.ui.PlanInputEditedCellMarks;
 import jp.co.pm.ai.desktop.ui.PlanInputProcessSequenceRowOrder;
@@ -383,7 +385,8 @@ public final class PlanInputTabController {
                         if (PlanInputProcessSequenceRowOrder.COL_DISPATCH_TRIAL_ORDER.equals(col)) {
                             renumberDispatchTrialOrderColumn();
                         }
-                    });
+                    },
+                    this::editLimitedOperators);
             planInputCellEditHooksInstalled = true;
         }
 
@@ -401,6 +404,23 @@ public final class PlanInputTabController {
                     }
                 });
         shell.syncPlanInputStage2ButtonFromDispatchDirty();
+    }
+
+    private void editLimitedOperators(
+            ObservableList<String> row,
+            String currentValue,
+            double anchorScreenX,
+            double anchorScreenY,
+            Consumer<String> onConfirmed) {
+        LimitedOperatorCellEditor.editAsync(
+                shell,
+                ownerStage,
+                headersRef,
+                row,
+                currentValue,
+                anchorScreenX,
+                anchorScreenY,
+                onConfirmed);
     }
 
     /**
@@ -1423,7 +1443,7 @@ public final class PlanInputTabController {
                             headerColumnCount.get(),
                             rollUnitHighlightTablesCached());
             int firstDataRow = SpreadsheetTabularSupport.spreadsheetFirstDataRowIndex();
-            refreshAndPersistPlanInputEditMarks();
+            refreshPlanInputEditMarksInMemory();
             PlanInputEditedCellMarks.applyHighlights(
                     grid, headersRef, rows, firstDataRow, editedCellMarks);
             PlanInputUnprocessedDispatchRemainingMismatchSupport.applyViolationHighlights(
@@ -1434,7 +1454,7 @@ public final class PlanInputTabController {
             gridChangeHandler =
                     ev -> {
                         rowSync.handle(ev);
-                        refreshAndPersistPlanInputEditMarks();
+                        refreshPlanInputEditMarksInMemory();
                         PlanInputEditedCellMarks.applyHighlights(
                                 currentGrid, headersRef, rows, firstDataRow, editedCellMarks);
                         PlanInputUnprocessedDispatchRemainingMismatchSupport.applyViolationHighlights(
@@ -1552,26 +1572,10 @@ public final class PlanInputTabController {
         editedCellMarks.addAll(loaded);
     }
 
-    /** 現在の表から編集マークを再計算し、変化があれば sidecar JSON へ保存する。 */
-    private void refreshAndPersistPlanInputEditMarks() {
+    /** 現在の表から編集マークをインメモリ再計算する。sidecar 保存は表保存成功後だけ行う。 */
+    private void refreshPlanInputEditMarksInMemory() {
         PlanInputEditedCellMarks.recompute(
                 headersRef, rows, editBaselineByMarkKey, editMarksPersistedAtLoad, editedCellMarks);
-        Path path = currentPlanInputPathOrNull();
-        if (path != null) {
-            PlanInputEditedCellMarks.save(path, editedCellMarks);
-        }
-    }
-
-    private Path currentPlanInputPathOrNull() {
-        String p = pathField.getText() != null ? pathField.getText().trim() : "";
-        if (p.isEmpty()) {
-            return null;
-        }
-        try {
-            return Path.of(p);
-        } catch (RuntimeException ex) {
-            return null;
-        }
     }
 
     private void syncFromEnv() {

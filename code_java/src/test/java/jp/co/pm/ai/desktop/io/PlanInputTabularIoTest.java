@@ -87,4 +87,21 @@ class PlanInputTabularIoTest {
         assertEquals("B1", sheet3.rows().get(0).get(0));
         assertEquals("1", sheet3.rows().get(0).get(1));
     }
+
+    @Test
+    void writeExcel_roundTripsLimitedOperatorJsonCell(@TempDir Path root) throws Exception {
+        Path xlsx = root.resolve("plan-input.xlsx");
+        String limitedOperators = "[\"山田\",\"佐藤\"]";
+        PlanInputTabularIo.write(
+                xlsx,
+                "配台計画_タスク入力",
+                new PlanInputTabularIo.TabularSheet(
+                        List.of("依頼NO", "担当OP_限定"),
+                        List.of(List.of("T1", limitedOperators))));
+
+        PlanInputTabularIo.TabularSheet reread =
+                PlanInputTabularIo.read(xlsx, "配台計画_タスク入力");
+
+        assertEquals(limitedOperators, reread.rows().get(0).get(1));
+    }
 }
