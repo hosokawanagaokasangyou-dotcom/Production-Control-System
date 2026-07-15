@@ -21,10 +21,10 @@ class RequestFormPreviewPdfFontsTest {
     @Test
     void rendererSpec_reflectsCjkScaleFromUi() {
         RequestFormSheetPreviewPdfRenderer.applyCjkMetricsScaleFromUi(Map.of("PM_AI_REQUEST_FORM_PREVIEW_PDF_CJK_SCALE", "0.68"));
-        assertEquals("pdfbox-v4-text-fit-s68", RequestFormSheetPreviewPdfRenderer.rendererSpec());
+        assertEquals("pdfbox-v5-unformatted-date-s68", RequestFormSheetPreviewPdfRenderer.rendererSpec());
         RequestFormSheetPreviewPdfRenderer.applyCjkMetricsScaleFromUi(Map.of());
         assertEquals(
-                "pdfbox-v4-text-fit-s"
+                "pdfbox-v5-unformatted-date-s"
                         + Math.round(AppPaths.DEFAULT_PM_AI_REQUEST_FORM_PREVIEW_PDF_CJK_SCALE * 100),
                 RequestFormSheetPreviewPdfRenderer.rendererSpec());
     }

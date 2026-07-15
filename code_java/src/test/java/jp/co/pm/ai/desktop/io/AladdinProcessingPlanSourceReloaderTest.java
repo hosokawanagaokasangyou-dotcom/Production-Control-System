@@ -27,7 +27,12 @@ class AladdinProcessingPlanSourceReloaderTest {
                 sourceDir.resolve("aladdin-plan.csv");
         Files.writeString(
                 csv,
-                "機械名,依頼NO,工程名,2026/07/07\n"
+                "列1,列2,列3,列4\n"
+                        + "上段1,,,\n"
+                        + "上段2,,,\n"
+                        + "上段3,,,\n"
+                        + "機械名,依頼NO,工程名,2026/07/07\n"
+                        + ",,,\n"
                         + "M1,T001,工程A,10\n");
 
         Map<String, String> ui =

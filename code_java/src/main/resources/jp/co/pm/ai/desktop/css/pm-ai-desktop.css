@@ -257,6 +257,21 @@
     -fx-padding: 12 0 4 0;
 }
 
+.pm-run-tab .label.pm-stage2-progress-running {
+    -fx-font-weight: bold;
+    -fx-text-fill: #1565c0;
+}
+
+.pm-run-tab .label.pm-stage2-progress-success {
+    -fx-font-weight: bold;
+    -fx-text-fill: #2e7d32;
+}
+
+.pm-run-tab .label.pm-stage2-progress-failure {
+    -fx-font-weight: bold;
+    -fx-text-fill: #c62828;
+}
+
 .pm-run-tab .pm-run-stage1-row {
     -fx-padding: 4 0 0 0;
 }

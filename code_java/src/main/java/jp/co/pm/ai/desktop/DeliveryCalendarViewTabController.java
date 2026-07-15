@@ -54,6 +54,7 @@ import org.controlsfx.control.spreadsheet.SpreadsheetView;
 import jp.co.pm.ai.desktop.bridge.PythonProcessRunner;
 import jp.co.pm.ai.desktop.bridge.PythonProcessRunner.RunRequest;
 import jp.co.pm.ai.desktop.config.AppPaths;
+import jp.co.pm.ai.desktop.config.Stage3UiVisibility;
 import jp.co.pm.ai.desktop.dispatch.AladdinShapedPlanQtyLookup;
 import jp.co.pm.ai.desktop.dispatch.AladdinSystemDispatchDisplayQty;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchSchema;
@@ -81,6 +82,13 @@ import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
  * Source file uses ASCII and Unicode escapes only (safe on CP932 mounts).
  */
 public final class DeliveryCalendarViewTabController {
+
+    private static final String PIPELINE_STALE_DETAIL_WITH_STAGE3 =
+            "段階1・段階2、または配台試行（段階3）実行の直後は、再読み込み前のデータを表示しません。"
+                    + "古い表に基づく誤判断を防ぐためです。";
+    private static final String PIPELINE_STALE_DETAIL_WITHOUT_STAGE3 =
+            "段階1・段階2実行の直後は、再読み込み前のデータを表示しません。"
+                    + "古い表に基づく誤判断を防ぐためです。";
 
     /** 内側 {@link TabPane} の「配台結果」タブ index（FXML / {@link MainShellInnerTabCatalog} と一致）。 */
     public static final int INNER_TAB_INDEX_DISPATCH_RESULT = 1;
@@ -573,6 +581,43 @@ public final class DeliveryCalendarViewTabController {
         }
         ensureInnerTabPersistenceWired();
         refreshSummaryExportLockPresentation();
+    }
+
+    void applyStage3UiVisibility(boolean visible) {
+        applyPipelineStaleDescriptionStage3Visibility(visible);
+        refreshPlanningStageBadgeFromDispatchJson();
+        if (!visible
+                && dataStageBadgeLabel != null
+                && dataStageBadgeLabel.getText() != null
+                && dataStageBadgeLabel.getText().startsWith("段階3")) {
+            Stage3UiVisibility.apply(dataStageBadgeLabel, false);
+        }
+        if (deliveryCalendarResultDispatchTableTabController != null) {
+            deliveryCalendarResultDispatchTableTabController.applyStage3UiVisibility(visible);
+        }
+        if (deliveryCalendarDispatchTaskSummaryTabController != null) {
+            deliveryCalendarDispatchTaskSummaryTabController.applyStage3UiVisibility(visible);
+        }
+    }
+
+    private void applyPipelineStaleDescriptionStage3Visibility(boolean visible) {
+        if (pipelineStaleOverlay == null) {
+            return;
+        }
+        for (Node child : pipelineStaleOverlay.getChildren()) {
+            if (!(child instanceof Label label)) {
+                continue;
+            }
+            String text = label.getText();
+            if (PIPELINE_STALE_DETAIL_WITH_STAGE3.equals(text)
+                    || PIPELINE_STALE_DETAIL_WITHOUT_STAGE3.equals(text)) {
+                label.setText(
+                        visible
+                                ? PIPELINE_STALE_DETAIL_WITH_STAGE3
+                                : PIPELINE_STALE_DETAIL_WITHOUT_STAGE3);
+                return;
+            }
+        }
     }
 
     /** メインシェルタブの切り替え抑止中（{@link MainShellController} が選択を差し戻す際に参照）。 */
@@ -2149,6 +2194,7 @@ public final class DeliveryCalendarViewTabController {
                         && ResultDispatchStage3Support.hasStage3ActualColumn(dispatchSnap.headers());
         ResultDispatchStage3Support.applyPlanningStageBadgeFromDispatchJson(
                 dataStageBadgeLabel, jsonPath);
+        Stage3UiVisibility.applyPlanningStageBadgePolicy(dataStageBadgeLabel, ui);
     }
 
     /** 配台 JSON の段階表示バッジを更新（子タブ再読込後にも呼ぶ）。 */
@@ -2162,6 +2208,7 @@ public final class DeliveryCalendarViewTabController {
                         && ResultDispatchStage3Support.detectStage3FromDispatchJsonPath(jsonPath);
         ResultDispatchStage3Support.applyPlanningStageBadgeFromDispatchJson(
                 dataStageBadgeLabel, jsonPath);
+        Stage3UiVisibility.applyPlanningStageBadgePolicy(dataStageBadgeLabel, ui);
     }
 
     private static Map<String, Map<String, Map<String, Double>>> loadStage3BaselineDispatchLookup(

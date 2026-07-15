@@ -20,13 +20,13 @@ class RequestFormTpiPdfContentDetectorTest {
     }
 
     @Test
-    void detect_scannedPdfFixture() throws Exception {
+    void detect_scannedNamedFixture_prefersEmbeddedTextLayer() throws Exception {
         Path pdf = Path.of("src/test/resources/tpi-request-forms/GB-scanned.pdf");
         if (!Files.isRegularFile(pdf)) {
             return;
         }
         assertEquals(
-                RequestFormTpiPdfContentKind.IMAGE_SCAN,
+                RequestFormTpiPdfContentKind.TEXT,
                 RequestFormTpiPdfContentDetector.detect(pdf.toFile()));
     }
 

@@ -30,6 +30,7 @@ import javafx.scene.control.ToggleButton;
 import javafx.scene.control.ToggleGroup;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
+import jp.co.pm.ai.desktop.config.Stage3UiVisibility;
 import jp.co.pm.ai.desktop.PipelineExecutionTimingHistoryStore.Stats;
 
 /**
@@ -44,11 +45,15 @@ public final class PipelineExecutionTimingTabController {
     private static final String KIND_FILTER_ALL = "すべて（重ね表示）";
 
     private MainShellController shell;
+    private boolean stage3UiVisible;
 
     private final Runnable historyChangeListener = () -> Platform.runLater(this::refreshFromStore);
 
     @FXML
     private Label storageDetailLabel;
+
+    @FXML
+    private Label hintLabel;
 
     @FXML
     private ComboBox<String> kindFilterCombo;
@@ -121,13 +126,7 @@ public final class PipelineExecutionTimingTabController {
 
     @FXML
     private void initialize() {
-        List<String> kindChoices = new ArrayList<>();
-        kindChoices.add(KIND_FILTER_ALL);
-        for (PipelineExecutionTimingKind kind : PipelineExecutionTimingKind.values()) {
-            kindChoices.add(kind.label());
-        }
-        kindFilterCombo.setItems(FXCollections.observableArrayList(kindChoices));
-        kindFilterCombo.getSelectionModel().selectFirst();
+        rebuildKindChoices();
         kindFilterCombo
                 .getSelectionModel()
                 .selectedItemProperty()
@@ -158,9 +157,53 @@ public final class PipelineExecutionTimingTabController {
             XYChart.Series<Number, Number> series = new XYChart.Series<>();
             series.setName(kind.label());
             trendSeriesByKind.put(kind, series);
-            trendChart.getData().add(series);
+            if (isKindVisible(kind)) {
+                trendChart.getData().add(series);
+            }
         }
         applyChartViewVisibility();
+    }
+
+    void applyStage3UiVisibility(boolean visible) {
+        stage3UiVisible = visible;
+        if (hintLabel != null) {
+            hintLabel.setText(
+                    visible
+                            ? "段階1・2.0～3.2・配台試行・サマリ Excel・納期管理ビューの所要時間を記録・表示します。"
+                            : "段階1・2.0～2.1・サマリ Excel・納期管理ビューの所要時間を記録・表示します。");
+        }
+        rebuildKindChoices();
+        trendChart
+                .getData()
+                .setAll(
+                        java.util.Arrays.stream(PipelineExecutionTimingKind.values())
+                                .filter(this::isKindVisible)
+                                .map(trendSeriesByKind::get)
+                                .toList());
+        refreshFromStore();
+    }
+
+    private void rebuildKindChoices() {
+        String selected = kindFilterCombo.getSelectionModel().getSelectedItem();
+        List<String> kindChoices = new ArrayList<>();
+        kindChoices.add(KIND_FILTER_ALL);
+        for (PipelineExecutionTimingKind kind : PipelineExecutionTimingKind.values()) {
+            if (isKindVisible(kind)) {
+                kindChoices.add(kind.label());
+            }
+        }
+        kindFilterCombo.setItems(FXCollections.observableArrayList(kindChoices));
+        if (selected == null || !kindChoices.contains(selected)) {
+            kindFilterCombo.getSelectionModel().selectFirst();
+        } else {
+            kindFilterCombo.getSelectionModel().select(selected);
+        }
+    }
+
+    private boolean isKindVisible(PipelineExecutionTimingKind kind) {
+        return Stage3UiVisibility.isTimingKindVisible(
+                kind,
+                Map.of(AppPaths.KEY_PM_AI_STAGE3_UI_VISIBLE, stage3UiVisible ? "1" : "0"));
     }
 
     private void bindStatsColumns() {
@@ -246,6 +289,7 @@ public final class PipelineExecutionTimingTabController {
                 selectedKind == null
                         ? store.recentSamples(null, limit)
                         : store.recentSamplesForKind(selectedKind, limit);
+        tableSamples = tableSamples.stream().filter(s -> isKindVisible(s.kind())).toList();
         refreshHistoryTable(tableSamples);
         refreshTrendChart(store, selectedKind, limit);
         refreshDistributionChart(selectedKind, limit, tableSamples);
@@ -310,6 +354,9 @@ public final class PipelineExecutionTimingTabController {
         for (PipelineExecutionTimingKind kind : PipelineExecutionTimingKind.values()) {
             XYChart.Series<Number, Number> series = trendSeriesByKind.get(kind);
             series.getData().clear();
+            if (!isKindVisible(kind)) {
+                continue;
+            }
             boolean show = selectedKind == null || selectedKind == kind;
             if (!show) {
                 continue;
@@ -354,6 +401,9 @@ public final class PipelineExecutionTimingTabController {
         List<StatsRow> rows = new ArrayList<>();
         if (selectedKind == null) {
             for (PipelineExecutionTimingKind kind : PipelineExecutionTimingKind.values()) {
+                if (!isKindVisible(kind)) {
+                    continue;
+                }
                 List<PipelineExecutionTimingSample> kindSamples =
                         shell.pipelineExecutionTimingHistory().recentSamplesForKind(kind, limit);
                 rows.add(StatsRow.from(kind.label(), PipelineExecutionTimingHistoryStore.computeStats(kindSamples)));

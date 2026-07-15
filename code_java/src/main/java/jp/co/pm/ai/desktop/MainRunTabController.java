@@ -21,6 +21,7 @@ import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.collections.transformation.FilteredList;
 import javafx.fxml.FXML;
+import javafx.scene.control.Accordion;
 import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
@@ -34,6 +35,7 @@ import javafx.scene.control.OverrunStyle;
 import javafx.scene.control.ScrollBar;
 import javafx.scene.control.SelectionMode;
 import javafx.scene.control.TextField;
+import javafx.scene.control.TitledPane;
 import javafx.scene.control.Tooltip;
 import javafx.scene.input.Clipboard;
 import javafx.scene.input.ClipboardContent;
@@ -43,6 +45,7 @@ import javafx.scene.input.KeyCombination;
 import javafx.scene.effect.DropShadow;
 import javafx.scene.image.ImageView;
 import javafx.scene.input.KeyEvent;
+import javafx.scene.layout.HBox;
 import javafx.scene.layout.StackPane;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
@@ -58,6 +61,7 @@ import jp.co.pm.ai.desktop.config.FactorySiteLogoSupport;
 import jp.co.pm.ai.desktop.config.GlobalInitSettingTarget;
 import jp.co.pm.ai.desktop.ui.FactorySiteComboPresentation;
 import jp.co.pm.ai.desktop.config.PersonBadgeStyle;
+import jp.co.pm.ai.desktop.config.Stage3UiVisibility;
 import jp.co.pm.ai.desktop.io.DesktopFileOpener;
 import jp.co.pm.ai.desktop.io.SummaryAiDispatchExportLock;
 import jp.co.pm.ai.desktop.ui.PersonBadgeNodeFactory;
@@ -97,6 +101,15 @@ public final class MainRunTabController {
 
     @FXML
     private Label statusLabel;
+
+    @FXML
+    private Accordion stage2ProgressAccordion;
+
+    @FXML
+    private TitledPane stage2ProgressPane;
+
+    @FXML
+    private Label stage2ProgressLabel;
 
     @FXML
     private TextField stage2ProductionPlanField;
@@ -205,6 +218,12 @@ public final class MainRunTabController {
 
     @FXML
     private Label pipelineTimingDispatchTrialLabel;
+
+    @FXML
+    private HBox pipelineTimingStage3Rows;
+
+    @FXML
+    private HBox pipelineTimingDispatchTrialRow;
 
     @FXML
     private Label pipelineTimingSummaryExcelLabel;
@@ -847,6 +866,11 @@ public final class MainRunTabController {
             refreshPipelineExecutionTimingLabels();
         }
         refreshLogThemeCells();
+    }
+
+    void applyStage3UiVisibility(boolean visible) {
+        Stage3UiVisibility.apply(pipelineTimingStage3Rows, visible);
+        Stage3UiVisibility.apply(pipelineTimingDispatchTrialRow, visible);
     }
 
     private void startSummaryExportLockPolling() {
@@ -1497,6 +1521,13 @@ public final class MainRunTabController {
         }
         if (shell != null) {
             shell.scheduleDesktopSessionSave();
+        }
+    }
+
+    void updateStage2Progress(MainRunStage2Progress.State state, String detail) {
+        MainRunStage2Progress.apply(stage2ProgressPane, stage2ProgressLabel, state, detail);
+        if (stage2ProgressAccordion != null && stage2ProgressPane != null) {
+            stage2ProgressAccordion.setExpandedPane(stage2ProgressPane);
         }
     }
 

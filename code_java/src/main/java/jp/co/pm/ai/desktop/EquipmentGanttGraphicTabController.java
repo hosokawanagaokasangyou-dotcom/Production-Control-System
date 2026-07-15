@@ -55,6 +55,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
+import jp.co.pm.ai.desktop.config.Stage3UiVisibility;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchStage3Support;
 import jp.co.pm.ai.desktop.config.EquipmentGanttBadgeDragDelta;
 import jp.co.pm.ai.desktop.config.DesktopSessionState;
@@ -1251,6 +1252,16 @@ public final class EquipmentGanttGraphicTabController {
         Platform.runLater(() -> reloadFromFields(false));
     }
 
+    void applyStage3UiVisibility(boolean visible) {
+        refreshPlanningStageBadgeFromDispatchJson();
+        if (!visible
+                && dataStageBadgeLabel != null
+                && dataStageBadgeLabel.getText() != null
+                && dataStageBadgeLabel.getText().startsWith("段階3")) {
+            Stage3UiVisibility.apply(dataStageBadgeLabel, false);
+        }
+    }
+
     private void refreshExistingGanttPdfPathFromEnv() {
         Map<String, String> ui = shell != null ? shell.snapshotUiEnv() : Map.of();
         Path existing = AppPaths.equipmentGanttPdfPath(ui);
@@ -1533,6 +1544,7 @@ public final class EquipmentGanttGraphicTabController {
         Path jsonPath = AppPaths.resolveResultDispatchTableJsonPath(ui);
         ResultDispatchStage3Support.applyPlanningStageBadgeFromDispatchJson(
                 dataStageBadgeLabel, jsonPath);
+        Stage3UiVisibility.applyPlanningStageBadgePolicy(dataStageBadgeLabel, ui);
     }
 
     private void applySelectedSheetFromMap(Map<String, JsonTableIo.SheetTable> eligible) {

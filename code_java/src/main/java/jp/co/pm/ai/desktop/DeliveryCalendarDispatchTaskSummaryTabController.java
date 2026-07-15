@@ -47,6 +47,7 @@ import org.controlsfx.control.spreadsheet.GridBase;
 import org.controlsfx.control.spreadsheet.SpreadsheetView;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
+import jp.co.pm.ai.desktop.config.Stage3UiVisibility;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchDeadlineJudgment;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchInteractiveConsolidator;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchSchema;
@@ -225,6 +226,20 @@ public final class DeliveryCalendarDispatchTaskSummaryTabController {
         reloadFromDisk();
     }
 
+    void applyStage3UiVisibility(boolean visible) {
+        if (shell != null) {
+            Path path = AppPaths.resolveResultDispatchTableJsonPath(shell.snapshotUiEnv());
+            ResultDispatchStage3Support.applyPlanningStageBadgeFromDispatchJson(
+                    dataStageBadgeLabel, path);
+        }
+        if (!visible
+                && dataStageBadgeLabel != null
+                && dataStageBadgeLabel.getText() != null
+                && dataStageBadgeLabel.getText().startsWith("段階3")) {
+            Stage3UiVisibility.apply(dataStageBadgeLabel, false);
+        }
+    }
+
     void setRefreshButtonVisible(boolean visible) {
         if (refreshButton != null) {
             refreshButton.setVisible(visible);
@@ -309,6 +324,8 @@ public final class DeliveryCalendarDispatchTaskSummaryTabController {
                     ResultDispatchTaskSummaryConsolidator.indexDailyRowsByTaskGroup(rowMaps));
             ResultDispatchStage3Support.applyPlanningStageBadgeFromDispatchJson(
                     dataStageBadgeLabel, path);
+            Stage3UiVisibility.applyPlanningStageBadgePolicy(
+                    dataStageBadgeLabel, shell != null ? shell.snapshotUiEnv() : Map.of());
 
             headersRef.clear();
             headersRef.addAll(headerOrder);

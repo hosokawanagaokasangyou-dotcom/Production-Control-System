@@ -18,6 +18,7 @@ class EquipmentStatusDashboardSourceLoaderTest {
 
     private static Map<String, String> uiForDir(Path dir) {
         Map<String, String> ui = new HashMap<>();
+        ui.put(AppPaths.KEY_PM_AI_REPO_ROOT, dir.toString());
         ui.put(AppPaths.KEY_PM_AI_RESULT_DISPATCH_TABLE_DIR, dir.toString());
         ui.put(AppPaths.KEY_PM_AI_ACTUAL_DETAIL_SOURCE_DIR, dir.resolve("actual-empty").toString());
         return ui;
@@ -79,7 +80,7 @@ class EquipmentStatusDashboardSourceLoaderTest {
         ui.put(AppPaths.KEY_PM_AI_TASK_INPUT_SOURCE_DIR, taskInputDir.toString());
 
         SourceFingerprint fp = EquipmentStatusDashboardSourceLoader.fingerprint(ui);
-        Assertions.assertTrue(fp.aladdinKey().contains("plan.csv"));
+        Assertions.assertTrue(fp.aladdinKey().contains("task-input-newest"));
         Assertions.assertFalse(fp.aladdinKey().contains("shaped"));
     }
 
@@ -99,6 +100,7 @@ class EquipmentStatusDashboardSourceLoaderTest {
                 "{\"columns\":[],\"rows\":[]}");
 
         Map<String, String> ui = new HashMap<>();
+        ui.put(AppPaths.KEY_PM_AI_REPO_ROOT, dir.toString());
         ui.put(AppPaths.KEY_PM_AI_RESULT_DISPATCH_TABLE_DIR, dir.toString());
         ui.put(AppPaths.KEY_PM_AI_ACTUAL_DETAIL_SOURCE_DIR, actualDir.toString());
         ui.put(AppPaths.KEY_PM_AI_TASK_INPUT_SOURCE_DIR, taskInputDir.toString());
@@ -142,6 +144,7 @@ class EquipmentStatusDashboardSourceLoaderTest {
                 "{\"columns\":[],\"rows\":[]}");
 
         Map<String, String> ui = new HashMap<>();
+        ui.put(AppPaths.KEY_PM_AI_REPO_ROOT, dir.toString());
         ui.put(AppPaths.KEY_PM_AI_RESULT_DISPATCH_TABLE_DIR, dir.toString());
         ui.put(AppPaths.KEY_PM_AI_ACTUAL_DETAIL_SOURCE_DIR, actualDir.toString());
 

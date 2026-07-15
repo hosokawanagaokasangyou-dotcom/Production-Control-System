@@ -11606,6 +11606,7 @@ def build_task_queue_from_planning_df(
     """
     if ai_by_tid is None:
         ai_by_tid = analyze_task_special_remarks(tasks_df, reference_year=run_date.year)
+    gpo = global_priority_override or {}
     _stage3_reg_shift_start: time | None = None
     if (os.environ.get("PM_AI_PLAN_INPUT_STAGE3") or "").strip() == "1":
         _stage3_reg_shift_start = stage3_regular_shift_start_time()

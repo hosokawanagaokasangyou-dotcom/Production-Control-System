@@ -55,9 +55,11 @@ public final class PlanInputProcessSequenceRowOrder {
         List<Integer> block = rowIndicesForDragMoveBlock(headers, rows, from);
         if (block.size() <= 1 || !block.contains(from)) {
             moveSingleRow(rows, from, to);
+            renumberDispatchTrialOrderInCurrentRowOrder(headers, rows);
             return;
         }
         moveRowBlock(rows, block, from, to, false);
+        renumberDispatchTrialOrderInCurrentRowOrder(headers, rows);
     }
 
     /**
@@ -82,6 +84,7 @@ public final class PlanInputProcessSequenceRowOrder {
             return selectedRow;
         }
         moveRowBlockForArrowReorder(rows, block, target);
+        renumberDispatchTrialOrderInCurrentRowOrder(headers, rows);
         return target;
     }
 
@@ -108,10 +111,24 @@ public final class PlanInputProcessSequenceRowOrder {
             return selectedRow;
         }
         moveRowBlockForArrowReorder(rows, block, target);
+        renumberDispatchTrialOrderInCurrentRowOrder(headers, rows);
         if (blockStart < target) {
             return target - block.size() + 1;
         }
         return blockStart;
+    }
+
+    private static void renumberDispatchTrialOrderInCurrentRowOrder(
+            List<String> headers, ObservableList<ObservableList<String>> rows) {
+        int colDto = headers.indexOf(COL_DISPATCH_TRIAL_ORDER);
+        if (colDto < 0) {
+            return;
+        }
+        for (int i = 0; i < rows.size(); i++) {
+            ObservableList<String> row = rows.get(i);
+            ensureSize(row, colDto + 1);
+            row.set(colDto, Integer.toString(i + 1));
+        }
     }
 
     /** ↑↓ 用: 選択行が属するブロック（入力1=同一依頼NOの全行、入力3.0=元依頼NOの全行）。 */

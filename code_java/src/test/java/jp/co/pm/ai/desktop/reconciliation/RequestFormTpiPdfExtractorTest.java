@@ -317,7 +317,7 @@ class RequestFormTpiPdfExtractorTest {
         assertTrue(ok >= 8, "expected at least 8 PDFs in TPI folder, got " + ok);
     }
 
-    /** UNC 到達時は実フォルダ、CI/WSL ではテスト用 8 件フィクスチャで一括検証する。 */
+    /** 明示指定がなければ、実機UNCに依存せずテスト用フィクスチャで一括検証する。 */
     private static Path resolveTpiPdfScanDirForVerification() {
         String uncDir = System.getenv("PM_AI_REQUEST_FORM_TPI_PDF_DIR");
         if (uncDir != null && !uncDir.isBlank()) {
@@ -325,10 +325,6 @@ class RequestFormTpiPdfExtractorTest {
             if (Files.isDirectory(fromEnv)) {
                 return fromEnv;
             }
-        }
-        Path factoryDefault = Path.of(AppPaths.DEFAULT_PM_AI_REQUEST_FORM_TPI_PDF_DIR_KONAN);
-        if (Files.isDirectory(factoryDefault)) {
-            return factoryDefault;
         }
         Path fixtures = Path.of("src/test/resources/tpi-request-forms");
         if (Files.isDirectory(fixtures)) {

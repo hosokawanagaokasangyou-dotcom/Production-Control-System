@@ -5,10 +5,25 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.awt.datatransfer.DataFlavor;
 import java.nio.charset.StandardCharsets;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
+import javafx.application.Platform;
+
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 class ClipboardTableSupportTest {
+
+    @BeforeAll
+    static void initJavaFx() {
+        try {
+            Platform.startup(() -> {});
+        } catch (IllegalStateException ignored) {
+            // already started
+        }
+    }
 
     @Test
     void buildCfHtmlClipboardString_includesValidOffsets() {
@@ -45,9 +60,24 @@ class ClipboardTableSupportTest {
     }
 
     @Test
-    void copyHtmlTableOnly_doesNotThrow() {
+    void copyHtmlTableOnly_doesNotThrow() throws Exception {
         String table = "<table><tr><td>A</td></tr></table>";
-        ClipboardTableSupport.copyHtmlTableOnly(table);
+        CountDownLatch completed = new CountDownLatch(1);
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+        Platform.runLater(
+                () -> {
+                    try {
+                        ClipboardTableSupport.copyHtmlTableOnly(table);
+                    } catch (Throwable error) {
+                        failure.set(error);
+                    } finally {
+                        completed.countDown();
+                    }
+                });
+        assertTrue(completed.await(5, TimeUnit.SECONDS));
+        if (failure.get() != null) {
+            throw new AssertionError(failure.get());
+        }
     }
 
     @Test

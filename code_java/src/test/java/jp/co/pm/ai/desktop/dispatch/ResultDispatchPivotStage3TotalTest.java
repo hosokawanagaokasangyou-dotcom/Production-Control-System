@@ -48,6 +48,7 @@ class ResultDispatchPivotStage3TotalTest {
         m.put("依頼NO", taskId);
         m.put(ResultDispatchSchema.COL_PROCESS, "分割");
         m.put(ResultDispatchSchema.COL_MACHINE, "スリット機1　湖南");
+        m.put("換算数量", "10000");
         m.put("配台日", dispatchDate);
         m.put(ResultDispatchSchema.COL_DISPATCH_QTY, planQty);
         m.put(ResultDispatchSchema.COL_DISPATCH_QTY_ACTUAL, actualQty);

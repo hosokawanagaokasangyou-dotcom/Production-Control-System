@@ -88,6 +88,7 @@ import org.controlsfx.control.spreadsheet.SpreadsheetColumn;
 import org.controlsfx.control.spreadsheet.SpreadsheetView;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
+import jp.co.pm.ai.desktop.config.Stage3UiVisibility;
 import jp.co.pm.ai.desktop.dispatch.AladdinShapedPlanQtyLookup;
 import jp.co.pm.ai.desktop.dispatch.AladdinSystemDispatchDisplayQty;
 import jp.co.pm.ai.desktop.dispatch.DispatchAladdinPlanAligner;
@@ -370,6 +371,12 @@ public final class DispatchInteractiveTabController {
     private Button dispatchTrialButton;
 
     @FXML
+    private HBox stage3QtyControls;
+
+    @FXML
+    private HBox stage3ActionControls;
+
+    @FXML
     private Button buildStage3InputButton;
 
     @FXML
@@ -422,6 +429,8 @@ public final class DispatchInteractiveTabController {
 
     @FXML
     private CheckBox showStage3AfterQtyLineCheck;
+
+    private boolean stage3UiVisible;
 
     @FXML
     private CheckBox showStage21AfterQtyLineCheck;
@@ -809,6 +818,18 @@ public final class DispatchInteractiveTabController {
                 showStage21AfterQtyLineCheck == null || showStage21AfterQtyLineCheck.isSelected());
     }
 
+    private DispatchInteractiveDateQtyLineFilterPrefs effectiveDateQtyLineFilter() {
+        if (stage3UiVisible) {
+            return dateQtyLineFilter;
+        }
+        return new DispatchInteractiveDateQtyLineFilterPrefs(
+                dateQtyLineFilter.showAladdinPlan(),
+                dateQtyLineFilter.showStage2Plan(),
+                false,
+                false,
+                dateQtyLineFilter.showStage21After());
+    }
+
     private ResultDispatchStage3Support.Stage3PlanningVariant effectiveStage3PlanningVariant() {
         if (stage3PlanningVariant != null
                 && stage3PlanningVariant
@@ -837,6 +858,24 @@ public final class DispatchInteractiveTabController {
         shell.syncPlanInputStage2ButtonFromDispatchDirty();
         reloadSpecialRuleBadges();
         refreshDispatchPlanningStageBadge(null);
+    }
+
+    void applyStage3UiVisibility(boolean visible) {
+        boolean changed = stage3UiVisible != visible;
+        stage3UiVisible = visible;
+        Stage3UiVisibility.apply(stage3QtyControls, visible);
+        Stage3UiVisibility.apply(stage3ActionControls, visible);
+        Stage3UiVisibility.apply(dispatchTrialButton, false);
+        if (changed && doc != null && !dateAxis.isEmpty()) {
+            rebuildGrids();
+        }
+        refreshDispatchPlanningStageBadge(null);
+        if (!visible
+                && dispatchPlanningStageBadgeLabel != null
+                && dispatchPlanningStageBadgeLabel.getText() != null
+                && dispatchPlanningStageBadgeLabel.getText().startsWith("段階3")) {
+            Stage3UiVisibility.apply(dispatchPlanningStageBadgeLabel, false);
+        }
     }
 
     void reloadSpecialRuleBadges() {
@@ -4246,7 +4285,7 @@ public final class DispatchInteractiveTabController {
                                         doneFmt,
                                         stage3PlanActualSingleLineDisplay(),
                                         DispatchPlanQtyLineLabel.STAGE3),
-                                dateQtyLineFilter,
+                                effectiveDateQtyLineFilter(),
                                 stage3PlanActualSingleLineDisplay()),
                         stage3PlanActualSingleLineDisplay());
                 tagDispatchDateQtyShortfallCell(cell, dispatchDateQtyMultilineCell());
@@ -4269,7 +4308,7 @@ public final class DispatchInteractiveTabController {
                     stage3Revised,
                     false,
                     0.0,
-                    dateQtyLineFilter,
+                    effectiveDateQtyLineFilter(),
                     effectiveStage3PlanningVariant());
             tagDispatchDateQtyCell(cell, dispatchDateQtyMultilineCell(), false);
             return;
@@ -4281,7 +4320,7 @@ public final class DispatchInteractiveTabController {
                     applyDateQtyLineFilterToSlots(
                             buildStage21PreStage3CompareLineSlots(
                                     aladdinAmt, baseline, stage21Amt, eps),
-                            dateQtyLineFilter);
+                            effectiveDateQtyLineFilter());
             setDispatchQtyCellDisplay(cell, slots, false);
             tagDispatchDateQtyCell(cell, true, Math.abs(baseline - stage21Amt) > eps);
             return;
@@ -4321,7 +4360,7 @@ public final class DispatchInteractiveTabController {
                     planMovedToDate,
                     stage21CompareSlide,
                     stage3BaselineSlide,
-                    dateQtyLineFilter,
+                    effectiveDateQtyLineFilter(),
                     effectiveStage3PlanningVariant());
             tagDispatchDateQtyCell(
                     cell,
@@ -4349,7 +4388,7 @@ public final class DispatchInteractiveTabController {
                 stage3Revised,
                 appendStage21,
                 stage21Amt,
-                dateQtyLineFilter,
+                effectiveDateQtyLineFilter(),
                 effectiveStage3PlanningVariant());
         tagDispatchDateQtyCell(
                 cell,
@@ -4375,7 +4414,7 @@ public final class DispatchInteractiveTabController {
                     applyDateQtyLineFilterToSlots(
                             buildStage21PreStage3CompareLineSlots(
                                     aladdinAmt, stage2Baseline, stage21Amt, eps),
-                            dateQtyLineFilter);
+                            effectiveDateQtyLineFilter());
             setDispatchQtyCellDisplay(cell, slots, false);
             tagDispatchDateQtyCell(cell, true, Math.abs(stage2Baseline - stage21Amt) > eps);
             return;
@@ -4391,7 +4430,7 @@ public final class DispatchInteractiveTabController {
                 stage3Revised,
                 appendStage21,
                 stage21Amt,
-                dateQtyLineFilter,
+                effectiveDateQtyLineFilter(),
                 effectiveStage3PlanningVariant());
         tagDispatchDateQtyCell(
                 cell,
@@ -4475,6 +4514,9 @@ public final class DispatchInteractiveTabController {
                 stage == ResultDispatchStage3Support.PlanningStage.STAGE3
                         ? effectiveStage3PlanningVariant()
                         : ResultDispatchStage3Support.Stage3PlanningVariant.NONE);
+        Stage3UiVisibility.applyPlanningStageBadgePolicy(
+                dispatchPlanningStageBadgeLabel,
+                shell != null ? shell.snapshotUiEnv() : Map.of());
     }
 
     private void captureStage21BaselineFromDocument(

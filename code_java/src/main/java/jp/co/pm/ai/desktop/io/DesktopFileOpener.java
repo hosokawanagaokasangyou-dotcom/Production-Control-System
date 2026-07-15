@@ -166,7 +166,10 @@ public final class DesktopFileOpener {
         if (looksLikeWindowsAbsolute(raw)) {
             return raw.replace('/', '\\');
         }
-        String s = path.toAbsolutePath().normalize().toString().replace('\\', '/');
+        String s =
+                raw.startsWith("/mnt/")
+                        ? raw
+                        : path.toAbsolutePath().normalize().toString().replace('\\', '/');
         if (!s.startsWith("/mnt/") || s.length() < 6) {
             return path.toString();
         }

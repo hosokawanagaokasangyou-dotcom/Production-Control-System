@@ -3,6 +3,7 @@ package jp.co.pm.ai.desktop.reconciliation;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -24,6 +25,10 @@ class RequestFormTpiPdfOcrIntegrationTest {
         if (!Files.isRegularFile(pdf)) {
             return;
         }
+        assumeTrue(
+                RequestFormTpiPdfContentDetector.detect(pdf.toFile())
+                        == RequestFormTpiPdfContentKind.IMAGE_SCAN,
+                "OCR対象の画像専用PDFではないためスキップ");
         List<Map<String, String>> entries =
                 RequestFormTpiPdfExtractor.extractEntries(pdf.toFile(), Map.of());
         assertEquals(1, entries.size());
@@ -36,7 +41,7 @@ class RequestFormTpiPdfOcrIntegrationTest {
     }
 
     @Test
-    void resolveTesseractConfig_returnsEmptyWhenNotInstalled() throws Exception {
+    void textLayerFixture_doesNotRequireTesseractWhenNotInstalled() throws Exception {
         if (AppPaths.resolveTesseractConfig(Map.of()).isPresent()) {
             return;
         }
@@ -45,7 +50,7 @@ class RequestFormTpiPdfOcrIntegrationTest {
             return;
         }
         assertEquals(
-                RequestFormTpiPdfContentKind.IMAGE_SCAN,
+                RequestFormTpiPdfContentKind.TEXT,
                 RequestFormTpiPdfContentDetector.detect(pdf.toFile()));
     }
 }

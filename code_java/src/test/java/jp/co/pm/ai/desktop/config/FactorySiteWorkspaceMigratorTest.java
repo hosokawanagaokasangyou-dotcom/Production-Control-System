@@ -22,11 +22,14 @@ class FactorySiteWorkspaceMigratorTest {
     private static final ObjectMapper JSON = new ObjectMapper();
 
     private String priorHome;
+    private String priorUserHome;
 
     @BeforeEach
     void setUp(@TempDir Path tmp) {
         priorHome = AppPaths.desktopAppHomeDirName();
-        AppPaths.setDesktopAppHomeDirName(tmp.toString());
+        priorUserHome = System.getProperty("user.home");
+        System.setProperty("user.home", tmp.toString());
+        AppPaths.setDesktopAppHomeDirName(".pm-ai-desktop-test");
         FactorySiteWorkspaceStore.resetForTests();
         GlobalInitSettingTarget.save(FactorySite.KONAN);
     }
@@ -35,6 +38,7 @@ class FactorySiteWorkspaceMigratorTest {
     void tearDown() {
         FactorySiteWorkspaceStore.resetForTests();
         AppPaths.setDesktopAppHomeDirName(priorHome);
+        System.setProperty("user.home", priorUserHome);
     }
 
     @Test

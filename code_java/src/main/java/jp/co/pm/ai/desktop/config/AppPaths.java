@@ -68,6 +68,12 @@ public final class AppPaths {
             "PM_AI_DEBUG_STAGE3_PLAN_ACTUAL_SINGLE_LINE";
 
     /**
+     * 段階3.0～3.2の関連UIだけを表示する。ロジック・成果物・履歴データはこの値にかかわらず保持する。
+     * 未設定または false 値では非表示。
+     */
+    public static final String KEY_PM_AI_STAGE3_UI_VISIBLE = "PM_AI_STAGE3_UI_VISIBLE";
+
+    /**
      * Stage1/2 成果物フォルダ（従来の {@code code/output} に相当）。未設定時は {@link #resolveRepoRoot(Map)} の直下の
      * {@code output/}。Python {@code planning_core.bootstrap} の {@code output_dir} と揃える。
      */
@@ -2192,7 +2198,7 @@ public final class AppPaths {
     }
 
     public static Path resolveRdpLauncherVersionFile(Map<String, String> ui) {
-        return resolveRdpLauncherDeployDir(ui).resolve(RDP_LAUNCHER_VERSION_BASENAME);
+        return resolveRdpLauncherExe(ui).resolveSibling(RDP_LAUNCHER_VERSION_BASENAME);
     }
 
     /** 接続先共有フォルダ上の当日ランチャーログ（{@code launcher-yyyyMMdd.log}）。 */

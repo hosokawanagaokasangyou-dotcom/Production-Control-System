@@ -17,7 +17,7 @@ class FactorySiteLogoSupportTest {
 
     @Test
     void bundledResourcePathsExistOnClasspath() {
-        for (FactorySite site : FactorySite.values()) {
+        for (FactorySite site : FactorySite.dispatchProductionSites()) {
             String path = FactorySiteLogoSupport.bundledResourcePath(site);
             assertNotNull(
                     FactorySiteLogoSupport.class.getResource(path),

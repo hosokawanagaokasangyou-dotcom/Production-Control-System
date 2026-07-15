@@ -113,6 +113,8 @@ import jp.co.pm.ai.desktop.config.DispatchTrialLogUiStore;
 import jp.co.pm.ai.desktop.config.JvmMemoryLogStore;
 import jp.co.pm.ai.desktop.config.MainShellTabLayoutDefaults;
 import jp.co.pm.ai.desktop.config.MainShellTabLayoutNode;
+import jp.co.pm.ai.desktop.config.Stage3MainShellLayout;
+import jp.co.pm.ai.desktop.config.Stage3UiVisibility;
 import jp.co.pm.ai.desktop.config.FactoryOperatorUserStore;
 import jp.co.pm.ai.desktop.config.FactorySite;
 import jp.co.pm.ai.desktop.config.FactorySiteOperatorAccess;
@@ -311,7 +313,8 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                     AppPaths.KEY_PM_AI_RESULT_DISPATCH_TABLE_DIR,
                     AppPaths.KEY_PM_AI_PLAN_RESULT_TASK_JSON,
                     AppPaths.KEY_PM_AI_PLAN_RESULT_TASK_JSON_PATH,
-                    AppPaths.KEY_PM_AI_PORTABLE_BUNDLE_SOURCE_DIR);
+                    AppPaths.KEY_PM_AI_PORTABLE_BUNDLE_SOURCE_DIR,
+                    AppPaths.KEY_PM_AI_STAGE3_UI_VISIBLE);
 
     /** Keys in {@link #BOOTSTRAP_ORDER} for quick membership checks. */
     private static final Set<String> BOOTSTRAP_KEY_SET = Set.copyOf(BOOTSTRAP_ORDER);
@@ -627,6 +630,9 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
      * {@link TabPane} の再構築を遅延し、初回 {@link Scene#doLayoutPass} と競合しないようにする。
      */
     private DesktopSessionState pendingMainShellTabLayoutSession;
+
+    /** OFF中も段階3タブの保存済み位置・グループを失わないための完全レイアウト。 */
+    private List<MainShellTabLayoutNode> completeMainShellTabLayout = List.of();
 
     /** 非選択タブの重い {@link Tab#setContent(Node)} を退避するときの {@link Tab#getProperties()} キー。 */
     private static final String PM_DEFERRED_TAB_CONTENT = "pmDeferredTabContent";
@@ -1180,6 +1186,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         }
         mainRunTabController.refreshOpenWorkbookHintLabels();
         mainRunTabController.refreshFactorySiteLogo();
+        applyStage3UiVisibility();
         Platform.runLater(() -> excludeRulesTabController.tryStartupLoadFromPathField());
     }
 
@@ -2468,6 +2475,18 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
     }
 
     private List<MainShellTabLayoutNode> snapshotMainShellTabLayout() {
+        List<MainShellTabLayoutNode> visibleLayout = snapshotLiveMainShellTabLayout();
+        if (!Stage3UiVisibility.isVisible(collectUiEnv())
+                && !completeMainShellTabLayout.isEmpty()) {
+            completeMainShellTabLayout =
+                    Stage3MainShellLayout.mergeHiddenTab(
+                            visibleLayout, completeMainShellTabLayout);
+            return completeMainShellTabLayout;
+        }
+        return visibleLayout;
+    }
+
+    private List<MainShellTabLayoutNode> snapshotLiveMainShellTabLayout() {
         if (tabPane == null) {
             return List.of();
         }
@@ -3341,12 +3360,17 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         if (!found.equals(required)) {
             return false;
         }
+        completeMainShellTabLayout = prepared;
         suppressEnvSessionPersistence.set(true);
         suppressMainShellTabChromeRefresh.set(true);
         try {
             wiredInnerMainShellTabPanes.clear();
             tabPane.getTabs().clear();
-            for (MainShellTabLayoutNode n : prepared) {
+            List<MainShellTabLayoutNode> displayed =
+                    Stage3UiVisibility.isVisible(collectUiEnv())
+                            ? prepared
+                            : Stage3MainShellLayout.withoutStage3(prepared);
+            for (MainShellTabLayoutNode n : displayed) {
                 Tab built = materializeLayoutNode(n);
                 if (built != null) {
                     tabPane.getTabs().add(built);
@@ -3428,28 +3452,11 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         if (tabPane == null || mainShellTabOrganizer == null) {
             return;
         }
-        suppressEnvSessionPersistence.set(true);
-        suppressMainShellTabChromeRefresh.set(true);
-        try {
-            wiredInnerMainShellTabPanes.clear();
-            tabPane.getTabs().clear();
-            for (String key : MainShellTabLayoutDefaults.completeFlatTabKeyOrder()) {
-                MainShellTabId id = MainShellTabId.fromKey(key);
-                Tab t = id != null ? mainShellTabFor(id) : null;
-                if (t != null) {
-                    applyShellTabColor(t, "");
-                    tabPane.getTabs().add(t);
-                }
-            }
-            tabPane.getTabs().add(mainShellTabOrganizer);
-            tabPane.setTabDragPolicy(TabPane.TabDragPolicy.REORDER);
-        } finally {
-            suppressMainShellTabChromeRefresh.set(false);
-            suppressEnvSessionPersistence.set(false);
+        List<MainShellTabLayoutNode> flat = new ArrayList<>();
+        for (String key : MainShellTabLayoutDefaults.completeFlatTabKeyOrder()) {
+            flat.add(MainShellTabLayoutNode.tabNode(key, ""));
         }
-        refreshMainShellTabDisplayedTitles();
-        lastEffectiveShellLeaf =
-                resolveEffectiveLeafTab(tabPane.getSelectionModel().getSelectedItem());
+        rebuildMainShellTabsFromLayout(flat);
     }
 
     /**
@@ -3458,7 +3465,12 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
      * @return メインタブの組み替えに成功したとき {@code true}
      */
     boolean applyMainShellTabLayoutFromOrganizer(List<MainShellTabLayoutNode> layout) {
-        if (!rebuildMainShellTabsFromLayout(layout)) {
+        List<MainShellTabLayoutNode> complete =
+                Stage3UiVisibility.isVisible(collectUiEnv())
+                        ? layout
+                        : Stage3MainShellLayout.mergeHiddenTab(
+                                layout, completeMainShellTabLayout);
+        if (!rebuildMainShellTabsFromLayout(complete)) {
             return false;
         }
         applyInnerTabHeaderColorsToLiveUi(innerTabHeaderColorByKey);
@@ -3469,7 +3481,10 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
 
     /** 現在のメインシェル構成をツリー編集用にエクスポート。 */
     List<MainShellTabLayoutNode> snapshotMainShellTabLayoutNodes() {
-        return snapshotMainShellTabLayout();
+        List<MainShellTabLayoutNode> layout = snapshotLiveMainShellTabLayout();
+        return Stage3UiVisibility.isVisible(collectUiEnv())
+                ? layout
+                : Stage3MainShellLayout.withoutStage3(layout);
     }
 
     /** {@link MainShellTabLayoutDefaults#completeFlatTabKeyOrder()} と同順の {@link MainShellTabId}。 */
@@ -3477,7 +3492,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         List<MainShellTabId> out = new ArrayList<>();
         for (String k : MainShellTabLayoutDefaults.completeFlatTabKeyOrder()) {
             MainShellTabId id = MainShellTabId.fromKey(k);
-            if (id != null) {
+            if (id != null && Stage3UiVisibility.isMainShellTabVisible(id, collectUiEnv())) {
                 out.add(id);
             }
         }
@@ -3486,7 +3501,10 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
 
     /** タブ整理オーガナイザ用の既定グループ構成（メインシェルが未構築のときのツリー表示）。 */
     List<MainShellTabLayoutNode> defaultMainShellTabLayoutGrouped() {
-        return MainShellTabLayoutDefaults.groupedLayout();
+        List<MainShellTabLayoutNode> grouped = MainShellTabLayoutDefaults.groupedLayout();
+        return Stage3UiVisibility.isVisible(collectUiEnv())
+                ? grouped
+                : Stage3MainShellLayout.withoutStage3(grouped);
     }
 
     private static HashSet<String> requiredShellTabKeys() {
@@ -4067,6 +4085,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                     pipelineExecutionTimingHistory.configureFromUi(collectUiEnv());
                     FactoryOperatorUserStore.configureFromUi(
                             collectUiEnv(), GlobalInitSettingTarget.load());
+                    applyStage3UiVisibility();
                 });
         Runnable schedule = () -> uiEnvSaveDebounce.playFromStart();
         this.uiEnvPersistSchedule = schedule;
@@ -4096,6 +4115,41 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         row.nameProperty().addListener((o, a, b) -> schedule.run());
         row.valueProperty().addListener((o, a, b) -> schedule.run());
         row.descriptionProperty().addListener((o, a, b) -> schedule.run());
+    }
+
+    private void applyStage3UiVisibility() {
+        boolean visible = Stage3UiVisibility.isVisible(collectUiEnv());
+        if (mainRunTabController != null) {
+            mainRunTabController.applyStage3UiVisibility(visible);
+        }
+        if (pipelineExecutionTimingTabController != null) {
+            pipelineExecutionTimingTabController.applyStage3UiVisibility(visible);
+        }
+        if (dispatchInteractiveTabController != null) {
+            dispatchInteractiveTabController.applyStage3UiVisibility(visible);
+        }
+        if (deliveryCalendarViewTabController != null) {
+            deliveryCalendarViewTabController.applyStage3UiVisibility(visible);
+        }
+        if (resultDispatchTableTabController != null) {
+            resultDispatchTableTabController.applyStage3UiVisibility(visible);
+        }
+        if (equipmentGanttGraphicTabController != null) {
+            equipmentGanttGraphicTabController.applyStage3UiVisibility(visible);
+        }
+        if (pushButtonDesignTabController != null) {
+            pushButtonDesignTabController.applyStage3UiVisibility(visible);
+        }
+        List<MainShellTabLayoutNode> liveLayout = snapshotLiveMainShellTabLayout();
+        List<MainShellTabLayoutNode> fullLayout =
+                Stage3MainShellLayout.mergeHiddenTab(
+                        liveLayout, completeMainShellTabLayout);
+        if (!fullLayout.isEmpty()) {
+            rebuildMainShellTabsFromLayout(fullLayout);
+        }
+        if (mainShellTabOrganizerPaneController != null) {
+            mainShellTabOrganizerPaneController.refreshFromShell();
+        }
     }
 
     private static boolean nonBlank(String v) {
@@ -4232,6 +4286,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         ensureBootstrapDefaultValuesVisible(collectUiEnv());
         ensureUiRefOptionalDisplayDefaultsVisible(collectUiEnv());
         applyRepoFolderPathNormalization();
+        applyStage3UiVisibility();
         if (persistSession) {
             DesktopSessionStateStore.save(collectDesktopSessionForGlobalPersistence());
         }
@@ -4485,6 +4540,10 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         activeRunStageScript = script;
         activeStageRunUserCancelled.set(false);
         selectMainShellTab(MainShellTabId.RUN);
+        if (STAGE2.equals(script)) {
+            mainRunTabController.updateStage2Progress(
+                    MainRunStage2Progress.State.RUNNING, "");
+        }
         applyRunTabGating();
         mainRunTabController.beginLogTailFollowForRun();
         if (STAGE2.equals(script) && dispatchInteractiveTabController != null) {
@@ -4831,6 +4890,8 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
             }
             if (STAGE2.equals(script)) {
                 if (c == 0) {
+                    mainRunTabController.updateStage2Progress(
+                            MainRunStage2Progress.State.DISPATCH_RELOADING, "");
                     refreshStage2OutputArtifacts();
                     Platform.runLater(
                             () -> {
@@ -4841,12 +4902,22 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                                 }
                                 Runnable afterDispatchReload =
                                         () -> {
+                                            mainRunTabController.updateStage2Progress(
+                                                    MainRunStage2Progress.State.DELIVERY_RELOADING,
+                                                    "");
                                             selectMainShellTab(
                                                     MainShellTabId.DELIVERY_CALENDAR_VIEW);
                                             Runnable afterDeliveryCalendarReload =
                                                     () -> {
+                                                        mainRunTabController
+                                                                .updateStage2Progress(
+                                                                        MainRunStage2Progress.State
+                                                                                .EXCEL_GENERATING,
+                                                                        "");
                                                         exportSharedAladdinEntryWorkbookAfterStage2(
                                                                 outcome -> {
+                                                                    updateStage2ExcelProgress(
+                                                                            outcome);
                                                                     MacroCompleteChime
                                                                             .playIfAvailable(
                                                                                     collectUiEnv());
@@ -5049,6 +5120,14 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         if (stage12 && failed) {
             appendLog("[ui] 段階処理が異常終了しました。エラーダイアログを表示します。");
             selectMainShellTab(MainShellTabId.RUN);
+            if (STAGE2.equals(script)) {
+                String detail =
+                        err != null
+                                ? err.getMessage()
+                                : code != null ? "exit=" + code : "";
+                mainRunTabController.updateStage2Progress(
+                        MainRunStage2Progress.State.STAGE2_FAILED, detail);
+            }
             if (STAGE2.equals(script) && err == null && code != null && code.intValue() == 3) {
                 showStage2FailureWithUnknownMasterComboRetry(code, tailSnap);
             } else {
@@ -5193,19 +5272,19 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         if (tabs.isEmpty()) {
             return;
         }
-        for (Tab t : tabs) {
-            t.setDisable(pipelineBusy && !isMainShellTabOperableDuringPipelineRun(t));
-        }
+        MainShellRunTabGating.apply(
+                tabPane, pipelineBusy, this::isMainShellLeafOperableDuringPipelineRun);
         if (pipelineBusy) {
             Tab sel = tabPane.getSelectionModel().getSelectedItem();
-            if (!isMainShellTabOperableDuringPipelineRun(sel)) {
+            if (!MainShellRunTabGating.isOperable(
+                    sel, this::isMainShellLeafOperableDuringPipelineRun)) {
                 selectMainShellTab(MainShellTabId.RUN);
             }
         }
     }
 
     /** 段階1／2.0～3.2／配台試行 実行中も切り替え・操作を許可するメインシェル最上段タブ。 */
-    private boolean isMainShellTabOperableDuringPipelineRun(Tab t) {
+    private boolean isMainShellLeafOperableDuringPipelineRun(Tab t) {
         return t == mainShellTabRun
                 || t == mainShellTabSpecialRules
                 || t == mainShellTabRequestFormInput
@@ -5351,6 +5430,27 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                         null,
                         List.of(),
                         new IllegalStateException("配台結果画面を初期化できませんでした。")));
+    }
+
+    private void updateStage2ExcelProgress(
+            ResultDispatchTableTabController.AladdinEntryExportOutcome outcome) {
+        if (outcome != null && outcome.succeeded()) {
+            Path latest = outcome.result().latestPath();
+            String detail =
+                    latest != null && latest.getFileName() != null
+                            ? latest.getFileName().toString()
+                            : "";
+            mainRunTabController.updateStage2Progress(
+                    MainRunStage2Progress.State.COMPLETED, detail);
+            return;
+        }
+        Exception error = outcome != null ? outcome.error() : null;
+        String detail =
+                error != null && error.getMessage() != null
+                        ? error.getMessage()
+                        : "原因不明";
+        mainRunTabController.updateStage2Progress(
+                MainRunStage2Progress.State.FAILED, detail);
     }
 
     static String stage2CompletionHeader(

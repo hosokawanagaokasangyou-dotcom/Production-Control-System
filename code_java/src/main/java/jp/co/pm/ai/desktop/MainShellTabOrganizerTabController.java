@@ -873,14 +873,9 @@ public final class MainShellTabOrganizerTabController {
         }
     }
 
-    private static String leafKeyMismatchDetail(List<MainShellTabLayoutNode> top) {
+    private String leafKeyMismatchDetail(List<MainShellTabLayoutNode> top) {
         Set<String> seen = new HashSet<>();
-        Set<String> required = new HashSet<>();
-        for (MainShellTabId id : MainShellTabId.values()) {
-            if (id != MainShellTabId.TAB_ORGANIZER) {
-                required.add(id.key());
-            }
-        }
+        Set<String> required = requiredVisibleTabKeys();
         for (MainShellTabLayoutNode n : top) {
             collectLeafKeys(n, seen);
         }
@@ -901,18 +896,29 @@ public final class MainShellTabOrganizerTabController {
         return sb.length() > 0 ? sb.toString().strip() : "";
     }
 
-    private static boolean validateAllTabsOnce(List<MainShellTabLayoutNode> top) {
+    private boolean validateAllTabsOnce(List<MainShellTabLayoutNode> top) {
         Set<String> seen = new HashSet<>();
+        Set<String> required = requiredVisibleTabKeys();
+        for (MainShellTabLayoutNode n : top) {
+            collectLeafKeys(n, seen);
+        }
+        return seen.size() == required.size() && seen.containsAll(required);
+    }
+
+    private Set<String> requiredVisibleTabKeys() {
         Set<String> required = new HashSet<>();
+        if (shell != null) {
+            for (MainShellTabId id : shell.defaultMainShellTabIds()) {
+                required.add(id.key());
+            }
+            return required;
+        }
         for (MainShellTabId id : MainShellTabId.values()) {
             if (id != MainShellTabId.TAB_ORGANIZER) {
                 required.add(id.key());
             }
         }
-        for (MainShellTabLayoutNode n : top) {
-            collectLeafKeys(n, seen);
-        }
-        return seen.size() == required.size() && seen.containsAll(required);
+        return required;
     }
 
     private static void collectLeafKeys(MainShellTabLayoutNode n, Set<String> out) {

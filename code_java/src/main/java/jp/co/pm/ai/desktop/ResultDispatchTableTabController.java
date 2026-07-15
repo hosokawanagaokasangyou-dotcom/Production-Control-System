@@ -37,6 +37,7 @@ import org.controlsfx.control.spreadsheet.GridBase;
 import org.controlsfx.control.spreadsheet.SpreadsheetView;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
+import jp.co.pm.ai.desktop.config.Stage3UiVisibility;
 import jp.co.pm.ai.desktop.dispatch.DispatchAladdinEntrySheetBuilder;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchDeadlineJudgment;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchNormalizer;
@@ -215,6 +216,20 @@ public final class ResultDispatchTableTabController {
         initResultDispatchSpreadsheetPresentationControls();
 
         Platform.runLater(() -> reloadFromDisk(false));
+    }
+
+    void applyStage3UiVisibility(boolean visible) {
+        if (shell != null) {
+            Path path = AppPaths.resolveResultDispatchTableJsonPath(shell.snapshotUiEnv());
+            ResultDispatchStage3Support.applyPlanningStageBadgeFromDispatchJson(
+                    dataStageBadgeLabel, path);
+        }
+        if (!visible
+                && dataStageBadgeLabel != null
+                && dataStageBadgeLabel.getText() != null
+                && dataStageBadgeLabel.getText().startsWith("段階3")) {
+            Stage3UiVisibility.apply(dataStageBadgeLabel, false);
+        }
     }
 
     /**
@@ -542,6 +557,8 @@ public final class ResultDispatchTableTabController {
             }
             ResultDispatchStage3Support.applyPlanningStageBadgeFromDispatchJson(
                     dataStageBadgeLabel, path);
+            Stage3UiVisibility.applyPlanningStageBadgePolicy(
+                    dataStageBadgeLabel, shell != null ? shell.snapshotUiEnv() : Map.of());
             statusLabel.setText(rowMaps.size() + " 行");
 
             headersRef.clear();

@@ -205,7 +205,7 @@ public final class RemoteDesktopLatestSourceFiles {
         }
     }
 
-    /** 更新日時とアクセス日時の新しい方（{@link NetworkSourceDirResolver} と同系）。 */
+    /** ファイル内容の鮮度を表す更新日時（アクセスしただけでは新しく扱わない）。 */
     static long acquiredAtEpochMillis(Path p) {
         return mtimeScore(p);
     }
@@ -213,14 +213,7 @@ public final class RemoteDesktopLatestSourceFiles {
     private static long mtimeScore(Path p) {
         try {
             BasicFileAttributes a = Files.readAttributes(p, BasicFileAttributes.class);
-            long m = a.lastModifiedTime().toMillis();
-            long ac = 0L;
-            try {
-                ac = a.lastAccessTime().toMillis();
-            } catch (UnsupportedOperationException ignored) {
-                ac = 0L;
-            }
-            return Math.max(m, ac);
+            return a.lastModifiedTime().toMillis();
         } catch (IOException e) {
             return Long.MIN_VALUE;
         }

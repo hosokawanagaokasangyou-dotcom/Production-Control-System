@@ -474,14 +474,7 @@ public final class NetworkSourceDirResolver {
     private static long mtimeScore(Path p) {
         try {
             BasicFileAttributes a = Files.readAttributes(p, BasicFileAttributes.class);
-            long m = a.lastModifiedTime().toMillis();
-            long ac = 0L;
-            try {
-                ac = a.lastAccessTime().toMillis();
-            } catch (UnsupportedOperationException ignored) {
-                ac = 0L;
-            }
-            return Math.max(m, ac);
+            return a.lastModifiedTime().toMillis();
         } catch (IOException e) {
             return Long.MIN_VALUE;
         }

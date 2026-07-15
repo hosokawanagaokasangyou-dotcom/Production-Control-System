@@ -463,7 +463,6 @@ def build_stage3_dispatch_targets_from_plan_df(pc, tasks_df) -> dict[tuple, floa
     if tasks_df is None or getattr(tasks_df, "empty", True):
         return targets
 
-    by_parent: dict[tuple[str, str, str], dict] = {}
     for _, row in tasks_df.iterrows():
         tid = pc._interactive_norm_cell(pc.planning_task_id_str_from_plan_row(row))
         parent = (
@@ -495,22 +494,8 @@ def build_stage3_dispatch_targets_from_plan_df(pc, tasks_df) -> dict[tuple, floa
         qty = _stage3_row_dispatch_qty_m(pc, row)
         if qty <= 1e-9:
             continue
-        gkey = (parent, proc, mach)
-        slot = by_parent.get(gkey)
-        if slot is None:
-            by_parent[gkey] = {
-                "tid": tid,
-                "dd": dd,
-                "qty": float(qty),
-            }
-        else:
-            slot["qty"] += float(qty)
-            if dd > slot["dd"]:
-                slot["dd"] = dd
-                slot["tid"] = tid
-
-    for (_parent, proc, mach), slot in by_parent.items():
-        targets[(slot["tid"], proc, mach, slot["dd"])] = float(slot["qty"])
+        key = (tid, proc, mach, dd)
+        targets[key] = targets.get(key, 0.0) + float(qty)
 
     return targets
 

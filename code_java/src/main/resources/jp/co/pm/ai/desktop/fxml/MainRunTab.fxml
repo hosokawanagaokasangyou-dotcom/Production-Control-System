@@ -88,14 +88,16 @@
     </center>
     <bottom>
         <VBox fillWidth="true" spacing="8.0">
-            <Accordion maxWidth="Infinity">
+            <Accordion fx:id="stage2ProgressAccordion" maxWidth="Infinity">
                 <panes>
-                    <TitledPane animated="true" expanded="false" text="その他（段階2・実行時間）">
+                    <TitledPane fx:id="stage2ProgressPane" animated="true" expanded="false" text="その他（段階2・実行時間）">
                         <content>
                             <ScrollPane fitToWidth="true" hbarPolicy="NEVER" maxHeight="320.0" minViewportHeight="120.0"
                                         prefViewportHeight="240.0" style="-fx-background-color: transparent;">
                                 <VBox fillWidth="true" spacing="12.0" styleClass="pm-run-secondary-panel">
                                 <Label styleClass="pm-section-title" text="段階2 成果物" />
+                                <Label fx:id="stage2ProgressLabel" styleClass="pm-stage2-progress-running"
+                                       text="段階2待機中" wrapText="true" />
                                 <HBox alignment="CENTER_LEFT" spacing="8.0">
                                     <Label text="段階2 Excel フォント" />
                                     <ComboBox fx:id="stage2ResultBookFontCombo" editable="true" prefWidth="220.0" />
@@ -139,14 +141,20 @@
                                     <Label fx:id="pipelineTimingStage20Label" styleClass="pm-run-timing-value" text="—" GridPane.columnIndex="3" GridPane.rowIndex="0" />
                                     <Label text="段階2.1" GridPane.columnIndex="4" GridPane.rowIndex="0" />
                                     <Label fx:id="pipelineTimingStage21Label" styleClass="pm-run-timing-value" text="—" GridPane.columnIndex="5" GridPane.rowIndex="0" />
-                                    <Label text="段階3.0" GridPane.columnIndex="0" GridPane.rowIndex="1" />
-                                    <Label fx:id="pipelineTimingStage30Label" styleClass="pm-run-timing-value" text="—" GridPane.columnIndex="1" GridPane.rowIndex="1" />
-                                    <Label text="段階3.1" GridPane.columnIndex="2" GridPane.rowIndex="1" />
-                                    <Label fx:id="pipelineTimingStage31Label" styleClass="pm-run-timing-value" text="—" GridPane.columnIndex="3" GridPane.rowIndex="1" />
-                                    <Label text="段階3.2" GridPane.columnIndex="4" GridPane.rowIndex="1" />
-                                    <Label fx:id="pipelineTimingStage32Label" styleClass="pm-run-timing-value" text="—" GridPane.columnIndex="5" GridPane.rowIndex="1" />
-                                    <Label text="配台試行" GridPane.columnIndex="0" GridPane.rowIndex="2" />
-                                    <Label fx:id="pipelineTimingDispatchTrialLabel" styleClass="pm-run-timing-value" text="—" GridPane.columnIndex="1" GridPane.rowIndex="2" />
+                                    <HBox fx:id="pipelineTimingStage3Rows" alignment="CENTER_LEFT" spacing="16.0"
+                                          GridPane.columnIndex="0" GridPane.rowIndex="1" GridPane.columnSpan="6">
+                                        <Label text="段階3.0" />
+                                        <Label fx:id="pipelineTimingStage30Label" styleClass="pm-run-timing-value" text="—" />
+                                        <Label text="段階3.1" />
+                                        <Label fx:id="pipelineTimingStage31Label" styleClass="pm-run-timing-value" text="—" />
+                                        <Label text="段階3.2" />
+                                        <Label fx:id="pipelineTimingStage32Label" styleClass="pm-run-timing-value" text="—" />
+                                    </HBox>
+                                    <HBox fx:id="pipelineTimingDispatchTrialRow" alignment="CENTER_LEFT" spacing="16.0"
+                                          GridPane.columnIndex="0" GridPane.rowIndex="2" GridPane.columnSpan="2">
+                                        <Label text="配台試行" />
+                                        <Label fx:id="pipelineTimingDispatchTrialLabel" styleClass="pm-run-timing-value" text="—" />
+                                    </HBox>
                                     <Label text="サマリ Excel" GridPane.columnIndex="2" GridPane.rowIndex="2" />
                                     <Label fx:id="pipelineTimingSummaryExcelLabel" styleClass="pm-run-timing-value" text="—" GridPane.columnIndex="3" GridPane.rowIndex="2" />
                                     <Label text="納期管理ビュー" GridPane.columnIndex="4" GridPane.rowIndex="2" />

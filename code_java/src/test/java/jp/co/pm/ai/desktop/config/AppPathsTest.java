@@ -88,20 +88,29 @@ class AppPathsTest {
 
     @Test
     void resolveRequestFormTpiPdfDir_usesEnvOverrideOrFactoryDefault(@TempDir Path tmp) {
-        Path custom = tmp.resolve("tpi-pdf");
-        Map<String, String> ui =
-                Map.of(AppPaths.KEY_PM_AI_REQUEST_FORM_TPI_PDF_DIR, custom.toString());
-        assertEquals(
-                custom.toAbsolutePath().normalize(),
-                AppPaths.resolveRequestFormTpiPdfDir(ui).get());
+        String priorUserHome = System.getProperty("user.home");
+        String priorAppHome = AppPaths.desktopAppHomeDirName();
+        try {
+            System.setProperty("user.home", tmp.toString());
+            AppPaths.setDesktopAppHomeDirName(".pm-ai-desktop-test");
+            GlobalInitSettingTarget.save(FactorySite.KONAN);
+            Path custom = tmp.resolve("tpi-pdf");
+            Map<String, String> ui =
+                    Map.of(AppPaths.KEY_PM_AI_REQUEST_FORM_TPI_PDF_DIR, custom.toString());
+            assertEquals(
+                    custom.toAbsolutePath().normalize(),
+                    AppPaths.resolveRequestFormTpiPdfDir(ui).get());
 
-        GlobalInitSettingTarget.save(FactorySite.KONAN);
-        assertEquals(
-                AppPaths.DEFAULT_PM_AI_REQUEST_FORM_TPI_PDF_DIR_KONAN,
-                AppPaths.resolveRequestFormTpiPdfDir(Map.of()).get().toString());
+            assertEquals(
+                    AppPaths.DEFAULT_PM_AI_REQUEST_FORM_TPI_PDF_DIR_KONAN,
+                    AppPaths.resolveRequestFormTpiPdfDir(Map.of()).get().toString());
 
-        GlobalInitSettingTarget.save(FactorySite.KOKUBU);
-        assertTrue(AppPaths.resolveRequestFormTpiPdfDir(Map.of()).isEmpty());
+            GlobalInitSettingTarget.save(FactorySite.KOKUBU);
+            assertTrue(AppPaths.resolveRequestFormTpiPdfDir(Map.of()).isEmpty());
+        } finally {
+            AppPaths.setDesktopAppHomeDirName(priorAppHome);
+            System.setProperty("user.home", priorUserHome);
+        }
     }
 
     @Test

@@ -3,17 +3,20 @@ package jp.co.pm.ai.desktop;
 import javafx.animation.PauseTransition;
 import javafx.fxml.FXML;
 import javafx.scene.control.Accordion;
+import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.ColorPicker;
 import javafx.scene.control.Label;
 import javafx.scene.control.Slider;
 import javafx.scene.control.TitledPane;
 import javafx.scene.layout.BorderPane;
+import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.util.Duration;
 
 import jp.co.pm.ai.desktop.config.DesktopSessionState;
 import jp.co.pm.ai.desktop.config.PushButtonDesignPrefs;
+import jp.co.pm.ai.desktop.config.Stage3UiVisibility;
 import jp.co.pm.ai.desktop.ui.SliderCommittedChangeSupport;
 
 /**
@@ -26,6 +29,12 @@ public final class PushButtonDesignTabController {
 
     @FXML
     private BorderPane previewRunPane;
+
+    @FXML
+    private Button stage3PreviewButton;
+
+    @FXML
+    private VBox stage3DesignControls;
 
     @FXML
     private CheckBox customGeneralCheck;
@@ -308,6 +317,11 @@ public final class PushButtonDesignTabController {
 
     void bindShell(MainShellController mainShell) {
         this.shell = mainShell;
+    }
+
+    void applyStage3UiVisibility(boolean visible) {
+        Stage3UiVisibility.apply(stage3PreviewButton, visible);
+        Stage3UiVisibility.apply(stage3DesignControls, visible);
     }
 
     void applyPushButtonSession(DesktopSessionState s) {

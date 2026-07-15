@@ -7,10 +7,30 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
 
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 class NetworkSourceDirResolverTest {
+
+    private String priorAppHome;
+    private String priorUserHome;
+
+    @BeforeEach
+    void setUp(@TempDir Path tmp) {
+        priorAppHome = AppPaths.desktopAppHomeDirName();
+        priorUserHome = System.getProperty("user.home");
+        System.setProperty("user.home", tmp.toString());
+        AppPaths.setDesktopAppHomeDirName(".pm-ai-desktop-test");
+        GlobalInitSettingTarget.save(FactorySite.KONAN);
+    }
+
+    @AfterEach
+    void tearDown() {
+        AppPaths.setDesktopAppHomeDirName(priorAppHome);
+        System.setProperty("user.home", priorUserHome);
+    }
 
     @Test
     void resolve_taskInputFromCache_falseWhenLiveNetworkFileFound(@TempDir Path fakeRepo) throws Exception {
@@ -77,6 +97,7 @@ class NetworkSourceDirResolverTest {
 
     @Test
     void requestFormTpiPdfDir_reachable_whenPresent(@TempDir Path dir) throws Exception {
+        GlobalInitSettingTarget.save(FactorySite.KONAN);
         Files.writeString(dir.resolve("sample.pdf"), "x");
         Map<String, String> ui =
                 Map.of(AppPaths.KEY_PM_AI_REQUEST_FORM_TPI_PDF_DIR, dir.toString());
