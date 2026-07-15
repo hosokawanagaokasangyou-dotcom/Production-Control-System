@@ -5273,11 +5273,17 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
             return;
         }
         MainShellRunTabGating.apply(
-                tabPane, pipelineBusy, this::isMainShellLeafOperableDuringPipelineRun);
+                tabPane,
+                pipelineBusy,
+                this::isMainShellLeafOperableDuringPipelineRun,
+                pipelineBusy ? mainShellTabRun : null);
         if (pipelineBusy) {
-            Tab sel = tabPane.getSelectionModel().getSelectedItem();
-            if (!MainShellRunTabGating.isOperable(
-                    sel, this::isMainShellLeafOperableDuringPipelineRun)) {
+            Tab leaf =
+                    MainShellRunTabGating.effectiveLeaf(
+                            tabPane.getSelectionModel().getSelectedItem());
+            if (leaf == null
+                    || leaf.isDisable()
+                    || !isMainShellLeafOperableDuringPipelineRun(leaf)) {
                 selectMainShellTab(MainShellTabId.RUN);
             }
         }
