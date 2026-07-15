@@ -52,7 +52,6 @@ public final class ExcludeRuleLogicGeminiService {
         u.add("実加工数");
         u.add("実出来高");
         u.add("指定納期");
-        u.add("担当OP_指定");
         u.add("換算数量");
         u.add("抽出時間");
         u.add("未加工");

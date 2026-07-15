@@ -186,7 +186,7 @@ public final class Stage2PythonishPlanWorkbookLayout {
     }
 
     /**
-     * Python {@code default_result_task_sheet_column_order(0)} と同じ 28 列見出しで、計画入力の列を同名または
+     * Python {@code default_result_task_sheet_column_order(0)} と同じ 27 列見出しで、計画入力の列を同名または
      * 依頼NO→タスクID にマッピングして転写する（配台未実行のため他列は空）。
      */
     private static void writeResultTaskListSheet(
@@ -221,7 +221,6 @@ public final class Stage2PythonishPlanWorkbookLayout {
                     "原反投入日",
                     "加工速度",
                     "優先度",
-                    "担当OP指定",
                 };
         for (String s : sameName) {
             planKeyToResultCol.put(s, s);

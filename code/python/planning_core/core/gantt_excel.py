@@ -2702,8 +2702,8 @@ def _apply_planning_sheet_post_load_mutations(
                 ex,
             )
 def _migrate_deprecated_plan_override_columns(df: "pd.DataFrame") -> "pd.DataFrame":
-    """廃止した *_上書き 列の値を基底列へ移し、参照列・上書き列を削除する。"""
-    if df is None or df.empty:
+    """廃止列を削除し、*_上書き列だけは値を基底列へ移す。"""
+    if df is None:
         return df
     for oc, base in PLAN_OVERRIDE_TO_BASE_COLUMN.items():
         if oc not in df.columns:
@@ -2725,6 +2725,7 @@ def _migrate_deprecated_plan_override_columns(df: "pd.DataFrame") -> "pd.DataFra
     drop = list(PLAN_DEPRECATED_OVERRIDE_COLUMNS) + [
         plan_reference_column_name(c) for c in PLAN_DEPRECATED_OVERRIDE_COLUMNS
     ]
+    drop.extend(("担当OP_指定", "担当OP指定"))
     present = [c for c in drop if c in df.columns]
     if present:
         df = df.drop(columns=present)

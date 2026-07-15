@@ -138,7 +138,6 @@
       "タスク効率",
       "加工途中",
       "特別指定あり",
-      "担当OP指定",
       "回答納期",
       "指定納期",
       "計画基準納期",
@@ -269,10 +268,6 @@
         "True"
       ],
       [
-        "担当OP指定",
-        "True"
-      ],
-      [
         "回答納期",
         "True"
       ],
@@ -372,7 +367,7 @@
       ],
       [
         "メイン_再優先特別記載(AI)",
-        "{\"ignore_skill_requirements\": false, \"ignore_need_minimum\": false, \"abolish_all_scheduling_limits\": false, \"task_preferred_operators\": {}, \"interpretation_ja\": \"\", \"factory_closure_dates\": [], \"scheduler_notes_ja\": \"\", \"global_speed_rules\": [], \"global_day_process_operator_rules\": []}"
+        "{\"ignore_skill_requirements\": false, \"ignore_need_minimum\": false, \"abolish_all_scheduling_limits\": false, \"interpretation_ja\": \"\", \"factory_closure_dates\": [], \"scheduler_notes_ja\": \"\", \"global_speed_rules\": [], \"global_day_process_operator_rules\": []}"
       ],
       [
         "特別指定備考_AI_API",

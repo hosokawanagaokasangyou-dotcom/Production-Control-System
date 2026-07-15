@@ -28,24 +28,38 @@ class PlanInputDeprecatedOverrideColumnSupportTest {
         assertTrue(
                 PlanInputDeprecatedOverrideColumnSupport.isDeprecatedReferenceOverrideColumn(
                         "（元）原反投入日_上書き"));
-        assertFalse(
-                PlanInputDeprecatedOverrideColumnSupport.isDeprecatedOverrideColumn(
+        assertTrue(
+                PlanInputDeprecatedOverrideColumnSupport.isDeprecatedOverrideOrReferenceColumn(
                         "担当OP_指定"));
+        assertTrue(
+                PlanInputDeprecatedOverrideColumnSupport.isDeprecatedOverrideOrReferenceColumn(
+                        "担当OP指定"));
+        assertFalse(
+                PlanInputDeprecatedOverrideColumnSupport.isDeprecatedOverrideOrReferenceColumn(
+                        "担当OP_限定"));
     }
 
     @Test
     void migrateAndDrop_removesOriginalReferenceColumns() {
         List<String> headers =
                 new ArrayList<>(
-                        List.of("依頼NO", "（元）担当OP_指定", "担当OP_指定", "（元）特別指定_備考", "特別指定_備考"));
+                        List.of(
+                                "依頼NO",
+                                "（元）担当OP_指定",
+                                "担当OP_指定",
+                                "担当OP_限定",
+                                "（元）特別指定_備考",
+                                "特別指定_備考"));
         ObservableList<ObservableList<String>> rows = FXCollections.observableArrayList();
-        rows.add(FXCollections.observableArrayList("A", "（OP1）", "OP1", "（備考）", "備考"));
+        rows.add(
+                FXCollections.observableArrayList(
+                        "A", "（OP1）", "OP1", "[\"限定OP\"]", "（備考）", "備考"));
         int dropped =
                 PlanInputDeprecatedOverrideColumnSupport.migrateAndDropDeprecatedOverrideColumns(
                         headers, rows);
-        assertEquals(2, dropped);
-        assertEquals(List.of("依頼NO", "担当OP_指定", "特別指定_備考"), headers);
-        assertEquals("OP1", rows.get(0).get(1));
+        assertEquals(3, dropped);
+        assertEquals(List.of("依頼NO", "担当OP_限定", "特別指定_備考"), headers);
+        assertEquals("[\"限定OP\"]", rows.get(0).get(1));
         assertEquals("備考", rows.get(0).get(2));
     }
 

@@ -12,14 +12,12 @@ def test_stage1_operator_restriction_column_contract():
     assert pc.PLAN_COL_LIMITED_OP == "担当OP_限定"
 
     stage1_order = pc.plan_input_sheet_column_order()
-    preferred_index = stage1_order.index(pc.PLAN_COL_PREFERRED_OP)
-    assert stage1_order[preferred_index + 1] == pc.PLAN_COL_LIMITED_OP
+    assert "担当OP_指定" not in stage1_order
+    assert pc.PLAN_COL_LIMITED_OP in stage1_order
 
     stage3_order = pc.plan_input_stage3_sheet_column_order()
     assert pc.PLAN_COL_LIMITED_OP in stage3_order
-    assert stage3_order.index(pc.PLAN_COL_LIMITED_OP) == (
-        stage3_order.index(pc.PLAN_COL_PREFERRED_OP) + 1
-    )
+    assert "担当OP_指定" not in stage3_order
     assert pc.PLAN_COL_LIMITED_OP not in pc.PLAN_STAGE1_MERGE_COLUMNS
 
 
@@ -42,7 +40,7 @@ def test_stage1_rerun_does_not_inherit_operator_restriction(tmp_path, monkeypatc
             {
                 pc.TASK_COL_TASK_ID: "A-1",
                 pc.TASK_COL_MACHINE: "SL",
-                pc.PLAN_COL_PREFERRED_OP: "継承対象OP",
+                "担当OP_指定": "継承してはいけない旧OP",
                 pc.PLAN_COL_LIMITED_OP: "継承してはいけないOP",
             }
         ]
@@ -55,7 +53,6 @@ def test_stage1_rerun_does_not_inherit_operator_restriction(tmp_path, monkeypatc
             {
                 pc.TASK_COL_TASK_ID: "A-1",
                 pc.TASK_COL_MACHINE: "SL",
-                pc.PLAN_COL_PREFERRED_OP: "",
                 pc.PLAN_COL_LIMITED_OP: "",
             }
         ]
@@ -63,5 +60,5 @@ def test_stage1_rerun_does_not_inherit_operator_restriction(tmp_path, monkeypatc
 
     merged = pc._merge_plan_sheet_user_overrides(current)
 
-    assert merged.at[0, pc.PLAN_COL_PREFERRED_OP] == "継承対象OP"
+    assert "担当OP_指定" not in merged.columns
     assert merged.at[0, pc.PLAN_COL_LIMITED_OP] == ""

@@ -70,6 +70,36 @@ class Stage2InProgressNextDayRollInputTest {
     }
 
     @Test
+    void aladdinRowsExposeNextDayRollsAndConvertBackToExcludedMeters() {
+        assertEquals(
+                1,
+                Stage2InProgressNextDayRollInput
+                        .defaultNextDayRollCountAfterAladdinToday(6090, 10660, 3045));
+        assertEquals(
+                6090.0,
+                Stage2InProgressNextDayRollInput
+                        .resolveExcludedMetersFromNextDayRollCount(1, 10660, 3045)
+                        .orElse(-1.0),
+                1e-9);
+        assertEquals(
+                0.0,
+                Stage2InProgressNextDayRollInput
+                        .resolveExcludedMetersFromNextDayRollCount(3, 10660, 3045)
+                        .orElse(-1.0),
+                1e-9);
+        assertEquals(
+                9135.0,
+                Stage2InProgressNextDayRollInput
+                        .resolveExcludedMetersFromNextDayRollCount(0, 10660, 3045)
+                        .orElse(-1.0),
+                1e-9);
+        assertTrue(
+                Stage2InProgressNextDayRollInput
+                        .resolveExcludedMetersFromNextDayRollCount(4, 10660, 3045)
+                        .isEmpty());
+    }
+
+    @Test
     void nextDayTargetAssumesAladdinTodayCompletes() {
         assertEquals(
                 3000.0,

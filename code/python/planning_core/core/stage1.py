@@ -113,7 +113,6 @@ def _write_stage1_task_input_preview_xlsx(df: pd.DataFrame, out_dir: str) -> str
     return out_path
 def _initialize_stage1_manual_input_columns(rec: dict) -> None:
     """段階1で新規生成する手入力列を空欄に初期化する。"""
-    rec[PLAN_COL_PREFERRED_OP] = ""
     rec[PLAN_COL_LIMITED_OP] = ""
     rec[PLAN_COL_SPECIAL_REMARK] = ""
     rec[PLAN_COL_EXCLUDE_FROM_ASSIGNMENT] = ""

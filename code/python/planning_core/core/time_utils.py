@@ -836,7 +836,7 @@ def build_member_assignment_priority_reference(
         },
         {
             "区分": "指定・グローバル上書き",
-            "内容": "担当OP_指定・メイン「再優先特別記載」の OP 指定は本表より優先されした。",
+            "内容": "担当OP_限定・日付×工程の必須メンバールールは本表より優先されした。",
         },
         {
             "区分": "TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF",
@@ -1031,13 +1031,6 @@ def _resolve_preferred_name_to_capable_member(raw, capable_candidates, roster_me
     if len(matches) == 1:
         return matches[0]
     return None
-def _resolve_preferred_op_to_member(raw, op_candidates, roster_member_names=None):
-    """当日スキル上 OP のみへ解決（従来 API）。実体は `_resolve_preferred_name_to_capable_member`。"""
-    return _resolve_preferred_name_to_capable_member(
-        raw, op_candidates, roster_member_names
-    )
-
-
 def _limited_operator_member_matches(raw_name, roster_member_names) -> list[str]:
     """既存の担当者名正規化方針で候補を列挙し、未知・曖昧を区別可能にする。"""
     roster = [
@@ -1117,7 +1110,6 @@ def _prepare_limited_operator_team_constraints(
     roster_member_names,
     skill_role_priority,
     available_capable_members,
-    preferred_member,
 ) -> dict | None:
     """限定行だけ need・候補・組み合わせプリセットを選択チームで上書きする。"""
     selected_raw = tuple(task.get("limited_operator_names") or ())
@@ -1147,24 +1139,6 @@ def _prepare_limited_operator_team_constraints(
             f"{context}: 選択チームに最低1名OPが必要です（ASのみは不可）。"
         )
 
-    preferred_raw = str(task.get("preferred_operator_raw") or "").strip()
-    preferred_resolved = preferred_member
-    if preferred_raw:
-        preferred_resolved = _resolve_limited_operator_names(
-            (preferred_raw,),
-            roster_member_names,
-            excel_row_number=excel_row,
-            task_id=task_id,
-        )[0]
-        if preferred_resolved not in selected:
-            raise PlanningValidationError(
-                f"{context}: 「担当OP_指定」={preferred_raw!r} と限定チームが矛盾しています。"
-            )
-        if roles.get(preferred_resolved) != "OP":
-            raise PlanningValidationError(
-                f"{context}: 「担当OP_指定」={preferred_raw!r} は限定内ですがOP資格ではありません。"
-            )
-
     available = set(available_capable_members or [])
     all_available = all(member in available for member in selected)
     if not all_available:
@@ -1181,14 +1155,13 @@ def _prepare_limited_operator_team_constraints(
         "capable_members": list(selected) if all_available else [],
         "fixed_team": list(selected) if all_available else [],
         "preset_rows": [(0, count, selected, None)],
-        "preferred_member": preferred_resolved,
     }
 
 
 def _validate_and_resolve_limited_operator_tasks(
     task_queue: list, roster_member_names, skills_dict: dict
 ) -> None:
-    """日次探索前に未知・曖昧・資格外・ASのみ・担当OP指定矛盾を停止させる。"""
+    """日次探索前に未知・曖昧・資格外・ASのみを停止させる。"""
     for task in task_queue or []:
         if not task.get("limited_operator_names"):
             continue
@@ -1210,7 +1183,6 @@ def _validate_and_resolve_limited_operator_tasks(
             roster_member_names,
             role_for,
             roster_member_names,
-            None,
         )
 
 
@@ -1692,20 +1664,3 @@ def _active_global_day_process_must_include(
                     f"指定「{raw_name}」を当日スキル該当メンバーに解決でしません"
                 )
     return acc, warns
-def _merge_global_day_process_and_pref_anchor(
-    must_include: list, pref_mem, capable_members: list
-) -> list[str]:
-    """必須メンバーと担当OP指定を1本化（capable にいるものの値）。"""
-    fixed: list[str] = []
-    seen: set[str] = set()
-    for m in must_include or []:
-        if m in capable_members and m not in seen:
-            seen.add(m)
-            fixed.append(m)
-    if (
-        pref_mem
-        and pref_mem in capable_members
-        and pref_mem not in seen
-    ):
-        fixed.append(pref_mem)
-    return fixed

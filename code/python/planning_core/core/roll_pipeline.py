@@ -6070,7 +6070,8 @@ def append_in_progress_next_day_dialog_rows_to_dispatch_table(
 
     タイムラインに載らなかった加工途中タスクも、手動修正タブで翌日目標量を編集できる。
     配台日は run_date より後の最初の稼働日（勤怠で is_working の日）。無いときのみ暦日 +1。
-    アラジン当日完了前提分（shortfall）は calendar_today（SKIP_TODAY 前の暦日）へ追補する。
+    アラジン当日完了前提分（shortfall）は、skip_today OFF なら
+    calendar_today（SKIP_TODAY 前の暦日）へ追補し、ON なら計画開始日の数量へ合算する。
     """
     overrides = _load_stage2_in_progress_next_day_dispatch_overrides()
     shortfall_overrides = _load_stage2_in_progress_aladdin_today_shortfall_overrides()
@@ -6205,8 +6206,11 @@ def append_in_progress_next_day_dialog_rows_to_dispatch_table(
         shortfall_m = _resolve_in_progress_aladdin_today_shortfall_m(
             ov_key, m, plan_ref, shortfall_overrides
         )
+        if skip_today and shortfall_m > 1e-12:
+            m = _sanitize_dispatch_qty_m(float(m) + float(shortfall_m))
         if (
             shortfall_m > 1e-12
+            and not skip_today
             and today_plan_day is not None
             and today_plan_day != next_day
         ):
@@ -6240,6 +6244,19 @@ def append_in_progress_next_day_dialog_rows_to_dispatch_table(
             continue
 
         if (tid, proc, mach, next_day) in filled:
+            if skip_today and shortfall_m > 1e-12:
+                for existing_row in out_records:
+                    existing_ident, existing_day, existing_qty = (
+                        _dispatch_table_row_identity_and_date_key(existing_row)
+                    )
+                    if existing_ident != (tid, proc, mach) or existing_day != next_day:
+                        continue
+                    topped_up_qty = _sanitize_dispatch_qty_m(
+                        float(existing_qty) + float(add_m)
+                    )
+                    existing_row["当日配台数量"] = topped_up_qty
+                    added += 1
+                    break
             continue
         if _timeline_identity_planned_m_on_day(tl_qty_by, tid, proc, mach, next_day) + 1e-9 >= add_m:
             skipped_timeline_covered += 1

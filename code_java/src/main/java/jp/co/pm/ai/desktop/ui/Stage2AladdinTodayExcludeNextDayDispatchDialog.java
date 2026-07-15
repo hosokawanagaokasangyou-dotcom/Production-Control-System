@@ -7,25 +7,23 @@ import jp.co.pm.ai.desktop.dispatch.Stage2InProgressNextDayRollInput;
 import jp.co.pm.ai.planning.stage2.Stage2AladdinTodayExcludeNextDayDispatchIo;
 import jp.co.pm.ai.planning.stage2.core.Stage2PlanRowDispatchQtyMetrics;
 
-/**
- * 段階2直前: アラジン当日配台がある行について、翌日配台から除外するロール本数を入力する。
- */
+/** 段階2直前: アラジン当日配台がある行の翌日配台ロール本数を入力する。 */
 public final class Stage2AladdinTodayExcludeNextDayDispatchDialog {
 
     private static final Stage2NextDayRollDispatchDialogSupport.Theme THEME =
             new Stage2NextDayRollDispatchDialogSupport.Theme(
-                    "アラジン当日配台 — 翌日からの除外量",
-                    "アラジン加工計画で当日に配台がある行について、翌日配台から除外するロール数を指定してください。"
-                            + " 実加工数>0 の加工途中行は、ラジオで「①」または「③」を選ぶと別ダイアログで設定します。"
-                            + " 0 の行は除外しません。",
+                    "アラジン当日配台 — 翌日の配台量",
+                    "アラジン加工計画で当日に配台がある行について、翌日に配台するロール数を指定してください。"
+                            + " 0 の行は翌日に配台しません。",
                     "配台計画手動修正タブと同様、配台ロール単位 (m) の整数倍で指定します。"
-                            + " 初期値はアラジン当日量以内の最大ロール本数です（アラジンが当日計画した分を目安に設定）。"
-                            + " 除外量は 0 以上・残量に収まるロール整数倍まで指定できます（アラジン当日量を超えて除外することも可能です）。"
+                            + " 初期値は残量からアラジン当日計画分を差し引いたロール本数です。"
+                            + " 入力値は翌日の配台上限であり、設備能力などにより実際の配台量は少なくなる場合があります。"
                             + " OK で未確定の入力も反映します。",
-                    "アラジン当日",
-                    "翌日除外(ロール)",
+                    "実加工",
+                    "翌日配台(ロール)",
                     "-fx-background-color: #E3F2FD;",
-                    "-fx-font-size: 11px; -fx-text-fill: #1565C0;");
+                    "-fx-font-size: 11px; -fx-text-fill: #1565C0;",
+                    true);
 
     private Stage2AladdinTodayExcludeNextDayDispatchDialog() {}
 
@@ -36,7 +34,7 @@ public final class Stage2AladdinTodayExcludeNextDayDispatchDialog {
         private final double aladdinTodayM;
         private final double remainingM;
         private final Stage2PlanRowDispatchQtyMetrics.DispatchSimulatorUnitM unitInfo;
-        private final javafx.beans.property.SimpleStringProperty excludeRollCount =
+        private final javafx.beans.property.SimpleStringProperty nextDayRollCount =
                 new javafx.beans.property.SimpleStringProperty();
 
         public Row(
@@ -57,9 +55,9 @@ public final class Stage2AladdinTodayExcludeNextDayDispatchDialog {
                             : new Stage2PlanRowDispatchQtyMetrics.DispatchSimulatorUnitM(
                                     0.0, 0.0, 0.0, false);
             int defaultRolls =
-                    Stage2InProgressNextDayRollInput.defaultRollCountForCap(
+                    Stage2InProgressNextDayRollInput.defaultNextDayRollCountAfterAladdinToday(
                             aladdinTodayM, remainingM, this.unitInfo.unitM());
-            this.excludeRollCount.set(String.valueOf(defaultRolls));
+            this.nextDayRollCount.set(String.valueOf(defaultRolls));
         }
 
         @Override
@@ -83,6 +81,11 @@ public final class Stage2AladdinTodayExcludeNextDayDispatchDialog {
 
         @Override
         public double referenceM() {
+            return 0.0;
+        }
+
+        @Override
+        public double aladdinTodayPlanM() {
             return aladdinTodayM;
         }
 
@@ -108,10 +111,24 @@ public final class Stage2AladdinTodayExcludeNextDayDispatchDialog {
 
         @Override
         public javafx.beans.property.StringProperty rollCountProperty() {
-            return excludeRollCount;
+            return nextDayRollCount;
         }
 
-        Stage2AladdinTodayExcludeNextDayDispatchIo.Entry toEntry(double excludeM) {
+        @Override
+        public String targetReason() {
+            return "アラジン当日";
+        }
+
+        Stage2AladdinTodayExcludeNextDayDispatchIo.Entry toEntryFromNextDayInput() {
+            int nextDayRolls =
+                    Stage2InProgressNextDayRollInput.parseNonNegativeRollCount(
+                                    nextDayRollCount.get())
+                            .orElse(0);
+            double excludeM =
+                    Stage2InProgressNextDayRollInput
+                            .resolveExcludedMetersFromNextDayRollCount(
+                                    nextDayRolls, remainingM, unitM())
+                            .orElse(0.0);
             return new Stage2AladdinTodayExcludeNextDayDispatchIo.Entry(
                     taskId, process, machineName, excludeM);
         }
@@ -124,20 +141,9 @@ public final class Stage2AladdinTodayExcludeNextDayDispatchDialog {
                 owner,
                 rows,
                 THEME,
-                r -> {
-                    Row row = (Row) r;
-                    int rolls =
-                            Stage2InProgressNextDayRollInput.parseNonNegativeRollCount(
-                                            row.excludeRollCount.get())
-                                    .orElse(0);
-                    double exclude =
-                            Stage2InProgressNextDayRollInput.resolveNextDayMeters(
-                                            rolls, row.remainingM(), row.unitM())
-                                    .orElse(0.0);
-                    return row.toEntry(Math.max(0.0, exclude));
-                },
+                r -> ((Row) r).toEntryFromNextDayInput(),
                 r ->
-                        Stage2InProgressNextDayRollInput.validateExcludeRollInput(
+                        Stage2InProgressNextDayRollInput.validateRollInput(
                                 r.rollCountProperty().get(), r.remainingM(), r.unitInfo()));
     }
 }

@@ -2011,6 +2011,9 @@ public final class DispatchInteractiveTabController {
             boolean validatePlanInputCoverage,
             Path jsonOverride) {
         if (shell == null) {
+            if (afterSuccessOnFxThread != null) {
+                afterSuccessOnFxThread.run();
+            }
             return;
         }
         Path p =
@@ -2035,6 +2038,9 @@ public final class DispatchInteractiveTabController {
             }
             if (userCompletionDialog) {
                 shell.showWarningDialog("再読み", "結果_配台表.json が見つかりません。\n" + p);
+            }
+            if (afterSuccessOnFxThread != null) {
+                afterSuccessOnFxThread.run();
             }
             return;
         }
@@ -2163,6 +2169,9 @@ public final class DispatchInteractiveTabController {
                                         ? loadEx.getMessage()
                                         : (loadEx != null ? loadEx.toString() : "不明");
                         shell.showErrorDialog("読込エラー", msg);
+                    }
+                    if (afterSuccessOnFxThread != null) {
+                        afterSuccessOnFxThread.run();
                     }
                 });
         new Thread(task, "dispatch-editor-reload").start();

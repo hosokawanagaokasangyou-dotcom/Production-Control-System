@@ -10,13 +10,13 @@ import org.junit.jupiter.api.Test;
 class PlanInputCellEditRoutingTest {
 
     @Test
-    void limitedOperatorColumnUsesChecklistButPreferredOperatorRemainsText() {
+    void limitedOperatorColumnUsesChecklistAndOrdinaryColumnsRemainText() {
         assertEquals(
                 PlanInputCellEditRouting.Editor.LIMITED_OPERATOR_CHECKLIST,
                 PlanInputCellEditRouting.editorFor("担当OP_限定"));
         assertEquals(
                 PlanInputCellEditRouting.Editor.TEXT,
-                PlanInputCellEditRouting.editorFor("担当OP_指定"));
+                PlanInputCellEditRouting.editorFor("特別指定_備考"));
     }
 
     @Test

@@ -4,7 +4,7 @@ import java.util.List;
 
 /**
  * Python {@code planning_core._core.default_result_task_sheet_column_order(0)} と同一の
- * 「結果_タスク一覧」既定列順（履歴列なし＝28 列）。
+ * 「結果_タスク一覧」既定列順（履歴列なし＝27 列）。
  *
  * <p>PassThrough 経路は配台コア未実行のためセル値は限定的だが、列集合・順序を Python 段階2と揃え
  * 計画ブック JSON のスキーマ比較・ゴールデンを進めやすくする。
@@ -30,7 +30,6 @@ public final class Stage2ResultTaskListCanonicalHeaders {
                     "タスク効率",
                     "加工途中",
                     "特別指定あり",
-                    "担当OP指定",
                     "回答納期",
                     "指定納期",
                     "計画基準納期",

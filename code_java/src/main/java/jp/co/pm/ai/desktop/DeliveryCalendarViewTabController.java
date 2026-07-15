@@ -140,6 +140,8 @@ public final class DeliveryCalendarViewTabController {
 
     /** 段階2 正常完了後のパイプライン再読込が成功したあと FX スレッドで実行する（例: 段階2 完了ダイアログ）。 */
     private Runnable pendingAfterPipelineReloadSuccess;
+    private Runnable queuedStage2ReloadCompletion;
+    private boolean queuedStage2ReloadRequested;
 
     /** 段階3試行済みのとき比較表の (段階3前) 行を非表示にする。 */
     private boolean compareHideStage3PlanLine;
@@ -627,6 +629,16 @@ public final class DeliveryCalendarViewTabController {
         selectDispatchResultInnerTab(false);
     }
 
+    public boolean exportSharedAladdinEntryWorkbookAfterStage2(
+            Consumer<ResultDispatchTableTabController.AladdinEntryExportOutcome> completion) {
+        if (deliveryCalendarResultDispatchTableTabController == null) {
+            return false;
+        }
+        deliveryCalendarResultDispatchTableTabController
+                .exportSharedAladdinEntryWorkbookAfterStage2(completion);
+        return true;
+    }
+
     /**
      * @param promptExcelExportAttention 段階2 完了直後など Excel 出力ボタンのグロー誘導を付ける
      */
@@ -993,6 +1005,14 @@ public final class DeliveryCalendarViewTabController {
      * 段階2 正常完了後: 納期管理ビュー再読込（進行 UI 表示）。完了後 {@code afterSuccessOnFxThread} を FX スレッドで実行する。
      */
     public void reloadInBackgroundAfterStage2Success(Runnable afterSuccessOnFxThread) {
+        if (deliveryCalendarDataReloadInProgress.get()) {
+            queuedStage2ReloadCompletion = afterSuccessOnFxThread;
+            queuedStage2ReloadRequested = true;
+            if (shell != null) {
+                shell.appendLog("[delivery-calendar] 段階2後の再読み込みを実行中処理の完了後へ待機します。");
+            }
+            return;
+        }
         pendingAfterPipelineReloadSuccess = afterSuccessOnFxThread;
         runDeliveryCalendarDataReload(true, false, true);
     }
@@ -1006,12 +1026,15 @@ public final class DeliveryCalendarViewTabController {
     }
 
     private void failPendingPipelineReload(String message) {
-        boolean hadPending = pendingAfterPipelineReloadSuccess != null;
+        Runnable after = pendingAfterPipelineReloadSuccess;
         pendingAfterPipelineReloadSuccess = null;
-        if (hadPending && shell != null) {
+        if (after != null && shell != null) {
             shell.showErrorDialog(
                     "段階2 完了後の納期管理更新",
                     message != null && !message.isBlank() ? message : "納期管理ビューの更新に失敗しました。");
+        }
+        if (after != null) {
+            after.run();
         }
     }
 
@@ -1071,10 +1094,12 @@ public final class DeliveryCalendarViewTabController {
             boolean fullProgressShellChrome, boolean completionInfoDialog, boolean pipelineTriggered) {
         if (requestFactory == null) {
             statusLabel.setText("初期化待ち");
+            failPendingPipelineReload("納期管理ビューの初期化が完了していません。");
             return;
         }
         if (shell != null
                 && shell.blockIfSummaryAiDispatchExportLocked("納期管理ビューの再読み込み")) {
+            failPendingPipelineReload("サマリ出力ロック中のため納期管理ビューを更新できませんでした。");
             return;
         }
         if (!pipelineTriggered && refreshButton != null && refreshButton.isDisabled()) {
@@ -1198,6 +1223,13 @@ public final class DeliveryCalendarViewTabController {
         if (shell != null) {
             shell.setDeliveryCalendarReloadBlockingStageRuns(false);
             shell.setDeliveryCalendarReloadGreyOutOtherMainTabs(false);
+        }
+        boolean startQueuedStage2Reload = queuedStage2ReloadRequested;
+        queuedStage2ReloadRequested = false;
+        Runnable queued = queuedStage2ReloadCompletion;
+        queuedStage2ReloadCompletion = null;
+        if (startQueuedStage2Reload) {
+            Platform.runLater(() -> reloadInBackgroundAfterStage2Success(queued));
         }
         if (deliveryReloadProgressContainer == null) {
             return;

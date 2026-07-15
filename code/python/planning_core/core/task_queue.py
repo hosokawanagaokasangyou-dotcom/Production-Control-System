@@ -214,24 +214,11 @@ def build_task_queue_from_planning_df(
             ai_one,
             allow_ai_dispatch_priority_from_remark=allow_ai_dispatch_priority,
         )
-        preferred_operator_raw = _merge_preferred_operator_cell_and_ai(row, ai_one)
         limited_operator_names = _parse_limited_operator_json_cell(
             _planning_df_cell_scalar(row, PLAN_COL_LIMITED_OP),
             planning_excel_row,
             task_id,
         )
-        gpo = global_priority_override or {}
-        gop_name = _global_override_preferred_operator_for_task(
-            gpo.get("task_preferred_operators"), task_id
-        )
-        if gop_name is not None:
-            preferred_operator_raw = gop_name
-            logging.info(
-                "メイン再優先特記: 依頼NO=%s の担当OPをグローバル指定で上書き %r（セル・特別指定備考AIより優先）",
-                task_id,
-                gop_name,
-            )
-
         if answer_due is not None:
             due_basis = answer_due
             due_source = "answer_due"
@@ -460,7 +447,6 @@ def build_task_queue_from_planning_df(
                 "task_eff_factor": task_eff_factor,
                 "priority": priority,
                 "earliest_start_time": start_time_ov,
-                "preferred_operator_raw": preferred_operator_raw,
                 "limited_operator_names": limited_operator_names,
                 "planning_excel_row": planning_excel_row,
                 "task_special_ai_note": ai_note,

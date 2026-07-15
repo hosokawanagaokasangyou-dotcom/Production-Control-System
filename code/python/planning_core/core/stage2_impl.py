@@ -1220,20 +1220,13 @@ def _generate_plan_impl(
                                 machine_free_dbg,
                             )
     
-                        pref_raw = str(task.get("preferred_operator_raw") or "").strip()
                         op_today = [m for m in capable_members if skill_role_priority(m)[0] == "OP"]
-                        pref_mem = (
-                            _resolve_preferred_op_to_member(pref_raw, op_today, members)
-                            if pref_raw
-                            else None
-                        )
                         limited_constraints = (
                             _legacy_dispatch_limited_operator_constraints(
                                 task,
                                 members,
                                 skill_role_priority,
                                 capable_members,
-                                pref_mem,
                             )
                         )
                         if limited_constraints is not None:
@@ -1247,13 +1240,6 @@ def _generate_plan_impl(
                                 for m in capable_members
                                 if skill_role_priority(m)[0] == "OP"
                             ]
-                            pref_mem = limited_constraints["preferred_member"]
-                        if pref_raw and pref_mem is None and op_today:
-                            logging.info(
-                                "担当OP指定: 当日のOP候補に一致せう制約なし task=%s raw=%r",
-                                task.get("task_id"),
-                                pref_raw,
-                            )
 
                         _gdp_must, _gdp_warns = _active_global_day_process_must_include(
                             _gpo,
@@ -1267,9 +1253,7 @@ def _generate_plan_impl(
                         fixed_team_anchor = (
                             limited_constraints["fixed_team"]
                             if limited_constraints is not None
-                            else _merge_global_day_process_and_pref_anchor(
-                                _gdp_must, pref_mem, capable_members
-                            )
+                            else list(_gdp_must)
                         )
                         if _gdp_must:
                             logging.info(
@@ -1359,7 +1343,7 @@ def _generate_plan_impl(
                         if trace_assign:
                             logging.info(
                                 "TRACE配台[%s] %s 工程/機械=%s / %s req_num=%s extra_max=%s → max_team=%s "
-                                "capable(n=%s)=%s ignore_need1=%s ignore_skill=%s abolish=%s 担当OP指定=%s→%s",
+                                "capable(n=%s)=%s ignore_need1=%s ignore_skill=%s abolish=%s",
                                 task["task_id"],
                                 current_date,
                                 _log_plain_label(machine),
@@ -1372,8 +1356,6 @@ def _generate_plan_impl(
                                 global_priority_override.get("ignore_need_minimum"),
                                 global_priority_override.get("ignore_skill_requirements"),
                                 global_priority_override.get("abolish_all_scheduling_limits"),
-                                pref_raw,
-                                pref_mem,
                             )
     
                         team_candidates: list[dict] = []
@@ -1398,8 +1380,6 @@ def _generate_plan_impl(
                                     _allowed_members.add(_m)
                             for _m in (fixed_team_anchor or []):
                                 _allowed_members.add(_m)
-                            if pref_mem:
-                                _allowed_members.add(pref_mem)
                             _dropped = [
                                 m for m in capable_members if m not in _allowed_members
                             ]
@@ -1465,8 +1445,6 @@ def _generate_plan_impl(
                                     m in pteam for m in fixed_team_anchor
                                 ):
                                     continue
-                                if pref_mem is not None and pref_mem not in pteam:
-                                    continue
                                 if not all(m in capable_members for m in pteam):
                                     continue
                                 _append_legacy_dispatch_candidate_for_team(
@@ -1513,27 +1491,6 @@ def _generate_plan_impl(
                                     ]
                                 else:
                                     teams_iter = []
-                            elif (
-                                pref_mem is not None
-                                and pref_mem in capable_members
-                                and skill_role_priority(pref_mem)[0] == "OP"
-                            ):
-                                others = [m for m in capable_members if m != pref_mem]
-                                if tsize == 1:
-                                    teams_iter = [(pref_mem,)]
-                                elif len(others) >= tsize - 1:
-                                    teams_iter = [
-                                        tuple([pref_mem] + list(rest))
-                                        for rest in itertools.combinations(others, tsize - 1)
-                                    ]
-                                else:
-                                    logging.info(
-                                        "担当OP指定: フォーム人数を満たせないため、指定を無視 task=%s size=%s raw=%r",
-                                        task.get("task_id"),
-                                        tsize,
-                                        pref_raw,
-                                    )
-                                    teams_iter = itertools.combinations(capable_members, tsize)
                             else:
                                 teams_iter = itertools.combinations(capable_members, tsize)
     
@@ -1839,13 +1796,10 @@ def _generate_plan_impl(
                                         "combo_sheet_row_id": _lcid_l,
                                         "combo_preset_team": tuple(best_c["team"]),
                                     }
-                            if pref_mem and pref_mem in best_c["op_list"]:
-                                lead_op = pref_mem
-                            else:
-                                lead_op = min(
-                                    best_c["op_list"],
-                                    key=lambda mm: (skill_role_priority(mm)[1], mm),
-                                )
+                            lead_op = min(
+                                best_c["op_list"],
+                                key=lambda mm: (skill_role_priority(mm)[1], mm),
+                            )
                             best_team = best_c["team"]
                             best_info = {
                                 "start_dt": best_c["team_start"],
@@ -2902,7 +2856,6 @@ def _generate_plan_impl(
             "タスク効率": parse_float_safe(t.get("task_eff_factor"), 1.0),
             "加工途中": "はい" if t.get("in_progress") else "いいえ",
             "特別指定あり": "はい" if t.get("has_special_remark") else "いいえ",
-            "担当OP指定": (t.get("preferred_operator_raw") or "")[:120],
             "回答納期": ans_s,
             "指定納期": spec_s,
             "計画基準納期": basis_s,

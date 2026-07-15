@@ -4845,23 +4845,30 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                                                     MainShellTabId.DELIVERY_CALENDAR_VIEW);
                                             Runnable afterDeliveryCalendarReload =
                                                     () -> {
-                                                        MacroCompleteChime.playIfAvailable(
-                                                                collectUiEnv());
-                                                        showStageCompletionDialogAndWait(
-                                                                "段階2 完了",
-                                                                "段階2 の処理が正常終了しました。",
-                                                                () -> {
-                                                                    selectMainShellTab(
-                                                                            MainShellTabId
-                                                                                    .DELIVERY_CALENDAR_VIEW);
-                                                                    if (deliveryCalendarViewTabController
-                                                                            != null) {
-                                                                        deliveryCalendarViewTabController
-                                                                                .selectDispatchResultInnerTab(
-                                                                                        true);
-                                                                    }
+                                                        exportSharedAladdinEntryWorkbookAfterStage2(
+                                                                outcome -> {
+                                                                    MacroCompleteChime
+                                                                            .playIfAvailable(
+                                                                                    collectUiEnv());
+                                                                    showStageCompletionDialogAndWait(
+                                                                            "段階2 完了",
+                                                                            stage2CompletionHeader(
+                                                                                    outcome),
+                                                                            stage2CompletionContent(
+                                                                                    outcome),
+                                                                            () -> {
+                                                                                selectMainShellTab(
+                                                                                        MainShellTabId
+                                                                                                .DELIVERY_CALENDAR_VIEW);
+                                                                                if (deliveryCalendarViewTabController
+                                                                                        != null) {
+                                                                                    deliveryCalendarViewTabController
+                                                                                            .selectDispatchResultInnerTab(
+                                                                                                    false);
+                                                                                }
+                                                                            });
+                                                                    showRawInputMorningDispatchRateWarningAfterStage2();
                                                                 });
-                                                        showRawInputMorningDispatchRateWarningAfterStage2();
                                                     };
                                             if (deliveryCalendarViewTabController != null) {
                                                 deliveryCalendarViewTabController
@@ -5315,17 +5322,62 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
      * 段階2 完了など: 納期管理ビュー更新後に OK 待ちし、閉じたあと {@code afterOk} を実行する。
      */
     private void showStageCompletionDialogAndWait(
-            String title, String contentText, Runnable afterOk) {
+            String title, String headerText, String contentText, Runnable afterOk) {
         Alert alert = new Alert(AlertType.INFORMATION);
         initDialogOwnerIfSceneReady(alert);
         applyAlertStylesheetsFromOwner(alert);
         alert.setTitle(title);
-        alert.setHeaderText(null);
+        alert.setHeaderText(headerText);
         alert.setContentText(contentText);
         alert.showAndWait();
         if (afterOk != null) {
             afterOk.run();
         }
+    }
+
+    private void exportSharedAladdinEntryWorkbookAfterStage2(
+            Consumer<ResultDispatchTableTabController.AladdinEntryExportOutcome> completion) {
+        if (deliveryCalendarViewTabController != null
+                && deliveryCalendarViewTabController.exportSharedAladdinEntryWorkbookAfterStage2(
+                        completion)) {
+            return;
+        }
+        if (resultDispatchTableTabController != null) {
+            resultDispatchTableTabController.exportSharedAladdinEntryWorkbookAfterStage2(completion);
+            return;
+        }
+        completion.accept(
+                new ResultDispatchTableTabController.AladdinEntryExportOutcome(
+                        null,
+                        List.of(),
+                        new IllegalStateException("配台結果画面を初期化できませんでした。")));
+    }
+
+    static String stage2CompletionHeader(
+            ResultDispatchTableTabController.AladdinEntryExportOutcome outcome) {
+        return outcome != null && outcome.succeeded()
+                ? "アラジン入力用Excelを生成しました"
+                : "Excel自動生成に失敗しました";
+    }
+
+    static String stage2CompletionContent(
+            ResultDispatchTableTabController.AladdinEntryExportOutcome outcome) {
+        StringBuilder text = new StringBuilder("段階2 の処理自体は正常終了しました。");
+        if (outcome != null && outcome.succeeded()) {
+            text.append("\n\n最新: ").append(outcome.result().latestPath());
+            if (outcome.warnings() != null && !outcome.warnings().isEmpty()) {
+                text.append("\n\n警告:\n").append(String.join("\n", outcome.warnings()));
+            }
+            return text.toString();
+        }
+        Exception error = outcome != null ? outcome.error() : null;
+        String reason =
+                error == null
+                        ? "原因不明"
+                        : error.getMessage() != null && !error.getMessage().isBlank()
+                                ? error.getMessage()
+                                : error.toString();
+        return text.append("\n\nExcel自動生成の原因: ").append(reason).toString();
     }
 
     /** 配台試行（段階3）正常終了後: 完了音・配台タブへ切替・完了ダイアログ（段階2と同趣旨）。 */
@@ -7230,81 +7282,74 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
             return true;
         }
 
-        if (mode.runsInProgressDialog()) {
-            var inProgress = planInputTabController.collectInProgressRowsForNextDayDialog(ui);
-            if (!inProgress.isEmpty()) {
-                var entries =
-                        jp.co.pm.ai.desktop.ui.Stage2InProgressNextDayDispatchDialog.prompt(
-                                primaryStage, inProgress);
-                if (entries.isEmpty()) {
-                    appendLog("[stage2] 加工途中の翌日配台量設定をキャンセルしました。");
-                    return false;
-                }
-                try {
-                    jp.co.pm.ai.planning.stage2.Stage2InProgressNextDayDispatchIo.write(
-                            inProgressCache, entries.get());
-                    pendingStage2InProgressNextDayJsonPath =
-                            inProgressCache.toAbsolutePath().normalize();
-                } catch (Exception ex) {
-                    appendLog("[stage2] 翌日配台量 JSON の保存に失敗: " + ex.getMessage());
-                    return false;
-                }
-            } else if (mode == jp.co.pm.ai.planning.stage2.Stage2NextDayDialogMode.IN_PROGRESS) {
-                jp.co.pm.ai.planning.stage2.Stage2InProgressNextDayDispatchIo.deleteIfExists(
-                        inProgressCache);
+        List<jp.co.pm.ai.desktop.ui.Stage2InProgressNextDayDispatchDialog.Row> inProgressRows =
+                mode.runsInProgressDialog()
+                        ? planInputTabController.collectInProgressRowsForNextDayDialog(ui)
+                        : List.of();
+        List<jp.co.pm.ai.desktop.ui.Stage2AladdinTodayExcludeNextDayDispatchDialog.Row> aladdinRows =
+                mode.runsAladdinExcludeDialog()
+                        ? planInputTabController.collectAladdinTodayExcludeRowsForNextDayDialog(ui)
+                        : List.of();
+
+        if (mode == jp.co.pm.ai.planning.stage2.Stage2NextDayDialogMode.ALADDIN_TODAY_EXCLUDE) {
+            var inProgressForHint =
+                    planInputTabController.collectInProgressRowsForNextDayDialog(ui);
+            if (!inProgressForHint.isEmpty()) {
+                appendLog(
+                        "[stage2] 加工途中 "
+                                + inProgressForHint.size()
+                                + " 件は②には表示しません（実加工数>0）。"
+                                + " 設定する場合はラジオ「加工途中…」または「①と②の両方」を選んでください。");
             }
         }
-        if (!mode.runsInProgressDialog()) {
+        if (mode.runsAladdinExcludeDialog() && aladdinRows.isEmpty()) {
+            appendLog(
+                    "[stage2] アラジン当日対象: 0件のため表示を省略"
+                            + "（shaped_aladdin_plan 未読込・当日列なし・実加工>0 の行のみ等）。");
+        }
+
+        if (inProgressRows.isEmpty() && aladdinRows.isEmpty()) {
+            jp.co.pm.ai.planning.stage2.Stage2InProgressNextDayDispatchIo.deleteIfExists(
+                    inProgressCache);
+            jp.co.pm.ai.planning.stage2.Stage2AladdinTodayExcludeNextDayDispatchIo.deleteIfExists(
+                    aladdinCache);
+            return true;
+        }
+
+        var result =
+                jp.co.pm.ai.desktop.ui.Stage2NextDayDispatchDialog.prompt(
+                        primaryStage, inProgressRows, aladdinRows);
+        if (result.isEmpty()) {
+            appendLog("[stage2] 翌日配台量設定をキャンセルしました。");
+            return false;
+        }
+
+        if (mode.runsInProgressDialog() && !result.get().inProgressEntries().isEmpty()) {
+            try {
+                jp.co.pm.ai.planning.stage2.Stage2InProgressNextDayDispatchIo.write(
+                        inProgressCache, result.get().inProgressEntries());
+                pendingStage2InProgressNextDayJsonPath =
+                        inProgressCache.toAbsolutePath().normalize();
+            } catch (Exception ex) {
+                appendLog("[stage2] 翌日配台量 JSON の保存に失敗: " + ex.getMessage());
+                return false;
+            }
+        } else {
             jp.co.pm.ai.planning.stage2.Stage2InProgressNextDayDispatchIo.deleteIfExists(
                     inProgressCache);
         }
 
-        if (mode.runsAladdinExcludeDialog()) {
-            var aladdinRows =
-                    planInputTabController.collectAladdinTodayExcludeRowsForNextDayDialog(ui);
-            if (mode == jp.co.pm.ai.planning.stage2.Stage2NextDayDialogMode.ALADDIN_TODAY_EXCLUDE
-                    || mode == jp.co.pm.ai.planning.stage2.Stage2NextDayDialogMode.BOTH) {
-                var inProgressForHint =
-                        mode == jp.co.pm.ai.planning.stage2.Stage2NextDayDialogMode.ALADDIN_TODAY_EXCLUDE
-                                ? planInputTabController.collectInProgressRowsForNextDayDialog(ui)
-                                : List.<jp.co.pm.ai.desktop.ui.Stage2InProgressNextDayDispatchDialog.Row>of();
-                if (!inProgressForHint.isEmpty()
-                        && mode
-                                == jp.co.pm.ai.planning.stage2.Stage2NextDayDialogMode
-                                        .ALADDIN_TODAY_EXCLUDE) {
-                    appendLog(
-                            "[stage2] 加工途中 "
-                                    + inProgressForHint.size()
-                                    + " 件は②には表示しません（実加工数>0）。"
-                                    + " 設定する場合はラジオ「加工途中…」または「①と②の両方」を選んでください。");
-                }
+        if (mode.runsAladdinExcludeDialog() && !result.get().aladdinExcludeEntries().isEmpty()) {
+            try {
+                jp.co.pm.ai.planning.stage2.Stage2AladdinTodayExcludeNextDayDispatchIo.write(
+                        aladdinCache, result.get().aladdinExcludeEntries());
+                pendingStage2AladdinTodayExcludeJsonPath =
+                        aladdinCache.toAbsolutePath().normalize();
+            } catch (Exception ex) {
+                appendLog("[stage2] アラジン翌日除外 JSON の保存に失敗: " + ex.getMessage());
+                return false;
             }
-            if (!aladdinRows.isEmpty()) {
-                var entries =
-                        jp.co.pm.ai.desktop.ui.Stage2AladdinTodayExcludeNextDayDispatchDialog
-                                .prompt(primaryStage, aladdinRows);
-                if (entries.isEmpty()) {
-                    appendLog("[stage2] アラジン当日配台の翌日除外量設定をキャンセルしました。");
-                    return false;
-                }
-                try {
-                    jp.co.pm.ai.planning.stage2.Stage2AladdinTodayExcludeNextDayDispatchIo.write(
-                            aladdinCache, entries.get());
-                    pendingStage2AladdinTodayExcludeJsonPath =
-                            aladdinCache.toAbsolutePath().normalize();
-                } catch (Exception ex) {
-                    appendLog("[stage2] アラジン翌日除外 JSON の保存に失敗: " + ex.getMessage());
-                    return false;
-                }
-            } else if (mode == jp.co.pm.ai.planning.stage2.Stage2NextDayDialogMode.ALADDIN_TODAY_EXCLUDE) {
-                appendLog(
-                        "[stage2] アラジン翌日除外ダイアログ: 対象行0件のため省略"
-                                + "（shaped_aladdin_plan 未読込・当日列なし・実加工>0 の行のみ等）。");
-                jp.co.pm.ai.planning.stage2.Stage2AladdinTodayExcludeNextDayDispatchIo.deleteIfExists(
-                        aladdinCache);
-            }
-        }
-        if (!mode.runsAladdinExcludeDialog()) {
+        } else {
             jp.co.pm.ai.planning.stage2.Stage2AladdinTodayExcludeNextDayDispatchIo.deleteIfExists(
                     aladdinCache);
         }

@@ -187,7 +187,7 @@ def test_stage3_column_order_excludes_dispatchable_override():
 
 def test_plan_input_sheet_column_order_excludes_original_reference_columns():
     order = pc.plan_input_sheet_column_order()
-    assert pc.PLAN_COL_PREFERRED_OP in order
+    assert "担当OP_指定" not in order
     assert pc.PLAN_COL_SPECIAL_REMARK in order
     assert not any(pc._plan_column_is_original_reference(c) for c in order)
 

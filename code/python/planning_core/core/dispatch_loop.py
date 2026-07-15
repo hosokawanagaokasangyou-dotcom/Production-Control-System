@@ -703,19 +703,12 @@ def _assign_one_roll_trial_order_flow(
         task, task_queue, capable_members
     )
 
-    pref_raw = str(task.get("preferred_operator_raw") or "").strip()
     op_today = [m for m in capable_members if skill_role_priority(m)[0] == "OP"]
-    pref_mem = (
-        _resolve_preferred_op_to_member(pref_raw, op_today, members)
-        if pref_raw
-        else None
-    )
     limited_constraints = _new_dispatch_limited_operator_constraints(
         task,
         members,
         skill_role_priority,
         capable_members,
-        pref_mem,
     )
     if limited_constraints is not None:
         req_num = limited_constraints["required_count"]
@@ -726,7 +719,6 @@ def _assign_one_roll_trial_order_flow(
         op_today = [
             m for m in capable_members if skill_role_priority(m)[0] == "OP"
         ]
-        pref_mem = limited_constraints["preferred_member"]
 
     _gdp_must, _gdp_warns = _active_global_day_process_must_include(
         _gpo, task, current_date, capable_members, members
@@ -737,9 +729,7 @@ def _assign_one_roll_trial_order_flow(
     fixed_team_anchor = (
         limited_constraints["fixed_team"]
         if limited_constraints is not None
-        else _merge_global_day_process_and_pref_anchor(
-            _gdp_must, pref_mem, capable_members
-        )
+        else list(_gdp_must)
     )
     if _gdp_must:
         logging.info(
@@ -803,7 +793,7 @@ def _assign_one_roll_trial_order_flow(
     )
 
     # 組み合わせ表プリセットが存在する工程+機械は、探索で表外メンバーを混ぜず
-    # プリセット記載メンバー（＋担当OP指定・グローバル日付×工程指定の明示メンバー）に限定する。
+    # プリセット記載メンバー（＋グローバル日付×工程指定の明示メンバー）に限定する。
     if TEAM_ASSIGN_COMBO_SHEET_RESTRICT_TO_PRESET_MEMBERS and preset_rows_assign:
         _allowed_members: set = set()
         for _prio, _req, _preset_team, _cid in preset_rows_assign:
@@ -811,8 +801,6 @@ def _assign_one_roll_trial_order_flow(
                 _allowed_members.add(_m)
         for _m in (fixed_team_anchor or []):
             _allowed_members.add(_m)
-        if pref_mem:
-            _allowed_members.add(pref_mem)
         _restricted = [m for m in capable_members if m in _allowed_members]
         _dropped = [m for m in capable_members if m not in _allowed_members]
         if _dropped:
@@ -1197,10 +1185,7 @@ def _assign_one_roll_trial_order_flow(
                 machine_occ_key,
             )
             return None
-        if pref_mem and pref_mem in op_list:
-            lead_op = pref_mem
-        else:
-            lead_op = min(op_list, key=lambda mm: (skill_role_priority(mm)[1], mm))
+        lead_op = min(op_list, key=lambda mm: (skill_role_priority(mm)[1], mm))
         team_prio_sum = sum(skill_role_priority(m)[1] for m in team)
         return {
             "team": team,
@@ -1265,8 +1250,6 @@ def _assign_one_roll_trial_order_flow(
             lo_pt, hi_pt = bounds
             if fixed_team_anchor and not all(m in preset_team for m in fixed_team_anchor):
                 continue
-            if pref_mem is not None and pref_mem not in preset_team:
-                continue
             if not all(m in capable_members for m in preset_team):
                 continue
             if sum(1 for m in preset_team if skill_role_priority(m)[0] == "OP") < 1:
@@ -1299,26 +1282,6 @@ def _assign_one_roll_trial_order_flow(
                 ]
             else:
                 teams_iter = []
-        elif (
-            pref_mem is not None
-            and pref_mem in capable_members
-            and skill_role_priority(pref_mem)[0] == "OP"
-        ):
-            if tsize == 1:
-                _trace_assign(
-                    "候補固定: 担当OP指定=%s のため、 1人フォームは当人のみ試行",
-                    pref_mem,
-                )
-            others = [m for m in capable_members if m != pref_mem]
-            if tsize == 1:
-                teams_iter = [(pref_mem,)]
-            elif len(others) >= tsize - 1:
-                teams_iter = [
-                    tuple([pref_mem] + list(rest))
-                    for rest in itertools.combinations(others, tsize - 1)
-                ]
-            else:
-                teams_iter = itertools.combinations(capable_members, tsize)
         else:
             teams_iter = itertools.combinations(capable_members, tsize)
 
@@ -1371,8 +1334,6 @@ def _assign_one_roll_trial_order_flow(
                     lo_pt, hi_pt = bounds
                     if fixed_team_anchor and not all(m in preset_team for m in fixed_team_anchor):
                         continue
-                    if pref_mem is not None and pref_mem not in preset_team:
-                        continue
                     if not all(m in capable_members for m in preset_team):
                         continue
                     if sum(1 for m in preset_team if skill_role_priority(m)[0] == "OP") < 1:
@@ -1404,21 +1365,6 @@ def _assign_one_roll_trial_order_flow(
                         ]
                     else:
                         teams_iter = []
-                elif (
-                    pref_mem is not None
-                    and pref_mem in capable_members
-                    and skill_role_priority(pref_mem)[0] == "OP"
-                ):
-                    others = [m for m in capable_members if m != pref_mem]
-                    if tsize == 1:
-                        teams_iter = [(pref_mem,)]
-                    elif len(others) >= tsize - 1:
-                        teams_iter = [
-                            tuple([pref_mem] + list(rest))
-                            for rest in itertools.combinations(others, tsize - 1)
-                        ]
-                    else:
-                        teams_iter = itertools.combinations(capable_members, tsize)
                 else:
                     teams_iter = itertools.combinations(capable_members, tsize)
 

@@ -4,8 +4,6 @@ def load_planning_tasks_df():
     """
     2段階目用: 環境変数 ``PM_AI_PLAN_INPUT_PATH`` の表（CSV / Parquet / xlsx）を読み込む。
 
-    「担当OP_指定」列または特別指定備考の AI 出力 preferred_operator で主担当 OP を指名できる（skills のメンバー名とあいまい一致）。
-    メイン「再優先特別記載」の task_preferred_operators は generate_plan 側で最優先マージされる。
     「配台不要」がオン（TRUE/1/はい 等）の行は配台対象外（**シート上の列の値をそのまま**解釈する）。
     読み込み後、同一依頼NO・重複機械名があるグループの工程「分割」行へ空なら「配台不要」=yes（段階1と同じ）。
     「設定_配台不要工程」シートの**行同期・保守**（``run_exclude_rules_sheet_maintenance``）は、
@@ -443,21 +441,6 @@ def _apply_global_priority_solo_heuristic(blob: str, coerced: dict) -> dict:
         )
         return out
     return coerced
-def _coerce_task_preferred_operators_dict(raw_val) -> dict:
-    """AI の task_preferred_operators を {依頼NO: 並び} に正規化。"""
-    out = {}
-    if not isinstance(raw_val, dict):
-        return out
-    for k, v in raw_val.items():
-        ks = str(k).strip()
-        if not ks:
-            continue
-        if v is None or (isinstance(v, float) and pd.isna(v)):
-            continue
-        vs = str(v).strip()
-        if vs and vs.lower() not in ("nan", "none", "null"):
-            out[ks] = vs
-    return out
 def _normalize_factory_closure_dates_iso_list(val, default_year: int) -> list[str]:
     """
     AI またはフォールバックの日付リストを YYYY-MM-DD 文字列の昇順ユニークに正規化。
@@ -562,98 +545,6 @@ def _global_speed_multiplier_for_row(process_name: str, machine_name: str, rules
     if combined <= 0:
         return 1.0
     return combined
-def _infer_global_day_process_rules_from_free_text(text: str, ref_y: int) -> list[dict]:
-    """
-    Gemini は task_preferred_operators に誤って長文を入れた場合など」
-    自然言語断片から global_day_process_operator_rules 相当を推定する（保守的）。
-    例: 「2026/4/4 工程名:EC 森下と宮島を配台」
-    """
-    t = unicodedata.normalize("NFKC", str(text or "")).strip()
-    if len(t) < 6:
-        return []
-    dates = _extract_calendar_dates_from_text(t, int(ref_y))
-    if not dates:
-        return []
-    d0 = dates[0]
-    proc_m = re.search(
-        r"工程名?\s*[:：]?\s*([A-Za-z0-9一-龯ー・〆々]+)",
-        t,
-    )
-    pc = proc_m.group(1).strip() if proc_m else ""
-    if not pc:
-        m2 = re.search(r"([\dA-Za-z一-龯ー・〆々]{1,12})\s*工程", t)
-        pc = m2.group(1).strip() if m2 else ""
-    if not pc:
-        return []
-    names: list[str] = []
-    for m in re.finditer(
-        r"([\u3040-\u9FFF々ー・A-Za-z・〆々]{1,16}?)\s*と\s*([\u3040-\u9FFF々ー・A-Za-z・〆々]{1,16}?)\s*を?\s*(?:配台|酝属|組ませ|同一フォーム)",
-        t,
-    ):
-        a, b = m.group(1).strip(), m.group(2).strip()
-        if a:
-            names.append(a)
-        if b:
-            names.append(b)
-    if len(names) < 2:
-        return []
-    return [
-        {
-            "date": d0.isoformat(),
-            "process_contains": pc,
-            "operator_names": names[:12],
-        }
-    ]
-def _salvage_malformed_global_priority_gemini_dict(raw: dict, ref_y: int) -> dict:
-    """
-    Gemini は task_preferred_operators に **配列**や誤スキーマ（workstation_id 等）を返したとし」
-    杨でうに global_day_process_operator_rules / scheduler_notes_ja へ救済れる。
-    """
-    out = dict(raw)
-    tpo = out.get("task_preferred_operators")
-    if not isinstance(tpo, list) or not tpo:
-        return out
-    narratives: list[str] = []
-    extra_rule_objs: list[dict] = []
-    for item in tpo:
-        if not isinstance(item, dict):
-            continue
-        onames = item.get("operator_names")
-        if isinstance(onames, list) and (
-            item.get("date") is not None or item.get("process_contains")
-        ):
-            extra_rule_objs.append(item)
-            continue
-        for key in ("workstation_id", "schedule_notes_ai", "schedule_notes", "note", "text"):
-            s = str(item.get(key) or "").strip()
-            if len(s) >= 12:
-                narratives.append(s[:800])
-        for _k, v in item.items():
-            if _k in (
-                "factory_closure_dates",
-                "operator_names",
-                "date",
-                "process_contains",
-            ):
-                continue
-            if isinstance(v, str) and len(v) > 35 and ("酝" in v or "工程" in v):
-                narratives.append(v[:800])
-    out["task_preferred_operators"] = {}
-    gdp_existing = out.get("global_day_process_operator_rules")
-    gdp_list: list = list(gdp_existing) if isinstance(gdp_existing, list) else []
-    gdp_list.extend(extra_rule_objs)
-    seen_n: set[str] = set()
-    for nb in narratives:
-        if nb in seen_n:
-            continue
-        seen_n.add(nb)
-        gdp_list.extend(_infer_global_day_process_rules_from_free_text(nb, ref_y))
-    out["global_day_process_operator_rules"] = gdp_list
-    if narratives:
-        sn0 = str(out.get("scheduler_notes_ja") or "").strip()
-        add = " | ".join(n[:280] for n in narratives[:4])
-        out["scheduler_notes_ja"] = (sn0 + " " + add).strip()[:600]
-    return out
 def _coerce_global_priority_override_dict(raw, reference_year: int | None = None) -> dict:
     """Gemini 戻りを配台用フラグ・工場休業日リストに正規化。"""
     y0 = int(reference_year) if reference_year is not None else date.today().year
@@ -672,7 +563,6 @@ def _coerce_global_priority_override_dict(raw, reference_year: int | None = None
         "ignore_skill_requirements": False,
         "ignore_need_minimum": False,
         "abolish_all_scheduling_limits": False,
-        "task_preferred_operators": {},
         "interpretation_ja": "",
         "factory_closure_dates": [],
         "scheduler_notes_ja": "",
@@ -681,14 +571,10 @@ def _coerce_global_priority_override_dict(raw, reference_year: int | None = None
     }
     if not isinstance(raw, dict):
         return base
-    raw = _salvage_malformed_global_priority_gemini_dict(raw, y0)
     base["ignore_skill_requirements"] = as_bool(raw.get("ignore_skill_requirements"))
     base["ignore_need_minimum"] = as_bool(raw.get("ignore_need_minimum"))
     base["abolish_all_scheduling_limits"] = as_bool(
         raw.get("abolish_all_scheduling_limits")
-    )
-    base["task_preferred_operators"] = _coerce_task_preferred_operators_dict(
-        raw.get("task_preferred_operators")
     )
     ij = raw.get("interpretation_ja")
     if ij is not None and not (isinstance(ij, float) and pd.isna(ij)):
@@ -743,7 +629,7 @@ def analyze_global_priority_override_comment(
     自然言語の文脈切り分け・改行の別指示解釈は AI に任せ」戻り値のキーの値システムは機械適用する。
 
     - factory_closure_dates: **工場全体**で稼働しない日（全員非稼働扱い）の YYYY-MM-DD 文字列の配列。該当なしは []。
-    - ignore_skill_requirements / ignore_need_minimum / abolish_all_scheduling_limits / task_preferred_operators: 従来どおり。
+    - ignore_skill_requirements / ignore_need_minimum / abolish_all_scheduling_limits: 従来どおり。
     - global_speed_rules: **工程名・機械名**への部分一致（坄キーワードは **どうらの列にあっても坯**）で」既存の加工速度（シート＝上書き後）に **乗算**れるルールの配列。該当なしは []。
     - global_day_process_operator_rules: **日付＋工程名の部分一致＋複数メンバー**を」当日しの工程のタスクの**フォーム全員に必う含むる**ルールの配列。該当なしは []。
     - scheduler_notes_ja: 上記に蝽とししれない補足や靋用メモ（速度は可能なら global_speed_rules も併記）。
@@ -807,8 +693,8 @@ A) **factory_closure_dates** （配列・必須）
    - 該当はなけれみ **空の配列 []**（キー省略試行）。
    - 年は省略されでいれみ西暦 {ref_y} 年として解釈。
 
-B) **ignore_skill_requirements** / **ignore_need_minimum** / **abolish_all_scheduling_limits** / **task_preferred_operators**
-   - 従来どおり（配台のスキル無視・人数1固定・制限撤廃・依頼NO→主担当OP指定）。該当なけれみ false または {{}}。
+B) **ignore_skill_requirements** / **ignore_need_minimum** / **abolish_all_scheduling_limits**
+   - 従来どおり（配台のスキル無視・人数1固定・制限撤廃）。該当なけれみ false。
 
 C) **global_speed_rules** （配列・必須）
    - 特定の **工程名**（Excel「工程名」列）や **機械名**（「機械名」列）に対し、**既存の加工速度に掛ける倍率** を指定するオブジェクトのリスト。
@@ -831,8 +717,7 @@ E) **interpretation_ja** （文字列・必須）
 
 F) **global_day_process_operator_rules** （配列・必須）
    - **特定の稼働日**かつ **工程名（Excel「工程名」列）の部分一致** に当ではまるタスクについで」
-     列挙した **全メンバーを同一フォームに必う含むる** ルール（**OP/AS どうらのスキルでも坯**。並び解決は **担当OP指定とともに**）。
-   - **依頼NOは分かる主担当の1坝指定**は **task_preferred_operators** を使うこと。原文は **「◯月◯日の△工程にＡとＢを配台」** のよごに **日付・工程・複数坝**のときは **本配列**へ蝽とれ。
+     列挙した **全メンバーを同一フォームに必う含むる** ルール（**OP/AS どうらのスキルでも坯**）。
    - 坄オブジェクトのキー:
      - "date": **YYYY-MM-DD**（しの日に割り当でるロールに適用）
      - "process_contains": 工程名に **部分一致**（NFKC 想定）。例: "EC"
@@ -847,7 +732,6 @@ F) **global_day_process_operator_rules** （配列・必須）
 - "ignore_skill_requirements": true または false
 - "ignore_need_minimum": true または false
 - "abolish_all_scheduling_limits": true または false
-- "task_preferred_operators": **JSON オブジェクトのみ**（キー=依頼NO・値=主担当並び）。**配列にしてはならない**。該当なしは {{}}
 - "global_speed_rules": オブジェクトの配列（該当なしは []）
 - "global_day_process_operator_rules": オブジェクトの配列（該当なしは []）
 - "scheduler_notes_ja": 文字列
@@ -903,19 +787,17 @@ F) **global_day_process_operator_rules** （配列・必須）
             pass
         put_cached_ai_result(ai_cache, cache_key, coerced, content_key=cache_fingerprint)
         save_ai_cache(ai_cache)
-        _tpo = coerced.get("task_preferred_operators") or {}
         _fcd = coerced.get("factory_closure_dates") or []
         _gsr = coerced.get("global_speed_rules") or []
         _gdp = coerced.get("global_day_process_operator_rules") or []
         logging.info(
-            "メイン再優先特記: AI 解釈 factory休業=%s日 速度ルール=%s件 日×工程フォーム=%s件 skill=%s need1=%s abolish=%s task_pref=%s件 — %s",
+            "メイン再優先特記: AI 解釈 factory休業=%s日 速度ルール=%s件 日×工程フォーム=%s件 skill=%s need1=%s abolish=%s — %s",
             len(_fcd),
             len(_gsr),
             len(_gdp),
             coerced["ignore_skill_requirements"],
             coerced["ignore_need_minimum"],
             coerced.get("abolish_all_scheduling_limits"),
-            len(_tpo),
             coerced.get("interpretation_ja", "")[:100],
         )
         if ai_sheet_sink is not None:
@@ -948,7 +830,6 @@ def default_result_task_sheet_column_order(max_history_len: int) -> list:
         "タスク効率",
         "加工途中",
         "特別指定あり",
-        "担当OP指定",
         "回答納期",
         "指定納期",
         "計画基準納期",
@@ -3136,8 +3017,8 @@ def build_actual_timeline_events(
         _normalize_roll_detail_daily_actual_qty_duplicate(events)
     return events
 TASK_SPECIAL_AI_LAST_RESPONSE_FILE = "ai_task_special_remark_last.txt"
-TASK_SPECIAL_CACHE_KEY_PREFIX = "TASK_SPECIAL_v3|"
-GLOBAL_PRIORITY_OVERRIDE_CACHE_PREFIX = "GLOBAL_PRIO_v8|"
+TASK_SPECIAL_CACHE_KEY_PREFIX = "TASK_SPECIAL_v4|"
+GLOBAL_PRIORITY_OVERRIDE_CACHE_PREFIX = "GLOBAL_PRIO_v9|"
 def _normalize_special_task_id_for_ai(val):
     """
     依頼NOをキャッシュキー・プロンプト行で一貫させる。
@@ -3328,6 +3209,17 @@ def _repair_task_special_ai_wrong_top_level_keys(parsed: dict, tasks_df) -> dict
         else:
             parsed[bad_key] = val
     return parsed
+def _drop_retired_preferred_operator_ai_keys(value):
+    """旧AIキャッシュを含む任意の入れ子構造から単一担当者指定を除去する。"""
+    if isinstance(value, dict):
+        return {
+            key: _drop_retired_preferred_operator_ai_keys(item)
+            for key, item in value.items()
+            if key not in ("preferred_operator", "task_preferred_operators")
+        }
+    if isinstance(value, list):
+        return [_drop_retired_preferred_operator_ai_keys(item) for item in value]
+    return copy.deepcopy(value)
 def _normalize_task_special_scope_str(s) -> str:
     if s is None or (isinstance(s, float) and pd.isna(s)):
         return ""
@@ -3716,12 +3608,6 @@ def _plan_sheet_write_global_parse_block_to_ws(
             "はい" if gpo.get("abolish_all_scheduling_limits") else "いいえ",
         ),
         (
-            "グローバルOP指定",
-            json.dumps(gpo.get("task_preferred_operators") or {}, ensure_ascii=False)
-            if gpo.get("task_preferred_operators")
-            else "（なし）",
-        ),
-        (
             "日付×工程フォーム指定",
             json.dumps(
                 gpo.get("global_day_process_operator_rules") or [],
@@ -3954,7 +3840,6 @@ def analyze_task_special_remarks(tasks_df, reference_year=None, ai_sheet_sink: d
     """
     「配台計画_タスク入力」の「特別指定_備考」を AI で構造化（セルに値はある項目は後段でセルを優先）。
     「配台試行」はオンな行はプロンプトに載せない（API 節約・当該行は配台しないため）。
-    担当OP指定はプロンプトの返坴契約でモデルに preferred_operator を出力させる（備考を正覝表睾で切り出す処理は行ゝない）。
     json/ai_remarks_cache.json に TTL AI_CACHE_TTL_SECONDS でキャッシュ（同一入力・同一基準年なら API を呼みない）。
     依頼NOは数値表記・全角などを正規化してキーを安定化し、基準年は指紋に含むで日付解釈の変化とキャッシュの食い靕いを防し。
 
@@ -3962,7 +3847,7 @@ def analyze_task_special_remarks(tasks_df, reference_year=None, ai_sheet_sink: d
       process_name, machine_name … 当該備考セルはある行の工程名・機械名（プロンプトの行と一致）
       restrict_to_process_name, restrict_to_machine_name … 省略または空なら同一依頼NOの全工程・全機械行に適用。
       しの他 required_op, speed_override, task_efficiency, priority, start_date, start_time,
-      target_completion_date, ship_by_date, preferred_operator など。
+      target_completion_date, ship_by_date など。
     """
     lines = _task_special_prompt_lines(tasks_df)
     if not lines:
@@ -4005,7 +3890,7 @@ def analyze_task_special_remarks(tasks_df, reference_year=None, ai_sheet_sink: d
         if ai_sheet_sink is not None:
             ai_sheet_sink["特別指定備考_AI_API"] = "なし（キャッシュ使用）"
             ai_sheet_sink["特別指定備考_Geminiモデル"] = "—（キャッシュ利用・今回 API 未実行）"
-        out = copy.deepcopy(cached_parsed)
+        out = _drop_retired_preferred_operator_ai_keys(cached_parsed)
         if isinstance(out, dict):
             _repair_task_special_ai_wrong_top_level_keys(out, tasks_df)
         return out
@@ -4048,13 +3933,6 @@ def analyze_task_special_remarks(tasks_df, reference_year=None, ai_sheet_sink: d
 - しの場合」配台ロジックは **同一依頼NOの別行（例: エンボス行と分割行）にも指示を適用** れる。
 - 絞る場合は」原文で示された識別名を入れる（Excel の工程名・機械名と照合しやれい表記）。
 
-■ preferred_operator（文字列）— 条件付し**必須**
-- **必須条件**: 当該依頼の原文を読み」「**誰はこの加工・作業の主担当（OP）として割り当でたいか**」は **愝味として** 読み坖れるとし。
-  例: 特定の人にやってもらご＝しの人に任せる＝担当はあの人＝OPは〜＝〜さん（並び）に依頼」など。**表睾の型に依存せう**」文の愝味で判断れる。
-- **満たしたとしの出力義務**: 上記の愝味は成立れると判断したオブジェクトでは」**必う** キー `preferred_operator` を含む」値は **空でない文字列** とれる。併せで **process_name / machine_name は必須**（例: `{{"process_name":"…","machine_name":"…","preferred_operator":"…"}}`）。
-- **値の形式**: 原文で示された **担当者の識別名を1坝分**（姓・坝・ニックフォーム等」原文に睾れた表記を維挝）。末尾の敬称（さん・坛・氝）のみ除去。例:「森岡さんにやってもらいした」→ `"森岡"`。
-- **出力してはいけないとし**: 原文に担当者の指愝は **一切ない** と判断した依頼NOでは `preferred_operator` キー自体を **省略** れる（空文字列も付けない）。
-
 ■ しの他フィールド（required_op, speed_override, task_efficiency, priority, start_date, start_time, target_completion_date, ship_by_date）
 - 原文から **明確に** 読み坖れる場合のみ出力。読み取れない数値・日付は **省略**（推測で埋ゝない）。
 
@@ -4069,7 +3947,6 @@ def analyze_task_special_remarks(tasks_df, reference_year=None, ai_sheet_sink: d
 」フィールド一覧（型の参考）】
 - process_name, machine_name: 文字列（必須。プロンプト行と一致）
 - restrict_to_process_name, restrict_to_machine_name: 文字列（任愝。陝定なら）
-- preferred_operator: 文字列（上記契約に従ご）
 - required_op: 正の整数
 - speed_override: 正の数（m/分）。※配台の実効速度は列「加工速度_上書き」「加工速度」のみ使用。本キーは速度計算には反映せず、列との食い違い検出に用いる。
 - task_efficiency: 0〜1
@@ -4079,21 +3956,17 @@ def analyze_task_special_remarks(tasks_df, reference_year=None, ai_sheet_sink: d
 
 」解釈の指針】
 - 「間に坈ごよごに」「繰り上きる」→ priority を上きる（数値を下きる）。日付は文中にあれみ target_completion_date または ship_by_date に入れる。
-- 担当者指定は **愝味睆解** で preferred_operator を決ゝる（特定のキーワード列挙に頼らない）。
 - 数値・日付は推測で補ゝない。
 - **備考は特定の工程・機械にの値言坊していない陝り**」restrict_to_* は空にし、同一依頼NOの他行にも適用される形にれる。
 
 」出力直後の自己検証（必う実行してから JSON を閉もる）】
 - 」特別指定原文】の **坄行** についで」対応れるオブジェクトに **process_name** と **machine_name** はあるか。
 - 同一依頼NOは複数行あるとしは **配列** で坄行に1オブジェクト」または革切にマージした坘一オブジェクト＋restrict の靋用を一貫させる。
-- 「主担当OPの指愝」はある行では **非空の preferred_operator** を付ける。
-
 」出力形式の例】（依頼NO・値は実データに合わせ替ごること）
 {{
   "W3-14": {{
     "process_name": "検査",
-    "machine_name": "ラインA",
-    "preferred_operator": "森岡"
+    "machine_name": "ラインA"
   }},
   "Y3-26": {{
     "process_name": "コーティング",
@@ -4130,6 +4003,7 @@ def analyze_task_special_remarks(tasks_df, reference_year=None, ai_sheet_sink: d
         record_gemini_response_usage(res, gem_model_used)
         parsed = _parse_and_log_task_special_gemini_response(res, prompt_text=prompt)
         if parsed is not None:
+            parsed = _drop_retired_preferred_operator_ai_keys(parsed)
             _repair_task_special_ai_wrong_top_level_keys(parsed, tasks_df)
             put_cached_ai_result(
                 ai_cache, cache_key, parsed, content_key=cache_fingerprint
@@ -4154,39 +4028,6 @@ def analyze_task_special_remarks(tasks_df, reference_year=None, ai_sheet_sink: d
             ai_sheet_sink["特別指定備考_AI_API"] = f"失敗: {e}"[:500]
             ai_sheet_sink["特別指定備考_Geminiモデル"] = "—（呼び出し失敗）"
         return {}
-def _merge_preferred_operator_cell_and_ai(row, ai_for_tid):
-    """Excel「担当OP_指定」を優先し、空なら AI の preferred_operator。"""
-    ai = ai_for_tid if isinstance(ai_for_tid, dict) else {}
-    v = row.get(PLAN_COL_PREFERRED_OP)
-    if v is not None and not (isinstance(v, float) and pd.isna(v)):
-        s = str(v).strip()
-        if s and s.lower() not in ("nan", "none", "null"):
-            return s
-    a = ai.get("preferred_operator")
-    if a is not None:
-        s = str(a).strip()
-        if s and s.lower() not in ("nan", "none", "null"):
-            return s
-    return ""
-def _global_override_preferred_operator_for_task(tpref, task_id) -> str | None:
-    """
-    メイン「再優先特別記載」の task_preferred_operators。
-    キーは依頼NO（大文字・尝文字の差は無視）。
-    """
-    if not isinstance(tpref, dict) or not tpref:
-        return None
-    tid = str(task_id).strip()
-    if not tid:
-        return None
-    tlo = tid.lower()
-    for k, v in tpref.items():
-        if str(k).strip().lower() != tlo:
-            continue
-        s = str(v).strip()
-        if s and s.lower() not in ("nan", "none", "null"):
-            return s
-        return None
-    return None
 def _planning_speed_override_sheet_column_only(row) -> float | None:
     """廃止: 加工速度は列「加工速度」のみ。互換のため常に None。"""
     return None
@@ -4276,12 +4117,6 @@ def detect_planning_remark_ai_conflicts(row, ai_for_tid):
             av = _ai_float_for_conflict(ai, "speed_override")
             if av is not None and abs(cv - av) > 1e-5:
                 out.add(TASK_COL_SPEED)
-
-    if _plan_row_cell_nonempty(row, PLAN_COL_PREFERRED_OP):
-        cv = _normalize_person_name_for_match(row.get(PLAN_COL_PREFERRED_OP))
-        av = _normalize_person_name_for_match(ai.get("preferred_operator"))
-        if cv and av and cv != av:
-            out.add(PLAN_COL_PREFERRED_OP)
 
     if out:
         out.add(PLAN_COL_SPECIAL_REMARK)
@@ -4686,7 +4521,6 @@ def _ai_task_special_entry_has_dispatch_priority_signals(ai_for_row) -> bool:
     """
     備考テキストのキーワード検出に漏れても、AI が既に priority / 日付 / 人数 等を返しているときは
     build_task_queue_from_planning_df 側で allow_ai_dispatch_priority_from_remark を立てる。
-    preferred_operator のみのときは False（従来どおりセル側マージで足りる）。
     """
     if not isinstance(ai_for_row, dict) or not ai_for_row:
         return False
@@ -4696,7 +4530,6 @@ def _ai_task_special_entry_has_dispatch_priority_signals(ai_for_row) -> bool:
             "machine_name",
             "restrict_to_process_name",
             "restrict_to_machine_name",
-            "preferred_operator",
         }
     )
     for k, v in ai_for_row.items():

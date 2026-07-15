@@ -1,6 +1,7 @@
 package jp.co.pm.ai.planning.stage2.output;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 import java.io.InputStream;
 import java.nio.file.Files;
@@ -18,6 +19,10 @@ class Stage2PythonishPlanWorkbookLayoutTest {
 
     @Test
     void sheetNamesAndOrderMatchPythonStage2(@TempDir Path tmp) throws Exception {
+        assertEquals(27, Stage2ResultTaskListCanonicalHeaders.DEFAULT_ORDER_NO_HISTORY.size());
+        assertFalse(
+                Stage2ResultTaskListCanonicalHeaders.DEFAULT_ORDER_NO_HISTORY.contains(
+                        "担当OP指定"));
         Path x = tmp.resolve("計画test.xlsx");
         PlanInputTabularIo.TabularSheet tab =
                 new PlanInputTabularIo.TabularSheet(List.of("依頼NO"), List.of(List.of("X1")));

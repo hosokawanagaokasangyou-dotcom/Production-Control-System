@@ -17,7 +17,6 @@ def _task(**overrides):
         "machine": "工程A",
         "machine_name": "機械1",
         "limited_operator_names": (),
-        "preferred_operator_raw": "",
     }
     task.update(overrides)
     return task
@@ -32,7 +31,7 @@ def test_limited_operator_blank_is_backward_compatible():
     assert pc._parse_limited_operator_json_cell(None, 7, "REQ-42") == ()
 
     result = pc._prepare_limited_operator_team_constraints(
-        _task(), ["甲", "乙"], _role_map({"甲": ("OP", 1)}), ["甲"], None
+        _task(), ["甲", "乙"], _role_map({"甲": ("OP", 1)}), ["甲"]
     )
 
     assert result is None
@@ -93,14 +92,13 @@ def test_limited_operator_rejects_unknown_and_ambiguous_names(
 
 
 def test_limited_operator_overrides_need_members_and_preset_for_only_that_row():
-    task = _task(limited_operator_names=("乙", "甲"), preferred_operator_raw="甲")
+    task = _task(limited_operator_names=("乙", "甲"))
 
     result = pc._prepare_limited_operator_team_constraints(
         task,
         ["甲", "乙", "丙"],
         _role_map({"甲": ("OP", 1), "乙": ("AS", 2), "丙": ("OP", 3)}),
         ["甲", "乙", "丙"],
-        "甲",
     )
 
     assert result["required_count"] == 2
@@ -108,18 +106,18 @@ def test_limited_operator_overrides_need_members_and_preset_for_only_that_row():
     assert result["capable_members"] == ["乙", "甲"]
     assert result["fixed_team"] == ["乙", "甲"]
     assert result["preset_rows"] == [(0, 2, ("乙", "甲"), None)]
-    assert result["preferred_member"] == "甲"
+    assert "preferred_member" not in result
 
 
-def test_limited_operator_preferred_outside_team_is_conflict():
-    with pytest.raises(pc.PlanningValidationError, match="矛盾"):
-        pc._prepare_limited_operator_team_constraints(
-            _task(limited_operator_names=("甲",), preferred_operator_raw="乙"),
-            ["甲", "乙"],
-            _role_map({"甲": ("OP", 1), "乙": ("OP", 2)}),
-            ["甲", "乙"],
-            "乙",
-        )
+def test_limited_operator_ignores_retired_preferred_operator_payload():
+    result = pc._prepare_limited_operator_team_constraints(
+        _task(limited_operator_names=("甲",), preferred_operator_raw="乙"),
+        ["甲", "乙"],
+        _role_map({"甲": ("OP", 1), "乙": ("OP", 2)}),
+        ["甲", "乙"],
+    )
+
+    assert result["fixed_team"] == ["甲"]
 
 
 @pytest.mark.parametrize(
@@ -136,7 +134,6 @@ def test_limited_operator_rejects_unqualified_or_as_only_team(roles, reason):
             ["甲", "乙"],
             _role_map(roles),
             ["甲", "乙"],
-            None,
         )
 
     assert reason in str(exc_info.value)
@@ -150,7 +147,6 @@ def test_limited_operator_nonattendance_does_not_fallback_to_other_member():
         ["甲", "乙", "丙"],
         _role_map({"甲": ("OP", 1), "乙": ("AS", 2), "丙": ("OP", 3)}),
         ["甲", "丙"],
-        None,
     )
 
     assert result["capable_members"] == []

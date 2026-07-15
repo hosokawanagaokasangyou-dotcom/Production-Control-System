@@ -16,6 +16,8 @@ import javafx.collections.ObservableList;
 public final class PlanInputDeprecatedOverrideColumnSupport {
 
     private static final String OVERRIDE_SUFFIX = "_上書き";
+    private static final List<String> RETIRED_PREFERRED_OPERATOR_COLUMNS =
+            List.of("担当OP_指定", "担当OP指定");
 
     private static final Map<String, String> OVERRIDE_TO_BASE =
             Map.of(
@@ -57,7 +59,15 @@ public final class PlanInputDeprecatedOverrideColumnSupport {
 
     public static boolean isDeprecatedOverrideOrReferenceColumn(String columnTitle) {
         return isDeprecatedOverrideColumn(columnTitle)
-                || isOriginalReferenceColumn(columnTitle);
+                || isOriginalReferenceColumn(columnTitle)
+                || isRetiredPreferredOperatorColumn(columnTitle);
+    }
+
+    private static boolean isRetiredPreferredOperatorColumn(String columnTitle) {
+        if (columnTitle == null) {
+            return false;
+        }
+        return RETIRED_PREFERRED_OPERATOR_COLUMNS.contains(normalize(columnTitle));
     }
 
     /**

@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -66,6 +67,15 @@ public final class ResultDispatchTableTabController {
 
     private static final ObjectMapper JSON = new ObjectMapper();
 
+    public record AladdinEntryExportOutcome(
+            DispatchAladdinEntryWorkbookExporter.ExportResult result,
+            List<String> warnings,
+            Exception error) {
+        public boolean succeeded() {
+            return error == null && result != null;
+        }
+    }
+
     private static final String HINT_TEXT =
             "PM_AI_RESULT_DISPATCH_TABLE_DIR またはデフォルトの code/output/"
                     + " 配下の JSON を表示します。再読みで"
@@ -76,11 +86,7 @@ public final class ResultDispatchTableTabController {
     @FXML
     private Button refreshButton;
 
-    @FXML
-    private Button aladdinEntryExportButton;
-
-    @FXML
-    private Button aladdinEntryReloadExportButton;
+    @FXML private Button aladdinEntryReloadExportButton;
 
     @FXML
     private Button aladdinEntryLocalExportButton;
@@ -161,11 +167,7 @@ public final class ResultDispatchTableTabController {
 
     private boolean embeddedInDeliveryCalendar;
 
-    private ButtonAttentionGlow aladdinEntryExportGlow;
-    private ButtonAttentionGlow aladdinEntryReloadExportGlow;
     private ButtonAttentionGlow aladdinEntryOpenLatestGlow;
-    private ButtonAttentionGlow aladdinEntryOpenGenerationsGlow;
-    private boolean aladdinExportAttentionDismissed;
 
     @FXML
     private void initialize() {
@@ -237,9 +239,9 @@ public final class ResultDispatchTableTabController {
     }
 
     /**
-     * 納期管理ビュー内「配台結果」子タブ表示時: 「操作・ソース」を開き、必要なら Excel 出力ボタンを光らせる。
+     * 納期管理ビュー内「配台結果」子タブ表示時: 「操作・ソース」を開き、必要なら「最新を開く」を光らせる。
      *
-     * @param promptExcelExportAttention 段階2 完了直後など、Excel 出力を促すグローを付ける
+     * @param promptExcelExportAttention 段階2 完了直後など、生成済みExcelを開くグローを付ける
      */
     public void onEmbeddedDispatchResultTabShown(boolean promptExcelExportAttention) {
         if (!embeddedInDeliveryCalendar) {
@@ -247,10 +249,7 @@ public final class ResultDispatchTableTabController {
         }
         expandOperationsSourcePane();
         if (promptExcelExportAttention) {
-            aladdinExportAttentionDismissed = false;
-        }
-        if (promptExcelExportAttention && !aladdinExportAttentionDismissed) {
-            startAladdinExportAttentionGlow();
+            startAladdinOpenAttentionGlow();
         }
     }
 
@@ -260,44 +259,18 @@ public final class ResultDispatchTableTabController {
         }
     }
 
-    private void startAladdinExportAttentionGlow() {
-        if (aladdinEntryExportGlow == null && aladdinEntryExportButton != null) {
-            aladdinEntryExportGlow = new ButtonAttentionGlow(aladdinEntryExportButton);
-        }
-        if (aladdinEntryReloadExportGlow == null && aladdinEntryReloadExportButton != null) {
-            aladdinEntryReloadExportGlow = new ButtonAttentionGlow(aladdinEntryReloadExportButton);
-        }
-        if (aladdinEntryExportGlow != null) {
-            aladdinEntryExportGlow.startIfIdle();
-        }
-        if (aladdinEntryReloadExportGlow != null) {
-            aladdinEntryReloadExportGlow.startIfIdle();
-        }
-    }
-
-    private void dismissAladdinExportAttentionGlow() {
-        aladdinExportAttentionDismissed = true;
-        ButtonAttentionGlow.stopAll(aladdinEntryExportGlow, aladdinEntryReloadExportGlow);
-    }
-
     private void startAladdinOpenAttentionGlow() {
         expandOperationsSourcePane();
         if (aladdinEntryOpenLatestGlow == null && aladdinEntryOpenLatestButton != null) {
             aladdinEntryOpenLatestGlow = new ButtonAttentionGlow(aladdinEntryOpenLatestButton);
         }
-        if (aladdinEntryOpenGenerationsGlow == null && aladdinEntryOpenGenerationsButton != null) {
-            aladdinEntryOpenGenerationsGlow = new ButtonAttentionGlow(aladdinEntryOpenGenerationsButton);
-        }
         if (aladdinEntryOpenLatestGlow != null) {
             aladdinEntryOpenLatestGlow.startIfIdle();
-        }
-        if (aladdinEntryOpenGenerationsGlow != null) {
-            aladdinEntryOpenGenerationsGlow.startIfIdle();
         }
     }
 
     private void dismissAladdinOpenAttentionGlow() {
-        ButtonAttentionGlow.stopAll(aladdinEntryOpenLatestGlow, aladdinEntryOpenGenerationsGlow);
+        ButtonAttentionGlow.stopAll(aladdinEntryOpenLatestGlow);
     }
 
     private void onLeadingColumnCountCommitted(int n) {
@@ -688,11 +661,6 @@ public final class ResultDispatchTableTabController {
     }
 
     @FXML
-    private void onExportAladdinEntryWorkbookAction() {
-        runAladdinEntryExport(false, DispatchAladdinEntryWorkbookExporter.Destination.SHARED);
-    }
-
-    @FXML
     private void onReloadAladdinPlanAndExportEntryWorkbookAction() {
         runAladdinEntryExport(true, DispatchAladdinEntryWorkbookExporter.Destination.SHARED);
     }
@@ -705,14 +673,35 @@ public final class ResultDispatchTableTabController {
     private void runAladdinEntryExport(
             boolean reloadAladdinPlanFromSource,
             DispatchAladdinEntryWorkbookExporter.Destination destination) {
+        runAladdinEntryExport(reloadAladdinPlanFromSource, destination, true, null);
+    }
+
+    public void exportSharedAladdinEntryWorkbookAfterStage2(
+            Consumer<AladdinEntryExportOutcome> completion) {
+        runAladdinEntryExport(
+                false,
+                DispatchAladdinEntryWorkbookExporter.Destination.SHARED,
+                false,
+                completion);
+    }
+
+    private void runAladdinEntryExport(
+            boolean reloadAladdinPlanFromSource,
+            DispatchAladdinEntryWorkbookExporter.Destination destination,
+            boolean showCompletionDialog,
+            Consumer<AladdinEntryExportOutcome> completion) {
         if (shell == null) {
+            if (completion != null) {
+                completion.accept(
+                        new AladdinEntryExportOutcome(
+                                null, List.of(), new IllegalStateException("画面の初期化が完了していません。")));
+            }
             return;
         }
         DispatchAladdinEntryWorkbookExporter.Destination dest =
                 destination != null
                         ? destination
                         : DispatchAladdinEntryWorkbookExporter.Destination.SHARED;
-        dismissAladdinExportAttentionGlow();
         dismissAladdinOpenAttentionGlow();
         Map<String, String> ui = shell.snapshotUiEnv();
         setAladdinEntryExportButtonsDisabled(true);
@@ -774,7 +763,9 @@ public final class ResultDispatchTableTabController {
                                                         warnings,
                                                         null,
                                                         reloadAladdinPlanFromSource,
-                                                        dest));
+                                                        dest,
+                                                        showCompletionDialog,
+                                                        completion));
                             } catch (Exception ex) {
                                 Platform.runLater(
                                         () ->
@@ -783,7 +774,9 @@ public final class ResultDispatchTableTabController {
                                                         warnings,
                                                         ex,
                                                         reloadAladdinPlanFromSource,
-                                                        dest));
+                                                        dest,
+                                                        showCompletionDialog,
+                                                        completion));
                             }
                         },
                         reloadAladdinPlanFromSource
@@ -796,9 +789,6 @@ public final class ResultDispatchTableTabController {
     }
 
     private void setAladdinEntryExportButtonsDisabled(boolean disabled) {
-        if (aladdinEntryExportButton != null) {
-            aladdinEntryExportButton.setDisable(disabled);
-        }
         if (aladdinEntryReloadExportButton != null) {
             aladdinEntryReloadExportButton.setDisable(disabled);
         }
@@ -836,7 +826,9 @@ public final class ResultDispatchTableTabController {
             List<String> warnings,
             Exception error,
             boolean reloadedAladdinPlan,
-            DispatchAladdinEntryWorkbookExporter.Destination destination) {
+            DispatchAladdinEntryWorkbookExporter.Destination destination,
+            boolean showCompletionDialog,
+            Consumer<AladdinEntryExportOutcome> completion) {
         setAladdinEntryExportButtonsDisabled(false);
         hideAladdinEntryExportProgress();
         boolean local =
@@ -852,9 +844,14 @@ public final class ResultDispatchTableTabController {
         }
         if (error != null) {
             shell.appendLog("[aladdin-entry-export] error: " + error.getMessage());
-            shell.showErrorDialog(
-                    dialogTitle,
-                    error.getMessage() != null ? error.getMessage() : error.toString());
+            if (showCompletionDialog) {
+                shell.showErrorDialog(
+                        dialogTitle,
+                        error.getMessage() != null ? error.getMessage() : error.toString());
+            }
+            if (completion != null) {
+                completion.accept(new AladdinEntryExportOutcome(null, List.copyOf(warnings), error));
+            }
             return;
         }
         shell.appendLog("[aladdin-entry-export] " + result.latestPath());
@@ -871,9 +868,14 @@ public final class ResultDispatchTableTabController {
         if (!warnings.isEmpty()) {
             sb.append("\n\n警告:\n").append(String.join("\n", warnings));
         }
-        shell.showInformationDialog(dialogTitle, sb.toString());
+        if (showCompletionDialog) {
+            shell.showInformationDialog(dialogTitle, sb.toString());
+        }
         if (!local) {
             startAladdinOpenAttentionGlow();
+        }
+        if (completion != null) {
+            completion.accept(new AladdinEntryExportOutcome(result, List.copyOf(warnings), null));
         }
     }
 
@@ -887,7 +889,8 @@ public final class ResultDispatchTableTabController {
         if (!Files.isRegularFile(latest)) {
             shell.showWarningDialog(
                     "最新を開く",
-                    "ファイルがまだありません。先に「アラジン入力用Excel出力」を実行してください。\n" + latest);
+                    "ファイルがまだありません。段階2を実行するか「アラジン加工計画読込→Excel出力」を実行してください。\n"
+                            + latest);
             return;
         }
         try {
@@ -921,7 +924,6 @@ public final class ResultDispatchTableTabController {
 
     @FXML
     private void onOpenAladdinEntryGenerationsAction() {
-        dismissAladdinOpenAttentionGlow();
         if (shell == null) {
             return;
         }

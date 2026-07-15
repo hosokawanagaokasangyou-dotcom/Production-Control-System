@@ -141,12 +141,25 @@ public final class Stage2InProgressNextDayDispatchDialog {
             return nextDayRollCount;
         }
 
-        Stage2InProgressNextDayDispatchIo.Entry toEntry(double nextDayM) {
+        @Override
+        public String targetReason() {
+            return "加工途中";
+        }
+
+        Stage2InProgressNextDayDispatchIo.Entry toEntryFromNextDayInput() {
+            int rolls =
+                    Stage2InProgressNextDayRollInput.parseNonNegativeRollCount(
+                                    nextDayRollCount.get())
+                            .orElse(0);
+            double nextDayM =
+                    Stage2InProgressNextDayRollInput.resolveNextDayMeters(
+                                    rolls, remainingM(), unitM())
+                            .orElse(0.0);
             double shortfallM =
                     Stage2InProgressNextDayRollInput.aladdinTodayShortfallMeters(
                             remainingM, actualDoneM, aladdinTodayM);
             return new Stage2InProgressNextDayDispatchIo.Entry(
-                    taskId, process, machineName, nextDayM, shortfallM);
+                    taskId, process, machineName, Math.max(0.0, nextDayM), shortfallM);
         }
     }
 
@@ -157,18 +170,7 @@ public final class Stage2InProgressNextDayDispatchDialog {
                 owner,
                 rows,
                 THEME,
-                r -> {
-                    Row row = (Row) r;
-                    int rolls =
-                            Stage2InProgressNextDayRollInput.parseNonNegativeRollCount(
-                                            row.nextDayRollCount.get())
-                                    .orElse(0);
-                    double next =
-                            Stage2InProgressNextDayRollInput.resolveNextDayMeters(
-                                            rolls, row.remainingM(), row.unitM())
-                                    .orElse(0.0);
-                    return row.toEntry(Math.max(0.0, next));
-                },
+                r -> ((Row) r).toEntryFromNextDayInput(),
                 r ->
                         Stage2InProgressNextDayRollInput.validateRollInput(
                                 r.rollCountProperty().get(), r.remainingM(), r.unitInfo()));

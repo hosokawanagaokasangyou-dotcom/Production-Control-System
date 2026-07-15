@@ -85,6 +85,36 @@ public final class Stage2InProgressNextDayRollInput {
     }
 
     /**
+     * アラジン当日分を除いた、翌日に配台可能な初期ロール本数。
+     *
+     * <p>従来の「翌日除外ロール数」を、利用者向けの「翌日配台ロール数」へ反転した値。
+     */
+    public static int defaultNextDayRollCountAfterAladdinToday(
+            double aladdinTodayM, double remainingM, double unitM) {
+        int maxRolls = maxRolls(remainingM, unitM);
+        int excludedRolls = defaultRollCountForCap(aladdinTodayM, remainingM, unitM);
+        return Math.max(0, maxRolls - excludedRolls);
+    }
+
+    /**
+     * 利用者が指定した翌日配台ロール数を、Pythonへ渡す従来形式の翌日除外 m に変換する。
+     *
+     * @return empty は入力不正・ロール単位不明・残量超過
+     */
+    public static Optional<Double> resolveExcludedMetersFromNextDayRollCount(
+            int nextDayRolls, double remainingM, double unitM) {
+        if (nextDayRolls < 0 || unitM <= 1e-9) {
+            return Optional.empty();
+        }
+        int maxRolls = maxRolls(remainingM, unitM);
+        if (nextDayRolls > maxRolls) {
+            return Optional.empty();
+        }
+        int excludedRolls = maxRolls - nextDayRolls;
+        return resolveNextDayMeters(excludedRolls, remainingM, unitM);
+    }
+
+    /**
      * ロール本数から翌日配台 m を解決する。
      *
      * @return empty は入力不正・ロール単位不明・残量超過

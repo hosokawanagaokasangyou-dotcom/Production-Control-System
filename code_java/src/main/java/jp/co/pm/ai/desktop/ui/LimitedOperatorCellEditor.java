@@ -7,6 +7,8 @@ import java.util.concurrent.Executors;
 import java.util.function.Consumer;
 
 import javafx.application.Platform;
+import javafx.scene.control.ButtonBar;
+import javafx.scene.control.ButtonType;
 import javafx.scene.control.Dialog;
 import javafx.scene.control.Label;
 import javafx.scene.control.ProgressIndicator;
@@ -70,6 +72,9 @@ public final class LimitedOperatorCellEditor {
                         LOAD_EXECUTOR,
                         Platform::runLater,
                         candidates -> {
+                            if (!busyDialog.isShowing()) {
+                                return;
+                            }
                             busyDialog.close();
                             try {
                                 LimitedOperatorChecklistDialog.edit(
@@ -84,6 +89,9 @@ public final class LimitedOperatorCellEditor {
                             }
                         },
                         failure -> {
+                            if (!busyDialog.isShowing()) {
+                                return;
+                            }
                             busyDialog.close();
                             showLoadError(shell, failure);
                         });
@@ -95,7 +103,7 @@ public final class LimitedOperatorCellEditor {
         }
     }
 
-    private static Dialog<Void> createBusyDialog(Window owner) {
+    static Dialog<Void> createBusyDialog(Window owner) {
         Dialog<Void> dialog = new Dialog<>();
         dialog.initOwner(owner);
         dialog.initModality(Modality.WINDOW_MODAL);
@@ -106,6 +114,9 @@ public final class LimitedOperatorCellEditor {
         dialog.getDialogPane()
                 .setContent(new VBox(10, progress, new Label("master.xlsm の skills を確認しています。")));
         dialog.getDialogPane().setPrefWidth(360);
+        dialog.getDialogPane()
+                .getButtonTypes()
+                .add(new ButtonType("キャンセル", ButtonBar.ButtonData.CANCEL_CLOSE));
         return dialog;
     }
 

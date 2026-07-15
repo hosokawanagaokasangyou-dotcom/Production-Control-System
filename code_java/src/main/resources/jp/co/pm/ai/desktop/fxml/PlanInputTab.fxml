@@ -80,9 +80,9 @@
                         <RadioButton fx:id="stage2NextDayDialogInProgressRadio" mnemonicParsing="false"
                                 text="加工途中タスクの翌日配台量を設定" />
                         <RadioButton fx:id="stage2NextDayDialogAladdinExcludeRadio" mnemonicParsing="false"
-                                text="アラジン当日配台の翌日除外量を設定" />
+                                text="アラジン当日対象行の翌日配台量を設定" />
                         <RadioButton fx:id="stage2NextDayDialogBothRadio" mnemonicParsing="false" selected="true"
-                                text="①と②の両方を設定" />
+                                text="①と②をまとめて設定" />
                         <RadioButton fx:id="stage2NextDayDialogNoneRadio" mnemonicParsing="false"
                                 text="ダイアログを表示しない" />
                     </VBox>

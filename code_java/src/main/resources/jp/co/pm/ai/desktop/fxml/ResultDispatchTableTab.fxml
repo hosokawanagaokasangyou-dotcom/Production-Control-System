@@ -33,10 +33,6 @@
                             onAction="#onRefreshButtonAction"/>
                     <Button mnemonicParsing="false" text="列フィルタ・並べ替え解除"
                             onAction="#onClearColumnFiltersAction"/>
-                    <Button fx:id="aladdinEntryExportButton" mnemonicParsing="false"
-                            styleClass="pm-aladdin-entry-export-button"
-                            text="アラジン入力用Excel出力"
-                            onAction="#onExportAladdinEntryWorkbookAction"/>
                     <Button fx:id="aladdinEntryReloadExportButton" mnemonicParsing="false"
                             styleClass="pm-aladdin-entry-export-button"
                             text="アラジン加工計画読込→Excel出力"
@@ -46,11 +42,11 @@
                             text="ローカルへ出力"
                             onAction="#onExportAladdinEntryWorkbookLocalAction"/>
                     <Button fx:id="aladdinEntryOpenLocalLatestButton" mnemonicParsing="false"
-                            styleClass="pm-aladdin-entry-open-button"
+                            styleClass="pm-aladdin-entry-local-export-button"
                             text="ローカル最新を開く"
                             onAction="#onOpenLocalLatestAladdinEntryWorkbookAction"/>
                     <Button fx:id="aladdinEntryOpenLocalGenerationsButton" mnemonicParsing="false"
-                            styleClass="pm-aladdin-entry-open-button"
+                            styleClass="pm-aladdin-entry-local-export-button"
                             text="ローカル世代を開く…"
                             onAction="#onOpenLocalAladdinEntryGenerationsAction"/>
                     <Button fx:id="aladdinEntryOpenLatestButton" mnemonicParsing="false"

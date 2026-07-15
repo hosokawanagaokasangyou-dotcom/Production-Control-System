@@ -45,6 +45,10 @@ final class Stage2NextDayRollDispatchDialogSupport {
 
         String machineName();
 
+        default String targetReason() {
+            return "";
+        }
+
         double referenceM();
 
         /** ①ダイアログ用: 当日アラジン計画 (m)。無いときは 0。 */
@@ -174,6 +178,20 @@ final class Stage2NextDayRollDispatchDialogSupport {
         cMach.setEditable(false);
         cMach.setPrefWidth(120);
 
+        TableColumn<RowModel, String> cProcess = createProcessColumn();
+
+        TableColumn<RowModel, String> cReason = null;
+        if (rows.stream().anyMatch(r -> !r.targetReason().isBlank())) {
+            TableColumn<RowModel, String> cTargetReason = new TableColumn<>("対象理由");
+            cTargetReason.setCellValueFactory(
+                    cd ->
+                            new javafx.beans.property.SimpleStringProperty(
+                                    cd.getValue().targetReason()));
+            cTargetReason.setEditable(false);
+            cTargetReason.setPrefWidth(92);
+            cReason = cTargetReason;
+        }
+
         TableColumn<RowModel, String> cRef = new TableColumn<>(theme.referenceColumnLabel());
         cRef.setCellValueFactory(
                 cd ->
@@ -287,6 +305,10 @@ final class Stage2NextDayRollDispatchDialogSupport {
         java.util.List<TableColumn<RowModel, ?>> cols = new java.util.ArrayList<>();
         cols.add(cTask);
         cols.add(cMach);
+        cols.add(cProcess);
+        if (cReason != null) {
+            cols.add(cReason);
+        }
         cols.add(cRef);
         if (cConvQty != null) {
             cols.add(cConvQty);
@@ -309,6 +331,10 @@ final class Stage2NextDayRollDispatchDialogSupport {
         }
         if (theme.showPlanQtyColumns()) {
             prefW += 144;
+        }
+        prefW += 90;
+        if (cReason != null) {
+            prefW += 92;
         }
         dialog.getDialogPane().setPrefWidth(prefW);
         table.getItems().forEach(r -> r.rollCountProperty().addListener((o, a, b) -> table.refresh()));
@@ -351,6 +377,15 @@ final class Stage2NextDayRollDispatchDialogSupport {
             out.add(toEntry.apply(r));
         }
         return Optional.of(out);
+    }
+
+    static TableColumn<RowModel, String> createProcessColumn() {
+        TableColumn<RowModel, String> column = new TableColumn<>("工程名");
+        column.setCellValueFactory(
+                cd -> new javafx.beans.property.SimpleStringProperty(cd.getValue().process()));
+        column.setEditable(false);
+        column.setPrefWidth(90);
+        return column;
     }
 
     private static String rowDetail(RowModel row) {
