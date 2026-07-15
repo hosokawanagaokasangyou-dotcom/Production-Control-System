@@ -106,6 +106,38 @@ class Stage1SourcePairMatcherTest {
         assertNull(pair.dailyReport());
     }
 
+    @Test
+    void matchPlanToDaily_equalDeltaPicksNewerFileName() {
+        var plan = entry(temp.resolve("plan.xlsx"), LocalDateTime.of(2026, 7, 10, 8, 0), "plan.xlsx");
+        var older = entry(temp.resolve("daily-A.csv"), LocalDateTime.of(2026, 7, 10, 7, 50), "daily-A.csv");
+        var newer = entry(temp.resolve("daily-Z.csv"), LocalDateTime.of(2026, 7, 10, 8, 10), "daily-Z.csv");
+
+        assertEquals(newer, Stage1SourcePairMatcher.matchPlanToDaily(plan, List.of(older, newer)).dailyReport());
+    }
+
+    @Test
+    void matchPlanToDaily_equalDeltaAndFileNamePicksNewerMtime() throws Exception {
+        Path oldPath = temp.resolve("old").resolve("daily.csv");
+        Path newPath = temp.resolve("new").resolve("daily.csv");
+        Files.createDirectories(oldPath.getParent());
+        Files.createDirectories(newPath.getParent());
+        Files.writeString(oldPath, "old");
+        Files.writeString(newPath, "new");
+        Files.setLastModifiedTime(oldPath, java.nio.file.attribute.FileTime.fromMillis(1_000));
+        Files.setLastModifiedTime(newPath, java.nio.file.attribute.FileTime.fromMillis(2_000));
+        var plan = entry(temp.resolve("plan.xlsx"), LocalDateTime.of(2026, 7, 10, 8, 0), "plan.xlsx");
+        var oldEntry = entry(oldPath, LocalDateTime.of(2026, 7, 10, 7, 50), "daily.csv");
+        var newEntry = entry(newPath, LocalDateTime.of(2026, 7, 10, 8, 10), "daily.csv");
+
+        assertEquals(newEntry, Stage1SourcePairMatcher.matchPlanToDaily(plan, List.of(oldEntry, newEntry)).dailyReport());
+    }
+
+    private static NetworkSourceExtractionCatalog.SourceEntry entry(
+            Path path, LocalDateTime time, String fileName) {
+        return new NetworkSourceExtractionCatalog.SourceEntry(
+                path, time, NetworkSourceExtractionTimeSupport.SourceKind.FILENAME, fileName);
+    }
+
     private static void writeDailyCsv(Path path) throws Exception {
         Files.writeString(
                 path,

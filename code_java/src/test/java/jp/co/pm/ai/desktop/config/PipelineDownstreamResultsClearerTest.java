@@ -85,4 +85,24 @@ class PipelineDownstreamResultsClearerTest {
         assertTrue(stage3.rows().isEmpty());
         assertFalse(stage3.headers().isEmpty());
     }
+
+    @Test
+    void clearStage2ThroughStage32_canPreserveTodayDispatchSourceBundle() throws Exception {
+        Path repo = temp.resolve("repo2");
+        Path output = repo.resolve("code").resolve("output");
+        Path python = repo.resolve("code").resolve("python");
+        Files.createDirectories(output);
+        Files.createDirectories(python);
+        Files.writeString(python.resolve("task_extract_stage1.py"), "# stub\n");
+
+        Map<String, String> ui = ui(repo);
+        Path bundle =
+                jp.co.pm.ai.planning.stage2.source.Stage1SourceBundleIo.defaultCachePath(ui);
+        Files.createDirectories(bundle.getParent());
+        Files.writeString(bundle, "{\"version\":1}");
+
+        PipelineDownstreamResultsClearer.clearStage2ThroughStage32(ui, true);
+
+        assertTrue(Files.isRegularFile(bundle));
+    }
 }

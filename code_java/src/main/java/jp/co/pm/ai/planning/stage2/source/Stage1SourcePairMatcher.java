@@ -64,10 +64,17 @@ public final class Stage1SourcePairMatcher {
         NetworkSourceExtractionCatalog.SourceEntry best =
                 sameDay.stream()
                         .min(
-                                Comparator.comparingLong(
+                                Comparator.<NetworkSourceExtractionCatalog.SourceEntry>comparingLong(
                                         dr ->
                                                 NetworkSourceExtractionTimeSupport.deltaMinutes(
-                                                        plan.extractionTime(), dr.extractionTime())))
+                                                        plan.extractionTime(), dr.extractionTime()))
+                                        .thenComparing(
+                                                NetworkSourceExtractionCatalog.SourceEntry::fileName,
+                                                Comparator.reverseOrder())
+                                        .thenComparing(
+                                                Comparator.comparingLong(
+                                                                Stage1SourcePairMatcher::lastModifiedMillis)
+                                                        .reversed()))
                         .orElse(null);
         long delta =
                 best != null
@@ -82,6 +89,14 @@ public final class Stage1SourcePairMatcher {
                                         .reversed())
                         .toList();
         return new MatchedPair(plan, best, delta, false, candidates);
+    }
+
+    private static long lastModifiedMillis(NetworkSourceExtractionCatalog.SourceEntry entry) {
+        try {
+            return java.nio.file.Files.getLastModifiedTime(entry.path()).toMillis();
+        } catch (Exception ex) {
+            return Long.MIN_VALUE;
+        }
     }
 
     public static MatchedPair withDailyOverride(

@@ -3,12 +3,16 @@ package jp.co.pm.ai.desktop.ui;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.nio.file.Path;
 
+import javafx.event.ActionEvent;
 import javafx.beans.property.SimpleObjectProperty;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.FXCollections;
 import javafx.geometry.Insets;
 import javafx.scene.control.ButtonType;
+import javafx.scene.control.Button;
+import javafx.scene.control.Alert;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Dialog;
 import javafx.scene.control.Label;
@@ -19,6 +23,8 @@ import javafx.scene.control.TableView;
 import javafx.scene.control.ToggleGroup;
 import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.layout.VBox;
+import javafx.scene.layout.HBox;
+import javafx.stage.FileChooser;
 import javafx.stage.Modality;
 import javafx.stage.Window;
 import javafx.util.StringConverter;
@@ -31,6 +37,23 @@ import jp.co.pm.ai.planning.stage2.source.Stage1SourcePairMatcher;
 public final class TodayDispatchSourceSelectionDialog {
 
     private TodayDispatchSourceSelectionDialog() {}
+
+    public static boolean requiresManualDailySelection(Stage1SourcePairMatcher.MatchedPair pair) {
+        return pair != null && pair.plan() != null && pair.sameDayDailyCandidates().isEmpty();
+    }
+
+    public static boolean canConfirmSelection(Stage1SourcePairMatcher.MatchedPair pair) {
+        return pair != null && pair.plan() != null && pair.dailyReport() != null;
+    }
+
+    public static Optional<Stage1SourcePairMatcher.MatchedPair> selectManualDailyReport(
+            Stage1SourcePairMatcher.MatchedPair base, Path csv) {
+        if (base == null || csv == null) {
+            return Optional.empty();
+        }
+        return NetworkSourceExtractionCatalog.resolveDailyReportEntry(csv)
+                .map(entry -> Stage1SourcePairMatcher.withDailyOverride(base, entry));
+    }
 
     public static final class Row {
         private final Stage1SourcePairMatcher.MatchedPair initial;
@@ -177,6 +200,8 @@ public final class TodayDispatchSourceSelectionDialog {
                         new TableCell<>() {
                             private final ComboBox<NetworkSourceExtractionCatalog.SourceEntry> combo =
                                     new ComboBox<>();
+                            private final Button manualButton = new Button("CSVを手動選択…");
+                            private final HBox box = new HBox(6, combo, manualButton);
 
                             {
                                 combo.setConverter(
@@ -210,6 +235,23 @@ public final class TodayDispatchSourceSelectionDialog {
                                                         row.refreshTexts();
                                                     }
                                                 });
+                                manualButton.setOnAction(
+                                        event -> {
+                                            Row row = getTableRow() != null ? getTableRow().getItem() : null;
+                                            if (row == null) {
+                                                return;
+                                            }
+                                            FileChooser chooser = new FileChooser();
+                                            chooser.setTitle("加工日報CSVを選択");
+                                            chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("CSV", "*.csv"));
+                                            java.io.File selected = chooser.showOpenDialog(owner);
+                                            selectManualDailyReport(row.initial, selected != null ? selected.toPath() : null)
+                                                    .ifPresent(pair -> {
+                                                        row.selectedDaily = pair.dailyReport();
+                                                        row.refreshTexts();
+                                                        combo.setValue(pair.dailyReport());
+                                                    });
+                                        });
                             }
 
                             @Override
@@ -223,7 +265,9 @@ public final class TodayDispatchSourceSelectionDialog {
                                                     item.dailyCandidates()));
                                     combo.setValue(item.selectedDaily);
                                     combo.setDisable(item.dailyCandidates().isEmpty());
-                                    setGraphic(combo);
+                                    manualButton.setVisible(requiresManualDailySelection(item.initial));
+                                    manualButton.setManaged(manualButton.isVisible());
+                                    setGraphic(box);
                                 }
                             }
                         });
@@ -241,6 +285,27 @@ public final class TodayDispatchSourceSelectionDialog {
         VBox root = new VBox(8, hint, table);
         root.setPadding(new Insets(12));
         dialog.getDialogPane().setContent(root);
+        dialog.getDialogPane().lookupButton(ButtonType.OK).addEventFilter(
+                ActionEvent.ACTION,
+                event -> {
+                    Stage1SourcePairMatcher.MatchedPair selected = rows.stream()
+                            .filter(row -> row.selectRadio().isSelected())
+                            .findFirst().map(Row::toMatchedPair).orElse(null);
+                    if (!canConfirmSelection(selected)) {
+                        event.consume();
+                        Alert alert = new Alert(Alert.AlertType.WARNING, "加工日報CSVを選択してください。", ButtonType.OK);
+                        if (owner != null) {
+                            alert.initOwner(owner);
+                        }
+                        alert.showAndWait();
+                    }
+                });
+
+        if (rows.stream().anyMatch(row -> requiresManualDailySelection(row.initial))) {
+            Label missingWarning = new Label("同日の加工日報候補がない行があります。CSVを手動選択してください。");
+            missingWarning.setStyle("-fx-text-fill: #b45309;");
+            root.getChildren().add(1, missingWarning);
+        }
 
         dialog.setResultConverter(
                 button -> {

@@ -1,6 +1,7 @@
 package jp.co.pm.ai.planning.stage2.source;
 
 import java.nio.file.Path;
+import java.nio.file.Files;
 import java.util.Map;
 import java.util.Optional;
 
@@ -24,40 +25,47 @@ public final class Stage2SourceConsistencyGuard {
     private Stage2SourceConsistencyGuard() {}
 
     public static Result verify(Map<String, String> ui, Stage1SourceBundle bundle) {
+        return prepareForStageRun(
+                true, new java.util.HashMap<>(ui != null ? ui : Map.of()), bundle);
+    }
+
+    public static Result prepareForStageRun(
+            boolean todayDispatch, Map<String, String> ui, Stage1SourceBundle bundle) {
+        if (!todayDispatch) {
+            return Result.ok();
+        }
         if (bundle == null) {
             return Result.blocked(
                     "段階1のソース束が未保存です。当日配台 ON のときは段階1を先に正常終了してください。");
         }
-        Optional<Path> currentPlan = resolveCurrentProcessingPlanPath(ui);
-        Optional<Path> currentDaily = KonanDailyReportLookup.resolveNewestCsvPath(ui);
+        var structural = bundle.validationError();
+        if (structural.isPresent()) return Result.blocked("段階1bundleが不正です: " + structural.get());
         Path expectedPlan = bundle.processingPlanPathNormalized();
         Path expectedDaily = bundle.dailyReportCsvPathNormalized();
-
-        if (currentPlan.isEmpty()) {
-            return Result.blocked("加工計画ファイルを解決できません。段階1と同じ取得分を選んでください。");
-        }
-        if (currentDaily.isEmpty()) {
-            return Result.blocked("加工日報 CSV を解決できません。段階1と同じ取得分を選んでください。");
-        }
-        if (!pathsEqual(currentPlan.get(), expectedPlan)) {
-            return Result.blocked(
-                    "加工計画が段階1固定ソースと一致しません。\n"
-                            + "固定: "
-                            + expectedPlan
-                            + "\n現在: "
-                            + currentPlan.get()
-                            + "\n段階1を再実行するか、当日配台を OFF にしてください。");
-        }
-        if (!pathsEqual(currentDaily.get(), expectedDaily)) {
-            return Result.blocked(
-                    "加工日報が段階1固定ソースと一致しません。\n"
-                            + "固定: "
-                            + expectedDaily
-                            + "\n現在: "
-                            + currentDaily.get()
-                            + "\n段階1を再実行するか、当日配台を OFF にしてください。");
-        }
+        Path expectedExtraction = Path.of(bundle.dataExtractionWorkbookPath()).toAbsolutePath().normalize();
+        Result files = requireFiles(expectedPlan, expectedDaily, expectedExtraction);
+        if (!files.allowed()) return files;
+        Result explicitPlan = verifyExplicit(ui, AppPaths.KEY_PM_AI_PROCESSING_PLAN_PATH, expectedPlan, "加工計画");
+        if (!explicitPlan.allowed()) return explicitPlan;
+        Result explicitDaily = verifyExplicit(ui, KonanDailyReportLookup.KEY_DAILY_REPORT_CSV_PATH, expectedDaily, "加工日報");
+        if (!explicitDaily.allowed()) return explicitDaily;
+        overlayBundlePaths(ui, bundle);
         return Result.ok();
+    }
+
+    private static Result requireFiles(Path plan, Path daily, Path extraction) {
+        if (!Files.isRegularFile(plan)) return Result.blocked("固定 processingPlanPath を利用できません");
+        if (!Files.isRegularFile(daily)) return Result.blocked("固定 dailyReportCsvPath を利用できません");
+        if (!Files.isRegularFile(extraction)) return Result.blocked("固定 dataExtractionWorkbookPath を利用できません");
+        return Result.ok();
+    }
+
+    private static Result verifyExplicit(Map<String, String> ui, String key, Path expected, String label) {
+        String raw = ui != null ? ui.getOrDefault(key, "").strip() : "";
+        if (raw.isEmpty()) return Result.ok();
+        final Path current;
+        try { current = Path.of(raw); } catch (RuntimeException ex) { return Result.blocked(label + "の明示パスが不正です"); }
+        return pathsEqual(current, expected) ? Result.ok() : Result.blocked(label + "が段階1固定ソースと一致しません");
     }
 
     public static void overlayBundlePaths(Map<String, String> env, Stage1SourceBundle bundle) {
@@ -91,6 +99,14 @@ public final class Stage2SourceConsistencyGuard {
         if (a == null || b == null) {
             return false;
         }
-        return a.toAbsolutePath().normalize().equals(b.toAbsolutePath().normalize());
+        try {
+            if (Files.exists(a) && Files.exists(b) && Files.isSameFile(a, b)) return true;
+        } catch (Exception ignored) {
+        }
+        try {
+            return a.toAbsolutePath().normalize().equals(b.toAbsolutePath().normalize());
+        } catch (RuntimeException ex) {
+            return false;
+        }
     }
 }

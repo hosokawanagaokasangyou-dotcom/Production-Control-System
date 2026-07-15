@@ -79,10 +79,13 @@ import jp.co.pm.ai.desktop.runtime.FxJvmMemoryStatusBar;
 
 import jp.co.pm.ai.desktop.ui.TodayDispatchSourceSelectionDialog;
 import jp.co.pm.ai.planning.stage2.source.Stage1SourceBundle;
+import jp.co.pm.ai.planning.stage2.source.Stage1SourceBundleCompletionGate;
 import jp.co.pm.ai.planning.stage2.source.Stage1SourceBundleIo;
 import jp.co.pm.ai.planning.stage2.source.Stage1SourcePairMatcher;
 import jp.co.pm.ai.planning.stage2.source.Stage2SkipTodayDispatchPolicy;
 import jp.co.pm.ai.planning.stage2.source.Stage2SourceConsistencyGuard;
+import jp.co.pm.ai.planning.stage2.source.Stage2SourceGuardCoordinator;
+import jp.co.pm.ai.planning.stage2.source.Stage2SourceGuardSnapshot;
 
 import jp.co.pm.ai.desktop.audio.MacroCompleteChime;
 import jp.co.pm.ai.desktop.audio.UiClickSound;
@@ -4436,6 +4439,11 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
     }
 
     private void runStage(String script) {
+        if (stage2SourceGuardCoordinator.isRunning() && !stage2SourceGuardRunHandoff) {
+            appendLog("[busy] 固定ソース確認中のため段階処理を開始できません。");
+            releaseStage3RunButtonLockIfNeeded(script);
+            return;
+        }
         if (isDeliveryCalendarReloadBlockingStageRuns()) {
             String stageJa =
                     STAGE1.equals(script)
@@ -4508,7 +4516,6 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                 pendingStage31OvertimeJsonPath = null;
                 pendingStage2InProgressNextDayJsonPath = null;
                 pendingStage2AladdinTodayExcludeJsonPath = null;
-                pendingTodayDispatchSourcePair = null;
                 syncUiAfterDownstreamPipelineResultsCleared();
             }
             if (STAGE2.equals(script)) {
@@ -4777,6 +4784,16 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
             mainRunTabController.getStatusLabel().setText(exitCodeLegend(c));
             appendLog("[end] exitCode=" + c + " " + exitHint(c));
             if (STAGE1.equals(script) && c == 0) {
+                Stage1SourceBundleCompletionGate.Result bundleResult =
+                        persistStage1SourceBundleAfterSuccess();
+                if (!bundleResult.completionAllowed()) {
+                    mainRunTabController.getStatusLabel().setText("bundle保存失敗");
+                    appendLog("[stage1] " + bundleResult.message());
+                    showErrorDialog(
+                            "段階1",
+                            bundleResult.message() + "\n段階1は完了扱いにしません。再実行してください。");
+                    return;
+                }
                 applyStage1ExcludeRulesJsonToEnvTab();
                 try {
                     CodeDispatchLookupTablesMerge.MergeSummary ms =
@@ -4808,7 +4825,6 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                 invalidateDeliveryCalendarAfterPipelineRun();
                 refreshEquipmentGanttGraphicAfterPipelineRun();
                 MacroCompleteChime.playIfAvailable(collectUiEnv());
-                persistStage1SourceBundleAfterSuccess();
                 selectMainShellTab(MainShellTabId.PLAN_INPUT);
                 String completionMsg = buildStage1CompletionMessage();
                 showStageCompletionDialog("段階1 完了", completionMsg);
@@ -5148,7 +5164,8 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         boolean stage1Running = STAGE1.equals(script);
         boolean stageScriptRunning = pipelineTimingKindForStageScript(script) != null;
         boolean dispatchTrialBusy = activeDispatchTrialKind != null;
-        boolean pipelineBusy = stageScriptRunning || dispatchTrialBusy;
+        boolean sourceGuardBusy = stage2SourceGuardCoordinator.isRunning();
+        boolean pipelineBusy = stageScriptRunning || dispatchTrialBusy || sourceGuardBusy;
         if (mainRunTabController != null) {
             mainRunTabController.setStageRunProgressVisible(stage1Running, pipelineBusy);
         }
@@ -5190,7 +5207,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
 
     /** 段階スクリプト／配台試行のいずれかが {@link #runLock} 保持中なら true。 */
     private boolean isPipelineRunLocked() {
-        return runLock.get();
+        return runLock.get() || stage2SourceGuardCoordinator.isRunning();
     }
 
     private boolean blockIfPipelineRunLocked(String stageJa) {
@@ -5198,6 +5215,14 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
             return false;
         }
         appendLog("[busy] 他の処理が実行中のため " + stageJa + " を開始できません。");
+        return true;
+    }
+
+    private boolean blockIfStage2SourceGuardBusy(String stageJa) {
+        if (stage2SourceGuardCoordinator.allowsRelatedStart()) {
+            return false;
+        }
+        appendLog("[busy] 固定ソース確認中のため " + stageJa + " を開始できません。");
         return true;
     }
 
@@ -6806,13 +6831,83 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
     }
 
     void onDispatchInteractiveTableDirtyChanged(boolean dispatchTableDirty) {
+        if (lastDispatchTableDirty != dispatchTableDirty) {
+            dispatchTableDirtyGeneration++;
+            lastDispatchTableDirty = dispatchTableDirty;
+        }
         if (planInputTabController != null) {
             planInputTabController.setStage2BlockedByUnsavedDispatchEdit(dispatchTableDirty);
         }
     }
 
     void triggerStage1() {
-        if (!prepareTodayDispatchSourceSelectionForStage1()) {
+        if (blockIfStage2SourceGuardBusy("段階1")) {
+            return;
+        }
+        if (planInputTabController == null || !planInputTabController.snapshotTodayDispatch()) {
+            pendingTodayDispatchSourcePair = null;
+            startStage1AfterStrictBundleInvalidation();
+            return;
+        }
+        loadTodayDispatchSourceCandidatesForStage1();
+    }
+
+    private void loadTodayDispatchSourceCandidatesForStage1() {
+        Map<String, String> ui = new HashMap<>(collectUiEnv());
+        Dialog<Void> wait = new Dialog<>();
+        wait.initOwner(primaryStage);
+        wait.setTitle("段階1");
+        wait.setHeaderText("当日配台ソース候補を取得中…");
+        wait.getDialogPane().getButtonTypes().add(ButtonType.CANCEL);
+        wait.getDialogPane().setContent(new ProgressIndicator());
+
+        Task<List<Stage1SourcePairMatcher.MatchedPair>> task =
+                new Task<>() {
+                    @Override
+                    protected List<Stage1SourcePairMatcher.MatchedPair> call() {
+                        return Stage1SourcePairMatcher.buildSelectableRows(ui);
+                    }
+                };
+        wait.setOnCloseRequest(event -> task.cancel());
+        task.setOnSucceeded(
+                event -> {
+                    wait.close();
+                    if (prepareTodayDispatchSourceSelectionForStage1(task.getValue())) {
+                        startStage1AfterStrictBundleInvalidation();
+                    }
+                });
+        task.setOnCancelled(
+                event -> {
+                    wait.close();
+                    appendLog("[stage1] 当日配台: ソース候補取得をキャンセルしました。");
+                });
+        task.setOnFailed(
+                event -> {
+                    wait.close();
+                    Throwable failure = task.getException();
+                    String detail =
+                            failure != null && failure.getMessage() != null
+                                    ? failure.getMessage()
+                                    : String.valueOf(failure);
+                    appendLog("[stage1] 当日配台: ソース候補取得に失敗: " + detail);
+                    showErrorDialog("段階1", "当日配台ソース候補の取得に失敗しました。\n" + detail);
+                });
+        Thread worker = new Thread(task, "today-dispatch-source-scan");
+        worker.setDaemon(true);
+        worker.start();
+        wait.show();
+    }
+
+    private void startStage1AfterStrictBundleInvalidation() {
+        Map<String, String> ui = new HashMap<>(collectUiEnv());
+        Stage1SourceBundleCompletionGate.Result invalidation =
+                Stage1SourceBundleCompletionGate.invalidateBeforeStage1(
+                        () -> Stage1SourceBundleIo.deleteDefaultIfExists(ui));
+        if (!invalidation.completionAllowed()) {
+            appendLog("[stage1] " + invalidation.message());
+            showErrorDialog(
+                    "段階1",
+                    invalidation.message() + "\n旧bundleを無効化できないため段階1を開始しません。");
             return;
         }
         runStage(STAGE1);
@@ -6823,14 +6918,8 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
      *
      * @return false なら段階1を中止
      */
-    private boolean prepareTodayDispatchSourceSelectionForStage1() {
-        if (planInputTabController == null || !planInputTabController.snapshotTodayDispatch()) {
-            pendingTodayDispatchSourcePair = null;
-            return true;
-        }
-        Map<String, String> ui = collectUiEnv();
-        List<Stage1SourcePairMatcher.MatchedPair> rows =
-                Stage1SourcePairMatcher.buildSelectableRows(ui);
+    private boolean prepareTodayDispatchSourceSelectionForStage1(
+            List<Stage1SourcePairMatcher.MatchedPair> rows) {
         if (rows.isEmpty()) {
             appendLog("[stage1] 当日配台: 加工計画の候補が見つかりません。");
             showErrorDialog(
@@ -6875,25 +6964,110 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         return true;
     }
 
-    private boolean guardTodayDispatchSourceBundleBeforeStageRun(String stageLabel) {
-        if (planInputTabController == null || !planInputTabController.snapshotTodayDispatch()) {
-            return true;
-        }
-        Map<String, String> ui = collectUiEnv();
-        Optional<Stage1SourceBundle> bundle = Stage1SourceBundleIo.readIfPresent(ui);
-        Stage2SourceConsistencyGuard.Result guard =
-                Stage2SourceConsistencyGuard.verify(ui, bundle.orElse(null));
-        if (!guard.allowed()) {
-            appendLog("[" + stageLabel + "] " + guard.message().replace('\n', ' '));
-            showErrorDialog(stageLabel, guard.message());
+    private boolean guardTodayDispatchSourceBundleBeforeStageRun(
+            String stageLabel, Runnable continuation) {
+        Map<String, String> guardEnvironment = new HashMap<>(collectUiEnv());
+        Stage2SourceGuardSnapshot startedSnapshot =
+                captureStage2SourceGuardSnapshot(guardEnvironment);
+        boolean submitted =
+                stage2SourceGuardCoordinator.submit(
+                        () -> evaluateTodayDispatchSourceGuard(startedSnapshot, guardEnvironment),
+                        outcome -> {
+                            Stage2SourceGuardSnapshot currentSnapshot =
+                                    captureStage2SourceGuardSnapshot(
+                                            new HashMap<>(collectUiEnv()));
+                            if (!startedSnapshot.matches(currentSnapshot)) {
+                                pendingTodayDispatchStageBundle = null;
+                                String message =
+                                        "ガード中に実行条件が変更されました。"
+                                                + startedSnapshot.mismatchMessage(currentSnapshot)
+                                                + "\n状態を確認して段階処理を再実行してください。";
+                                appendLog("[" + stageLabel + "] 実行条件変更のため中止しました。");
+                                showErrorDialog(stageLabel, message);
+                                Platform.runLater(this::applyRunTabGating);
+                                return;
+                            }
+                            if (!outcome.guard().allowed()) {
+                                pendingTodayDispatchStageBundle = null;
+                                appendLog(
+                                        "["
+                                                + stageLabel
+                                                + "] "
+                                                + outcome.guard().message().replace('\n', ' '));
+                                showErrorDialog(stageLabel, outcome.guard().message());
+                                Platform.runLater(this::applyRunTabGating);
+                                return;
+                            }
+                            pendingTodayDispatchStageBundle = outcome.bundle();
+                            if (outcome.bundle() != null && planInputTabController != null) {
+                                planInputTabController.applyStage2SkipTodayDispatchFromSession(
+                                        Stage2SkipTodayDispatchPolicy.shouldSkipTodayDispatch(
+                                                outcome.bundle().planExtractionTime()));
+                            }
+                            continuation.run();
+                            Platform.runLater(this::applyRunTabGating);
+                        },
+                        failure -> {
+                            pendingTodayDispatchStageBundle = null;
+                            appendLog(
+                                    "["
+                                            + stageLabel
+                                            + "] 固定ソース確認に失敗: "
+                                            + (failure.getMessage() != null
+                                                    ? failure.getMessage()
+                                                    : failure.getClass().getSimpleName()));
+                            showErrorDialog(stageLabel, "固定ソース確認に失敗しました。段階処理を再実行してください。");
+                            Platform.runLater(this::applyRunTabGating);
+                        });
+        if (!submitted) {
+            appendLog("[" + stageLabel + "] 固定ソース確認中のため重複起動を拒否しました。");
             return false;
         }
-        bundle.ifPresent(
-                b ->
-                        planInputTabController.applyStage2SkipTodayDispatchFromSession(
-                                Stage2SkipTodayDispatchPolicy.shouldSkipTodayDispatch(
-                                        b.planExtractionTime())));
+        applyRunTabGating();
         return true;
+    }
+
+    private StageSourceGuardOutcome evaluateTodayDispatchSourceGuard(
+            Stage2SourceGuardSnapshot snapshot, Map<String, String> guardEnvironment)
+            throws IOException {
+        if (!snapshot.todayDispatch()) {
+            return new StageSourceGuardOutcome(Stage2SourceConsistencyGuard.Result.ok(), null);
+        }
+        Optional<Stage1SourceBundle> bundle =
+                Stage1SourceBundleIo.readIfPresentStrict(guardEnvironment);
+        Stage2SourceConsistencyGuard.Result guard =
+                Stage2SourceConsistencyGuard.verify(
+                        guardEnvironment, bundle.orElse(null));
+        return new StageSourceGuardOutcome(guard, guard.allowed() ? bundle.orElse(null) : null);
+    }
+
+    private Stage2SourceGuardSnapshot captureStage2SourceGuardSnapshot(
+            Map<String, String> environment) {
+        return new Stage2SourceGuardSnapshot(
+                planInputTabController != null
+                        && planInputTabController.snapshotTodayDispatch(),
+                planInputTabController != null
+                        && planInputTabController.isPlanInputTableDirtySinceSave(),
+                planInputTabController != null
+                        ? planInputTabController.snapshotPlanInputDirtyGeneration()
+                        : 0L,
+                dispatchInteractiveTabController != null
+                        && dispatchInteractiveTabController.isDispatchDocDirtySinceSave(),
+                dispatchTableDirtyGeneration,
+                runLock.get(),
+                environment);
+    }
+
+    private record StageSourceGuardOutcome(
+            Stage2SourceConsistencyGuard.Result guard, Stage1SourceBundle bundle) {}
+
+    private void runStageAfterStage2SourceGuard(String script) {
+        stage2SourceGuardRunHandoff = true;
+        try {
+            runStage(script);
+        } finally {
+            stage2SourceGuardRunHandoff = false;
+        }
     }
 
     private void overlayTodayDispatchSourcesForStageRun(
@@ -6906,8 +7080,10 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
             return;
         }
         if (STAGE2.equals(script) || STAGE2_1.equals(script)) {
-            Stage1SourceBundleIo.readIfPresent(uiRun)
-                    .ifPresent(b -> Stage2SourceConsistencyGuard.overlayBundlePaths(uiRun, b));
+            if (pendingTodayDispatchStageBundle != null) {
+                Stage2SourceConsistencyGuard.overlayBundlePaths(
+                        uiRun, pendingTodayDispatchStageBundle);
+            }
         }
     }
 
@@ -6924,28 +7100,38 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                 pair.dailyReport().path().toString());
     }
 
-    private void persistStage1SourceBundleAfterSuccess() {
-        if (planInputTabController == null
-                || !planInputTabController.snapshotTodayDispatch()
-                || pendingTodayDispatchSourcePair == null
-                || pendingTodayDispatchSourcePair.dailyReport() == null) {
-            return;
-        }
-        try {
-            Stage1SourceBundle bundle =
-                    Stage1SourceBundle.fromMatchedPair(
-                            pendingTodayDispatchSourcePair, System.currentTimeMillis());
-            Stage1SourceBundleIo.writeDefault(collectUiEnv(), bundle);
+    private Stage1SourceBundleCompletionGate.Result persistStage1SourceBundleAfterSuccess() {
+        boolean todayDispatch =
+                planInputTabController != null && planInputTabController.snapshotTodayDispatch();
+        boolean bundleReady =
+                pendingTodayDispatchSourcePair != null
+                        && pendingTodayDispatchSourcePair.dailyReport() != null;
+        Map<String, String> ui = new HashMap<>(collectUiEnv());
+        Stage1SourceBundleCompletionGate.Result result =
+                Stage1SourceBundleCompletionGate.persist(
+                        todayDispatch,
+                        bundleReady,
+                        () -> Stage1SourceBundleIo.deleteDefaultIfExists(ui),
+                        () -> {
+                            Stage1SourceBundle bundle =
+                                    Stage1SourceBundle.fromMatchedPair(
+                                            pendingTodayDispatchSourcePair,
+                                            System.currentTimeMillis());
+                            Stage1SourceBundleIo.writeDefault(ui, bundle);
+                        });
+        if (result.completionAllowed() && todayDispatch) {
             appendLog(
                     "[stage1] 当日配台: ソース束を固定しました（"
                             + Stage1SourceBundleIo.CACHE_FILE_NAME
                             + "）。");
-        } catch (Exception ex) {
-            appendLog("[stage1] 当日配台: ソース束の保存に失敗: " + ex.getMessage());
         }
+        return result;
     }
 
     void triggerStage2() {
+        if (blockIfStage2SourceGuardBusy("段階2")) {
+            return;
+        }
         if (blockIfSummaryAiDispatchExportLocked("段階2")) {
             return;
         }
@@ -6964,9 +7150,13 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                     "[stage2] 配台計画_タスク入力タブの表に未保存の変更があります。「保存」または「再読み」で確定してから実行してください。");
             return;
         }
-        if (!guardTodayDispatchSourceBundleBeforeStageRun("段階2")) {
+        if (!guardTodayDispatchSourceBundleBeforeStageRun(
+                "段階2", this::continueStage2AfterSourceGuard)) {
             return;
         }
+    }
+
+    private void continueStage2AfterSourceGuard() {
         boolean skipCacheClear =
                 planInputTabController != null
                         && planInputTabController.snapshotStage2SkipCacheClearBeforeRun();
@@ -6981,7 +7171,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
             pendingStage2InProgressNextDayJsonPath = null;
             pendingStage2AladdinTodayExcludeJsonPath = null;
         }
-        runStage(STAGE2);
+        runStageAfterStage2SourceGuard(STAGE2);
     }
 
     /**
@@ -7124,6 +7314,9 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
 
     /** 段階2.1（残業/休出シミュ）: 時間外ウィザードを起動し、確定後に {@link #triggerStage21} へ進む。 */
     void launchStage21OvertimeSimulationWizard() {
+        if (blockIfStage2SourceGuardBusy("段階2.1")) {
+            return;
+        }
         if (blockIfSummaryAiDispatchExportLocked("段階2.1")
                 || blockIfMaterialLookupTablesHaveBlankValues("段階2.1")) {
             return;
@@ -7192,6 +7385,9 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
 
     /** 段階2.1（残業/休出シミュ）: ウィザード確定後にフル再配台（output/stage21/）。 */
     void triggerStage21(java.nio.file.Path overtimeSimulationJson) {
+        if (blockIfStage2SourceGuardBusy("段階2.1")) {
+            return;
+        }
         if (blockIfSummaryAiDispatchExportLocked("段階2.1")) {
             return;
         }
@@ -7220,9 +7416,15 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                     "[stage2.1] 配台計画_タスク入力タブの表に未保存の変更があります。「保存」または「再読み」で確定してから実行してください。");
             return;
         }
-        if (!guardTodayDispatchSourceBundleBeforeStageRun("段階2.1")) {
+        if (!guardTodayDispatchSourceBundleBeforeStageRun(
+                "段階2.1",
+                () -> continueStage21AfterSourceGuard(overtimeSimulationJson, mainJson))) {
             return;
         }
+    }
+
+    private void continueStage21AfterSourceGuard(
+            java.nio.file.Path overtimeSimulationJson, java.nio.file.Path mainJson) {
         if (overtimeSimulationJson == null
                 || !java.nio.file.Files.isRegularFile(overtimeSimulationJson)) {
             appendLog("[stage2.1] 残業シミュレーション JSON が無効です。");
@@ -7234,7 +7436,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
             dispatchInteractiveTabController.captureStage21BaselineBeforeRun(
                     mainJson, pendingStage21OvertimeJsonPath);
         }
-        runStage(STAGE2_1);
+        runStageAfterStage2SourceGuard(STAGE2_1);
     }
 
     /** 入力3表（配台計画_タスク入力3.0）の元ブックパス（段階2.0 入力タブと同じワークブック）。 */
@@ -7506,6 +7708,24 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
 
     /** 当日配台 ON 時、段階1直前にユーザーが選んだ plan+daily ペア。 */
     private Stage1SourcePairMatcher.MatchedPair pendingTodayDispatchSourcePair;
+
+    private boolean lastDispatchTableDirty;
+    private long dispatchTableDirtyGeneration;
+
+    private Stage1SourceBundle pendingTodayDispatchStageBundle;
+
+    private final Stage2SourceGuardCoordinator stage2SourceGuardCoordinator =
+            new Stage2SourceGuardCoordinator(
+                    command -> {
+                        Thread worker =
+                                new Thread(command, "today-dispatch-stage-source-guard");
+                        worker.setDaemon(true);
+                        worker.start();
+                    },
+                    Platform::runLater);
+
+    /** 固定ソースガードの成功コールバックから runLock 取得へ渡すFXスレッド内限定フラグ。 */
+    private boolean stage2SourceGuardRunHandoff;
 
     private void applyStage2InProgressNextDayDispatchEnv(Map<String, String> ui) {
         java.nio.file.Path p = pendingStage2InProgressNextDayJsonPath;

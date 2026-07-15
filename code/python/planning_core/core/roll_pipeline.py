@@ -5809,6 +5809,43 @@ def _timeline_identity_planned_m_on_day(
         return float(qty_by.get((tid, proc, mach, day), 0.0) or 0.0)
     except (TypeError, ValueError):
         return 0.0
+
+
+def _dispatch_table_identity_total_planned_m(
+    records: list[dict], tid: str, proc: str, mach: str
+) -> float:
+    """同一 (依頼NO, 工程, 機械名) の結果_配台表行の当日配台数量合計。"""
+    ident_key = (
+        planning_task_id_str_from_scalar(tid),
+        str(proc or "").strip(),
+        str(mach or "").strip(),
+    )
+    total = 0.0
+    for row in records:
+        ident, _, qty = _dispatch_table_row_identity_and_date_key(row)
+        if ident == ident_key:
+            total += float(qty or 0.0)
+    return total
+
+
+def _dispatch_table_identity_planned_m_on_day(
+    records: list[dict], tid: str, proc: str, mach: str, day: date | None
+) -> float:
+    if day is None:
+        return 0.0
+    ident_key = (
+        planning_task_id_str_from_scalar(tid),
+        str(proc or "").strip(),
+        str(mach or "").strip(),
+    )
+    total = 0.0
+    for row in records:
+        ident, dispatch_day, qty = _dispatch_table_row_identity_and_date_key(row)
+        if ident == ident_key and dispatch_day == day:
+            total += float(qty or 0.0)
+    return _sanitize_dispatch_qty_m(total)
+
+
 def _dispatch_table_fill_row_timeline_meta_from_bounds(
     row: dict,
     *,
@@ -5985,6 +6022,24 @@ def _stage2_dialog_target_plan_day(
     return _first_working_day_strictly_after(run_date, working_days)
 
 
+def _safe_plan_dispatch_remaining_m(plan_ref) -> float:
+    """結果_配台表追補用: 未加工検証で落ちない残量 (m)。"""
+    try:
+        rem, _, _, _ = _plan_row_dispatch_qty_metrics(plan_ref)
+        return max(0.0, float(rem))
+    except Exception:
+        try:
+            qty_conv = parse_float_safe(
+                _planning_df_cell_scalar(plan_ref, TASK_COL_QTY), 0.0
+            )
+            actual = parse_float_safe(
+                _planning_df_cell_scalar(plan_ref, TASK_COL_ACTUAL_DONE), 0.0
+            )
+            return max(0.0, qty_conv - actual)
+        except Exception:
+            return 0.0
+
+
 def _resolve_in_progress_aladdin_today_shortfall_m(
     ov_key: str,
     next_day_m: float,
@@ -6155,26 +6210,45 @@ def append_in_progress_next_day_dialog_rows_to_dispatch_table(
             and today_plan_day is not None
             and today_plan_day != next_day
         ):
-            if (tid, proc, mach, today_plan_day) not in filled:
-                tl_today = _timeline_identity_planned_m_on_day(
-                    tl_qty_by, tid, proc, mach, today_plan_day
-                )
-                if tl_today + 1e-9 < shortfall_m:
-                    out_records.append(_build_dialog_row(today_plan_day, shortfall_m))
-                    filled.add((tid, proc, mach, today_plan_day))
-                    added += 1
-                    added_shortfall += 1
+            table_today = _dispatch_table_identity_planned_m_on_day(
+                out_records, tid, proc, mach, today_plan_day
+            )
+            timeline_today = _timeline_identity_planned_m_on_day(
+                tl_qty_by, tid, proc, mach, today_plan_day
+            )
+            covered_m = max(table_today, timeline_today)
+            uncovered_m = _sanitize_dispatch_qty_m(
+                max(0.0, float(shortfall_m) - float(covered_m))
+            )
+            if uncovered_m > 1e-12:
+                out_records.append(_build_dialog_row(today_plan_day, uncovered_m))
+                filled.add((tid, proc, mach, today_plan_day))
+                added += 1
+                added_shortfall += 1
+
+        existing_total = _dispatch_table_identity_total_planned_m(
+            out_records, tid, proc, mach
+        )
+        rem = _safe_plan_dispatch_remaining_m(plan_ref)
+        remaining_to_plan = max(0.0, float(rem) - existing_total)
+        if remaining_to_plan <= 1e-12:
+            skipped_timeline_covered += 1
+            continue
+        add_m = _sanitize_dispatch_qty_m(min(m, remaining_to_plan))
+        if add_m <= 1e-12:
+            skipped_timeline_covered += 1
+            continue
 
         if (tid, proc, mach, next_day) in filled:
             continue
-        if _timeline_identity_planned_m_on_day(tl_qty_by, tid, proc, mach, next_day) + 1e-9 >= m:
+        if _timeline_identity_planned_m_on_day(tl_qty_by, tid, proc, mach, next_day) + 1e-9 >= add_m:
             skipped_timeline_covered += 1
             continue
         if (
             run_date is not None
             and _timeline_identity_planned_m_on_day(tl_qty_by, tid, proc, mach, run_date)
             + 1e-9
-            >= m
+            >= add_m
         ):
             logging.info(
                 "段階2: 加工途中・翌日追補を省略（run_date=%s にタイムライン配台済 "
@@ -6183,11 +6257,11 @@ def append_in_progress_next_day_dialog_rows_to_dispatch_table(
                 tid,
                 _log_plain_label(proc),
                 _log_plain_label(mach),
-                m,
+                add_m,
             )
             skipped_timeline_covered += 1
             continue
-        out_records.append(_build_dialog_row(next_day, m))
+        out_records.append(_build_dialog_row(next_day, add_m))
         filled.add((tid, proc, mach, next_day))
         added += 1
 

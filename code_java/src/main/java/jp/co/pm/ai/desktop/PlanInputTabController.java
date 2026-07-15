@@ -216,6 +216,7 @@ public final class PlanInputTabController {
      * 配台計画_タスク入力タブの表を手動変更したが「保存」または「再読み」でディスクと同期していないとき、段階2を抑止する。
      */
     private boolean stage2BlockedByUnsavedPlanInputTableEdit;
+    private long planInputDirtyGeneration;
 
     /** 納期管理ビュー再読み込み中（メインシェルから同期）。 */
     private boolean deliveryCalendarReloadBlocking;
@@ -437,12 +438,22 @@ public final class PlanInputTabController {
         return stage2BlockedByUnsavedPlanInputTableEdit;
     }
 
+    long snapshotPlanInputDirtyGeneration() {
+        return planInputDirtyGeneration;
+    }
+
     private void markPlanInputTableDirtySinceSave() {
+        if (!stage2BlockedByUnsavedPlanInputTableEdit) {
+            planInputDirtyGeneration++;
+        }
         stage2BlockedByUnsavedPlanInputTableEdit = true;
         applyStage2RunButtonEnabledState();
     }
 
     private void clearPlanInputTableDirtySinceSave() {
+        if (stage2BlockedByUnsavedPlanInputTableEdit) {
+            planInputDirtyGeneration++;
+        }
         stage2BlockedByUnsavedPlanInputTableEdit = false;
         applyStage2RunButtonEnabledState();
     }

@@ -45,6 +45,18 @@ public final class PipelineDownstreamResultsClearer {
 
     /** 段階2〜3.2 のディスク成果物を削除し、入力3表シートを空にする。 */
     public static ClearResult clearStage2ThroughStage32(Map<String, String> ui) {
+        return clearStage2ThroughStage32(ui, false);
+    }
+
+    /**
+     * 段階2〜3.2 のディスク成果物を削除し、入力3表シートを空にする。
+     *
+     * @param preserveTodayDispatchSourceBundle true のとき当日配台ソース束
+     *     ({@link jp.co.pm.ai.planning.stage2.source.Stage1SourceBundleIo}) は削除しない（段階2.0
+     *     実行直前クリア向け）
+     */
+    public static ClearResult clearStage2ThroughStage32(
+            Map<String, String> ui, boolean preserveTodayDispatchSourceBundle) {
         Map<String, String> u = ui != null ? ui : Map.of();
         List<String> logs = new ArrayList<>();
         int deleted = 0;
@@ -56,8 +68,10 @@ public final class PipelineDownstreamResultsClearer {
         collectStage2PrimaryArtifacts(u, targets);
         targets.add(DispatchRuleTraceLoader.sidecarPath(u));
         targets.add(Stage2InProgressNextDayDispatchIo.defaultCachePath(u));
-        targets.add(
-                jp.co.pm.ai.planning.stage2.source.Stage1SourceBundleIo.defaultCachePath(u));
+        if (!preserveTodayDispatchSourceBundle) {
+            targets.add(
+                    jp.co.pm.ai.planning.stage2.source.Stage1SourceBundleIo.defaultCachePath(u));
+        }
         targets.add(
                 jp.co.pm.ai.planning.stage2.Stage2AladdinTodayExcludeNextDayDispatchIo.defaultCachePath(
                         u));
