@@ -21,7 +21,6 @@ import javafx.scene.control.TableCell;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 import javafx.scene.control.ToggleGroup;
-import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.layout.VBox;
 import javafx.scene.layout.HBox;
 import javafx.stage.FileChooser;
@@ -123,20 +122,37 @@ public final class TodayDispatchSourceSelectionDialog {
             return selectRadio;
         }
 
-        String planTime() {
+        /** JavaFX {@link PropertyValueFactory} 用（{@code get} 接頭辞必須）。 */
+        public String getPlanTime() {
             return planTime.get();
         }
 
-        String planFile() {
+        public String getPlanFile() {
             return planFile.get();
         }
 
-        String dailyTime() {
+        public String getDailyTime() {
             return dailyTime.get();
         }
 
-        String delta() {
+        public String getDelta() {
             return delta.get();
+        }
+
+        SimpleStringProperty planTimeProperty() {
+            return planTime;
+        }
+
+        SimpleStringProperty planFileProperty() {
+            return planFile;
+        }
+
+        SimpleStringProperty dailyTimeProperty() {
+            return dailyTime;
+        }
+
+        SimpleStringProperty deltaProperty() {
+            return delta;
         }
     }
 
@@ -181,17 +197,17 @@ public final class TodayDispatchSourceSelectionDialog {
                         });
 
         TableColumn<Row, String> planTimeCol = new TableColumn<>("計画取得");
-        planTimeCol.setCellValueFactory(new PropertyValueFactory<>("planTime"));
+        planTimeCol.setCellValueFactory(c -> c.getValue().planTimeProperty());
 
         TableColumn<Row, String> planFileCol = new TableColumn<>("加工計画");
-        planFileCol.setCellValueFactory(new PropertyValueFactory<>("planFile"));
+        planFileCol.setCellValueFactory(c -> c.getValue().planFileProperty());
 
         TableColumn<Row, String> dailyTimeCol = new TableColumn<>("日報取得");
-        dailyTimeCol.setCellValueFactory(new PropertyValueFactory<>("dailyTime"));
+        dailyTimeCol.setCellValueFactory(c -> c.getValue().dailyTimeProperty());
 
         TableColumn<Row, String> deltaCol = new TableColumn<>("差分");
         deltaCol.setMaxWidth(72);
-        deltaCol.setCellValueFactory(new PropertyValueFactory<>("delta"));
+        deltaCol.setCellValueFactory(c -> c.getValue().deltaProperty());
 
         TableColumn<Row, Row> dailyPickCol = new TableColumn<>("加工日報");
         dailyPickCol.setCellValueFactory(c -> new SimpleObjectProperty<>(c.getValue()));
