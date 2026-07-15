@@ -102,6 +102,14 @@ public final class DesktopSessionStateStore {
      * <strong>最後</strong>に重ねる（工場別の上書き。無い場合は無視）。グローバル設定の書き出し先と工場リセットの参照先を揃える。
      */
     static JsonNode readMergedSessionUiDefaultsNode(Map<String, String> ui) {
+        return readMergedSessionUiDefaultsNode(ui, ui != null ? GlobalInitSettingTarget.load() : null);
+    }
+
+    /**
+     * {@link #readMergedSessionUiDefaultsNode(Map)} と同じマージだが、工場別 {@code session_defaults_*.json} は
+     * {@code factorySite} を明示指定する（環境変数初期化など、ストアと読みたい工場を一致させたいとき用）。
+     */
+    static JsonNode readMergedSessionUiDefaultsNode(Map<String, String> ui, FactorySite factorySite) {
         ObjectNode acc = JSON.createObjectNode();
         mergeSessionUiFromClasspath(acc, BUNDLED_SESSION_UI_DEFAULTS_RESOURCE);
         mergeSessionUiFromClasspath(acc, LEGACY_BUNDLED_SESSION_BADGE_DEFAULTS_RESOURCE);
@@ -122,8 +130,11 @@ public final class DesktopSessionStateStore {
         if (ui != null) {
             Path repoInit = InitSettingPaths.resolveRepoInitSettingDir(ui);
             mergeSessionUiFromPath(acc, repoInit.resolve(InitSettingPaths.SESSION_DEFAULTS_FILE));
-            FactorySite g = GlobalInitSettingTarget.load();
-            mergeSessionUiFromPath(acc, repoInit.resolve(InitSettingPaths.sessionDefaultsFileForFactory(g)));
+            FactorySite g = factorySite != null ? factorySite : GlobalInitSettingTarget.load();
+            if (g != null) {
+                mergeSessionUiFromPath(
+                        acc, repoInit.resolve(InitSettingPaths.sessionDefaultsFileForFactory(g)));
+            }
         }
         return acc.size() > 0 ? acc : null;
     }
@@ -135,11 +146,11 @@ public final class DesktopSessionStateStore {
 
     public static RequestFormComboChoices loadFactoryRequestFormComboChoices(
             Map<String, String> ui, FactorySite site) {
-        JsonNode merged = readMergedSessionUiDefaultsNode(ui);
+        FactorySite effective = site != null ? site : FactorySite.KONAN;
+        JsonNode merged = readMergedSessionUiDefaultsNode(ui, effective);
         if (merged == null || !merged.isObject()) {
             return RequestFormComboChoices.empty();
         }
-        FactorySite effective = site != null ? site : FactorySite.KONAN;
         Path factoryFile =
                 ui != null
                         ? InitSettingPaths.resolveRepoInitSettingDir(ui)
@@ -214,13 +225,24 @@ public final class DesktopSessionStateStore {
     /**
      * 工場出荷 UI リセット用: マージ済み既定に対し、環境・実行パスだけ {@code bootstrap} を適用する。
      *
+     * <p>工場別 {@code session_defaults_*.json} は {@link GlobalInitSettingTarget#load()} を参照する。
+     *
      * @param ui 非 null のとき {@code resolveRepoInitSettingDir(ui)} 配下の {@code session_defaults.json} と工場別
      *     {@link InitSettingPaths#sessionDefaultsFileForFactory(FactorySite)} をマージ最終層に含め、グローバル設定で書き出した UI
      *     既定に近づける
      */
     public static DesktopSessionState buildFactoryResetSession(
             DesktopSessionState bootstrap, Map<String, String> ui) {
-        JsonNode merged = readMergedSessionUiDefaultsNode(ui);
+        return buildFactoryResetSession(bootstrap, ui, GlobalInitSettingTarget.load());
+    }
+
+    /**
+     * {@link #buildFactoryResetSession(DesktopSessionState, Map)} と同じだが、工場別 {@code init_setting} を
+     * {@code factorySite} で明示する。
+     */
+    public static DesktopSessionState buildFactoryResetSession(
+            DesktopSessionState bootstrap, Map<String, String> ui, FactorySite factorySite) {
+        JsonNode merged = readMergedSessionUiDefaultsNode(ui, factorySite);
         ObjectNode root =
                 merged != null && merged.isObject()
                         ? (ObjectNode) merged

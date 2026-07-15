@@ -4172,7 +4172,8 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
      * Resets the env-var table to bundled defaults ({@link UiRefEnvDefaults}) and reapplies bootstrap fills.
      * Shows a confirmation dialog first.
      *
-     * <p>順序: 現在の利用工場のグローバル設定（{@code init_setting}）を適用 → 環境変数を初期化。
+     * <p>順序: 現在選択工場のグローバル設定（{@code init_setting} 全体）を適用 → 環境変数を初期化 →
+     * 依頼書原本フォルダ案内 → 実行・ログタブへ遷移。
      */
     public void confirmAndResetEnvRowsToDefaults() {
         FactorySite site = GlobalInitSettingTarget.load();
@@ -4194,12 +4195,29 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         if (ans.isEmpty() || ans.get() != ButtonType.OK) {
             return;
         }
-        // 1) 現在の工場のグローバル設定（init_setting session_defaults / 依頼書設定）を適用
+        GlobalInitSettingTarget.save(site);
+        // 1) 現在工場のグローバル設定（init_setting 全体: タブ構成・テーマ・列順・依頼書設定など）を適用
         suppressEnvSessionPersistence.set(true);
         try {
-            applyInitSettingFactorySessionFragment(site);
+            DesktopSessionState merged =
+                    DesktopSessionStateStore.buildFactoryResetSession(
+                            collectDesktopSession(), collectUiEnv(), site);
+            /*
+             * 環境変数は直後の applyEnvRowsFullBundledResetAndPersist で ui_ref 既定へ載せ替える。
+             * applyUiEnvRowsFromSession（true）だと init_setting の uiEnvRows と初期化が干渉するため false。
+             */
+            applyDesktopSession(merged, false, false);
             applyFactoryRequestFormGlobalSettings(site, true);
+            TableColumnOrderPersistence.materializeTableColumnStoreAfterFactoryReset(collectUiEnv());
+            applyDesktopThemeFromSession(merged);
             refreshDesktopSessionDependentUi();
+            if (globalSettingsTabController != null) {
+                globalSettingsTabController.refreshInitSettingTargetComboFromStore();
+            }
+            if (mainRunTabController != null) {
+                mainRunTabController.refreshFactorySiteComboFromStore();
+                mainRunTabController.refreshFactorySiteLogo();
+            }
         } finally {
             suppressEnvSessionPersistence.set(false);
         }
@@ -4213,7 +4231,10 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                 "[env] "
                         + site.displayLabelJa()
                         + "のグローバル設定を適用し、環境変数を ui_ref 既定に戻しました。");
+        // 3) 依頼書原本フォルダ（未設定時のみ案内）
         maybePromptRequestFormOriginalDirIfUnset("[env]", site);
+        // 4) 実行・ログタブへ遷移
+        selectMainShellTab(MainShellTabId.RUN);
         requireOperatorSelectionForFactory(site, false);
     }
 
