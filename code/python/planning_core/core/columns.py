@@ -334,6 +334,7 @@ def dispatchable_from_time_for(stock_location=None) -> time:
 PLAN_COL_PARENT_TASK_ID = "元依頼NO"
 PLAN_COL_BRANCH_SEQ = "配台枝番"
 PLAN_COL_PREFERRED_OP = "担当OP_指定"
+PLAN_COL_LIMITED_OP = "担当OP_限定"
 PLAN_COL_SPECIAL_REMARK = "特別指定_備考"
 PLAN_COL_EXCLUDE_FROM_ASSIGNMENT = "配台不要"
 PLAN_COL_STAGE2_DISPATCH_PLAN_EXCLUDE_MARKER = "配台計画除外"
@@ -755,7 +756,7 @@ def plan_input_sheet_column_order():
     2. 加工計画DATA 由来（SOURCE_BASE_COLUMNS）… 依頼NO〜実出来高まで（換算数量の次に未加工→配台使用残数量→配台ロール数、製品名の直後に(製品)ロール単位長さ・製品幅、原反投入日の直後に在庫場所・使用原反の直後に(原反)ロール単位長さ・原反幅）
        （(製品)ロール単位長さは製品名テーブル→製品名寸法のみ。(原反)ロール単位長さは使用原反テーブル→使用原反文字列の寸法→いずれも不可なら「不明」）
     3. 加工工程の決定プロセスの因孝
-    4. 手入力列… 担当OP_指定・特別指定_備考・AI特別指定_解析 等（{@code （元）…} 参照列・*_上書き 列は廃止）
+    4. 手入力列… 担当OP_指定・担当OP_限定・特別指定_備考・AI特別指定_解析 等（{@code （元）…} 参照列・*_上書き 列は廃止）
 
     「加工速度」列は master.xlsm「speed」（基本速度×実稼働比率）で埋め、配台の実効速度は列「加工速度」のみ。
     global_speed_rules 等で変える実効速度は計画シート列には出ないが、配台で確定した値は結果_タスク一覧の「加工速度」列に出力される。
@@ -783,6 +784,8 @@ def plan_input_sheet_column_order():
         if c in PLAN_DEPRECATED_OVERRIDE_COLUMNS:
             continue
         cols.append(c)
+        if c == PLAN_COL_PREFERRED_OP:
+            cols.append(PLAN_COL_LIMITED_OP)
     return cols
 def plan_input_stage3_sheet_column_order():
     """段階3 入力3表の列順。入力1表の列順の先頭に枝番識別列（元依頼NO・配台枝番）を足したもの。

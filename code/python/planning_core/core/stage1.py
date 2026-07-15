@@ -111,6 +111,13 @@ def _write_stage1_task_input_preview_xlsx(df: pd.DataFrame, out_dir: str) -> str
         len(df_out),
     )
     return out_path
+def _initialize_stage1_manual_input_columns(rec: dict) -> None:
+    """段階1で新規生成する手入力列を空欄に初期化する。"""
+    rec[PLAN_COL_PREFERRED_OP] = ""
+    rec[PLAN_COL_LIMITED_OP] = ""
+    rec[PLAN_COL_SPECIAL_REMARK] = ""
+    rec[PLAN_COL_EXCLUDE_FROM_ASSIGNMENT] = ""
+    rec[PLAN_COL_AI_PARSE] = ""
 def run_stage1_extract():
     """
     段階1: 加工計画DATA から配台用タスク一覧を抽出し output/plan_input_tasks.xlsx へ出力。
@@ -273,10 +280,7 @@ def run_stage1_extract():
                 _raw_for_dispatch, stock_location=rec.get(TASK_COL_STOCK_LOCATION)
             )
         )
-        rec[PLAN_COL_PREFERRED_OP] = ""
-        rec[PLAN_COL_SPECIAL_REMARK] = ""
-        rec[PLAN_COL_EXCLUDE_FROM_ASSIGNMENT] = ""
-        rec[PLAN_COL_AI_PARSE] = ""
+        _initialize_stage1_manual_input_columns(rec)
         records.append(rec)
     if not records:
         logging.warning("段階1: 抽出対象タスクはありません。")
