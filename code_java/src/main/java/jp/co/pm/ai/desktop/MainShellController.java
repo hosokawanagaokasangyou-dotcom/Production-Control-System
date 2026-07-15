@@ -634,6 +634,12 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
     /** OFF中も段階3タブの保存済み位置・グループを失わないための完全レイアウト。 */
     private List<MainShellTabLayoutNode> completeMainShellTabLayout = List.of();
 
+    /**
+     * 直前の {@link #applyStage3UiVisibility()} で適用した表示状態。未適用は {@code null}。
+     * 環境変数 debounce のたびにタブを組み替えると選択が消え、操作可能なリモート等へ寄るため、変化時のみ再構築する。
+     */
+    private Boolean lastAppliedStage3UiVisible;
+
     /** 非選択タブの重い {@link Tab#setContent(Node)} を退避するときの {@link Tab#getProperties()} キー。 */
     private static final String PM_DEFERRED_TAB_CONTENT = "pmDeferredTabContent";
 
@@ -3360,6 +3366,9 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         if (!found.equals(required)) {
             return false;
         }
+        MainShellTabId selectedLeafBefore =
+                mainShellTabId(
+                        resolveEffectiveLeafTab(tabPane.getSelectionModel().getSelectedItem()));
         completeMainShellTabLayout = prepared;
         suppressEnvSessionPersistence.set(true);
         suppressMainShellTabChromeRefresh.set(true);
@@ -3402,6 +3411,17 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
             suppressEnvSessionPersistence.set(false);
         }
         refreshMainShellTabDisplayedTitles();
+        if (isPipelineRunLocked()
+                || activeRunStageScript != null
+                || activeDispatchTrialKind != null) {
+            ensureMainShellRunTabSelected();
+        } else if (selectedLeafBefore != null) {
+            selectMainShellTabRecursive(tabPane, selectedLeafBefore);
+            if (!suppressLazyMainShellTabContentSwap.get()) {
+                activateMainShellTabHeavyContentRecursive(
+                        tabPane.getSelectionModel().getSelectedItem());
+            }
+        }
         lastEffectiveShellLeaf =
                 resolveEffectiveLeafTab(tabPane.getSelectionModel().getSelectedItem());
         Platform.runLater(this::refreshMainShellTabHeaderChromeFromStoredColors);
@@ -4140,15 +4160,30 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         if (pushButtonDesignTabController != null) {
             pushButtonDesignTabController.applyStage3UiVisibility(visible);
         }
-        List<MainShellTabLayoutNode> liveLayout = snapshotLiveMainShellTabLayout();
-        List<MainShellTabLayoutNode> fullLayout =
-                Stage3MainShellLayout.mergeHiddenTab(
-                        liveLayout, completeMainShellTabLayout);
-        if (!fullLayout.isEmpty()) {
-            rebuildMainShellTabsFromLayout(fullLayout);
-        }
-        if (mainShellTabOrganizerPaneController != null) {
-            mainShellTabOrganizerPaneController.refreshFromShell();
+        boolean visibilityChanged =
+                lastAppliedStage3UiVisible == null || lastAppliedStage3UiVisible != visible;
+        lastAppliedStage3UiVisible = visible;
+        /*
+         * 環境変数タブの debounce のたびに rebuild すると選択が先頭へ戻り、段階実行中は操作可能な
+         * リモートデスクトップ等へ JavaFX が自動遷移する。表示状態が変わったときだけ組み替える。
+         */
+        if (visibilityChanged) {
+            List<MainShellTabLayoutNode> liveLayout = snapshotLiveMainShellTabLayout();
+            List<MainShellTabLayoutNode> fullLayout =
+                    Stage3MainShellLayout.mergeHiddenTab(
+                            liveLayout, completeMainShellTabLayout);
+            if (!fullLayout.isEmpty()) {
+                rebuildMainShellTabsFromLayout(fullLayout);
+            }
+            if (mainShellTabOrganizerPaneController != null) {
+                mainShellTabOrganizerPaneController.refreshFromShell();
+            }
+            if (isPipelineRunLocked()
+                    || activeRunStageScript != null
+                    || activeDispatchTrialKind != null) {
+                ensureMainShellRunTabSelected();
+                applyRunTabGating();
+            }
         }
     }
 
@@ -4233,9 +4268,10 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                         + "のグローバル設定を適用し、環境変数を ui_ref 既定に戻しました。");
         // 3) 依頼書原本フォルダ（未設定時のみ案内）
         maybePromptRequestFormOriginalDirIfUnset("[env]", site);
-        // 4) 実行・ログタブへ遷移
-        selectMainShellTab(MainShellTabId.RUN);
+        // 4) 実行・ログタブへ遷移（ダイアログ後・タブ再構築後の自動遷移を打ち消す）
+        ensureMainShellRunTabSelected();
         requireOperatorSelectionForFactory(site, false);
+        Platform.runLater(this::ensureMainShellRunTabSelected);
     }
 
     /**
@@ -5299,14 +5335,8 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                 this::isMainShellLeafOperableDuringPipelineRun,
                 pipelineBusy ? mainShellTabRun : null);
         if (pipelineBusy) {
-            Tab leaf =
-                    MainShellRunTabGating.effectiveLeaf(
-                            tabPane.getSelectionModel().getSelectedItem());
-            if (leaf == null
-                    || leaf.isDisable()
-                    || !isMainShellLeafOperableDuringPipelineRun(leaf)) {
-                selectMainShellTab(MainShellTabId.RUN);
-            }
+            // リモートデスクトップ等「操作可能」葉への自動遷移を許容せず実行・ログへ固定する
+            ensureMainShellRunTabSelected();
         }
     }
 
@@ -6201,7 +6231,44 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         if (tabPane == null || id == null) {
             return;
         }
+        if (id == MainShellTabId.RUN) {
+            ensureMainShellRunTabSelected();
+            return;
+        }
         selectMainShellTabRecursive(tabPane, id);
+    }
+
+    /**
+     * 「実行・ログ」葉タブを確実に選択する。タブ整理のグループ化後や {@link #rebuildMainShellTabsFromLayout}
+     * 直後は 1 フレーム遅れて再試行する（無効化時の自動遷移でリモート等へ寄った場合も戻す）。
+     */
+    private void ensureMainShellRunTabSelected() {
+        if (tabPane == null || mainShellTabRun == null) {
+            return;
+        }
+        Runnable select =
+                () -> {
+                    if (!selectShellTabLeaf(mainShellTabRun)) {
+                        selectMainShellTabRecursive(tabPane, MainShellTabId.RUN);
+                    }
+                    Tab effective =
+                            resolveEffectiveLeafTab(
+                                    tabPane.getSelectionModel().getSelectedItem());
+                    if (effective != mainShellTabRun) {
+                        selectShellTabLeaf(mainShellTabRun);
+                    }
+                    if (!suppressLazyMainShellTabContentSwap.get()) {
+                        activateMainShellTabHeavyContentRecursive(
+                                tabPane.getSelectionModel().getSelectedItem());
+                    }
+                    lastEffectiveShellLeaf = mainShellTabRun;
+                };
+        if (Platform.isFxApplicationThread()) {
+            select.run();
+            Platform.runLater(select);
+        } else {
+            Platform.runLater(select);
+        }
     }
 
     private boolean selectMainShellTabRecursive(TabPane pane, MainShellTabId id) {

@@ -64,6 +64,39 @@ class MainShellRunTabGatingTest {
     }
 
     @Test
+    void afterDisableStillSelectsPreferredLeafWhenRemoteWouldStayOperable() throws Exception {
+        CountDownLatch completed = new CountDownLatch(1);
+        AtomicReference<AssertionError> failure = new AtomicReference<>();
+        Platform.runLater(
+                () -> {
+                    try {
+                        Tab run = new Tab("run");
+                        Tab remote = new Tab("remote");
+                        Tab blocked = new Tab("blocked");
+                        TabPane outer = new TabPane(blocked, remote, run);
+                        outer.getSelectionModel().select(blocked);
+
+                        MainShellRunTabGating.apply(
+                                outer,
+                                true,
+                                tab -> tab == run || tab == remote,
+                                run);
+
+                        assertEquals(run, outer.getSelectionModel().getSelectedItem());
+                    } catch (AssertionError error) {
+                        failure.set(error);
+                    } finally {
+                        completed.countDown();
+                    }
+                });
+
+        assertTrue(completed.await(5, TimeUnit.SECONDS));
+        if (failure.get() != null) {
+            throw failure.get();
+        }
+    }
+
+    @Test
     void prefersRunOverRemoteWhenBusyDisablesCurrentSelection() throws Exception {
         CountDownLatch completed = new CountDownLatch(1);
         AtomicReference<AssertionError> failure = new AtomicReference<>();
