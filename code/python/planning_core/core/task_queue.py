@@ -1,5 +1,63 @@
 # -*- coding: utf-8 -*-
 # planning_core.core.task_queue — body only (loaded via _core exec chain)
+def _limited_operator_error_context(excel_row_number, task_id) -> str:
+    try:
+        row_num = int(excel_row_number)
+    except (TypeError, ValueError):
+        row_num = 0
+    tid = str(task_id or "").strip() or "（空欄）"
+    return f"Excel行{row_num}・依頼NO={tid}・列「{PLAN_COL_LIMITED_OP}」"
+
+
+def _parse_limited_operator_json_cell(
+    raw_value, excel_row_number, task_id
+) -> tuple[str, ...]:
+    """「担当OP_限定」を厳格な JSON 文字列配列として読む。"""
+    context = _limited_operator_error_context(excel_row_number, task_id)
+    if raw_value is None or (isinstance(raw_value, float) and pd.isna(raw_value)):
+        return ()
+    if not isinstance(raw_value, str):
+        raise PlanningValidationError(
+            f"{context}: JSON文字列ではありません（実値の型={type(raw_value).__name__}）。"
+        )
+    raw = raw_value.strip()
+    if not raw:
+        return ()
+    try:
+        parsed = json.loads(raw)
+    except (json.JSONDecodeError, TypeError) as exc:
+        raise PlanningValidationError(
+            f"{context}: 不正JSONです（{exc}）。"
+        ) from exc
+    if not isinstance(parsed, list):
+        raise PlanningValidationError(f"{context}: JSONの最上位は配列でなければなりません。")
+    if not parsed:
+        raise PlanningValidationError(
+            f"{context}: JSON配列には選択名を1名以上指定してください。"
+        )
+
+    names: list[str] = []
+    normalized_seen: set[str] = set()
+    for index, value in enumerate(parsed, start=1):
+        if not isinstance(value, str):
+            raise PlanningValidationError(
+                f"{context}: 配列要素{index}は文字列でなければなりません。"
+            )
+        name = value.strip()
+        if not name:
+            raise PlanningValidationError(f"{context}: 配列要素{index}が空名です。")
+        normalized = _normalize_person_name_for_match(name)
+        if not normalized:
+            raise PlanningValidationError(f"{context}: 配列要素{index}が空名です。")
+        if normalized in normalized_seen:
+            raise PlanningValidationError(
+                f"{context}: 重複名があります（{name!r}）。"
+            )
+        normalized_seen.add(normalized)
+        names.append(name)
+    return tuple(names)
+
+
 def _stage2_in_progress_next_day_dispatch_key(
     task_id: str, machine: str, machine_name: str
 ) -> str:
@@ -37,6 +95,7 @@ def build_task_queue_from_planning_df(
 
     for planning_df_iloc, (row_idx, row) in enumerate(tasks_df.iterrows()):
         task_id = planning_task_id_str_from_plan_row(row)
+        planning_excel_row = planning_df_iloc + 2
         # 枝番タスク（入力3表）の親。列「元依頼NO」が空なら自身を親とする。
         # 配台 task_id は枝番依頼NO（例 Y3-24-01）のままで、特別ルール・WIP・工程依存は rule_task_id=親で集計する。
         parent_task_id = str(
@@ -156,6 +215,11 @@ def build_task_queue_from_planning_df(
             allow_ai_dispatch_priority_from_remark=allow_ai_dispatch_priority,
         )
         preferred_operator_raw = _merge_preferred_operator_cell_and_ai(row, ai_one)
+        limited_operator_names = _parse_limited_operator_json_cell(
+            _planning_df_cell_scalar(row, PLAN_COL_LIMITED_OP),
+            planning_excel_row,
+            task_id,
+        )
         gpo = global_priority_override or {}
         gop_name = _global_override_preferred_operator_for_task(
             gpo.get("task_preferred_operators"), task_id
@@ -397,6 +461,8 @@ def build_task_queue_from_planning_df(
                 "priority": priority,
                 "earliest_start_time": start_time_ov,
                 "preferred_operator_raw": preferred_operator_raw,
+                "limited_operator_names": limited_operator_names,
+                "planning_excel_row": planning_excel_row,
                 "task_special_ai_note": ai_note,
                 "in_progress": in_progress,
                 "qty_from_in_progress_next_day_dialog": qty_from_in_progress_next_day_dialog,

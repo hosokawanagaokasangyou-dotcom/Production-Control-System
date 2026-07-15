@@ -337,6 +337,10 @@ def _trial_order_flow_eligible_tasks(
     for task in tasks_today:
         if float(task.get("remaining_units") or 0) <= 1e-12:
             continue
+        _abolish_for_task = _scheduling_limits_abolished_for_task(
+            {"abolish_all_scheduling_limits": abolish_all_scheduling_limits},
+            task,
+        )
         _t_task0 = time_module.perf_counter()
         try:
             if (
@@ -445,7 +449,7 @@ def _trial_order_flow_eligible_tasks(
                 machine_day_start=machine_day_start,
                 machine_handoff=machine_handoff,
                 skills_dict=skills_dict,
-                abolish_all_scheduling_limits=abolish_all_scheduling_limits,
+                abolish_all_scheduling_limits=_abolish_for_task,
                 dispatch_interval_mirror=dispatch_interval_mirror,
                 min_dispatch_effective=min_dispatch_effective,
             ):
@@ -471,7 +475,7 @@ def _trial_order_flow_eligible_tasks(
                 machine_day_start,
                 machine_handoff=machine_handoff,
                 skills_dict=skills_dict,
-                abolish_all_scheduling_limits=abolish_all_scheduling_limits,
+                abolish_all_scheduling_limits=_abolish_for_task,
                 dispatch_interval_mirror=dispatch_interval_mirror,
                 window_left_cache=window_left_cache,
             ):
@@ -516,7 +520,7 @@ def _trial_order_flow_eligible_tasks(
             machine_day_start=machine_day_start,
             machine_handoff=machine_handoff,
             skills_dict=skills_dict,
-            abolish_all_scheduling_limits=abolish_all_scheduling_limits,
+            abolish_all_scheduling_limits=_abolish_for_task,
             dispatch_interval_mirror=dispatch_interval_mirror,
             assign_probe_ctx=assign_probe_ctx,
             pending_by_occ=pending_by_occ,
@@ -549,6 +553,7 @@ def _assign_one_roll_trial_order_flow(
     _need_headcount_logged_orders: set,
     team_combo_presets: dict | None = None,
     dispatch_interval_mirror: DispatchIntervalMirror | None = None,
+    limited_equipment_mirror: DispatchIntervalMirror | None = None,
     machine_handoff: dict | None = None,
     timeline_events: list | None = None,
     stage35_overtime_only: bool = False,
@@ -565,6 +570,10 @@ def _assign_one_roll_trial_order_flow(
     eq_line = str(task.get("equipment_line_key") or machine or "").strip() or machine
     machine_occ_key = _machine_occupancy_key_resolve(task, eq_line)
     _gpo = global_priority_override or {}
+    _all_limits_abolished = bool(_gpo.get("abolish_all_scheduling_limits"))
+    _equipment_occupancy_abolished = (
+        _new_dispatch_scheduling_limits_abolished(_gpo, task)
+    )
     _mh = machine_handoff or {
         "last_tid": {},
         "last_eq": {},
@@ -674,7 +683,7 @@ def _assign_one_roll_trial_order_flow(
     skill_meta_cache: dict = {}
 
     def skill_role_priority(mem):
-        if _gpo.get("ignore_skill_requirements"):
+        if _new_dispatch_skill_requirements_ignored(_gpo, task):
             return ("OP", 100)
         if mem not in skill_meta_cache:
             srow = skills_dict.get(mem, {})
@@ -701,6 +710,23 @@ def _assign_one_roll_trial_order_flow(
         if pref_raw
         else None
     )
+    limited_constraints = _new_dispatch_limited_operator_constraints(
+        task,
+        members,
+        skill_role_priority,
+        capable_members,
+        pref_mem,
+    )
+    if limited_constraints is not None:
+        req_num = limited_constraints["required_count"]
+        need_src_line = (
+            f"計画シート「{PLAN_COL_LIMITED_OP}」で必須人数={req_num}"
+        )
+        capable_members = limited_constraints["capable_members"]
+        op_today = [
+            m for m in capable_members if skill_role_priority(m)[0] == "OP"
+        ]
+        pref_mem = limited_constraints["preferred_member"]
 
     _gdp_must, _gdp_warns = _active_global_day_process_must_include(
         _gpo, task, current_date, capable_members, members
@@ -708,8 +734,12 @@ def _assign_one_roll_trial_order_flow(
 
     for _gw in _gdp_warns:
         logging.warning(_gw)
-    fixed_team_anchor = _merge_global_day_process_and_pref_anchor(
-        _gdp_must, pref_mem, capable_members
+    fixed_team_anchor = (
+        limited_constraints["fixed_team"]
+        if limited_constraints is not None
+        else _merge_global_day_process_and_pref_anchor(
+            _gdp_must, pref_mem, capable_members
+        )
     )
     if _gdp_must:
         logging.info(
@@ -726,13 +756,17 @@ def _assign_one_roll_trial_order_flow(
             need_src_line += f"グローバル(日付×工程)指定で最低{_nfix}人"
         req_num = max(req_num, _nfix)
 
-    extra_max_sheet, extra_src_line = resolve_need_surplus_extra_max_explain(
-        machine,
-        machine_name,
-        task["task_id"],
-        surplus_map,
-        need_rules,
-    )
+    if limited_constraints is not None:
+        extra_max_sheet = 0
+        extra_src_line = f"計画シート「{PLAN_COL_LIMITED_OP}」で追加人数=0"
+    else:
+        extra_max_sheet, extra_src_line = resolve_need_surplus_extra_max_explain(
+            machine,
+            machine_name,
+            task["task_id"],
+            surplus_map,
+            need_rules,
+        )
     if TEAM_ASSIGN_IGNORE_NEED_SURPLUS_ROW:
         extra_max_sheet = 0
         extra_src_line = (
@@ -759,9 +793,13 @@ def _assign_one_roll_trial_order_flow(
         else ""
     )
     preset_rows_assign = (
-        (team_combo_presets or {}).get(combo_key_assign)
-        if (team_combo_presets and combo_key_assign)
-        else None
+        limited_constraints["preset_rows"]
+        if limited_constraints is not None
+        else (
+            (team_combo_presets or {}).get(combo_key_assign)
+            if (team_combo_presets and combo_key_assign)
+            else None
+        )
     )
 
     # 組み合わせ表プリセットが存在する工程+機械は、探索で表外メンバーを混ぜず
@@ -843,7 +881,7 @@ def _assign_one_roll_trial_order_flow(
         machine_occ_key, machine_day_floor
     )
     _mach_floor_eff, _co_segs, _co_abort = _resolve_machine_changeover_floor_segments(
-        abolish_all_scheduling_limits=bool(_gpo.get("abolish_all_scheduling_limits")),
+        abolish_all_scheduling_limits=_equipment_occupancy_abolished,
         machine_occ_key=machine_occ_key,
         task_id=str(task.get("task_id") or "").strip(),
         eq_line=eq_line,
@@ -908,10 +946,11 @@ def _assign_one_roll_trial_order_flow(
             )
             return None
         team_start = max(avail_dt[m] for m in team)
-        if not _gpo.get("abolish_all_scheduling_limits"):
+        if not _equipment_occupancy_abolished:
             machine_free_dt = _mach_floor_eff
             if team_start < machine_free_dt:
                 team_start = machine_free_dt
+        if not _all_limits_abolished:
             if team_start < day_floor:
                 team_start = day_floor
         if b2_insp_ec_floor is not None and team_start < b2_insp_ec_floor:
@@ -968,10 +1007,11 @@ def _assign_one_roll_trial_order_flow(
 
         def _refloor_trial_roll(ts: datetime) -> datetime:
             ts = max(ts, max(avail_dt[m] for m in team))
-            if not _gpo.get("abolish_all_scheduling_limits"):
+            if not _equipment_occupancy_abolished:
                 mf = _mach_floor_eff
                 if ts < mf:
                     ts = mf
+            if not _all_limits_abolished:
                 if ts < day_floor:
                     ts = day_floor
             if b2_insp_ec_floor is not None and ts < b2_insp_ec_floor:
@@ -1007,7 +1047,7 @@ def _assign_one_roll_trial_order_flow(
             return None
         team_start = team_start_d
         _roll_prep_extra: list[dict] = []
-        if not _gpo.get("abolish_all_scheduling_limits"):
+        if not _equipment_occupancy_abolished:
             team_start, _roll_prep_extra = _roll_prep_segments_for_assign(
                 team_start=team_start,
                 team_breaks=team_breaks,
@@ -1034,6 +1074,18 @@ def _assign_one_roll_trial_order_flow(
                 machine_day_floor=machine_day_floor,
             )
             team_start = _refloor_trial_roll(team_start)
+        protected_capacity = _candidate_capacity_after_equipment_protection(
+            limited_equipment_mirror,
+            machine_occ_key,
+            team_start,
+            float(max(1, int(math.ceil(eff_time_per_unit)))),
+            1.0,
+            team_breaks,
+            team_end_limit,
+        )
+        if protected_capacity is None:
+            return None
+        team_start, _ = protected_capacity
         if team_start >= team_end_limit:
             _trace_assign(
                 "候補坴下: デファー後に開始>=終業 team=%s start=%s end_limit=%s",
@@ -1126,6 +1178,23 @@ def _assign_one_roll_trial_order_flow(
                 team_start,
                 actual_end_dt,
                 eq_line,
+            )
+            return None
+        if _new_dispatch_limited_equipment_interval_blocked(
+            task,
+            _gpo,
+            machine_avail_dt,
+            limited_equipment_mirror,
+            machine_occ_key,
+            team_start,
+            actual_end_dt,
+        ):
+            _trace_assign(
+                "限定設備保護区間で棄却: team=%s start=%s end=%s eq=%s",
+                ",".join(str(x) for x in team),
+                team_start,
+                actual_end_dt,
+                machine_occ_key,
             )
             return None
         if pref_mem and pref_mem in op_list:
@@ -1276,7 +1345,9 @@ def _assign_one_roll_trial_order_flow(
             _orig_speed = task.get(TASK_COL_SPEED)
             _orig_btpu = task.get("base_time_per_unit")
             try:
-                req_num = max(1, int(_l2_req_before))
+                req_num = _l2_fallback_required_count(
+                    _l2_req_before, limited_constraints
+                )
             except (TypeError, ValueError):
                 req_num = 1
             max_team_size = min(req_num + extra_max, len(capable_members))
@@ -1445,6 +1516,20 @@ def _assign_one_roll_trial_order_flow(
                 and not op_today
             ):
                 _fail_reason = "no_op_on_working_day"
+            if limited_constraints is not None:
+                if _fail_reason == "mach_floor_after_shift_end":
+                    _record_limited_operator_rejection(
+                        task, "設備占有により開始可能時刻が選択者の終業後です"
+                    )
+                elif _fail_reason == "capable_lt_req":
+                    _record_limited_operator_rejection(
+                        task, "非出勤または二重配台により選択者全員が同時に利用できません"
+                    )
+                else:
+                    _record_limited_operator_rejection(
+                        task,
+                        "休憩・終業・二重配台・設備占有の安全条件を満たしません",
+                    )
             task["_debug_fail_attempts"] = (
                 int(task.get("_debug_fail_attempts") or 0) + 1
             )
@@ -1686,6 +1771,7 @@ def _trial_order_assign_probe_fails(
             set(),
             team_combo_presets=ctx.get("team_combo_presets"),
             dispatch_interval_mirror=ctx.get("dispatch_interval_mirror"),
+            limited_equipment_mirror=ctx.get("limited_equipment_mirror"),
             machine_handoff=ctx["machine_handoff"],
         )
         _dispatch_loop_profile_add(
@@ -1854,6 +1940,7 @@ def _trial_order_first_schedule_pass(
     _need_headcount_logged_orders: set,
     team_combo_presets: dict | None = None,
     dispatch_interval_mirror: DispatchIntervalMirror | None = None,
+    limited_equipment_mirror: DispatchIntervalMirror | None = None,
     interactive_dispatch_targets: dict | None = None,
     interactive_trial_pair_dates: dict | None = None,
     interactive_trial_meters_done: dict | None = None,
@@ -1904,6 +1991,7 @@ def _trial_order_first_schedule_pass(
             "machine_handoff": _mh_init,
             "team_combo_presets": team_combo_presets,
             "dispatch_interval_mirror": dispatch_interval_mirror,
+            "limited_equipment_mirror": limited_equipment_mirror,
         }
     _min_dispatch_eff: int | None = None
     _pool_min: list = []
@@ -2214,6 +2302,7 @@ def _trial_order_first_schedule_pass(
                 _need_headcount_logged_orders,
                 team_combo_presets,
                 dispatch_interval_mirror=dispatch_interval_mirror,
+                limited_equipment_mirror=limited_equipment_mirror,
                 machine_handoff=machine_handoff,
                 timeline_events=timeline_events,
                 stage35_overtime_only=stage35_overtime_only,
@@ -2378,7 +2467,7 @@ def _trial_order_first_schedule_pass(
             )
             for m in best_team:
                 avail_dt[m] = best_end
-            if not _gpo.get("abolish_all_scheduling_limits"):
+            if _machine_occupancy_tracking_required(_gpo, task_queue):
                 machine_avail_dt[machine_occ_key] = best_end
                 _bump_machine_avail_after_roll_for_calendar(
                     current_date,
@@ -2387,6 +2476,13 @@ def _trial_order_first_schedule_pass(
                     machine_calendar_plan_end=_mc_plan_end,
                     machine_day_floor=_mc_w0,
                 )
+            _register_limited_equipment_interval(
+                limited_equipment_mirror,
+                task,
+                machine_occ_key,
+                best_start,
+                best_end,
+            )
             machine_handoff["last_tid"][machine_occ_key] = str(
                 task.get("task_id") or ""
             ).strip()
@@ -2652,7 +2748,7 @@ def _run_b2_inspection_rewind_pass(
             avail_dt,
             _machine_day_start,
         )
-        if _gpo.get("abolish_all_scheduling_limits"):
+        if not _machine_occupancy_tracking_required(_gpo, task_queue):
             machine_avail_dt.clear()
         _mc_plan_end_b2 = _machine_calendar_planning_window_end_dt(
             current_date, daily_status, members

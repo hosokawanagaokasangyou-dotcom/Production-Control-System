@@ -434,6 +434,9 @@ def _generate_plan_impl(
         global_priority_override,
         equipment_list,
     )
+    _validate_and_resolve_limited_operator_tasks(
+        task_queue, members, skills_dict
+    )
     # 開始日は非稼働日の場合は」直後の稼働日へ補正（例: 4/4, 4/5 は非稼働なら 4/3 へ）
     working_days = [
         d for d in sorted_dates
@@ -583,6 +586,7 @@ def _generate_plan_impl(
             "DISPATCH_INTERVAL_MIRROR_ENFORCE: 設備・人の占有を区間ミラーで追跡しした"
             "（無効化は 設定_環境変数 等で DISPATCH_INTERVAL_MIRROR_ENFORCE=0）。"
         )
+    _limited_operator_equipment_mirror = _LimitedEquipmentProtection()
 
     if STAGE2_SERIAL_DISPATCH_BY_TASK_ID:
         logging.info(
@@ -627,6 +631,7 @@ def _generate_plan_impl(
     _outer_retry_round = 0
     while True:
         _dispatch_trace_begin_outer_round(_outer_retry_round)
+        _limited_operator_equipment_mirror.clear()
         _need_headcount_logged_orders: set = set()
         if _outer_retry_round > 0:
             _purge_attendance_days_not_in_set(
@@ -826,6 +831,7 @@ def _generate_plan_impl(
                     _need_headcount_logged_orders,
                     team_combo_presets,
                     dispatch_interval_mirror=_dispatch_interval_mirror,
+                    limited_equipment_mirror=_limited_operator_equipment_mirror,
                     interactive_dispatch_targets=interactive_dispatch_targets,
                     interactive_trial_pair_dates=_interactive_trial_pair_dates,
                     interactive_trial_meters_done=_interactive_trial_meters_done,
@@ -865,6 +871,7 @@ def _generate_plan_impl(
                         _need_headcount_logged_orders,
                         team_combo_presets,
                         dispatch_interval_mirror=_dispatch_interval_mirror,
+                        limited_equipment_mirror=_limited_operator_equipment_mirror,
                         interactive_dispatch_targets=interactive_dispatch_targets,
                         interactive_trial_pair_dates=_interactive_trial_pair_dates,
                         interactive_trial_meters_done=_interactive_trial_meters_done,
@@ -995,6 +1002,16 @@ def _generate_plan_impl(
                             task.get("equipment_line_key") or machine or ""
                         ).strip() or machine
                         machine_occ_key = _machine_occupancy_key_resolve(task, eq_line)
+                        _all_limits_abolished_legacy = bool(
+                            global_priority_override.get(
+                                "abolish_all_scheduling_limits"
+                            )
+                        )
+                        _equipment_occupancy_abolished_legacy = (
+                            _legacy_dispatch_scheduling_limits_abolished(
+                                global_priority_override, task
+                            )
+                        )
                         if PLANNING_B1_INSPECTION_EXCLUSIVE_MACHINE:
                             _b1_holder = _exclusive_b1_inspection_holder_for_machine(
                                 task_queue,
@@ -1048,10 +1065,8 @@ def _generate_plan_impl(
                             machine_day_start=_machine_day_start,
                             machine_handoff=machine_handoff_legacy,
                             skills_dict=skills_dict,
-                            abolish_all_scheduling_limits=bool(
-                                global_priority_override.get(
-                                    "abolish_all_scheduling_limits"
-                                )
+                            abolish_all_scheduling_limits=(
+                                _equipment_occupancy_abolished_legacy
                             ),
                             dispatch_interval_mirror=_dispatch_interval_mirror,
                             min_dispatch_effective=_min_dispatch_eff_legacy,
@@ -1079,10 +1094,8 @@ def _generate_plan_impl(
                             _machine_day_start,
                             machine_handoff=machine_handoff_legacy,
                             skills_dict=skills_dict,
-                            abolish_all_scheduling_limits=bool(
-                                global_priority_override.get(
-                                    "abolish_all_scheduling_limits"
-                                )
+                            abolish_all_scheduling_limits=(
+                                _equipment_occupancy_abolished_legacy
                             ),
                             dispatch_interval_mirror=_dispatch_interval_mirror,
                         ):
@@ -1098,10 +1111,8 @@ def _generate_plan_impl(
                             machine_day_start=_machine_day_start,
                             machine_handoff=machine_handoff_legacy,
                             skills_dict=skills_dict,
-                            abolish_all_scheduling_limits=bool(
-                                global_priority_override.get(
-                                    "abolish_all_scheduling_limits"
-                                )
+                            abolish_all_scheduling_limits=(
+                                _equipment_occupancy_abolished_legacy
                             ),
                             dispatch_interval_mirror=_dispatch_interval_mirror,
                         ):
@@ -1164,7 +1175,9 @@ def _generate_plan_impl(
                         _gpo = global_priority_override
     
                         def skill_role_priority(mem):
-                            if _gpo.get("ignore_skill_requirements"):
+                            if _legacy_dispatch_skill_requirements_ignored(
+                                _gpo, task
+                            ):
                                 return ("OP", 100)
                             if mem not in skill_meta_cache:
                                 srow = skills_dict.get(mem, {})
@@ -1192,7 +1205,7 @@ def _generate_plan_impl(
                                 machine_avail_dt,
                                 machine_handoff_legacy,
                                 _machine_day_start,
-                                bool(_gpo.get("abolish_all_scheduling_limits")),
+                                _equipment_occupancy_abolished_legacy,
                                 current_date=current_date,
                                 daily_status=daily_status,
                                 skills_dict=skills_dict,
@@ -1214,6 +1227,27 @@ def _generate_plan_impl(
                             if pref_raw
                             else None
                         )
+                        limited_constraints = (
+                            _legacy_dispatch_limited_operator_constraints(
+                                task,
+                                members,
+                                skill_role_priority,
+                                capable_members,
+                                pref_mem,
+                            )
+                        )
+                        if limited_constraints is not None:
+                            req_num = limited_constraints["required_count"]
+                            need_src_line = (
+                                f"計画シート「{PLAN_COL_LIMITED_OP}」で必須人数={req_num}"
+                            )
+                            capable_members = limited_constraints["capable_members"]
+                            op_today = [
+                                m
+                                for m in capable_members
+                                if skill_role_priority(m)[0] == "OP"
+                            ]
+                            pref_mem = limited_constraints["preferred_member"]
                         if pref_raw and pref_mem is None and op_today:
                             logging.info(
                                 "担当OP指定: 当日のOP候補に一致せう制約なし task=%s raw=%r",
@@ -1230,8 +1264,12 @@ def _generate_plan_impl(
                         )
                         for _gw in _gdp_warns:
                             logging.warning(_gw)
-                        fixed_team_anchor = _merge_global_day_process_and_pref_anchor(
-                            _gdp_must, pref_mem, capable_members
+                        fixed_team_anchor = (
+                            limited_constraints["fixed_team"]
+                            if limited_constraints is not None
+                            else _merge_global_day_process_and_pref_anchor(
+                                _gdp_must, pref_mem, capable_members
+                            )
                         )
                         if _gdp_must:
                             logging.info(
@@ -1254,13 +1292,19 @@ def _generate_plan_impl(
                                 )
                             req_num = max(req_num, _nfix)
     
-                        extra_max_sheet, extra_src_line = resolve_need_surplus_extra_max_explain(
-                            machine,
-                            machine_name,
-                            task["task_id"],
-                            surplus_map,
-                            need_rules,
-                        )
+                        if limited_constraints is not None:
+                            extra_max_sheet = 0
+                            extra_src_line = (
+                                f"計画シート「{PLAN_COL_LIMITED_OP}」で追加人数=0"
+                            )
+                        else:
+                            extra_max_sheet, extra_src_line = resolve_need_surplus_extra_max_explain(
+                                machine,
+                                machine_name,
+                                task["task_id"],
+                                surplus_map,
+                                need_rules,
+                            )
                         if TEAM_ASSIGN_IGNORE_NEED_SURPLUS_ROW:
                             extra_max_sheet = 0
                             extra_src_line = (
@@ -1339,9 +1383,13 @@ def _generate_plan_impl(
                             else ""
                         )
                         preset_rows = (
-                            (team_combo_presets or {}).get(combo_key)
-                            if (team_combo_presets and combo_key)
-                            else None
+                            limited_constraints["preset_rows"]
+                            if limited_constraints is not None
+                            else (
+                                (team_combo_presets or {}).get(combo_key)
+                                if (team_combo_presets and combo_key)
+                                else None
+                            )
                         )
                         if TEAM_ASSIGN_COMBO_SHEET_RESTRICT_TO_PRESET_MEMBERS and preset_rows:
                             _allowed_members = set()
@@ -1383,8 +1431,8 @@ def _generate_plan_impl(
                             _co_segs_legacy,
                             _abort_legacy,
                         ) = _resolve_machine_changeover_floor_segments(
-                            abolish_all_scheduling_limits=bool(
-                                _gpo.get("abolish_all_scheduling_limits")
+                            abolish_all_scheduling_limits=(
+                                _equipment_occupancy_abolished_legacy
                             ),
                             machine_occ_key=machine_occ_key,
                             task_id=str(task.get("task_id") or "").strip(),
@@ -1439,6 +1487,9 @@ def _generate_plan_impl(
                                     combo_sheet_row_id=combo_row_id,
                                     combo_preset_team=pteam,
                                     dispatch_interval_mirror=_dispatch_interval_mirror,
+                                    limited_equipment_mirror=(
+                                        _limited_operator_equipment_mirror
+                                    ),
                                     machine_handoff=machine_handoff_legacy,
                                     machine_day_floor=_machine_day_start,
                                     machine_floor_cached=_mach_floor_legacy,
@@ -1492,11 +1543,12 @@ def _generate_plan_impl(
                                     continue
     
                                 team_start = max(avail_dt[m] for m in team)
-                                if not _gpo.get("abolish_all_scheduling_limits"):
+                                if not _equipment_occupancy_abolished_legacy:
                                     # 同一設備は1時点で1タスクのみ（設備空し＋日次始業/依頼切替の準備・後始末）
                                     machine_free_dt = _mach_floor_legacy
                                     if team_start < machine_free_dt:
                                         team_start = machine_free_dt
+                                if not _all_limits_abolished_legacy:
                                     # 原板投入日と同日の開始は 12:45 以降（試行順優先フローと一致）
                                     if task.get("same_day_raw_start_limit") and current_date == task["start_date_req"]:
                                         min_start_dt = datetime.combine(
@@ -1547,10 +1599,11 @@ def _generate_plan_impl(
 
                                 def _refloor_legacy_inline(ts):
                                     ts = max(ts, max(avail_dt[m] for m in team))
-                                    if not _gpo.get("abolish_all_scheduling_limits"):
+                                    if not _equipment_occupancy_abolished_legacy:
                                         _mfd = _mach_floor_legacy
                                         if ts < _mfd:
                                             ts = _mfd
+                                    if not _all_limits_abolished_legacy:
                                         if task.get(
                                             "same_day_raw_start_limit"
                                         ) and current_date == task["start_date_req"]:
@@ -1590,7 +1643,7 @@ def _generate_plan_impl(
                                     continue
                                 team_start = _ts_adj
                                 _roll_prep_inline: list[dict] = []
-                                if not _gpo.get("abolish_all_scheduling_limits"):
+                                if not _equipment_occupancy_abolished_legacy:
                                     team_start, _roll_prep_inline = (
                                         _roll_prep_segments_for_assign(
                                             team_start=team_start,
@@ -1659,13 +1712,24 @@ def _generate_plan_impl(
                                     if _prep_mirror_block:
                                         continue
     
-                                _, avail_mins, _ = calculate_end_time(team_start, 9999, team_breaks, team_end_limit)
-    
-                                units_can_do = int(avail_mins / eff_time_per_unit)
-                                if units_can_do == 0:
+                                protected_capacity = (
+                                    _candidate_capacity_after_equipment_protection(
+                                        _limited_operator_equipment_mirror,
+                                        machine_occ_key,
+                                        team_start,
+                                        eff_time_per_unit,
+                                        float(task["remaining_units"]),
+                                        team_breaks,
+                                        team_end_limit,
+                                    )
+                                )
+                                if protected_capacity is None:
                                     continue
-    
-                                units_today = min(units_can_do, math.ceil(task['remaining_units']))
+                                team_start, capacity = protected_capacity
+                                if team_start >= team_end_limit:
+                                    continue
+                                units_today = capacity["units_today"]
+                                work_mins_needed = capacity["work_mins_needed"]
                                 if _eod_reject_capacity_units_below_threshold(
                                     units_today,
                                     team_start,
@@ -1676,7 +1740,6 @@ def _generate_plan_impl(
                                     ),
                                 ):
                                     continue
-                                work_mins_needed = int(units_today * eff_time_per_unit)
                                 if (
                                     _contiguous_work_minutes_until_next_break_or_limit(
                                         team_start, team_breaks, team_end_limit
@@ -1684,7 +1747,22 @@ def _generate_plan_impl(
                                     < work_mins_needed
                                 ):
                                     continue
-                                actual_end_dt, _, _ = calculate_end_time(team_start, work_mins_needed, team_breaks, team_end_limit)
+                                (
+                                    actual_end_dt,
+                                    _limited_equipment_blocked,
+                                ) = _legacy_candidate_end_and_protection(
+                                    task,
+                                    _gpo,
+                                    machine_avail_dt,
+                                    _limited_operator_equipment_mirror,
+                                    machine_occ_key,
+                                    team_start,
+                                    work_mins_needed,
+                                    team_breaks,
+                                    team_end_limit,
+                                )
+                                if _limited_equipment_blocked:
+                                    continue
     
                                 team_prio_sum = sum(skill_role_priority(m)[1] for m in team)
                                 if (
@@ -1778,6 +1856,11 @@ def _generate_plan_impl(
                                 "eff": best_c["avg_eff"],
                                 "prio_sum": best_c["prio_sum"],
                             }
+                        elif limited_constraints is not None:
+                            _record_limited_operator_rejection(
+                                task,
+                                "休憩・終業・二重配台・設備占有の安全条件を満たしません",
+                            )
     
                         if trace_assign:
                             _tk = _team_assign_trace_tuple_label()
@@ -2065,7 +2148,9 @@ def _generate_plan_impl(
 
                             for m in best_team:
                                 avail_dt[m] = best_info["end_dt"]
-                            if not _gpo.get("abolish_all_scheduling_limits"):
+                            if _machine_occupancy_tracking_required(
+                                _gpo, task_queue
+                            ):
                                 machine_avail_dt[machine_occ_key] = best_info["end_dt"]
                                 _bump_machine_avail_after_roll_for_calendar(
                                     current_date,
@@ -2074,6 +2159,13 @@ def _generate_plan_impl(
                                     machine_calendar_plan_end=_machine_calendar_plan_end,
                                     machine_day_floor=_machine_day_start,
                                 )
+                            _register_limited_equipment_interval(
+                                _limited_operator_equipment_mirror,
+                                task,
+                                machine_occ_key,
+                                best_info["start_dt"],
+                                best_info["end_dt"],
+                            )
                             machine_handoff_legacy["last_tid"][machine_occ_key] = str(
                                 task.get("task_id") or ""
                             ).strip()

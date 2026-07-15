@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 # planning_core.core.time_utils — body only (loaded via _core exec chain)
+import bisect
 def _eod_minutes_window_covers_start(
     team_start: datetime, team_end_limit: datetime
 ) -> bool:
@@ -1035,6 +1036,569 @@ def _resolve_preferred_op_to_member(raw, op_candidates, roster_member_names=None
     return _resolve_preferred_name_to_capable_member(
         raw, op_candidates, roster_member_names
     )
+
+
+def _limited_operator_member_matches(raw_name, roster_member_names) -> list[str]:
+    """既存の担当者名正規化方針で候補を列挙し、未知・曖昧を区別可能にする。"""
+    roster = [
+        str(member).strip()
+        for member in (roster_member_names or [])
+        if str(member or "").strip()
+    ]
+    raw_normalized = _normalize_person_name_for_match(raw_name)
+    exact = [
+        member
+        for member in roster
+        if _normalize_person_name_for_match(member) == raw_normalized
+    ]
+    if exact:
+        return list(dict.fromkeys(exact))
+
+    raw_sei, raw_mei = _split_person_sei_mei(raw_name)
+    raw_sei_normalized = _normalize_sei_for_match(raw_sei)
+    raw_mei_normalized = _normalize_mei_for_match(raw_mei)
+    allow_mei_fuzzy = not _has_duplicate_surname_among_members(roster)
+    matches: list[str] = []
+    for member in roster:
+        member_sei, member_mei = _split_person_sei_mei(member)
+        if raw_sei_normalized != _normalize_sei_for_match(member_sei):
+            continue
+        member_mei_normalized = _normalize_mei_for_match(member_mei)
+        if not raw_mei_normalized:
+            matched = True
+        elif allow_mei_fuzzy:
+            matched = (
+                _mei_matches_with_fuzzy_allowed(
+                    raw_mei_normalized, member_mei_normalized
+                )
+            )
+        else:
+            matched = raw_mei_normalized == member_mei_normalized
+        if matched and member not in matches:
+            matches.append(member)
+    return matches
+
+
+def _resolve_limited_operator_names(
+    selected_names,
+    roster_member_names,
+    *,
+    excel_row_number,
+    task_id,
+) -> tuple[str, ...]:
+    context = _limited_operator_error_context(excel_row_number, task_id)
+    resolved: list[str] = []
+    for raw_name in selected_names or ():
+        matches = _limited_operator_member_matches(raw_name, roster_member_names)
+        if not matches:
+            raise PlanningValidationError(
+                f"{context}: 未知名です（{raw_name!r} は master skills メンバーに一致しません）。"
+            )
+        if len(matches) > 1:
+            raise PlanningValidationError(
+                f"{context}: 曖昧名です（{raw_name!r} → {matches}）。"
+            )
+        member = matches[0]
+        if member in resolved:
+            raise PlanningValidationError(
+                f"{context}: 正規化後の重複名です（{raw_name!r} → {member!r}）。"
+            )
+        resolved.append(member)
+    return tuple(resolved)
+
+
+def _record_limited_operator_rejection(task: dict, reason: str) -> None:
+    if task.get("limited_operator_names"):
+        task["_limited_operator_last_rejection_reason"] = str(reason or "").strip()
+
+
+def _prepare_limited_operator_team_constraints(
+    task: dict,
+    roster_member_names,
+    skill_role_priority,
+    available_capable_members,
+    preferred_member,
+) -> dict | None:
+    """限定行だけ need・候補・組み合わせプリセットを選択チームで上書きする。"""
+    selected_raw = tuple(task.get("limited_operator_names") or ())
+    if not selected_raw:
+        return None
+    excel_row = task.get("planning_excel_row")
+    task_id = task.get("task_id")
+    context = _limited_operator_error_context(excel_row, task_id)
+    selected = _resolve_limited_operator_names(
+        selected_raw,
+        roster_member_names,
+        excel_row_number=excel_row,
+        task_id=task_id,
+    )
+    task["limited_operator_names"] = selected
+
+    roles = {member: skill_role_priority(member)[0] for member in selected}
+    unqualified = [
+        member for member, role in roles.items() if role not in ("OP", "AS")
+    ]
+    if unqualified:
+        raise PlanningValidationError(
+            f"{context}: 資格外です。当該工程+機械でOP/ASではない選択者={unqualified}。"
+        )
+    if not any(role == "OP" for role in roles.values()):
+        raise PlanningValidationError(
+            f"{context}: 選択チームに最低1名OPが必要です（ASのみは不可）。"
+        )
+
+    preferred_raw = str(task.get("preferred_operator_raw") or "").strip()
+    preferred_resolved = preferred_member
+    if preferred_raw:
+        preferred_resolved = _resolve_limited_operator_names(
+            (preferred_raw,),
+            roster_member_names,
+            excel_row_number=excel_row,
+            task_id=task_id,
+        )[0]
+        if preferred_resolved not in selected:
+            raise PlanningValidationError(
+                f"{context}: 「担当OP_指定」={preferred_raw!r} と限定チームが矛盾しています。"
+            )
+        if roles.get(preferred_resolved) != "OP":
+            raise PlanningValidationError(
+                f"{context}: 「担当OP_指定」={preferred_raw!r} は限定内ですがOP資格ではありません。"
+            )
+
+    available = set(available_capable_members or [])
+    all_available = all(member in available for member in selected)
+    if not all_available:
+        missing = [member for member in selected if member not in available]
+        _record_limited_operator_rejection(
+            task,
+            "非出勤または二重配台により選択者全員が同時に利用できません"
+            f"（不足={missing}）",
+        )
+    count = len(selected)
+    return {
+        "required_count": count,
+        "max_count": count,
+        "capable_members": list(selected) if all_available else [],
+        "fixed_team": list(selected) if all_available else [],
+        "preset_rows": [(0, count, selected, None)],
+        "preferred_member": preferred_resolved,
+    }
+
+
+def _validate_and_resolve_limited_operator_tasks(
+    task_queue: list, roster_member_names, skills_dict: dict
+) -> None:
+    """日次探索前に未知・曖昧・資格外・ASのみ・担当OP指定矛盾を停止させる。"""
+    for task in task_queue or []:
+        if not task.get("limited_operator_names"):
+            continue
+        machine = str(task.get("machine") or "").strip()
+        machine_name = str(task.get("machine_name") or "").strip()
+
+        def role_for(member):
+            skill_row = (skills_dict or {}).get(member, {})
+            if machine and machine_name:
+                value = skill_row.get(f"{machine}+{machine_name}", "")
+            elif machine_name:
+                value = skill_row.get(machine_name, "")
+            else:
+                value = skill_row.get(machine, "")
+            return parse_op_as_skill_cell(value)
+
+        _prepare_limited_operator_team_constraints(
+            task,
+            roster_member_names,
+            role_for,
+            roster_member_names,
+            None,
+        )
+
+
+def _raise_limited_operator_remaining_tasks(
+    task_queue: list,
+    calendar_last_plan_day: date | None,
+    *,
+    context_label: str = "段階2",
+) -> None:
+    pending = []
+    for task in task_queue or []:
+        try:
+            remaining = float(task.get("remaining_units") or 0)
+        except (TypeError, ValueError):
+            remaining = 0.0
+        if remaining > 1e-12 and task.get("limited_operator_names"):
+            pending.append(task)
+    if not pending:
+        return
+    details = []
+    for task in pending[:8]:
+        context = _limited_operator_error_context(
+            task.get("planning_excel_row"), task.get("task_id")
+        )
+        reason = str(
+            task.get("_limited_operator_last_rejection_reason")
+            or "休憩・終業・二重配台・設備占有の安全条件を満たす日がありません"
+        ).strip()
+        details.append(f"{context}: {reason}")
+    last_day = (
+        calendar_last_plan_day.isoformat()
+        if isinstance(calendar_last_plan_day, date)
+        else "—"
+    )
+    raise PlanningValidationError(
+        f"{context_label}: 担当OP_限定チームが成立可能な日がありません"
+        f"（勤怠最終日={last_day}）。" + "；".join(details)
+    )
+
+
+_new_dispatch_limited_operator_constraints = (
+    _prepare_limited_operator_team_constraints
+)
+_legacy_dispatch_limited_operator_constraints = (
+    _prepare_limited_operator_team_constraints
+)
+
+
+def _scheduling_limits_abolished_for_task(
+    global_priority_override: dict | None, task: dict | None
+) -> bool:
+    """設備占有を省略できるか。限定行だけは全制約撤廃指定より設備安全を優先する。"""
+    requested = bool(
+        (global_priority_override or {}).get("abolish_all_scheduling_limits")
+    )
+    limited = bool((task or {}).get("limited_operator_names"))
+    return requested and not limited
+
+
+_new_dispatch_scheduling_limits_abolished = (
+    _scheduling_limits_abolished_for_task
+)
+_legacy_dispatch_scheduling_limits_abolished = (
+    _scheduling_limits_abolished_for_task
+)
+
+
+def _machine_occupancy_tracking_required(
+    global_priority_override: dict | None, task_queue
+) -> bool:
+    """限定行が混在する日は、未指定行が制約を無視しても設備占有時刻だけは蓄積する。"""
+    if not bool(
+        (global_priority_override or {}).get("abolish_all_scheduling_limits")
+    ):
+        return True
+    return any(
+        bool((task or {}).get("limited_operator_names"))
+        for task in (task_queue or [])
+    )
+
+
+class _LimitedEquipmentProtection:
+    """担当OP_限定で確定した設備半開区間だけを保持する保護ミラー。"""
+
+    def __init__(self) -> None:
+        self._by_equipment: dict[
+            str, list[tuple[datetime, datetime]]
+        ] = defaultdict(list)
+        self.last_scan_count = 0
+
+    def clear(self) -> None:
+        self._by_equipment.clear()
+
+    def register(
+        self, machine_occupancy_key: str, start_dt: datetime, end_dt: datetime
+    ) -> None:
+        key = _normalize_equipment_match_key(machine_occupancy_key)
+        if not key or end_dt <= start_dt:
+            return
+        intervals = self._by_equipment[key]
+        if not intervals or intervals[-1][1] < start_dt:
+            intervals.append((start_dt, end_dt))
+            return
+        index = bisect.bisect_left(
+            intervals, start_dt, key=lambda interval: interval[0]
+        )
+        if index > 0 and intervals[index - 1][1] >= start_dt:
+            index -= 1
+            start_dt = intervals[index][0]
+            end_dt = max(end_dt, intervals[index][1])
+        merge_end = index
+        while merge_end < len(intervals) and intervals[merge_end][0] <= end_dt:
+            end_dt = max(end_dt, intervals[merge_end][1])
+            merge_end += 1
+        intervals[index:merge_end] = [(start_dt, end_dt)]
+
+    def interval_count(self, machine_occupancy_key: str) -> int:
+        key = _normalize_equipment_match_key(machine_occupancy_key)
+        return len(self._by_equipment.get(key, ()))
+
+    def next_interval(
+        self, machine_occupancy_key: str, start_dt: datetime
+    ) -> tuple[datetime, datetime] | None:
+        key = _normalize_equipment_match_key(machine_occupancy_key)
+        intervals = self._by_equipment.get(key, ())
+        if not intervals:
+            return None
+        index = max(
+            0,
+            bisect.bisect_right(
+                intervals, start_dt, key=lambda interval: interval[0]
+            )
+            - 1,
+        )
+        if intervals[index][1] > start_dt:
+            return intervals[index]
+        index += 1
+        return intervals[index] if index < len(intervals) else None
+
+    def would_block_equipment(
+        self, machine_occupancy_key: str, start_dt: datetime, end_dt: datetime
+    ) -> bool:
+        key = _normalize_equipment_match_key(machine_occupancy_key)
+        self.last_scan_count = 0
+        intervals = self._by_equipment.get(key, ())
+        if not intervals:
+            return False
+        index = max(
+            0,
+            bisect.bisect_right(
+                intervals, start_dt, key=lambda interval: interval[0]
+            )
+            - 1,
+        )
+        for interval_index in range(index, len(intervals)):
+            protected_start, protected_end = intervals[interval_index]
+            self.last_scan_count += 1
+            if protected_end <= start_dt:
+                continue
+            if protected_start >= end_dt:
+                break
+            return True
+        return False
+
+    def earliest_available_start(
+        self,
+        machine_occupancy_key: str,
+        start_dt: datetime,
+        required_duration: timedelta,
+    ) -> datetime:
+        key = _normalize_equipment_match_key(machine_occupancy_key)
+        candidate = start_dt
+        candidate_end = candidate + max(required_duration, timedelta(0))
+        self.last_scan_count = 0
+        intervals = self._by_equipment.get(key, ())
+        if not intervals:
+            return candidate
+        index = max(
+            0,
+            bisect.bisect_right(
+                intervals, candidate, key=lambda interval: interval[0]
+            )
+            - 1,
+        )
+        for interval_index in range(index, len(intervals)):
+            protected_start, protected_end = intervals[interval_index]
+            self.last_scan_count += 1
+            if protected_end <= candidate:
+                continue
+            if protected_start >= candidate_end:
+                break
+            candidate = protected_end
+            candidate_end = candidate + max(required_duration, timedelta(0))
+        return candidate
+
+
+def _limited_equipment_interval_blocked(
+    task: dict,
+    global_priority_override: dict | None,
+    machine_avail_dt: dict | None,
+    protected_mirror: _LimitedEquipmentProtection | None,
+    machine_occupancy_key: str,
+    start_dt: datetime,
+    end_dt: datetime,
+) -> bool:
+    """通常設備床と限定由来区間を統合判定する。限定由来区間は全行に対して絶対保護。"""
+    if protected_mirror is not None and protected_mirror.would_block_equipment(
+        machine_occupancy_key, start_dt, end_dt
+    ):
+        return True
+    if _scheduling_limits_abolished_for_task(global_priority_override, task):
+        return False
+    floor = (machine_avail_dt or {}).get(machine_occupancy_key)
+    return isinstance(floor, datetime) and start_dt < floor
+
+
+def _register_limited_equipment_interval(
+    protected_mirror: _LimitedEquipmentProtection | None,
+    task: dict,
+    machine_occupancy_key: str,
+    start_dt: datetime,
+    end_dt: datetime,
+) -> None:
+    if protected_mirror is None or not task.get("limited_operator_names"):
+        return
+    protected_mirror.register(
+        machine_occupancy_key,
+        start_dt,
+        end_dt,
+    )
+
+
+def _limited_equipment_earliest_start(
+    protected_mirror: _LimitedEquipmentProtection | None,
+    machine_occupancy_key: str,
+    start_dt: datetime,
+    required_duration: timedelta,
+) -> datetime:
+    if protected_mirror is None:
+        return start_dt
+    return protected_mirror.earliest_available_start(
+        machine_occupancy_key, start_dt, required_duration
+    )
+
+
+def _candidate_capacity_at_start(
+    start_dt: datetime,
+    effective_minutes_per_unit: float,
+    remaining_units: float,
+    breaks,
+    end_limit: datetime,
+) -> dict[str, int] | None:
+    """候補開始時刻から当日配台可能数と必要時間を一貫して再計算する。"""
+    _, available_minutes, _ = calculate_end_time(
+        start_dt, 9999, breaks, end_limit
+    )
+    units_can_do = int(available_minutes / effective_minutes_per_unit)
+    if units_can_do <= 0:
+        return None
+    units_today = min(units_can_do, math.ceil(remaining_units))
+    return {
+        "units_can_do": units_can_do,
+        "units_today": units_today,
+        "work_mins_needed": int(units_today * effective_minutes_per_unit),
+    }
+
+
+def _candidate_capacity_after_equipment_protection(
+    protected_mirror: _LimitedEquipmentProtection | None,
+    machine_occupancy_key: str,
+    start_dt: datetime,
+    effective_minutes_per_unit: float,
+    remaining_units: float,
+    breaks,
+    end_limit: datetime,
+) -> tuple[datetime, dict[str, int]] | None:
+    candidate_start = start_dt
+    while candidate_start < end_limit:
+        capacity = _candidate_capacity_at_start(
+            candidate_start,
+            effective_minutes_per_unit,
+            remaining_units,
+            breaks,
+            end_limit,
+        )
+        if capacity is None:
+            return None
+        protected_interval = (
+            protected_mirror.next_interval(
+                machine_occupancy_key, candidate_start
+            )
+            if protected_mirror is not None
+            else None
+        )
+        if protected_interval is None:
+            return candidate_start, capacity
+        protected_start, protected_end = protected_interval
+        if protected_start <= candidate_start < protected_end:
+            candidate_start = protected_end
+            continue
+        contiguous_minutes = _contiguous_work_minutes_until_next_break_or_limit(
+            candidate_start,
+            breaks,
+            min(protected_start, end_limit),
+        )
+        units_before_protection = int(
+            contiguous_minutes / effective_minutes_per_unit
+        )
+        if units_before_protection >= 1:
+            units_today = min(
+                units_before_protection, math.ceil(remaining_units)
+            )
+            return candidate_start, {
+                "units_can_do": units_before_protection,
+                "units_today": units_today,
+                "work_mins_needed": int(
+                    units_today * effective_minutes_per_unit
+                ),
+            }
+        candidate_start = protected_end
+    return None
+
+
+def _legacy_candidate_end_and_protection(
+    task: dict,
+    global_priority_override: dict | None,
+    machine_avail_dt: dict | None,
+    protected_mirror: _LimitedEquipmentProtection | None,
+    machine_occupancy_key: str,
+    start_dt: datetime,
+    work_minutes: int,
+    breaks,
+    end_limit: datetime,
+) -> tuple[datetime, bool]:
+    actual_end, _, _ = calculate_end_time(
+        start_dt, work_minutes, breaks, end_limit
+    )
+    blocked = _legacy_dispatch_limited_equipment_interval_blocked(
+        task,
+        global_priority_override,
+        machine_avail_dt,
+        protected_mirror,
+        machine_occupancy_key,
+        start_dt,
+        actual_end,
+    )
+    return actual_end, blocked
+
+
+_new_dispatch_limited_equipment_interval_blocked = (
+    _limited_equipment_interval_blocked
+)
+_legacy_dispatch_limited_equipment_interval_blocked = (
+    _limited_equipment_interval_blocked
+)
+
+
+def _skill_requirements_ignored_for_task(
+    global_priority_override: dict | None, task: dict | None
+) -> bool:
+    return bool(
+        (global_priority_override or {}).get("ignore_skill_requirements")
+    ) and not bool((task or {}).get("limited_operator_names"))
+
+
+_new_dispatch_skill_requirements_ignored = (
+    _skill_requirements_ignored_for_task
+)
+_legacy_dispatch_skill_requirements_ignored = (
+    _skill_requirements_ignored_for_task
+)
+
+
+def _l2_fallback_required_count(
+    required_count_before_l2, limited_constraints: dict | None
+) -> int:
+    """L2速度フォールバック後の人数。限定行は選択人数を絶対値として維持する。"""
+    source = (
+        limited_constraints.get("required_count")
+        if limited_constraints is not None
+        else required_count_before_l2
+    )
+    try:
+        return max(1, int(source))
+    except (TypeError, ValueError):
+        return 1
+
+
 def _task_process_matches_global_contains(machine_val: str, contains: str) -> bool:
     """工程名（タスクの machine）に部分一致（NFKC・大尝無視）。"""
     m = unicodedata.normalize("NFKC", str(machine_val or "").strip()).casefold()

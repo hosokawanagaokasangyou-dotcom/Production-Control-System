@@ -7443,6 +7443,15 @@ def _raise_if_remaining_tasks_exceed_attendance_calendar(
     段階2標準・段階3パリティ: master 勤怠の計画日を使い切っても残タスクがあれば試行を致命エラーで止める。
     段階3手動修正試行（interactive_dispatch_targets あり）のみ: 致命にせずスナップショットへ記録して続行。
     """
+    if not (
+        _interactive_dispatch_trial_env_active()
+        and _PLAN_IMPL_INTERACTIVE_DISPATCH_TARGETS
+    ):
+        _raise_limited_operator_remaining_tasks(
+            task_queue,
+            calendar_last_plan_day,
+            context_label=context_label,
+        )
     if not _dispatch_postpone_only_policy_active():
         return
     pending = _pending_tasks_with_remaining_units(task_queue)
@@ -11221,6 +11230,7 @@ def _append_legacy_dispatch_candidate_for_team(
     combo_sheet_row_id: int | None = None,
     combo_preset_team: tuple[str, ...] | None = None,
     dispatch_interval_mirror: DispatchIntervalMirror | None = None,
+    limited_equipment_mirror: _LimitedEquipmentProtection | None = None,
     machine_handoff: dict | None = None,
     machine_day_floor: datetime | None = None,
     machine_floor_cached: datetime | None = None,
@@ -11228,6 +11238,10 @@ def _append_legacy_dispatch_candidate_for_team(
     """レガシー日次配台ループ用: 坘一フォームは成立れれみ team_candidates に 1 件追加して True。"""
     _machine_occ_key = _machine_occupancy_key_resolve(task, eq_line)
     _gpo = global_priority_override or {}
+    _all_limits_abolished = bool(_gpo.get("abolish_all_scheduling_limits"))
+    _equipment_occupancy_abolished = (
+        _legacy_dispatch_scheduling_limits_abolished(_gpo, task)
+    )
     _floor_default = datetime.combine(current_date, DEFAULT_START_TIME)
     _mdf = machine_day_floor if machine_day_floor is not None else _floor_default
     _mh_legacy = machine_handoff or {
@@ -11245,7 +11259,7 @@ def _append_legacy_dispatch_candidate_for_team(
         return False
     team_start = max(avail_dt[m] for m in team)
     _prev_mach_raw = machine_avail_dt.get(_machine_occ_key, _mdf)
-    if not _gpo.get("abolish_all_scheduling_limits"):
+    if not _equipment_occupancy_abolished:
         if machine_floor_cached is not None:
             machine_free_dt = machine_floor_cached
         else:
@@ -11262,6 +11276,7 @@ def _append_legacy_dispatch_candidate_for_team(
             )
         if team_start < machine_free_dt:
             team_start = machine_free_dt
+    if not _all_limits_abolished:
         if task.get("same_day_raw_start_limit") and current_date == task["start_date_req"]:
             min_start_dt = datetime.combine(
                 current_date, task["same_day_raw_start_limit"]
@@ -11306,7 +11321,7 @@ def _append_legacy_dispatch_candidate_for_team(
 
     def _refloor_legacy_roll(ts: datetime) -> datetime:
         ts = max(ts, max(avail_dt[m] for m in team))
-        if not _gpo.get("abolish_all_scheduling_limits"):
+        if not _equipment_occupancy_abolished:
             if machine_floor_cached is not None:
                 mf = machine_floor_cached
             else:
@@ -11323,6 +11338,7 @@ def _append_legacy_dispatch_candidate_for_team(
                 )
             if ts < mf:
                 ts = mf
+        if not _all_limits_abolished:
             if task.get("same_day_raw_start_limit") and current_date == task["start_date_req"]:
                 min_start_dt = datetime.combine(
                     current_date, task["same_day_raw_start_limit"]
@@ -11353,7 +11369,7 @@ def _append_legacy_dispatch_candidate_for_team(
         return False
     team_start = team_start_adj
     _roll_prep_extra_l: list[dict] = []
-    if not _gpo.get("abolish_all_scheduling_limits"):
+    if not _equipment_occupancy_abolished:
         team_start, _roll_prep_extra_l = _roll_prep_segments_for_assign(
             team_start=team_start,
             team_breaks=team_breaks,
@@ -11395,11 +11411,22 @@ def _append_legacy_dispatch_candidate_for_team(
             ):
                 return False
 
-    _, avail_mins, _ = calculate_end_time(team_start, 9999, team_breaks, team_end_limit)
-    units_can_do = int(avail_mins / eff_time_per_unit)
-    if units_can_do == 0:
+    protected_capacity = _candidate_capacity_after_equipment_protection(
+        limited_equipment_mirror,
+        _machine_occ_key,
+        team_start,
+        eff_time_per_unit,
+        float(task["remaining_units"]),
+        team_breaks,
+        team_end_limit,
+    )
+    if protected_capacity is None:
         return False
-    units_today = min(units_can_do, math.ceil(task["remaining_units"]))
+    team_start, capacity = protected_capacity
+    if team_start >= team_end_limit:
+        return False
+    units_today = capacity["units_today"]
+    work_mins_needed = capacity["work_mins_needed"]
     if _eod_reject_capacity_units_below_threshold(
         units_today,
         team_start,
@@ -11408,7 +11435,6 @@ def _append_legacy_dispatch_candidate_for_team(
         remaining_units_ceil=math.ceil(float(task.get("remaining_units") or 0)),
     ):
         return False
-    work_mins_needed = int(units_today * eff_time_per_unit)
     if (
         _contiguous_work_minutes_until_next_break_or_limit(
             team_start, team_breaks, team_end_limit
@@ -11421,6 +11447,16 @@ def _append_legacy_dispatch_candidate_for_team(
     )
     if dispatch_interval_mirror is not None and dispatch_interval_mirror.would_block_roll(
         _machine_occ_key, team, team_start, actual_end_dt
+    ):
+        return False
+    if _legacy_dispatch_limited_equipment_interval_blocked(
+        task,
+        _gpo,
+        machine_avail_dt,
+        limited_equipment_mirror,
+        _machine_occ_key,
+        team_start,
+        actual_end_dt,
     ):
         return False
     team_prio_sum = sum(skill_role_priority(m)[1] for m in team)
@@ -11478,6 +11514,10 @@ def _tasks_in_min_pending_dispatch_pool(
             t, current_date, daily_status, members
         ):
             continue
+        _abolish_for_task = _scheduling_limits_abolished_for_task(
+            {"abolish_all_scheduling_limits": abolish_all_scheduling_limits},
+            t,
+        )
         if _task_no_machining_window_left_from_avail_floor(
             t,
             current_date,
@@ -11487,7 +11527,7 @@ def _tasks_in_min_pending_dispatch_pool(
             machine_day_start,
             machine_handoff=machine_handoff,
             skills_dict=skills_dict,
-            abolish_all_scheduling_limits=abolish_all_scheduling_limits,
+            abolish_all_scheduling_limits=_abolish_for_task,
             dispatch_interval_mirror=dispatch_interval_mirror,
         ):
             continue
