@@ -1336,31 +1336,43 @@ public final class AppPaths {
      */
     public static Path resolveResultDispatchTableDir(Map<String, String> ui) {
         Map<String, String> u = ui != null ? ui : Map.of();
+        Path resolved;
         String override = trim(u.get(KEY_PM_AI_RESULT_DISPATCH_TABLE_DIR));
         if (!override.isEmpty()) {
-            return Path.of(override).toAbsolutePath().normalize();
-        }
-        String pip = trim(u.get(KEY_PM_AI_PLAN_INPUT_PATH));
-        if (!pip.isEmpty()) {
-            try {
-                Path planInput = Path.of(pip);
-                if (Files.isRegularFile(planInput)) {
-                    String pl = pip.toLowerCase(Locale.ROOT);
-                    if (pl.endsWith(".xlsx")
-                            || pl.endsWith(".xlsm")
-                            || pl.endsWith(".xltx")
-                            || pl.endsWith(".xltm")) {
-                        Path parent = planInput.toAbsolutePath().normalize().getParent();
-                        if (parent != null) {
-                            return parent;
+            resolved = Path.of(override).toAbsolutePath().normalize();
+        } else {
+            resolved = null;
+            String pip = trim(u.get(KEY_PM_AI_PLAN_INPUT_PATH));
+            if (!pip.isEmpty()) {
+                try {
+                    Path planInput = Path.of(pip);
+                    if (Files.isRegularFile(planInput)) {
+                        String pl = pip.toLowerCase(Locale.ROOT);
+                        if (pl.endsWith(".xlsx")
+                                || pl.endsWith(".xlsm")
+                                || pl.endsWith(".xltx")
+                                || pl.endsWith(".xltm")) {
+                            Path parent = planInput.toAbsolutePath().normalize().getParent();
+                            if (parent != null) {
+                                resolved = parent;
+                            }
                         }
                     }
+                } catch (Exception ignored) {
+                    // fall through to default (same drive / Unicode paths)
                 }
-            } catch (Exception ignored) {
-                // fall through to default (same drive / Unicode paths)
+            }
+            if (resolved == null) {
+                resolved =
+                        resolveRepoRoot(u)
+                                .resolve("code")
+                                .resolve("output")
+                                .toAbsolutePath()
+                                .normalize();
             }
         }
-        return resolveRepoRoot(u).resolve("code").resolve("output").toAbsolutePath().normalize();
+        // 段階2 配台表 JSON/xlsx は共有へ出さない（アラジン入力用 Excel は別経路で共有可）
+        return PipelineLocalResultsPolicy.requireLocalDirectory(resolved, u);
     }
 
     /** Basename of the JSON export for the result dispatch table (next to the standalone xlsx). */
@@ -1580,9 +1592,10 @@ public final class AppPaths {
         Map<String, String> u = ui != null ? ui : Map.of();
         String override = trim(u.get(KEY_PM_AI_OUTPUT_DIR));
         if (!override.isEmpty()) {
-            return Path.of(override).toAbsolutePath().normalize();
+            Path candidate = Path.of(override).toAbsolutePath().normalize();
+            return PipelineLocalResultsPolicy.requireLocalDirectory(candidate, u);
         }
-        return resolveRepoRoot(u).resolve("output").toAbsolutePath().normalize();
+        return PipelineLocalResultsPolicy.localPipelineOutputDir(u);
     }
 
     /**
@@ -2572,8 +2585,8 @@ public final class AppPaths {
     public static final String STAGE1_TASK_INPUT_PREVIEW_SHEET = "タスク入力整形";
 
     /**
-     * Written by {@code run_stage1_extract} beside {@link #summaryAiDispatchXlsxPath} ({@code
-     * STAGE1_EXCLUDE_RULES_JSON_FILENAME}).
+     * Written by {@code run_stage1_extract} under local {@link #resolveDefaultOutputDir} ({@code
+     * STAGE1_EXCLUDE_RULES_JSON_FILENAME}). 旧配置はサマリ Excel 同階層（共有）だった。
      */
     public static final String STAGE1_EXCLUDE_RULES_JSON_FILENAME = "stage1_exclude_rules.json";
 
@@ -2616,9 +2629,19 @@ public final class AppPaths {
     }
 
     /**
-     * Path: {@link #summaryAiDispatchXlsxPath(Map)} と同一フォルダの段階1配台不要ルール JSON。
+     * Path: ローカル {@link #resolveDefaultOutputDir(Map)} 配下の段階1配台不要ルール JSON。
      */
     public static Path stage1ExcludeRulesJsonPath(Map<String, String> ui) {
+        return resolveDefaultOutputDir(ui != null ? ui : Map.of())
+                .resolve(STAGE1_EXCLUDE_RULES_JSON_FILENAME)
+                .toAbsolutePath()
+                .normalize();
+    }
+
+    /**
+     * 旧作業先: {@link #summaryAiDispatchXlsxPath(Map)} と同一フォルダ（共有に残っている場合の移行・削除用）。
+     */
+    public static Path stage1ExcludeRulesJsonPathLegacyBesideSummary(Map<String, String> ui) {
         return siblingOfSummaryAiDispatchWorkbook(ui, STAGE1_EXCLUDE_RULES_JSON_FILENAME);
     }
 
@@ -2729,8 +2752,8 @@ public final class AppPaths {
     }
 
     /**
-     * 作業先（サマリ Excel と同一フォルダ）に {@link #STAGE1_EXCLUDE_RULES_JSON_FILENAME} が無ければ、
-     * リポジトリ同梱または旧配置からコピーする。
+     * ローカル作業先に {@link #STAGE1_EXCLUDE_RULES_JSON_FILENAME} が無ければ、
+     * リポジトリ同梱または旧配置（サマリ同階層・code/json 等）からコピーする。
      *
      * @return 作業先ファイルが実在するとき {@code true}
      */
@@ -2742,13 +2765,18 @@ public final class AppPaths {
         }
         Optional<Path> source = resolveBundledExcludeRulesJsonSourceInRepo(u);
         if (source.isEmpty()) {
-            Path legacyCodeJson = stage1ExcludeRulesJsonPathLegacyUnderCodeJson(u);
-            if (Files.isRegularFile(legacyCodeJson) && !legacyCodeJson.equals(target)) {
-                source = Optional.of(legacyCodeJson);
+            Path legacyBesideSummary = stage1ExcludeRulesJsonPathLegacyBesideSummary(u);
+            if (Files.isRegularFile(legacyBesideSummary) && !legacyBesideSummary.equals(target)) {
+                source = Optional.of(legacyBesideSummary);
             } else {
-                Path legacyPythonJson = stage1ExcludeRulesJsonPathLegacyUnderPython(u);
-                if (Files.isRegularFile(legacyPythonJson) && !legacyPythonJson.equals(target)) {
-                    source = Optional.of(legacyPythonJson);
+                Path legacyCodeJson = stage1ExcludeRulesJsonPathLegacyUnderCodeJson(u);
+                if (Files.isRegularFile(legacyCodeJson) && !legacyCodeJson.equals(target)) {
+                    source = Optional.of(legacyCodeJson);
+                } else {
+                    Path legacyPythonJson = stage1ExcludeRulesJsonPathLegacyUnderPython(u);
+                    if (Files.isRegularFile(legacyPythonJson) && !legacyPythonJson.equals(target)) {
+                        source = Optional.of(legacyPythonJson);
+                    }
                 }
             }
         }
@@ -2767,9 +2795,8 @@ public final class AppPaths {
     }
 
     /**
-     * Default for {@link #KEY_PM_AI_EXCLUDE_RULES_JSON}: {@link #summaryAiDispatchXlsxPath(Map)} と同一フォルダの
-     * {@link #STAGE1_EXCLUDE_RULES_JSON_FILENAME}。無ければ {@link #ensureStage1ExcludeRulesJsonFromRepoIfMissing} で
-     * リポジトリ同梱からコピーしてから返す。
+     * Default for {@link #KEY_PM_AI_EXCLUDE_RULES_JSON}: ローカル {@link #stage1ExcludeRulesJsonPath(Map)}。
+     * 無ければ {@link #ensureStage1ExcludeRulesJsonFromRepoIfMissing} でコピーしてから返す。
      */
     public static Optional<Path> resolveDefaultExcludeRulesJsonPath(Map<String, String> ui) {
         Map<String, String> u = ui != null ? ui : Map.of();

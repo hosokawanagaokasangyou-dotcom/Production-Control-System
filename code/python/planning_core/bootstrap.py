@@ -160,11 +160,22 @@ stream_handler.setFormatter(formatter)
 logger.addHandler(stream_handler)
 
 # 2. 成果物用 output / 実行ログ用 log（いずれも常に最新1ファイルのみ上書き）
-def _resolve_output_dir() -> str:
-    """PM_AI_OUTPUT_DIR → PM_AI_REPO_ROOT/output → (cwd が code なら) 親/output → cwd/output。"""
-    override = (os.environ.get("PM_AI_OUTPUT_DIR") or "").strip()
-    if override:
-        return os.path.abspath(override)
+def _is_shared_or_unc_path(path: str) -> bool:
+    """工場共有（UNC / 共有DATA）パスなら True。段階1／2 コア成果物の直書き禁止判定用。"""
+    s = (path or "").strip().replace("/", "\\")
+    if not s:
+        return False
+    if s.startswith("\\\\") or s.startswith("//"):
+        return True
+    low = s.lower()
+    if low.startswith("m:\\湖南工場") or low.startswith("m:/湖南工場"):
+        return True
+    if "\\共有data" in low or "\\●配台aiシステム\\" in low or "\\配台aiシステム\\" in low:
+        return True
+    return False
+
+
+def _local_pipeline_output_dir() -> str:
     repo = (os.environ.get("PM_AI_REPO_ROOT") or "").strip()
     if repo and os.path.isdir(repo):
         return os.path.join(os.path.abspath(repo), "output")
@@ -172,6 +183,16 @@ def _resolve_output_dir() -> str:
     if os.path.basename(cwd).lower() == "code":
         return os.path.join(os.path.dirname(os.path.abspath(cwd)), "output")
     return os.path.join(cwd, "output")
+
+
+def _resolve_output_dir() -> str:
+    """PM_AI_OUTPUT_DIR（共有なら拒否）→ PM_AI_REPO_ROOT/output → (cwd が code なら) 親/output → cwd/output。"""
+    override = (os.environ.get("PM_AI_OUTPUT_DIR") or "").strip()
+    if override:
+        abs_override = os.path.abspath(override)
+        if not _is_shared_or_unc_path(abs_override):
+            return abs_override
+    return _local_pipeline_output_dir()
 
 
 output_dir = _resolve_output_dir()

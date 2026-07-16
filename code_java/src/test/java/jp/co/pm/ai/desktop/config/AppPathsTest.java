@@ -529,7 +529,7 @@ class AppPathsTest {
     }
 
     @Test
-    void resolveDefaultExcludeRulesJsonPath_copiesBundledToSummarySibling(@TempDir Path fakeRepo)
+    void resolveDefaultExcludeRulesJsonPath_copiesBundledToLocalOutput(@TempDir Path fakeRepo)
             throws Exception {
         Path code = fakeRepo.resolve("code");
         Files.createDirectories(code.resolve("python"));
@@ -549,7 +549,8 @@ class AppPathsTest {
                         AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK,
                         summary.toString());
         Path expected =
-                summaryDir
+                fakeRepo
+                        .resolve("output")
                         .resolve(AppPaths.STAGE1_EXCLUDE_RULES_JSON_FILENAME)
                         .toAbsolutePath()
                         .normalize();
@@ -558,16 +559,47 @@ class AppPathsTest {
     }
 
     @Test
-    void stage1ExcludeRulesJsonPath_usesSummaryWorkbookParent(@TempDir Path tmp) {
-        Path custom = tmp.resolve("shared").resolve(AppPaths.SUMMARY_AI_DISPATCH_XLSX);
+    void stage1ExcludeRulesJsonPath_usesLocalOutputDir(@TempDir Path fakeRepo) throws Exception {
+        Path code = fakeRepo.resolve("code").resolve("python");
+        Files.createDirectories(code);
+        Files.createFile(code.resolve("task_extract_stage1.py"));
+        Path custom = fakeRepo.resolve("shared").resolve(AppPaths.SUMMARY_AI_DISPATCH_XLSX);
+        Files.createDirectories(custom.getParent());
         Map<String, String> ui =
-                Map.of(AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK, custom.toString());
+                Map.of(
+                        AppPaths.KEY_PM_AI_REPO_ROOT,
+                        fakeRepo.toString(),
+                        AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK,
+                        custom.toString());
         Path expected =
-                custom.getParent()
+                fakeRepo
+                        .resolve("output")
                         .resolve(AppPaths.STAGE1_EXCLUDE_RULES_JSON_FILENAME)
                         .toAbsolutePath()
                         .normalize();
         assertEquals(expected, AppPaths.stage1ExcludeRulesJsonPath(ui));
+        assertEquals(
+                custom.getParent()
+                        .resolve(AppPaths.STAGE1_EXCLUDE_RULES_JSON_FILENAME)
+                        .toAbsolutePath()
+                        .normalize(),
+                AppPaths.stage1ExcludeRulesJsonPathLegacyBesideSummary(ui));
+    }
+
+    @Test
+    void resolveDefaultOutputDir_rejectsSharedOverride(@TempDir Path fakeRepo) throws Exception {
+        Path code = fakeRepo.resolve("code").resolve("python");
+        Files.createDirectories(code);
+        Files.createFile(code.resolve("task_extract_stage1.py"));
+        Map<String, String> ui =
+                Map.of(
+                        AppPaths.KEY_PM_AI_REPO_ROOT,
+                        fakeRepo.toString(),
+                        AppPaths.KEY_PM_AI_OUTPUT_DIR,
+                        AppPaths.DEFAULT_KONAN_SHARED_DATA_DIR);
+        assertEquals(
+                fakeRepo.resolve("output").toAbsolutePath().normalize(),
+                AppPaths.resolveDefaultOutputDir(ui));
     }
 
     @Test

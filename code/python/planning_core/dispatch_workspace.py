@@ -257,33 +257,63 @@ def resolve_dispatch_learning_archive_root() -> str:
     return root
 
 
+def _is_shared_or_unc_path(path: str) -> bool:
+    """工場共有（UNC / 共有DATA）パスなら True。配台表 JSON/xlsx の直書き禁止判定用。"""
+    s = (path or "").strip().replace("/", "\\")
+    if not s:
+        return False
+    if s.startswith("\\\\") or s.startswith("//"):
+        return True
+    low = s.lower()
+    if low.startswith("m:\\湖南工場") or low.startswith("m:/湖南工場"):
+        return True
+    if "\\共有data" in low or "\\●配台aiシステム\\" in low or "\\配台aiシステム\\" in low:
+        return True
+    return False
+
+
+def _local_pipeline_output_dir() -> str:
+    repo = (os.environ.get(ENV_PM_AI_REPO_ROOT) or "").strip()
+    if repo:
+        return os.path.join(os.path.abspath(repo), "output")
+    return ""
+
+
 def resolve_result_dispatch_table_output_dir(task_input_workbook: str) -> str:
     """Output folder for standalone result dispatch table xlsx (fixed filename).
 
     Priority: PM_AI_RESULT_DISPATCH_TABLE_DIR, dirname(PM_AI_PLAN_INPUT_PATH),
-    dirname(task_input_workbook argument), PM_AI_REPO_ROOT/code.
+    dirname(task_input_workbook argument), PM_AI_REPO_ROOT/code/output.
 
+    共有／UNC が解決された場合は ``{repo}/output`` へフォールバックする（アラジン入力用 Excel は別経路）。
     ``plan_input_workbook_path_for_excel_ops`` が空でも、環境変数の計画タスク入力パスがあれば
     その親フォルダ（通常 ``.../output``）へ出す（専用 UI・Power Query 用ファイルの置き場所を揃える）。
     リポジトリ既定は ``{repo}/code/output``（フォルダが無くてもパスを返し、書き込み側が作成する）。
     """
+    resolved = ""
     o = (os.environ.get(ENV_RESULT_DISPATCH_TABLE_DIR) or "").strip()
     if o and os.path.isdir(o):
-        return os.path.abspath(o)
-    pip = (os.environ.get(ENV_PLAN_INPUT_PATH) or "").strip()
-    if pip and os.path.isfile(pip):
-        low = pip.lower()
-        if low.endswith((".xlsx", ".xlsm", ".xltx", ".xltm")):
-            return os.path.dirname(os.path.abspath(pip))
-    wb = (task_input_workbook or "").strip()
-    if wb and os.path.isfile(wb):
-        return os.path.dirname(os.path.abspath(wb))
-    repo = (os.environ.get(ENV_PM_AI_REPO_ROOT) or "").strip()
-    if repo:
-        code_root = os.path.join(os.path.abspath(repo), "code")
-        if os.path.isdir(code_root):
-            return os.path.join(code_root, "output")
-    return ""
+        resolved = os.path.abspath(o)
+    if not resolved:
+        pip = (os.environ.get(ENV_PLAN_INPUT_PATH) or "").strip()
+        if pip and os.path.isfile(pip):
+            low = pip.lower()
+            if low.endswith((".xlsx", ".xlsm", ".xltx", ".xltm")):
+                resolved = os.path.dirname(os.path.abspath(pip))
+    if not resolved:
+        wb = (task_input_workbook or "").strip()
+        if wb and os.path.isfile(wb):
+            resolved = os.path.dirname(os.path.abspath(wb))
+    if not resolved:
+        repo = (os.environ.get(ENV_PM_AI_REPO_ROOT) or "").strip()
+        if repo:
+            code_root = os.path.join(os.path.abspath(repo), "code")
+            if os.path.isdir(code_root):
+                resolved = os.path.join(code_root, "output")
+    if resolved and _is_shared_or_unc_path(resolved):
+        local = _local_pipeline_output_dir()
+        return local if local else resolved
+    return resolved
 
 
 def _norm_sheet_key(name: str) -> str:

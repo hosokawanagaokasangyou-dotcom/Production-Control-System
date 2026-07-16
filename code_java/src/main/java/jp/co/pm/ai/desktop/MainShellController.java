@@ -102,7 +102,9 @@ import jp.co.pm.ai.desktop.dispatch.rules.trace.DispatchRuleTraceLoader;
 import jp.co.pm.ai.desktop.bridge.StagePythonExecutable;
 import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.config.PipelineDownstreamResultsClearer;
+import jp.co.pm.ai.desktop.config.PipelineLocalResultsPolicy;
 import jp.co.pm.ai.desktop.config.PlanningCoreMaterialTableAppendProbe;
+import jp.co.pm.ai.desktop.config.SharedPipelineResultsCleaner;
 import jp.co.pm.ai.desktop.config.Stage1AiCacheClearer;
 import jp.co.pm.ai.desktop.config.WorkspaceCacheArchiveStore;
 import jp.co.pm.ai.desktop.debug.AgentDebugLog;
@@ -4480,7 +4482,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
     }
 
     /**
-     * After stage 1 writes {@code stage1_exclude_rules.json} beside the summary workbook, mirror the path into the env tab so
+     * After stage 1 writes {@code stage1_exclude_rules.json} under the local output dir, mirror the path into the env tab so
      * {@code PM_AI_EXCLUDE_RULES_JSON} matches the next child-process run.
      */
     private void applyStage1ExcludeRulesJsonToEnvTab() {
@@ -4614,6 +4616,32 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         }
         try {
             Map<String, String> uiRun = collectUiEnv();
+            if (STAGE1.equals(script) || STAGE2.equals(script) || STAGE2_1.equals(script)) {
+                // 段階1／2（および2.1）コア成果物はローカルのみ。共有上の残骸は削除（アラジンExcelは対象外）。
+                // 削除は env 書き換え前に行い、共有を指していた OUTPUT_DIR も走査対象に含める。
+                for (Path removed : SharedPipelineResultsCleaner.deletePipelineArtifactsFromShared(uiRun)) {
+                    appendLog("[cleanup] 共有上の段階成果物を削除: " + removed);
+                }
+                if (PipelineLocalResultsPolicy.rewritePipelineOutputEnvToLocal(uiRun)) {
+                    syncEnvTabValue(
+                            AppPaths.KEY_PM_AI_OUTPUT_DIR,
+                            uiRun.getOrDefault(AppPaths.KEY_PM_AI_OUTPUT_DIR, ""));
+                    syncEnvTabValue(
+                            AppPaths.KEY_PM_AI_RESULT_DISPATCH_TABLE_DIR,
+                            uiRun.getOrDefault(AppPaths.KEY_PM_AI_RESULT_DISPATCH_TABLE_DIR, ""));
+                    if (uiRun.containsKey(AppPaths.KEY_PM_AI_PLAN_INPUT_PATH)) {
+                        syncEnvTabValue(
+                                AppPaths.KEY_PM_AI_PLAN_INPUT_PATH,
+                                uiRun.get(AppPaths.KEY_PM_AI_PLAN_INPUT_PATH));
+                    }
+                    if (uiRun.containsKey(AppPaths.KEY_PM_AI_EXCLUDE_RULES_JSON)) {
+                        syncEnvTabValue(
+                                AppPaths.KEY_PM_AI_EXCLUDE_RULES_JSON,
+                                uiRun.get(AppPaths.KEY_PM_AI_EXCLUDE_RULES_JSON));
+                    }
+                    appendLog("[policy] 段階成果物の出力先をローカルディスクに固定しました。");
+                }
+            }
             overlayWorkingExcludeRulesJsonPathForStageRun(uiRun);
             overlayDispatchSpecialRulesForStageRun(uiRun, script);
             overlayDispatchLookupTablePathsForStageRun(uiRun);

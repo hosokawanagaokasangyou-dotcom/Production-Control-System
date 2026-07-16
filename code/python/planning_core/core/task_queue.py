@@ -3088,13 +3088,41 @@ def _resolve_summary_ai_dispatch_workbook_path() -> str:
         return os.path.normpath(os.path.join(repo, "code", SUMMARY_AI_DISPATCH_XLSX))
     return os.path.normpath(os.path.join(os.getcwd(), "code", SUMMARY_AI_DISPATCH_XLSX))
 def _resolve_stage1_exclude_rules_json_work_path() -> str:
-    """サマリ Excel と同一フォルダの stage1_exclude_rules.json 絶対パス。"""
+    """ローカル output 配下の stage1_exclude_rules.json 絶対パス（共有へは出さない）。"""
+    override = (os.environ.get("PM_AI_OUTPUT_DIR") or "").strip()
+    if override:
+        abs_override = os.path.abspath(override)
+        s = abs_override.replace("/", "\\")
+        shared = (
+            s.startswith("\\\\")
+            or s.startswith("//")
+            or "\\共有DATA" in s
+            or "\\●配台AIシステム\\" in s
+            or "\\配台AIシステム\\" in s
+            or s.lower().startswith("m:\\湖南工場")
+        )
+        if not shared:
+            return os.path.normpath(
+                os.path.join(abs_override, STAGE1_EXCLUDE_RULES_JSON_FILENAME)
+            )
+    repo = (os.environ.get("PM_AI_REPO_ROOT") or "").strip()
+    if repo:
+        parent = os.path.join(os.path.abspath(repo), "output")
+    else:
+        parent = os.path.join(os.getcwd(), "output")
+    return os.path.normpath(os.path.join(parent, STAGE1_EXCLUDE_RULES_JSON_FILENAME))
+
+
+def _resolve_stage1_exclude_rules_json_legacy_beside_summary() -> str:
+    """旧作業先: サマリ Excel と同フォルダ（共有に残っている場合の移行元）。"""
     summary = _resolve_summary_ai_dispatch_workbook_path()
     parent = os.path.dirname(summary)
     if not parent:
         repo = (os.environ.get("PM_AI_REPO_ROOT") or "").strip()
         parent = os.path.join(repo or os.getcwd(), "code")
     return os.path.normpath(os.path.join(parent, STAGE1_EXCLUDE_RULES_JSON_FILENAME))
+
+
 def _copy_exclude_rules_json_if_missing(target: str, source: str) -> bool:
     if os.path.isfile(target):
         return True
@@ -3108,9 +3136,10 @@ def _copy_exclude_rules_json_if_missing(target: str, source: str) -> bool:
     except OSError:
         return False
     return os.path.isfile(target)
+
+
 def _ensure_stage1_exclude_rules_json_at_work_path() -> str | None:
-    """作業先（サマリ Excel 同フォルダ）に JSON が無ければリポジトリ同梱または
-    （code/exclude_rules.json → code/json/stage1_exclude_rules.json）または旧 cwd/json からコピー。"""
+    """ローカル作業先に JSON が無ければリポジトリ同梱・旧サマリ同階層・旧 cwd/json からコピー。"""
     target = _resolve_stage1_exclude_rules_json_work_path()
     if os.path.isfile(target):
         return target
@@ -3119,6 +3148,16 @@ def _ensure_stage1_exclude_rules_json_at_work_path() -> str | None:
         logging.info(
             "配台不要ルール JSON をリポジトリ同梱から作業先へコピーしました（%s → %s）。",
             bundled,
+            target,
+        )
+        return target
+    legacy_summary = _resolve_stage1_exclude_rules_json_legacy_beside_summary()
+    if legacy_summary != target and _copy_exclude_rules_json_if_missing(
+        target, legacy_summary
+    ):
+        logging.info(
+            "配台不要ルール JSON を旧配置（サマリ同階層）から作業先へコピーしました（%s → %s）。",
+            legacy_summary,
             target,
         )
         return target
@@ -3182,11 +3221,21 @@ def _resolve_default_exclude_rules_json_path_for_env() -> str | None:
             return cand
     return None
 def _ensure_stage1_exclude_rules_json_env_from_repo_default() -> None:
-    """``PM_AI_EXCLUDE_RULES_JSON`` が未設定または実在しないとき、サマリ Excel 同フォルダの作業 JSON を正本として載せる。"""
+    """``PM_AI_EXCLUDE_RULES_JSON`` が未設定・共有上・実在しないとき、ローカル作業 JSON を正本として載せる。"""
     cur = (os.environ.get(ENV_EXCLUDE_RULES_JSON) or "").strip()
     if cur and os.path.isfile(cur):
-        _reset_exclude_rules_json_env_memo()
-        return
+        s = cur.replace("/", "\\")
+        shared = (
+            s.startswith("\\\\")
+            or s.startswith("//")
+            or "\\共有DATA" in s
+            or "\\●配台AIシステム\\" in s
+            or "\\配台AIシステム\\" in s
+            or s.lower().startswith("m:\\湖南工場")
+        )
+        if not shared:
+            _reset_exclude_rules_json_env_memo()
+            return
     work = _ensure_stage1_exclude_rules_json_at_work_path()
     if not work:
         return
