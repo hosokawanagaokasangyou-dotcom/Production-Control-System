@@ -103,21 +103,42 @@ public final class DispatchAladdinEntrySheetBuilder {
             return "NG (差 " + signed + ")";
         }
 
-        /** 加工完了日が回答納期の一日前以前か。 */
+        /** 実効完了日（加工完了日と最終シス計日の遅い方）が回答納期の一日前以前か。 */
         public boolean completionDateCheckOk() {
             return "OK".equals(completionDateCheckText());
         }
 
         /**
          * 完了日チェック（{@code OK} / {@code NG}）。
-         * 回答納期が空欄のときは空文字。加工完了日が取れないときも空文字。
+         * 回答納期が空欄のときは空文字。実効完了日が取れないときも空文字。
+         *
+         * <p>実効完了日 = {@code max(加工完了日, 最終シス計日)}。画面のシス計日が加工完了日より遅い場合は
+         * そちらを優先する（配台日が納期当日なのに加工完了日だけ早いと誤って OK になるのを防ぐ）。
          */
         public String completionDateCheckText() {
             if (kaitoNoki == null || kaitoNoki.isBlank()) {
                 return "";
             }
             return completionDateOneDayBeforeAnswerCheck(
-                    processCompleteDate, kaitoNoki, referenceYear);
+                    processCompleteDate, kaitoNoki, referenceYear, lastSystemDispatchDate());
+        }
+
+        /** シス計が 0 超の日付のうち最遅。無ければ null。 */
+        LocalDate lastSystemDispatchDate() {
+            if (cells == null || cells.isEmpty()) {
+                return null;
+            }
+            LocalDate last = null;
+            for (Map.Entry<LocalDate, EntryCell> e : cells.entrySet()) {
+                EntryCell c = e.getValue();
+                if (c == null || Math.abs(c.systemQty()) <= QTY_MATCH_EPS) {
+                    continue;
+                }
+                if (last == null || e.getKey().isAfter(last)) {
+                    last = e.getKey();
+                }
+            }
+            return last;
         }
     }
 
@@ -275,23 +296,40 @@ public final class DispatchAladdinEntrySheetBuilder {
     }
 
     /**
-     * 加工完了日が回答納期の一日前以前か（{@code OK} / {@code NG}）。
-     * 回答納期が空欄、または加工完了日が取れないときは空文字。
+     * 実効完了日が回答納期の一日前以前か（{@code OK} / {@code NG}）。
+     * 回答納期が空欄、または実効完了日が取れないときは空文字。
      *
      * <p>依頼書目次の {@code M/d} や {@code yyyy/M/d} なども解釈する。
      */
     static String completionDateOneDayBeforeAnswerCheck(
             String processCompleteDate, String answerNoki, int referenceYear) {
+        return completionDateOneDayBeforeAnswerCheck(
+                processCompleteDate, answerNoki, referenceYear, null);
+    }
+
+    /**
+     * @param lastSystemDispatch シス計のある最遅配台日（null 可）。加工完了日より遅いときはこちらを実効完了日とする。
+     */
+    static String completionDateOneDayBeforeAnswerCheck(
+            String processCompleteDate,
+            String answerNoki,
+            int referenceYear,
+            LocalDate lastSystemDispatch) {
         if (answerNoki == null || answerNoki.isBlank()) {
             return "";
         }
         LocalDate answer = parseAladdinEntryDate(answerNoki, referenceYear);
         int completeYear = answer != null ? answer.getYear() : referenceYear;
         LocalDate complete = parseAladdinEntryDate(processCompleteDate, completeYear);
-        if (complete == null || answer == null) {
+        LocalDate effective = complete;
+        if (lastSystemDispatch != null
+                && (effective == null || lastSystemDispatch.isAfter(effective))) {
+            effective = lastSystemDispatch;
+        }
+        if (effective == null || answer == null) {
             return "";
         }
-        return !complete.isAfter(answer.minusDays(1)) ? "OK" : "NG";
+        return !effective.isAfter(answer.minusDays(1)) ? "OK" : "NG";
     }
 
     /**

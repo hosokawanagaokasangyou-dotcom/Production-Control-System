@@ -232,6 +232,30 @@ class DispatchAladdinEntrySheetBuilderTest {
     }
 
     @Test
+    void completionDateCheckNgWhenLastSystemDispatchOnAnswerNokiEvenIfProcessCompleteEarlier() {
+        // W7-7-2 EC 相当: 加工完了日は納期前日でも、シス計が納期当日なら NG
+        List<Map<String, String>> rows = new ArrayList<>();
+        Map<String, String> r = row("W7-7-2", "EC", "EC機　湖南", "2026-07-17", "600");
+        r.put("回答納期", "2026-07-17");
+        r.put("加工完了日", "2026-07-16");
+        r.put("換算数量", "600");
+        rows.add(r);
+
+        DispatchAladdinEntrySheetBuilder.EntryRow out = buildSingleRow(rows);
+
+        assertEquals(LocalDate.of(2026, 7, 17), out.lastSystemDispatchDate());
+        assertFalse(out.completionDateCheckOk());
+        assertEquals("NG", out.completionDateCheckText());
+        assertEquals(
+                "NG",
+                DispatchAladdinEntrySheetBuilder.completionDateOneDayBeforeAnswerCheck(
+                        "2026-07-16",
+                        "2026-07-17",
+                        2026,
+                        LocalDate.of(2026, 7, 17)));
+    }
+
+    @Test
     void completionDateCheckUsesIndexKaitoNokiOverride() {
         List<Map<String, String>> rows = new ArrayList<>();
         Map<String, String> r = row("W1", "巻返し", "M1", "2026-07-08", "100");
