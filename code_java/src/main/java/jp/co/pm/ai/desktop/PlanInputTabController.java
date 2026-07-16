@@ -137,9 +137,6 @@ public final class PlanInputTabController {
 
     private static final String STAGE2_RUN_BUTTON_TEXT_DEFAULT = "段階2 実行";
 
-    private static final String STAGE2_RUN_BUTTON_TEXT_SUMMARY_LOCKED =
-            "段階2（サマリエクセル更新中）";
-
     private static final String STAGE2_RUN_BUTTON_TEXT_DELIVERY_CALENDAR_RELOAD =
             "段階2（納期管理ビュー更新中）";
 
@@ -444,15 +441,6 @@ public final class PlanInputTabController {
         applyStage2RunButtonEnabledState();
     }
 
-    /** ロックファイルの有無に合わせて段階2ボタン表示を更新する（{@link MainShellController#isSummaryAiDispatchExportLocked}）。 */
-    void refreshSummaryExportLockPresentation() {
-        applyStage2RunButtonEnabledState();
-    }
-
-    private boolean isSummaryExportLockedByLockFile() {
-        return shell != null && shell.isSummaryAiDispatchExportLocked();
-    }
-
     /** タスク入力表が「保存」または「再読み」後と同期しているか（段階2実行可否）。 */
     boolean isPlanInputTableDirtySinceSave() {
         return stage2BlockedByUnsavedPlanInputTableEdit;
@@ -482,7 +470,6 @@ public final class PlanInputTabController {
         boolean disable =
                 stage2RunPipelineBusy
                         || deliveryCalendarReloadBlocking
-                        || isSummaryExportLockedByLockFile()
                         || stage2BlockedByDispatchUnsavedEdit
                         || stage2BlockedByUnsavedPlanInputTableEdit;
         if (stage2RunButton != null) {
@@ -501,16 +488,6 @@ public final class PlanInputTabController {
         } else if (deliveryCalendarReloadBlocking) {
             Tooltip blockedTip =
                     new Tooltip("納期管理ビューを再読み込み中です。完了後に実行してください。");
-            if (stage2RunButton != null) {
-                stage2RunButton.setTooltip(blockedTip);
-            }
-            if (stage21RunButton != null) {
-                stage21RunButton.setTooltip(blockedTip);
-            }
-        } else if (isSummaryExportLockedByLockFile()) {
-            Tooltip blockedTip =
-                    new Tooltip(
-                            "サマリ xlsx を作成中です。完了後に実行するか、実行・ログタブの「ロック解除」を使用してください。");
             if (stage2RunButton != null) {
                 stage2RunButton.setTooltip(blockedTip);
             }
@@ -550,8 +527,6 @@ public final class PlanInputTabController {
         if (stage2RunButton != null) {
             if (deliveryCalendarReloadBlocking) {
                 stage2RunButton.setText(STAGE2_RUN_BUTTON_TEXT_DELIVERY_CALENDAR_RELOAD);
-            } else if (isSummaryExportLockedByLockFile()) {
-                stage2RunButton.setText(STAGE2_RUN_BUTTON_TEXT_SUMMARY_LOCKED);
             } else {
                 stage2RunButton.setText(STAGE2_RUN_BUTTON_TEXT_DEFAULT);
             }

@@ -78,20 +78,6 @@
                         <fx:include fx:id="globalSettingsTab" source="GlobalSettingsTab.fxml"/>
                     </content>
                 </Tab>
-                <Tab fx:id="mainShellTabSummaryAiDispatchExportCustomize" closable="false"
-                     text="サマリ_AI配台エクセル生成カスタイマイズ">
-                    <content>
-                        <fx:include fx:id="summaryAiDispatchExportCustomizeTab"
-                                    source="SummaryAiDispatchExportCustomizeTab.fxml"/>
-                    </content>
-                </Tab>
-                <Tab fx:id="mainShellTabSummaryAiDispatchGeneration" closable="false"
-                     text="サマリ Excel 世代">
-                    <content>
-                        <fx:include fx:id="summaryAiDispatchGenerationTab"
-                                    source="SummaryAiDispatchGenerationTab.fxml"/>
-                    </content>
-                </Tab>
                 <Tab fx:id="mainShellTabUserProfiles" closable="false" text="ユーザープロファイル">
                     <content>
                         <fx:include fx:id="userProfilesTab" source="UserProfilesTab.fxml"/>

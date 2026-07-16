@@ -31,7 +31,7 @@ import org.apache.poi.xssf.usermodel.XSSFRichTextString;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
-import jp.co.pm.ai.desktop.config.SummaryAiDispatchExportPrefs;
+import jp.co.pm.ai.desktop.config.OperatorUserPaths;
 import jp.co.pm.ai.desktop.dispatch.AladdinShapedPlanQtyLookup;
 import jp.co.pm.ai.desktop.dispatch.DispatchAladdinEntrySheetBuilder;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchInteractiveConsolidator;
@@ -48,6 +48,12 @@ public final class DispatchAladdinEntryWorkbookExporter {
 
     /** 操作者フォルダあたりの世代保持上限（ファイル数）。 */
     public static final int MAX_GENERATIONS_PER_USER = 20;
+
+    /** ブック既定フォント（日本語 UI フォント）。 */
+    public static final String DEFAULT_WORKBOOK_FONT_FAMILY = "BIZ UDPゴシック";
+
+    /** ブック既定フォントサイズ（pt）。 */
+    public static final int DEFAULT_WORKBOOK_FONT_SIZE_PT = 11;
 
     /** 世代ファイル名: {@code アラジン入力用_配台計画_yyyyMMdd-HHmmss.xlsx} */
     private static final DateTimeFormatter GEN_TS = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
@@ -217,7 +223,7 @@ public final class DispatchAladdinEntryWorkbookExporter {
     /** 最新ファイルを操作者別世代フォルダへコピーし、上限超過分を古い順に削除する。 */
     private static Path saveGenerationCopy(
             Map<String, String> ui, Path latest, Destination destination) throws IOException {
-        String operator = SummaryAiDispatchGenerationStore.resolveOperatorUser(ui);
+        String operator = OperatorUserPaths.resolveOperatorUser(ui);
         Path operatorDir = operatorGenerationDir(ui, operator, destination);
         Files.createDirectories(operatorDir);
         String fileName =
@@ -241,15 +247,14 @@ public final class DispatchAladdinEntryWorkbookExporter {
                         ? AppPaths.aladdinEntryDispatchPlanLocalDir(ui)
                         : AppPaths.aladdinEntryDispatchPlanDir(ui);
         return parent
-                .resolve(SummaryAiDispatchGenerationStore.sanitizeOperatorDirName(operatorUser))
+                .resolve(OperatorUserPaths.sanitizeOperatorDirName(operatorUser))
                 .toAbsolutePath()
                 .normalize();
     }
 
     /** 現在の操作者の世代フォルダ名（サニタイズ済み。世代ダイアログの既定選択用）。 */
     public static String currentOperatorDirName(Map<String, String> ui) {
-        return SummaryAiDispatchGenerationStore.sanitizeOperatorDirName(
-                SummaryAiDispatchGenerationStore.resolveOperatorUser(ui));
+        return OperatorUserPaths.sanitizeOperatorDirName(OperatorUserPaths.resolveOperatorUser(ui));
     }
 
     /** 世代フォルダ内の xlsx を更新日時の古い順に削除して {@link #MAX_GENERATIONS_PER_USER} 件へ揃える。 */
@@ -539,8 +544,8 @@ public final class DispatchAladdinEntryWorkbookExporter {
         }
 
         static Styles of(XSSFWorkbook wb) {
-            String fontName = SummaryAiDispatchExportPrefs.DEFAULT_FONT_FAMILY;
-            short defaultPt = (short) SummaryAiDispatchExportPrefs.DEFAULT_FONT_SIZE_PT;
+            String fontName = DEFAULT_WORKBOOK_FONT_FAMILY;
+            short defaultPt = (short) DEFAULT_WORKBOOK_FONT_SIZE_PT;
 
             Font headerFont = wb.createFont();
             headerFont.setFontName(fontName);

@@ -382,9 +382,6 @@ public final class DispatchInteractiveTabController {
     @FXML
     private static final String DISPATCH_TRIAL_BUTTON_TEXT_DEFAULT = "段階3";
 
-    private static final String DISPATCH_TRIAL_BUTTON_TEXT_SUMMARY_LOCKED =
-            "段階3（サマリエクセル更新中）";
-
     private static final String DISPATCH_TRIAL_BUTTON_TEXT_DELIVERY_CALENDAR_RELOAD =
             "段階3（納期管理ビュー更新中）";
 
@@ -1719,9 +1716,6 @@ public final class DispatchInteractiveTabController {
             return;
         }
         String blockLabel = "配台試行（段階3）";
-        if (shell.blockIfSummaryAiDispatchExportLocked(blockLabel)) {
-            return;
-        }
         if (shell.blockIfMaterialLookupTablesHaveBlankValues(blockLabel)) {
             return;
         }
@@ -2556,23 +2550,11 @@ public final class DispatchInteractiveTabController {
         return dispatchDocDirtySinceSave;
     }
 
-    /**
-     * 配台試行ボタン: 再読込中は無効。表を手動編集して未保存のときは無効（保存または「再読み」で有効化）。
-     */
-    void refreshSummaryExportLockPresentation() {
-        applyDispatchTrialButtonEnabledState();
-    }
-
-    private boolean isSummaryExportLockedByLockFile() {
-        return shell != null && shell.isSummaryAiDispatchExportLocked();
-    }
-
     private void applyDispatchTrialButtonEnabledState() {
         boolean blockTrial =
                 reloadInteractionDisabled
                         || deliveryCalendarReloadBlocking
                         || dispatchDocDirtySinceSave
-                        || isSummaryExportLockedByLockFile()
                         || stagePipelineBusy;
         if (dispatchTrialButton != null) {
             dispatchTrialButton.setDisable(blockTrial);
@@ -2582,7 +2564,6 @@ public final class DispatchInteractiveTabController {
                     reloadInteractionDisabled
                             || deliveryCalendarReloadBlocking
                             || dispatchDocDirtySinceSave
-                            || isSummaryExportLockedByLockFile()
                             || stagePipelineBusy
                             || stage3InputBuildBusy;
             buildStage3InputButton.setDisable(blockBuild3Input);
@@ -2591,17 +2572,7 @@ public final class DispatchInteractiveTabController {
                             ? BUILD_STAGE3_INPUT_BUTTON_TEXT_BUSY
                             : BUILD_STAGE3_INPUT_BUTTON_TEXT_DEFAULT);
         }
-        if (isSummaryExportLockedByLockFile() && !reloadInteractionDisabled && !deliveryCalendarReloadBlocking) {
-            Tooltip t =
-                    new Tooltip(
-                            "サマリ xlsx を作成中です。完了後に配台試行するか、実行・ログタブの「ロック解除」を使用してください。");
-            if (dispatchTrialButton != null) {
-                dispatchTrialButton.setTooltip(t);
-            }
-            if (buildStage3InputButton != null) {
-                buildStage3InputButton.setTooltip(t);
-            }
-        } else if (deliveryCalendarReloadBlocking && !reloadInteractionDisabled) {
+        if (deliveryCalendarReloadBlocking && !reloadInteractionDisabled) {
             Tooltip t =
                     new Tooltip("納期管理ビューを再読み込み中です。完了後に配台試行を実行してください。");
             if (dispatchTrialButton != null) {
@@ -2641,8 +2612,6 @@ public final class DispatchInteractiveTabController {
         if (dispatchTrialButton != null) {
             if (deliveryCalendarReloadBlocking && !reloadInteractionDisabled) {
                 dispatchTrialButton.setText(DISPATCH_TRIAL_BUTTON_TEXT_DELIVERY_CALENDAR_RELOAD);
-            } else if (isSummaryExportLockedByLockFile() && !reloadInteractionDisabled) {
-                dispatchTrialButton.setText(DISPATCH_TRIAL_BUTTON_TEXT_SUMMARY_LOCKED);
             } else {
                 dispatchTrialButton.setText(DISPATCH_TRIAL_BUTTON_TEXT_DEFAULT);
             }

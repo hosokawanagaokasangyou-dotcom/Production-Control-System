@@ -13,8 +13,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import javafx.animation.KeyFrame;
 import javafx.animation.Timeline;
 import javafx.application.Platform;
-import javafx.scene.control.Alert;
-import javafx.scene.control.ButtonType;
 import javafx.util.Duration;
 import javafx.beans.binding.Bindings;
 import javafx.collections.FXCollections;
@@ -63,7 +61,6 @@ import jp.co.pm.ai.desktop.ui.FactorySiteComboPresentation;
 import jp.co.pm.ai.desktop.config.PersonBadgeStyle;
 import jp.co.pm.ai.desktop.config.Stage3UiVisibility;
 import jp.co.pm.ai.desktop.io.DesktopFileOpener;
-import jp.co.pm.ai.desktop.io.SummaryAiDispatchExportLock;
 import jp.co.pm.ai.desktop.ui.PersonBadgeNodeFactory;
 
 /** Run/log tab; layout in {@code MainRunTab.fxml}. */
@@ -156,29 +153,13 @@ public final class MainRunTabController {
     private Label masterWorkbookOpenHintLabel;
 
     @FXML
-    private Label summaryWorkbookOpenHintLabel;
-
-    @FXML
-    private Button openSummaryAiDispatchButton;
-
-    @FXML
-    private Button forceUnlockSummaryAiDispatchButton;
-
-    @FXML
     private StackPane factoryLogoHost;
-
-    private Timeline summaryLockPollTimeline;
-
-    /** {@link #refreshSummaryWorkbookOpenLockState()} の前回ポーリング結果（変化時のみ段階2等 UI を同期）。 */
-    private Boolean lastPolledSummaryExportLocked;
 
     /** 段階1／段階2 の Python 実行中（メインシェルから同期）。 */
     private boolean stage1RunPipelineBusy;
 
     /** 納期管理ビュー再読み込み中（メインシェルから同期）。 */
     private boolean deliveryCalendarReloadBlocking;
-
-    private Tooltip summaryOpenButtonTooltip;
 
     @FXML
     private ImageView factoryLogoImageView;
@@ -858,8 +839,6 @@ public final class MainRunTabController {
         refreshOpenWorkbookHintLabels();
         refreshFactorySiteLogo();
         refreshOperatorUserLabel();
-        startSummaryExportLockPolling();
-        refreshSummaryWorkbookOpenLockState();
         pipelineTimingHistoryListener = () -> Platform.runLater(this::refreshPipelineExecutionTimingLabels);
         if (shell != null) {
             shell.pipelineExecutionTimingHistory().addChangeListener(pipelineTimingHistoryListener);
@@ -871,74 +850,6 @@ public final class MainRunTabController {
     void applyStage3UiVisibility(boolean visible) {
         Stage3UiVisibility.apply(pipelineTimingStage3Rows, visible);
         Stage3UiVisibility.apply(pipelineTimingDispatchTrialRow, visible);
-    }
-
-    private void startSummaryExportLockPolling() {
-        stopSummaryExportLockPolling();
-        summaryLockPollTimeline =
-                new Timeline(
-                        new KeyFrame(
-                                Duration.seconds(1.5),
-                                e -> refreshSummaryWorkbookOpenLockState()));
-        summaryLockPollTimeline.setCycleCount(Timeline.INDEFINITE);
-        summaryLockPollTimeline.play();
-    }
-
-    private void stopSummaryExportLockPolling() {
-        if (summaryLockPollTimeline != null) {
-            summaryLockPollTimeline.stop();
-            summaryLockPollTimeline = null;
-        }
-    }
-
-    /**
-     * 共有ロックファイルの存在（{@link MainShellController#isSummaryAiDispatchExportLocked}）に応じて
-     * サマリ「エクセルを開く」を有効／無効にする。他 PC が作成中でもロックが見える。
-     */
-    void refreshSummaryWorkbookOpenLockState() {
-        if (shell == null) {
-            return;
-        }
-        Map<String, String> ui = shell.snapshotUiEnv();
-        Path workbook = AppPaths.summaryAiDispatchXlsxPath(ui);
-        boolean locked = shell.isSummaryAiDispatchExportLocked();
-        if (lastPolledSummaryExportLocked == null || lastPolledSummaryExportLocked != locked) {
-            lastPolledSummaryExportLocked = locked;
-            shell.refreshSummaryWorkbookLockUi();
-        }
-        if (openSummaryAiDispatchButton != null) {
-            openSummaryAiDispatchButton.setDisable(locked);
-        }
-        if (forceUnlockSummaryAiDispatchButton != null) {
-            forceUnlockSummaryAiDispatchButton.setDisable(!locked);
-        }
-        if (summaryWorkbookOpenHintLabel != null) {
-            String fileName = workbook.getFileName().toString();
-            if (locked) {
-                String host =
-                        SummaryAiDispatchExportLock.readLockInfo(workbook)
-                                .map(SummaryAiDispatchExportLock.LockInfo::displayCreator)
-                                .orElse("他端末");
-                summaryWorkbookOpenHintLabel.setText(fileName + " （作成中: " + host + "）");
-                if (openSummaryAiDispatchButton != null) {
-                    if (summaryOpenButtonTooltip != null) {
-                        Tooltip.uninstall(openSummaryAiDispatchButton, summaryOpenButtonTooltip);
-                    }
-                    summaryOpenButtonTooltip =
-                            new Tooltip(
-                                    "サマリ xlsx を作成中です（"
-                                            + host
-                                            + "）。完了後に開けます。残ロックは「ロック解除」で削除できます。");
-                    Tooltip.install(openSummaryAiDispatchButton, summaryOpenButtonTooltip);
-                }
-            } else {
-                summaryWorkbookOpenHintLabel.setText(fileName);
-                if (openSummaryAiDispatchButton != null && summaryOpenButtonTooltip != null) {
-                    Tooltip.uninstall(openSummaryAiDispatchButton, summaryOpenButtonTooltip);
-                    summaryOpenButtonTooltip = null;
-                }
-            }
-        }
     }
 
     /** {@link GlobalInitSettingTarget} の工場に合わせて実行・ログタブ上部のロゴを更新する。 */
@@ -1051,10 +962,6 @@ public final class MainRunTabController {
             } else {
                 masterWorkbookOpenHintLabel.setText("master.xlsm");
             }
-        }
-        if (summaryWorkbookOpenHintLabel != null) {
-            summaryWorkbookOpenHintLabel.setText(
-                    AppPaths.summaryAiDispatchXlsxPath(ui).getFileName().toString());
         }
     }
 
@@ -1251,85 +1158,6 @@ public final class MainRunTabController {
         } catch (Exception e) {
             appendLog("[manual] open failed: " + e.getMessage());
         }
-    }
-
-    @FXML
-    private void onOpenSummaryAiDispatchAction() {
-        if (shell == null) {
-            return;
-        }
-        Path p = AppPaths.summaryAiDispatchXlsxPath(shell.snapshotUiEnv());
-        if (shell.isSummaryAiDispatchExportLocked()) {
-            String host =
-                    SummaryAiDispatchExportLock.readLockInfo(p)
-                            .map(SummaryAiDispatchExportLock.LockInfo::displayCreator)
-                            .orElse("他端末");
-            appendLog("[summary-ai-dispatch] 作成中のため開けません（" + host + "）");
-            return;
-        }
-        if (!Files.isRegularFile(p)) {
-            appendLog(
-                    "[summary-ai-dispatch] file not found: "
-                            + p
-                            + " (set "
-                            + AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK
-                            + " to open another book, or "
-                            + AppPaths.KEY_PM_AI_REPO_ROOT
-                            + " if the repository root is wrong)");
-            return;
-        }
-        try {
-            DesktopFileOpener.openFileReadOnly(p);
-            appendLog(
-                    "[summary-ai-dispatch] opened (read-only): "
-                            + p.toAbsolutePath().normalize());
-        } catch (Exception e) {
-            appendLog("[summary-ai-dispatch] open failed: " + e.getMessage());
-        }
-    }
-
-    @FXML
-    private void onOpenSummaryGenerationHistoryAction() {
-        if (shell == null) {
-            return;
-        }
-        shell.selectMainShellTab(MainShellTabId.SUMMARY_AI_DISPATCH_GENERATION);
-        appendLog("[summary-generation] サマリ Excel 世代タブを開きました");
-    }
-
-    @FXML
-    private void onForceUnlockSummaryExportLockAction() {
-        if (shell == null) {
-            return;
-        }
-        Path workbook = AppPaths.summaryAiDispatchXlsxPath(shell.snapshotUiEnv());
-        if (!shell.isSummaryAiDispatchExportLocked()) {
-            refreshSummaryWorkbookOpenLockState();
-            return;
-        }
-        String host =
-                SummaryAiDispatchExportLock.readLockInfo(workbook)
-                        .map(SummaryAiDispatchExportLock.LockInfo::displayCreator)
-                        .orElse("他端末");
-        Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
-        alert.setTitle("サマリ作成ロックの強制解除");
-        alert.setHeaderText("ロックファイルを削除します");
-        alert.setContentText(
-                "出力中の端末（"
-                        + host
-                        + "）があると、ブック破損や同時書き込みの恐れがあります。\n"
-                        + "クラッシュ等で残ったロックの削除にも使えます。\n\n続行しますか？");
-        if (alert.showAndWait().orElse(ButtonType.CANCEL) != ButtonType.OK) {
-            return;
-        }
-        boolean removed = SummaryAiDispatchExportLock.forceRemove(workbook);
-        appendLog(
-                removed
-                        ? "[summary-ai-dispatch] ロックを強制削除しました: "
-                                + SummaryAiDispatchExportLock.lockFilePath(workbook)
-                        : "[summary-ai-dispatch] ロック削除に失敗しました（権限・ネットワークを確認）");
-        refreshSummaryWorkbookOpenLockState();
-        shell.refreshSummaryWorkbookLockUi();
     }
 
     @FXML

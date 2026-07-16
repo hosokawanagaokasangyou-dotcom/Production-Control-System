@@ -58,10 +58,6 @@
                 <HBox alignment="CENTER_LEFT" spacing="8.0" styleClass="pm-run-book-open-inline">
                     <Label fx:id="masterWorkbookOpenHintLabel" text="master.xlsm" />
                     <Button mnemonicParsing="false" onAction="#onOpenMasterWorkbookAction" text="エクセルを開く" />
-                    <Label fx:id="summaryWorkbookOpenHintLabel" text="サマリ_AI配台.xlsx" />
-                    <Button fx:id="openSummaryAiDispatchButton" mnemonicParsing="false" onAction="#onOpenSummaryAiDispatchAction" text="エクセルを開く" />
-                    <Button fx:id="openSummaryGenerationHistoryButton" mnemonicParsing="false" onAction="#onOpenSummaryGenerationHistoryAction" text="サマリ履歴" />
-                    <Button fx:id="forceUnlockSummaryAiDispatchButton" disable="true" mnemonicParsing="false" onAction="#onForceUnlockSummaryExportLockAction" text="ロック解除" />
                 </HBox>
             </HBox>
             <HBox alignment="CENTER_LEFT" spacing="8.0" styleClass="pm-run-log-toolbar">

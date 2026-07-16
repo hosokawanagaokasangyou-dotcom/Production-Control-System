@@ -409,11 +409,6 @@ public final class FactoryOperatorUserStore {
         return isGuestOperator(sessionOperatorName());
     }
 
-    /** 現在セッションがサマリ Excel の生成・上書きを行えるか。 */
-    public static boolean sessionMayGenerateSummaryExcel() {
-        return !isGuestSession();
-    }
-
     /** 依頼書入力の転記・一時保存・設定変更を行えるか。 */
     public static boolean sessionMayMutateRequestFormInput() {
         return !isGuestSession();

@@ -418,11 +418,10 @@ class FactoryOperatorUserStoreTest {
     }
 
     @Test
-    void guestSessionRequiresNoPinAndBlocksSummaryExcel() throws Exception {
+    void guestSessionRequiresNoPinAndBlocksRequestFormMutation() throws Exception {
         FactoryOperatorUserStore.selectSessionOperator(FactorySite.KONAN, FactoryOperatorUserStore.GUEST_OPERATOR_NAME);
         assertEquals(FactoryOperatorUserStore.GUEST_OPERATOR_NAME, FactoryOperatorUserStore.sessionOperatorName());
         assertTrue(FactoryOperatorUserStore.isGuestSession());
-        assertTrue(!FactoryOperatorUserStore.sessionMayGenerateSummaryExcel());
         assertTrue(!FactoryOperatorUserStore.sessionMayMutateRequestFormInput());
         assertTrue(!FactoryOperatorUserStore.hasPin(FactorySite.KONAN, FactoryOperatorUserStore.GUEST_OPERATOR_NAME));
         assertEquals(

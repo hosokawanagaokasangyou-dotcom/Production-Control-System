@@ -401,9 +401,7 @@ public final class EnvVarDocs {
                         + " stage1_exclude_rules.json を書出し"
                         + " PM_AI_EXCLUDE_RULES_JSON を自動設定。"
                         + " 特別ルール JSON は dispatch_special_rules/ 配下。"
-                        + " SummaryAiDispatchWorkbookExporter・納期管理ビュー・"
-                        + " 実行・ログ「開く」の出力先。"
-                        + " UI から Excel を開く操作は読取専用。");
+                        + " 操作者 bin・PDF・バックアップ等の出力先フォルダの基準パス。");
         put(
                 "PM_AI_SKIP_WORKBOOK_ENV_SHEET",
                 "1/true 等で workbook_env_bootstrap がマクロブックの"

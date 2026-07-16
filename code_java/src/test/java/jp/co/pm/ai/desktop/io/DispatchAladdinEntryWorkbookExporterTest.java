@@ -20,7 +20,6 @@ import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-import jp.co.pm.ai.desktop.config.SummaryAiDispatchExportPrefs;
 import jp.co.pm.ai.desktop.dispatch.DispatchAladdinEntrySheetBuilder;
 import jp.co.pm.ai.desktop.reconciliation.PostProcessingPlanMachineLookup;
 
@@ -241,7 +240,7 @@ class DispatchAladdinEntryWorkbookExporterTest {
     @Test
     void dateCellRichTextAppliesPerLineFontSizes() throws IOException {
         try (XSSFWorkbook wb = new XSSFWorkbook()) {
-            String fontName = SummaryAiDispatchExportPrefs.DEFAULT_FONT_FAMILY;
+            String fontName = DispatchAladdinEntryWorkbookExporter.DEFAULT_WORKBOOK_FONT_FAMILY;
             Font aladdinLineFont = wb.createFont();
             aladdinLineFont.setFontName(fontName);
             aladdinLineFont.setFontHeightInPoints((short) 9);
