@@ -157,12 +157,29 @@ class DispatchAladdinEntryWorkbookExporterTest {
                     (org.apache.poi.xssf.usermodel.XSSFCellStyle)
                             sh.getRow(1).getCell(11).getCellStyle();
             org.apache.poi.xssf.usermodel.XSSFColor fill = totalStyle.getFillForegroundXSSFColor();
-            if (fill != null && fill.getRGB() != null) {
-                byte[] rgb = fill.getRGB();
-                assertFalse(
-                        rgb[0] == (byte) 0xFF && rgb[1] == (byte) 0xF2 && rgb[2] == (byte) 0xCC,
-                        "合計行に不一致色を付けてはならない");
-            }
+            assertNotNull(fill);
+            byte[] rgb = fill.getRGB();
+            assertNotNull(rgb);
+            assertEquals((byte) 0x00, rgb[0]);
+            assertEquals((byte) 0x6B, rgb[1]);
+            assertEquals((byte) 0x6B, rgb[2]);
+            assertEquals(
+                    org.apache.poi.ss.usermodel.IndexedColors.WHITE.getIndex(),
+                    totalStyle.getFont().getColor());
+
+            org.apache.poi.xssf.usermodel.XSSFCellStyle totalLabelStyle =
+                    (org.apache.poi.xssf.usermodel.XSSFCellStyle)
+                            sh.getRow(1).getCell(0).getCellStyle();
+            org.apache.poi.xssf.usermodel.XSSFColor labelFill =
+                    totalLabelStyle.getFillForegroundXSSFColor();
+            assertNotNull(labelFill);
+            byte[] labelRgb = labelFill.getRGB();
+            assertEquals((byte) 0x00, labelRgb[0]);
+            assertEquals((byte) 0x6B, labelRgb[1]);
+            assertEquals((byte) 0x6B, labelRgb[2]);
+            assertEquals(
+                    org.apache.poi.ss.usermodel.IndexedColors.WHITE.getIndex(),
+                    totalLabelStyle.getFont().getColor());
 
             org.apache.poi.xssf.usermodel.XSSFCellStyle dataMismatchStyle =
                     (org.apache.poi.xssf.usermodel.XSSFCellStyle)

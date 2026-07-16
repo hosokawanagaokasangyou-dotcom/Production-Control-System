@@ -370,22 +370,21 @@ public final class DispatchAladdinEntryWorkbookExporter {
 
         Row totalRow = sh.createRow(1);
         totalRow.setHeightInPoints(33f);
-        writeFixedCell(totalRow, 0, DAILY_PROCESSING_TOTAL_LABEL, styles.data());
+        writeFixedCell(totalRow, 0, DAILY_PROCESSING_TOTAL_LABEL, styles.dailyTotal());
         for (int c = 1; c < FIXED_COLUMN_COUNT; c++) {
-            writeFixedCell(totalRow, c, "", styles.data());
+            writeFixedCell(totalRow, c, "", styles.dailyTotal());
         }
         for (int i = 0; i < dates.size(); i++) {
             LocalDate d = dates.get(i);
             DispatchAladdinEntrySheetBuilder.EntryCell ec =
                     sumDateColumn(machineSheet.rows(), d);
             Cell cell = totalRow.createCell(FIXED_COLUMN_COUNT + i);
+            cell.setCellStyle(styles.dailyTotalDate());
             if (ec.isEmpty()) {
                 cell.setCellValue("");
-                cell.setCellStyle(styles.dateCellFor(d, false));
             } else {
                 String cellText = ec.cellText();
-                cell.setCellStyle(styles.dateCellFor(d, false));
-                XSSFRichTextString rich = styles.dateCellRichText(cellText);
+                XSSFRichTextString rich = styles.dailyTotalDateCellRichText(cellText);
                 if (rich != null) {
                     cell.setCellValue(rich);
                 } else {
@@ -499,6 +498,10 @@ public final class DispatchAladdinEntryWorkbookExporter {
         return rich;
     }
 
+    /** 日加工合計数行の背景（濃い青緑）。 */
+    private static final byte[] DAILY_TOTAL_FILL_RGB =
+            new byte[] {(byte) 0x00, (byte) 0x6B, (byte) 0x6B};
+
     /** シート内スタイル一式。 */
     private record Styles(
             CellStyle header,
@@ -513,11 +516,19 @@ public final class DispatchAladdinEntryWorkbookExporter {
             CellStyle dateCell,
             CellStyle dateCellMismatch,
             CellStyle dateCellWeekend,
+            CellStyle dailyTotal,
+            CellStyle dailyTotalDate,
             Font aladdinLineFont,
-            Font systemLineFont) {
+            Font systemLineFont,
+            Font dailyTotalAladdinLineFont,
+            Font dailyTotalSystemLineFont) {
 
         XSSFRichTextString dateCellRichText(String text) {
             return buildDateCellRichText(text, aladdinLineFont, systemLineFont);
+        }
+
+        XSSFRichTextString dailyTotalDateCellRichText(String text) {
+            return buildDateCellRichText(text, dailyTotalAladdinLineFont, dailyTotalSystemLineFont);
         }
 
         CellStyle dateHeaderFor(LocalDate d, boolean isToday) {
@@ -567,6 +578,22 @@ public final class DispatchAladdinEntryWorkbookExporter {
             systemLineFont.setFontName(fontName);
             systemLineFont.setFontHeightInPoints(SYSTEM_LINE_FONT_SIZE_PT);
 
+            Font dailyTotalFont = wb.createFont();
+            dailyTotalFont.setFontName(fontName);
+            dailyTotalFont.setFontHeightInPoints(defaultPt);
+            dailyTotalFont.setBold(true);
+            dailyTotalFont.setColor(org.apache.poi.ss.usermodel.IndexedColors.WHITE.getIndex());
+            Font dailyTotalAladdinLineFont = wb.createFont();
+            dailyTotalAladdinLineFont.setFontName(fontName);
+            dailyTotalAladdinLineFont.setFontHeightInPoints(ALADDIN_LINE_FONT_SIZE_PT);
+            dailyTotalAladdinLineFont.setColor(
+                    org.apache.poi.ss.usermodel.IndexedColors.WHITE.getIndex());
+            Font dailyTotalSystemLineFont = wb.createFont();
+            dailyTotalSystemLineFont.setFontName(fontName);
+            dailyTotalSystemLineFont.setFontHeightInPoints(SYSTEM_LINE_FONT_SIZE_PT);
+            dailyTotalSystemLineFont.setColor(
+                    org.apache.poi.ss.usermodel.IndexedColors.WHITE.getIndex());
+
             CellStyle header = borderedStyle(wb, headerFont, HorizontalAlignment.CENTER, true);
             fill(header, new byte[] {(byte) 0xD9, (byte) 0xE1, (byte) 0xF2}); // 薄青グレー
 
@@ -591,6 +618,13 @@ public final class DispatchAladdinEntryWorkbookExporter {
             CellStyle dateCellWeekend = borderedStyle(wb, dataFont, HorizontalAlignment.RIGHT, true);
             fill(dateCellWeekend, new byte[] {(byte) 0xF2, (byte) 0xF2, (byte) 0xF2}); // 薄灰
 
+            CellStyle dailyTotal =
+                    borderedStyle(wb, dailyTotalFont, HorizontalAlignment.LEFT, false);
+            fill(dailyTotal, DAILY_TOTAL_FILL_RGB);
+            CellStyle dailyTotalDate =
+                    borderedStyle(wb, dailyTotalFont, HorizontalAlignment.RIGHT, true);
+            fill(dailyTotalDate, DAILY_TOTAL_FILL_RGB);
+
             return new Styles(
                     header,
                     dateHeaderWeekday,
@@ -604,8 +638,12 @@ public final class DispatchAladdinEntryWorkbookExporter {
                     dateCell,
                     dateCellMismatch,
                     dateCellWeekend,
+                    dailyTotal,
+                    dailyTotalDate,
                     aladdinLineFont,
-                    systemLineFont);
+                    systemLineFont,
+                    dailyTotalAladdinLineFont,
+                    dailyTotalSystemLineFont);
         }
 
         private static CellStyle borderedStyle(
