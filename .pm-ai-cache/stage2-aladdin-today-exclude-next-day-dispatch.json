@@ -1,0 +1,29 @@
+{
+  "version" : 1,
+  "entries" : [ {
+    "task_id" : "V7-10",
+    "process" : "接続",
+    "machine_name" : "熱融着機　湖南",
+    "exclude_next_day_m" : 1000.0
+  }, {
+    "task_id" : "C7-19",
+    "process" : "スリット",
+    "machine_name" : "スリット機1　湖南",
+    "exclude_next_day_m" : 800.0
+  }, {
+    "task_id" : "C7-20",
+    "process" : "スリット",
+    "machine_name" : "スリット機1　湖南",
+    "exclude_next_day_m" : 1200.0
+  }, {
+    "task_id" : "W7-4",
+    "process" : "検査",
+    "machine_name" : "熱融着機　湖南",
+    "exclude_next_day_m" : 600.0
+  }, {
+    "task_id" : "C7-15",
+    "process" : "SEC",
+    "machine_name" : "SEC機　湖南",
+    "exclude_next_day_m" : 5400.0
+  } ]
+}
