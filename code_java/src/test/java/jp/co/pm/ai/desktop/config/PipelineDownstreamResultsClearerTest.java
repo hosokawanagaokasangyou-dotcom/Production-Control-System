@@ -31,13 +31,13 @@ class PipelineDownstreamResultsClearerTest {
     @Test
     void clearStage2ThroughStage32_removesDispatchSidecarsAndStage3SheetRows() throws Exception {
         Path repo = temp.resolve("repo");
-        Path output = repo.resolve("code").resolve("output");
         Path python = repo.resolve("code").resolve("python");
-        Files.createDirectories(output);
         Files.createDirectories(python);
         Files.writeString(python.resolve("task_extract_stage1.py"), "# stub\n");
 
         Map<String, String> ui = ui(repo);
+        Path output = AppPaths.resolveResultDispatchTableDir(ui);
+        Files.createDirectories(output);
         Path dispatchJson = output.resolve(AppPaths.RESULT_DISPATCH_TABLE_JSON_BASENAME);
         Files.writeString(dispatchJson, "{\"rows\":[]}");
         Files.writeString(
@@ -89,13 +89,12 @@ class PipelineDownstreamResultsClearerTest {
     @Test
     void clearStage2ThroughStage32_canPreserveTodayDispatchSourceBundle() throws Exception {
         Path repo = temp.resolve("repo2");
-        Path output = repo.resolve("code").resolve("output");
         Path python = repo.resolve("code").resolve("python");
-        Files.createDirectories(output);
         Files.createDirectories(python);
         Files.writeString(python.resolve("task_extract_stage1.py"), "# stub\n");
 
         Map<String, String> ui = ui(repo);
+        Files.createDirectories(AppPaths.resolveResultDispatchTableDir(ui));
         Path bundle =
                 jp.co.pm.ai.planning.stage2.source.Stage1SourceBundleIo.defaultCachePath(ui);
         Files.createDirectories(bundle.getParent());

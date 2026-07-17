@@ -356,9 +356,9 @@ public final class EnvVarDocs {
                 "Power Query _q結果_配台表 参照用の"
                         + " 結果_配台表.xlsx 出力先（マクロブック側に"
                         + " フォルダパス名を合わせる場合）。"
-                        + "未設定時は段階2は PM_AI_WORKSPACE または"
-                        + " PM_AI_PLAN_INPUT_PATH 親階層に合わせる場合がある、"
-                        + "JavaFX 初期値は PM_AI_REPO_ROOT 下の code/output（例: Production-Control-System/code/output/"
+                        + "未設定時は段階2は PM_AI_PLAN_INPUT_PATH 親階層、"
+                        + "それも無ければ PM_AI_OUTPUT_DIR／REPO 直下 output"
+                        + "（ポータブルは pm-ai-data/output。"
                         + "結果_配台表.xlsx 同階層に 結果_配台表.json も出力）。"
                         + "「納期管理ビュー」の計画比較サブタブはこのフォルダ直下の 結果_配台表.json と"
                         + "タスク入力ソースのアラジン日別数量を突き合わせる。");

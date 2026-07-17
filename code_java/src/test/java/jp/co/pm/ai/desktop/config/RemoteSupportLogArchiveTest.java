@@ -72,10 +72,16 @@ class RemoteSupportLogArchiveTest {
         Path execLog = codeLog.resolve(AppPaths.EXECUTION_LOG_TXT);
         Files.writeString(execLog, "python-log-line\n", StandardCharsets.UTF_8);
 
+        Path out = temp.resolve("output");
+        Files.createDirectories(out);
+        Path dispatchJson = out.resolve(AppPaths.RESULT_DISPATCH_TABLE_JSON_BASENAME);
+        Files.writeString(dispatchJson, "{\"rows\":[]}\n", StandardCharsets.UTF_8);
+
         Map<String, String> ui = new HashMap<>();
         ui.put(AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK, summary.toString());
         ui.put(AppPaths.KEY_PM_AI_REPO_ROOT, temp.toString());
         ui.put(AppPaths.KEY_PM_AI_CODE_DIR, temp.resolve("code").toString());
+        ui.put(AppPaths.KEY_PM_AI_OUTPUT_DIR, out.toString());
 
         Path keep =
                 RemoteSupportLogArchive.archiveAfterStage(
@@ -90,6 +96,8 @@ class RemoteSupportLogArchiveTest {
         assertTrue(Files.isRegularFile(keep.resolve(RemoteSupportLogArchive.UI_RUN_LOG_FILENAME)));
         assertTrue(Files.isRegularFile(keep.resolve(AppPaths.EXECUTION_LOG_TXT)));
         assertTrue(Files.isRegularFile(keep.resolve(RemoteSupportLogArchive.META_JSON_FILENAME)));
+        assertTrue(
+                Files.isRegularFile(keep.resolve(AppPaths.RESULT_DISPATCH_TABLE_JSON_BASENAME)));
         String uiText =
                 Files.readString(
                         keep.resolve(RemoteSupportLogArchive.UI_RUN_LOG_FILENAME),

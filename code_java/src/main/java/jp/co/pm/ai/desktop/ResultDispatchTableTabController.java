@@ -78,7 +78,7 @@ public final class ResultDispatchTableTabController {
     }
 
     private static final String HINT_TEXT =
-            "PM_AI_RESULT_DISPATCH_TABLE_DIR またはデフォルトの code/output/"
+            "PM_AI_RESULT_DISPATCH_TABLE_DIR またはデフォルトの output/"
                     + " 配下の JSON を表示します。再読みで"
                     + "最新化します。"
                     + " ControlsFX SpreadsheetView （段階1成形結果と同じ"

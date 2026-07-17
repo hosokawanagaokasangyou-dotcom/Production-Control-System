@@ -206,6 +206,16 @@ public final class RemoteSupportLogArchive {
             copiedExec = true;
         }
 
+        Path dispatchJsonSrc = AppPaths.resolveResultDispatchTableStage2JsonPath(ui);
+        boolean copiedDispatchJson = false;
+        if (Files.isRegularFile(dispatchJsonSrc)) {
+            Files.copy(
+                    dispatchJsonSrc,
+                    genDir.resolve(AppPaths.RESULT_DISPATCH_TABLE_JSON_BASENAME),
+                    StandardCopyOption.REPLACE_EXISTING);
+            copiedDispatchJson = true;
+        }
+
         Map<String, Object> meta = new LinkedHashMap<>();
         meta.put("format_version", 1);
         meta.put("stage_id", stageId.strip());
@@ -226,6 +236,10 @@ public final class RemoteSupportLogArchive {
         meta.put(
                 "execution_log_source",
                 execSrc.toAbsolutePath().normalize().toString());
+        meta.put("result_dispatch_json_copied", copiedDispatchJson);
+        meta.put(
+                "result_dispatch_json_source",
+                dispatchJsonSrc.toAbsolutePath().normalize().toString());
         Files.writeString(
                 genDir.resolve(META_JSON_FILENAME),
                 JSON.writerWithDefaultPrettyPrinter().writeValueAsString(meta) + "\n",

@@ -721,19 +721,34 @@ class AppPathsTest {
     }
 
     @Test
-    void resultDispatchTableDir_defaultsToRepoCode(@TempDir Path fakeRepo) throws Exception {
+    void resultDispatchTableDir_defaultsToDefaultOutputDir(@TempDir Path fakeRepo) throws Exception {
         Path code = fakeRepo.resolve("Production-Control-System").resolve("code").resolve("python");
         Files.createDirectories(code);
         Files.createFile(code.resolve("task_extract_stage1.py"));
         Map<String, String> ui =
                 Map.of(AppPaths.KEY_PM_AI_REPO_ROOT, fakeRepo.resolve("Production-Control-System").toString());
         Path expected =
-                fakeRepo.resolve("Production-Control-System")
-                        .resolve("code")
-                        .resolve("output")
-                        .toAbsolutePath()
-                        .normalize();
+                AppPaths.resolveDefaultOutputDir(ui).toAbsolutePath().normalize();
         assertEquals(expected, AppPaths.resolveResultDispatchTableDir(ui));
+    }
+
+    @Test
+    void resultDispatchTableJsonPath_fallsBackToLegacyCodeOutputWhenPresent(
+            @TempDir Path fakeRepo) throws Exception {
+        Path repo = fakeRepo.resolve("Production-Control-System");
+        Path code = repo.resolve("code").resolve("python");
+        Files.createDirectories(code);
+        Files.createFile(code.resolve("task_extract_stage1.py"));
+        Path legacyJson =
+                repo.resolve("code")
+                        .resolve("output")
+                        .resolve(AppPaths.RESULT_DISPATCH_TABLE_JSON_BASENAME);
+        Files.createDirectories(legacyJson.getParent());
+        Files.writeString(legacyJson, "{\"rows\":[]}");
+        Map<String, String> ui = Map.of(AppPaths.KEY_PM_AI_REPO_ROOT, repo.toString());
+        assertEquals(
+                legacyJson.toAbsolutePath().normalize(),
+                AppPaths.resolveResultDispatchTableJsonPath(ui));
     }
 
     @Test

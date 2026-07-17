@@ -4968,6 +4968,8 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                     mainRunTabController.updateStage2Progress(
                             MainRunStage2Progress.State.DISPATCH_RELOADING, "");
                     refreshStage2OutputArtifacts();
+                    final Integer stage2ExitCode = code;
+                    final Throwable stage2Err = err;
                     Platform.runLater(
                             () -> {
                                 refreshEquipmentGanttGraphicAfterPipelineRun();
@@ -4977,6 +4979,10 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                                 }
                                 Runnable afterDispatchReload =
                                         () -> {
+                                            // 反映漏れダイアログ／[配台整合] ログの後に remote_log を残す
+                                            mainRunTabController.flushPendingLogAppends();
+                                            maybeArchiveRemoteSupportLogAfterStage(
+                                                    STAGE2, stage2ExitCode, stage2Err);
                                             mainRunTabController.updateStage2Progress(
                                                     MainRunStage2Progress.State.DELIVERY_RELOADING,
                                                     "");
@@ -5213,7 +5219,12 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
             mainRunTabController.resetDevCheckboxesAfterStage1Run();
         }
         mainRunTabController.flushPendingLogAppends();
-        maybeArchiveRemoteSupportLogAfterStage(script, code, err);
+        // 段階2 正常終了は手動修正表の再読込・反映漏れチェック後にアーカイブする
+        boolean deferRemoteLogForStage2Success =
+                STAGE2.equals(script) && err == null && code != null && code.intValue() == 0;
+        if (!deferRemoteLogForStage2Success) {
+            maybeArchiveRemoteSupportLogAfterStage(script, code, err);
+        }
     }
 
     /**

@@ -1332,7 +1332,7 @@ public final class AppPaths {
      * Directory for standalone result-dispatch xlsx; optional {@code PM_AI_RESULT_DISPATCH_TABLE_DIR} in
      * {@code ui}. Matches {@code planning_core.dispatch_workspace.resolve_result_dispatch_table_output_dir}:
      * optional override, then parent of {@link #KEY_PM_AI_PLAN_INPUT_PATH} when it is an existing Excel workbook,
-     * else {@code resolveRepoRoot(ui)}/{@code code/output}.
+     * else {@link #resolveDefaultOutputDir(Map)}（ポータブルは {@code pm-ai-data/output} 等）。
      */
     public static Path resolveResultDispatchTableDir(Map<String, String> ui) {
         Map<String, String> u = ui != null ? ui : Map.of();
@@ -1363,12 +1363,9 @@ public final class AppPaths {
                 }
             }
             if (resolved == null) {
-                resolved =
-                        resolveRepoRoot(u)
-                                .resolve("code")
-                                .resolve("output")
-                                .toAbsolutePath()
-                                .normalize();
+                // Python 段階2の主出力・ポータブル OUTPUT_DIR（pm-ai-data/output）と揃える。
+                // 旧既定の code/output だと JSON があるのに手動修正タブが空読みし「反映漏れ」になる。
+                resolved = resolveDefaultOutputDir(u);
             }
         }
         // 段階2 配台表 JSON/xlsx は共有へ出さない（アラジン入力用 Excel は別経路で共有可）
@@ -1379,12 +1376,41 @@ public final class AppPaths {
     public static final String RESULT_DISPATCH_TABLE_JSON_BASENAME =
             "結果_配台表.json";
 
-    /** 段階2 出力の {@link #RESULT_DISPATCH_TABLE_JSON_BASENAME}。 */
+    /**
+     * 段階2 出力の {@link #RESULT_DISPATCH_TABLE_JSON_BASENAME}。
+     *
+     * <p>解決先にファイルが無いとき、ローカル output / 旧 code/output に実体があればそちらを返す
+     * （環境タブの PLAN_INPUT / RESULT_DISPATCH が空で Python だけが output に書いた場合の取りこぼし防止）。
+     */
     public static Path resolveResultDispatchTableStage2JsonPath(Map<String, String> ui) {
-        return resolveResultDispatchTableDir(ui != null ? ui : Map.of())
-                .resolve(RESULT_DISPATCH_TABLE_JSON_BASENAME)
-                .toAbsolutePath()
-                .normalize();
+        Map<String, String> u = ui != null ? ui : Map.of();
+        Path primary =
+                resolveResultDispatchTableDir(u)
+                        .resolve(RESULT_DISPATCH_TABLE_JSON_BASENAME)
+                        .toAbsolutePath()
+                        .normalize();
+        if (Files.isRegularFile(primary)) {
+            return primary;
+        }
+        Path underDefaultOut =
+                resolveDefaultOutputDir(u)
+                        .resolve(RESULT_DISPATCH_TABLE_JSON_BASENAME)
+                        .toAbsolutePath()
+                        .normalize();
+        if (Files.isRegularFile(underDefaultOut)) {
+            return underDefaultOut;
+        }
+        Path legacyCodeOut =
+                resolveRepoRoot(u)
+                        .resolve("code")
+                        .resolve("output")
+                        .resolve(RESULT_DISPATCH_TABLE_JSON_BASENAME)
+                        .toAbsolutePath()
+                        .normalize();
+        if (Files.isRegularFile(legacyCodeOut)) {
+            return legacyCodeOut;
+        }
+        return primary;
     }
 
     /** 段階2.1 残業シミュの出力ディレクトリ（段階2 の {@link #resolveResultDispatchTableDir} 配下）。 */
