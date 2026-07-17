@@ -81,7 +81,7 @@ import jp.co.pm.ai.planning.stage2.Stage2PlanRunDateResolver;
 /**
  * 配台計画_タスク入力タブ。レイアウトは {@code PlanInputTab.fxml}。
  *
- * <p>段階2の「当日は配台しない」オプション（{@code PM_AI_STAGE2_SKIP_TODAY_DISPATCH}）および加工途中の翌日配台量設定は本タブに配置する。
+ * <p>段階2の加工途中の翌日配台量設定は本タブに配置する。当日配台モード（排他2択）は実行・ログの段階1ボタン横。
  *
  * <p>ControlsFX {@link SpreadsheetView} で先頭固定列をネイティブに扱う。
  */
@@ -142,12 +142,6 @@ public final class PlanInputTabController {
 
     @FXML
     private CheckBox stage2SkipCacheClearCheckBox;
-
-    @FXML
-    private CheckBox stage2SkipTodayDispatchCheckBox;
-
-    @FXML
-    private CheckBox todayDispatchCheckBox;
 
     @FXML
     private CheckBox stage2SkipGeminiApiCheckBox;
@@ -231,30 +225,6 @@ public final class PlanInputTabController {
 
         installStageRunButtonDepth(stage2RunButton, Color.rgb(194, 65, 12, 0.35));
         installStageRunButtonDepth(stage21RunButton, Color.rgb(194, 65, 12, 0.35));
-        if (stage2SkipTodayDispatchCheckBox != null) {
-            stage2SkipTodayDispatchCheckBox.setSelected(true);
-            stage2SkipTodayDispatchCheckBox
-                    .selectedProperty()
-                    .addListener(
-                            (o, a, b) -> {
-                                refreshNextDayDialogRadioCoupling();
-                                if (shell != null) {
-                                    shell.scheduleDesktopSessionSave();
-                                }
-                            });
-        }
-        if (todayDispatchCheckBox != null) {
-            todayDispatchCheckBox.setSelected(false);
-            todayDispatchCheckBox
-                    .selectedProperty()
-                    .addListener(
-                            (o, a, b) -> {
-                                refreshNextDayDialogRadioCoupling();
-                                if (shell != null) {
-                                    shell.scheduleDesktopSessionSave();
-                                }
-                            });
-        }
         if (stage2SkipGeminiApiCheckBox != null) {
             stage2SkipGeminiApiCheckBox.setSelected(true);
             stage2SkipGeminiApiCheckBox
@@ -538,29 +508,15 @@ public final class PlanInputTabController {
         return stage2SkipCacheClearCheckBox != null && stage2SkipCacheClearCheckBox.isSelected();
     }
 
-    /** 段階2子プロセスへ渡す {@code PM_AI_STAGE2_SKIP_TODAY_DISPATCH}（チェックは本タブ）。 */
-    boolean snapshotStage2SkipTodayDispatch() {
-        return stage2SkipTodayDispatchCheckBox != null && stage2SkipTodayDispatchCheckBox.isSelected();
-    }
-
-    /** 当日配台（朝運用・ソース固定）チェックボックス。 */
-    boolean snapshotTodayDispatch() {
-        return todayDispatchCheckBox != null && todayDispatchCheckBox.isSelected();
-    }
-
-    void applyTodayDispatchFromSession(boolean todayDispatch) {
-        if (todayDispatchCheckBox != null) {
-            todayDispatchCheckBox.setSelected(todayDispatch);
-        }
-        refreshNextDayDialogRadioCoupling();
-    }
-
     /**
      * 当日配台かつ skip_today OFF のとき、加工途中ダイアログ(①/③)用ラジオを無効化する。
+     * 当日配台モードは実行・ログ（段階1ボタン横）の排他2択を参照する。
      */
     void refreshNextDayDialogRadioCoupling() {
         boolean coupleOff =
-                snapshotTodayDispatch() && !snapshotStage2SkipTodayDispatch();
+                shell != null
+                        && shell.snapshotTodayDispatch()
+                        && !shell.snapshotStage2SkipTodayDispatch();
         if (stage2NextDayDialogInProgressRadio != null) {
             stage2NextDayDialogInProgressRadio.setDisable(coupleOff);
         }
@@ -582,13 +538,6 @@ public final class PlanInputTabController {
                 }
             }
         }
-    }
-
-    void applyStage2SkipTodayDispatchFromSession(boolean skipToday) {
-        if (stage2SkipTodayDispatchCheckBox != null) {
-            stage2SkipTodayDispatchCheckBox.setSelected(skipToday);
-        }
-        refreshNextDayDialogRadioCoupling();
     }
 
     /** 段階2/2.1 子プロセスへ渡す {@code PM_AI_SKIP_GEMINI_API}（チェックは本タブ）。 */

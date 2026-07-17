@@ -4,12 +4,14 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.nio.file.Path;
+import java.util.function.Function;
 
 import javafx.event.ActionEvent;
 import javafx.beans.property.SimpleObjectProperty;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.FXCollections;
 import javafx.geometry.Insets;
+import javafx.geometry.Rectangle2D;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.Button;
 import javafx.scene.control.Alert;
@@ -21,10 +23,14 @@ import javafx.scene.control.TableCell;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 import javafx.scene.control.ToggleGroup;
+import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import javafx.scene.layout.HBox;
+import javafx.scene.text.Text;
 import javafx.stage.FileChooser;
 import javafx.stage.Modality;
+import javafx.stage.Screen;
+import javafx.stage.Stage;
 import javafx.stage.Window;
 import javafx.util.StringConverter;
 
@@ -32,8 +38,19 @@ import jp.co.pm.ai.planning.stage2.source.NetworkSourceExtractionCatalog;
 import jp.co.pm.ai.planning.stage2.source.NetworkSourceExtractionTimeSupport;
 import jp.co.pm.ai.planning.stage2.source.Stage1SourcePairMatcher;
 
-/** 当日配台 ON 時、段階1直前に加工計画取得時刻と自動ペア日報を選ぶ。 */
+/** 「当日配台する」選択時、段階1直前に加工計画取得時刻と自動ペア日報を選ぶ。 */
 public final class TodayDispatchSourceSelectionDialog {
+
+    private static final double COL_SELECT_W = 56;
+    private static final double COL_PLAN_TIME_W = 88;
+    private static final double COL_DAILY_TIME_W = 110;
+    private static final double COL_DELTA_W = 80;
+    private static final double COL_MANUAL_BUTTON_W = 128;
+    private static final double COL_PAD = 28;
+    private static final double DIALOG_CHROME_W = 56;
+    private static final double DIALOG_PREF_H = 480;
+    private static final double DIALOG_MIN_W = 760;
+    private static final double DIALOG_MIN_H = 360;
 
     private TodayDispatchSourceSelectionDialog() {}
 
@@ -173,14 +190,28 @@ public final class TodayDispatchSourceSelectionDialog {
         }
         dialog.initModality(Modality.APPLICATION_MODAL);
         dialog.setTitle("当日配台 — ソース選択");
+        dialog.setResizable(true);
         dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
 
+        double planFileW =
+                Math.max(
+                        textWidth("加工計画") + COL_PAD,
+                        maxTextWidth(rows, Row::getPlanFile) + COL_PAD);
+        double dailyLabelW = Math.max(textWidth("加工日報") + COL_PAD, maxDailyLabelWidth(rows) + COL_PAD);
+        boolean anyManual = rows.stream().anyMatch(row -> requiresManualDailySelection(row.initial));
+        double dailyPickW = dailyLabelW + (anyManual ? COL_MANUAL_BUTTON_W + 8 : 0);
+        double comboPrefW = dailyLabelW;
+
         TableView<Row> table = new TableView<>(FXCollections.observableArrayList(rows));
-        table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
+        table.setColumnResizePolicy(TableView.UNCONSTRAINED_RESIZE_POLICY);
         table.setPrefHeight(320);
+        VBox.setVgrow(table, Priority.ALWAYS);
 
         TableColumn<Row, Row> selectCol = new TableColumn<>("選択");
-        selectCol.setMaxWidth(56);
+        selectCol.setPrefWidth(COL_SELECT_W);
+        selectCol.setMinWidth(COL_SELECT_W);
+        selectCol.setMaxWidth(COL_SELECT_W);
+        selectCol.setResizable(false);
         selectCol.setCellValueFactory(c -> new SimpleObjectProperty<>(c.getValue()));
         selectCol.setCellFactory(
                 col ->
@@ -197,19 +228,28 @@ public final class TodayDispatchSourceSelectionDialog {
                         });
 
         TableColumn<Row, String> planTimeCol = new TableColumn<>("計画取得");
+        planTimeCol.setPrefWidth(COL_PLAN_TIME_W);
+        planTimeCol.setMinWidth(72);
         planTimeCol.setCellValueFactory(c -> c.getValue().planTimeProperty());
 
         TableColumn<Row, String> planFileCol = new TableColumn<>("加工計画");
+        planFileCol.setPrefWidth(planFileW);
+        planFileCol.setMinWidth(160);
         planFileCol.setCellValueFactory(c -> c.getValue().planFileProperty());
 
         TableColumn<Row, String> dailyTimeCol = new TableColumn<>("日報取得");
+        dailyTimeCol.setPrefWidth(COL_DAILY_TIME_W);
+        dailyTimeCol.setMinWidth(88);
         dailyTimeCol.setCellValueFactory(c -> c.getValue().dailyTimeProperty());
 
         TableColumn<Row, String> deltaCol = new TableColumn<>("差分");
-        deltaCol.setMaxWidth(72);
+        deltaCol.setPrefWidth(COL_DELTA_W);
+        deltaCol.setMinWidth(64);
         deltaCol.setCellValueFactory(c -> c.getValue().deltaProperty());
 
         TableColumn<Row, Row> dailyPickCol = new TableColumn<>("加工日報");
+        dailyPickCol.setPrefWidth(dailyPickW);
+        dailyPickCol.setMinWidth(200);
         dailyPickCol.setCellValueFactory(c -> new SimpleObjectProperty<>(c.getValue()));
         dailyPickCol.setCellFactory(
                 col ->
@@ -220,18 +260,15 @@ public final class TodayDispatchSourceSelectionDialog {
                             private final HBox box = new HBox(6, combo, manualButton);
 
                             {
+                                combo.setPrefWidth(comboPrefW);
+                                combo.setMaxWidth(Double.MAX_VALUE);
+                                HBox.setHgrow(combo, Priority.ALWAYS);
                                 combo.setConverter(
                                         new StringConverter<>() {
                                             @Override
                                             public String toString(
                                                     NetworkSourceExtractionCatalog.SourceEntry e) {
-                                                if (e == null) {
-                                                    return "";
-                                                }
-                                                return NetworkSourceExtractionTimeSupport.displayTime(
-                                                                e.extractionTime())
-                                                        + " "
-                                                        + e.fileName();
+                                                return formatDailyLabel(e);
                                             }
 
                                             @Override
@@ -293,6 +330,16 @@ public final class TodayDispatchSourceSelectionDialog {
             rows.getFirst().selectRadio().setSelected(true);
         }
 
+        double tablePrefW =
+                COL_SELECT_W
+                        + COL_PLAN_TIME_W
+                        + planFileW
+                        + COL_DAILY_TIME_W
+                        + COL_DELTA_W
+                        + dailyPickW
+                        + 24;
+        table.setPrefWidth(tablePrefW);
+
         Label hint =
                 new Label(
                         "加工計画の取得時刻（行）を1つ選んでください。日報は同日最接近で自動ペアします。"
@@ -300,7 +347,26 @@ public final class TodayDispatchSourceSelectionDialog {
         hint.setWrapText(true);
         VBox root = new VBox(8, hint, table);
         root.setPadding(new Insets(12));
+        root.setFillWidth(true);
         dialog.getDialogPane().setContent(root);
+
+        Rectangle2D visual = Screen.getPrimary().getVisualBounds();
+        double prefW = Math.min(visual.getWidth() * 0.92, tablePrefW + DIALOG_CHROME_W);
+        double prefH = Math.min(visual.getHeight() * 0.85, DIALOG_PREF_H);
+        dialog.getDialogPane().setPrefSize(prefW, prefH);
+        dialog.getDialogPane().setMinWidth(DIALOG_MIN_W);
+        dialog.getDialogPane().setMinHeight(DIALOG_MIN_H);
+        dialog.setOnShown(
+                ev -> {
+                    Window w = dialog.getDialogPane().getScene() != null
+                            ? dialog.getDialogPane().getScene().getWindow()
+                            : null;
+                    if (w instanceof Stage stage) {
+                        stage.setMinWidth(DIALOG_MIN_W);
+                        stage.setMinHeight(DIALOG_MIN_H);
+                    }
+                });
+
         dialog.getDialogPane().lookupButton(ButtonType.OK).addEventFilter(
                 ActionEvent.ACTION,
                 event -> {
@@ -317,7 +383,7 @@ public final class TodayDispatchSourceSelectionDialog {
                     }
                 });
 
-        if (rows.stream().anyMatch(row -> requiresManualDailySelection(row.initial))) {
+        if (anyManual) {
             Label missingWarning = new Label("同日の加工日報候補がない行があります。CSVを手動選択してください。");
             missingWarning.setStyle("-fx-text-fill: #b45309;");
             root.getChildren().add(1, missingWarning);
@@ -341,5 +407,36 @@ public final class TodayDispatchSourceSelectionDialog {
                 });
 
         return dialog.showAndWait();
+    }
+
+    static String formatDailyLabel(NetworkSourceExtractionCatalog.SourceEntry e) {
+        if (e == null) {
+            return "";
+        }
+        return NetworkSourceExtractionTimeSupport.displayTime(e.extractionTime()) + " " + e.fileName();
+    }
+
+    private static double maxTextWidth(List<Row> rows, Function<Row, String> getter) {
+        double max = 0;
+        for (Row row : rows) {
+            max = Math.max(max, textWidth(getter.apply(row)));
+        }
+        return max;
+    }
+
+    private static double maxDailyLabelWidth(List<Row> rows) {
+        double max = 0;
+        for (Row row : rows) {
+            max = Math.max(max, textWidth(formatDailyLabel(row.selectedDaily)));
+            for (NetworkSourceExtractionCatalog.SourceEntry e : row.dailyCandidates()) {
+                max = Math.max(max, textWidth(formatDailyLabel(e)));
+            }
+        }
+        return max;
+    }
+
+    private static double textWidth(String s) {
+        Text text = new Text(s == null ? "" : s);
+        return Math.ceil(text.getLayoutBounds().getWidth());
     }
 }

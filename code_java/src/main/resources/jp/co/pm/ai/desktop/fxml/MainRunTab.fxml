@@ -7,9 +7,11 @@
 <?import javafx.scene.control.ComboBox?>
 <?import javafx.scene.control.Label?>
 <?import javafx.scene.control.ListView?>
+<?import javafx.scene.control.RadioButton?>
 <?import javafx.scene.control.ScrollPane?>
 <?import javafx.scene.control.TextField?>
 <?import javafx.scene.control.TitledPane?>
+<?import javafx.scene.control.ToggleGroup?>
 <?import javafx.scene.control.Tooltip?>
 <?import javafx.scene.image.ImageView?>
 <?import javafx.scene.layout.BorderPane?>
@@ -50,6 +52,22 @@
             <HBox alignment="CENTER_LEFT" spacing="12.0" styleClass="pm-run-primary-bar">
                 <StackPane fx:id="stage1NetworkCacheBadgeHost" alignment="CENTER_LEFT" managed="false" styleClass="pm-stage1-network-cache-badge-host" visible="false" />
                 <Button fx:id="stage1RunButton" mnemonicParsing="false" onAction="#onStage1RunButtonAction" styleClass="pm-stage-run-button,pm-stage-run-1" text="段階1 実行" />
+                <RadioButton fx:id="stage2SkipTodayDispatchRadio" mnemonicParsing="false" selected="true"
+                        text="当日は配台しない（翌日以降から計画）">
+                    <toggleGroup>
+                        <ToggleGroup fx:id="todayDispatchModeToggleGroup"/>
+                    </toggleGroup>
+                    <tooltip>
+                        <Tooltip text="当日配台しない（翌日以降から計画）。「当日配台する」との排他2択です。既定。" />
+                    </tooltip>
+                </RadioButton>
+                <RadioButton fx:id="todayDispatchRadio" mnemonicParsing="false"
+                        text="当日配台する（朝運用・取得時刻でソース固定）"
+                        toggleGroup="$todayDispatchModeToggleGroup">
+                    <tooltip>
+                        <Tooltip text="当日配台する。段階1前に加工計画の取得時刻を選び、段階1/2で同一ファイル束を固定します。「当日は配台しない」との排他2択です。" />
+                    </tooltip>
+                </RadioButton>
                 <CheckBox fx:id="skipGeminiApiCheckBox" mnemonicParsing="false" selected="true" text="AI API 呼び出しをスキップ（開発用）">
                     <tooltip>
                         <Tooltip text="ON のとき Gemini への HTTP 呼び出しを行いません（段階1/2・配台不要ロジック等）。本番運用では必ず OFF にしてください。" />

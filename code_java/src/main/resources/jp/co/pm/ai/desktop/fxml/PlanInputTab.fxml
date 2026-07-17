@@ -67,14 +67,6 @@
                                 <Tooltip text="ON のとき段階2/2.1 で Gemini への HTTP 呼び出しを行いません。本番運用では OFF にしてください。" />
                             </tooltip>
                         </CheckBox>
-                        <CheckBox fx:id="stage2SkipTodayDispatchCheckBox" mnemonicParsing="false" selected="true"
-                                text="当日は配台しない（翌日以降から計画）" />
-                        <CheckBox fx:id="todayDispatchCheckBox" mnemonicParsing="false"
-                                text="当日配台（朝運用・取得時刻でソース固定）">
-                            <tooltip>
-                                <Tooltip text="ON のとき段階1前に加工計画の取得時刻を選び、段階1/2で同一ファイル束を固定します。既定 OFF。" />
-                            </tooltip>
-                        </CheckBox>
                     </HBox>
                     <VBox spacing="4.0">
                         <RadioButton fx:id="stage2NextDayDialogInProgressRadio" mnemonicParsing="false"
