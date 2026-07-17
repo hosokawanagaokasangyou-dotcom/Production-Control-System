@@ -49,9 +49,12 @@ public final class PipelineLocalResultsPolicy {
                 || startsWithIgnoreCase(s, konanM)) {
             return true;
         }
-        return s.contains("\\共有DATA")
-                || s.contains("\\●配台AIシステム\\")
-                || s.contains("\\配台AIシステム\\");
+        /*
+         * 工場共有 DATA フォルダ名のみをヒューリスティックにする。
+         * 「●配台AIシステム」単体はポータブル導入先（例: C:\●配台AIシステム\PMD_initial_install\pm-ai-data\output）
+         * にも含まれるため共有扱いしない（段階2直前クリーンアップが plan_input_tasks.xlsx を消す事故を防ぐ）。
+         */
+        return s.contains("\\共有DATA");
     }
 
     /** 段階1／2 コア成果物のローカル出力ディレクトリ（{@code {repo}/output}）。 */

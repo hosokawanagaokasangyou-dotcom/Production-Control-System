@@ -30,10 +30,12 @@ import javafx.scene.control.ListView;
 import javafx.scene.control.MenuItem;
 import javafx.scene.control.MultipleSelectionModel;
 import javafx.scene.control.OverrunStyle;
+import javafx.scene.control.RadioButton;
 import javafx.scene.control.ScrollBar;
 import javafx.scene.control.SelectionMode;
 import javafx.scene.control.TextField;
 import javafx.scene.control.TitledPane;
+import javafx.scene.control.ToggleGroup;
 import javafx.scene.control.Tooltip;
 import javafx.scene.input.Clipboard;
 import javafx.scene.input.ClipboardContent;
@@ -124,6 +126,24 @@ public final class MainRunTabController {
 
     private static final String STAGE1_RUN_BUTTON_TEXT_DELIVERY_CALENDAR_RELOAD =
             "段階1（納期管理ビュー更新中）";
+
+    @FXML
+    private RadioButton stage2SkipTodayDispatchRadio;
+
+    @FXML
+    private RadioButton todayDispatchRadio;
+
+    @FXML
+    private ToggleGroup todayDispatchModeToggleGroup;
+
+    /**
+     * 「当日配台する」選択中の {@code PM_AI_STAGE2_SKIP_TODAY_DISPATCH}。
+     * ソース取得時刻ポリシー等で更新する。「当日は配台しない」選択中は {@link #snapshotStage2SkipTodayDispatch()} が常に true。
+     */
+    private boolean stage2SkipTodayDispatchWhenTodayMode;
+
+    /** セッション復元・プログラムからの選択変更中はリスナー副作用を抑止する。 */
+    private boolean suppressingTodayDispatchModeListener;
 
     @FXML
     private ComboBox<String> stage2ResultBookFontCombo;
@@ -357,6 +377,7 @@ public final class MainRunTabController {
         }
         applyLogAreaFont();
         installStageRunButtonDepth(stage1RunButton, Color.rgb(14, 116, 144, 0.35));
+        wireTodayDispatchModeExclusiveRadios();
         if (prismPipelineLabel != null) {
             prismPipelineLabel.setText(PrismGpuBootstrapStatus.runTabSummary());
         }
@@ -1282,6 +1303,96 @@ public final class MainRunTabController {
         }
     }
 
+    /** 段階2子プロセスへ渡す {@code PM_AI_STAGE2_SKIP_TODAY_DISPATCH}（排他2択は段階1ボタン横）。 */
+    boolean snapshotStage2SkipTodayDispatch() {
+        if (!snapshotTodayDispatch()) {
+            return true;
+        }
+        return stage2SkipTodayDispatchWhenTodayMode;
+    }
+
+    /** 当日配台する（朝運用・ソース固定）。「当日は配台しない」との排他2択。 */
+    boolean snapshotTodayDispatch() {
+        return todayDispatchRadio != null && todayDispatchRadio.isSelected();
+    }
+
+    /**
+     * セッションから当日配台モード（排他2択）を復元する。
+     *
+     * <p>{@code todayDispatch=true} のとき {@code skipToday} は当日配台モード中の skip 上書きとして保持する。
+     * {@code todayDispatch=false} は常に「当日は配台しない」（旧来の skip=false かつ today=false もこちらへ正規化）。
+     */
+    void applyTodayDispatchModeFromSession(boolean skipToday, boolean todayDispatch) {
+        suppressingTodayDispatchModeListener = true;
+        try {
+            if (todayDispatch && todayDispatchRadio != null) {
+                todayDispatchRadio.setSelected(true);
+                stage2SkipTodayDispatchWhenTodayMode = skipToday;
+            } else if (stage2SkipTodayDispatchRadio != null) {
+                stage2SkipTodayDispatchRadio.setSelected(true);
+                stage2SkipTodayDispatchWhenTodayMode = false;
+            }
+        } finally {
+            suppressingTodayDispatchModeListener = false;
+        }
+        if (shell != null) {
+            shell.refreshPlanInputNextDayDialogCoupling();
+        }
+    }
+
+    /**
+     * skip_today のみ更新する。当日配台モード中はラジオを切り替えず上書き値だけ変える（取得時刻ポリシー用）。
+     * 「当日は配台しない」選択中は skip は常に true のため、呼び出しは無視する。
+     */
+    void applyStage2SkipTodayDispatchFromSession(boolean skipToday) {
+        if (!snapshotTodayDispatch()) {
+            return;
+        }
+        stage2SkipTodayDispatchWhenTodayMode = skipToday;
+        if (shell != null) {
+            shell.refreshPlanInputNextDayDialogCoupling();
+            shell.scheduleDesktopSessionSave();
+        }
+    }
+
+    private void wireTodayDispatchModeExclusiveRadios() {
+        if (stage2SkipTodayDispatchRadio != null) {
+            stage2SkipTodayDispatchRadio.setSelected(true);
+        }
+        if (todayDispatchRadio != null) {
+            todayDispatchRadio.setSelected(false);
+        }
+        stage2SkipTodayDispatchWhenTodayMode = false;
+        if (todayDispatchModeToggleGroup != null) {
+            todayDispatchModeToggleGroup
+                    .selectedToggleProperty()
+                    .addListener(
+                            (o, a, b) -> {
+                                if (suppressingTodayDispatchModeListener) {
+                                    return;
+                                }
+                                if (b == null) {
+                                    suppressingTodayDispatchModeListener = true;
+                                    try {
+                                        if (stage2SkipTodayDispatchRadio != null) {
+                                            stage2SkipTodayDispatchRadio.setSelected(true);
+                                        }
+                                    } finally {
+                                        suppressingTodayDispatchModeListener = false;
+                                    }
+                                    return;
+                                }
+                                if (b == todayDispatchRadio) {
+                                    stage2SkipTodayDispatchWhenTodayMode = false;
+                                }
+                                if (shell != null) {
+                                    shell.refreshPlanInputNextDayDialogCoupling();
+                                    shell.scheduleDesktopSessionSave();
+                                }
+                            });
+        }
+    }
+
     /**
      * 段階1／段階2 実行中は段階1ボタンの再実行を無効化する（進捗・中断はメインシェルツールバーのみ）。段階2実行ボタンは
      * {@link PlanInputTabController} 側。
@@ -1558,6 +1669,27 @@ public final class MainRunTabController {
             return List.copyOf(logLinesAll);
         }
         return List.copyOf(logLinesAll.subList(n - MAX_PERSISTED_LOG_LINES, n));
+    }
+
+    /**
+     * 実行・ログタブの全文（フィルタ前の蓄積バッファ）を改行連結する。リモートサポート用ログ保存向け。
+     */
+    String snapshotAllLogText() {
+        flushPendingLogAppendsOnFxThread();
+        if (logLinesAll.isEmpty()) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder(Math.min(logLinesAll.size() * 80, 1 << 20));
+        for (int i = 0; i < logLinesAll.size(); i++) {
+            if (i > 0) {
+                sb.append('\n');
+            }
+            sb.append(logLinesAll.get(i));
+        }
+        if (!logLinesAll.isEmpty()) {
+            sb.append('\n');
+        }
+        return sb.toString();
     }
 
     double snapshotLogScrollProportion() {

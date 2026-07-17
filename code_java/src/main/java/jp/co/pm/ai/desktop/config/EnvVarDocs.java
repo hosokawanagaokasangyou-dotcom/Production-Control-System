@@ -401,7 +401,13 @@ public final class EnvVarDocs {
                         + " stage1_exclude_rules.json を書出し"
                         + " PM_AI_EXCLUDE_RULES_JSON を自動設定。"
                         + " 特別ルール JSON は dispatch_special_rules/ 配下。"
-                        + " 操作者 bin・PDF・バックアップ等の出力先フォルダの基準パス。");
+                        + " 操作者 bin・PDF・バックアップ・remote_log 等の出力先フォルダの基準パス。");
+        put(
+                "PM_AI_REMOTE_LOG",
+                "リモートサポート用ログ（サマリ Excel 同階層の remote_log/操作者/）への"
+                        + "段階1／2／2.1 終了時スナップショット："
+                        + "0/false/no/off/none で無効（空で有効）。"
+                        + " 実行・ログタブ本文と code/log/execution_log.txt を3日世代管理。");
         put(
                 "PM_AI_SKIP_WORKBOOK_ENV_SHEET",
                 "1/true 等で workbook_env_bootstrap がマクロブックの"

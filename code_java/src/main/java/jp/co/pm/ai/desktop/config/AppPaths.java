@@ -2313,6 +2313,20 @@ public final class AppPaths {
             "pipeline-execution-timing-history.json";
 
     /**
+     * リモートサポート用ログの共有出力を無効化する環境変数（{@code 0}/{@code false}/{@code off} 等）。
+     * 空・未設定は有効。
+     */
+    public static final String KEY_PM_AI_REMOTE_LOG = "PM_AI_REMOTE_LOG";
+
+    /**
+     * リモートサポート用ログのルートフォルダ名（親は {@link #summaryAiDispatchXlsxPath} と同一）。
+     */
+    public static final String REMOTE_LOG_DIR_NAME = "remote_log";
+
+    /** Python planning_core が書く実行ログファイル名（{@code code/log/} 配下）。 */
+    public static final String EXECUTION_LOG_TXT = "execution_log.txt";
+
+    /**
      * 工場別操作者名・PIN 設定（{@link FactoryOperatorUserStore}）。{@link #summaryAiDispatchXlsxPath(Map)}
      * と同一フォルダのバイナリ。
      */
@@ -2323,6 +2337,26 @@ public final class AppPaths {
      */
     public static Path pipelineExecutionTimingHistoryPath(Map<String, String> ui) {
         return siblingOfSummaryAiDispatchWorkbook(ui, PIPELINE_EXECUTION_TIMING_HISTORY_JSON);
+    }
+
+    /**
+     * リモートサポート用ログのルート（{@link #summaryAiDispatchXlsxPath(Map)} の親 +
+     * {@link #REMOTE_LOG_DIR_NAME}）。
+     */
+    public static Path resolveRemoteLogRoot(Map<String, String> ui) {
+        return siblingOfSummaryAiDispatchWorkbook(ui, REMOTE_LOG_DIR_NAME);
+    }
+
+    /**
+     * Python {@code execution_log.txt} の既定パス（{@link #resolveCodeDir(Map)}/{@code log}/
+     * {@link #EXECUTION_LOG_TXT}）。
+     */
+    public static Path resolveExecutionLogTxtPath(Map<String, String> ui) {
+        return resolveCodeDir(ui != null ? ui : Map.of())
+                .resolve("log")
+                .resolve(EXECUTION_LOG_TXT)
+                .toAbsolutePath()
+                .normalize();
     }
 
     /**

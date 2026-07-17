@@ -104,6 +104,7 @@ import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.config.PipelineDownstreamResultsClearer;
 import jp.co.pm.ai.desktop.config.PipelineLocalResultsPolicy;
 import jp.co.pm.ai.desktop.config.PlanningCoreMaterialTableAppendProbe;
+import jp.co.pm.ai.desktop.config.RemoteSupportLogArchive;
 import jp.co.pm.ai.desktop.config.SharedPipelineResultsCleaner;
 import jp.co.pm.ai.desktop.config.Stage1AiCacheClearer;
 import jp.co.pm.ai.desktop.config.WorkspaceCacheArchiveStore;
@@ -1126,9 +1127,10 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                     nz(s.mainRunStage2ProductionPlan()),
                     nz(s.mainRunStage2MemberSchedule()));
         }
-        planInputTabController.applyStage2SkipTodayDispatchFromSession(s.mainRunStage2SkipTodayDispatch());
-        planInputTabController.applyTodayDispatchFromSession(s.planInputTodayDispatch());
+        mainRunTabController.applyTodayDispatchModeFromSession(
+                s.mainRunStage2SkipTodayDispatch(), s.planInputTodayDispatch());
         planInputTabController.applyStage2SkipGeminiApiFromSession(s.planInputStage2SkipGeminiApi());
+        planInputTabController.refreshNextDayDialogRadioCoupling();
         planInputTabController.applyStage2NextDayDialogModeFromSession(
                 s.planInputStage2NextDayDialogMode());
         planInputTabController.applyComboSheetMayExceedNeedFromSession(
@@ -1246,11 +1248,11 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                 mainRunTabController.snapshotLogScrollProportion(),
                 mainRunTabController.snapshotStage2ProductionPlanPath(),
                 mainRunTabController.snapshotStage2MemberSchedulePath(),
-                planInputTabController.snapshotStage2SkipTodayDispatch(),
+                mainRunTabController.snapshotStage2SkipTodayDispatch(),
                 planInputTabController.snapshotStage2NextDayDialogMode().name(),
                 planInputTabController.snapshotComboSheetMayExceedNeed(),
                 planInputTabController.snapshotStage2SkipGeminiApi(),
-                planInputTabController.snapshotTodayDispatch(),
+                mainRunTabController.snapshotTodayDispatch(),
                 mainRunTabController.snapshotStage2ResultBookFont(),
                 mainRunTabController.snapshotSkipGeminiApi(),
                 false,
@@ -3906,6 +3908,23 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         schedulePersistSessionDebounced();
     }
 
+    /** 実行・ログの当日配台排他2択（段階1ボタン横）。 */
+    boolean snapshotTodayDispatch() {
+        return mainRunTabController != null && mainRunTabController.snapshotTodayDispatch();
+    }
+
+    /** 「当日は配台しない」または当日配台モード中の skip 上書き。未初期化時は true（しない側）。 */
+    boolean snapshotStage2SkipTodayDispatch() {
+        return mainRunTabController == null || mainRunTabController.snapshotStage2SkipTodayDispatch();
+    }
+
+    /** 当日配台モード変更時に配台計画_タスク入力の翌日配台ダイアログ連動を更新する。 */
+    void refreshPlanInputNextDayDialogCoupling() {
+        if (planInputTabController != null) {
+            planInputTabController.refreshNextDayDialogRadioCoupling();
+        }
+    }
+
     private void schedulePersistSessionDebounced() {
         if (!suppressEnvSessionPersistence.get()) {
             sessionPersistDebounce.playFromStart();
@@ -4635,7 +4654,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                 uiRun.put(AppPaths.KEY_PM_AI_STAGE2_WRITE_EXCEL, "1");
                 uiRun.put(
                         AppPaths.KEY_PM_AI_STAGE2_SKIP_TODAY_DISPATCH,
-                        planInputTabController.snapshotStage2SkipTodayDispatch() ? "1" : "0");
+                        mainRunTabController.snapshotStage2SkipTodayDispatch() ? "1" : "0");
                 uiRun.put(AppPaths.KEY_PM_AI_STAGE2_SKIP_IN_PROGRESS_DISPATCH, "0");
                 applyStage2NextDayDialogEnvs(uiRun);
                 overlayPlanInputComboSheetMayExceedNeedEnv(uiRun);
@@ -4905,6 +4924,8 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                     showErrorDialog(
                             "段階1",
                             bundleResult.message() + "\n段階1は完了扱いにしません。再実行してください。");
+                    mainRunTabController.flushPendingLogAppends();
+                    maybeArchiveRemoteSupportLogAfterStage(script, code, err);
                     return;
                 }
                 applyStage1ExcludeRulesJsonToEnvTab();
@@ -5192,6 +5213,23 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
             mainRunTabController.resetDevCheckboxesAfterStage1Run();
         }
         mainRunTabController.flushPendingLogAppends();
+        maybeArchiveRemoteSupportLogAfterStage(script, code, err);
+    }
+
+    /**
+     * 段階1／2／2.1 終了時: 共有 {@code remote_log/<操作者>/} へ実行ログを非同期保存する。
+     */
+    private void maybeArchiveRemoteSupportLogAfterStage(
+            String script, Integer code, Throwable err) {
+        String stageId =
+                RemoteSupportLogArchive.stageIdForMainShellScript(
+                        script, STAGE1, STAGE2, STAGE2_1);
+        if (stageId == null || mainRunTabController == null) {
+            return;
+        }
+        String uiLog = mainRunTabController.snapshotAllLogText();
+        RemoteSupportLogArchive.archiveAfterStageAsync(
+                collectUiEnv(), stageId, code, err, uiLog, this::appendLog);
     }
 
     /**
@@ -6859,7 +6897,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         ui.put(AppPaths.KEY_PM_AI_STAGE2_WRITE_EXCEL, "1");
         ui.put(
                 AppPaths.KEY_PM_AI_STAGE2_SKIP_TODAY_DISPATCH,
-                planInputTabController.snapshotStage2SkipTodayDispatch() ? "1" : "0");
+                mainRunTabController.snapshotStage2SkipTodayDispatch() ? "1" : "0");
         ui.put(AppPaths.KEY_PM_AI_STAGE2_SKIP_IN_PROGRESS_DISPATCH, "0");
         applyStage2NextDayDialogEnvs(ui);
         overlayPlanInputComboSheetMayExceedNeedEnv(ui);
@@ -6882,7 +6920,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         ui.put(AppPaths.KEY_PM_AI_STAGE2_WRITE_EXCEL, "1");
         ui.put(
                 AppPaths.KEY_PM_AI_STAGE2_SKIP_TODAY_DISPATCH,
-                planInputTabController.snapshotStage2SkipTodayDispatch() ? "1" : "0");
+                mainRunTabController.snapshotStage2SkipTodayDispatch() ? "1" : "0");
         ui.put(AppPaths.KEY_PM_AI_STAGE2_SKIP_IN_PROGRESS_DISPATCH, "0");
         applyStage2NextDayDialogEnvs(ui);
         overlayPlanInputComboSheetMayExceedNeedEnv(ui);
@@ -7056,7 +7094,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         if (blockIfStage2SourceGuardBusy("段階1")) {
             return;
         }
-        if (planInputTabController == null || !planInputTabController.snapshotTodayDispatch()) {
+        if (mainRunTabController == null || !mainRunTabController.snapshotTodayDispatch()) {
             stage1StartedWithTodayDispatch = false;
             pendingTodayDispatchSourcePair = null;
             startStage1AfterStrictBundleInvalidation();
@@ -7137,8 +7175,8 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
             appendLog("[stage1] 当日配台: 加工計画の候補が見つかりません。");
             showErrorDialog(
                     "段階1",
-                    "当日配台 ON ですが、加工計画フォルダに候補ファイルがありません。\n"
-                            + "PM_AI_TASK_INPUT_SOURCE_DIR を確認するか、当日配台を OFF にしてください。");
+                    "「当日配台する」ですが、加工計画フォルダに候補ファイルがありません。\n"
+                            + "PM_AI_TASK_INPUT_SOURCE_DIR を確認するか、「当日は配台しない」を選んでください。");
             return false;
         }
         Optional<Stage1SourcePairMatcher.MatchedPair> chosen =
@@ -7167,7 +7205,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         boolean skipToday =
                 Stage2SkipTodayDispatchPolicy.shouldSkipTodayDispatch(
                         pair.plan().extractionTime());
-        planInputTabController.applyStage2SkipTodayDispatchFromSession(skipToday);
+        mainRunTabController.applyStage2SkipTodayDispatchFromSession(skipToday);
         appendLog(
                 "[stage1] 当日配台: 計画="
                         + pair.plan().fileName()
@@ -7213,8 +7251,8 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                                 return;
                             }
                             pendingTodayDispatchStageBundle = outcome.bundle();
-                            if (outcome.bundle() != null && planInputTabController != null) {
-                                planInputTabController.applyStage2SkipTodayDispatchFromSession(
+                            if (outcome.bundle() != null && mainRunTabController != null) {
+                                mainRunTabController.applyStage2SkipTodayDispatchFromSession(
                                         Stage2SkipTodayDispatchPolicy.shouldSkipTodayDispatch(
                                                 outcome.bundle().planExtractionTime()));
                             }
@@ -7278,8 +7316,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
     private Stage2SourceGuardSnapshot captureStage2SourceGuardSnapshot(
             Map<String, String> environment) {
         return new Stage2SourceGuardSnapshot(
-                planInputTabController != null
-                        && planInputTabController.snapshotTodayDispatch(),
+                mainRunTabController != null && mainRunTabController.snapshotTodayDispatch(),
                 planInputTabController != null
                         && planInputTabController.isPlanInputTableDirtySinceSave(),
                 planInputTabController != null
@@ -7306,7 +7343,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
 
     private void overlayTodayDispatchSourcesForStageRun(
             Map<String, String> uiRun, String script) {
-        if (planInputTabController == null || !planInputTabController.snapshotTodayDispatch()) {
+        if (mainRunTabController == null || !mainRunTabController.snapshotTodayDispatch()) {
             return;
         }
         if (STAGE1.equals(script) && pendingTodayDispatchSourcePair != null) {
@@ -7426,7 +7463,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         }
         jp.co.pm.ai.planning.stage2.Stage2NextDayDialogMode mode =
                 planInputTabController.snapshotStage2NextDayDialogMode();
-        if (planInputTabController.snapshotStage2SkipTodayDispatch()) {
+        if (snapshotStage2SkipTodayDispatch()) {
             return mode;
         }
         return switch (mode) {
@@ -7448,14 +7485,13 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                         : jp.co.pm.ai.planning.stage2.Stage2NextDayDialogMode.defaultMode();
         jp.co.pm.ai.planning.stage2.Stage2NextDayDialogMode mode =
                 effectiveStage2NextDayDialogMode();
-        if (planInputTabController != null
-                && planInputTabController.snapshotTodayDispatch()
-                && !planInputTabController.snapshotStage2SkipTodayDispatch()
+        if (snapshotTodayDispatch()
+                && !snapshotStage2SkipTodayDispatch()
                 && mode != requestedMode
                 && requestedMode.runsInProgressDialog()) {
             appendLog(
-                    "[stage2] 当日配台 ON のため加工途中の翌日配台ダイアログ(①)を省略します。"
-                            + " 設定する場合は「当日は配台しない」を ON にするか、当日配台チェックを OFF にしてください。");
+                    "[stage2] 当日配台する のため加工途中の翌日配台ダイアログ(①)を省略します。"
+                            + " 設定する場合は「当日は配台しない」を選んでください。");
         }
         pendingStage2InProgressNextDayJsonPath = null;
         pendingStage2AladdinTodayExcludeJsonPath = null;

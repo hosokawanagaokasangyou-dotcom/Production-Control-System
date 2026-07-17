@@ -24,6 +24,16 @@ class PipelineLocalResultsPolicyTest {
                 PipelineLocalResultsPolicy.isSharedOrUncPathText(
                         AppPaths.DEFAULT_KONAN_SHARED_DATA_DIR_M));
         assertFalse(PipelineLocalResultsPolicy.isSharedOrUncPathText("C:\\Users\\me\\output"));
+        // ポータブル導入先はローカル成果物置き場。共有 DATA と誤認しないこと。
+        assertFalse(
+                PipelineLocalResultsPolicy.isSharedOrUncPathText(
+                        "C:\\●配台AIシステム\\PMD_initial_install\\pm-ai-data\\output"));
+        assertFalse(
+                PipelineLocalResultsPolicy.isSharedOrUncPathText(
+                        "C:\\●配台AIシステム\\PMD_initial_install\\pm-ai-data\\output\\plan_input_tasks.xlsx"));
+        assertTrue(
+                PipelineLocalResultsPolicy.isSharedOrUncPathText(
+                        "M:\\湖南工場\\湖南共有\\002  加工G\\●配台AIシステム\\共有DATA\\plan_input_tasks.xlsx"));
     }
 
     @Test
