@@ -13,6 +13,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.regex.Pattern;
 
 import javafx.animation.PauseTransition;
@@ -63,6 +64,16 @@ import jp.co.pm.ai.desktop.config.DesktopTheme;
 import jp.co.pm.ai.desktop.config.PersonBadgeStyle;
 import jp.co.pm.ai.desktop.io.DesktopFileOpener;
 import jp.co.pm.ai.desktop.io.Stage2OutputNaming;
+import jp.co.pm.ai.desktop.io.gantt.EquipmentGanttAssignmentBadgeGridUpdater;
+import jp.co.pm.ai.desktop.io.gantt.EquipmentGanttAssignmentBarContext;
+import jp.co.pm.ai.desktop.io.gantt.EquipmentGanttAssignmentDragPayload;
+import jp.co.pm.ai.desktop.io.gantt.EquipmentGanttAssignmentDropTarget;
+import jp.co.pm.ai.desktop.io.gantt.EquipmentGanttAssignmentEditActions;
+import jp.co.pm.ai.desktop.io.gantt.EquipmentGanttAssignmentEditModel;
+import jp.co.pm.ai.desktop.io.gantt.EquipmentGanttAssignmentInteraction;
+import jp.co.pm.ai.desktop.io.gantt.EquipmentGanttAssignmentMetadata;
+import jp.co.pm.ai.desktop.io.gantt.EquipmentGanttAssignmentPerson;
+import jp.co.pm.ai.desktop.io.gantt.EquipmentGanttAssignmentRole;
 import jp.co.pm.ai.desktop.io.gantt.EquipmentGanttContractSheetTableBuilder;
 import jp.co.pm.ai.desktop.io.gantt.EquipmentGanttSheetBundle;
 import jp.co.pm.ai.desktop.io.gantt.GanttContractValueDecoder;
@@ -74,6 +85,7 @@ import jp.co.pm.ai.desktop.print.EquipmentGanttPrintPageSpec;
 import jp.co.pm.ai.desktop.print.EquipmentGanttPrintTableData;
 import jp.co.pm.ai.desktop.print.EquipmentGanttPdfExporter;
 import jp.co.pm.ai.desktop.print.EquipmentGanttPrintTimelineColumnDensifier;
+import jp.co.pm.ai.desktop.ui.EquipmentGanttAssignmentMemberPicker;
 import jp.co.pm.ai.desktop.ui.SliderCommittedChangeSupport;
 import jp.co.pm.ai.desktop.ui.EquipmentGraphicGanttPane;
 import jp.co.pm.ai.desktop.ui.EquipmentGanttPersonBadgeWireDashStyle;
@@ -195,6 +207,26 @@ public final class EquipmentGanttGraphicTabController {
     /** 契約 JSON から得たバッジグリッド（{@link #DEFAULT_SHEET} 表示時のみ使用）。 */
     private List<List<String>> loadedContractBadgeRows;
 
+    private EquipmentGanttAssignmentMetadata loadedAssignmentMetadata;
+
+    private EquipmentGanttAssignmentEditModel assignmentEditModel;
+
+    private boolean assignmentDirty;
+
+    private final EquipmentGanttAssignmentEditActions assignmentEditActions =
+            new EquipmentGanttAssignmentEditActions() {
+                @Override
+                public void onAddPersonRequested(String barId, double screenX, double screenY) {
+                    promptAddAssignmentPerson(barId, screenX, screenY);
+                }
+
+                @Override
+                public void onRemovePersonRequested(
+                        String barId, String memberKey, double screenX, double screenY) {
+                    removeAssignmentPerson(barId, memberKey);
+                }
+            };
+
     /** {@link #applyGraphicCenter} に渡す現在のバッジ行（シートに応じて null）。 */
     private List<List<String>> badgeRowsForCurrentGraphic;
 
@@ -216,7 +248,19 @@ public final class EquipmentGanttGraphicTabController {
     private CheckBox personBadgeShowCheckBox;
 
     @FXML
-    private CheckBox personBadgeDragAdjustCheckBox;
+    private RadioButton personBadgeInteractionNoneRadio;
+
+    @FXML
+    private ToggleGroup personBadgeInteractionModeToggleGroup;
+
+    @FXML
+    private RadioButton personBadgeDragAdjustRadio;
+
+    @FXML
+    private RadioButton personBadgeAssignmentEditRadio;
+
+    @FXML
+    private Button undoAssignmentButton;
 
     @FXML
     private CheckBox personBadgeWireShowCheckBox;
@@ -335,6 +379,8 @@ public final class EquipmentGanttGraphicTabController {
 
     private PauseTransition equipmentGraphicPersistDelay;
 
+    /** 担当割当編集と位置ドラッグの排他同期中（再入防止）。 */
+
     private boolean graphicWheelHookInstalled;
 
     /**
@@ -371,6 +417,11 @@ public final class EquipmentGanttGraphicTabController {
                     .expandedProperty()
                     .addListener(
                             (o, a, b) -> {
+                                if (!b) {
+                                    resetPersonBadgeInteractionToViewMode();
+                                } else if (isPersonBadgeEditModeRadioSelected()) {
+                                    flushGraphicRebuildNow();
+                                }
                                 scheduleEquipmentGraphicPersist();
                             });
         }
@@ -587,13 +638,14 @@ public final class EquipmentGanttGraphicTabController {
                     },
                     graphicCommitted);
         }
-        if (personBadgeDragAdjustCheckBox != null) {
-            personBadgeDragAdjustCheckBox
-                    .selectedProperty()
+        if (personBadgeInteractionModeToggleGroup != null) {
+            personBadgeInteractionModeToggleGroup
+                    .selectedToggleProperty()
                     .addListener(
                             (o, a, b) -> {
                                 flushGraphicRebuildNow();
                                 scheduleEquipmentGraphicPersist();
+                                refreshUndoAssignmentButtonState();
                             });
         }
         if (personBadgeWireShowCheckBox != null) {
@@ -1036,8 +1088,12 @@ public final class EquipmentGanttGraphicTabController {
         if (s.equipmentGanttBadgeDragDeltas() != null) {
             equipmentGanttBadgeDragDeltas.putAll(s.equipmentGanttBadgeDragDeltas());
         }
-        if (personBadgeDragAdjustCheckBox != null) {
-            personBadgeDragAdjustCheckBox.setSelected(s.equipmentGanttPersonBadgeDragAdjustEnabled());
+        if (personBadgeDragAdjustRadio != null) {
+            if (s.equipmentGanttPersonBadgeDragAdjustEnabled()) {
+                personBadgeDragAdjustRadio.setSelected(true);
+            } else if (personBadgeInteractionNoneRadio != null) {
+                personBadgeInteractionNoneRadio.setSelected(true);
+            }
         }
     }
 
@@ -1214,17 +1270,231 @@ public final class EquipmentGanttGraphicTabController {
     }
 
     boolean snapshotEquipmentGanttPersonBadgeDragAdjustEnabled() {
-        return personBadgeDragAdjustCheckBox != null && personBadgeDragAdjustCheckBox.isSelected();
+        return personBadgeDragAdjustRadio != null && personBadgeDragAdjustRadio.isSelected();
+    }
+
+    private boolean isPersonBadgeEditModeRadioSelected() {
+        return (personBadgeDragAdjustRadio != null && personBadgeDragAdjustRadio.isSelected())
+                || (personBadgeAssignmentEditRadio != null
+                        && personBadgeAssignmentEditRadio.isSelected());
     }
 
     /**
-     * アコーディオン「閲覧モード」ではドラッグを無効にする。チェックボックス ON でも閉じている間は操作しない。
+     * アコーディオン閉じ（閲覧モード）時に編集ラジオを通常表示へ戻す。
+     * ラジオ選択のままだと再構築後に effective* が false となり操作不能になる。
+     */
+    private void resetPersonBadgeInteractionToViewMode() {
+        if (!isPersonBadgeEditModeRadioSelected()) {
+            return;
+        }
+        if (personBadgeInteractionNoneRadio != null) {
+            personBadgeInteractionNoneRadio.setSelected(true);
+            return;
+        }
+        flushGraphicRebuildNow();
+    }
+
+    /**
+     * アコーディオン「閲覧モード」ではドラッグを無効にする。ラジオ ON でも閉じている間は操作しない。
      */
     private boolean effectivePersonBadgeDragAdjustEnabled() {
-        if (personBadgeDragAdjustCheckBox == null || !personBadgeDragAdjustCheckBox.isSelected()) {
+        if (personBadgeDragAdjustRadio == null || !personBadgeDragAdjustRadio.isSelected()) {
             return false;
         }
         return sourceTitledPane == null || sourceTitledPane.isExpanded();
+    }
+
+    /**
+     * アコーディオン「閲覧モード」では担当割当編集を無効にする。位置調整と同様。
+     */
+    private boolean effectivePersonBadgeAssignmentEditEnabled() {
+        if (personBadgeAssignmentEditRadio == null
+                || !personBadgeAssignmentEditRadio.isSelected()) {
+            return false;
+        }
+        if (loadedAssignmentMetadata == null || loadedAssignmentMetadata.barUnits().isEmpty()) {
+            return false;
+        }
+        return sourceTitledPane == null || sourceTitledPane.isExpanded();
+    }
+
+    @FXML
+    private void onUndoAssignmentChangesAction() {
+        undoAssignmentChanges();
+    }
+
+    private void undoAssignmentChanges() {
+        resetAssignmentEditState();
+        if (loadedContractBadgeRows != null) {
+            badgeRowsForCurrentGraphic = deepCopyBadgeRows(loadedContractBadgeRows);
+        }
+        refreshUndoAssignmentButtonState();
+        flushGraphicRebuildNow();
+    }
+
+    private void resetAssignmentEditState() {
+        assignmentEditModel =
+                loadedAssignmentMetadata != null
+                                && !loadedAssignmentMetadata.barUnits().isEmpty()
+                        ? new EquipmentGanttAssignmentEditModel(loadedAssignmentMetadata)
+                        : null;
+        assignmentDirty = false;
+    }
+
+    private void refreshAssignmentBadgeGrid() {
+        if (badgeRowsForCurrentGraphic == null
+                || assignmentEditModel == null
+                || loadedAssignmentMetadata == null) {
+            return;
+        }
+        EquipmentGanttAssignmentBadgeGridUpdater.applyToBadgeRows(
+                badgeRowsForCurrentGraphic,
+                loadedAssignmentMetadata,
+                assignmentEditModel.snapshotPersonsByBarId());
+    }
+
+    private EquipmentGanttAssignmentInteraction buildAssignmentInteraction() {
+        boolean effective = effectivePersonBadgeAssignmentEditEnabled();
+        boolean modelPresent = assignmentEditModel != null;
+        EquipmentGanttAssignmentInteraction built;
+        if (!effective || !modelPresent) {
+            built = EquipmentGanttAssignmentInteraction.disabled();
+        } else {
+            built =
+                    new EquipmentGanttAssignmentInteraction(
+                            true,
+                            loadedAssignmentMetadata,
+                            assignmentEditModel.snapshotPersonsByBarId(),
+                            this::handleAssignmentDrop,
+                            assignmentEditActions);
+        }
+        return built;
+    }
+
+    private void promptAddAssignmentPerson(String barId, double screenX, double screenY) {
+        if (assignmentEditModel == null || !effectivePersonBadgeAssignmentEditEnabled()) {
+            return;
+        }
+        if (shell == null) {
+            return;
+        }
+        Optional<EquipmentGanttAssignmentBarContext.ProcessMachine> ctx =
+                EquipmentGanttAssignmentBarContext.resolve(
+                        loadedAssignmentMetadata, lastGraphicSheet, barId);
+        if (ctx.isEmpty()) {
+            shell.showWarningDialog("担当を追加", "対象バーの工程・機械名を解決できません。");
+            return;
+        }
+        Stage owner = ownerStage != null ? ownerStage : shell.getPrimaryStage();
+        EquipmentGanttAssignmentMemberPicker.pickSingleMemberAsync(
+                shell,
+                owner,
+                ctx.get().processName(),
+                ctx.get().machineName(),
+                screenX,
+                screenY,
+                fullName -> {
+                    EquipmentGanttAssignmentPerson person =
+                            EquipmentGanttAssignmentPerson.fromRawName(
+                                    fullName, EquipmentGanttAssignmentRole.SUB);
+                    applyAssignmentMutation(assignmentEditModel.addPerson(barId, person));
+                });
+    }
+
+    private void removeAssignmentPerson(String barId, String memberKey) {
+        if (assignmentEditModel == null || !effectivePersonBadgeAssignmentEditEnabled()) {
+            return;
+        }
+        applyAssignmentMutation(assignmentEditModel.removePerson(barId, memberKey));
+    }
+
+    private boolean applyAssignmentMutation(
+            Optional<EquipmentGanttAssignmentEditModel.Failure> failure) {
+        if (failure.isPresent()) {
+            EquipmentGanttAssignmentEditModel.Failure f = failure.get();
+            if (f != EquipmentGanttAssignmentEditModel.Failure.SAME_BAR_NOOP && shell != null) {
+                shell.appendLog("[equipment-gantt-assignment] rejected: " + f);
+                String message = assignmentFailureMessage(f);
+                if (!message.isBlank()) {
+                    shell.showWarningDialog("担当割当", message);
+                }
+            }
+            return false;
+        }
+        assignmentDirty = true;
+        refreshAssignmentBadgeGrid();
+        refreshUndoAssignmentButtonState();
+        flushGraphicRebuildNow();
+        return true;
+    }
+
+    private static String assignmentFailureMessage(
+            EquipmentGanttAssignmentEditModel.Failure failure) {
+        return switch (failure) {
+            case UNKNOWN_BAR -> "対象バーが見つかりません。";
+            case UNKNOWN_PERSON -> "対象担当者が見つかりません。";
+            case DUPLICATE_PERSON -> "同じ担当者は既に割り当て済みです。";
+            case EMPTY_BAR_FORBIDDEN -> "バーを0名にすることはできません。";
+            case SAME_BAR_NOOP -> "";
+        };
+    }
+
+    private boolean handleAssignmentDrop(
+            EquipmentGanttAssignmentDragPayload source,
+            EquipmentGanttAssignmentDropTarget target) {
+        if (assignmentEditModel == null || !effectivePersonBadgeAssignmentEditEnabled()) {
+            return false;
+        }
+        if (source == null || target == null) {
+            return false;
+        }
+        Optional<EquipmentGanttAssignmentEditModel.Failure> failure;
+        if (target.memberKey() == null || target.memberKey().isBlank()) {
+            failure =
+                    assignmentEditModel.movePerson(
+                            source.barId(), target.barId(), source.memberKey());
+        } else {
+            failure =
+                    assignmentEditModel.swapPerson(
+                            source.barId(),
+                            target.barId(),
+                            source.memberKey(),
+                            target.memberKey());
+        }
+        return applyAssignmentMutation(failure);
+    }
+
+    private void refreshUndoAssignmentButtonState() {
+        if (undoAssignmentButton != null) {
+            undoAssignmentButton.setDisable(!assignmentDirty);
+        }
+    }
+
+    /** 契約メタデータが無いときは担当割当編集ラジオを選べないようにする。 */
+    private void refreshAssignmentEditRadioState() {
+        if (personBadgeAssignmentEditRadio == null) {
+            return;
+        }
+        boolean hasMeta =
+                loadedAssignmentMetadata != null
+                        && !loadedAssignmentMetadata.barUnits().isEmpty();
+        personBadgeAssignmentEditRadio.setDisable(!hasMeta);
+        if (!hasMeta
+                && personBadgeAssignmentEditRadio.isSelected()
+                && personBadgeInteractionNoneRadio != null) {
+            personBadgeInteractionNoneRadio.setSelected(true);
+        }
+    }
+
+    private static List<List<String>> deepCopyBadgeRows(List<List<String>> src) {
+        if (src == null) {
+            return null;
+        }
+        List<List<String>> out = new ArrayList<>(src.size());
+        for (List<String> row : src) {
+            out.add(row != null ? new ArrayList<>(row) : new ArrayList<>());
+        }
+        return out;
     }
 
     String snapshotEquipmentGanttPlanJsonPath() {
@@ -1472,6 +1742,10 @@ public final class EquipmentGanttGraphicTabController {
             SheetLoad loaded = loadWorkbookSheetsForGraphic(planPath);
             Map<String, JsonTableIo.SheetTable> sheets = loaded.sheets();
             loadedContractBadgeRows = loaded.contractBadgeSlotRows();
+            loadedAssignmentMetadata = loaded.assignmentMetadata();
+            resetAssignmentEditState();
+            refreshUndoAssignmentButtonState();
+            refreshAssignmentEditRadioState();
             loadRegularShiftTimesFromPlan(planPath);
             lastLoadedPlanPath = planPath.toString();
 
@@ -1564,7 +1838,7 @@ public final class EquipmentGanttGraphicTabController {
         }
         lastGraphicSheet = st;
         if (loadedContractBadgeRows != null && DEFAULT_SHEET.equals(name)) {
-            badgeRowsForCurrentGraphic = loadedContractBadgeRows;
+            badgeRowsForCurrentGraphic = deepCopyBadgeRows(loadedContractBadgeRows);
         } else {
             badgeRowsForCurrentGraphic = null;
         }
@@ -1604,6 +1878,11 @@ public final class EquipmentGanttGraphicTabController {
     private void resetGraphicState(String placeholderMsg, boolean clearBadgeSessionData) {
         lastGraphicSheet = null;
         loadedContractBadgeRows = null;
+        loadedAssignmentMetadata = null;
+        assignmentEditModel = null;
+        assignmentDirty = false;
+        refreshUndoAssignmentButtonState();
+        refreshAssignmentEditRadioState();
         loadedRegularShiftStart = null;
         loadedRegularShiftEnd = null;
         refreshPrintTimeRegularHint();
@@ -1690,7 +1969,7 @@ public final class EquipmentGanttGraphicTabController {
                         st.columns(),
                         rows,
                         badgeRowsForCurrentGraphic,
-                        effectivePersonBadgeDragAdjustEnabled());
+                        true);
         if (Boolean.getBoolean("pm.ai.gantt.profile")) {
             long ms = (System.nanoTime() - buildT0) / 1_000_000L;
             if (shell != null) {
@@ -1718,7 +1997,7 @@ public final class EquipmentGanttGraphicTabController {
     /**
      * 設備ガント（グラフィック）の {@link EquipmentGraphicGanttPane#build} を、現在のツールバー設定で行う。
      *
-     * @param interactiveDragBadges false のとき印刷用（ドラッグずれの保存を行わない）
+     * @param interactiveDragBadges false のとき印刷用（ドラッグずれマップを渡さない）。画面表示は true。
      */
     private BorderPane buildEquipmentGanttBorderPane(
             List<String> columns,
@@ -1758,10 +2037,10 @@ public final class EquipmentGanttGraphicTabController {
                         : (String __) -> PersonBadgeStyle.defaultStyle();
         boolean showBadges = snapshotEquipmentGanttPersonBadgeEnabled();
 
-        boolean dragEffective =
+        boolean dragAdjustActive =
                 interactiveDragBadges && effectivePersonBadgeDragAdjustEnabled();
         java.util.function.BiConsumer<String, EquipmentGanttBadgeDragDelta> dragSink =
-                dragEffective
+                dragAdjustActive
                         ? (k, d) -> {
                             if (Math.abs(d.dx()) < 1e-6 && Math.abs(d.dy()) < 1e-6) {
                                 equipmentGanttBadgeDragDeltas.remove(k);
@@ -1772,7 +2051,7 @@ public final class EquipmentGanttGraphicTabController {
                         }
                         : null;
         java.util.Map<String, EquipmentGanttBadgeDragDelta> dragMap =
-                dragEffective ? equipmentGanttBadgeDragDeltas : java.util.Map.of();
+                interactiveDragBadges ? equipmentGanttBadgeDragDeltas : java.util.Map.of();
 
         return EquipmentGraphicGanttPane.build(
                 columns,
@@ -1793,7 +2072,7 @@ public final class EquipmentGanttGraphicTabController {
                 badgeResolver,
                 snapshotEquipmentGanttPersonBadgeGapPx(),
                 snapshotEquipmentGanttPersonBadgeBandVerticalOffsetPx(),
-                dragEffective,
+                dragAdjustActive,
                 dragMap,
                 dragSink,
                 snapshotEquipmentGanttPersonBadgeWireStrokeHex(),
@@ -1802,7 +2081,8 @@ public final class EquipmentGanttGraphicTabController {
                 snapshotEquipmentGanttPersonBadgeWireMaxLengthPx(),
                 snapshotEquipmentGanttPersonBadgeWireEnabled(),
                 snapshotEquipmentGanttPrepTimeLabelsEnabled(),
-                highQualityPrint);
+                highQualityPrint,
+                buildAssignmentInteraction());
     }
 
     @FXML
@@ -2249,6 +2529,7 @@ public final class EquipmentGanttGraphicTabController {
         sb.append(snapshotEquipmentGanttPersonBadgeGapPx()).append('\u0001');
         sb.append(snapshotEquipmentGanttPersonBadgeBandVerticalOffsetPx()).append('\u0001');
         sb.append(effectivePersonBadgeDragAdjustEnabled()).append('\u0001');
+        sb.append(effectivePersonBadgeAssignmentEditEnabled()).append('\u0001');
         sb.append(snapshotEquipmentGanttPersonBadgeWireEnabled()).append('\u0001');
         sb.append(snapshotEquipmentGanttPersonBadgeWireStrokeHex()).append('\u0001');
         sb.append(snapshotEquipmentGanttPersonBadgeWireWidthPx()).append('\u0001');
@@ -2257,7 +2538,7 @@ public final class EquipmentGanttGraphicTabController {
         sb.append(snapshotEquipmentGanttPrepTimeLabelsEnabled()).append('\u0001');
         sb.append(columns != null ? columns.size() : 0).append('\u0001');
         sb.append(rows != null ? rows.size() : 0);
-        if (effectivePersonBadgeDragAdjustEnabled() && !equipmentGanttBadgeDragDeltas.isEmpty()) {
+        if (!equipmentGanttBadgeDragDeltas.isEmpty()) {
             equipmentGanttBadgeDragDeltas.entrySet().stream()
                     .sorted(Map.Entry.comparingByKey())
                     .forEach(
@@ -2269,6 +2550,24 @@ public final class EquipmentGanttGraphicTabController {
                                         .append(d != null ? d.dx() : 0)
                                         .append(',')
                                         .append(d != null ? d.dy() : 0);
+                            });
+        }
+        if (assignmentEditModel != null && assignmentDirty) {
+            assignmentEditModel.snapshotPersonsByBarId().entrySet().stream()
+                    .sorted(Map.Entry.comparingByKey())
+                    .forEach(
+                            e -> {
+                                sb.append('\u0001').append(e.getKey()).append('=');
+                                if (e.getValue() != null) {
+                                    e.getValue()
+                                            .forEach(
+                                                    p ->
+                                                            sb.append(
+                                                                            p != null
+                                                                                    ? p.memberKey()
+                                                                                    : "")
+                                                                    .append(','));
+                                }
                             });
         }
         return sb.toString();
@@ -2471,7 +2770,8 @@ public final class EquipmentGanttGraphicTabController {
     private record SheetLoad(
             Map<String, JsonTableIo.SheetTable> sheets,
             String description,
-            List<List<String>> contractBadgeSlotRows) {}
+            List<List<String>> contractBadgeSlotRows,
+            EquipmentGanttAssignmentMetadata assignmentMetadata) {}
 
     /**
      * ブック JSON は論理ビューがあればそれを読む（他シートの結合セル展開用）。
@@ -2490,7 +2790,10 @@ public final class EquipmentGanttGraphicTabController {
                 Map<String, JsonTableIo.SheetTable> m = new LinkedHashMap<>();
                 m.put(DEFAULT_SHEET, bundle.table());
                 return new SheetLoad(
-                        m, fn0.toString() + " (設備ガント契約・直接)", bundle.badgeSlotRows());
+                        m,
+                        fn0.toString() + " (設備ガント契約・直接)",
+                        bundle.badgeSlotRows(),
+                        bundle.assignmentMetadata());
             }
         }
         Path logical = resolveLogicalViewPath(planJsonFromField);
@@ -2507,14 +2810,16 @@ public final class EquipmentGanttGraphicTabController {
             desc = planJsonFromField.getFileName().toString();
         }
         List<List<String>> badgeRows = null;
+        EquipmentGanttAssignmentMetadata assignmentMetadata = EquipmentGanttAssignmentMetadata.empty();
         if (contract != null && Files.isRegularFile(contract)) {
             EquipmentGanttSheetBundle bundle =
                     EquipmentGanttContractSheetTableBuilder.buildBundleFromContractPath(contract);
             sheets.put(DEFAULT_SHEET, bundle.table());
             badgeRows = bundle.badgeSlotRows();
+            assignmentMetadata = bundle.assignmentMetadata();
             desc = desc + " / " + contract.getFileName() + " (設備ガント帯)";
         }
-        return new SheetLoad(sheets, desc, badgeRows);
+        return new SheetLoad(sheets, desc, badgeRows, assignmentMetadata);
     }
 
     /**

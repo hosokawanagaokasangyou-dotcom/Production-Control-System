@@ -44,8 +44,23 @@
                                       text="バッジワイヤー表示" selected="true"/>
                             <CheckBox fx:id="prepTimeLabelsShowCheckBox" mnemonicParsing="false"
                                       text="準備時間ラベルを表示" selected="false"/>
-                            <CheckBox fx:id="personBadgeDragAdjustCheckBox" mnemonicParsing="false"
-                                      text="バッジをドラッグで移動（再描画でリセット）"/>
+                            <RadioButton fx:id="personBadgeInteractionNoneRadio" mnemonicParsing="false"
+                                          text="通常表示" selected="true">
+                                <toggleGroup>
+                                    <ToggleGroup fx:id="personBadgeInteractionModeToggleGroup"/>
+                                </toggleGroup>
+                            </RadioButton>
+                            <RadioButton fx:id="personBadgeDragAdjustRadio" mnemonicParsing="false"
+                                          text="バッジをドラッグで移動（表示位置のみ）"
+                                          toggleGroup="$personBadgeInteractionModeToggleGroup"/>
+                            <RadioButton fx:id="personBadgeAssignmentEditRadio" mnemonicParsing="false"
+                                          text="担当割当を編集"
+                                          toggleGroup="$personBadgeInteractionModeToggleGroup"/>
+                            <Button fx:id="undoAssignmentButton" mnemonicParsing="false"
+                                    text="割当変更を元に戻す" disable="true"
+                                    onAction="#onUndoAssignmentChangesAction"/>
+                            <Label styleClass="pm-plan-result-viewer-hint-inline"
+                                   text="バー上右クリックで追加・バッジ上右クリックで削除"/>
                             <Label fx:id="dataStageBadgeLabel" styleClass="pm-planning-stage-badge"
                                    text="&#x6bb5;&#x968e;2" visible="false" managed="false"/>
                             <Button fx:id="reloadButton" mnemonicParsing="false" text="再読み"

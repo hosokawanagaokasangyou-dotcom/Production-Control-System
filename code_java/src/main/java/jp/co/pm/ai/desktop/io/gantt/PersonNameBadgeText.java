@@ -50,6 +50,14 @@ public final class PersonNameBadgeText {
      * @param subSplitStartup {@code true} のとき {@code sub} は {@code [,、]} で分割（始業系）。{@code false} のとき {@code
      *     [,、」]} で分割（加工セグメント系）。
      */
+    /**
+     * {@code op} / {@code sub} から、出現順のフル氏名（重複除去済み）を返す。担当割当編集メタデータ用。
+     */
+    public static List<String> orderedRawNamesFromOpSub(
+            String op, String sub, boolean subSplitStartup) {
+        return List.copyOf(orderedRawNames(op, sub, subSplitStartup));
+    }
+
     public static List<String> badgeListFromOpSub(String op, String sub, boolean subSplitStartup) {
         List<String> rawOrdered = orderedRawNames(op, sub, subSplitStartup);
         LinkedHashSet<String> seenLabs = new LinkedHashSet<>();

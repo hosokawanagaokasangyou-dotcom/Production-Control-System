@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "kind": "equipment_gantt",
+  "fn": "_write_results_equipment_gantt_sheet",
+  "kwargs_packed": {
+    "timeline_events": [
+      {
+        "date": {"__t": "date", "v": "2026-05-14"},
+        "machine": "EC機　湖南",
+        "task_id": "Y1-1",
+        "event_kind": "machining",
+        "start_dt": {"__t": "datetime", "v": "2026-05-14T08:05:00"},
+        "end_dt": {"__t": "datetime", "v": "2026-05-14T08:07:00"},
+        "unit_m": 100.0,
+        "units_done": 1.0,
+        "op": "山田 太郎",
+        "sub": "佐藤 花子"
+      },
+      {
+        "date": {"__t": "date", "v": "2026-05-14"},
+        "machine": "EC機　湖南",
+        "task_id": "Y1-2",
+        "event_kind": "machining",
+        "start_dt": {"__t": "datetime", "v": "2026-05-14T08:20:00"},
+        "end_dt": {"__t": "datetime", "v": "2026-05-14T08:22:00"},
+        "unit_m": 100.0,
+        "units_done": 1.0,
+        "op": "鈴木 一郎",
+        "sub": ""
+      },
+      {
+        "date": {"__t": "date", "v": "2026-05-14"},
+        "machine": "EC機　湖南",
+        "task_id": "Y1-3",
+        "event_kind": "machining",
+        "start_dt": {"__t": "datetime", "v": "2026-05-14T08:40:00"},
+        "end_dt": {"__t": "datetime", "v": "2026-05-14T08:42:00"},
+        "unit_m": 100.0,
+        "units_done": 1.0,
+        "op": "",
+        "sub": ""
+      }
+    ],
+    "equipment_list": ["EC機　湖南"],
+    "sorted_dates": [{"__t": "date", "v": "2026-05-14"}]
+  }
+}

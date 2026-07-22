@@ -185,7 +185,10 @@ public final class EquipmentGanttContractSheetTableBuilder {
         }
 
         return new EquipmentGanttSheetBundle(
-                new JsonTableIo.SheetTable(columns, rows), badgeSlotRows);
+                new JsonTableIo.SheetTable(columns, rows),
+                badgeSlotRows,
+                EquipmentGanttAssignmentMetadataBuilder.build(
+                        events, new JsonTableIo.SheetTable(columns, rows), badgeSlotRows, slotStarts));
     }
 
     /**
@@ -332,6 +335,57 @@ public final class EquipmentGanttContractSheetTableBuilder {
             }
         }
         return List.of();
+    }
+
+    /**
+     * 表の機械名列表示と {@code timeline_events.machine}（生キー）が同一設備列を指すか。
+     * {@link #eventsForEquipmentColumn} と同系の正規化・工程+機械分割を使う。
+     */
+    static boolean equipmentColumnMatchesEventMachine(String columnLabel, String eventMachine) {
+        if (columnLabel == null
+                || columnLabel.isBlank()
+                || eventMachine == null
+                || eventMachine.isBlank()) {
+            return false;
+        }
+        String col = stripMachineColumnSuffix(columnLabel);
+        String colN = normalizeEquipmentMatchKey(col);
+        String evN = normalizeEquipmentMatchKey(eventMachine);
+        if (!colN.isEmpty() && colN.equals(evN)) {
+            return true;
+        }
+        String[] colSplit = splitEquipmentLine(col);
+        String colMach =
+                colSplit[1].isEmpty() ? col : colSplit[1];
+        String colMachN = normalizeEquipmentMatchKey(colMach);
+        String[] evSplit = splitEquipmentLine(eventMachine);
+        String evMach =
+                evSplit[1].isEmpty() ? eventMachine : evSplit[1];
+        String evMachN = normalizeEquipmentMatchKey(evMach);
+        if (!colMachN.isEmpty() && colMachN.equals(evMachN)) {
+            return true;
+        }
+        String colProcN = normalizeEquipmentMatchKey(colSplit[0]);
+        String evProcN = normalizeEquipmentMatchKey(evSplit[0]);
+        return !colProcN.isEmpty()
+                && !colMachN.isEmpty()
+                && colProcN.equals(evProcN)
+                && colMachN.equals(evMachN);
+    }
+
+    /** 機械名列末尾の {@code (...)} / {@code （…）} を除いた表示キー（UI {@code machineMergeKey} 相当）。 */
+    static String stripMachineColumnSuffix(String rawMachineCell) {
+        if (rawMachineCell == null || rawMachineCell.isBlank()) {
+            return "";
+        }
+        String s = rawMachineCell.strip().split("\\R", 2)[0].strip();
+        String prev;
+        do {
+            prev = s;
+            s = s.replaceFirst("\\s*\\([^)]*\\)\\s*$", "").strip();
+            s = s.replaceFirst("\\s*（[^）]*）\\s*$", "").strip();
+        } while (!s.equals(prev));
+        return s;
     }
 
     /**

@@ -68,6 +68,10 @@ import javafx.scene.Node;
 import javafx.scene.Parent;
 
 import jp.co.pm.ai.desktop.config.PersonBadgeStyle;
+import jp.co.pm.ai.desktop.io.gantt.EquipmentGanttAssignmentBarUnit;
+import jp.co.pm.ai.desktop.io.gantt.EquipmentGanttAssignmentInteraction;
+import jp.co.pm.ai.desktop.io.gantt.EquipmentGanttAssignmentMetadata;
+import jp.co.pm.ai.desktop.io.gantt.EquipmentGanttAssignmentPerson;
 import jp.co.pm.ai.desktop.io.gantt.PersonNameBadgeText;
 
 /**
@@ -362,6 +366,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 layout,
                 badgeResolver,
                 req.displayRowIndex(),
+                req.assignmentTableRowIndex(),
+                req.machineDisplay(),
                 req.gapPx(),
                 req.badgeDragAdjustEnabled(),
                 req.timelineBandTop(),
@@ -373,7 +379,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 req.dragDeltaSink(),
                 req.personBadgeWiresEnabled(),
                 req.wirePaintOrNull(),
-                req.personBadgeWireMaxLengthPxOrZero());
+                req.personBadgeWireMaxLengthPxOrZero(),
+                req.assignmentInteraction());
         spec.badgePane.setTranslateY(req.badgePaneVerticalOffsetPx());
     }
 
@@ -967,12 +974,10 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 personBadgeWireMaxLengthPxOrZero,
                 showPersonBadgeWires,
                 false,
-                false);
+                false,
+                EquipmentGanttAssignmentInteraction.disabled());
     }
 
-    /**
-     * @param highQualityPrint true のとき印刷向けベクタータイムライン（Pane）を使う（画面表示用 build では false）
-     */
     public static BorderPane build(
             List<String> columns,
             ObservableList<ObservableList<String>> rows,
@@ -1001,7 +1006,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             double personBadgeWireMaxLengthPxOrZero,
             boolean showPersonBadgeWires,
             boolean showPrepTimeBarLabels,
-            boolean highQualityPrint) {
+            boolean highQualityPrint,
+            EquipmentGanttAssignmentInteraction assignmentInteraction) {
         BorderPane root = new BorderPane();
         root.setCache(false);
         RepairedGanttTable repairedTable = RepairedGanttTable.from(columns, rows, badgeSlotRowsRaw);
@@ -1066,6 +1072,14 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
 
         Map<String, EquipmentGanttBadgeDragDelta> dragEff =
                 personBadgeDragDeltas != null ? personBadgeDragDeltas : Map.of();
+        final EquipmentGanttAssignmentInteraction assignmentEff =
+                assignmentInteraction != null
+                        ? assignmentInteraction
+                        : EquipmentGanttAssignmentInteraction.disabled();
+        final boolean assignmentEditActive = assignmentEff.active();
+        final boolean badgePointerActive =
+                showPersonBadges
+                        && (personBadgeDragAdjustEnabled || assignmentEditActive);
 
         TimelineRowHeights rowHeights =
                 computeTimelineRowHeights(
@@ -1419,7 +1433,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
              * ドラッグ調整 ON のときだけ非透過にし、余白は pickOnBounds(false) で Canvas 側へ透過させる。
              */
             badgePane.setPickOnBounds(false);
-            badgePane.setMouseTransparent(!(showPersonBadges && personBadgeDragAdjustEnabled));
+            badgePane.setMouseTransparent(!(showPersonBadges && badgePointerActive));
             LazyBadgeLayoutRequest lazyBadgeReq = null;
             if (showPersonBadges && lazyBadgeLayout) {
                 lazyBadgeReq =
@@ -1427,6 +1441,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                                 dr.badgeCellsInSlots(),
                                 dr.cellsInSlots(),
                                 ri,
+                                dr.tableRowIndex(),
+                                dr.machineLine() != null ? dr.machineLine() : "",
                                 gapPxEff,
                                 personBadgeDragAdjustEnabled,
                                 timelineDrawOuterPad,
@@ -1438,7 +1454,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                                 personBadgeDragDeltaSink,
                                 personBadgeWiresEffective,
                                 personBadgeWiresEffective ? personBadgeWirePaint : null,
-                                personBadgeWireMaxLengthPxEff);
+                                personBadgeWireMaxLengthPxEff,
+                                assignmentEff);
             } else if (showPersonBadges) {
                 layoutPersonBadgeOverlay(
                         badgePane,
@@ -1447,6 +1464,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                         layout,
                         badgeResolver,
                         ri,
+                        dr.tableRowIndex(),
+                        dr.machineLine() != null ? dr.machineLine() : "",
                         gapPxEff,
                         personBadgeDragAdjustEnabled,
                         timelineDrawOuterPad,
@@ -1458,7 +1477,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                         personBadgeDragDeltaSink,
                         personBadgeWiresEffective,
                         personBadgeWiresEffective ? personBadgeWirePaint : null,
-                        personBadgeWireMaxLengthPxEff);
+                        personBadgeWireMaxLengthPxEff,
+                        assignmentEff);
                 badgePane.setTranslateY(bandVertEff);
             }
             StackPane rowStack = new StackPane(timelineNode, badgePane);
@@ -1484,7 +1504,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             /*
              * Canvas と Pane を並べるだけでも後勝ちだが、子追加や再有効化時に順序がずれたとき備えて明示的に最前面へ。
              */
-            if (showPersonBadges && personBadgeDragAdjustEnabled) {
+            if (showPersonBadges && badgePointerActive) {
                 badgePane.toFront();
             }
 
@@ -1572,7 +1592,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                                     personBadgeWiresEffective,
                                     personBadgeWirePaint,
                                     personBadgeWireMaxLengthPxEff,
-                                    badgeResolver));
+                                    badgeResolver,
+                                    assignmentEff));
         }
 
         ScrollPane leftBodyScroll = new ScrollPane(useVirtualBody ? leftBodyHost : leftBodyGrid);
@@ -4016,6 +4037,149 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
     /**
      * ワイヤー有効時: バッジをアンカーから一定距離の円周上に円環配置する（①右上45°起点 ②時計回り45°刻み。横並び初期配置の代替）。
      */
+    private static List<EquipmentGanttAssignmentPerson> assignmentPersonsOnBar(
+            EquipmentGanttAssignmentInteraction assignment, String barId) {
+        if (assignment == null
+                || barId == null
+                || barId.isBlank()
+                || assignment.personsByBarId() == null) {
+            return List.of();
+        }
+        List<EquipmentGanttAssignmentPerson> list = assignment.personsByBarId().get(barId);
+        if (list != null && !list.isEmpty()) {
+            return list;
+        }
+        if (assignment.metadata() != null) {
+            EquipmentGanttAssignmentBarUnit unit =
+                    assignment.metadata().barUnitsById().get(barId);
+            if (unit != null && unit.persons() != null && !unit.persons().isEmpty()) {
+                return unit.persons();
+            }
+        }
+        return List.of();
+    }
+
+    private static void installBarAssignmentDropZoneIfNeeded(
+            Pane overlay,
+            BarRun run,
+            LayoutMetrics layout,
+            int assignmentTableRowIndex,
+            double timelineBandTop,
+            double timelineBandHeight,
+            EquipmentGanttAssignmentInteraction assignment) {
+        if (overlay == null
+                || assignment == null
+                || !assignment.active()
+                || assignment.metadata() == null
+                || run == null
+                || run.kind() == BarKind.BREAK
+                || assignmentTableRowIndex < 0) {
+            return;
+        }
+        java.util.Optional<String> barIdOpt =
+                assignment
+                        .metadata()
+                        .resolveBarId(
+                                assignmentTableRowIndex, run.fromSlot(), run.toSlot());
+        if (barIdOpt.isEmpty()) {
+            return;
+        }
+        double inset = 0.5 * layout.zoom;
+        double barLeft = run.fromSlot() * layout.slotWidth + inset;
+        double barWidth =
+                (run.toSlot() - run.fromSlot() + 1) * layout.slotWidth - 2 * inset;
+        if (barWidth < 4) {
+            return;
+        }
+        Region zone = new Region();
+        zone.setPickOnBounds(true);
+        zone.setMouseTransparent(false);
+        zone.setLayoutX(barLeft);
+        zone.setLayoutY(timelineBandTop);
+        double barH = Math.max(4, timelineBandHeight);
+        zone.setPrefSize(barWidth, barH);
+        zone.setMinSize(barWidth, barH);
+        zone.setMaxSize(barWidth, barH);
+        zone.setOpacity(0.02);
+        EquipmentGanttAssignmentDragInstall.installBarBodyDropTarget(zone, barIdOpt.get(), assignment);
+        overlay.getChildren().add(0, zone);
+    }
+
+    private static EquipmentGanttAssignmentPerson resolveAssignmentPerson(
+            List<EquipmentGanttAssignmentPerson> persons,
+            int personIndex,
+            String personLabel) {
+        if (persons == null || persons.isEmpty()) {
+            return null;
+        }
+        if (personLabel != null && !personLabel.isBlank()) {
+            String label = personLabel.strip();
+            for (EquipmentGanttAssignmentPerson p : persons) {
+                if (EquipmentGanttAssignmentMetadata.personLabelMatchesBadge(p, label)) {
+                    return p;
+                }
+            }
+        }
+        if (personIndex >= 0 && personIndex < persons.size()) {
+            return persons.get(personIndex);
+        }
+        return null;
+    }
+
+    private static void installPersonBadgeInteraction(
+            StackPane sp,
+            boolean badgeDragAdjustEnabled,
+            EquipmentGanttAssignmentInteraction assignment,
+            String barId,
+            List<EquipmentGanttAssignmentPerson> persons,
+            int personIndex,
+            String personLabel,
+            Bounds clampBounds,
+            double badgeDragBandTop,
+            double badgeDragBandBottom,
+            double timelinePaneWidth,
+            double defaultLayoutX,
+            double defaultLayoutY,
+            String badgeKey,
+            BiConsumer<String, EquipmentGanttBadgeDragDelta> dragDeltaSink,
+            double wireAnchorX,
+            double wireAnchorY,
+            double wireMaxLengthPx) {
+        if (assignment != null && assignment.active()) {
+            sp.setMouseTransparent(false);
+            EquipmentGanttAssignmentDragInstall.applyOpenHandCursor(sp);
+            EquipmentGanttAssignmentPerson person =
+                    resolveAssignmentPerson(persons, personIndex, personLabel);
+            boolean installed =
+                    barId != null
+                            && !barId.isBlank()
+                            && person != null
+                            && !person.memberKey().isBlank();
+            if (installed) {
+                EquipmentGanttAssignmentDragInstall.installBadgeSource(
+                        sp, barId, person.memberKey(), assignment);
+            }
+            return;
+        }
+        if (badgeDragAdjustEnabled) {
+            sp.setMouseTransparent(false);
+            sp.setCursor(Cursor.DEFAULT);
+            installBadgeDragHandlers(
+                    sp,
+                    clampBounds,
+                    badgeDragBandTop,
+                    badgeDragBandBottom,
+                    timelinePaneWidth,
+                    defaultLayoutX,
+                    defaultLayoutY,
+                    badgeKey,
+                    dragDeltaSink,
+                    wireAnchorX,
+                    wireAnchorY,
+                    wireMaxLengthPx);
+        }
+    }
+
     private static void layoutPersonBadgesRadialForRun(
             int displayRowIndex,
             List<String> parts,
@@ -4036,7 +4200,10 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             boolean badgeDragAdjustEnabled,
             BiConsumer<String, EquipmentGanttBadgeDragDelta> dragDeltaSink,
             List<BadgeWirePlacement> wirePlacementBatch,
-            PersonBadgeWirePaint wirePaintOrNull) {
+            PersonBadgeWirePaint wirePaintOrNull,
+            EquipmentGanttAssignmentInteraction assignmentInteraction,
+            String barId,
+            List<EquipmentGanttAssignmentPerson> barPersons) {
         int n = nodes.size();
         if (n == 0) {
             return;
@@ -4160,11 +4327,16 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             }
             wirePlacementBatch.add(
                     new BadgeWirePlacement(wireLine, anchorDot, sp, anchorX, anchorY));
-            if (badgeDragAdjustEnabled) {
-                sp.setMouseTransparent(false);
-                sp.setCursor(Cursor.DEFAULT);
-                installBadgeDragHandlers(
+            if (badgeDragAdjustEnabled
+                    || (assignmentInteraction != null && assignmentInteraction.active())) {
+                installPersonBadgeInteraction(
                         sp,
+                        badgeDragAdjustEnabled,
+                        assignmentInteraction,
+                        barId,
+                        barPersons,
+                        k,
+                        personLabel,
                         badgeDragClampBounds(sp),
                         badgeDragBandTop,
                         badgeDragBandBottom,
@@ -4187,6 +4359,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             LayoutMetrics layout,
             Function<String, PersonBadgeStyle> styleForLabel,
             int displayRowIndex,
+            int assignmentTableRowIndex,
+            String machineDisplay,
             double personBadgeGapPx,
             boolean badgeDragAdjustEnabled,
             double timelineBandTop,
@@ -4198,7 +4372,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             BiConsumer<String, EquipmentGanttBadgeDragDelta> dragDeltaSink,
             boolean personBadgeWiresEnabled,
             PersonBadgeWirePaint wirePaintOrNull,
-            double personBadgeWireMaxLengthPxOrZero) {
+            double personBadgeWireMaxLengthPxOrZero,
+            EquipmentGanttAssignmentInteraction assignmentInteraction) {
         if (overlay == null
                 || styleForLabel == null
                 || badgeSlotTexts == null
@@ -4223,11 +4398,45 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             if (run.kind() == BarKind.BREAK) {
                 continue;
             }
+            installBarAssignmentDropZoneIfNeeded(
+                    overlay,
+                    run,
+                    layout,
+                    assignmentTableRowIndex,
+                    timelineBandTop,
+                    timelineBandHeight,
+                    assignmentInteraction);
             String frag =
                     PersonNameBadgeText.firstNonEmptyInSlotRange(
                             badgeSlotTexts, run.fromSlot(), run.toSlot());
             if (frag.isEmpty()) {
                 continue;
+            }
+            List<String> parts = PersonNameBadgeText.splitBadgeCell(frag);
+            if (parts.isEmpty()) {
+                continue;
+            }
+            String barId = "";
+            List<EquipmentGanttAssignmentPerson> barPersons = List.of();
+            if (assignmentInteraction != null
+                    && assignmentInteraction.metadata() != null
+                    && assignmentTableRowIndex >= 0) {
+                String mach =
+                        machineDisplay != null ? machineDisplay : "";
+                java.util.Optional<String> barIdOpt =
+                        assignmentInteraction
+                                .metadata()
+                                .resolveBarIdForBadgeRun(
+                                        assignmentTableRowIndex,
+                                        run.fromSlot(),
+                                        run.toSlot(),
+                                        mach,
+                                        parts,
+                                        run.text());
+                if (barIdOpt.isPresent()) {
+                    barId = barIdOpt.get();
+                    barPersons = assignmentPersonsOnBar(assignmentInteraction, barId);
+                }
             }
             boolean wireThisRun = personBadgeWiresEnabled && wirePaintOrNull != null;
             double anchorX = 0d;
@@ -4235,10 +4444,6 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             if (wireThisRun) {
                 anchorX = barAnchorCenterX(layout, run);
                 anchorY = bandCenterY;
-            }
-            List<String> parts = PersonNameBadgeText.splitBadgeCell(frag);
-            if (parts.isEmpty()) {
-                continue;
             }
             List<StackPane> nodes = new ArrayList<>();
             List<Bounds> locals = new ArrayList<>();
@@ -4287,7 +4492,10 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                         badgeDragAdjustEnabled,
                         dragDeltaSink,
                         wirePlacementBatch,
-                        wirePaintOrNull);
+                        wirePaintOrNull,
+                        assignmentInteraction,
+                        barId,
+                        barPersons);
                 continue;
             }
 
@@ -4474,15 +4682,17 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                     }
                     wirePlacementBatch.add(
                             new BadgeWirePlacement(wireLine, anchorDot, sp, anchorX, anchorY));
-                    if (badgeDragAdjustEnabled) {
-                        sp.setMouseTransparent(false);
-                        sp.setCursor(Cursor.DEFAULT);
-                        /*
-                         * ドラッグのクランプは DropShadow を含む getBoundsInLocal() を使わない。
-                         * グローの広がりがバッジごとに異なり論理高さが帯より大きくなると可動域がほぼゼロになる。
-                         */
-                        installBadgeDragHandlers(
+                    if (badgeDragAdjustEnabled
+                            || (assignmentInteraction != null
+                                    && assignmentInteraction.active())) {
+                        installPersonBadgeInteraction(
                                 sp,
+                                badgeDragAdjustEnabled,
+                                assignmentInteraction,
+                                barId,
+                                barPersons,
+                                ii,
+                                personLabel,
                                 badgeDragClampBounds(sp),
                                 badgeDragBandTop,
                                 badgeDragBandBottom,
@@ -5434,6 +5644,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             List<String> badgeSlotTexts,
             List<String> slotTexts,
             int displayRowIndex,
+            int assignmentTableRowIndex,
+            String machineDisplay,
             double gapPx,
             boolean badgeDragAdjustEnabled,
             double timelineBandTop,
@@ -5445,7 +5657,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             BiConsumer<String, EquipmentGanttBadgeDragDelta> dragDeltaSink,
             boolean personBadgeWiresEnabled,
             PersonBadgeWirePaint wirePaintOrNull,
-            double personBadgeWireMaxLengthPxOrZero) {}
+            double personBadgeWireMaxLengthPxOrZero,
+            EquipmentGanttAssignmentInteraction assignmentInteraction) {}
 
     private record GanttBodyRowPlan(
             int displayRowIndex,
@@ -5541,7 +5754,17 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 boolean personBadgeWiresEffective,
                 PersonBadgeWirePaint personBadgeWirePaint,
                 double personBadgeWireMaxLengthPxEff,
-                Function<String, PersonBadgeStyle> badgeResolver) {}
+                Function<String, PersonBadgeStyle> badgeResolver,
+                EquipmentGanttAssignmentInteraction assignmentInteraction) {
+
+        boolean badgePointerActive(
+                boolean showPersonBadges, boolean personBadgeDragAdjustEnabled) {
+            return showPersonBadges
+                    && (personBadgeDragAdjustEnabled
+                            || (assignmentInteraction != null
+                                    && assignmentInteraction.active()));
+        }
+        }
 
         private final List<GanttBodyRowPlan> plans;
         private final Pane leftHost;
@@ -5840,7 +6063,10 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
 
             Pane badgePane = new Pane();
             badgePane.setPickOnBounds(false);
-            badgePane.setMouseTransparent(!(ctx.showPersonBadges() && ctx.personBadgeDragAdjustEnabled()));
+            boolean badgePaneMouseTransparent =
+                    !ctx.badgePointerActive(
+                            ctx.showPersonBadges(), ctx.personBadgeDragAdjustEnabled());
+            badgePane.setMouseTransparent(badgePaneMouseTransparent);
             LazyBadgeLayoutRequest lazyBadgeReq = null;
             if (ctx.showPersonBadges() && ctx.lazyBadgeLayout()) {
                 lazyBadgeReq =
@@ -5848,6 +6074,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                                 dr.badgeCellsInSlots(),
                                 dr.cellsInSlots(),
                                 plan.displayRowIndex(),
+                                dr.tableRowIndex(),
+                                dr.machineLine() != null ? dr.machineLine() : "",
                                 ctx.gapPxEff(),
                                 ctx.personBadgeDragAdjustEnabled(),
                                 ctx.timelineDrawOuterPad(),
@@ -5859,7 +6087,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                                 ctx.dragDeltaSink(),
                                 ctx.personBadgeWiresEffective(),
                                 ctx.personBadgeWiresEffective() ? ctx.personBadgeWirePaint() : null,
-                                ctx.personBadgeWireMaxLengthPxEff());
+                                ctx.personBadgeWireMaxLengthPxEff(),
+                                ctx.assignmentInteraction());
             } else if (ctx.showPersonBadges()) {
                 layoutPersonBadgeOverlay(
                         badgePane,
@@ -5868,6 +6097,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                         layout,
                         ctx.badgeResolver(),
                         plan.displayRowIndex(),
+                        dr.tableRowIndex(),
+                        dr.machineLine() != null ? dr.machineLine() : "",
                         ctx.gapPxEff(),
                         ctx.personBadgeDragAdjustEnabled(),
                         ctx.timelineDrawOuterPad(),
@@ -5879,11 +6110,12 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                         ctx.dragDeltaSink(),
                         ctx.personBadgeWiresEffective(),
                         ctx.personBadgeWiresEffective() ? ctx.personBadgeWirePaint() : null,
-                        ctx.personBadgeWireMaxLengthPxEff());
+                        ctx.personBadgeWireMaxLengthPxEff(),
+                        ctx.assignmentInteraction());
                 badgePane.setTranslateY(ctx.bandVertEff());
             }
             StackPane rowStack = new StackPane(timelineNode, badgePane);
-            if (ctx.showPersonBadges() && ctx.personBadgeDragAdjustEnabled()) {
+            if (ctx.badgePointerActive(ctx.showPersonBadges(), ctx.personBadgeDragAdjustEnabled())) {
                 badgePane.toFront();
             }
             rowStack.setLayoutX(0);
@@ -6009,7 +6241,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             String c0 = row.size() > 0 && row.get(0) != null ? row.get(0).strip() : "";
             if (isSectionRow(row)) {
                 String banner = !c0.isEmpty() ? c0 : sectionTitleFromRow(row);
-                displayRows.add(new DisplayRow(banner, null, null, null, null, null, null, row));
+                displayRows.add(
+                        new DisplayRow(banner, null, null, null, null, null, null, r, row));
                 continue;
             }
             int dateCol = columns.indexOf("日付");
@@ -6048,6 +6281,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                             dateForCol,
                             slotCells,
                             badgeSlotCells,
+                            r,
                             row));
         }
         return new ParseResult(slots, progressCols, slotMinutes, slotBaseTime, displayRows);
@@ -6305,5 +6539,6 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             String dateCompact,
             List<String> cellsInSlots,
             List<String> badgeCellsInSlots,
+            int tableRowIndex,
             ObservableList<String> rawRow) {}
 }
