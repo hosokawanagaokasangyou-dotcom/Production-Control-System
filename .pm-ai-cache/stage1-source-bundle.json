@@ -1,9 +1,0 @@
-{
-  "planExtractionTime" : "2026-07-17T07:30:39",
-  "dailyReportExtractionTime" : "2026-07-17T07:35:21",
-  "pairDeltaMinutes" : 4,
-  "processingPlanPath" : "\\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\生産管理システム\\管理システム\\●DATA\\生産計画問合せ\\工程別生産計画問合せ問合せ_20260717_073039.xlsx",
-  "dailyReportCsvPath" : "\\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\生産管理システム\\管理システム\\●DATA\\加工日報\\加工日報発行問合せ_20260717_073521.csv",
-  "dataExtractionWorkbookPath" : "\\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\生産管理システム\\管理システム\\●DATA\\生産計画問合せ\\工程別生産計画問合せ問合せ_20260717_073039.xlsx",
-  "stage1CompletedAtEpochMillis" : 1784247679927
-}
