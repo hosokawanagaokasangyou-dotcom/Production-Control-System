@@ -263,7 +263,10 @@
         <version>3.6.3</version>
         <configuration>
           <classpathScope>compile</classpathScope>
-          <executable>java</executable>
+          <!-- PATH 先頭に古い JDK があると OpenJFX ${javafx.version} を読めない
+               （InvalidModuleDescriptorException: Unsupported major.minor version）。
+               Maven 自身の JVM（JAVA_HOME）で起動して maven.compiler.release と揃える。 -->
+          <executable>${java.home}/bin/java</executable>
           <longModulepath>false</longModulepath>
         </configuration>
         <executions>
