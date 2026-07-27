@@ -42,7 +42,8 @@ import jp.co.pm.ai.desktop.reconciliation.PostProcessingPlanMachineLookup;
 
 /**
  * アラジン入力用配台計画 Excel（機械名ごとのシート、日別2段セル）を
- * {@link AppPaths#aladdinEntryDispatchPlanXlsxPath} へ上書き出力し、操作者別世代フォルダへも保存する。
+ * {@link AppPaths#aladdinEntryDispatchPlanLocalXlsxPath}（ローカルディスク）へ上書き出力し、
+ * 操作者別世代フォルダへも保存する。世代フォルダは {@link Destination} で共有ドライブ側とローカル側を切り替える。
  */
 public final class DispatchAladdinEntryWorkbookExporter {
 
@@ -112,12 +113,15 @@ public final class DispatchAladdinEntryWorkbookExporter {
         return new DispatchAladdinEntrySheetBuilder.EntryCell(aladdin, system);
     }
 
-    /** 出力結果（最新固定パスと世代パス）。 */
+    /** 出力結果（最新固定パスと世代パス）。最新固定パスは常にローカルディスク。 */
     public record ExportResult(Path latestPath, Path generationPath) {}
 
     /**
-     * 出力先。{@link #SHARED} はサマリ Excel と同フォルダ側（共有ドライブ想定）、
+     * 世代コピーの保存先。{@link #SHARED} はサマリ Excel と同フォルダ側（共有ドライブ想定）、
      * {@link #LOCAL} はリポジトリ {@code code/アラジン入力用配台計画}。
+     *
+     * <p>最新固定名ブックはいずれの場合も
+     * {@link AppPaths#aladdinEntryDispatchPlanLocalXlsxPath}（ローカルディスク）へ出力する。
      */
     public enum Destination {
         SHARED,
@@ -173,14 +177,14 @@ public final class DispatchAladdinEntryWorkbookExporter {
         return write(u, model, destination);
     }
 
-    /** モデルを共有側の最新固定パスへ上書きし、操作者別世代フォルダへコピー・剪定する。 */
+    /** モデルをローカルの最新固定パスへ上書きし、共有側の操作者別世代フォルダへコピー・剪定する。 */
     public static ExportResult write(
             Map<String, String> ui, DispatchAladdinEntrySheetBuilder.EntryWorkbook model)
             throws IOException {
         return write(ui, model, Destination.SHARED);
     }
 
-    /** モデルを指定出力先の最新固定パスへ上書きし、操作者別世代フォルダへコピー・剪定する。 */
+    /** モデルをローカルの最新固定パスへ上書きし、指定出力先の操作者別世代フォルダへコピー・剪定する。 */
     public static ExportResult write(
             Map<String, String> ui,
             DispatchAladdinEntrySheetBuilder.EntryWorkbook model,
@@ -188,10 +192,7 @@ public final class DispatchAladdinEntryWorkbookExporter {
             throws IOException {
         Map<String, String> u = ui != null ? ui : Map.of();
         Destination dest = destination != null ? destination : Destination.SHARED;
-        Path latest =
-                dest == Destination.LOCAL
-                        ? AppPaths.aladdinEntryDispatchPlanLocalXlsxPath(u)
-                        : AppPaths.aladdinEntryDispatchPlanXlsxPath(u);
+        Path latest = AppPaths.aladdinEntryDispatchPlanLocalXlsxPath(u);
         Path repoRoot = AppPaths.resolveRepoRoot(u);
         String tmpSuffix = dest == Destination.LOCAL ? ".local.tmp" : ".tmp";
         Path stagingTmp =

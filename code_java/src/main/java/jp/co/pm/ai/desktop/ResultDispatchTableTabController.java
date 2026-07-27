@@ -902,7 +902,7 @@ public final class ResultDispatchTableTabController {
         if (shell == null) {
             return;
         }
-        Path latest = AppPaths.aladdinEntryDispatchPlanXlsxPath(shell.snapshotUiEnv());
+        Path latest = AppPaths.aladdinEntryDispatchPlanLocalXlsxPath(shell.snapshotUiEnv());
         if (!Files.isRegularFile(latest)) {
             shell.showWarningDialog(
                     "最新を開く",
@@ -927,7 +927,8 @@ public final class ResultDispatchTableTabController {
         if (!Files.isRegularFile(latest)) {
             shell.showWarningDialog(
                     "ローカル最新を開く",
-                    "ファイルがまだありません。先に「ローカルへ出力」を実行してください。\n" + latest);
+                    "ファイルがまだありません。段階2を実行するか「アラジン加工計画読込→Excel出力」「ローカルへ出力」を実行してください。\n"
+                            + latest);
             return;
         }
         try {

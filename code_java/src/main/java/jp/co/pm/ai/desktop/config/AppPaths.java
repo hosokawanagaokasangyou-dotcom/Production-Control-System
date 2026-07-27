@@ -2553,19 +2553,12 @@ public final class AppPaths {
 
     /**
      * アラジン入力用配台計画の格納フォルダ（{@link #summaryAiDispatchXlsxPath(Map)} の親 +
-     * {@link #ALADDIN_ENTRY_DISPATCH_PLAN_DIR_NAME}）。直下に最新固定名、配下に操作者別世代フォルダ。
-     * 工場共有 DATA（共有ドライブ）側の既定出力先。
+     * {@link #ALADDIN_ENTRY_DISPATCH_PLAN_DIR_NAME}）。配下に操作者別世代フォルダ。
+     * 工場共有 DATA（共有ドライブ）側の世代管理用。最新固定名ブックは
+     * {@link #aladdinEntryDispatchPlanLocalXlsxPath}（ローカルディスク）側に出力する。
      */
     public static Path aladdinEntryDispatchPlanDir(Map<String, String> ui) {
         return siblingOfSummaryAiDispatchWorkbook(ui, ALADDIN_ENTRY_DISPATCH_PLAN_DIR_NAME);
-    }
-
-    /** アラジン入力用配台計画 Excel の最新固定パス（{@link #aladdinEntryDispatchPlanDir} 直下）。 */
-    public static Path aladdinEntryDispatchPlanXlsxPath(Map<String, String> ui) {
-        return aladdinEntryDispatchPlanDir(ui)
-                .resolve(ALADDIN_ENTRY_DISPATCH_PLAN_XLSX)
-                .toAbsolutePath()
-                .normalize();
     }
 
     /**

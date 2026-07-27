@@ -255,6 +255,44 @@ class DispatchAladdinEntryWorkbookExporterTest {
     }
 
     @Test
+    void write_sharedDestination_writesLatestToLocalDiskAndGenerationToSharedDir()
+            throws IOException {
+        Path repo = tempDir.resolve("repo");
+        Files.createDirectories(repo.resolve("code"));
+        Path sharedDataDir = tempDir.resolve("shared-data");
+        Files.createDirectories(sharedDataDir);
+        Map<String, String> ui =
+                Map.of(
+                        jp.co.pm.ai.desktop.config.AppPaths.KEY_PM_AI_REPO_ROOT,
+                        repo.toString(),
+                        jp.co.pm.ai.desktop.config.AppPaths
+                                .KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK,
+                        sharedDataDir
+                                .resolve(
+                                        jp.co.pm.ai.desktop.config.AppPaths
+                                                .SUMMARY_AI_DISPATCH_XLSX)
+                                .toString());
+        DispatchAladdinEntrySheetBuilder.EntryWorkbook model =
+                new DispatchAladdinEntrySheetBuilder.EntryWorkbook(List.of(), List.of());
+
+        DispatchAladdinEntryWorkbookExporter.ExportResult result =
+                DispatchAladdinEntryWorkbookExporter.write(
+                        ui, model, DispatchAladdinEntryWorkbookExporter.Destination.SHARED);
+
+        assertEquals(
+                jp.co.pm.ai.desktop.config.AppPaths.aladdinEntryDispatchPlanLocalXlsxPath(ui),
+                result.latestPath());
+        assertTrue(Files.isRegularFile(result.latestPath()));
+        assertTrue(
+                result.generationPath()
+                        .startsWith(
+                                jp.co.pm.ai.desktop.config.AppPaths.aladdinEntryDispatchPlanDir(
+                                        ui)));
+        assertTrue(result.generationPath().startsWith(sharedDataDir));
+        assertTrue(Files.isRegularFile(result.generationPath()));
+    }
+
+    @Test
     void dateCellRichTextAppliesPerLineFontSizes() throws IOException {
         try (XSSFWorkbook wb = new XSSFWorkbook()) {
             String fontName = DispatchAladdinEntryWorkbookExporter.DEFAULT_WORKBOOK_FONT_FAMILY;
