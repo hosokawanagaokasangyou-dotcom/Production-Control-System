@@ -181,6 +181,10 @@ public final class MainRunTabController {
     /** 納期管理ビュー再読み込み中（メインシェルから同期）。 */
     private boolean deliveryCalendarReloadBlocking;
 
+    private boolean stage1BlockedByPipelineCheck;
+
+    private String stage1PipelineCheckBlockTooltip = "";
+
     @FXML
     private ImageView factoryLogoImageView;
 
@@ -1407,15 +1411,34 @@ public final class MainRunTabController {
         applyStage1RunButtonEnabledState();
     }
 
+    void setStage1BlockedByPipelineCheck(boolean blocked, String tooltip) {
+        stage1BlockedByPipelineCheck = blocked;
+        stage1PipelineCheckBlockTooltip = tooltip != null ? tooltip : "";
+        applyStage1RunButtonEnabledState();
+    }
+
     private void applyStage1RunButtonEnabledState() {
         if (stage1RunButton == null) {
             return;
         }
-        stage1RunButton.setDisable(stage1RunPipelineBusy || deliveryCalendarReloadBlocking);
+        stage1RunButton.setDisable(
+                stage1RunPipelineBusy
+                        || deliveryCalendarReloadBlocking
+                        || stage1BlockedByPipelineCheck);
         if (deliveryCalendarReloadBlocking && !stage1RunPipelineBusy) {
             stage1RunButton.setText(STAGE1_RUN_BUTTON_TEXT_DELIVERY_CALENDAR_RELOAD);
+            stage1RunButton.setTooltip(null);
+        } else if (stage1BlockedByPipelineCheck && !stage1RunPipelineBusy) {
+            stage1RunButton.setText(STAGE1_RUN_BUTTON_TEXT_DEFAULT);
+            if (!stage1PipelineCheckBlockTooltip.isBlank()) {
+                stage1RunButton.setTooltip(new Tooltip(stage1PipelineCheckBlockTooltip));
+            } else {
+                stage1RunButton.setTooltip(
+                        new Tooltip("原本転記・計画確認タブで問題を確認してください。"));
+            }
         } else {
             stage1RunButton.setText(STAGE1_RUN_BUTTON_TEXT_DEFAULT);
+            stage1RunButton.setTooltip(null);
         }
     }
 

@@ -147,6 +147,7 @@ import jp.co.pm.ai.desktop.config.InitSettingPersistence;
 import jp.co.pm.ai.desktop.config.UiEnvRowSnapshot;
 import jp.co.pm.ai.desktop.config.UiRefEnvDefaults;
 import jp.co.pm.ai.desktop.ui.Stage1NewMaterialLookupDialog;
+import jp.co.pm.ai.desktop.ui.MissingSkillsSheetColumnDialog;
 import jp.co.pm.ai.desktop.ui.Stage2UnknownMasterCombinationDialog;
 import jp.co.pm.ai.desktop.ui.Stage2UnknownMasterCombinationDialogResult;
 import jp.co.pm.ai.desktop.ui.ButtonPressFeedback;
@@ -772,6 +773,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         if (requestFormPipelineCheckTabController != null) {
             requestFormPipelineCheckTabController.bindShell(this);
         }
+        refreshStage1PipelineCheckGate();
         if (remoteDesktopTabController != null) {
             remoteDesktopTabController.bindShell(this);
         }
@@ -3951,6 +3953,14 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         stripRemovedEnvVarRows(envRows);
         ensureBootstrapDefaultValuesVisible(collectUiEnv());
         ensureUiRefOptionalDisplayDefaultsVisible(collectUiEnv());
+        applyFactoryWorkspaceSessionFragment(snapshot);
+    }
+
+    /** 工場ワークスペースの session 断片のみ適用（環境変数行は {@link #applyEnvRowsFullBundledResetAndPersist} 後に使う）。 */
+    private void applyFactoryWorkspaceSessionFragment(FactorySiteWorkspaceSnapshot snapshot) {
+        if (snapshot == null) {
+            return;
+        }
         DesktopSessionState merged =
                 collectDesktopSession().mergeFactoryScopedFrom(snapshot.sessionFragment());
         applyDesktopSession(merged, false, false);
@@ -4222,31 +4232,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
             return;
         }
         GlobalInitSettingTarget.save(site);
-        // 1) 現在工場のグローバル設定（init_setting 全体: タブ構成・テーマ・列順・依頼書設定など）を適用
-        suppressEnvSessionPersistence.set(true);
-        try {
-            DesktopSessionState merged =
-                    DesktopSessionStateStore.buildFactoryResetSession(
-                            collectDesktopSession(), collectUiEnv(), site);
-            /*
-             * 環境変数は直後の applyEnvRowsFullBundledResetAndPersist で ui_ref 既定へ載せ替える。
-             * applyUiEnvRowsFromSession（true）だと init_setting の uiEnvRows と初期化が干渉するため false。
-             */
-            applyDesktopSession(merged, false, false);
-            applyFactoryRequestFormGlobalSettings(site, true);
-            TableColumnOrderPersistence.materializeTableColumnStoreAfterFactoryReset(collectUiEnv());
-            applyDesktopThemeFromSession(merged);
-            refreshDesktopSessionDependentUi();
-            if (globalSettingsTabController != null) {
-                globalSettingsTabController.refreshInitSettingTargetComboFromStore();
-            }
-            if (mainRunTabController != null) {
-                mainRunTabController.refreshFactorySiteComboFromStore();
-                mainRunTabController.refreshFactorySiteLogo();
-            }
-        } finally {
-            suppressEnvSessionPersistence.set(false);
-        }
+        applyGlobalInitSettingBeforeEnvReset(site);
         // 2) 環境変数を ui_ref 既定へ初期化（工場別 UNC 等も再適用）
         applyEnvRowsFullBundledResetAndPersist(true, site);
         String operator = FactoryOperatorUserStore.sessionOperatorName();
@@ -4263,6 +4249,34 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         ensureMainShellRunTabSelected();
         requireOperatorSelectionForFactory(site, false);
         Platform.runLater(this::ensureMainShellRunTabSelected);
+    }
+
+    /**
+     * 環境変数初期化の直前に、指定工場のグローバル設定（{@code init_setting} 全体: タブ構成・テーマ・列順・依頼書設定など）を適用する。
+     * {@link #confirmAndResetEnvRowsToDefaults()} の手順 1 と同一。環境変数行は {@code applyUiEnvRowsFromSession=false} で載せ替えない。
+     */
+    private void applyGlobalInitSettingBeforeEnvReset(FactorySite site) {
+        FactorySite effective = site != null ? site : FactorySite.KONAN;
+        suppressEnvSessionPersistence.set(true);
+        try {
+            DesktopSessionState merged =
+                    DesktopSessionStateStore.buildFactoryResetSession(
+                            collectDesktopSession(), collectUiEnv(), effective);
+            applyDesktopSession(merged, false, false);
+            applyFactoryRequestFormGlobalSettings(effective, true);
+            TableColumnOrderPersistence.materializeTableColumnStoreAfterFactoryReset(collectUiEnv());
+            applyDesktopThemeFromSession(merged);
+            refreshDesktopSessionDependentUi();
+            if (globalSettingsTabController != null) {
+                globalSettingsTabController.refreshInitSettingTargetComboFromStore();
+            }
+            if (mainRunTabController != null) {
+                mainRunTabController.refreshFactorySiteComboFromStore();
+                mainRunTabController.refreshFactorySiteLogo();
+            }
+        } finally {
+            suppressEnvSessionPersistence.set(false);
+        }
     }
 
     /**
@@ -4572,6 +4586,12 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
             return;
         }
         if (STAGE2_1.equals(script) && !confirmStage2UnknownMasterCombinationsBeforeRun()) {
+            return;
+        }
+        if (STAGE2.equals(script) && !confirmStage2MissingSkillsColumnsBeforeRun()) {
+            return;
+        }
+        if (STAGE2_1.equals(script) && !confirmStage2MissingSkillsColumnsBeforeRun()) {
             return;
         }
         if (!runLock.compareAndSet(false, true)) {
@@ -4948,6 +4968,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                     codeDispatchLookupTablesTabController.reloadAllFromDisk();
                 }
                 promptStage1NewMaterialLookupsAfterMerge();
+                warnStage1MissingSkillsColumnsAfterSuccess();
                 if (reloadAfterStage1Preview != null) {
                     reloadAfterStage1Preview.run();
                 }
@@ -5412,6 +5433,33 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
             return false;
         }
         appendLog("[busy] 固定ソース確認中のため " + stageJa + " を開始できません。");
+        return true;
+    }
+
+    void refreshStage1PipelineCheckGate() {
+        if (mainRunTabController == null) {
+            return;
+        }
+        RequestFormPipelineCheckTabController.Stage1GateStatus status =
+                requestFormPipelineCheckTabController != null
+                        ? requestFormPipelineCheckTabController.evaluateStage1Gate()
+                        : RequestFormPipelineCheckTabController.Stage1GateStatus.blocked(
+                                "原本転記・計画確認で「更新」を実行し、問題の有無を確認してください。");
+        mainRunTabController.setStage1BlockedByPipelineCheck(
+                !status.permitted(), status.message());
+    }
+
+    private boolean blockIfPipelineCheckBlocksStage1() {
+        RequestFormPipelineCheckTabController.Stage1GateStatus status =
+                requestFormPipelineCheckTabController != null
+                        ? requestFormPipelineCheckTabController.evaluateStage1Gate()
+                        : RequestFormPipelineCheckTabController.Stage1GateStatus.blocked(
+                                "原本転記・計画確認で「更新」を実行し、問題の有無を確認してください。");
+        if (status.permitted()) {
+            return false;
+        }
+        appendLog("[stage1] " + status.message());
+        showWarningDialog("段階1", status.message());
         return true;
     }
 
@@ -7105,6 +7153,9 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         if (blockIfStage2SourceGuardBusy("段階1")) {
             return;
         }
+        if (blockIfPipelineCheckBlocksStage1()) {
+            return;
+        }
         if (mainRunTabController == null || !mainRunTabController.snapshotTodayDispatch()) {
             stage1StartedWithTodayDispatch = false;
             pendingTodayDispatchSourcePair = null;
@@ -8134,6 +8185,72 @@ public PlanInputTabController planInputTabControllerForDispatchRollUnit() {
         }
     }
 
+    /**
+     * 段階2実行前: 計画タスクの工程+機械が skills シートに列として無ければ確認ダイアログを出す。
+     *
+     * @return {@code false} のとき段階2実行を中止（キャンセル）
+     */
+    private boolean confirmStage2MissingSkillsColumnsBeforeRun() {
+        try {
+            PlanTasksMissingSkillsColumnPrompt.PromptBundle bundle =
+                    PlanTasksMissingSkillsColumnPrompt.collectMissingPairs(collectUiEnv());
+            if (bundle.empty()) {
+                return true;
+            }
+            appendLog(
+                    "[stage2] skills シートに無い工程+機械 "
+                            + bundle.pairs().size()
+                            + " 件 — 配台阻害の確認ダイアログを表示します。");
+            Optional<Boolean> entered =
+                    MissingSkillsSheetColumnDialog.prompt(
+                            primaryStageForDialogs(), bundle, true);
+            if (entered.isEmpty() || !entered.get()) {
+                appendLog(
+                        "[stage2] skills シート未登録の確認をキャンセルしたため段階2を中止します。");
+                showWarningDialog(
+                        "段階2 中止",
+                        "skills シートに未登録の工程+機械があるため、段階2は実行しませんでした。\n\n"
+                                + bundle.summaryJa(12)
+                                + "\n\nmaster の skills シートへ列を追加してください。");
+                return false;
+            }
+            appendLog("[stage2] skills シート未登録あり — ユーザーが続行を選択しました。");
+            return true;
+        } catch (IOException ex) {
+            appendLog(
+                    "[stage2] skills シート未登録の確認に失敗: "
+                            + (ex.getMessage() != null ? ex.getMessage() : ex.toString()));
+            showWarningDialog(
+                    "段階2 確認失敗",
+                    "skills シート未登録の工程+機械を確認できませんでした。\n"
+                            + (ex.getMessage() != null ? ex.getMessage() : ex.toString())
+                            + "\n\n段階2を続行します。");
+            return true;
+        }
+    }
+
+    /**
+     * 段階1正常終了後: 計画タスクの工程+機械が skills シートに無ければ警告ダイアログを出す。
+     */
+    private void warnStage1MissingSkillsColumnsAfterSuccess() {
+        try {
+            PlanTasksMissingSkillsColumnPrompt.PromptBundle bundle =
+                    PlanTasksMissingSkillsColumnPrompt.collectMissingPairs(collectUiEnv());
+            if (bundle.empty()) {
+                return;
+            }
+            appendLog(
+                    "[stage1] skills シートに無い工程+機械 "
+                            + bundle.pairs().size()
+                            + " 件 — 段階2配台阻害の警告を表示します。");
+            MissingSkillsSheetColumnDialog.prompt(primaryStageForDialogs(), bundle, false);
+        } catch (IOException ex) {
+            appendLog(
+                    "[stage1] skills シート未登録の確認に失敗: "
+                            + (ex.getMessage() != null ? ex.getMessage() : ex.toString()));
+        }
+    }
+
     private void applyStage2UnknownMasterCombinationSelections(
             Stage2UnknownMasterCombinationDialogResult result) throws IOException {
         if (result == null || result.markExclude() == null || result.markExclude().isEmpty()) {
@@ -8398,17 +8515,32 @@ public PlanInputTabController planInputTabControllerForDispatchRollUnit() {
     }
 
     private String buildStage1CompletionMessage() {
+        String skillsNote = "";
+        try {
+            PlanTasksMissingSkillsColumnPrompt.PromptBundle skillsBundle =
+                    PlanTasksMissingSkillsColumnPrompt.collectMissingPairs(collectUiEnv());
+            if (!skillsBundle.empty()) {
+                skillsNote =
+                        "\n\nmaster「skills」シートに未登録の工程+機械が "
+                                + skillsBundle.pairs().size()
+                                + " 件あります（段階2で配台されません）。\n"
+                                + skillsBundle.summaryJa(8);
+            }
+        } catch (IOException ignored) {
+            // 完了メッセージはベストエフォート
+        }
         try {
             CodeDispatchLookupTablesValidator.ValidationResult vr =
                     CodeDispatchLookupTablesValidator.validateNoBlankValues(collectUiEnv());
             if (vr.ok()) {
-                return "段階1 の処理が正常終了しました。";
+                return "段階1 の処理が正常終了しました。" + skillsNote;
             }
             return "段階1 の処理が正常終了しました。\n\n"
                     + "材料・製品種類情報（code/）に値が空欄の行が残っています。"
-                    + " 段階2・段階3の前に「材料・製品種類情報」タブで入力してください。";
+                    + " 段階2・段階3の前に「材料・製品種類情報」タブで入力してください。"
+                    + skillsNote;
         } catch (IOException ex) {
-            return "段階1 の処理が正常終了しました。";
+            return "段階1 の処理が正常終了しました。" + skillsNote;
         }
     }
 
@@ -9065,7 +9197,8 @@ public PlanInputTabController planInputTabControllerForDispatchRollUnit() {
      * PortableBundleUpgradeFollowUp} 経由でここだけ再実行する。
      *
      * <p>工場選択ダイアログは出さず、アップデート前の利用工場（または正本 UNC からの推定）を維持する。操作者選択もスキップし、
-     * 前回選択の復元のみ試みる。
+     * 前回選択の復元のみ試みる。{@code init_setting} のグローバル設定を適用したうえで、環境変数タブを
+     * {@link #applyEnvRowsFullBundledResetAndPersist} で ui_ref 既定へ初期化する（工場ワークスペースに保存されていた環境変数行は復元しない）。
      */
     private void finishPortableUpgradeWithFactorySitePrompt(
             Path cwd,
@@ -9081,6 +9214,7 @@ public PlanInputTabController planInputTabControllerForDispatchRollUnit() {
         skipOperatorPromptAfterPortableUpgrade.set(true);
         deferOperatorPromptForPortableUpgrade.set(false);
         String operator = FactoryOperatorUserStore.sessionOperatorName();
+        Optional<FactorySiteWorkspaceSnapshot> workspace = Optional.empty();
         if (!operator.isBlank()) {
             FactorySiteWorkspaceMigrator.migrateIfNeeded(
                     operator,
@@ -9089,16 +9223,14 @@ public PlanInputTabController planInputTabControllerForDispatchRollUnit() {
                     DesktopSessionStateStore.load(),
                     collectUiEnv());
             FactorySiteWorkspaceStore.warmMemoryCacheFromDisk(operator);
-            Optional<FactorySiteWorkspaceSnapshot> workspace =
-                    FactorySiteWorkspaceStore.load(operator, siteAfterUpgrade);
-            if (workspace.isPresent()) {
-                applyFactoryWorkspaceSnapshot(workspace.get());
-            } else {
-                applyEnvRowsFullBundledResetAndPersist(false, siteAfterUpgrade);
-                applyInitSettingFactorySessionFragment(siteAfterUpgrade);
-            }
+            workspace = FactorySiteWorkspaceStore.load(operator, siteAfterUpgrade);
+        }
+        applyGlobalInitSettingBeforeEnvReset(siteAfterUpgrade);
+        applyEnvRowsFullBundledResetAndPersist(false, siteAfterUpgrade);
+        if (workspace.isPresent()) {
+            applyFactoryWorkspaceSessionFragment(workspace.get());
         } else {
-            applyFactorySitePortableAndNetworkDefaults(siteAfterUpgrade);
+            applyInitSettingFactorySessionFragment(siteAfterUpgrade);
         }
         applyPortableUpgradeShellUiSnapshotIfPresent();
         applyRepoFolderPathNormalization();
@@ -9114,7 +9246,8 @@ public PlanInputTabController planInputTabControllerForDispatchRollUnit() {
         PortableBundleUpgradeFollowUp.clear();
         String completion =
                 "[startup] ポータル同期が完了しました（version.txt・pm-ai-data／init_setting をリポジトリへ反映）。"
-                        + "タブ配置を維持して環境を反映しました。"
+                        + "グローバル設定を適用し、環境変数を ui_ref 既定に初期化しました。"
+                        + "タブ配置を維持して反映しました。"
                         + " 工場既定: "
                         + siteAfterUpgrade.displayLabelJa()
                         + "（アップデート前の利用工場を維持）。"

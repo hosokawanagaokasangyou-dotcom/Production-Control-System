@@ -9,6 +9,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import javafx.application.Platform;
 import javafx.beans.binding.Bindings;
+import javafx.beans.property.BooleanProperty;
+import javafx.beans.property.SimpleBooleanProperty;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
@@ -46,6 +48,8 @@ import jp.co.pm.ai.desktop.reconciliation.KonanDailyReportLookup;
 import jp.co.pm.ai.desktop.reconciliation.RawInputDateCrossSourceCheck;
 import jp.co.pm.ai.desktop.reconciliation.RemoteDesktopLatestSourceFiles;
 import jp.co.pm.ai.desktop.io.AladdinProcessingPlanSourceReloader;
+import jp.co.pm.ai.desktop.reconciliation.RequestFormPipelineIssueCheck;
+import jp.co.pm.ai.desktop.reconciliation.RequestFormPipelineIssueCheck.IssueKind;
 import jp.co.pm.ai.desktop.reconciliation.RequestFormPipelineStatusService;
 import jp.co.pm.ai.desktop.reconciliation.RequestFormPipelineStatusService.PipelineStatusRow;
 import jp.co.pm.ai.desktop.reconciliation.RequestFormPipelineStatusService.ScanResult;
@@ -65,16 +69,21 @@ public final class RequestFormPipelineCheckTabController {
                     + " JSON表の日付列順とは無関係。"
                     + " 受注入力日フィルタは既定30日（変更可）。"
                     + " 「日報」列は加工日報の完了区分を依頼単位で集約（完了/未了/―）。"
-                    + " 「日報未了のみ表示」は既定オン（完了済み依頼を非表示）。"
+                    + " 「日報未了のみ表示」「原反投入日不一致のみ表示」は既定オン。"
+                    + " 「アラジン計画無しを表示」は既定オフ。"
                     + " 下段表はアラジン計画が無い場合、加工日報の工程行を表示。"
                     + " 「投入日一致」列は原反投入日をアラジン・受注・目次・依頼シートの4ソースで厳格照合し、"
-                    + " 4ソースすべてに値がありすべて等価なときのみ「一致」（欠落・相違は「不一致」）。";
+                    + " 4ソースすべてに値がありすべて等価なときのみ「一致」（欠落・相違は「不一致」）。"
+                    + " 問題がある行は「確認」列にチェックを付けて内容を確認した印とし、"
+                    + " 未確認が残っている間は段階1を実行できません。";
 
     private record MainColDef(String title, String property, double defaultWidth) {}
 
     private static List<MainColDef> defaultMainColumnDefs() {
         List<MainColDef> defs = new ArrayList<>();
         defs.add(new MainColDef("依頼No", "iraiNo", 90));
+        defs.add(new MainColDef("問題", "issueSummary", 168));
+        defs.add(new MainColDef("確認", "issueConfirmedDisplay", 52));
         defs.add(new MainColDef("原本", "originalFile", 140));
         defs.add(new MainColDef("回答日", "indexResponseDate", 88));
         defs.add(new MainColDef("原反投入日", "indexInputDate", 88));
@@ -123,6 +132,9 @@ public final class RequestFormPipelineCheckTabController {
         private String rawInputDateMatchStatus;
         /** 加工日報の依頼単位ステータス: 完了 / 未了 / ― */
         private String dailyReportOrderStatus;
+        private String issueSummary = "";
+        private boolean hasIssues;
+        private final BooleanProperty issueConfirmed = new SimpleBooleanProperty(false);
         private final List<String> planDayValues = new ArrayList<>(PLAN_DAY_COLUMNS);
         private PipelineStatusRow source;
 
@@ -274,6 +286,34 @@ public final class RequestFormPipelineCheckTabController {
 
         public void setDailyReportOrderStatus(String dailyReportOrderStatus) {
             this.dailyReportOrderStatus = dailyReportOrderStatus;
+        }
+
+        public String getIssueSummary() {
+            return issueSummary;
+        }
+
+        public void setIssueSummary(String issueSummary) {
+            this.issueSummary = issueSummary != null ? issueSummary : "";
+        }
+
+        public boolean hasIssues() {
+            return hasIssues;
+        }
+
+        public void setHasIssues(boolean hasIssues) {
+            this.hasIssues = hasIssues;
+        }
+
+        public BooleanProperty issueConfirmedProperty() {
+            return issueConfirmed;
+        }
+
+        public boolean isIssueConfirmed() {
+            return issueConfirmed.get();
+        }
+
+        public String getIssueConfirmedDisplay() {
+            return RequestFormPipelineIssueCheck.formatConfirmedDisplay(hasIssues, issueConfirmed.get());
         }
 
         public String getPlanDay0() {
@@ -524,6 +564,9 @@ public final class RequestFormPipelineCheckTabController {
     private Label hintLabel;
 
     @FXML
+    private Label stage1GateLabel;
+
+    @FXML
     private Label aladdinPlanSourceLabel;
 
     @FXML
@@ -696,6 +739,8 @@ public final class RequestFormPipelineCheckTabController {
     void bindShell(MainShellController shell) {
         this.shell = shell;
         setupMainColumnsOnce();
+        updateStage1GateLabel();
+        notifyStage1GateChanged();
     }
 
     /** 工場切替後: 走査結果を破棄し、タブ選択時まで再走査を遅延する。 */
@@ -712,6 +757,8 @@ public final class RequestFormPipelineCheckTabController {
             statusLabel.setText("工場切替: タブを開くと再走査します");
         }
         updateAladdinPlanSourceLabel();
+        updateStage1GateLabel();
+        notifyStage1GateChanged();
     }
 
     /** メインシェルで当該タブが選択されたとき。起動後未走査なら自動更新する。 */
@@ -919,6 +966,7 @@ public final class RequestFormPipelineCheckTabController {
                     dailyReportLookup.orderCompletionStatus(row.iraiNo()));
             ui.setPlanDayValues(row.planDayValues());
             ui.setSource(row);
+            applyIssueState(ui, row);
             allRows.add(ui);
         }
         lastScanWarnings =
@@ -942,6 +990,104 @@ public final class RequestFormPipelineCheckTabController {
         crossSourceRows.clear();
         planRows.clear();
         planContextRow = null;
+        updateStage1GateLabel();
+        notifyStage1GateChanged();
+    }
+
+    private void applyIssueState(MainRow ui, PipelineStatusRow row) {
+        List<IssueKind> issues = RequestFormPipelineIssueCheck.detect(row, aladdinJsonAvailable);
+        ui.setIssueSummary(RequestFormPipelineIssueCheck.formatSummary(issues));
+        ui.setHasIssues(!issues.isEmpty());
+        ui.issueConfirmedProperty().set(false);
+        ui.issueConfirmedProperty()
+                .addListener(
+                        (obs, oldVal, newVal) -> {
+                            updateStage1GateLabel();
+                            notifyStage1GateChanged();
+                        });
+    }
+
+    /** 段階1実行可否（未走査・未確認の問題があれば不可）。 */
+    public Stage1GateStatus evaluateStage1Gate() {
+        if (!scanApplied) {
+            return Stage1GateStatus.blocked(
+                    "原本転記・計画確認で「更新」を実行し、問題の有無を確認してください。");
+        }
+        int issueCount = 0;
+        int unconfirmedCount = 0;
+        for (MainRow row : allRows) {
+            if (!row.hasIssues()) {
+                continue;
+            }
+            issueCount++;
+            if (!row.isIssueConfirmed()) {
+                unconfirmedCount++;
+            }
+        }
+        if (unconfirmedCount > 0) {
+            return Stage1GateStatus.blocked(
+                    "原本転記・計画確認: 要確認 "
+                            + issueCount
+                            + " 件のうち "
+                            + unconfirmedCount
+                            + " 件が未確認です。各行の「確認」にチェックを付けてください。");
+        }
+        return Stage1GateStatus.allowed();
+    }
+
+    public record Stage1GateStatus(boolean permitted, String message) {
+        public static Stage1GateStatus allowed() {
+            return new Stage1GateStatus(true, "");
+        }
+
+        public static Stage1GateStatus blocked(String message) {
+            return new Stage1GateStatus(false, message != null ? message : "");
+        }
+    }
+
+    private void notifyStage1GateChanged() {
+        if (shell != null) {
+            shell.refreshStage1PipelineCheckGate();
+        }
+    }
+
+    private void updateStage1GateLabel() {
+        if (stage1GateLabel == null) {
+            return;
+        }
+        if (!scanApplied) {
+            stage1GateLabel.setText("段階1: 未走査 — 「更新」で照合してから実行してください。");
+            stage1GateLabel.getStyleClass().setAll("pipeline-check-stage1-gate-label", "warn");
+            return;
+        }
+        int issueCount = 0;
+        int unconfirmedCount = 0;
+        for (MainRow row : allRows) {
+            if (!row.hasIssues()) {
+                continue;
+            }
+            issueCount++;
+            if (!row.isIssueConfirmed()) {
+                unconfirmedCount++;
+            }
+        }
+        if (issueCount == 0) {
+            stage1GateLabel.setText("段階1: 問題なし — 実行できます。");
+            stage1GateLabel.getStyleClass().setAll("pipeline-check-stage1-gate-label", "ok");
+            return;
+        }
+        if (unconfirmedCount > 0) {
+            stage1GateLabel.setText(
+                    "段階1: 要確認 "
+                            + issueCount
+                            + " 件（未確認 "
+                            + unconfirmedCount
+                            + " 件）— すべて確認するまで実行できません。");
+            stage1GateLabel.getStyleClass().setAll("pipeline-check-stage1-gate-label", "warn");
+            return;
+        }
+        stage1GateLabel.setText("段階1: 要確認 " + issueCount + " 件 — すべて確認済み。実行できます。");
+        stage1GateLabel.getStyleClass().setAll("pipeline-check-stage1-gate-label", "ok");
     }
 
     private void showDetail(MainRow row) {
@@ -1385,6 +1531,8 @@ public final class RequestFormPipelineCheckTabController {
                     case "aladdinStatus" -> row.getAladdinStatus();
                     case "rawInputDateMatchStatus" -> row.getRawInputDateMatchStatus();
                     case "dailyReportOrderStatus" -> row.getDailyReportOrderStatus();
+                    case "issueSummary" -> row.getIssueSummary();
+                    case "issueConfirmedDisplay" -> row.getIssueConfirmedDisplay();
                     case "planDay0" -> row.getPlanDay0();
                     case "planDay1" -> row.getPlanDay1();
                     case "planDay2" -> row.getPlanDay2();
@@ -1757,6 +1905,10 @@ public final class RequestFormPipelineCheckTabController {
             column.setUserData(def.property());
             if ("rawInputDateMatchStatus".equals(def.property())) {
                 installRawInputMatchCellFactory(column);
+            } else if ("issueSummary".equals(def.property())) {
+                installIssueSummaryCellFactory(column);
+            } else if ("issueConfirmedDisplay".equals(def.property())) {
+                installIssueConfirmCellFactory(column);
             }
             columns.add(column);
         }
@@ -1764,6 +1916,7 @@ public final class RequestFormPipelineCheckTabController {
         try {
             mainTable.getColumns().setAll(columns);
             mainTable.setColumnResizePolicy(TableView.UNCONSTRAINED_RESIZE_POLICY);
+            installMainTableRowFactory();
             List<TableColumnOrderPersistence.ColumnSpec> layout =
                     TableColumnOrderPersistence.loadLayout(
                             TableColumnOrderPersistence.TableId.REQUEST_FORM_PIPELINE_CHECK);
@@ -1884,6 +2037,86 @@ public final class RequestFormPipelineCheckTabController {
                                 }
                                 setText(item);
                                 applyRawInputDateMatchStatusCellStyle(this, item);
+                            }
+                        });
+    }
+
+    private static void installIssueSummaryCellFactory(TableColumn<MainRow, String> column) {
+        column.setCellFactory(
+                col ->
+                        new javafx.scene.control.TableCell<>() {
+                            @Override
+                            protected void updateItem(String item, boolean empty) {
+                                super.updateItem(item, empty);
+                                if (empty) {
+                                    setText(null);
+                                    setStyle("");
+                                    return;
+                                }
+                                MainRow row = getTableRow() != null ? getTableRow().getItem() : null;
+                                setText(item != null ? item : "");
+                                if (row != null && row.hasIssues()) {
+                                    setStyle(
+                                            "-fx-background-color: #FFF4CE; -fx-control-inner-background: #FFF4CE;"
+                                                    + " -fx-text-fill: #7A5C00;");
+                                } else {
+                                    setStyle("");
+                                }
+                            }
+                        });
+    }
+
+    private void installIssueConfirmCellFactory(TableColumn<MainRow, String> column) {
+        column.setCellFactory(
+                col ->
+                        new javafx.scene.control.TableCell<>() {
+                            private final CheckBox checkBox = new CheckBox();
+
+                            {
+                                checkBox.setOnAction(
+                                        event -> {
+                                            MainRow row =
+                                                    getTableRow() != null
+                                                            ? getTableRow().getItem()
+                                                            : null;
+                                            if (row != null && row.hasIssues()) {
+                                                row.issueConfirmedProperty().set(checkBox.isSelected());
+                                            }
+                                        });
+                            }
+
+                            @Override
+                            protected void updateItem(String item, boolean empty) {
+                                super.updateItem(item, empty);
+                                if (empty) {
+                                    setGraphic(null);
+                                    setText(null);
+                                    return;
+                                }
+                                MainRow row = getTableRow() != null ? getTableRow().getItem() : null;
+                                if (row == null || !row.hasIssues()) {
+                                    setGraphic(null);
+                                    setText("―");
+                                    return;
+                                }
+                                checkBox.setSelected(row.isIssueConfirmed());
+                                setGraphic(checkBox);
+                                setText(null);
+                            }
+                        });
+    }
+
+    private void installMainTableRowFactory() {
+        mainTable.setRowFactory(
+                tv ->
+                        new javafx.scene.control.TableRow<>() {
+                            @Override
+                            protected void updateItem(MainRow item, boolean empty) {
+                                super.updateItem(item, empty);
+                                getStyleClass().remove("pipeline-check-row-unconfirmed");
+                                if (!empty && item != null && item.hasIssues() && !item.isIssueConfirmed()) {
+                                    getStyleClass().add("pipeline-check-row-unconfirmed");
+                                }
                             }
                         });
     }

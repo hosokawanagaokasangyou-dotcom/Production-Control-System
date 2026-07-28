@@ -318,6 +318,25 @@
     -fx-font-weight: bold;
 }
 
+.pm-aladdin-entry-reload-export-cell {
+    -fx-alignment: top-center;
+    -fx-spacing: 2;
+}
+
+.label.pm-aladdin-entry-reload-export-disabled-badge {
+    -fx-padding: 0 6 0 6;
+    -fx-background-radius: 3;
+    -fx-background-color: rgba(251, 191, 36, 0.22);
+    -fx-border-color: rgba(251, 191, 36, 0.75);
+    -fx-border-radius: 3;
+    -fx-border-width: 1;
+    -fx-font-size: 10px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #fde68a;
+    -fx-wrap-text: false;
+    -fx-max-height: 16;
+}
+
 /* ローカルディスク出力: 主ボタンより小さく・控えめ */
 .button.pm-aladdin-entry-local-export-button {
     -fx-font-size: 11px;
@@ -2365,4 +2384,25 @@
 
 .combo-box .list-cell.pm-ai-factory-site-unregistered {
     -fx-opacity: 0.55;
+}
+
+.pipeline-check-stage1-gate-label {
+    -fx-font-size: 12px;
+    -fx-font-weight: bold;
+    -fx-padding: 4 8 4 8;
+    -fx-background-radius: 4;
+}
+
+.pipeline-check-stage1-gate-label.warn {
+    -fx-text-fill: #7A4F01;
+    -fx-background-color: rgba(255, 196, 64, 0.35);
+}
+
+.pipeline-check-stage1-gate-label.ok {
+    -fx-text-fill: #1F5C2E;
+    -fx-background-color: rgba(169, 209, 142, 0.45);
+}
+
+.table-view .table-row-cell.pipeline-check-row-unconfirmed {
+    -fx-background-color: rgba(255, 196, 64, 0.18);
 }

@@ -22,7 +22,7 @@ class RequestFormPipelineCheckTabControllerTest {
         MainRow row = sampleMainRow();
 
         String tsv = RequestFormPipelineCheckTabController.formatMainTableTsv(List.of(row));
-        assertTrue(tsv.startsWith("依頼No\t原本\t回答日"));
+        assertTrue(tsv.startsWith("依頼No\t問題\t確認\t原本\t回答日"));
         assertTrue(tsv.contains("W7-14"));
         assertTrue(tsv.contains("6/9"));
         assertTrue(tsv.contains("納期備考A"));
@@ -46,7 +46,7 @@ class RequestFormPipelineCheckTabControllerTest {
         row.setIndexDeliveryRemarks("A,B");
 
         String csv = RequestFormPipelineCheckTabController.formatMainTableCsv(List.of(row));
-        assertTrue(csv.startsWith("依頼No,原本,回答日"));
+        assertTrue(csv.startsWith("依頼No,問題,確認,原本,回答日"));
         assertTrue(csv.contains("\"A,B\""));
     }
 
