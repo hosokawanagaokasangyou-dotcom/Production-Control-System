@@ -44,22 +44,17 @@
                                text="加工計画は最新と同一（再読込不要）"
                                visible="false" managed="false"/>
                     </VBox>
-                    <Button fx:id="aladdinEntryLocalExportButton" mnemonicParsing="false"
-                            styleClass="pm-aladdin-entry-local-export-button"
-                            text="ローカルへ出力"
-                            onAction="#onExportAladdinEntryWorkbookLocalAction"/>
-                    <Button fx:id="aladdinEntryOpenLocalLatestButton" mnemonicParsing="false"
-                            styleClass="pm-aladdin-entry-local-export-button"
-                            text="ローカル最新を開く"
-                            onAction="#onOpenLocalLatestAladdinEntryWorkbookAction"/>
-                    <Button fx:id="aladdinEntryOpenLocalGenerationsButton" mnemonicParsing="false"
-                            styleClass="pm-aladdin-entry-local-export-button"
-                            text="ローカル世代を開く…"
-                            onAction="#onOpenLocalAladdinEntryGenerationsAction"/>
-                    <Button fx:id="aladdinEntryOpenLatestButton" mnemonicParsing="false"
-                            styleClass="pm-aladdin-entry-open-button"
-                            text="最新を開く"
-                            onAction="#onOpenLatestAladdinEntryWorkbookAction"/>
+                    <VBox alignment="TOP_CENTER" spacing="2.0"
+                          styleClass="pm-aladdin-entry-reload-export-cell">
+                        <Button fx:id="aladdinEntryOpenLatestButton" mnemonicParsing="false"
+                                styleClass="pm-aladdin-entry-open-button"
+                                text="最新を開く"
+                                onAction="#onOpenLatestAladdinEntryWorkbookAction"/>
+                        <Label fx:id="aladdinEntryOpenLatestDisabledBadge"
+                               styleClass="pm-aladdin-entry-reload-export-disabled-badge"
+                               text="あと 900秒"
+                               visible="false" managed="false"/>
+                    </VBox>
                     <Button fx:id="aladdinEntryOpenGenerationsButton" mnemonicParsing="false"
                             styleClass="pm-aladdin-entry-open-button"
                             text="世代を開く…"

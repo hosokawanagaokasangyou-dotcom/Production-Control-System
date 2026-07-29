@@ -1,6 +1,5 @@
 package jp.co.pm.ai.desktop;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -15,13 +14,13 @@ import org.w3c.dom.Element;
 class ResultDispatchTableTabFxmlTest {
 
     @Test
-    void localOpenButtonsUseTheSameSubduedStyleAsLocalExport() throws Exception {
+    void openLatestButtonHasDisabledBadgeCell() throws Exception {
         var resource =
                 ResultDispatchTableTabFxmlTest.class.getResourceAsStream(
                         "/jp/co/pm/ai/desktop/fxml/ResultDispatchTableTab.fxml");
         var document = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(resource);
         var buttons = document.getElementsByTagName("Button");
-        Map<String, String> styleById =
+        Map<String, String> buttonStyleById =
                 IntStream.range(0, buttons.getLength())
                         .mapToObj(buttons::item)
                         .filter(Element.class::isInstance)
@@ -32,11 +31,23 @@ class ResultDispatchTableTabFxmlTest {
                                         button -> button.getAttribute("fx:id"),
                                         button -> button.getAttribute("styleClass")));
 
-        String localExportStyle = styleById.get("aladdinEntryLocalExportButton");
-        assertEquals(localExportStyle, styleById.get("aladdinEntryOpenLocalLatestButton"));
-        assertEquals(localExportStyle, styleById.get("aladdinEntryOpenLocalGenerationsButton"));
-        assertFalse(styleById.containsKey("aladdinEntryExportButton"));
-        assertTrue(styleById.containsKey("aladdinEntryReloadExportButton"));
-        assertTrue(styleById.containsKey("aladdinEntryReloadExportDisabledBadge"));
+        var labels = document.getElementsByTagName("Label");
+        java.util.Set<String> labelIds =
+                IntStream.range(0, labels.getLength())
+                        .mapToObj(labels::item)
+                        .filter(Element.class::isInstance)
+                        .map(Element.class::cast)
+                        .filter(label -> label.hasAttribute("fx:id"))
+                        .map(label -> label.getAttribute("fx:id"))
+                        .collect(java.util.stream.Collectors.toSet());
+
+        assertFalse(buttonStyleById.containsKey("aladdinEntryLocalExportButton"));
+        assertFalse(buttonStyleById.containsKey("aladdinEntryOpenLocalLatestButton"));
+        assertFalse(buttonStyleById.containsKey("aladdinEntryOpenLocalGenerationsButton"));
+        assertFalse(buttonStyleById.containsKey("aladdinEntryExportButton"));
+        assertTrue(buttonStyleById.containsKey("aladdinEntryReloadExportButton"));
+        assertTrue(labelIds.contains("aladdinEntryReloadExportDisabledBadge"));
+        assertTrue(buttonStyleById.containsKey("aladdinEntryOpenLatestButton"));
+        assertTrue(labelIds.contains("aladdinEntryOpenLatestDisabledBadge"));
     }
 }

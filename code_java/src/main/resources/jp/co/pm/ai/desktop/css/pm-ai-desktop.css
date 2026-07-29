@@ -337,34 +337,7 @@
     -fx-max-height: 16;
 }
 
-/* ローカルディスク出力: 主ボタンより小さく・控えめ */
-.button.pm-aladdin-entry-local-export-button {
-    -fx-font-size: 11px;
-    -fx-font-weight: normal;
-    -fx-opacity: 0.72;
-    -fx-padding: 2 8 2 8;
-    -fx-background-color: transparent;
-    -fx-border-color: rgba(148, 163, 184, 0.45);
-    -fx-border-width: 1;
-    -fx-border-radius: 4;
-    -fx-background-radius: 4;
-    -fx-text-fill: #94a3b8;
-    -fx-cursor: hand;
-}
-
-.button.pm-aladdin-entry-local-export-button:hover {
-    -fx-opacity: 0.9;
-    -fx-border-color: rgba(148, 163, 184, 0.7);
-    -fx-text-fill: #cbd5e1;
-}
-
-.button.pm-aladdin-entry-local-export-button:pressed {
-    -fx-opacity: 0.85;
-}
-
-.button.pm-aladdin-entry-local-export-button:disabled {
-    -fx-opacity: 0.4;
-}
+/* ローカルディスク出力ボタンは廃止（最新固定パスは aladdinEntryDispatchPlanLocalXlsxPath のまま） */
 
 .button.pm-aladdin-entry-export-attention {
     -fx-background-color: rgba(14, 165, 233, 0.28);
@@ -1530,6 +1503,13 @@
     -fx-padding: 0 0 0 8;
 }
 
+/* ツールバー：環境変数 ui_ref 既定への最終初期化日時 */
+.label.pm-env-vars-initialized-at {
+    -fx-font-size: 11px;
+    -fx-text-fill: derive(-fx-text-inner-color, -8%);
+    -fx-padding: 0 0 0 10;
+}
+
 /* 配台結果・納期管理・設備ガント: 表示データの段階（段階2 / 段階3） */
 .label.pm-planning-stage-badge {
     -fx-padding: 2 10 2 10;
@@ -2412,16 +2392,21 @@
     -fx-font-weight: bold;
     -fx-padding: 4 8 4 8;
     -fx-background-radius: 4;
+    -fx-border-radius: 4;
+    -fx-border-width: 1;
 }
 
 .pipeline-check-stage1-gate-label.warn {
-    -fx-text-fill: #7A4F01;
-    -fx-background-color: rgba(255, 196, 64, 0.35);
+  /* ダークテーマ: 暗色文字は背景と同化するため明るいアンバー系に統一 */
+    -fx-text-fill: #fde68a;
+    -fx-background-color: rgba(251, 191, 36, 0.22);
+    -fx-border-color: rgba(251, 191, 36, 0.75);
 }
 
 .pipeline-check-stage1-gate-label.ok {
-    -fx-text-fill: #1F5C2E;
-    -fx-background-color: rgba(169, 209, 142, 0.45);
+    -fx-text-fill: #86efac;
+    -fx-background-color: rgba(34, 197, 94, 0.22);
+    -fx-border-color: rgba(34, 197, 94, 0.75);
 }
 
 .table-view.pipeline-check-main-table .table-row-cell.pipeline-check-row-unconfirmed {

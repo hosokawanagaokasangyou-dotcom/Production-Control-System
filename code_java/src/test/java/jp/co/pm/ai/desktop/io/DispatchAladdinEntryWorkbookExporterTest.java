@@ -132,8 +132,7 @@ class DispatchAladdinEntryWorkbookExporterTest {
                                         "テスト機", List.of(row1, row2))));
 
         DispatchAladdinEntryWorkbookExporter.ExportResult result =
-                DispatchAladdinEntryWorkbookExporter.write(
-                        ui, model, DispatchAladdinEntryWorkbookExporter.Destination.LOCAL);
+                DispatchAladdinEntryWorkbookExporter.write(ui, model);
 
         try (XSSFWorkbook wb =
                 new XSSFWorkbook(Files.newInputStream(result.latestPath()))) {
@@ -231,32 +230,7 @@ class DispatchAladdinEntryWorkbookExporterTest {
     }
 
     @Test
-    void write_localDestination_usesRepoCodeAladdinFolder() throws IOException {
-        Path repo = tempDir.resolve("repo");
-        Files.createDirectories(repo.resolve("code"));
-        Map<String, String> ui =
-                Map.of(jp.co.pm.ai.desktop.config.AppPaths.KEY_PM_AI_REPO_ROOT, repo.toString());
-        DispatchAladdinEntrySheetBuilder.EntryWorkbook model =
-                new DispatchAladdinEntrySheetBuilder.EntryWorkbook(List.of(), List.of());
-
-        DispatchAladdinEntryWorkbookExporter.ExportResult result =
-                DispatchAladdinEntryWorkbookExporter.write(
-                        ui, model, DispatchAladdinEntryWorkbookExporter.Destination.LOCAL);
-
-        Path expectedLatest =
-                jp.co.pm.ai.desktop.config.AppPaths.aladdinEntryDispatchPlanLocalXlsxPath(ui);
-        assertEquals(expectedLatest, result.latestPath());
-        assertTrue(Files.isRegularFile(result.latestPath()));
-        assertTrue(
-                result.generationPath()
-                        .startsWith(
-                                jp.co.pm.ai.desktop.config.AppPaths.aladdinEntryDispatchPlanLocalDir(
-                                        ui)));
-    }
-
-    @Test
-    void write_sharedDestination_writesLatestToLocalDiskAndGenerationToSharedDir()
-            throws IOException {
+    void write_writesLatestToLocalDiskAndGenerationToSharedDir() throws IOException {
         Path repo = tempDir.resolve("repo");
         Files.createDirectories(repo.resolve("code"));
         Path sharedDataDir = tempDir.resolve("shared-data");
@@ -276,8 +250,7 @@ class DispatchAladdinEntryWorkbookExporterTest {
                 new DispatchAladdinEntrySheetBuilder.EntryWorkbook(List.of(), List.of());
 
         DispatchAladdinEntryWorkbookExporter.ExportResult result =
-                DispatchAladdinEntryWorkbookExporter.write(
-                        ui, model, DispatchAladdinEntryWorkbookExporter.Destination.SHARED);
+                DispatchAladdinEntryWorkbookExporter.write(ui, model);
 
         assertEquals(
                 jp.co.pm.ai.desktop.config.AppPaths.aladdinEntryDispatchPlanLocalXlsxPath(ui),

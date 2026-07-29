@@ -43,7 +43,7 @@ import jp.co.pm.ai.desktop.reconciliation.PostProcessingPlanMachineLookup;
 /**
  * アラジン入力用配台計画 Excel（機械名ごとのシート、日別2段セル）を
  * {@link AppPaths#aladdinEntryDispatchPlanLocalXlsxPath}（ローカルディスク）へ上書き出力し、
- * 操作者別世代フォルダへも保存する。世代フォルダは {@link Destination} で共有ドライブ側とローカル側を切り替える。
+ * 操作者別世代フォルダ（共有ドライブ側）へも保存する。
  */
 public final class DispatchAladdinEntryWorkbookExporter {
 
@@ -117,18 +117,6 @@ public final class DispatchAladdinEntryWorkbookExporter {
     public record ExportResult(Path latestPath, Path generationPath) {}
 
     /**
-     * 世代コピーの保存先。{@link #SHARED} はサマリ Excel と同フォルダ側（共有ドライブ想定）、
-     * {@link #LOCAL} はリポジトリ {@code code/アラジン入力用配台計画}。
-     *
-     * <p>最新固定名ブックはいずれの場合も
-     * {@link AppPaths#aladdinEntryDispatchPlanLocalXlsxPath}（ローカルディスク）へ出力する。
-     */
-    public enum Destination {
-        SHARED,
-        LOCAL
-    }
-
-    /**
      * ディスク上の 結果_配台表.json / shaped_aladdin_plan.json と目次情報からブックを組み立てて出力する。
      *
      * @param indexByTid {@code RequestFormOriginalIndexLookup.loadByIraiNoKey} の結果（null 可）
@@ -136,17 +124,6 @@ public final class DispatchAladdinEntryWorkbookExporter {
     public static ExportResult writeFromCachedSources(
             Map<String, String> ui,
             Map<String, DispatchAladdinEntrySheetBuilder.IndexInfo> indexByTid)
-            throws IOException {
-        return writeFromCachedSources(ui, indexByTid, Destination.SHARED);
-    }
-
-    /**
-     * @param destination {@link Destination#SHARED}（既定）または {@link Destination#LOCAL}
-     */
-    public static ExportResult writeFromCachedSources(
-            Map<String, String> ui,
-            Map<String, DispatchAladdinEntrySheetBuilder.IndexInfo> indexByTid,
-            Destination destination)
             throws IOException {
         Map<String, String> u = ui != null ? ui : Map.of();
         Path dispatchJson = AppPaths.resolveResultDispatchTableJsonPath(u);
@@ -174,29 +151,18 @@ public final class DispatchAladdinEntryWorkbookExporter {
         DispatchAladdinEntrySheetBuilder.EntryWorkbook model =
                 DispatchAladdinEntrySheetBuilder.build(
                         columns, rows, aladdinLookup, indexByTid, LocalDate.now());
-        return write(u, model, destination);
+        return write(u, model);
     }
 
     /** モデルをローカルの最新固定パスへ上書きし、共有側の操作者別世代フォルダへコピー・剪定する。 */
     public static ExportResult write(
             Map<String, String> ui, DispatchAladdinEntrySheetBuilder.EntryWorkbook model)
             throws IOException {
-        return write(ui, model, Destination.SHARED);
-    }
-
-    /** モデルをローカルの最新固定パスへ上書きし、指定出力先の操作者別世代フォルダへコピー・剪定する。 */
-    public static ExportResult write(
-            Map<String, String> ui,
-            DispatchAladdinEntrySheetBuilder.EntryWorkbook model,
-            Destination destination)
-            throws IOException {
         Map<String, String> u = ui != null ? ui : Map.of();
-        Destination dest = destination != null ? destination : Destination.SHARED;
         Path latest = AppPaths.aladdinEntryDispatchPlanLocalXlsxPath(u);
         Path repoRoot = AppPaths.resolveRepoRoot(u);
-        String tmpSuffix = dest == Destination.LOCAL ? ".local.tmp" : ".tmp";
         Path stagingTmp =
-                repoRoot.resolve(AppPaths.ALADDIN_ENTRY_DISPATCH_PLAN_XLSX + tmpSuffix)
+                repoRoot.resolve(AppPaths.ALADDIN_ENTRY_DISPATCH_PLAN_XLSX + ".tmp")
                         .toAbsolutePath()
                         .normalize();
         PostProcessingPlanMachineLookup.Snapshot machineSnap = loadMachineSnapshot(u);
@@ -217,15 +183,14 @@ public final class DispatchAladdinEntryWorkbookExporter {
         } finally {
             Files.deleteIfExists(stagingTmp);
         }
-        Path generation = saveGenerationCopy(u, latest, dest);
+        Path generation = saveGenerationCopy(u, latest);
         return new ExportResult(latest, generation);
     }
 
     /** 最新ファイルを操作者別世代フォルダへコピーし、上限超過分を古い順に削除する。 */
-    private static Path saveGenerationCopy(
-            Map<String, String> ui, Path latest, Destination destination) throws IOException {
+    private static Path saveGenerationCopy(Map<String, String> ui, Path latest) throws IOException {
         String operator = OperatorUserPaths.resolveOperatorUser(ui);
-        Path operatorDir = operatorGenerationDir(ui, operator, destination);
+        Path operatorDir = operatorGenerationDir(ui, operator);
         Files.createDirectories(operatorDir);
         String fileName =
                 GEN_FILE_PREFIX + GEN_TS.format(LocalDateTime.now()) + ".xlsx";
@@ -237,16 +202,7 @@ public final class DispatchAladdinEntryWorkbookExporter {
 
     /** 操作者別世代フォルダ（共有側 {@link AppPaths#aladdinEntryDispatchPlanDir} 配下）。 */
     public static Path operatorGenerationDir(Map<String, String> ui, String operatorUser) {
-        return operatorGenerationDir(ui, operatorUser, Destination.SHARED);
-    }
-
-    /** 操作者別世代フォルダ（出力先に応じた親配下）。 */
-    public static Path operatorGenerationDir(
-            Map<String, String> ui, String operatorUser, Destination destination) {
-        Path parent =
-                destination == Destination.LOCAL
-                        ? AppPaths.aladdinEntryDispatchPlanLocalDir(ui)
-                        : AppPaths.aladdinEntryDispatchPlanDir(ui);
+        Path parent = AppPaths.aladdinEntryDispatchPlanDir(ui);
         return parent
                 .resolve(OperatorUserPaths.sanitizeOperatorDirName(operatorUser))
                 .toAbsolutePath()

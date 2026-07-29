@@ -126,6 +126,7 @@ import jp.co.pm.ai.desktop.config.FactorySiteWorkspaceSnapshot;
 import jp.co.pm.ai.desktop.config.FactorySiteWorkspaceStore;
 import jp.co.pm.ai.desktop.config.PortableBundleUpgradeUiSnapshot;
 import jp.co.pm.ai.desktop.config.GeminiDispatchModelTryOrderDefaults;
+import jp.co.pm.ai.desktop.config.EnvVarsInitializedAtStore;
 import jp.co.pm.ai.desktop.config.GlobalInitSettingTarget;
 import jp.co.pm.ai.desktop.config.DesktopTheme;
 import jp.co.pm.ai.desktop.config.PushButtonCssEmitter;
@@ -348,6 +349,9 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
 
     @FXML
     private Label jvmMemoryStatusLabel;
+
+    @FXML
+    private Label envVarsInitializedAtLabel;
 
     @FXML
     private MainRunTabController mainRunTabController;
@@ -815,6 +819,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
             if (mainRunTabController != null) {
                 mainRunTabController.refreshFactorySiteLogo();
             }
+            refreshEnvVarsInitializedAtToolbarLabel();
             if (equipmentStatusDashboardTabController != null) {
                 equipmentStatusDashboardTabController.resetDashboardDatesToToday();
             }
@@ -4355,6 +4360,16 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         refreshPersonBadgeSkillsMembersFromMaster();
         mainRunTabController.refreshOpenWorkbookHintLabels();
         uiEnvSaveDebounce.stop();
+        EnvVarsInitializedAtStore.recordNow();
+        refreshEnvVarsInitializedAtToolbarLabel();
+    }
+
+    private void refreshEnvVarsInitializedAtToolbarLabel() {
+        if (envVarsInitializedAtLabel == null) {
+            return;
+        }
+        envVarsInitializedAtLabel.setText(
+                "環境変数初期化: " + EnvVarsInitializedAtStore.formatForToolbar());
     }
 
     void appendBootMessage() {
