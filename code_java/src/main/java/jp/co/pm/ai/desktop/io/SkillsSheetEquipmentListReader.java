@@ -9,6 +9,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.Set;
 
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.DataFormatter;
@@ -16,6 +17,8 @@ import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
+
+import jp.co.pm.ai.desktop.io.MasterTeamCombinationTableReader;
 
 /**
  * {@code master.xls(x/m)} の {@code skills} シートから、Python {@code load_skills_and_needs} の 2 段ヘッダ分岐と同趣旨の
@@ -79,6 +82,28 @@ public final class SkillsSheetEquipmentListReader {
             }
             return List.copyOf(out);
         }
+    }
+
+    /**
+     * skills シート 2 段ヘッダの「工程名+機械名」列を正規化キー集合で返す。
+     * 1 行ヘッダ形式・シート無しのときは空集合。
+     */
+    public static Set<String> readNormalizedComboKeys(Path workbookPath) throws IOException {
+        List<String> combos = readEquipmentProcPlusMachineCombos(workbookPath);
+        LinkedHashSet<String> keys = new LinkedHashSet<>();
+        for (String combo : combos) {
+            int plus = combo.indexOf('+');
+            if (plus <= 0 || plus >= combo.length() - 1) {
+                continue;
+            }
+            String key =
+                    MasterTeamCombinationTableReader.normalizedComboKey(
+                            combo.substring(0, plus), combo.substring(plus + 1));
+            if (!key.isEmpty()) {
+                keys.add(key);
+            }
+        }
+        return Set.copyOf(keys);
     }
 
     private static String cellStr(DataFormatter fmt, Cell cell) {

@@ -29,7 +29,9 @@ import javafx.print.Printer;
 import javafx.print.PrinterJob;
 import javafx.scene.input.ScrollEvent;
 import javafx.scene.control.Accordion;
+import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
+import javafx.scene.control.ButtonType;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.ColorPicker;
 import javafx.scene.control.ComboBox;
@@ -54,7 +56,9 @@ import javafx.util.StringConverter;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 
+import jp.co.pm.ai.desktop.bridge.StagePythonExecutable;
 import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.config.Stage3UiVisibility;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchStage3Support;
@@ -72,6 +76,9 @@ import jp.co.pm.ai.desktop.io.gantt.EquipmentGanttAssignmentEditActions;
 import jp.co.pm.ai.desktop.io.gantt.EquipmentGanttAssignmentEditModel;
 import jp.co.pm.ai.desktop.io.gantt.EquipmentGanttAssignmentInteraction;
 import jp.co.pm.ai.desktop.io.gantt.EquipmentGanttAssignmentMetadata;
+import jp.co.pm.ai.desktop.io.gantt.EquipmentGanttAssignmentOpSubCodec;
+import jp.co.pm.ai.desktop.io.gantt.EquipmentGanttAssignmentSyncPython;
+import jp.co.pm.ai.desktop.io.gantt.EquipmentGanttAssignmentSyncResult;
 import jp.co.pm.ai.desktop.io.gantt.EquipmentGanttAssignmentPerson;
 import jp.co.pm.ai.desktop.io.gantt.EquipmentGanttAssignmentRole;
 import jp.co.pm.ai.desktop.io.gantt.EquipmentGanttContractSheetTableBuilder;
@@ -261,6 +268,11 @@ public final class EquipmentGanttGraphicTabController {
 
     @FXML
     private Button undoAssignmentButton;
+
+    @FXML
+    private Button saveAssignmentButton;
+
+    private boolean assignmentSaveInProgress;
 
     @FXML
     private CheckBox personBadgeWireShowCheckBox;
@@ -1323,12 +1335,242 @@ public final class EquipmentGanttGraphicTabController {
         undoAssignmentChanges();
     }
 
+    @FXML
+    private void onSaveAssignmentChangesAction() {
+        beginSaveAssignmentChanges();
+    }
+
+    private void beginSaveAssignmentChanges() {
+        if (shell == null
+                || assignmentSaveInProgress
+                || !assignmentDirty
+                || assignmentEditModel == null
+                || loadedAssignmentMetadata == null) {
+            return;
+        }
+        String planPath = lastLoadedPlanPath != null ? lastLoadedPlanPath.strip() : "";
+        if (planPath.isEmpty()) {
+            shell.showWarningDialog("担当割当の保存", "計画 JSON が読み込まれていません。");
+            return;
+        }
+        Path planJson = Path.of(planPath);
+        Path contract = resolveEquipmentContractSibling(planJson);
+        if (contract == null || !Files.isRegularFile(contract)) {
+            shell.showWarningDialog(
+                    "担当割当の保存", "設備ガント契約 JSON が見つかりません。JSON を再読み込みしてください。");
+            return;
+        }
+        Path updatesJson;
+        try {
+            updatesJson = writeAssignmentUpdatesJson();
+        } catch (IOException ex) {
+            shell.showErrorDialog("担当割当の保存", "更新内容の書き出しに失敗しました: " + ex.getMessage());
+            return;
+        }
+        Path planXlsx = resolvePlanXlsxSibling(planJson);
+        Map<String, String> ui = shell.snapshotUiEnv();
+        Path pythonExe = StagePythonExecutable.resolve(ui);
+        Path scriptDir = EquipmentGanttAssignmentSyncPython.defaultScriptDir(ui);
+        assignmentSaveInProgress = true;
+        refreshAssignmentActionButtonsState();
+        shell.appendLog("[equipment-gantt-assignment] save: validate start");
+        EquipmentGanttAssignmentSyncPython.Request validateReq =
+                new EquipmentGanttAssignmentSyncPython.Request(
+                        contract,
+                        updatesJson,
+                        planXlsx,
+                        null,
+                        null,
+                        false,
+                        true);
+        EquipmentGanttAssignmentSyncPython.runAsync(
+                        pythonExe, scriptDir, ui, validateReq, shell::appendLog)
+                .whenComplete(
+                        (preview, err) ->
+                                Platform.runLater(
+                                        () ->
+                                                onAssignmentValidateComplete(
+                                                        preview,
+                                                        err,
+                                                        contract,
+                                                        updatesJson,
+                                                        planXlsx,
+                                                        pythonExe,
+                                                        scriptDir,
+                                                        ui)));
+    }
+
+    private void onAssignmentValidateComplete(
+            EquipmentGanttAssignmentSyncResult preview,
+            Throwable err,
+            Path contract,
+            Path updatesJson,
+            Path planXlsx,
+            Path pythonExe,
+            Path scriptDir,
+            Map<String, String> ui) {
+        if (err != null) {
+            assignmentSaveInProgress = false;
+            refreshAssignmentActionButtonsState();
+            shell.showErrorDialog(
+                    "担当割当の保存",
+                    err.getCause() != null ? err.getCause().getMessage() : err.getMessage());
+            return;
+        }
+        if (preview == null) {
+            assignmentSaveInProgress = false;
+            refreshAssignmentActionButtonsState();
+            shell.showErrorDialog("担当割当の保存", "検証応答が空です。");
+            return;
+        }
+        if (!preview.ok() && preview.hasWarnings()) {
+            String msg =
+                    "次の警告があります。保存を続行しますか？\n\n"
+                            + preview.formatIssuesForDialog();
+            if (!confirmAssignmentSaveWithWarnings(msg)) {
+                assignmentSaveInProgress = false;
+                refreshAssignmentActionButtonsState();
+                return;
+            }
+            applyAssignmentChangesAfterConfirm(
+                    contract,
+                    updatesJson,
+                    planXlsx,
+                    pythonExe,
+                    scriptDir,
+                    ui,
+                    preview.timelineHash(),
+                    preview.confirmToken());
+            return;
+        }
+        if (!preview.ok()) {
+            assignmentSaveInProgress = false;
+            refreshAssignmentActionButtonsState();
+            shell.showErrorDialog("担当割当の保存", preview.formatIssuesForDialog());
+            return;
+        }
+        applyAssignmentChangesAfterConfirm(
+                contract,
+                updatesJson,
+                planXlsx,
+                pythonExe,
+                scriptDir,
+                ui,
+                preview.timelineHash(),
+                null);
+    }
+
+    private void applyAssignmentChangesAfterConfirm(
+            Path contract,
+            Path updatesJson,
+            Path planXlsx,
+            Path pythonExe,
+            Path scriptDir,
+            Map<String, String> ui,
+            String expectedTimelineHash,
+            String confirmToken) {
+        boolean forceWarnings = confirmToken != null && !confirmToken.isBlank();
+        EquipmentGanttAssignmentSyncPython.Request applyReq =
+                new EquipmentGanttAssignmentSyncPython.Request(
+                        contract,
+                        updatesJson,
+                        planXlsx,
+                        expectedTimelineHash,
+                        confirmToken,
+                        forceWarnings,
+                        false);
+        EquipmentGanttAssignmentSyncPython.runAsync(
+                        pythonExe, scriptDir, ui, applyReq, shell::appendLog)
+                .whenComplete(
+                        (applied, err) ->
+                                Platform.runLater(
+                                        () ->
+                                                onAssignmentApplyComplete(applied, err)));
+    }
+
+    private void onAssignmentApplyComplete(
+            EquipmentGanttAssignmentSyncResult applied, Throwable err) {
+        assignmentSaveInProgress = false;
+        refreshAssignmentActionButtonsState();
+        if (err != null) {
+            shell.showErrorDialog(
+                    "担当割当の保存",
+                    err.getCause() != null ? err.getCause().getMessage() : err.getMessage());
+            return;
+        }
+        if (applied == null || !applied.ok()) {
+            String msg =
+                    applied != null ? applied.formatIssuesForDialog() : "保存応答が空です。";
+            shell.showErrorDialog("担当割当の保存", msg);
+            return;
+        }
+        shell.appendLog("[equipment-gantt-assignment] save: applied " + applied.detail());
+        shell.showInformationDialog("担当割当の保存", "担当割当を保存しました。");
+        shell.refreshOperatorCardAfterPipelineRun();
+        reloadFromFields(false);
+    }
+
+    private boolean confirmAssignmentSaveWithWarnings(String message) {
+        Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+        Stage owner = ownerStage != null ? ownerStage : shell.getPrimaryStage();
+        if (owner != null) {
+            alert.initOwner(owner);
+        }
+        alert.setTitle("担当割当の保存");
+        alert.setHeaderText(null);
+        alert.setContentText(message);
+        return alert.showAndWait().filter(r -> r == ButtonType.OK).isPresent();
+    }
+
+    private Path writeAssignmentUpdatesJson() throws IOException {
+        Map<Integer, EquipmentGanttAssignmentOpSubCodec.OpSubPair> updates =
+                EquipmentGanttAssignmentOpSubCodec.eventUpdates(
+                        loadedAssignmentMetadata,
+                        assignmentEditModel.snapshotPersonsByBarId());
+        ObjectMapper mapper = new ObjectMapper();
+        ObjectNode root = mapper.createObjectNode();
+        ObjectNode updatesNode = mapper.createObjectNode();
+        for (Map.Entry<Integer, EquipmentGanttAssignmentOpSubCodec.OpSubPair> e :
+                updates.entrySet()) {
+            ObjectNode pair = mapper.createObjectNode();
+            pair.put("op", e.getValue().op());
+            pair.put("sub", e.getValue().sub());
+            updatesNode.set(String.valueOf(e.getKey()), pair);
+        }
+        root.set("updates", updatesNode);
+        Path tmp = Files.createTempFile("pm_ai_gantt_assignment_updates_", ".json");
+        tmp.toFile().deleteOnExit();
+        Files.writeString(
+                tmp,
+                mapper.writerWithDefaultPrettyPrinter().writeValueAsString(root),
+                StandardCharsets.UTF_8);
+        return tmp;
+    }
+
+    private static Path resolvePlanXlsxSibling(Path planJsonFromField) {
+        if (planJsonFromField == null || !Files.isRegularFile(planJsonFromField)) {
+            return null;
+        }
+        Path fn = planJsonFromField.getFileName();
+        if (fn == null) {
+            return null;
+        }
+        String name = fn.toString();
+        if (!name.endsWith(".json")) {
+            return null;
+        }
+        String stem = name.substring(0, name.length() - 5);
+        String baseStem = stripStage2PlanJsonStemVariants(stem);
+        Path xlsx = planJsonFromField.resolveSibling(baseStem + ".xlsx");
+        return Files.isRegularFile(xlsx) ? xlsx : null;
+    }
+
     private void undoAssignmentChanges() {
         resetAssignmentEditState();
         if (loadedContractBadgeRows != null) {
             badgeRowsForCurrentGraphic = deepCopyBadgeRows(loadedContractBadgeRows);
         }
-        refreshUndoAssignmentButtonState();
+        refreshAssignmentActionButtonsState();
         flushGraphicRebuildNow();
     }
 
@@ -1423,9 +1665,14 @@ public final class EquipmentGanttGraphicTabController {
         }
         assignmentDirty = true;
         refreshAssignmentBadgeGrid();
-        refreshUndoAssignmentButtonState();
+        refreshAssignmentActionButtonsState();
         flushGraphicRebuildNow();
         return true;
+    }
+
+    private void refreshAssignmentActionButtonsState() {
+        refreshUndoAssignmentButtonState();
+        refreshSaveAssignmentButtonState();
     }
 
     private static String assignmentFailureMessage(
@@ -1466,7 +1713,14 @@ public final class EquipmentGanttGraphicTabController {
 
     private void refreshUndoAssignmentButtonState() {
         if (undoAssignmentButton != null) {
-            undoAssignmentButton.setDisable(!assignmentDirty);
+            undoAssignmentButton.setDisable(!assignmentDirty || assignmentSaveInProgress);
+        }
+    }
+
+    private void refreshSaveAssignmentButtonState() {
+        if (saveAssignmentButton != null) {
+            saveAssignmentButton.setDisable(
+                    !assignmentDirty || assignmentSaveInProgress || assignmentEditModel == null);
         }
     }
 
@@ -1744,7 +1998,7 @@ public final class EquipmentGanttGraphicTabController {
             loadedContractBadgeRows = loaded.contractBadgeSlotRows();
             loadedAssignmentMetadata = loaded.assignmentMetadata();
             resetAssignmentEditState();
-            refreshUndoAssignmentButtonState();
+            refreshAssignmentActionButtonsState();
             refreshAssignmentEditRadioState();
             loadRegularShiftTimesFromPlan(planPath);
             lastLoadedPlanPath = planPath.toString();
@@ -1881,7 +2135,7 @@ public final class EquipmentGanttGraphicTabController {
         loadedAssignmentMetadata = null;
         assignmentEditModel = null;
         assignmentDirty = false;
-        refreshUndoAssignmentButtonState();
+        refreshAssignmentActionButtonsState();
         refreshAssignmentEditRadioState();
         loadedRegularShiftStart = null;
         loadedRegularShiftEnd = null;

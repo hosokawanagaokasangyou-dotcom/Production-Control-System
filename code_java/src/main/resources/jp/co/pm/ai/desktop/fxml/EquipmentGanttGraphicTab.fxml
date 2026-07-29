@@ -59,6 +59,9 @@
                             <Button fx:id="undoAssignmentButton" mnemonicParsing="false"
                                     text="割当変更を元に戻す" disable="true"
                                     onAction="#onUndoAssignmentChangesAction"/>
+                            <Button fx:id="saveAssignmentButton" mnemonicParsing="false"
+                                    text="割当変更を保存" disable="true"
+                                    onAction="#onSaveAssignmentChangesAction"/>
                             <Label styleClass="pm-plan-result-viewer-hint-inline"
                                    text="バー上右クリックで追加・バッジ上右クリックで削除"/>
                             <Label fx:id="dataStageBadgeLabel" styleClass="pm-planning-stage-badge"
