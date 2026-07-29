@@ -1,12 +1,20 @@
 package jp.co.pm.ai.desktop;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import javafx.animation.KeyFrame;
+import javafx.animation.Timeline;
 import javafx.application.Platform;
 import javafx.beans.binding.Bindings;
 import javafx.beans.property.BooleanProperty;
@@ -35,15 +43,21 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import javafx.stage.Window;
+import javafx.util.Duration;
+
+import jp.co.pm.ai.desktop.config.AppPaths;
+import jp.co.pm.ai.desktop.config.NetworkSourceDirResolver;
 
 import jp.co.pm.ai.desktop.dispatch.AladdinShapedPlanQtyLookup;
 import jp.co.pm.ai.desktop.dispatch.AladdinShapedPlanQtyLookup.PlanEntry;
+import jp.co.pm.ai.desktop.ui.ButtonAttentionGlow;
 import jp.co.pm.ai.desktop.ui.ClipboardTableSupport;
 import jp.co.pm.ai.desktop.ui.ColumnVisibilitySupport;
 import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
 import jp.co.pm.ai.desktop.ui.TableViewColumnSettingsStrip;
 import jp.co.pm.ai.desktop.reconciliation.JuchuTransferCoverageCheck.ColumnCheck;
 import jp.co.pm.ai.desktop.reconciliation.JuchuHeaderAliasRegistry;
+import jp.co.pm.ai.desktop.reconciliation.JuchuTransferValueNormalizer;
 import jp.co.pm.ai.desktop.reconciliation.KonanDailyReportLookup;
 import jp.co.pm.ai.desktop.reconciliation.RawInputDateCrossSourceCheck;
 import jp.co.pm.ai.desktop.reconciliation.RemoteDesktopLatestSourceFiles;
@@ -60,6 +74,11 @@ public final class RequestFormPipelineCheckTabController {
     private static final int PLAN_DAY_COLUMNS =
             AladdinShapedPlanQtyLookup.PIPELINE_CHECK_PLAN_DAY_COLUMNS;
 
+    private static final String DAILY_REPORT_ORDER_STATUS_ABSENT = "―";
+    private static final String DAILY_REPORT_ORDER_STATUS_COMPLETE = "完了";
+
+    private static final Duration ALADDIN_PLAN_WATCH_INTERVAL = Duration.minutes(1);
+
     private static final String HINT_TEXT =
             "「更新」でタスク入力ソースからアラジン加工計画を再読込し、"
                     + "依頼書原本フォルダ内の Excel 原本と TPI PDF を走査して受注ファイルへの転記状況と"
@@ -74,7 +93,15 @@ public final class RequestFormPipelineCheckTabController {
                     + " 下段表はアラジン計画が無い場合、加工日報の工程行を表示。"
                     + " 「投入日一致」列は原反投入日をアラジン・受注・目次・依頼シートの4ソースで厳格照合し、"
                     + " 4ソースすべてに値がありすべて等価なときのみ「一致」（欠落・相違は「不一致」）。"
-                    + " 問題がある行は「確認」列にチェックを付けて内容を確認した印とし、"
+                    + " 「確認」列のチェックが必要なのは次のいずれか。"
+                    + " (A) 調整納期が当日以降・日報が―・原反投入日不一致の3条件すべて。"
+                    + " (B) アラジン計画なしかつ、（依頼書原本ありで納期が当日以降）"
+                    + " または（受注ありで調整納期が当日以降）。"
+                    + " 日報列が完了の行は確認不要。"
+                    + " 確認チェック対象の行は一覧フィルタに関係なく常に表示。"
+                    + " アラジン加工計画ファイルが更新されたときは確認チェックをリセット。"
+                    + " 前回走査後に加工計画が更新されていればタブ表示時に自動走査。"
+                    + " 1分ごとに加工計画の更新を監視し、更新時は「更新」ボタンを光らせる。"
                     + " 未確認が残っている間は段階1を実行できません。";
 
     private record MainColDef(String title, String property, double defaultWidth) {}
@@ -313,7 +340,10 @@ public final class RequestFormPipelineCheckTabController {
         }
 
         public String getIssueConfirmedDisplay() {
-            return RequestFormPipelineIssueCheck.formatConfirmedDisplay(hasIssues, issueConfirmed.get());
+            if (!RequestFormPipelineCheckTabController.requiresStage1Confirmation(this)) {
+                return "―";
+            }
+            return RequestFormPipelineIssueCheck.formatConfirmedDisplay(true, issueConfirmed.get());
         }
 
         public String getPlanDay0() {
@@ -627,6 +657,21 @@ public final class RequestFormPipelineCheckTabController {
     /** 直近の「更新」で読み込んだアラジン加工計画ソースの絶対パス。 */
     private String aladdinPlanSourcePath = "";
 
+    /**
+     * 直近の走査完了時点のアラジン加工計画ソース版。
+     * ディスク上の最新版と異なれば再走査が必要。
+     */
+    private String lastScannedAladdinPlanSourceRevisionKey = "";
+
+    /**
+     * 直近に取り込んだアラジン加工計画ソースの版（絶対パス + 最終更新時刻）。
+     * 変更検知で確認チェックをリセットする。
+     */
+    private String lastAladdinPlanSourceRevisionKey = "";
+
+    private ButtonAttentionGlow refreshButtonGlow;
+    private Timeline aladdinPlanWatchTimeline;
+
     private boolean aladdinJsonAvailable = true;
     private String lastScanWarnings = "";
     /** 起動後に一度でも走査結果を反映したら true（手動「更新」は常に可）。 */
@@ -739,8 +784,13 @@ public final class RequestFormPipelineCheckTabController {
     void bindShell(MainShellController shell) {
         this.shell = shell;
         setupMainColumnsOnce();
+        if (refreshButton != null && refreshButtonGlow == null) {
+            refreshButtonGlow = new ButtonAttentionGlow(refreshButton);
+        }
+        startAladdinPlanWatch();
         updateStage1GateLabel();
         notifyStage1GateChanged();
+        Platform.runLater(this::tickAladdinPlanWatch);
     }
 
     /** 工場切替後: 走査結果を破棄し、タブ選択時まで再走査を遅延する。 */
@@ -748,6 +798,9 @@ public final class RequestFormPipelineCheckTabController {
         scanApplied = false;
         lastScanWarnings = "";
         aladdinPlanSourcePath = "";
+        lastScannedAladdinPlanSourceRevisionKey = "";
+        lastAladdinPlanSourceRevisionKey = "";
+        stopRefreshButtonGlow();
         allRows.clear();
         mismatchRows.clear();
         crossSourceRows.clear();
@@ -761,24 +814,127 @@ public final class RequestFormPipelineCheckTabController {
         notifyStage1GateChanged();
     }
 
-    /** メインシェルで当該タブが選択されたとき。起動後未走査なら自動更新する。 */
+    /** メインシェルで当該タブが選択されたとき。未走査または加工計画更新後は自動走査する。 */
     void onMainShellTabSelected() {
-        scheduleInitialRefreshIfNeeded();
+        scheduleRefreshIfNeededOnTabSelected();
+    }
+
+    private void scheduleRefreshIfNeededOnTabSelected() {
+        if (refreshInProgress || shell == null) {
+            return;
+        }
+        if (!scanApplied) {
+            Platform.runLater(() -> startRefresh(true));
+            return;
+        }
+        if (isAladdinPlanSourceNewerThanLastScan(shell.snapshotUiEnv())) {
+            Platform.runLater(() -> startRefresh(true));
+        } else {
+            Platform.runLater(this::refreshAladdinPlanWatchState);
+        }
     }
 
     private void scheduleInitialRefreshIfNeeded() {
-        if (scanApplied || refreshInProgress || shell == null) {
-            return;
-        }
-        Platform.runLater(this::startRefresh);
+        scheduleRefreshIfNeededOnTabSelected();
     }
 
     @FXML
     private void onRefreshButtonAction() {
-        if (!confirmRefreshDespiteStaleSources()) {
+        startRefresh(false);
+    }
+
+    private void startRefresh() {
+        startRefresh(false);
+    }
+
+    private void startRefresh(boolean skipStaleSourceConfirm) {
+        if (!skipStaleSourceConfirm && !confirmRefreshDespiteStaleSources()) {
             return;
         }
-        startRefresh();
+        stopRefreshButtonGlow();
+        if (shell == null) {
+            statusLabel.setText("シェル未接続");
+            return;
+        }
+        if (refreshInProgress) {
+            return;
+        }
+        refreshInProgress = true;
+        setRefreshing(true);
+        statusLabel.setText("アラジン加工計画読込中…");
+        JuchuHeaderAliasRegistry registry = shell.snapshotJuchuHeaderAliasRegistryForExport();
+        Thread worker =
+                new Thread(
+                        () -> {
+                            Map<String, String> ui = shell.snapshotUiEnv();
+                            List<String> reloadWarnings = new ArrayList<>();
+                            String loadedPlanSourcePath = aladdinPlanSourcePath;
+                            boolean aladdinPlanSourceUpdated = false;
+                            try {
+                                try {
+                                    AladdinProcessingPlanSourceReloader.ReloadResult reload =
+                                            AladdinProcessingPlanSourceReloader
+                                                    .reloadNewestFromDiskAndSaveShapedJson(ui);
+                                    loadedPlanSourcePath =
+                                            reload.sourceFile().toAbsolutePath().normalize().toString();
+                                    aladdinPlanSourceUpdated =
+                                            registerAladdinPlanSourceReload(reload.sourceFile());
+                                    shell.appendLog(
+                                            "[pipeline-check] アラジン加工計画再読込: "
+                                                    + reload.sourceFile()
+                                                    + " ("
+                                                    + reload.rowCount()
+                                                    + " 行 × "
+                                                    + reload.columnCount()
+                                                    + " 列)");
+                                    Platform.runLater(shell::refreshAladdinProcessingPlanTabFromDisk);
+                                } catch (Exception reloadEx) {
+                                    String msg =
+                                            "アラジン加工計画の再読込に失敗: "
+                                                    + (reloadEx.getMessage() != null
+                                                            ? reloadEx.getMessage()
+                                                            : reloadEx.toString());
+                                    reloadWarnings.add(msg);
+                                    shell.appendLog("[pipeline-check] " + msg);
+                                }
+                                Platform.runLater(() -> statusLabel.setText("走査中…"));
+                                ScanResult result =
+                                        RequestFormPipelineStatusService.scan(ui, registry);
+                                if (!reloadWarnings.isEmpty()) {
+                                    List<String> mergedWarnings = new ArrayList<>(reloadWarnings);
+                                    mergedWarnings.addAll(result.warnings());
+                                    result =
+                                            new ScanResult(
+                                                    result.rows(),
+                                                    mergedWarnings,
+                                                    result.aladdinJsonAvailable(),
+                                                    result.planDateHeaders(),
+                                                    result.dailyReportLookup());
+                                }
+                                ScanResult scanResult = result;
+                                String planSourcePath = loadedPlanSourcePath;
+                                boolean resetConfirmations = aladdinPlanSourceUpdated;
+                                Platform.runLater(
+                                        () -> {
+                                            setRefreshing(false);
+                                            aladdinPlanSourcePath = planSourcePath;
+                                            applyScanResult(scanResult, resetConfirmations);
+                                        });
+                            } catch (Exception ex) {
+                                Platform.runLater(
+                                        () -> {
+                                            setRefreshing(false);
+                                            statusLabel.setText(
+                                                    "走査失敗: "
+                                                            + (ex.getMessage() != null
+                                                                    ? ex.getMessage()
+                                                                    : ex.toString()));
+                                        });
+                            }
+                        },
+                        "request-form-pipeline-check");
+        worker.setDaemon(true);
+        worker.start();
     }
 
     /**
@@ -821,88 +977,6 @@ public final class RequestFormPipelineCheckTabController {
         return alert.showAndWait().orElse(cancel) == proceed;
     }
 
-    private void startRefresh() {
-        if (shell == null) {
-            statusLabel.setText("シェル未接続");
-            return;
-        }
-        if (refreshInProgress) {
-            return;
-        }
-        refreshInProgress = true;
-        setRefreshing(true);
-        statusLabel.setText("アラジン加工計画読込中…");
-        JuchuHeaderAliasRegistry registry = shell.snapshotJuchuHeaderAliasRegistryForExport();
-        Thread worker =
-                new Thread(
-                        () -> {
-                            Map<String, String> ui = shell.snapshotUiEnv();
-                            List<String> reloadWarnings = new ArrayList<>();
-                            String loadedPlanSourcePath = aladdinPlanSourcePath;
-                            try {
-                                try {
-                                    AladdinProcessingPlanSourceReloader.ReloadResult reload =
-                                            AladdinProcessingPlanSourceReloader
-                                                    .reloadNewestFromDiskAndSaveShapedJson(ui);
-                                    loadedPlanSourcePath =
-                                            reload.sourceFile().toAbsolutePath().normalize().toString();
-                                    shell.appendLog(
-                                            "[pipeline-check] アラジン加工計画再読込: "
-                                                    + reload.sourceFile()
-                                                    + " ("
-                                                    + reload.rowCount()
-                                                    + " 行 × "
-                                                    + reload.columnCount()
-                                                    + " 列)");
-                                    Platform.runLater(shell::refreshAladdinProcessingPlanTabFromDisk);
-                                } catch (Exception reloadEx) {
-                                    String msg =
-                                            "アラジン加工計画の再読込に失敗: "
-                                                    + (reloadEx.getMessage() != null
-                                                            ? reloadEx.getMessage()
-                                                            : reloadEx.toString());
-                                    reloadWarnings.add(msg);
-                                    shell.appendLog("[pipeline-check] " + msg);
-                                }
-                                Platform.runLater(() -> statusLabel.setText("走査中…"));
-                                ScanResult result =
-                                        RequestFormPipelineStatusService.scan(ui, registry);
-                                if (!reloadWarnings.isEmpty()) {
-                                    List<String> mergedWarnings = new ArrayList<>(reloadWarnings);
-                                    mergedWarnings.addAll(result.warnings());
-                                    result =
-                                            new ScanResult(
-                                                    result.rows(),
-                                                    mergedWarnings,
-                                                    result.aladdinJsonAvailable(),
-                                                    result.planDateHeaders(),
-                                                    result.dailyReportLookup());
-                                }
-                                ScanResult scanResult = result;
-                                String planSourcePath = loadedPlanSourcePath;
-                                Platform.runLater(
-                                        () -> {
-                                            setRefreshing(false);
-                                            aladdinPlanSourcePath = planSourcePath;
-                                            applyScanResult(scanResult);
-                                        });
-                            } catch (Exception ex) {
-                                Platform.runLater(
-                                        () -> {
-                                            setRefreshing(false);
-                                            statusLabel.setText(
-                                                    "走査失敗: "
-                                                            + (ex.getMessage() != null
-                                                                    ? ex.getMessage()
-                                                                    : ex.toString()));
-                                        });
-                            }
-                        },
-                        "request-form-pipeline-check");
-        worker.setDaemon(true);
-        worker.start();
-    }
-
     private void setRefreshing(boolean on) {
         if (!on) {
             refreshInProgress = false;
@@ -917,6 +991,18 @@ public final class RequestFormPipelineCheckTabController {
     }
 
     private void applyScanResult(ScanResult result) {
+        applyScanResult(result, true);
+    }
+
+    private void applyScanResult(ScanResult result, boolean resetIssueConfirmations) {
+        Map<String, Boolean> previousConfirmations = new HashMap<>();
+        if (!resetIssueConfirmations) {
+            for (MainRow row : allRows) {
+                if (row.isIssueConfirmed() && row.getIraiNo() != null && !row.getIraiNo().isBlank()) {
+                    previousConfirmations.put(row.getIraiNo(), true);
+                }
+            }
+        }
         scanApplied = true;
         allRows.clear();
         aladdinJsonAvailable = result.aladdinJsonAvailable();
@@ -966,7 +1052,7 @@ public final class RequestFormPipelineCheckTabController {
                     dailyReportLookup.orderCompletionStatus(row.iraiNo()));
             ui.setPlanDayValues(row.planDayValues());
             ui.setSource(row);
-            applyIssueState(ui, row);
+            applyIssueState(ui, row, previousConfirmations);
             allRows.add(ui);
         }
         lastScanWarnings =
@@ -992,13 +1078,178 @@ public final class RequestFormPipelineCheckTabController {
         planContextRow = null;
         updateStage1GateLabel();
         notifyStage1GateChanged();
+        if (resetIssueConfirmations && shell != null) {
+            shell.appendLog("[pipeline-check] アラジン加工計画更新のため確認チェックをリセットしました。");
+        }
+        captureLastScannedAladdinPlanRevision();
+        refreshAladdinPlanWatchState();
     }
 
-    private void applyIssueState(MainRow ui, PipelineStatusRow row) {
+    /**
+     * 他画面からアラジン加工計画ソースが再読込されたとき。
+     * ファイル版が変わっていれば表示中の確認チェックをリセットする。
+     */
+    void onAladdinProcessingPlanSourceUpdated(Path sourceFile) {
+        boolean planReloaded = registerAladdinPlanSourceReload(sourceFile);
+        if (planReloaded) {
+            resetAllIssueConfirmations();
+            if (shell != null) {
+                shell.appendLog("[pipeline-check] アラジン加工計画更新のため確認チェックをリセットしました。");
+            }
+        }
+        Platform.runLater(this::refreshAladdinPlanWatchState);
+    }
+
+    private void resetAllIssueConfirmations() {
+        for (MainRow row : allRows) {
+            row.issueConfirmedProperty().set(false);
+        }
+        if (mainTable != null) {
+            mainTable.refresh();
+        }
+        updateStage1GateLabel();
+        notifyStage1GateChanged();
+    }
+
+    /**
+     * アラジン加工計画ソースの版を登録する。
+     *
+     * @return 前回取り込みからファイルが更新されていれば {@code true}
+     */
+    boolean registerAladdinPlanSourceReload(Path sourceFile) {
+        try {
+            String revisionKey = aladdinPlanSourceRevisionKey(sourceFile);
+            if (revisionKey.isBlank()) {
+                return false;
+            }
+            boolean updated = !revisionKey.equals(lastAladdinPlanSourceRevisionKey);
+            lastAladdinPlanSourceRevisionKey = revisionKey;
+            return updated;
+        } catch (IOException ex) {
+            lastAladdinPlanSourceRevisionKey = "";
+            return true;
+        }
+    }
+
+    static String aladdinPlanSourceRevisionKey(Path sourceFile) throws IOException {
+        if (sourceFile == null || !Files.isRegularFile(sourceFile)) {
+            return "";
+        }
+        Path normalized = sourceFile.toAbsolutePath().normalize();
+        return normalized + "|" + Files.getLastModifiedTime(normalized).toMillis();
+    }
+
+    static Optional<String> resolveCurrentAladdinPlanSourceRevisionKey(Map<String, String> ui) {
+        try {
+            Path dir = AppPaths.resolveTaskInputSourceDir(ui != null ? ui : Map.of());
+            if (dir == null || !Files.isDirectory(dir)) {
+                return Optional.empty();
+            }
+            Optional<Path> newest = NetworkSourceDirResolver.newestTaskInputFileInDirectory(dir);
+            if (newest.isEmpty()) {
+                return Optional.empty();
+            }
+            Path file = newest.get();
+            String low = file.getFileName().toString().toLowerCase(Locale.ROOT);
+            if (low.endsWith(".pq") || low.endsWith(".parquet")) {
+                return Optional.empty();
+            }
+            String key = aladdinPlanSourceRevisionKey(file);
+            return key.isBlank() ? Optional.empty() : Optional.of(key);
+        } catch (IOException ex) {
+            return Optional.empty();
+        }
+    }
+
+    boolean isAladdinPlanSourceNewerThanLastScan(Map<String, String> ui) {
+        Optional<String> current = resolveCurrentAladdinPlanSourceRevisionKey(ui);
+        if (current.isEmpty()) {
+            return false;
+        }
+        if (lastScannedAladdinPlanSourceRevisionKey.isBlank()) {
+            return scanApplied;
+        }
+        return !current.get().equals(lastScannedAladdinPlanSourceRevisionKey);
+    }
+
+    private void captureLastScannedAladdinPlanRevision() {
+        if (shell == null) {
+            return;
+        }
+        captureLastScannedAladdinPlanRevision(shell.snapshotUiEnv());
+    }
+
+    void captureLastScannedAladdinPlanRevisionForTest(Map<String, String> ui) {
+        captureLastScannedAladdinPlanRevision(ui);
+        scanApplied = true;
+    }
+
+    private void captureLastScannedAladdinPlanRevision(Map<String, String> ui) {
+        resolveCurrentAladdinPlanSourceRevisionKey(ui)
+                .ifPresent(key -> lastScannedAladdinPlanSourceRevisionKey = key);
+    }
+
+    private void startAladdinPlanWatch() {
+        if (aladdinPlanWatchTimeline != null) {
+            return;
+        }
+        aladdinPlanWatchTimeline =
+                new Timeline(new KeyFrame(ALADDIN_PLAN_WATCH_INTERVAL, event -> tickAladdinPlanWatch()));
+        aladdinPlanWatchTimeline.setCycleCount(Timeline.INDEFINITE);
+        aladdinPlanWatchTimeline.play();
+    }
+
+    private void tickAladdinPlanWatch() {
+        if (shell == null || refreshInProgress) {
+            return;
+        }
+        Map<String, String> ui = shell.snapshotUiEnv();
+        Thread worker =
+                new Thread(
+                        () -> {
+                            boolean newer = isAladdinPlanSourceNewerThanLastScan(ui);
+                            Platform.runLater(() -> setRefreshButtonAttentionForAladdinPlanNewer(newer));
+                        },
+                        "pipeline-check-aladdin-watch");
+        worker.setDaemon(true);
+        worker.start();
+    }
+
+    private void refreshAladdinPlanWatchState() {
+        if (shell == null || refreshInProgress) {
+            return;
+        }
+        boolean newer = isAladdinPlanSourceNewerThanLastScan(shell.snapshotUiEnv());
+        setRefreshButtonAttentionForAladdinPlanNewer(newer);
+    }
+
+    private void setRefreshButtonAttentionForAladdinPlanNewer(boolean newer) {
+        if (refreshButton == null) {
+            return;
+        }
+        if (refreshButtonGlow == null) {
+            refreshButtonGlow = new ButtonAttentionGlow(refreshButton);
+        }
+        if (newer) {
+            refreshButtonGlow.startIfIdle();
+        } else {
+            stopRefreshButtonGlow();
+        }
+    }
+
+    private void stopRefreshButtonGlow() {
+        ButtonAttentionGlow.stopAll(refreshButtonGlow);
+    }
+
+    private void applyIssueState(
+            MainRow ui, PipelineStatusRow row, Map<String, Boolean> previousConfirmations) {
         List<IssueKind> issues = RequestFormPipelineIssueCheck.detect(row, aladdinJsonAvailable);
         ui.setIssueSummary(RequestFormPipelineIssueCheck.formatSummary(issues));
         ui.setHasIssues(!issues.isEmpty());
-        ui.issueConfirmedProperty().set(false);
+        boolean restoreConfirmed =
+                previousConfirmations != null
+                        && Boolean.TRUE.equals(previousConfirmations.get(ui.getIraiNo()));
+        ui.issueConfirmedProperty().set(restoreConfirmed);
         ui.issueConfirmedProperty()
                 .addListener(
                         (obs, oldVal, newVal) -> {
@@ -1011,37 +1262,184 @@ public final class RequestFormPipelineCheckTabController {
     public Stage1GateStatus evaluateStage1Gate() {
         if (!scanApplied) {
             return Stage1GateStatus.blocked(
-                    "原本転記・計画確認で「更新」を実行し、問題の有無を確認してください。");
+                    "原本転記・計画確認で「更新」を実行し、問題の有無を確認してください。",
+                    "原本転記: 未走査");
         }
-        int issueCount = 0;
-        int unconfirmedCount = 0;
-        for (MainRow row : allRows) {
-            if (!row.hasIssues()) {
-                continue;
-            }
-            issueCount++;
-            if (!row.isIssueConfirmed()) {
-                unconfirmedCount++;
-            }
-        }
-        if (unconfirmedCount > 0) {
+        Stage1ConfirmationCounts counts = countStage1ConfirmationRequirements();
+        if (counts.unconfirmedRequiringConfirmation() > 0) {
             return Stage1GateStatus.blocked(
                     "原本転記・計画確認: 要確認 "
-                            + issueCount
+                            + counts.requiringConfirmation()
                             + " 件のうち "
-                            + unconfirmedCount
-                            + " 件が未確認です。各行の「確認」にチェックを付けてください。");
+                            + counts.unconfirmedRequiringConfirmation()
+                            + " 件が未確認です。該当行の「確認」にチェックを付けてください。"
+                            + "（原反投入日不一致の3条件、またはアラジン計画なし＋納期/調整納期当日以降）",
+                    "原本転記: 未確認 "
+                            + counts.unconfirmedRequiringConfirmation()
+                            + "/"
+                            + counts.requiringConfirmation()
+                            + " 件");
         }
         return Stage1GateStatus.allowed();
     }
 
-    public record Stage1GateStatus(boolean permitted, String message) {
+    private record Stage1ConfirmationCounts(
+            int totalIssues, int requiringConfirmation, int unconfirmedRequiringConfirmation) {}
+
+    private Stage1ConfirmationCounts countStage1ConfirmationRequirements() {
+        int totalIssues = 0;
+        int requiringConfirmation = 0;
+        int unconfirmedRequiringConfirmation = 0;
+        for (MainRow row : filteredRows) {
+            if (!row.hasIssues()) {
+                continue;
+            }
+            totalIssues++;
+            if (!requiresStage1Confirmation(row)) {
+                continue;
+            }
+            requiringConfirmation++;
+            if (!row.isIssueConfirmed()) {
+                unconfirmedRequiringConfirmation++;
+            }
+        }
+        return new Stage1ConfirmationCounts(
+                totalIssues, requiringConfirmation, unconfirmedRequiringConfirmation);
+    }
+
+    /** 調整納期が当日以降か。 */
+    static boolean isAdjustDeliveryOnOrAfterTodayForRow(MainRow row) {
+        return RequestFormPipelineStatusService.isAdjustDeliveryOnOrAfterToday(
+                resolveAdjustDeliveryDate(row));
+    }
+
+    /** 日報列が未登録（―）。 */
+    static boolean isDailyReportOrderStatusAbsent(MainRow row) {
+        if (row == null) {
+            return false;
+        }
+        String status = row.getDailyReportOrderStatus();
+        return DAILY_REPORT_ORDER_STATUS_ABSENT.equals(status != null ? status.strip() : "");
+    }
+
+    /** 日報列が完了。 */
+    static boolean isDailyReportOrderStatusComplete(MainRow row) {
+        if (row == null) {
+            return false;
+        }
+        String status = row.getDailyReportOrderStatus();
+        return DAILY_REPORT_ORDER_STATUS_COMPLETE.equals(status != null ? status.strip() : "");
+    }
+
+    /** 原反投入日4ソース照合が不一致。 */
+    static boolean isRawInputDateMismatchForRow(MainRow row) {
+        if (row == null) {
+            return false;
+        }
+        return RawInputDateCrossSourceCheck.STATUS_MISMATCH.equals(
+                nullToEmpty(row.getRawInputDateMatchStatus()));
+    }
+
+    /** アラジン列が「なし」（JSON読込済みで当該依頼に計画行なし）。 */
+    static boolean isAladdinPlanMissingForRow(MainRow row) {
+        return row != null && "なし".equals(nullToEmpty(row.getAladdinStatus()));
+    }
+
+    /** 目次納期が当日以降か。 */
+    static boolean isIndexDeliveryOnOrAfterTodayForRow(MainRow row) {
+        LocalDate delivery = resolveIndexDeliveryDate(row);
+        return delivery != null && !delivery.isBefore(LocalDate.now());
+    }
+
+    /** 目次納期の解釈（ソース行と表示列の両方から）。 */
+    static LocalDate resolveIndexDeliveryDate(MainRow row) {
+        if (row == null) {
+            return null;
+        }
+        if (row.source() != null) {
+            String fromSource = nullToEmpty(row.source().indexDeliveryDate());
+            if (!fromSource.isBlank()) {
+                LocalDate parsed = JuchuTransferValueNormalizer.parseLocalDate(fromSource.strip());
+                if (parsed != null) {
+                    return parsed;
+                }
+            }
+        }
+        String display = row.getIndexDeliveryDate();
+        if (display == null || display.isBlank()) {
+            return null;
+        }
+        return JuchuTransferValueNormalizer.parseLocalDate(display.strip());
+    }
+
+    /**
+     * (A) 調整納期が当日以降・日報が―・原反投入日不一致の3条件すべて。
+     */
+    static boolean requiresStage1ConfirmationForRawInputMismatchTriplet(MainRow row) {
+        return row != null
+                && isAdjustDeliveryOnOrAfterTodayForRow(row)
+                && isDailyReportOrderStatusAbsent(row)
+                && isRawInputDateMismatchForRow(row);
+    }
+
+    /**
+     * (B) アラジン計画なしかつ、原本納期または受注調整納期が当日以降。
+     */
+    static boolean requiresStage1ConfirmationForAladdinMissingWithDelivery(MainRow row) {
+        if (row == null || !isAladdinPlanMissingForRow(row)) {
+            return false;
+        }
+        PipelineStatusRow src = row.source();
+        if (src == null) {
+            return false;
+        }
+        boolean originalDeliveryPath =
+                src.originalPresent() && isIndexDeliveryOnOrAfterTodayForRow(row);
+        boolean juchuAdjustDeliveryPath =
+                src.juchuRegistered() && isAdjustDeliveryOnOrAfterTodayForRow(row);
+        return originalDeliveryPath || juchuAdjustDeliveryPath;
+    }
+
+    /**
+     * 段階1前に確認チェックが必要な行（上記 (A) または (B)）。日報完了は対象外。
+     */
+    static boolean requiresStage1Confirmation(MainRow row) {
+        if (row == null || isDailyReportOrderStatusComplete(row)) {
+            return false;
+        }
+        return requiresStage1ConfirmationForRawInputMismatchTriplet(row)
+                || requiresStage1ConfirmationForAladdinMissingWithDelivery(row);
+    }
+
+    /** 調整納期の解釈（ソース行と表示列の両方から）。 */
+    static LocalDate resolveAdjustDeliveryDate(MainRow row) {
+        if (row == null) {
+            return null;
+        }
+        if (row.source() != null) {
+            LocalDate fromSource =
+                    RequestFormPipelineStatusService.resolveAdjustDeliveryLocalDate(row.source());
+            if (fromSource != null) {
+                return fromSource;
+            }
+        }
+        String display = row.getJuchuAdjustDeliveryDate();
+        if (display == null || display.isBlank()) {
+            return null;
+        }
+        return JuchuTransferValueNormalizer.parseLocalDate(display.strip());
+    }
+
+    public record Stage1GateStatus(boolean permitted, String message, String badgeMessage) {
         public static Stage1GateStatus allowed() {
-            return new Stage1GateStatus(true, "");
+            return new Stage1GateStatus(true, "", "");
         }
 
-        public static Stage1GateStatus blocked(String message) {
-            return new Stage1GateStatus(false, message != null ? message : "");
+        public static Stage1GateStatus blocked(String message, String badgeMessage) {
+            return new Stage1GateStatus(
+                    false,
+                    message != null ? message : "",
+                    badgeMessage != null ? badgeMessage : "");
         }
     }
 
@@ -1060,33 +1458,33 @@ public final class RequestFormPipelineCheckTabController {
             stage1GateLabel.getStyleClass().setAll("pipeline-check-stage1-gate-label", "warn");
             return;
         }
-        int issueCount = 0;
-        int unconfirmedCount = 0;
-        for (MainRow row : allRows) {
-            if (!row.hasIssues()) {
-                continue;
-            }
-            issueCount++;
-            if (!row.isIssueConfirmed()) {
-                unconfirmedCount++;
-            }
-        }
-        if (issueCount == 0) {
+        Stage1ConfirmationCounts counts = countStage1ConfirmationRequirements();
+        if (counts.totalIssues() == 0) {
             stage1GateLabel.setText("段階1: 問題なし — 実行できます。");
             stage1GateLabel.getStyleClass().setAll("pipeline-check-stage1-gate-label", "ok");
             return;
         }
-        if (unconfirmedCount > 0) {
+        if (counts.unconfirmedRequiringConfirmation() > 0) {
             stage1GateLabel.setText(
                     "段階1: 要確認 "
-                            + issueCount
+                            + counts.requiringConfirmation()
                             + " 件（未確認 "
-                            + unconfirmedCount
-                            + " 件）— すべて確認するまで実行できません。");
+                            + counts.unconfirmedRequiringConfirmation()
+                            + " 件）— 確認チェック対象行のみ要確認");
             stage1GateLabel.getStyleClass().setAll("pipeline-check-stage1-gate-label", "warn");
             return;
         }
-        stage1GateLabel.setText("段階1: 要確認 " + issueCount + " 件 — すべて確認済み。実行できます。");
+        if (counts.requiringConfirmation() == 0) {
+            stage1GateLabel.setText(
+                    "段階1: 問題 "
+                            + counts.totalIssues()
+                            + " 件（確認チェック対象外あり）— 実行できます。");
+        } else {
+            stage1GateLabel.setText(
+                    "段階1: 要確認 "
+                            + counts.requiringConfirmation()
+                            + " 件 — すべて確認済み。実行できます。");
+        }
         stage1GateLabel.getStyleClass().setAll("pipeline-check-stage1-gate-label", "ok");
     }
 
@@ -1694,6 +2092,9 @@ public final class RequestFormPipelineCheckTabController {
                     if (src == null) {
                         return false;
                     }
+                    if (requiresStage1Confirmation(row)) {
+                        return matchesPipelineCheckQuickSearch(row, src, q);
+                    }
                     if (hideNoOriginal && !src.originalPresent()) {
                         return false;
                     }
@@ -1708,7 +2109,8 @@ public final class RequestFormPipelineCheckTabController {
                     if (showAdjustDeliveryFromTodayOnly
                             && RequestFormPipelineStatusService
                                     .shouldHideByAdjustDeliveryBeforeToday(
-                                            src.juchuAdjustDeliveryDate())) {
+                                            RequestFormPipelineStatusService
+                                                    .resolveAdjustDeliveryLocalDate(src))) {
                         return false;
                     }
                     if (showDailyReportIncompleteOnly
@@ -1720,16 +2122,21 @@ public final class RequestFormPipelineCheckTabController {
                                     nullToEmpty(row.getRawInputDateMatchStatus()))) {
                         return false;
                     }
-                    if (q.isEmpty()) {
-                        return true;
-                    }
-                    String irai =
-                            row.getIraiNo() != null ? row.getIraiNo().toLowerCase(Locale.ROOT) : "";
-                    String user =
-                            src.user() != null ? src.user().toLowerCase(Locale.ROOT) : "";
-                    return irai.contains(q) || user.contains(q);
+                    return matchesPipelineCheckQuickSearch(row, src, q);
                 });
         updateStatusLabel();
+    }
+
+    /** 依頼No・ユーザー名のクイック検索（空なら常に一致）。 */
+    private static boolean matchesPipelineCheckQuickSearch(
+            MainRow row, PipelineStatusRow src, String q) {
+        if (q == null || q.isEmpty()) {
+            return true;
+        }
+        String irai =
+                row.getIraiNo() != null ? row.getIraiNo().toLowerCase(Locale.ROOT) : "";
+        String user = src.user() != null ? src.user().toLowerCase(Locale.ROOT) : "";
+        return irai.contains(q) || user.contains(q);
     }
 
     private int resolveJuchuInputHideDays() {
@@ -1782,7 +2189,8 @@ public final class RequestFormPipelineCheckTabController {
             PipelineStatusRow src = row.source();
             if (src != null
                     && RequestFormPipelineStatusService.shouldHideByAdjustDeliveryBeforeToday(
-                            src.juchuAdjustDeliveryDate())) {
+                            RequestFormPipelineStatusService.resolveAdjustDeliveryLocalDate(
+                                    src))) {
                 count++;
             }
         }
@@ -2008,7 +2416,27 @@ public final class RequestFormPipelineCheckTabController {
                 colCrossSource("照合", "status", 72));
     }
 
+    private static void clearPipelineCheckCellAccent(javafx.scene.control.TableCell<?, ?> cell) {
+        cell.getStyleClass()
+                .removeAll(
+                        "pipeline-check-cell-mismatch",
+                        "pipeline-check-cell-match",
+                        "pipeline-check-cell-issue");
+        cell.setStyle("");
+    }
+
     private static void applyRawInputDateMatchStatusCellStyle(
+            javafx.scene.control.TableCell<?, ?> cell, String status) {
+        clearPipelineCheckCellAccent(cell);
+        if (RawInputDateCrossSourceCheck.STATUS_MISMATCH.equals(status)) {
+            cell.getStyleClass().add("pipeline-check-cell-mismatch");
+        } else if (RawInputDateCrossSourceCheck.STATUS_MATCH.equals(status)) {
+            cell.getStyleClass().add("pipeline-check-cell-match");
+        }
+    }
+
+    /** 下段4ソース照合用（明背景テーマのままインライン色を使用）。 */
+    private static void applyCrossSourceStatusCellStyle(
             javafx.scene.control.TableCell<?, ?> cell, String status) {
         if (RawInputDateCrossSourceCheck.STATUS_MISMATCH.equals(status)) {
             cell.setStyle(
@@ -2032,7 +2460,7 @@ public final class RequestFormPipelineCheckTabController {
                                 super.updateItem(item, empty);
                                 if (empty || item == null || item.isBlank()) {
                                     setText("");
-                                    setStyle("");
+                                    clearPipelineCheckCellAccent(this);
                                     return;
                                 }
                                 setText(item);
@@ -2050,17 +2478,18 @@ public final class RequestFormPipelineCheckTabController {
                                 super.updateItem(item, empty);
                                 if (empty) {
                                     setText(null);
-                                    setStyle("");
+                                    clearPipelineCheckCellAccent(this);
                                     return;
                                 }
                                 MainRow row = getTableRow() != null ? getTableRow().getItem() : null;
                                 setText(item != null ? item : "");
+                                clearPipelineCheckCellAccent(this);
                                 if (row != null && row.hasIssues()) {
-                                    setStyle(
-                                            "-fx-background-color: #FFF4CE; -fx-control-inner-background: #FFF4CE;"
-                                                    + " -fx-text-fill: #7A5C00;");
-                                } else {
-                                    setStyle("");
+                                    if (requiresStage1Confirmation(row)) {
+                                        getStyleClass().add("pipeline-check-cell-issue");
+                                    } else {
+                                        getStyleClass().add("pipeline-check-cell-exempt");
+                                    }
                                 }
                             }
                         });
@@ -2079,7 +2508,7 @@ public final class RequestFormPipelineCheckTabController {
                                                     getTableRow() != null
                                                             ? getTableRow().getItem()
                                                             : null;
-                                            if (row != null && row.hasIssues()) {
+                                            if (row != null && requiresStage1Confirmation(row)) {
                                                 row.issueConfirmedProperty().set(checkBox.isSelected());
                                             }
                                         });
@@ -2094,7 +2523,7 @@ public final class RequestFormPipelineCheckTabController {
                                     return;
                                 }
                                 MainRow row = getTableRow() != null ? getTableRow().getItem() : null;
-                                if (row == null || !row.hasIssues()) {
+                                if (!requiresStage1Confirmation(row)) {
                                     setGraphic(null);
                                     setText("―");
                                     return;
@@ -2113,9 +2542,19 @@ public final class RequestFormPipelineCheckTabController {
                             @Override
                             protected void updateItem(MainRow item, boolean empty) {
                                 super.updateItem(item, empty);
-                                getStyleClass().remove("pipeline-check-row-unconfirmed");
-                                if (!empty && item != null && item.hasIssues() && !item.isIssueConfirmed()) {
-                                    getStyleClass().add("pipeline-check-row-unconfirmed");
+                                getStyleClass()
+                                        .removeAll(
+                                                "pipeline-check-row-unconfirmed",
+                                                "pipeline-check-row-confirmation-exempt");
+                                if (empty || item == null) {
+                                    return;
+                                }
+                                if (requiresStage1Confirmation(item)) {
+                                    if (!item.isIssueConfirmed()) {
+                                        getStyleClass().add("pipeline-check-row-unconfirmed");
+                                    }
+                                } else if (item.hasIssues()) {
+                                    getStyleClass().add("pipeline-check-row-confirmation-exempt");
                                 }
                             }
                         });
@@ -2164,7 +2603,7 @@ public final class RequestFormPipelineCheckTabController {
                                 setText(item);
                                 CrossSourceRow row =
                                         getTableRow() != null ? getTableRow().getItem() : null;
-                                applyRawInputDateMatchStatusCellStyle(
+                                applyCrossSourceStatusCellStyle(
                                         this, row != null ? row.getStatus() : "");
                             }
                         });

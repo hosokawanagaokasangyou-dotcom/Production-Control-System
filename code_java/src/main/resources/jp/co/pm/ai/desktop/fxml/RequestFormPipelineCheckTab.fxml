@@ -61,7 +61,7 @@
                     text="カンマ区切りでコピー" onAction="#onCopyMainTableCsvButtonAction"/>
         </HBox>
         <HBox fx:id="mainColumnStripHost" alignment="CENTER_LEFT" spacing="0.0"/>
-        <TableView fx:id="mainTable" minHeight="180.0" VBox.vgrow="ALWAYS"/>
+        <TableView fx:id="mainTable" minHeight="180.0" styleClass="pipeline-check-main-table" VBox.vgrow="ALWAYS"/>
     </VBox>
     <SplitPane dividerPositions="0.5" minHeight="160.0" prefHeight="200.0" VBox.vgrow="ALWAYS">
         <VBox spacing="4.0">

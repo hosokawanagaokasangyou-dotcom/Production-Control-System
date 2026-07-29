@@ -44,6 +44,7 @@ import jp.co.pm.ai.desktop.dispatch.ResultDispatchNormalizer;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchInteractiveConsolidator;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchSchema;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchStage3Support;
+import jp.co.pm.ai.desktop.io.AladdinProcessingPlanSourceFreshness;
 import jp.co.pm.ai.desktop.io.AladdinProcessingPlanSourceReloader;
 import jp.co.pm.ai.desktop.io.DesktopFileOpener;
 import jp.co.pm.ai.desktop.io.DispatchAladdinEntryWorkbookExporter;
@@ -84,10 +85,15 @@ public final class ResultDispatchTableTabController {
                     + " ControlsFX SpreadsheetView （段階1成形結果と同じ"
                     + "列フィルタ）。";
 
+    private static final String ALADDIN_RELOAD_EXPORT_UP_TO_DATE_BADGE =
+            "加工計画は最新と同一（再読込不要）";
+
     @FXML
     private Button refreshButton;
 
     @FXML private Button aladdinEntryReloadExportButton;
+
+    @FXML private Label aladdinEntryReloadExportDisabledBadge;
 
     @FXML
     private Button aladdinEntryLocalExportButton;
@@ -170,6 +176,12 @@ public final class ResultDispatchTableTabController {
 
     private ButtonAttentionGlow aladdinEntryOpenLatestGlow;
 
+    private final AtomicBoolean aladdinEntryExportBusy = new AtomicBoolean(false);
+
+    private final AtomicBoolean aladdinReloadExportUpToDate = new AtomicBoolean(false);
+
+    private final AtomicInteger aladdinReloadExportStateGeneration = new AtomicInteger();
+
     @FXML
     private void initialize() {
         hintLabel.setText(HINT_TEXT);
@@ -215,7 +227,11 @@ public final class ResultDispatchTableTabController {
 
         initResultDispatchSpreadsheetPresentationControls();
 
-        Platform.runLater(() -> reloadFromDisk(false));
+        Platform.runLater(
+                () -> {
+                    reloadFromDisk(false);
+                    refreshAladdinEntryReloadExportButtonState();
+                });
     }
 
     void applyStage3UiVisibility(boolean visible) {
@@ -251,6 +267,7 @@ public final class ResultDispatchTableTabController {
     /** 親（納期管理ビュー）の再読込成功後に呼ぶ。 */
     public void reloadResultDispatchTableFromDisk() {
         reloadFromDisk(false);
+        refreshAladdinEntryReloadExportButtonState();
     }
 
     /**
@@ -263,6 +280,7 @@ public final class ResultDispatchTableTabController {
             return;
         }
         expandOperationsSourcePane();
+        refreshAladdinEntryReloadExportButtonState();
         if (promptExcelExportAttention) {
             startAladdinOpenAttentionGlow();
         }
@@ -721,7 +739,7 @@ public final class ResultDispatchTableTabController {
                         : DispatchAladdinEntryWorkbookExporter.Destination.SHARED;
         dismissAladdinOpenAttentionGlow();
         Map<String, String> ui = shell.snapshotUiEnv();
-        setAladdinEntryExportButtonsDisabled(true);
+        setAladdinEntryExportBusy(true);
         showAladdinEntryExportProgress(
                 ProgressBar.INDETERMINATE_PROGRESS,
                 reloadAladdinPlanFromSource
@@ -736,15 +754,21 @@ public final class ResultDispatchTableTabController {
                                     AladdinProcessingPlanSourceReloader.ReloadResult reload =
                                             AladdinProcessingPlanSourceReloader
                                                     .reloadNewestFromDiskAndSaveShapedJson(ui);
+                                    java.nio.file.Path reloadedSource = reload.sourceFile();
                                     shell.appendLog(
                                             "[aladdin-entry-export] 加工計画再読込: "
-                                                    + reload.sourceFile()
+                                                    + reloadedSource
                                                     + " ("
                                                     + reload.rowCount()
                                                     + " 行 × "
                                                     + reload.columnCount()
                                                     + " 列)");
-                                    Platform.runLater(shell::refreshAladdinProcessingPlanTabFromDisk);
+                                    Platform.runLater(
+                                            () -> {
+                                                shell.refreshAladdinProcessingPlanTabFromDisk();
+                                                shell.notifyAladdinProcessingPlanSourceReloaded(
+                                                        reloadedSource);
+                                            });
                                 }
                                 Map<String, DispatchAladdinEntrySheetBuilder.IndexInfo> index =
                                         RequestFormOriginalIndexLookup.loadByIraiNoKey(
@@ -805,12 +829,54 @@ public final class ResultDispatchTableTabController {
         worker.start();
     }
 
-    private void setAladdinEntryExportButtonsDisabled(boolean disabled) {
-        if (aladdinEntryReloadExportButton != null) {
-            aladdinEntryReloadExportButton.setDisable(disabled);
-        }
+    private void setAladdinEntryExportBusy(boolean busy) {
+        aladdinEntryExportBusy.set(busy);
+        applyAladdinEntryReloadExportButtonDisabledState();
         if (aladdinEntryLocalExportButton != null) {
-            aladdinEntryLocalExportButton.setDisable(disabled);
+            aladdinEntryLocalExportButton.setDisable(busy);
+        }
+    }
+
+    private void refreshAladdinEntryReloadExportButtonState() {
+        if (shell == null) {
+            return;
+        }
+        int generation = aladdinReloadExportStateGeneration.incrementAndGet();
+        Map<String, String> ui = shell.snapshotUiEnv();
+        Thread worker =
+                new Thread(
+                        () -> {
+                            boolean upToDate =
+                                    AladdinProcessingPlanSourceFreshness
+                                            .isSavedShapedPlanIdenticalToNewestSource(ui);
+                            Platform.runLater(
+                                    () -> {
+                                        if (generation
+                                                != aladdinReloadExportStateGeneration.get()) {
+                                            return;
+                                        }
+                                        aladdinReloadExportUpToDate.set(upToDate);
+                                        applyAladdinEntryReloadExportButtonDisabledState();
+                                    });
+                        },
+                        "aladdin-reload-export-state");
+        worker.setDaemon(true);
+        worker.start();
+    }
+
+    private void applyAladdinEntryReloadExportButtonDisabledState() {
+        if (aladdinEntryReloadExportButton == null) {
+            return;
+        }
+        boolean disable =
+                aladdinEntryExportBusy.get() || aladdinReloadExportUpToDate.get();
+        aladdinEntryReloadExportButton.setDisable(disable);
+        boolean showUpToDateBadge =
+                disable && aladdinReloadExportUpToDate.get() && !aladdinEntryExportBusy.get();
+        if (aladdinEntryReloadExportDisabledBadge != null) {
+            aladdinEntryReloadExportDisabledBadge.setText(ALADDIN_RELOAD_EXPORT_UP_TO_DATE_BADGE);
+            aladdinEntryReloadExportDisabledBadge.setVisible(showUpToDateBadge);
+            aladdinEntryReloadExportDisabledBadge.setManaged(showUpToDateBadge);
         }
     }
 
@@ -846,7 +912,8 @@ public final class ResultDispatchTableTabController {
             DispatchAladdinEntryWorkbookExporter.Destination destination,
             boolean showCompletionDialog,
             Consumer<AladdinEntryExportOutcome> completion) {
-        setAladdinEntryExportButtonsDisabled(false);
+        setAladdinEntryExportBusy(false);
+        refreshAladdinEntryReloadExportButtonState();
         hideAladdinEntryExportProgress();
         boolean local =
                 destination == DispatchAladdinEntryWorkbookExporter.Destination.LOCAL;

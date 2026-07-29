@@ -49,11 +49,29 @@ public final class AladdinProcessingPlanSourceReloader {
             throw new IOException("Parquet は未対応です: " + file);
         }
 
-        PlanInputTabularIo.TabularSheet tab = readAladdinTabularFromDisk(file);
+        PlanInputTabularIo.TabularSheet tab = readNewestAladdinTabularFromDisk(file);
         Path shapedJson = AppPaths.resolveShapedAladdinPlanJsonPath(u);
         Files.createDirectories(shapedJson.getParent());
         JsonTableIo.saveArrayTable(shapedJson, tab.headers(), tab.rows());
         return new ReloadResult(file, shapedJson, tab.rows().size(), tab.headers().size());
+    }
+
+    /**
+     * タスク入力ソースの最新ファイルからアラジン加工計画を読み込む（shaped JSON は更新しない）。
+     *
+     * @throws IOException 読込失敗
+     */
+    public static PlanInputTabularIo.TabularSheet readNewestAladdinTabularFromDisk(Path file)
+            throws IOException {
+        if (file == null) {
+            throw new IOException("読込対象ファイルがありません");
+        }
+        Path normalized = file.toAbsolutePath().normalize();
+        String low = normalized.getFileName().toString().toLowerCase(Locale.ROOT);
+        if (low.endsWith(".pq") || low.endsWith(".parquet")) {
+            throw new IOException("Parquet は未対応です: " + normalized);
+        }
+        return readAladdinTabularFromDisk(normalized);
     }
 
     private static PlanInputTabularIo.TabularSheet readAladdinTabularFromDisk(Path file)

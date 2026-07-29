@@ -122,6 +122,9 @@ public final class MainRunTabController {
     @FXML
     private Button stage1RunButton;
 
+    @FXML
+    private Label stage1PipelineCheckBlockBadge;
+
     private static final String STAGE1_RUN_BUTTON_TEXT_DEFAULT = "段階1 実行";
 
     private static final String STAGE1_RUN_BUTTON_TEXT_DELIVERY_CALENDAR_RELOAD =
@@ -184,6 +187,8 @@ public final class MainRunTabController {
     private boolean stage1BlockedByPipelineCheck;
 
     private String stage1PipelineCheckBlockTooltip = "";
+
+    private String stage1PipelineCheckBlockBadgeText = "";
 
     @FXML
     private ImageView factoryLogoImageView;
@@ -1411,10 +1416,15 @@ public final class MainRunTabController {
         applyStage1RunButtonEnabledState();
     }
 
-    void setStage1BlockedByPipelineCheck(boolean blocked, String tooltip) {
+    void setStage1BlockedByPipelineCheck(boolean blocked, String tooltip, String badgeText) {
         stage1BlockedByPipelineCheck = blocked;
         stage1PipelineCheckBlockTooltip = tooltip != null ? tooltip : "";
+        stage1PipelineCheckBlockBadgeText = badgeText != null ? badgeText.strip() : "";
         applyStage1RunButtonEnabledState();
+    }
+
+    void setStage1BlockedByPipelineCheck(boolean blocked, String tooltip) {
+        setStage1BlockedByPipelineCheck(blocked, tooltip, "");
     }
 
     private void applyStage1RunButtonEnabledState() {
@@ -1439,6 +1449,28 @@ public final class MainRunTabController {
         } else {
             stage1RunButton.setText(STAGE1_RUN_BUTTON_TEXT_DEFAULT);
             stage1RunButton.setTooltip(null);
+        }
+        applyStage1PipelineCheckBlockBadge();
+    }
+
+    private void applyStage1PipelineCheckBlockBadge() {
+        if (stage1PipelineCheckBlockBadge == null) {
+            return;
+        }
+        boolean show =
+                stage1BlockedByPipelineCheck
+                        && !stage1RunPipelineBusy
+                        && !deliveryCalendarReloadBlocking
+                        && !stage1PipelineCheckBlockBadgeText.isBlank();
+        stage1PipelineCheckBlockBadge.setText(
+                show ? stage1PipelineCheckBlockBadgeText : "");
+        stage1PipelineCheckBlockBadge.setManaged(show);
+        stage1PipelineCheckBlockBadge.setVisible(show);
+        if (show && !stage1PipelineCheckBlockTooltip.isBlank()) {
+            stage1PipelineCheckBlockBadge.setTooltip(
+                    new Tooltip(stage1PipelineCheckBlockTooltip));
+        } else {
+            stage1PipelineCheckBlockBadge.setTooltip(null);
         }
     }
 

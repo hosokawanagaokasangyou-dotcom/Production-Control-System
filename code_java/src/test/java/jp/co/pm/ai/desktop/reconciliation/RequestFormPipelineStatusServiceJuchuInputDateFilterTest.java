@@ -85,4 +85,89 @@ class RequestFormPipelineStatusServiceJuchuInputDateFilterTest {
                 RequestFormPipelineStatusService.shouldHideByAdjustDeliveryBeforeToday(
                         LocalDate.now().plusDays(1)));
     }
+
+    @Test
+    void isAdjustDeliveryOnOrAfterToday_whenTodayOrFuture() {
+        assertFalse(RequestFormPipelineStatusService.isAdjustDeliveryOnOrAfterToday(null));
+        assertFalse(
+                RequestFormPipelineStatusService.isAdjustDeliveryOnOrAfterToday(
+                        LocalDate.now().minusDays(1)));
+        assertTrue(
+                RequestFormPipelineStatusService.isAdjustDeliveryOnOrAfterToday(LocalDate.now()));
+        assertTrue(
+                RequestFormPipelineStatusService.isAdjustDeliveryOnOrAfterToday(
+                        LocalDate.now().plusDays(1)));
+    }
+
+    @Test
+    void resolveAdjustDeliveryLocalDate_prefersParsedValue() {
+        LocalDate adjust = LocalDate.of(2026, 8, 17);
+        var row =
+                new RequestFormPipelineStatusService.PipelineStatusRow(
+                        "X",
+                        "",
+                        false,
+                        "",
+                        false,
+                        "",
+                        0,
+                        0,
+                        "",
+                        "",
+                        false,
+                        java.util.List.of(),
+                        null,
+                        java.util.List.of(),
+                        null,
+                        "",
+                        "",
+                        adjust,
+                        "2026/7/1",
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        null);
+        assertEquals(
+                adjust, RequestFormPipelineStatusService.resolveAdjustDeliveryLocalDate(row));
+    }
+
+    @Test
+    void resolveAdjustDeliveryLocalDate_fallsBackToDisplayWhenParsedMissing() {
+        var row =
+                new RequestFormPipelineStatusService.PipelineStatusRow(
+                        "X",
+                        "",
+                        false,
+                        "",
+                        false,
+                        "",
+                        0,
+                        0,
+                        "",
+                        "",
+                        false,
+                        java.util.List.of(),
+                        null,
+                        java.util.List.of(),
+                        null,
+                        "",
+                        "",
+                        null,
+                        "2026/8/17",
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        null);
+        assertEquals(
+                LocalDate.of(2026, 8, 17),
+                RequestFormPipelineStatusService.resolveAdjustDeliveryLocalDate(row));
+    }
 }

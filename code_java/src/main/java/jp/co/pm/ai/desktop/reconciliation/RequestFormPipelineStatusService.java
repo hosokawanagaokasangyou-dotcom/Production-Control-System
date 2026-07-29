@@ -236,6 +236,12 @@ public final class RequestFormPipelineStatusService {
                 parseJuchuDateField(juchuDb, Col.CHOSEI_NOKI.dbKey());
         String juchuAdjustDeliveryDateDisplay =
                 formatJuchuDateFieldDisplay(juchuDb, Col.CHOSEI_NOKI.dbKey());
+        if (juchuAdjustDeliveryDate == null
+                && !JuchuTransferValueNormalizer.isBlank(juchuAdjustDeliveryDateDisplay)) {
+            juchuAdjustDeliveryDate =
+                    JuchuTransferValueNormalizer.parseLocalDate(
+                            juchuAdjustDeliveryDateDisplay.strip());
+        }
         String rawInputDateDisplay =
                 formatRawInputDateDisplay(originalDb, originalPresent, juchuDb);
         RequestFormOriginalIndexSheetMeta.IndexSheetDisplay idx =
@@ -409,6 +415,30 @@ public final class RequestFormPipelineStatusService {
             return true;
         }
         return adjustDeliveryDate.isBefore(LocalDate.now());
+    }
+
+    /** 調整納期が当日以降（当日含む）。未設定は false。 */
+    public static boolean isAdjustDeliveryOnOrAfterToday(LocalDate adjustDeliveryDate) {
+        return adjustDeliveryDate != null && !adjustDeliveryDate.isBefore(LocalDate.now());
+    }
+
+    /**
+     * 調整納期の {@link LocalDate}。スキャン時の解釈値を優先し、なければ表示文字列から再解釈する。
+     * フィルタ・段階1確認免除で列表示と判定のずれを防ぐ。
+     */
+    public static LocalDate resolveAdjustDeliveryLocalDate(PipelineStatusRow row) {
+        if (row == null) {
+            return null;
+        }
+        LocalDate parsed = row.juchuAdjustDeliveryDate();
+        if (parsed != null) {
+            return parsed;
+        }
+        String display = row.juchuAdjustDeliveryDateDisplay();
+        if (JuchuTransferValueNormalizer.isBlank(display)) {
+            return null;
+        }
+        return JuchuTransferValueNormalizer.parseLocalDate(display.strip());
     }
 
     static List<String> emptyPlanDayValues() {

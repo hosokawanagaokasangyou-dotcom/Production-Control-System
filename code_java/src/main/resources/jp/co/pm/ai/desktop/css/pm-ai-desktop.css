@@ -442,6 +442,27 @@
     -fx-padding: 0 10 0 0;
 }
 
+.pm-stage1-run-column {
+    -fx-spacing: 2;
+}
+
+.label.pm-stage1-pipeline-check-block-badge {
+    -fx-font-size: 10px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #fde68a;
+    -fx-background-color: rgba(251, 191, 36, 0.22);
+    -fx-border-color: rgba(251, 191, 36, 0.75);
+    -fx-border-radius: 3;
+    -fx-background-radius: 3;
+    -fx-border-width: 1;
+    -fx-padding: 1 6 1 6;
+    -fx-wrap-text: false;
+    -fx-max-width: 200;
+    -fx-min-width: 200;
+    -fx-text-overrun: ellipsis;
+    -fx-alignment: center;
+}
+
 .button.pm-stage-run-button {
     -fx-cursor: hand;
     -fx-font-size: 15px;
@@ -2403,6 +2424,86 @@
     -fx-background-color: rgba(169, 209, 142, 0.45);
 }
 
-.table-view .table-row-cell.pipeline-check-row-unconfirmed {
+.table-view.pipeline-check-main-table .table-row-cell.pipeline-check-row-unconfirmed {
     -fx-background-color: rgba(255, 196, 64, 0.18);
+}
+
+.table-view.pipeline-check-main-table .table-row-cell.pipeline-check-row-confirmation-exempt {
+    -fx-background-color: rgba(100, 116, 139, 0.16);
+}
+
+.table-view.pipeline-check-main-table .table-row-cell.pipeline-check-row-confirmation-exempt .table-cell {
+    -fx-text-fill: #94a3b8;
+}
+
+.table-view.pipeline-check-main-table .table-cell.pipeline-check-cell-exempt {
+    -fx-background-color: rgba(100, 116, 139, 0.22);
+    -fx-text-fill: #94a3b8;
+}
+
+.table-view.pipeline-check-main-table .table-row-cell.pipeline-check-row-confirmation-exempt .table-cell.pipeline-check-cell-mismatch {
+    -fx-background-color: rgba(100, 116, 139, 0.22);
+    -fx-text-fill: #94a3b8;
+}
+
+.table-view.pipeline-check-main-table .table-row-cell.pipeline-check-row-confirmation-exempt:filled:selected .table-cell {
+    -fx-text-fill: #f0f9ff;
+}
+
+/* 原本転記・計画確認: 一覧の選択行を明確に（ダークテーマ向け） */
+.table-view.pipeline-check-main-table .table-row-cell:filled:hover {
+    -fx-background-color: rgba(148, 163, 184, 0.14);
+}
+
+.table-view.pipeline-check-main-table .table-row-cell:filled:selected {
+    -fx-background-color: rgba(56, 189, 248, 0.20);
+}
+
+.table-view.pipeline-check-main-table:focused .table-row-cell:filled:selected {
+    -fx-background-color: rgba(56, 189, 248, 0.28);
+}
+
+.table-view.pipeline-check-main-table .table-row-cell:filled:selected .table-cell {
+    -fx-background-color: rgba(56, 189, 248, 0.34);
+    -fx-border-color: transparent transparent transparent #38bdf8;
+    -fx-border-width: 0 0 0 3;
+    -fx-text-fill: #f0f9ff;
+}
+
+.table-view.pipeline-check-main-table:focused .table-row-cell:filled:selected .table-cell {
+    -fx-background-color: rgba(56, 189, 248, 0.48);
+    -fx-text-fill: #ffffff;
+}
+
+.table-view.pipeline-check-main-table .table-row-cell.pipeline-check-row-unconfirmed:filled:selected {
+    -fx-background-color: rgba(56, 189, 248, 0.24);
+}
+
+.table-view.pipeline-check-main-table .table-cell.pipeline-check-cell-mismatch {
+    -fx-background-color: rgba(127, 29, 29, 0.55);
+    -fx-text-fill: #fecaca;
+}
+
+.table-view.pipeline-check-main-table .table-cell.pipeline-check-cell-match {
+    -fx-background-color: rgba(22, 101, 52, 0.45);
+    -fx-text-fill: #bbf7d0;
+}
+
+.table-view.pipeline-check-main-table .table-cell.pipeline-check-cell-issue {
+    -fx-background-color: rgba(120, 83, 14, 0.50);
+    -fx-text-fill: #fde68a;
+}
+
+.table-view.pipeline-check-main-table .table-row-cell:filled:selected .table-cell.pipeline-check-cell-mismatch,
+.table-view.pipeline-check-main-table .table-row-cell:filled:selected .table-cell.pipeline-check-cell-match,
+.table-view.pipeline-check-main-table .table-row-cell:filled:selected .table-cell.pipeline-check-cell-issue {
+    -fx-background-color: rgba(56, 189, 248, 0.48);
+    -fx-text-fill: #ffffff;
+}
+
+.table-view.pipeline-check-main-table:focused .table-row-cell:filled:selected .table-cell.pipeline-check-cell-mismatch,
+.table-view.pipeline-check-main-table:focused .table-row-cell:filled:selected .table-cell.pipeline-check-cell-match,
+.table-view.pipeline-check-main-table:focused .table-row-cell:filled:selected .table-cell.pipeline-check-cell-issue {
+    -fx-background-color: rgba(56, 189, 248, 0.58);
+    -fx-text-fill: #ffffff;
 }

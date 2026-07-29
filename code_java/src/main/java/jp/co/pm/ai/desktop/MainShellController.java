@@ -5444,9 +5444,10 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                 requestFormPipelineCheckTabController != null
                         ? requestFormPipelineCheckTabController.evaluateStage1Gate()
                         : RequestFormPipelineCheckTabController.Stage1GateStatus.blocked(
-                                "原本転記・計画確認で「更新」を実行し、問題の有無を確認してください。");
+                                "原本転記・計画確認で「更新」を実行し、問題の有無を確認してください。",
+                                "原本転記: 未走査");
         mainRunTabController.setStage1BlockedByPipelineCheck(
-                !status.permitted(), status.message());
+                !status.permitted(), status.message(), status.badgeMessage());
     }
 
     private boolean blockIfPipelineCheckBlocksStage1() {
@@ -5454,7 +5455,8 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                 requestFormPipelineCheckTabController != null
                         ? requestFormPipelineCheckTabController.evaluateStage1Gate()
                         : RequestFormPipelineCheckTabController.Stage1GateStatus.blocked(
-                                "原本転記・計画確認で「更新」を実行し、問題の有無を確認してください。");
+                                "原本転記・計画確認で「更新」を実行し、問題の有無を確認してください。",
+                                "原本転記: 未走査");
         if (status.permitted()) {
             return false;
         }
@@ -8131,6 +8133,13 @@ public PlanInputTabController planInputTabControllerForDispatchRollUnit() {
     void refreshAladdinProcessingPlanTabFromDisk() {
         if (deliveryCalendarViewTabController != null) {
             deliveryCalendarViewTabController.refreshAladdinProcessingPlanTabFromDisk();
+        }
+    }
+
+    /** アラジン加工計画ソース再読込後、原本転記・計画確認の確認チェックを必要に応じてリセットする。 */
+    void notifyAladdinProcessingPlanSourceReloaded(java.nio.file.Path sourceFile) {
+        if (requestFormPipelineCheckTabController != null) {
+            requestFormPipelineCheckTabController.onAladdinProcessingPlanSourceUpdated(sourceFile);
         }
     }
 
