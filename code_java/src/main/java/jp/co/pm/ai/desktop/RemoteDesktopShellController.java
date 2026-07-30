@@ -219,8 +219,7 @@ public final class RemoteDesktopShellController implements DesktopShellHost, Env
 
     @FXML
     private void onChangeSessionOperatorToolbarAction() {
-        requireOperatorSelectionForFactory(FactorySite.RDP_LAUNCHER, false);
-        refreshOperatorUserPresentation();
+        changeSessionOperator(FactorySite.RDP_LAUNCHER);
     }
 
     private void emitTabNavigationGuard(Tab prev, Tab now) {
@@ -361,6 +360,11 @@ public final class RemoteDesktopShellController implements DesktopShellHost, Env
     @Override
     public void requireOperatorSelectionForFactory(FactorySite site, boolean startup) {
         OperatorUserSelectionSupport.requireOperatorSelectionForFactory(this, site, startup);
+    }
+
+    @Override
+    public void changeSessionOperator(FactorySite site) {
+        OperatorUserSelectionSupport.changeSessionOperator(this, site);
     }
 
     @Override

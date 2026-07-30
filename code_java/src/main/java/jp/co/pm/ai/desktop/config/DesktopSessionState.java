@@ -716,6 +716,106 @@ public record DesktopSessionState(
                 requestFormComboChoices());
     }
 
+    /**
+     * 環境変数初期化の正本（環境タブ）をクリアしたコピー。工場ワークスペース fragment を env リセット後に載せるとき用。
+     */
+    public DesktopSessionState withoutEnvInitializationFields() {
+        return new DesktopSessionState(
+                planInputPath(),
+                planInputSheet(),
+                stage1PreviewPath(),
+                stage1PreviewSheet(),
+                "",
+                "",
+                "",
+                windowWidth(),
+                windowHeight(),
+                windowX(),
+                windowY(),
+                uiTheme(),
+                logFontFamily(),
+                logFontSize(),
+                mainRunLogFilter(),
+                mainRunLogLines(),
+                mainRunLogScroll(),
+                mainRunStage2ProductionPlan(),
+                mainRunStage2MemberSchedule(),
+                mainRunStage2SkipTodayDispatch(),
+                planInputStage2NextDayDialogMode(),
+                planInputComboSheetMayExceedNeed(),
+                planInputStage2SkipGeminiApi(),
+                planInputTodayDispatch(),
+                mainRunStage2ResultBookFont(),
+                mainRunSkipGeminiApi(),
+                mainRunStage1MarkAllExcludeAfterRun(),
+                mainRunApplyLearnedSpeedFromActuals(),
+                List.of(),
+                mainShellTabOrder(),
+                mainShellTabLayout(),
+                mainShellTabTitleAliases(),
+                innerTabSelectedIndexByShellTabKey(),
+                innerTabHeaderColorByKey(),
+                equipmentGanttGraphicZoomPercent(),
+                equipmentGanttDateColWidth(),
+                equipmentGanttMachineColWidth(),
+                equipmentGanttProcessColWidth(),
+                equipmentGanttBarFontFamily(),
+                equipmentGanttBarFontPercent(),
+                equipmentGanttRowHeightPercent(),
+                equipmentGanttHeaderHeightPercent(),
+                equipmentGanttSlotWidthPercent(),
+                equipmentGanttShiftWheelHScrollPercent(),
+                equipmentGanttPrepTimeLabelsEnabled(),
+                equipmentGanttPersonBadgeGapPx(),
+                equipmentGanttPersonBadgeBandVerticalOffsetPx(),
+                equipmentGanttGraphicDataFingerprint(),
+                equipmentGanttBadgeDragDeltas(),
+                equipmentGanttPersonBadgeDragAdjustEnabled(),
+                equipmentGanttPersonBadgeEnabled(),
+                equipmentGanttPersonBadgeWireEnabled(),
+                equipmentGanttPersonBadgeWireStrokeHex(),
+                equipmentGanttPersonBadgeWireWidthPx(),
+                equipmentGanttPersonBadgeWireDashStyleKey(),
+                equipmentGanttPersonBadgeWireMaxLengthPx(),
+                equipmentGanttPersonBadgeFontFamily(),
+                equipmentGanttPersonBadgeFontPercent(),
+                equipmentGanttPersonBadgeFillHex(),
+                equipmentGanttPersonBadgeTextHex(),
+                equipmentGanttPersonBadgeStrokeHex(),
+                equipmentGanttPersonBadgeStrokeWidth(),
+                equipmentGanttPersonBadgeCornerRadius(),
+                equipmentGanttPersonBadgePill(),
+                equipmentGanttPersonBadgeGlowColorHex(),
+                equipmentGanttPersonBadgeGlowRadius(),
+                equipmentGanttPersonBadgeGlowSpread(),
+                equipmentGanttPersonBadgeOpacity(),
+                equipmentGanttPersonBadgeStylesByLabel(),
+                equipmentGanttPersonBadgeStylesByMemberKey(),
+                equipmentGanttPlanJsonPath(),
+                stage1NetworkCacheBadgeLabel(),
+                stage1NetworkCacheBadgeStyle(),
+                requestFormPreviewUpdateBadgeLabel(),
+                requestFormPreviewUpdateBadgeStyle(),
+                mainShellTabOrganizerHeaderGlow(),
+                mainShellTabOrganizerHeaderGlowStrength(),
+                pushButtonDesignPrefs(),
+                memoryMonitorEnabled(),
+                memoryMonitorIntervalSec(),
+                nextLaunchHeapFixed(),
+                nextLaunchHeapMinMiB(),
+                nextLaunchHeapMaxMiB(),
+                equipmentStatusDashboardActualDate(),
+                equipmentStatusDashboardPlanDate(),
+                equipmentStatusDashboardActualDayOffset(),
+                equipmentStatusDashboardPlanDayOffset(),
+                equipmentStatusDashboardAutoRefreshEnabled(),
+                equipmentStatusDashboardAutoRefreshIntervalSec(),
+                equipmentStatusDashboardShowAladdinPlans(),
+                equipmentStatusDashboardShowDispatchPlans(),
+                equipmentStatusDashboardAppearance(),
+                requestFormComboChoices());
+    }
+
     /** 工場スコープ項目だけ {@code factory} から上書きし、端末共通 UI は {@code this} を維持。 */
     public DesktopSessionState mergeFactoryScopedFrom(DesktopSessionState factory) {
         if (factory == null) {
@@ -815,6 +915,126 @@ public record DesktopSessionState(
                 factory.equipmentStatusDashboardShowDispatchPlans(),
                 factory.equipmentStatusDashboardAppearance(),
                 factory.requestFormComboChoices());
+    }
+
+    /**
+     * {@link #mergeFactoryScopedFrom} と同様だが、環境変数初期化の正本（除外 JSON・実行ブック・Python パス・{@code uiEnvRows}）は
+     * {@code factory} 側が空のとき {@code this} を維持する。
+     */
+    public DesktopSessionState mergeFactoryScopedFromPreservingEnvInitialization(
+            DesktopSessionState factory) {
+        if (factory == null) {
+            return this;
+        }
+        return new DesktopSessionState(
+                factory.planInputPath(),
+                factory.planInputSheet(),
+                factory.stage1PreviewPath(),
+                factory.stage1PreviewSheet(),
+                coalesceNonBlank(factory.excludeRulesPath(), excludeRulesPath()),
+                coalesceNonBlank(factory.mainRunWorkbook(), mainRunWorkbook()),
+                coalesceNonBlank(factory.mainRunScriptDir(), mainRunScriptDir()),
+                windowWidth(),
+                windowHeight(),
+                windowX(),
+                windowY(),
+                uiTheme(),
+                logFontFamily(),
+                logFontSize(),
+                mainRunLogFilter(),
+                mainRunLogLines(),
+                mainRunLogScroll(),
+                factory.mainRunStage2ProductionPlan(),
+                factory.mainRunStage2MemberSchedule(),
+                factory.mainRunStage2SkipTodayDispatch(),
+                factory.planInputStage2NextDayDialogMode(),
+                factory.planInputComboSheetMayExceedNeed(),
+                factory.planInputStage2SkipGeminiApi(),
+                factory.planInputTodayDispatch(),
+                factory.mainRunStage2ResultBookFont(),
+                factory.mainRunSkipGeminiApi(),
+                factory.mainRunStage1MarkAllExcludeAfterRun(),
+                factory.mainRunApplyLearnedSpeedFromActuals(),
+                coalesceUiEnvRows(factory.uiEnvRows(), uiEnvRows()),
+                mainShellTabOrder(),
+                mainShellTabLayout(),
+                mainShellTabTitleAliases(),
+                innerTabSelectedIndexByShellTabKey(),
+                innerTabHeaderColorByKey(),
+                factory.equipmentGanttGraphicZoomPercent(),
+                factory.equipmentGanttDateColWidth(),
+                factory.equipmentGanttMachineColWidth(),
+                factory.equipmentGanttProcessColWidth(),
+                factory.equipmentGanttBarFontFamily(),
+                factory.equipmentGanttBarFontPercent(),
+                factory.equipmentGanttRowHeightPercent(),
+                factory.equipmentGanttHeaderHeightPercent(),
+                factory.equipmentGanttSlotWidthPercent(),
+                factory.equipmentGanttShiftWheelHScrollPercent(),
+                factory.equipmentGanttPrepTimeLabelsEnabled(),
+                factory.equipmentGanttPersonBadgeGapPx(),
+                factory.equipmentGanttPersonBadgeBandVerticalOffsetPx(),
+                factory.equipmentGanttGraphicDataFingerprint(),
+                factory.equipmentGanttBadgeDragDeltas(),
+                factory.equipmentGanttPersonBadgeDragAdjustEnabled(),
+                factory.equipmentGanttPersonBadgeEnabled(),
+                factory.equipmentGanttPersonBadgeWireEnabled(),
+                factory.equipmentGanttPersonBadgeWireStrokeHex(),
+                factory.equipmentGanttPersonBadgeWireWidthPx(),
+                factory.equipmentGanttPersonBadgeWireDashStyleKey(),
+                factory.equipmentGanttPersonBadgeWireMaxLengthPx(),
+                factory.equipmentGanttPersonBadgeFontFamily(),
+                factory.equipmentGanttPersonBadgeFontPercent(),
+                factory.equipmentGanttPersonBadgeFillHex(),
+                factory.equipmentGanttPersonBadgeTextHex(),
+                factory.equipmentGanttPersonBadgeStrokeHex(),
+                factory.equipmentGanttPersonBadgeStrokeWidth(),
+                factory.equipmentGanttPersonBadgeCornerRadius(),
+                factory.equipmentGanttPersonBadgePill(),
+                factory.equipmentGanttPersonBadgeGlowColorHex(),
+                factory.equipmentGanttPersonBadgeGlowRadius(),
+                factory.equipmentGanttPersonBadgeGlowSpread(),
+                factory.equipmentGanttPersonBadgeOpacity(),
+                factory.equipmentGanttPersonBadgeStylesByLabel(),
+                factory.equipmentGanttPersonBadgeStylesByMemberKey(),
+                factory.equipmentGanttPlanJsonPath(),
+                stage1NetworkCacheBadgeLabel(),
+                stage1NetworkCacheBadgeStyle(),
+                requestFormPreviewUpdateBadgeLabel(),
+                requestFormPreviewUpdateBadgeStyle(),
+                mainShellTabOrganizerHeaderGlow(),
+                mainShellTabOrganizerHeaderGlowStrength(),
+                pushButtonDesignPrefs(),
+                memoryMonitorEnabled(),
+                memoryMonitorIntervalSec(),
+                nextLaunchHeapFixed(),
+                nextLaunchHeapMinMiB(),
+                nextLaunchHeapMaxMiB(),
+                factory.equipmentStatusDashboardActualDate(),
+                factory.equipmentStatusDashboardPlanDate(),
+                factory.equipmentStatusDashboardActualDayOffset(),
+                factory.equipmentStatusDashboardPlanDayOffset(),
+                factory.equipmentStatusDashboardAutoRefreshEnabled(),
+                factory.equipmentStatusDashboardAutoRefreshIntervalSec(),
+                factory.equipmentStatusDashboardShowAladdinPlans(),
+                factory.equipmentStatusDashboardShowDispatchPlans(),
+                factory.equipmentStatusDashboardAppearance(),
+                factory.requestFormComboChoices());
+    }
+
+    private static String coalesceNonBlank(String preferred, String fallback) {
+        if (preferred != null && !preferred.isBlank()) {
+            return preferred;
+        }
+        return fallback != null ? fallback : "";
+    }
+
+    private static List<UiEnvRowSnapshot> coalesceUiEnvRows(
+            List<UiEnvRowSnapshot> preferred, List<UiEnvRowSnapshot> fallback) {
+        if (preferred != null && !preferred.isEmpty()) {
+            return preferred;
+        }
+        return fallback != null ? fallback : List.of();
     }
 
     /** バージョンアップ前のシェル UI（タブ並び・子タブ・ウィンドウ・テーマ等）のみ抽出。 */

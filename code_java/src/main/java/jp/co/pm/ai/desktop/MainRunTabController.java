@@ -209,6 +209,9 @@ public final class MainRunTabController {
     private Button changeOperatorPinButton;
 
     @FXML
+    private Button changeSessionOperatorButton;
+
+    @FXML
     private Label pipelineTimingStage1Label;
 
     @FXML
@@ -975,6 +978,14 @@ public final class MainRunTabController {
             return;
         }
         shell.promptChangeSessionOperatorPin();
+    }
+
+    @FXML
+    private void onChangeSessionOperatorAction() {
+        if (shell == null) {
+            return;
+        }
+        shell.changeSessionOperator();
     }
 
     /**

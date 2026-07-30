@@ -195,6 +195,94 @@ public final class OperatorUserSelectionSupport {
         host.refreshOperatorUserPresentation();
     }
 
+    /**
+     * セッション中の操作者を変更する。取消時は変更前の操作者を復元する。
+     *
+     * <p>起動時の {@link #requireOperatorSelectionForFactory} とは異なり、既に操作者が選択済みでも必ず選択ダイアログを出す。
+     */
+    public static void changeSessionOperator(DesktopShellHost host, FactorySite site) {
+        if (host == null) {
+            return;
+        }
+        Stage primary = host.primaryStageForDialogs();
+        if (primary == null || primary.getScene() == null) {
+            return;
+        }
+        FactorySite factory =
+                RemoteDesktopStandaloneBootstrap.isActivated()
+                        ? FactorySite.RDP_LAUNCHER
+                        : (site != null
+                                ? site
+                                : GlobalInitSettingTarget.loadEffective(host.snapshotUiEnv()));
+        FactoryOperatorUserStore.configureForCurrentApp(host.snapshotUiEnv(), factory);
+        try {
+            FactoryOperatorUserStore.ensureStoreFileOnDisk();
+        } catch (IOException ex) {
+            host.appendLog(
+                    "[operator] 操作者一覧の読込に失敗: "
+                            + (ex.getMessage() != null ? ex.getMessage() : ex.toString()));
+        }
+        String previousOperator = FactoryOperatorUserStore.sessionOperatorName();
+        String previousDepartment = FactoryOperatorUserStore.sessionRdpDepartmentKey();
+        if (RemoteDesktopStandaloneBootstrap.isActivated()) {
+            performRdpOperatorChange(host, factory, previousOperator, previousDepartment);
+        } else {
+            performProductionOperatorChange(host, factory, previousOperator);
+        }
+        host.refreshOperatorUserPresentation();
+        host.refreshRemoteDesktopOperatorContext();
+    }
+
+    /**
+     * 本番 PMD 向けの操作者変更（部署選択なし）。取消時は {@code previousOperator} を復元する。
+     */
+    static void performProductionOperatorChange(
+            DesktopShellHost host, FactorySite factory, String previousOperator) {
+        performProductionOperatorChange(host, factory, previousOperator, null);
+    }
+
+    /** テスト用: ダイアログ差し替え可能な本番操作者変更フロー。 */
+    static void performProductionOperatorChange(
+            DesktopShellHost host,
+            FactorySite factory,
+            String previousOperator,
+            BiFunction<DesktopShellHost, FactorySite, Optional<String>> operatorPromptOverride) {
+        FactoryOperatorUserStore.clearSessionOperatorName();
+        Optional<String> chosen =
+                operatorPromptOverride != null
+                        ? operatorPromptOverride.apply(host, factory)
+                        : promptOperatorUserChoice(host, factory, false);
+        if (chosen.isEmpty()) {
+            restoreSessionOperatorQuietly(host, factory, previousOperator);
+            return;
+        }
+        String name = chosen.get();
+        if (UNREGISTERED_OPERATOR_PLACEHOLDER.equals(name) || "【ユーザー登録無し】".equals(name)) {
+            host.showWarningDialog(
+                    "操作者名", "当該工場のユーザー管理に登録された操作者名を選んでください。");
+            restoreSessionOperatorQuietly(host, factory, previousOperator);
+            return;
+        }
+        if (!confirmSelectedOperatorWithPin(host, factory, name)) {
+            restoreSessionOperatorQuietly(host, factory, previousOperator);
+            return;
+        }
+        try {
+            FactoryOperatorUserStore.selectSessionOperator(factory, name);
+            String dept = FactoryOperatorUserStore.sessionRdpDepartmentKey();
+            host.appendLog(
+                    operatorEventLogPrefix(false)
+                            + " 操作者: "
+                            + name
+                            + operatorSelectionLogContext(factory, dept, "・変更")
+                            + (FactoryOperatorUserStore.isGuestOperator(name) ? " ※ゲスト" : ""));
+        } catch (Exception ex) {
+            host.showWarningDialog(
+                    "操作者名", ex.getMessage() != null ? ex.getMessage() : ex.toString());
+            restoreSessionOperatorQuietly(host, factory, previousOperator);
+        }
+    }
+
     private static void restoreSessionOperatorQuietly(
             DesktopShellHost host, FactorySite factory, String previousOperator) {
         if (previousOperator == null || previousOperator.isBlank()) {

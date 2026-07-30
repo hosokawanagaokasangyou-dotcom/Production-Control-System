@@ -93,4 +93,51 @@ final class MainShellRunTabGating {
         }
         return false;
     }
+
+    /**
+     * 環境変数初期化未記録時: 環境変数葉を選択し、当該タブとコンテンツの {@code disable} を解除する。
+     *
+     * <p>他タブのブロックは {@code Tab#setDisable} ではなく選択ガードで行う（無効化された兄弟タブが選択されたままだと
+     * コンテンツ全体が灰色になる JavaFX の挙動を避ける）。
+     */
+    static void applyEnvInitPending(TabPane pane, Tab envLeaf) {
+        if (pane == null) {
+            return;
+        }
+        clearDisableRecursive(pane);
+        if (envLeaf != null) {
+            selectInTree(pane, envLeaf);
+            enableOperableSubtree(envLeaf);
+            selectInTree(pane, envLeaf);
+        }
+    }
+
+    static void enableOperableSubtree(Tab envLeaf) {
+        envLeaf.setDisable(false);
+        enableNodeAndDescendants(envLeaf.getContent());
+    }
+
+    private static void enableNodeAndDescendants(javafx.scene.Node node) {
+        if (node == null) {
+            return;
+        }
+        node.setDisable(false);
+        if (node instanceof javafx.scene.Parent parent) {
+            for (javafx.scene.Node child : parent.getChildrenUnmodifiable()) {
+                enableNodeAndDescendants(child);
+            }
+        }
+    }
+
+    static void clearDisableRecursive(TabPane pane) {
+        for (Tab tab : pane.getTabs()) {
+            tab.setDisable(false);
+            if (tab.getContent() != null) {
+                tab.getContent().setDisable(false);
+            }
+            if (tab.getContent() instanceof TabPane inner) {
+                clearDisableRecursive(inner);
+            }
+        }
+    }
 }

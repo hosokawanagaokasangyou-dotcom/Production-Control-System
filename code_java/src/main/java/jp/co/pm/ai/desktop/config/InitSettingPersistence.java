@@ -49,7 +49,9 @@ public final class InitSettingPersistence {
         Files.createDirectories(dir);
         Path sessionDest = dir.resolve(InitSettingPaths.sessionDefaultsFileForFactory(t));
         JSON.writerWithDefaultPrettyPrinter()
-                .writeValue(sessionDest.toFile(), DesktopSessionStateStore.toJsonObject(state));
+                .writeValue(
+                        sessionDest.toFile(),
+                        DesktopSessionStateStore.toJsonObjectForGlobalInitSetting(state));
 
         Path tableDest = dir.resolve(InitSettingPaths.tableColumnDefaultsFileForFactory(t));
         JsonNode merged = TableColumnOrderPersistence.mergedTableColumnDefaultsRootForExport();

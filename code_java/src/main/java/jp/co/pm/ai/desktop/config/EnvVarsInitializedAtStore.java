@@ -56,4 +56,9 @@ public final class EnvVarsInitializedAtStore {
     public static String formatForToolbar() {
         return load().map(DISPLAY_FMT::format).orElse("—");
     }
+
+    /** 環境変数 ui_ref 既定への初期化が一度でも記録されているか。 */
+    public static boolean isRecorded() {
+        return load().isPresent();
+    }
 }

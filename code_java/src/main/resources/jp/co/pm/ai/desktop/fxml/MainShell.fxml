@@ -23,7 +23,7 @@
             <Label text="テーマ"/>
             <ComboBox fx:id="themeCombo" prefWidth="196.0"/>
             <Separator orientation="VERTICAL"/>
-            <Button mnemonicParsing="false" onAction="#onOpenDispatchUsageGuideDocxAction" text="配台の使い方"/>
+            <Button fx:id="dispatchUsageGuideButton" mnemonicParsing="false" onAction="#onOpenDispatchUsageGuideDocxAction" text="配台の使い方"/>
             <Label fx:id="envVarsInitializedAtLabel" styleClass="pm-env-vars-initialized-at" text="環境変数初期化: —"/>
             <Separator orientation="VERTICAL"/>
             <HBox fx:id="shellStageProgressBox" alignment="CENTER_LEFT" managed="false" spacing="8.0" styleClass="pm-shell-stage-progress" visible="false">

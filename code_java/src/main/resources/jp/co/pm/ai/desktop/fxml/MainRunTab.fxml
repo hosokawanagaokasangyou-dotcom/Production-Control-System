@@ -40,6 +40,8 @@
                     </tooltip>
                 </ComboBox>
                 <Label fx:id="operatorUserLabel" styleClass="pm-muted-label" text="操作者: （未選択）" />
+                <Button fx:id="changeSessionOperatorButton" mnemonicParsing="false"
+                        onAction="#onChangeSessionOperatorAction" text="操作者変更" />
                 <Button fx:id="changeOperatorPinButton" mnemonicParsing="false" onAction="#onChangeOperatorPinAction" text="PIN変更" />
                 <Region HBox.hgrow="ALWAYS" />
                 <HBox alignment="CENTER_RIGHT" spacing="8.0">

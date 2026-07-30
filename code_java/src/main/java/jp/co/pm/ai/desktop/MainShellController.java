@@ -354,6 +354,9 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
     private Label envVarsInitializedAtLabel;
 
     @FXML
+    private Button dispatchUsageGuideButton;
+
+    @FXML
     private MainRunTabController mainRunTabController;
 
     @FXML
@@ -658,6 +661,11 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
     private final AtomicBoolean envResetInProgress = new AtomicBoolean(false);
 
     /**
+     * 環境変数初期化未記録時に他タブへ遷移しようとしたとき、{@link #ensureMainShellEnvTabSelected()} の再入を防ぐ。
+     */
+    private final AtomicBoolean suppressEnvVarsInitTabGuard = new AtomicBoolean(false);
+
+    /**
      * ポータル自動バージョンアップ実行中は、起動時の操作者ダイアログと依頼書原本フォルダ案内を出さない。
      */
     private final AtomicBoolean deferOperatorPromptForPortableUpgrade = new AtomicBoolean(false);
@@ -849,6 +857,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
 
         applyRepoFolderPathNormalization();
         maybePortableFirstLaunchEnvInit();
+        applyRunTabGating();
 
         probeNetworkSourceDirsAtStartup();
 
@@ -867,12 +876,17 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                     primaryStage.requestFocus();
                     applyPendingMainShellTabLayoutFromSessionIfNeeded();
                     installLazyMainShellTabContentForStartup();
-                    if (tabPane.getSelectionModel().getSelectedItem() == null
-                            && !tabPane.getTabs().isEmpty()) {
-                        tabPane.getSelectionModel().selectFirst();
+                    if (isEnvVarsInitializationPending()) {
+                        ensureMainShellEnvTabSelected();
                     }
                     activateMainShellTabHeavyContentRecursive(
                             tabPane.getSelectionModel().getSelectedItem());
+                    applyRunTabGating();
+                    if (!isEnvVarsInitializationPending()
+                            && tabPane.getSelectionModel().getSelectedItem() == null
+                            && !tabPane.getTabs().isEmpty()) {
+                        tabPane.getSelectionModel().selectFirst();
+                    }
                     Platform.runLater(
                             () ->
                                     Platform.runLater(
@@ -894,6 +908,9 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                 .selectedItemProperty()
                 .addListener(
                         (obs, prevTab, newTab) -> {
+                            if (blockMainShellTabSelectionIfEnvInitPending()) {
+                                return;
+                            }
                             if (!suppressDeliveryCalendarReloadTabGuard.get()
                                     && deliveryCalendarViewTabController != null
                                     && mainShellTabDeliveryCalendar != null
@@ -1092,16 +1109,25 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
     }
 
     private void applyDesktopSession(DesktopSessionState s) {
-        applyDesktopSession(s, true, false);
+        applyDesktopSession(s, true, false, false);
+    }
+
+    private void applyDesktopSession(
+            DesktopSessionState s, boolean restoreUiEnvRowsFromSession, boolean restoreMainRunLogLines) {
+        applyDesktopSession(s, restoreUiEnvRowsFromSession, restoreMainRunLogLines, false);
     }
 
     /**
      * @param restoreUiEnvRowsFromSession {@code false} のとき環境変数タブはセッションから復元せず、呼び出し元で構築済みの行を保持する（ポータル
      *     バージョンアップ直後のバンドル既定への初期化後など）。
      * @param restoreMainRunLogLines {@code true} のとき実行・ログタブのログ行・スクロールをセッションから復元する。アプリ起動時は {@code false}（ログは空で開始）。
+     * @param globalInitSettingOnly {@code true} のとき環境変数初期化の正本（環境タブ・{@code PM_AI_*} 派生パス）を適用しない。
      */
     private void applyDesktopSession(
-            DesktopSessionState s, boolean restoreUiEnvRowsFromSession, boolean restoreMainRunLogLines) {
+            DesktopSessionState s,
+            boolean restoreUiEnvRowsFromSession,
+            boolean restoreMainRunLogLines,
+            boolean globalInitSettingOnly) {
         if (s == null) {
             return;
         }
@@ -1113,14 +1139,23 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
             applyUiEnvRowsFromSession(s);
         }
         memorySettingsTabController.applyMemorySettingsSession(s);
-        planInputTabController.restoreDesktopSessionPaths(s.planInputPath(), s.planInputSheet());
-        stage1PreviewTabController.restoreDesktopSessionPaths(s.stage1PreviewPath(), s.stage1PreviewSheet());
-        excludeRulesTabController.restoreDesktopSessionPath(s.excludeRulesPath());
-        if (nonBlank(s.mainRunWorkbook())) {
-            mainRunTabController.getWorkbookField().setText(s.mainRunWorkbook());
-        }
-        if (nonBlank(s.mainRunScriptDir())) {
-            mainRunTabController.getScriptDirField().setText(s.mainRunScriptDir());
+        if (!globalInitSettingOnly) {
+            planInputTabController.restoreDesktopSessionPaths(s.planInputPath(), s.planInputSheet());
+            stage1PreviewTabController.restoreDesktopSessionPaths(
+                    s.stage1PreviewPath(), s.stage1PreviewSheet());
+            excludeRulesTabController.restoreDesktopSessionPath(s.excludeRulesPath());
+            if (nonBlank(s.mainRunWorkbook())) {
+                mainRunTabController.getWorkbookField().setText(s.mainRunWorkbook());
+            }
+            if (nonBlank(s.mainRunScriptDir())) {
+                mainRunTabController.getScriptDirField().setText(s.mainRunScriptDir());
+            }
+            if (nonBlank(s.mainRunStage2ProductionPlan())
+                    || nonBlank(s.mainRunStage2MemberSchedule())) {
+                mainRunTabController.setStage2ArtifactPaths(
+                        nz(s.mainRunStage2ProductionPlan()),
+                        nz(s.mainRunStage2MemberSchedule()));
+            }
         }
         mainRunTabController.applyLogFontFromSession(s.logFontFamily(), s.logFontSize());
         List<String> runLogLines = restoreMainRunLogLines ? s.mainRunLogLines() : List.of();
@@ -1128,25 +1163,20 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                 restoreMainRunLogLines ? s.mainRunLogScroll() : Double.NaN;
         mainRunTabController.restoreRunLogUiFromSession(
                 s.mainRunLogFilter(), runLogLines, runLogScroll);
-        if (nonBlank(s.mainRunStage2ProductionPlan())
-                || nonBlank(s.mainRunStage2MemberSchedule())) {
-            mainRunTabController.setStage2ArtifactPaths(
-                    nz(s.mainRunStage2ProductionPlan()),
-                    nz(s.mainRunStage2MemberSchedule()));
+        if (!globalInitSettingOnly) {
+            mainRunTabController.applyTodayDispatchModeFromSession(
+                    s.mainRunStage2SkipTodayDispatch(), s.planInputTodayDispatch());
+            planInputTabController.applyStage2SkipGeminiApiFromSession(s.planInputStage2SkipGeminiApi());
+            planInputTabController.refreshNextDayDialogRadioCoupling();
+            planInputTabController.applyStage2NextDayDialogModeFromSession(
+                    s.planInputStage2NextDayDialogMode());
+            planInputTabController.applyComboSheetMayExceedNeedFromSession(
+                    s.planInputComboSheetMayExceedNeed());
+            mainRunTabController.applyStage2ResultBookFontFromSession(s.mainRunStage2ResultBookFont());
+            mainRunTabController.applyApplyLearnedSpeedFromActualsFromSession(
+                    s.mainRunApplyLearnedSpeedFromActuals());
+            mainRunTabController.applySkipGeminiApiFromSession(s.mainRunSkipGeminiApi());
         }
-        mainRunTabController.applyTodayDispatchModeFromSession(
-                s.mainRunStage2SkipTodayDispatch(), s.planInputTodayDispatch());
-        planInputTabController.applyStage2SkipGeminiApiFromSession(s.planInputStage2SkipGeminiApi());
-        planInputTabController.refreshNextDayDialogRadioCoupling();
-        planInputTabController.applyStage2NextDayDialogModeFromSession(
-                s.planInputStage2NextDayDialogMode());
-        planInputTabController.applyComboSheetMayExceedNeedFromSession(
-                s.planInputComboSheetMayExceedNeed());
-        mainRunTabController.applyStage2ResultBookFontFromSession(s.mainRunStage2ResultBookFont());
-        mainRunTabController.applyApplyLearnedSpeedFromActualsFromSession(
-                s.mainRunApplyLearnedSpeedFromActuals());
-        // AI API スキップはセッション復元する（変更時に保存）。全配台不要チェックのみ常に OFF 起動。
-        mainRunTabController.applySkipGeminiApiFromSession(s.mainRunSkipGeminiApi());
         /*
          * 設備ガントの apply は末尾で Canvas を再構築し personBadgeStyleResolverForGantt を参照する。
          * 担当バッジのセッション（グロー等）を先に適用しないと、起動直後の帯は既定スタイルで描かれる。
@@ -1558,7 +1588,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
 
         PlanWorkspaceSessionFragment frag = PlanWorkspaceSnapshotStore.readSessionFragment(entry);
         DesktopSessionState merged = frag.mergeOnto(collectDesktopSession());
-        applyDesktopSession(merged, false, true);
+        applyDesktopSession(merged, false, true, false);
         if (dispatchInteractiveTabController != null) {
             dispatchInteractiveTabController.reloadTableFromDiskAfterExternalUpdate();
         }
@@ -1659,7 +1689,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
             return;
         }
         TableColumnOrderPersistence.overwriteStoreRoot(tableColumnOrderRoot);
-        applyDesktopSession(state, true, true);
+        applyDesktopSession(state, true, true, false);
         applyDesktopThemeFromSession(state);
         refreshDesktopSessionDependentUi();
         persistDesktopSessionNow();
@@ -1712,7 +1742,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         if (pushButtonDesignTabController != null) {
             pushButtonDesignTabController.flushEditsBeforeSnapshot();
         }
-        DesktopSessionStateStore.save(collectDesktopSession());
+        DesktopSessionStateStore.save(collectDesktopSessionForGlobalPersistence());
     }
 
     @Override
@@ -1855,8 +1885,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
     }
 
     /**
-     * タブ・表・テーマ等をマージ済みバンドル既定へ戻し、環境タブはテンプレ既定へ戻す。実行パス・環境値のうちブートストラップ系は
-     * リセット後の環境タブから再収集する。
+     * タブ・表・テーマ等を {@code init_setting} 既定へ戻す（環境変数タブは対象外）。
      *
      * <p>適用完了後、{@link #schedulePersistUserSessionAfterGlobalFactoryReset()} でユーザーセッション
      * （{@code session-state.json}）へ保存する。
@@ -1867,7 +1896,8 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         dialog.setTitle("確認");
         dialog.setHeaderText(null);
         dialog.setContentText(
-                "タブ・表・テーマ等をバンドル既定に戻し、環境変数タブをテンプレートに戻します。"
+                "タブ・表・テーマ等を init_setting の既定に戻します。"
+                        + "環境変数タブは変更しません。"
                         + "誤操作防止のため、次のパスワードを入力してください。\nパスワード: 111");
         Optional<String> ans = dialog.showAndWait();
         if (ans.isEmpty() || !"111".equals(ans.get().trim())) {
@@ -1889,13 +1919,12 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
     /**
      * グローバル設定タブ「デフォルトに戻す」と同一の処理（確認ダイアログ・完了アラートなし）。
      *
-     * <p>ポータブル自動バージョンアップ完了後に呼び出し、バンドル／{@code init_setting} 既定へ UI を揃える。
+     * <p>環境変数タブは {@link #applyFactoryScopedGlobalAndEnvReset} では触らない。
      */
     private void performGlobalUiFactoryResetWithoutConfirmation(FactorySite factorySite) {
         FactorySite site = factorySite != null ? factorySite : FactorySite.KONAN;
         suppressEnvSessionPersistence.set(true);
         try {
-            applyEnvRowsFullBundledResetAndPersist(false, site);
             try {
                 Files.deleteIfExists(TableColumnOrderPersistence.userHomeStorePath());
             } catch (IOException ignored) {
@@ -1904,19 +1933,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
             PlanWorkspaceSnapshotStore.deleteAllSilently();
             WorkspaceCacheArchiveStore.deleteAllSilently();
             PushButtonCssEmitter.deleteUserOverridesFileSilently();
-
-            DesktopSessionState merged =
-                    DesktopSessionStateStore.buildFactoryResetSession(collectDesktopSession(), collectUiEnv());
-            /*
-             * 環境変数タブは直前の applyEnvRowsFullBundledResetAndPersist で既にテンプレ＋ブートストラップ済み。
-             * applyUiEnvRowsFromSession（true）でセッションを再適用すると、マージ JSON の uiEnvRows 欠落や
-             * 早期 return と相性が悪く、アップグレード直後に「初期化されていない」ように見えることがあるため false。
-             */
-            applyDesktopSession(merged, false, false);
-            applyFactoryRequestFormGlobalSettings(site, true);
-            TableColumnOrderPersistence.materializeTableColumnStoreAfterFactoryReset(collectUiEnv());
-            applyDesktopThemeFromSession(merged);
-            refreshDesktopSessionDependentUi();
+            applyGlobalInitSettingBeforeEnvReset(site);
             schedulePersistUserSessionAfterGlobalFactoryReset();
         } finally {
             suppressEnvSessionPersistence.set(false);
@@ -2704,6 +2721,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
             suppressMainShellTabChromeRefresh.set(false);
             installLazyMainShellTabContentForStartup();
             restoreActiveMainShellTabHeavyContentAfterLazyInstall();
+            applyRunTabGating();
         }
     }
 
@@ -2714,6 +2732,9 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
     private void restoreActiveMainShellTabHeavyContentAfterLazyInstall() {
         if (tabPane == null) {
             return;
+        }
+        if (isEnvVarsInitializationPending()) {
+            ensureMainShellEnvTabSelected();
         }
         Tab selected = tabPane.getSelectionModel().getSelectedItem();
         if (selected == null && !tabPane.getTabs().isEmpty()) {
@@ -3377,6 +3398,9 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                         .selectedItemProperty()
                         .addListener(
                                 (o, p, n) -> {
+                                    if (blockMainShellTabSelectionIfEnvInitPending()) {
+                                        return;
+                                    }
                                     if (!suppressLazyMainShellTabContentSwap.get()) {
                                         deferMainShellTabBranchHeavyContent(p);
                                         activateMainShellTabHeavyContentRecursive(n);
@@ -3392,7 +3416,9 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
             suppressEnvSessionPersistence.set(false);
         }
         refreshMainShellTabDisplayedTitles();
-        if (isPipelineRunLocked()
+        if (isEnvVarsInitializationPending()) {
+            ensureMainShellEnvTabSelected();
+        } else if (isPipelineRunLocked()
                 || activeRunStageScript != null
                 || activeDispatchTrialKind != null) {
             ensureMainShellRunTabSelected();
@@ -3406,6 +3432,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         lastEffectiveShellLeaf =
                 resolveEffectiveLeafTab(tabPane.getSelectionModel().getSelectedItem());
         Platform.runLater(this::refreshMainShellTabHeaderChromeFromStoredColors);
+        applyRunTabGating();
         return true;
     }
 
@@ -3963,22 +3990,27 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
 
     /** 工場ワークスペースの session 断片のみ適用（環境変数行は {@link #applyEnvRowsFullBundledResetAndPersist} 後に使う）。 */
     private void applyFactoryWorkspaceSessionFragment(FactorySiteWorkspaceSnapshot snapshot) {
+        applyFactoryWorkspaceSessionFragment(snapshot, false);
+    }
+
+    /**
+     * @param afterEnvInitialization {@code true} のとき環境変数初期化直後。ワークスペース内の env 系パス・{@code uiEnvRows} は載せない。
+     */
+    private void applyFactoryWorkspaceSessionFragment(
+            FactorySiteWorkspaceSnapshot snapshot, boolean afterEnvInitialization) {
         if (snapshot == null) {
             return;
         }
+        DesktopSessionState fragment = snapshot.sessionFragment();
+        if (afterEnvInitialization) {
+            fragment = fragment.withoutEnvInitializationFields();
+        }
         DesktopSessionState merged =
-                collectDesktopSession().mergeFactoryScopedFrom(snapshot.sessionFragment());
-        applyDesktopSession(merged, false, false);
-    }
-
-    private void applyInitSettingFactorySessionFragment(FactorySite site) {
-        DesktopSessionState initFragment =
-                DesktopSessionStateStore.buildFactoryResetSession(
-                                DesktopSessionState.empty(), collectUiEnv())
-                        .extractFactoryScopedFields();
-        DesktopSessionState merged = collectDesktopSession().mergeFactoryScopedFrom(initFragment);
-        applyDesktopSession(merged, false, false);
-        applyFactoryRequestFormGlobalSettings(site, false);
+                afterEnvInitialization
+                        ? collectDesktopSession()
+                                .mergeFactoryScopedFromPreservingEnvInitialization(fragment)
+                        : collectDesktopSession().mergeFactoryScopedFrom(fragment);
+        applyDesktopSession(merged, false, false, afterEnvInitialization);
     }
 
     private void notifyActiveMainShellTabAfterWorkspaceChange() {
@@ -4237,18 +4269,11 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
             return;
         }
         GlobalInitSettingTarget.save(site);
-        applyGlobalInitSettingBeforeEnvReset(site);
-        // 2) 環境変数を ui_ref 既定へ初期化（工場別 UNC 等も再適用）
-        applyEnvRowsFullBundledResetAndPersist(true, site);
+        applyFactoryScopedGlobalAndEnvReset(site, true);
         String operator = FactoryOperatorUserStore.sessionOperatorName();
         if (!operator.isBlank()) {
             FactorySiteWorkspaceStore.save(operator, site, buildFactorySiteWorkspaceSnapshot());
         }
-        appendLog(
-                "[env] "
-                        + site.displayLabelJa()
-                        + "のグローバル設定を適用し、環境変数を ui_ref 既定に戻しました。");
-        // 3) 依頼書原本フォルダ（未設定時のみ案内）
         maybePromptRequestFormOriginalDirIfUnset("[env]", site);
         // 4) 実行・ログタブへ遷移（ダイアログ後・タブ再構築後の自動遷移を打ち消す）
         ensureMainShellRunTabSelected();
@@ -4260,14 +4285,24 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
      * 環境変数初期化の直前に、指定工場のグローバル設定（{@code init_setting} 全体: タブ構成・テーマ・列順・依頼書設定など）を適用する。
      * {@link #confirmAndResetEnvRowsToDefaults()} の手順 1 と同一。環境変数行は {@code applyUiEnvRowsFromSession=false} で載せ替えない。
      */
+    /**
+     * 工場スコープのグローバル設定（{@code init_setting}）適用のあと、環境変数タブを ui_ref 既定へ戻す。
+     * バージョンアップ後・環境タブ「環境変数を初期化」・グローバル設定「デフォルトに戻す」で共通。
+     */
+    private void applyFactoryScopedGlobalAndEnvReset(FactorySite site, boolean persistSession) {
+        FactorySite effective = site != null ? site : FactorySite.KONAN;
+        applyGlobalInitSettingBeforeEnvReset(effective);
+        applyEnvRowsFullBundledResetAndPersist(persistSession, effective);
+    }
+
     private void applyGlobalInitSettingBeforeEnvReset(FactorySite site) {
         FactorySite effective = site != null ? site : FactorySite.KONAN;
         suppressEnvSessionPersistence.set(true);
         try {
             DesktopSessionState merged =
-                    DesktopSessionStateStore.buildFactoryResetSession(
-                            collectDesktopSession(), collectUiEnv(), effective);
-            applyDesktopSession(merged, false, false);
+                    DesktopSessionStateStore.buildFactoryResetSessionFromInitSettingOnly(
+                            collectUiEnv(), effective);
+            applyDesktopSession(merged, false, false, true);
             applyFactoryRequestFormGlobalSettings(effective, true);
             TableColumnOrderPersistence.materializeTableColumnStoreAfterFactoryReset(collectUiEnv());
             applyDesktopThemeFromSession(merged);
@@ -4281,6 +4316,39 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
             }
         } finally {
             suppressEnvSessionPersistence.set(false);
+        }
+        logGlobalInitSettingLoaded(effective);
+    }
+
+    private void logGlobalInitSettingLoaded(FactorySite site) {
+        FactorySite effective = site != null ? site : FactorySite.KONAN;
+        appendLog(
+                "[global-settings] グローバル設定を読み込みました（init_setting）。工場: "
+                        + effective.displayLabelJa());
+    }
+
+    private void logEnvVarsBundledReset(FactorySite site) {
+        FactorySite effective = site != null ? site : FactorySite.KONAN;
+        appendLog(
+                "[env] 環境変数を ui_ref 既定に初期化しました。工場: "
+                        + effective.displayLabelJa());
+    }
+
+    /**
+     * 環境変数初期化後: 配台除外 JSON・タスク入力ブック等を環境タブの値へ揃える（{@code session_defaults} の
+     * {@code excludeRulesPath} / {@code mainRunWorkbook} と環境タブの二重管理を解消）。
+     */
+    private void syncDesktopSessionPathFieldsFromEnvTab() {
+        Map<String, String> ui = collectUiEnv();
+        String exclude = envTabValueTrimmed(AppPaths.KEY_PM_AI_EXCLUDE_RULES_JSON);
+        if (!exclude.isEmpty() && excludeRulesTabController != null) {
+            excludeRulesTabController.restoreDesktopSessionPath(exclude);
+        }
+        if (mainRunTabController != null) {
+            AppPaths.resolveTaskInputWorkbook(ui)
+                    .map(Path::toString)
+                    .filter(s -> !s.isBlank())
+                    .ifPresent(mainRunTabController.getWorkbookField()::setText);
         }
     }
 
@@ -4354,6 +4422,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         ensureUiRefOptionalDisplayDefaultsVisible(collectUiEnv());
         applyRepoFolderPathNormalization();
         applyStage3UiVisibility();
+        syncDesktopSessionPathFieldsFromEnvTab();
         if (persistSession) {
             DesktopSessionStateStore.save(collectDesktopSessionForGlobalPersistence());
         }
@@ -4362,6 +4431,8 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         uiEnvSaveDebounce.stop();
         EnvVarsInitializedAtStore.recordNow();
         refreshEnvVarsInitializedAtToolbarLabel();
+        applyRunTabGating();
+        logEnvVarsBundledReset(factorySite);
     }
 
     private void refreshEnvVarsInitializedAtToolbarLabel() {
@@ -4370,6 +4441,43 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         }
         envVarsInitializedAtLabel.setText(
                 "環境変数初期化: " + EnvVarsInitializedAtStore.formatForToolbar());
+    }
+
+    private boolean isEnvVarsInitializationPending() {
+        if (deferOperatorPromptForPortableUpgrade.get()) {
+            return false;
+        }
+        return !EnvVarsInitializedAtStore.isRecorded();
+    }
+
+    /**
+     * 環境変数初期化未記録時、環境変数葉以外へ遷移しようとしたら戻す。
+     *
+     * @return ブロックして環境変数タブへ戻したとき {@code true}
+     */
+    private boolean blockMainShellTabSelectionIfEnvInitPending() {
+        if (suppressEnvVarsInitTabGuard.get()
+                || !isEnvVarsInitializationPending()
+                || mainShellTabEnv == null
+                || tabPane == null) {
+            return false;
+        }
+        Tab effective =
+                resolveEffectiveLeafTab(tabPane.getSelectionModel().getSelectedItem());
+        Tab envLeaf = mainShellTabFor(MainShellTabId.ENV);
+        if (effective == envLeaf) {
+            return false;
+        }
+        suppressEnvVarsInitTabGuard.set(true);
+        try {
+            ensureMainShellEnvTabSelected();
+            appendLog(
+                    "[env] 環境変数の初期化が未完了のため、環境変数タブ以外は操作できません。"
+                            + "環境変数タブの「環境変数を初期化」を実行してください。");
+        } finally {
+            suppressEnvVarsInitTabGuard.set(false);
+        }
+        return true;
     }
 
     void appendBootMessage() {
@@ -5404,6 +5512,8 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
             planInputStage3TabController.setStageRunProgressVisible(stage1Running, pipelineBusy);
         }
         updateShellStageProgressOverlay(script, activeDispatchTrialKind);
+        boolean envInitPending = isEnvVarsInitializationPending();
+        applyEnvVarsInitToolbarGating(envInitPending);
         if (tabPane == null) {
             return;
         }
@@ -5411,6 +5521,13 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         if (tabs.isEmpty()) {
             return;
         }
+        if (envInitPending) {
+            Tab envLeaf = mainShellTabFor(MainShellTabId.ENV);
+            MainShellRunTabGating.applyEnvInitPending(tabPane, envLeaf);
+            ensureMainShellEnvTabSelected();
+            return;
+        }
+        MainShellRunTabGating.clearDisableRecursive(tabPane);
         MainShellRunTabGating.apply(
                 tabPane,
                 pipelineBusy,
@@ -5419,6 +5536,54 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         if (pipelineBusy) {
             // リモートデスクトップ等「操作可能」葉への自動遷移を許容せず実行・ログへ固定する
             ensureMainShellRunTabSelected();
+        }
+    }
+
+    private void applyEnvVarsInitToolbarGating(boolean pending) {
+        if (themeCombo != null) {
+            themeCombo.setDisable(pending);
+        }
+        if (dispatchUsageGuideButton != null) {
+            dispatchUsageGuideButton.setDisable(pending);
+        }
+    }
+
+    /** 環境変数 ui_ref 既定への初期化が未記録のときのみ操作可能なメインシェル葉タブ。 */
+    private boolean isMainShellLeafOperableDuringEnvVarsInit(Tab t) {
+        return t == mainShellTabEnv;
+    }
+
+    /**
+     * 「環境変数」葉タブを確実に選択する（初期化未記録時の操作制限用）。
+     */
+    private void ensureMainShellEnvTabSelected() {
+        Tab envLeaf = mainShellTabFor(MainShellTabId.ENV);
+        if (tabPane == null || envLeaf == null) {
+            return;
+        }
+        Runnable select =
+                () -> {
+                    if (!selectShellTabLeaf(envLeaf)) {
+                        selectMainShellTabRecursive(tabPane, MainShellTabId.ENV);
+                    }
+                    Tab effective =
+                            resolveEffectiveLeafTab(
+                                    tabPane.getSelectionModel().getSelectedItem());
+                    if (effective != envLeaf) {
+                        selectShellTabLeaf(envLeaf);
+                    }
+                    if (!suppressLazyMainShellTabContentSwap.get()) {
+                        activateMainShellTabHeavyContentRecursive(
+                                tabPane.getSelectionModel().getSelectedItem());
+                    }
+                    MainShellRunTabGating.enableOperableSubtree(envLeaf);
+                    lastEffectiveShellLeaf = envLeaf;
+                };
+        if (Platform.isFxApplicationThread()) {
+            select.run();
+            Platform.runLater(select);
+        } else {
+            Platform.runLater(select);
         }
     }
 
@@ -6239,7 +6404,6 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
             }
         }
         GlobalInitSettingTarget.save(site);
-        applyFactoryRequestFormGlobalSettings(site, false);
         if (globalSettingsTabController != null) {
             globalSettingsTabController.refreshInitSettingTargetComboFromStore();
         }
@@ -6312,6 +6476,10 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
      */
     public void selectMainShellTab(MainShellTabId id) {
         if (tabPane == null || id == null) {
+            return;
+        }
+        if (isEnvVarsInitializationPending() && id != MainShellTabId.ENV) {
+            ensureMainShellEnvTabSelected();
             return;
         }
         if (id == MainShellTabId.RUN) {
@@ -6489,8 +6657,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
             if (loaded.isPresent()) {
                 applyFactoryWorkspaceSnapshot(loaded.get());
             } else {
-                applyEnvRowsFullBundledResetAndPersist(false, newSite);
-                applyInitSettingFactorySessionFragment(newSite);
+                applyFactoryScopedGlobalAndEnvReset(newSite, false);
             }
             applyRepoFolderPathNormalization();
             refreshFactoryDependentTabs(newSite, true);
@@ -6557,6 +6724,17 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
     @Override
     public void requireOperatorSelectionForFactory(FactorySite site, boolean startup) {
         OperatorUserSelectionSupport.requireOperatorSelectionForFactory(this, site, startup);
+    }
+
+    @Override
+    public void changeSessionOperator(FactorySite site) {
+        OperatorUserSelectionSupport.changeSessionOperator(this, site);
+        scheduleDesktopSessionSave();
+    }
+
+    /** 実行・ログタブなどから、現在の工場向けに操作者を変更する。 */
+    public void changeSessionOperator() {
+        changeSessionOperator(GlobalInitSettingTarget.load());
     }
 
     private Optional<String> promptAndVerifyOperatorPin(FactorySite factory, String operatorName) {
@@ -8731,11 +8909,11 @@ public PlanInputTabController planInputTabControllerForDispatchRollUnit() {
             DesktopSessionStateStore.save(collectDesktopSession());
             Files.deleteIfExists(marker);
             appendLog(
-                    "[startup] 初回起動: 環境変数を初期化し（工場既定="
-                            + firstLaunchSite.displayLabelJa()
-                            + "）、"
+                    "[startup] 初回起動: "
                             + AppPaths.PORTABLE_FIRST_LAUNCH_MARKER_FILE
-                            + " を削除しました。");
+                            + " を削除しました（工場既定="
+                            + firstLaunchSite.displayLabelJa()
+                            + "）。");
         } catch (Exception ex) {
             appendLog(
                     "[startup] 初回起動の環境変数初期化に失敗（"
@@ -9100,9 +9278,15 @@ public PlanInputTabController planInputTabControllerForDispatchRollUnit() {
                     wait.close();
                     if (deferredDesktopRelaunch.get()) {
                         try {
-                            applyPortableUpgradeBundledPolicyFromPmAiData(localData);
-                            applyBundledPortableDefaultsIfPresent();
-                            PortableBundleUpgradeFollowUp.writePending(cwd, canonVerStr, upgradeFactorySite);
+                            finishPortableUpgradeWithFactorySitePrompt(
+                                    cwd,
+                                    localData,
+                                    filesSynced.get(),
+                                    fileLog,
+                                    "（デスクトップ本体再起動前に環境を反映）",
+                                    Optional.of(canonical));
+                            PortableBundleUpgradeFollowUp.writePending(
+                                    cwd, canonVerStr, upgradeFactorySite);
                             showPortableUpgradeDeferredRestartDialog(canonVerStr);
                             long pid = ProcessHandle.current().pid();
                             Path staging = PortableBundlePendingUpdate.defaultStagingDirectory();
@@ -9117,7 +9301,7 @@ public PlanInputTabController planInputTabControllerForDispatchRollUnit() {
                                     this::appendLog);
                             appendLog(
                                     "[startup] デスクトップ本体を適用するため終了します（pmd-apply-portable-update.ps1 が再起動します）。"
-                                            + " 再起動後に工場設定を維持して環境を反映します。");
+                                            + " 環境変数・グローバル設定は反映済みです。");
                             fileLogLine(fileLog, "[startup] deferred desktop apply launched");
                             if (fileLog != null) {
                                 fileLog.close(true, "deferred desktop apply");
@@ -9129,6 +9313,13 @@ public PlanInputTabController planInputTabControllerForDispatchRollUnit() {
                                     "[startup] デスクトップ本体の終了後更新の起動に失敗: "
                                             + ex.getMessage());
                             fileLogLine(fileLog, "[startup] deferred launch failed: " + ex.getMessage());
+                            finishPortableUpgradeWithFactorySitePrompt(
+                                    cwd,
+                                    localData,
+                                    filesSynced.get(),
+                                    fileLog,
+                                    "（本体再起動の起動に失敗したため、同期直後に環境を反映）",
+                                    Optional.of(canonical));
                         }
                         return;
                     }
@@ -9238,6 +9429,8 @@ public PlanInputTabController planInputTabControllerForDispatchRollUnit() {
         skipOperatorPromptAfterPortableUpgrade.set(true);
         deferOperatorPromptForPortableUpgrade.set(false);
         String operator = FactoryOperatorUserStore.sessionOperatorName();
+        applyFactoryScopedGlobalAndEnvReset(siteAfterUpgrade, true);
+        applyBundledPortableDefaultsIfPresent();
         Optional<FactorySiteWorkspaceSnapshot> workspace = Optional.empty();
         if (!operator.isBlank()) {
             FactorySiteWorkspaceMigrator.migrateIfNeeded(
@@ -9249,12 +9442,12 @@ public PlanInputTabController planInputTabControllerForDispatchRollUnit() {
             FactorySiteWorkspaceStore.warmMemoryCacheFromDisk(operator);
             workspace = FactorySiteWorkspaceStore.load(operator, siteAfterUpgrade);
         }
-        applyGlobalInitSettingBeforeEnvReset(siteAfterUpgrade);
-        applyEnvRowsFullBundledResetAndPersist(false, siteAfterUpgrade);
         if (workspace.isPresent()) {
-            applyFactoryWorkspaceSessionFragment(workspace.get());
-        } else {
-            applyInitSettingFactorySessionFragment(siteAfterUpgrade);
+            applyFactoryWorkspaceSessionFragment(workspace.get(), true);
+        }
+        if (!operator.isBlank()) {
+            FactorySiteWorkspaceStore.save(
+                    operator, siteAfterUpgrade, buildFactorySiteWorkspaceSnapshot());
         }
         applyPortableUpgradeShellUiSnapshotIfPresent();
         applyRepoFolderPathNormalization();
@@ -9268,9 +9461,10 @@ public PlanInputTabController planInputTabControllerForDispatchRollUnit() {
         mainRunTabController.refreshFactorySiteLogo();
         refreshFactorySiteComboPresentation();
         PortableBundleUpgradeFollowUp.clear();
+        refreshEnvVarsInitializedAtToolbarLabel();
+        applyRunTabGating();
         String completion =
                 "[startup] ポータル同期が完了しました（version.txt・pm-ai-data／init_setting をリポジトリへ反映）。"
-                        + "グローバル設定を適用し、環境変数を ui_ref 既定に初期化しました。"
                         + "タブ配置を維持して反映しました。"
                         + " 工場既定: "
                         + siteAfterUpgrade.displayLabelJa()

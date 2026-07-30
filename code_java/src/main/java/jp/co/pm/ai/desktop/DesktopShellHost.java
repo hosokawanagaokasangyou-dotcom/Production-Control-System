@@ -20,6 +20,11 @@ public interface DesktopShellHost {
 
     void requireOperatorSelectionForFactory(FactorySite site, boolean startup);
 
+    /**
+     * セッション中の操作者を変更する（起動時・工場切替とは別フロー。既に操作者がいる場合も選択ダイアログを出す）。
+     */
+    void changeSessionOperator(FactorySite site);
+
     void refreshOperatorUserPresentation();
 
     /** 操作者変更後にリモートデスクトップタブの RPA設定 ini パス表示・読込を同期する。 */

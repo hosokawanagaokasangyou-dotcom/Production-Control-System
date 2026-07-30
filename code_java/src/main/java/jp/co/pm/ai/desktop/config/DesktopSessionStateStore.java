@@ -11,6 +11,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -35,6 +36,23 @@ import jp.co.pm.ai.planning.stage2.Stage2NextDayDialogMode;
 public final class DesktopSessionStateStore {
 
     private static final ObjectMapper JSON = new ObjectMapper();
+
+    /**
+     * 環境変数初期化の正本は環境タブ（{@code ui_ref}＋工場コード既定）。グローバル設定（{@code init_setting}）の
+     * {@code session_defaults*.json} には含めない JSON キー。
+     */
+    public static final Set<String> ENV_INITIALIZATION_SESSION_JSON_KEYS =
+            Set.of("uiEnvRows", "excludeRulesPath", "mainRunWorkbook", "mainRunScriptDir");
+
+    /** {@link #ENV_INITIALIZATION_SESSION_JSON_KEYS} をセッション JSON から除去する。 */
+    public static void removeEnvInitializationFieldsFromSessionJson(ObjectNode root) {
+        if (root == null) {
+            return;
+        }
+        for (String key : ENV_INITIALIZATION_SESSION_JSON_KEYS) {
+            root.remove(key);
+        }
+    }
 
     private static Path storePath() {
         return AppPaths.resolveSessionStateStorePath();
@@ -242,13 +260,35 @@ public final class DesktopSessionStateStore {
      */
     public static DesktopSessionState buildFactoryResetSession(
             DesktopSessionState bootstrap, Map<String, String> ui, FactorySite factorySite) {
+        return buildFactoryResetSessionFromInitSettingOnly(ui, factorySite)
+                .withBootstrapFieldsFrom(bootstrap);
+    }
+
+    /**
+     * {@code init_setting} マージ結果のみ（現行セッションの上書きなし）。
+     *
+     * <p>グローバル設定読み込み → 環境変数初期化の順では、パス類の正本は環境タブ（{@code ui_ref}＋工場コード既定）のため、
+     * グローバル適用は UI セッション（タブ・テーマ・ガント等）に限定し {@code withBootstrapFieldsFrom} は使わない。
+     * {@code session_defaults*.json} 内の {@code uiEnvRows} はレガシーで、本メソッド経由では環境タブへ載せない。
+     */
+    public static DesktopSessionState buildFactoryResetSessionFromInitSettingOnly(
+            Map<String, String> ui, FactorySite factorySite) {
         JsonNode merged = readMergedSessionUiDefaultsNode(ui, factorySite);
         ObjectNode root =
                 merged != null && merged.isObject()
-                        ? (ObjectNode) merged
+                        ? ((ObjectNode) merged).deepCopy()
                         : JSON.createObjectNode();
-        DesktopSessionState factory = parseDesktopSessionState(root);
-        return factory.withBootstrapFieldsFrom(bootstrap);
+        removeEnvInitializationFieldsFromSessionJson(root);
+        return parseDesktopSessionState(root);
+    }
+
+    /**
+     * {@code init_setting} 向け書き出し。環境変数初期化の正本（{@link #ENV_INITIALIZATION_SESSION_JSON_KEYS}）は含めない。
+     */
+    public static ObjectNode toJsonObjectForGlobalInitSetting(DesktopSessionState state) {
+        ObjectNode root = toJsonObject(state);
+        removeEnvInitializationFieldsFromSessionJson(root);
+        return root;
     }
 
     /** {@link #save(DesktopSessionState)} と同一形状の JSON（{@code init_setting} 書き出し用）。 */
@@ -332,6 +372,9 @@ public final class DesktopSessionStateStore {
             Iterator<String> fn = bo.fieldNames();
             while (fn.hasNext()) {
                 String k = fn.next();
+                if (ENV_INITIALIZATION_SESSION_JSON_KEYS.contains(k)) {
+                    continue;
+                }
                 JsonNode v = bo.get(k);
                 if (v != null) {
                     root.set(k, v.deepCopy());

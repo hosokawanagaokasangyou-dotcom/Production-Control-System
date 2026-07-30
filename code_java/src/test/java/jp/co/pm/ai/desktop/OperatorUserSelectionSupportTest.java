@@ -146,6 +146,37 @@ class OperatorUserSelectionSupportTest {
         assertEquals("製造2課", FactoryOperatorUserStore.sessionRdpDepartmentKey());
     }
 
+    @Test
+    void mainRunTabFxml_hasChangeSessionOperatorButton() throws Exception {
+        Path fxml = Path.of("src/main/resources/jp/co/pm/ai/desktop/fxml/MainRunTab.fxml");
+        String text = Files.readString(fxml, StandardCharsets.UTF_8);
+        assertTrue(text.contains("changeSessionOperatorButton"));
+        assertTrue(text.contains("操作者変更"));
+    }
+
+    @Test
+    void productionOperatorChange_cancelRestoresSession(@TempDir Path tmp) throws Exception {
+        Path customDir = tmp.resolve("factory-user-store");
+        System.setProperty(
+                "pm.ai.test.factoryOperatorUserStore",
+                customDir.resolve("operators.bin").toString());
+        System.setProperty(
+                "pm.ai.test.factoryOperatorLastSelectedDir", tmp.resolve("last-selected").toString());
+        FactoryOperatorUserStore.resetStoreForTests();
+        FactoryOperatorUserStore.configureForCurrentApp(Map.of(), FactorySite.KONAN);
+        FactoryOperatorUserStore.addName(FactorySite.KONAN, "operatorA");
+        FactoryOperatorUserStore.addName(FactorySite.KONAN, "operatorB");
+        FactoryOperatorUserStore.selectSessionOperator(FactorySite.KONAN, "operatorA");
+
+        OperatorUserSelectionSupport.performProductionOperatorChange(
+                new StubHost(),
+                FactorySite.KONAN,
+                "operatorA",
+                (host, factory) -> Optional.empty());
+
+        assertEquals("operatorA", FactoryOperatorUserStore.sessionOperatorName());
+    }
+
     private static void configureRdpStore(Path tmp, String... departments) throws Exception {
         Path customDir = tmp.resolve("rdp-user-store");
         Map<String, String> ui =
@@ -181,6 +212,9 @@ class OperatorUserSelectionSupportTest {
 
         @Override
         public void requireOperatorSelectionForFactory(FactorySite site, boolean startup) {}
+
+        @Override
+        public void changeSessionOperator(FactorySite site) {}
 
         @Override
         public void refreshOperatorUserPresentation() {}

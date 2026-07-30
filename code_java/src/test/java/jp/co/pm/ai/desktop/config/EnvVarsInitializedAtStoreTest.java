@@ -39,6 +39,7 @@ class EnvVarsInitializedAtStoreTest {
     @Test
     void load_emptyWhenMissing() {
         assertFalse(EnvVarsInitializedAtStore.load().isPresent());
+        assertFalse(EnvVarsInitializedAtStore.isRecorded());
         assertEquals("—", EnvVarsInitializedAtStore.formatForToolbar());
     }
 
@@ -51,6 +52,7 @@ class EnvVarsInitializedAtStoreTest {
                 fixed.toString(),
                 StandardCharsets.UTF_8);
         assertEquals(fixed, EnvVarsInitializedAtStore.load().orElseThrow());
+        assertTrue(EnvVarsInitializedAtStore.isRecorded());
         assertTrue(EnvVarsInitializedAtStore.formatForToolbar().contains("2026"));
     }
 }

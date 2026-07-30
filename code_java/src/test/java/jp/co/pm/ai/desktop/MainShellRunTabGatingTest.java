@@ -97,29 +97,31 @@ class MainShellRunTabGatingTest {
     }
 
     @Test
-    void prefersRunOverRemoteWhenBusyDisablesCurrentSelection() throws Exception {
+    void envInitPendingKeepsEnvLeafOperableWhenBlockedSiblingWasSelected() throws Exception {
         CountDownLatch completed = new CountDownLatch(1);
         AtomicReference<AssertionError> failure = new AtomicReference<>();
         Platform.runLater(
                 () -> {
                     try {
+                        Tab env = new Tab("env");
+                        env.setContent(new javafx.scene.layout.Pane());
                         Tab blocked = new Tab("blocked");
-                        Tab remote = new Tab("remote");
-                        Tab run = new Tab("run");
-                        // remote が run より前にあると、無効化時の自動遷移先になりやすい
-                        TabPane outer = new TabPane(blocked, remote, run);
-                        outer.getSelectionModel().select(blocked);
+                        blocked.setContent(new javafx.scene.layout.Pane());
+                        TabPane inner = new TabPane(blocked, env);
+                        inner.getSelectionModel().select(blocked);
+                        Tab group = new Tab("group", inner);
+                        Tab other = new Tab("other");
+                        TabPane outer = new TabPane(group, other);
 
-                        MainShellRunTabGating.apply(
-                                outer,
-                                true,
-                                tab -> tab == run || tab == remote,
-                                run);
+                        MainShellRunTabGating.applyEnvInitPending(outer, env);
 
-                        assertEquals(run, outer.getSelectionModel().getSelectedItem());
-                        assertTrue(blocked.isDisable());
-                        assertFalse(run.isDisable());
-                        assertFalse(remote.isDisable());
+                        assertFalse(group.isDisable());
+                        assertFalse(env.isDisable());
+                        assertFalse(env.getContent().isDisable());
+                        assertFalse(blocked.isDisable());
+                        assertFalse(other.isDisable());
+                        assertEquals(env, inner.getSelectionModel().getSelectedItem());
+                        assertEquals(group, outer.getSelectionModel().getSelectedItem());
                     } catch (AssertionError error) {
                         failure.set(error);
                     } finally {

@@ -1122,7 +1122,7 @@ public final class OperatorUserManagementTabController {
         if (shell == null) {
             return;
         }
-        shell.requireOperatorSelectionForFactory(effectiveAppFactory(), false);
+        shell.changeSessionOperator(effectiveAppFactory());
         refreshPresentation();
     }
 
