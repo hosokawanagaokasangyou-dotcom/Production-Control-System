@@ -44,7 +44,8 @@
     </HBox>
     <Label fx:id="stage1GateLabel" wrapText="true"
            styleClass="pipeline-check-stage1-gate-label"/>
-    <Label fx:id="hintLabel" wrapText="true"/>
+    <Label fx:id="hintLabel" wrapText="true"
+           style="-fx-font-size: 11px; -fx-text-fill: #555555;"/>
     <Label fx:id="aladdinPlanSourceLabel" wrapText="true"
            style="-fx-font-size: 10px; -fx-text-fill: #555555;"/>
     <Label fx:id="dailyReportSourceLabel" wrapText="true"

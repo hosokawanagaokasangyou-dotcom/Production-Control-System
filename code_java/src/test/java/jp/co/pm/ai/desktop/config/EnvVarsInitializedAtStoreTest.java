@@ -8,6 +8,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.Map;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -54,5 +55,67 @@ class EnvVarsInitializedAtStoreTest {
         assertEquals(fixed, EnvVarsInitializedAtStore.load().orElseThrow());
         assertTrue(EnvVarsInitializedAtStore.isRecorded());
         assertTrue(EnvVarsInitializedAtStore.formatForToolbar().contains("2026"));
+    }
+
+    @Test
+    void envFingerprint_roundTrip() {
+        Map<String, String> env =
+                Map.of(
+                        "PM_AI_REPO_ROOT",
+                        "C:\\repo",
+                        "PM_AI_OUTPUT_DIR",
+                        "",
+                        "B_KEY",
+                        "2",
+                        "A_KEY",
+                        "1");
+        EnvVarsInitializedAtStore.recordEnvFingerprint(env, k -> k.startsWith("PM_AI_"));
+        assertTrue(EnvVarsInitializedAtStore.envFingerprintMatches(env, k -> k.startsWith("PM_AI_")));
+        assertFalse(
+                EnvVarsInitializedAtStore.envFingerprintMatches(
+                        Map.of("PM_AI_REPO_ROOT", "C:\\other"), k -> k.startsWith("PM_AI_")));
+    }
+
+    @Test
+    void matchesRecordedBaselineForKeys_ignoresRdpDrift() throws Exception {
+        Map<String, String> baseline =
+                Map.of(
+                        AppPaths.KEY_PM_AI_REPO_ROOT,
+                        "C:\\repo",
+                        AppPaths.KEY_PM_AI_REQUEST_FORM_RDP_PROFILE,
+                        "");
+        EnvVarsInitializedAtStore.recordEnvFingerprint(baseline, k -> true);
+        Map<String, String> current =
+                Map.of(
+                        AppPaths.KEY_PM_AI_REPO_ROOT,
+                        "C:\\repo",
+                        AppPaths.KEY_PM_AI_REQUEST_FORM_RDP_PROFILE,
+                        "C:\\signed.rdp");
+        assertTrue(
+                EnvVarsInitializedAtStore.matchesRecordedBaselineForKeys(
+                        current,
+                        k -> !RemoteDesktopEnvRows.excludedFromMainShellEnvInitFingerprint(k)));
+    }
+
+    @Test
+    void envFingerprint_ignoresRdpTabKeys() {
+        Map<String, String> baseline =
+                Map.of(
+                        AppPaths.KEY_PM_AI_REPO_ROOT,
+                        "C:\\repo",
+                        AppPaths.KEY_PM_AI_REQUEST_FORM_RDP_PROFILE,
+                        "");
+        EnvVarsInitializedAtStore.recordEnvFingerprint(baseline, k -> true);
+        Map<String, String> afterRdpVisit =
+                Map.of(
+                        AppPaths.KEY_PM_AI_REPO_ROOT,
+                        "C:\\repo",
+                        AppPaths.KEY_PM_AI_REQUEST_FORM_RDP_PROFILE,
+                        "C:\\profiles\\signed.rdp");
+        assertTrue(
+                EnvVarsInitializedAtStore.envFingerprintMatches(
+                        afterRdpVisit,
+                        k ->
+                                !RemoteDesktopEnvRows.excludedFromMainShellEnvInitFingerprint(k)));
     }
 }

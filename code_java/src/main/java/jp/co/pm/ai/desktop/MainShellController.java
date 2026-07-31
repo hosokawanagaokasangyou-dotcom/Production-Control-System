@@ -104,6 +104,7 @@ import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.config.PipelineDownstreamResultsClearer;
 import jp.co.pm.ai.desktop.config.PipelineLocalResultsPolicy;
 import jp.co.pm.ai.desktop.config.PlanningCoreMaterialTableAppendProbe;
+import jp.co.pm.ai.desktop.config.RemoteDesktopEnvRows;
 import jp.co.pm.ai.desktop.config.RemoteSupportLogArchive;
 import jp.co.pm.ai.desktop.config.SharedPipelineResultsCleaner;
 import jp.co.pm.ai.desktop.config.Stage1AiCacheClearer;
@@ -127,6 +128,7 @@ import jp.co.pm.ai.desktop.config.FactorySiteWorkspaceStore;
 import jp.co.pm.ai.desktop.config.PortableBundleUpgradeUiSnapshot;
 import jp.co.pm.ai.desktop.config.GeminiDispatchModelTryOrderDefaults;
 import jp.co.pm.ai.desktop.config.EnvVarsInitializedAtStore;
+import jp.co.pm.ai.desktop.config.EnvVarsInitialTemplate;
 import jp.co.pm.ai.desktop.config.GlobalInitSettingTarget;
 import jp.co.pm.ai.desktop.config.DesktopTheme;
 import jp.co.pm.ai.desktop.config.PushButtonCssEmitter;
@@ -669,6 +671,12 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
      * ポータル自動バージョンアップ実行中は、起動時の操作者ダイアログと依頼書原本フォルダ案内を出さない。
      */
     private final AtomicBoolean deferOperatorPromptForPortableUpgrade = new AtomicBoolean(false);
+
+    /** 起動時点で環境変数タブの値が初期化テンプレートと一致しなかったとき {@code true}（セッション中は再評価しない）。 */
+    private final AtomicBoolean envVarsDifferFromInitialAtStartup = new AtomicBoolean(false);
+
+    /** 起動時の環境変数テンプレート照合が完了したら {@code true}（完了前は初期化済みでも保守的にブロック）。 */
+    private final AtomicBoolean envVarsStartupCheckCompleted = new AtomicBoolean(false);
 
     /**
      * バージョンアップ後処理で操作者を復元済みなら、同起動での操作者ダイアログと依頼書原本フォルダ案内を省略する。
@@ -3738,6 +3746,12 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                 || DROPPED_ENV_TAB_ROW_KEYS.contains(k);
     }
 
+    /** 環境変数初期化フィンガープリント照合に含めるキー（RDP タブが更新する実行時設定は除外）。 */
+    private static boolean includeInEnvInitFingerprint(String name) {
+        return !omitEnvRowKey(name)
+                && !RemoteDesktopEnvRows.excludedFromMainShellEnvInitFingerprint(name);
+    }
+
     private List<UiEnvRowSnapshot> snapshotUiEnvRows() {
         if (envRows == null) {
             return List.of();
@@ -3986,6 +4000,20 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         ensureBootstrapDefaultValuesVisible(collectUiEnv());
         ensureUiRefOptionalDisplayDefaultsVisible(collectUiEnv());
         applyFactoryWorkspaceSessionFragment(snapshot);
+        applyRepoFolderPathNormalization();
+    }
+
+    /**
+     * 環境変数初期化完了時点のタブ値を工場ワークスペースと session-state に保存する。
+     * {@link #recordEnvInitializationBaseline()} の直前に呼び、フィンガープリントと復元元を揃える。
+     */
+    private void persistOperatorWorkspaceForEnvInitBaseline(FactorySite site) {
+        stabilizeEnvRowsForInitializationBaseline();
+        String operator = FactoryOperatorUserStore.sessionOperatorName();
+        if (!operator.isBlank() && site != null && site != FactorySite.RDP_LAUNCHER) {
+            FactorySiteWorkspaceStore.save(operator, site, buildFactorySiteWorkspaceSnapshot());
+        }
+        DesktopSessionStateStore.save(collectDesktopSessionForGlobalPersistence());
     }
 
     /** 工場ワークスペースの session 断片のみ適用（環境変数行は {@link #applyEnvRowsFullBundledResetAndPersist} 後に使う）。 */
@@ -4096,21 +4124,24 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                 collectUiEnv());
         FactorySiteWorkspaceStore.warmMemoryCacheFromDisk(operator);
         Optional<FactorySite> last = FactorySiteWorkspaceStore.loadLastFactorySite(operator);
-        if (last.isEmpty() || last.get() == current) {
-            return;
-        }
-        FactorySite target = last.get();
-        Map<String, String> ui = collectUiEnv();
-        FactoryOperatorUserStore.configureForCurrentApp(ui, target);
-        if (!FactorySiteOperatorAccess.isSessionOperatorAllowedForFactory(ui, target)) {
-            String reason = FactorySiteOperatorAccess.comboBlockReasonJa(ui, target);
-            if (!reason.isBlank()) {
-                appendLog("[startup] 前回工場の復元をスキップ: " + reason);
+        if (last.isPresent() && last.get() != current) {
+            FactorySite target = last.get();
+            Map<String, String> ui = collectUiEnv();
+            FactoryOperatorUserStore.configureForCurrentApp(ui, target);
+            if (!FactorySiteOperatorAccess.isSessionOperatorAllowedForFactory(ui, target)) {
+                String reason = FactorySiteOperatorAccess.comboBlockReasonJa(ui, target);
+                if (!reason.isBlank()) {
+                    appendLog("[startup] 前回工場の復元をスキップ: " + reason);
+                }
+                FactoryOperatorUserStore.configureForCurrentApp(ui, current);
+            } else {
+                switchActiveFactorySite(target, true);
+                return;
             }
-            FactoryOperatorUserStore.configureForCurrentApp(ui, current);
-            return;
         }
-        switchActiveFactorySite(target, true);
+        Optional<FactorySiteWorkspaceSnapshot> ws =
+                FactorySiteWorkspaceStore.load(operator, current);
+        ws.ifPresent(this::applyFactoryWorkspaceSnapshot);
     }
 
     private void applyPortableUpgradeShellUiSnapshotIfPresent() {
@@ -4270,11 +4301,9 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         }
         GlobalInitSettingTarget.save(site);
         applyFactoryScopedGlobalAndEnvReset(site, true);
-        String operator = FactoryOperatorUserStore.sessionOperatorName();
-        if (!operator.isBlank()) {
-            FactorySiteWorkspaceStore.save(operator, site, buildFactorySiteWorkspaceSnapshot());
-        }
         maybePromptRequestFormOriginalDirIfUnset("[env]", site);
+        persistOperatorWorkspaceForEnvInitBaseline(site);
+        recordEnvInitializationBaseline();
         // 4) 実行・ログタブへ遷移（ダイアログ後・タブ再構築後の自動遷移を打ち消す）
         ensureMainShellRunTabSelected();
         requireOperatorSelectionForFactory(site, false);
@@ -4430,6 +4459,8 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         mainRunTabController.refreshOpenWorkbookHintLabels();
         uiEnvSaveDebounce.stop();
         EnvVarsInitializedAtStore.recordNow();
+        envVarsDifferFromInitialAtStartup.set(false);
+        envVarsStartupCheckCompleted.set(true);
         refreshEnvVarsInitializedAtToolbarLabel();
         applyRunTabGating();
         logEnvVarsBundledReset(factorySite);
@@ -4447,7 +4478,94 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         if (deferOperatorPromptForPortableUpgrade.get()) {
             return false;
         }
-        return !EnvVarsInitializedAtStore.isRecorded();
+        if (!EnvVarsInitializedAtStore.isRecorded()) {
+            return true;
+        }
+        if (!envVarsStartupCheckCompleted.get()) {
+            return true;
+        }
+        return envVarsDifferFromInitialAtStartup.get();
+    }
+
+    /**
+     * 操作者選択・工場ワークスペース復元の後に、環境変数タブの値を初期化テンプレートと一度だけ照合する。
+     */
+    private void completeEnvVarsStartupCheck() {
+        if (envVarsStartupCheckCompleted.get()) {
+            return;
+        }
+        stabilizeEnvRowsForInitializationBaseline();
+        evaluateEnvVarsDifferFromInitialAtStartup();
+        applyRunTabGating();
+        if (!isEnvVarsInitializationPending()) {
+            ensureMainShellRunTabSelected();
+        }
+    }
+
+    /** 初期化記録・起動時照合の直前に、環境変数タブの表示値を安定化する（ブートストラップ補完・表示既定・フォルダ正規化）。 */
+    private void stabilizeEnvRowsForInitializationBaseline() {
+        Map<String, String> ui = collectUiEnv();
+        ensureBootstrapDefaultValuesVisible(ui);
+        ensureUiRefOptionalDisplayDefaultsVisible(ui);
+        applyRepoFolderPathNormalization();
+    }
+
+    private void recordEnvInitializationBaseline() {
+        stabilizeEnvRowsForInitializationBaseline();
+        EnvVarsInitializedAtStore.recordEnvFingerprint(
+                collectUiEnv(), MainShellController::includeInEnvInitFingerprint);
+    }
+
+    /**
+     * 起動時（工場ワークスペース復元後）に、環境変数タブの値が初期化テンプレートと一致するか一度だけ判定する。
+     */
+    private void evaluateEnvVarsDifferFromInitialAtStartup() {
+        try {
+            if (deferOperatorPromptForPortableUpgrade.get()) {
+                envVarsDifferFromInitialAtStartup.set(false);
+                return;
+            }
+            String operator = FactoryOperatorUserStore.sessionOperatorName();
+            if (FactoryOperatorUserStore.isGuestOperator(operator)) {
+                envVarsDifferFromInitialAtStartup.set(false);
+                return;
+            }
+            FactorySite site = GlobalInitSettingTarget.loadEffective(collectUiEnv());
+            stabilizeEnvRowsForInitializationBaseline();
+            Map<String, String> current = collectUiEnv();
+            java.util.function.Predicate<String> keyFilter = MainShellController::includeInEnvInitFingerprint;
+            boolean matches;
+            if (EnvVarsInitializedAtStore.loadEnvFingerprint().isPresent()) {
+                matches = EnvVarsInitializedAtStore.envFingerprintMatches(current, keyFilter);
+                if (!matches
+                        && EnvVarsInitializedAtStore.matchesRecordedBaselineForKeys(current, keyFilter)) {
+                    recordEnvInitializationBaseline();
+                    matches = true;
+                }
+            } else if (EnvVarsInitializedAtStore.isRecorded()) {
+                matches = true;
+            } else {
+                Map<String, String> expected = buildExpectedEnvMapAfterFullInit(site);
+                matches = EnvVarsInitialTemplate.matches(current, expected, keyFilter);
+            }
+            envVarsDifferFromInitialAtStartup.set(!matches);
+            if (!matches && EnvVarsInitializedAtStore.isRecorded()) {
+                appendLog(
+                        "[env] 起動時チェック: 環境変数の値が初期値と異なります。"
+                                + "環境変数タブの「環境変数を初期化」を実行するまで、他タブは操作できません。");
+            }
+        } finally {
+            envVarsStartupCheckCompleted.set(true);
+        }
+    }
+
+    private Map<String, String> buildExpectedEnvMapAfterFullInit(FactorySite site) {
+        return EnvVarsInitialTemplate.buildExpectedMap(
+                BOOTSTRAP_ORDER,
+                site,
+                MainShellController::bootstrapDefaultValueForKey,
+                MainShellController::optionalUiRefDisplayDefaultForKey,
+                MainShellController::includeInEnvInitFingerprint);
     }
 
     /**
@@ -4471,8 +4589,14 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         suppressEnvVarsInitTabGuard.set(true);
         try {
             ensureMainShellEnvTabSelected();
+            String reason =
+                    EnvVarsInitializedAtStore.isRecorded()
+                            ? "環境変数の値が初期値と異なるため"
+                            : "環境変数の初期化が未完了のため";
             appendLog(
-                    "[env] 環境変数の初期化が未完了のため、環境変数タブ以外は操作できません。"
+                    "[env] "
+                            + reason
+                            + "、環境変数タブ以外は操作できません。"
                             + "環境変数タブの「環境変数を初期化」を実行してください。");
         } finally {
             suppressEnvVarsInitTabGuard.set(false);
@@ -4503,9 +4627,6 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         Platform.runLater(
                 () -> {
                     maybePortableBundleSelfUpdate();
-                    if (!shouldSuppressStartupRequestFormOriginalDirPrompt()) {
-                        maybePromptRequestFormOriginalDirAtStartup();
-                    }
                     maybePromptOperatorUserAtStartup();
                 });
     }
@@ -6664,6 +6785,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
             schedulePersistSessionDebounced();
             requireOperatorSelectionForFactory(newSite, startup);
             Platform.runLater(this::notifyActiveMainShellTabAfterWorkspaceChange);
+            completeEnvVarsStartupCheck();
             long ms = (System.nanoTime() - t0) / 1_000_000L;
             appendLog(
                     "[factory] 切替完了 "
@@ -6973,6 +7095,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
 
     private void maybePromptOperatorUserAtStartup() {
         if (skipOperatorPromptAfterPortableUpgrade.compareAndSet(true, false)) {
+            completeEnvVarsStartupCheck();
             return;
         }
         if (deferOperatorPromptForPortableUpgrade.get()) {
@@ -6988,6 +7111,10 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         }
         requireOperatorSelectionForFactory(factory, true);
         finalizeOperatorLocalWorkspaceAfterSessionEstablished();
+        completeEnvVarsStartupCheck();
+        if (!isEnvVarsInitializationPending() && !shouldSuppressStartupRequestFormOriginalDirPrompt()) {
+            maybePromptRequestFormOriginalDirAtStartup();
+        }
     }
 
     private Optional<String> promptOperatorUserChoice(FactorySite site, boolean startup) {
@@ -9445,15 +9572,9 @@ public PlanInputTabController planInputTabControllerForDispatchRollUnit() {
         if (workspace.isPresent()) {
             applyFactoryWorkspaceSessionFragment(workspace.get(), true);
         }
-        if (!operator.isBlank()) {
-            FactorySiteWorkspaceStore.save(
-                    operator, siteAfterUpgrade, buildFactorySiteWorkspaceSnapshot());
-        }
         applyPortableUpgradeShellUiSnapshotIfPresent();
-        applyRepoFolderPathNormalization();
-        ensureBootstrapDefaultValuesVisible(collectUiEnv());
-        ensureUiRefOptionalDisplayDefaultsVisible(collectUiEnv());
-        applyRepoFolderPathNormalization();
+        persistOperatorWorkspaceForEnvInitBaseline(siteAfterUpgrade);
+        recordEnvInitializationBaseline();
         int badgeMembers = refreshPersonBadgeSkillsMembersFromMaster();
         DesktopSessionStateStore.save(collectDesktopSessionForGlobalPersistence());
         mainRunTabController.refreshAppVersionLabel();

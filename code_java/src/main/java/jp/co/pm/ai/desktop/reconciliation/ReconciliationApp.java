@@ -66,6 +66,9 @@ public class ReconciliationApp {
     private static final String COL_MASTER_BASE_SHOHIN_RAW = "masterBase商品(原反)";
     /** 受注ﾌｧｲﾙ: POI lastRowNum が書式だけで膨らんだときの最大走査行数。 */
     private static final int JUCHU_SHEET_MAX_SCAN_ROWS = 20_000;
+    /** 受注ﾌｧｲﾙ AO 列（0-based）。AH×AM の改行分割積を合計する既定数式の出力先。 */
+    private static final int JUCHU_AO_COLUMN_INDEX =
+            JuchuSheetColumnLayout.columnLetterToIndex("AO");
     private static final double SETTINGS_CARD_WIDTH = 300.0;
     /** 従来 100% 設計からの UI 幅倍率（現状 = 120%）。 */
     private static final double UI_WIDTH_SCALE = 1.2;
@@ -1226,8 +1229,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         btnOpenJuchuBackupFolder.getStyleClass().add("btn-reload");
         registerGuestMutableControl(btnOpenJuchuBackupFolder);
         btnOpenJuchuBackupFolder.setTooltip(
-                new Tooltip(
-                        "受注ファイル書き込み前のローカル世代バックアップ（15 分間隔）の保存先フォルダを開きます。"));
+                new Tooltip(RequestFormJuchuFileBackupStore.backupPolicyTooltipJa()));
         btnOpenJuchuBackupFolder.setOnAction(evt -> openJuchuBackupFolderExternally());
 
         Button btnJuchuColumnWizard = new Button("列定義ウィザード");
@@ -5423,10 +5425,25 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
     /** テンプレートに無い列向けの既定数式（既に数式があれば触らない）。 */
     private static void applyDefaultJuchuFormulasIfMissing(
             Row row, Map<String, Integer> colMap, int excelRow1Based) {
+        String aoAmountFormula = buildJuchuAoTextsSplitSumFormula(excelRow1Based);
         setJuchuFormulaIfMissing(row, colMap, "月数", "MONTH(AF" + excelRow1Based + ")");
         setJuchuFormulaIfMissing(row, colMap, "受注金額", "AI" + excelRow1Based + "*AH" + excelRow1Based);
         setJuchuFormulaIfMissing(row, colMap, "受注数", "M" + excelRow1Based);
-        setJuchuFormulaIfMissing(row, colMap, "単価", "AH" + excelRow1Based);
+        setJuchuFormulaIfMissing(row, colMap, "単価", aoAmountFormula);
+        setJuchuFormulaByColumnIndexIfMissing(row, JUCHU_AO_COLUMN_INDEX, aoAmountFormula);
+    }
+
+    /**
+     * AO 列向け: AH 列と AM 列の改行区切り値を対応ペアで掛け合わせて合計する数式。
+     *
+     * <p>例: {@code =SUM(IFERROR(VALUE(TEXTSPLIT($AH373,CHAR(10))),0)*IFERROR(VALUE(TEXTSPLIT($AM373,CHAR(10))),0))}
+     */
+    static String buildJuchuAoTextsSplitSumFormula(int excelRow1Based) {
+        return "SUM(IFERROR(VALUE(TEXTSPLIT($AH"
+                + excelRow1Based
+                + ",CHAR(10))),0)*IFERROR(VALUE(TEXTSPLIT($AM"
+                + excelRow1Based
+                + ",CHAR(10))),0))";
     }
 
     private static void setJuchuFormulaIfMissing(
@@ -5435,12 +5452,20 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         if (col == null || formula == null || formula.isBlank()) {
             return;
         }
-        Cell cell = row.getCell(col);
+        setJuchuFormulaByColumnIndexIfMissing(row, col, formula);
+    }
+
+    private static void setJuchuFormulaByColumnIndexIfMissing(
+            Row row, int colIndex, String formula) {
+        if (row == null || colIndex < 0 || formula == null || formula.isBlank()) {
+            return;
+        }
+        Cell cell = row.getCell(colIndex);
         if (isJuchuFormulaCell(cell)) {
             return;
         }
         if (cell == null) {
-            cell = row.createCell(col);
+            cell = row.createCell(colIndex);
         }
         cell.setCellFormula(formula);
     }
@@ -5710,7 +5735,9 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                             + root
                             + "　保持上限 "
                             + RequestFormJuchuFileBackupStore.MAX_GENERATIONS_PER_SOURCE
-                            + " 世代（15 分間隔で自動退避）");
+                            + " 世代（"
+                            + RequestFormJuchuFileBackupStore.backupPolicySummaryJa()
+                            + "）");
         }
     }
 

@@ -615,7 +615,7 @@ public final class ResultDispatchTableTabController {
                     dataStageBadgeLabel, path);
             Stage3UiVisibility.applyPlanningStageBadgePolicy(
                     dataStageBadgeLabel, shell != null ? shell.snapshotUiEnv() : Map.of());
-            statusLabel.setText(rowMaps.size() + " 行");
+            statusLabel.setText("");
 
             headersRef.clear();
             headersRef.addAll(headerOrder);

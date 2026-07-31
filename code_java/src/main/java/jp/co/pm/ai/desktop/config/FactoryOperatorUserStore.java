@@ -28,8 +28,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
-import jp.co.pm.ai.desktop.debug.AgentDebugLog;
-
 import jp.co.pm.ai.desktop.crypto.AladdinOperatorCredentialsCrypto;
 import jp.co.pm.ai.desktop.io.FactoryOperatorUserBackupStore;
 import jp.co.pm.ai.desktop.io.OperatorAladdinCredentialsLauncherJson;
@@ -792,34 +790,6 @@ public final class FactoryOperatorUserStore {
         putFactoryUsersInDocument(
                 doc, factory, forSharedStore(current, current.names(), pins, attempts, mustChange, plaintextAdmin));
         saveDocument(doc);
-        // #region agent log
-        if (usesRdpDepartmentScope(factory)) {
-            String adminDept = adminRdpDepartmentContextKey();
-            String sessionDept = sessionRdpDepartmentKey();
-            boolean hashInAdmin =
-                    loadFactoryForAdmin(factory).pinHashes().containsKey(normalized);
-            boolean hashInSession = loadFactory(factory).pinHashes().containsKey(normalized);
-            AgentDebugLog.appendStructured(
-                    Map.of(),
-                    "3c7d26",
-                    "A",
-                    "FactoryOperatorUserStore.assignPin",
-                    "pin saved",
-                    Map.of(
-                            "name",
-                            normalized,
-                            "adminDept",
-                            adminDept,
-                            "sessionDept",
-                            sessionDept,
-                            "hashInAdminDept",
-                            hashInAdmin,
-                            "hashInSessionDept",
-                            hashInSession,
-                            "requireChange",
-                            requireChangeOnNextLogin));
-        }
-        // #endregion
         return pinNorm;
     }
 
@@ -1013,34 +983,6 @@ public final class FactoryOperatorUserStore {
         }
         FactorySite factory = site != null ? site : FactorySite.KONAN;
         FactoryOperatorUsers users = loadFactoryForAdminPinUi(factory);
-        // #region agent log
-        if (usesRdpDepartmentScope(factory)) {
-            String normalized = normalizeName(name);
-            boolean hasSession = loadFactory(factory).pinHashes().containsKey(normalized);
-            boolean hasAdmin = users.pinHashes().containsKey(normalized);
-            AgentDebugLog.appendStructured(
-                    Map.of(),
-                    "3c7d26",
-                    "A",
-                    "FactoryOperatorUserStore.pinStatusLabel",
-                    "pin read paths",
-                    Map.of(
-                            "runId",
-                            "post-fix",
-                            "name",
-                            normalized,
-                            "adminDept",
-                            adminRdpDepartmentContextKey(),
-                            "sessionDept",
-                            sessionRdpDepartmentKey(),
-                            "hashInAdminDept",
-                            hasAdmin,
-                            "hashInSessionDept",
-                            hasSession,
-                            "labelUsesAdmin",
-                            hasPinInUsers(users, name)));
-        }
-        // #endregion
         if (isPinLockedInUsers(users, name)) {
             return "ロック";
         }

@@ -103,4 +103,16 @@ class RequestFormJuchuFileBackupStoreTest {
         assertEquals("pre-restore", index.get(0).reason());
         assertEquals("single-transfer", index.get(1).reason());
     }
+
+    @Test
+    void backupPolicyUiText_doesNotImplyPeriodicSchedule() {
+        String summary = RequestFormJuchuFileBackupStore.backupPolicySummaryJa();
+        String tooltip = RequestFormJuchuFileBackupStore.backupPolicyTooltipJa();
+
+        assertTrue(summary.contains("書き込み前"));
+        assertTrue(summary.contains("15分未満"));
+        assertFalse(summary.contains("15 分間隔"));
+
+        assertTrue(tooltip.contains("定期バックアップではありません"));
+    }
 }

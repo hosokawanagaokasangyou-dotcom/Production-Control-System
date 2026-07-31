@@ -50,6 +50,20 @@ public final class RemoteDesktopEnvRows {
         return RELEVANT_ENV_KEYS.contains(key.strip());
     }
 
+    /**
+     * リモートデスクトップタブがセッション中に更新するキー。メインシェルの環境変数初期化フィンガープリント照合からは除外する。
+     */
+    public static boolean excludedFromMainShellEnvInitFingerprint(String key) {
+        if (key == null || key.isBlank()) {
+            return false;
+        }
+        String k = key.strip();
+        if (isRelevantEnvKey(k)) {
+            return true;
+        }
+        return AppPaths.KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR.equals(k);
+    }
+
     public static void bootstrap(ObservableList<EnvVarRow> rows, DesktopSessionState session) {
         if (rows == null) {
             return;

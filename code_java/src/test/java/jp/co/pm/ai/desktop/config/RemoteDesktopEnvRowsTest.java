@@ -76,6 +76,22 @@ class RemoteDesktopEnvRowsTest {
     }
 
     @Test
+    void excludedFromMainShellEnvInitFingerprint_coversRdpTabKeys() {
+        assertTrue(
+                RemoteDesktopEnvRows.excludedFromMainShellEnvInitFingerprint(
+                        AppPaths.KEY_PM_AI_REQUEST_FORM_RDP_PROFILE));
+        assertTrue(
+                RemoteDesktopEnvRows.excludedFromMainShellEnvInitFingerprint(
+                        AppPaths.KEY_PM_AI_RDP_LAUNCH_PROFILE_NUMBER));
+        assertTrue(
+                RemoteDesktopEnvRows.excludedFromMainShellEnvInitFingerprint(
+                        AppPaths.KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR));
+        assertFalse(
+                RemoteDesktopEnvRows.excludedFromMainShellEnvInitFingerprint(
+                        AppPaths.KEY_PM_AI_REPO_ROOT));
+    }
+
+    @Test
     void snapshot_excludesIrrelevantRows() {
         ObservableList<EnvVarRow> rows = FXCollections.observableArrayList();
         EnvVarRow dispatch = new EnvVarRow();

@@ -48,6 +48,18 @@ public final class RequestFormJuchuFileBackupStore {
     /** 受注ファイル（ソースパス）ごとの保持上限（世代数）。超過分は古い順に削除。 */
     public static final int MAX_GENERATIONS_PER_SOURCE = 50;
 
+    /** 一覧ヒント等向け: 退避ポリシー要約（日本語）。 */
+    public static String backupPolicySummaryJa() {
+        return "書き込み前に自動退避（転記・新規登録等。直近退避から15分未満は省略）";
+    }
+
+    /** ボタンツールチップ向け: 退避ポリシー説明（日本語）。 */
+    public static String backupPolicyTooltipJa() {
+        return "受注ファイルへの書き込み（転記・新規登録・取り消し等）の直前に、"
+                + "ローカルへ世代退避したファイルの保存先フォルダを開きます。"
+                + "直近の退避から15分未満の連続書き込みでは退避を省略します（15分ごとの定期バックアップではありません）。";
+    }
+
     private static final Object LOCK = new Object();
 
     private static final ThreadLocal<Optional<RequestFormJuchuFileBackupEntry>> LAST_BACKED_UP =
