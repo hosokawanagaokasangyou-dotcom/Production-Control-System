@@ -10,6 +10,8 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -26,7 +28,33 @@ public final class GeminiGenerateContentRestClient {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
+    /**
+     * {@code thinkingBudget} を受け付けなかったモデル。
+     *
+     * <p>gemini-3.5-flash-lite は理由を書かない {@code 400 Request contains an invalid argument.} を返すため、
+     * 400 を受けたら思考設定を外して 1 度だけ送り直し、以降の呼び出しでは最初から外す。
+     */
+    private static final Set<String> THINKING_CONFIG_REJECTED = ConcurrentHashMap.newKeySet();
+
     private GeminiGenerateContentRestClient() {}
+
+    /** 当該モデルが {@code thinkingConfig} を拒んだと記録する。 */
+    public static void rememberThinkingConfigRejection(String modelId) {
+        String model = normalizeModelId(modelId);
+        if (!model.isEmpty()) {
+            THINKING_CONFIG_REJECTED.add(model);
+        }
+    }
+
+    /** 当該モデルが {@code thinkingConfig} を拒んだ記録があるか。 */
+    public static boolean modelRejectsThinkingConfig(String modelId) {
+        return THINKING_CONFIG_REJECTED.contains(normalizeModelId(modelId));
+    }
+
+    /** 記録を消す（テスト用）。 */
+    public static void forgetThinkingConfigRejections() {
+        THINKING_CONFIG_REJECTED.clear();
+    }
 
     /**
      * @param wallTimeNanos {@link System#nanoTime()} ベースの往復時間
@@ -92,19 +120,8 @@ public final class GeminiGenerateContentRestClient {
                                 + ":generateContent?key="
                                 + encKey);
 
-        String jsonBody = buildRequestJson(userPrompt, maxOutputTokens);
-
-        HttpClient client =
-                HttpClient.newBuilder().connectTimeout(requestTimeout).build();
-        HttpRequest req =
-                HttpRequest.newBuilder(uri)
-                        .timeout(requestTimeout)
-                        .header("Content-Type", "application/json; charset=utf-8")
-                        .POST(HttpRequest.BodyPublishers.ofString(jsonBody, StandardCharsets.UTF_8))
-                        .build();
-
         long t0 = System.nanoTime();
-        HttpResponse<String> res = client.send(req, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+        HttpResponse<String> res = sendWithThinkingConfigFallback(uri, model, userPrompt, maxOutputTokens, requestTimeout);
         long dt = System.nanoTime() - t0;
 
         int code = res.statusCode();
@@ -115,6 +132,34 @@ public final class GeminiGenerateContentRestClient {
             err = summarizeHttpError(code, body);
         }
         return new CallResult(code, dt, preview, err);
+    }
+
+    /**
+     * 1 度送り、{@code thinkingConfig} 付きで 400 が返ったら設定を外して送り直す。
+     */
+    private static HttpResponse<String> sendWithThinkingConfigFallback(
+            URI uri, String model, String userPrompt, int maxOutputTokens, Duration requestTimeout)
+            throws IOException, InterruptedException {
+        boolean withThinking = !modelRejectsThinkingConfig(model);
+        HttpResponse<String> res =
+                send(uri, buildRequestJson(userPrompt, maxOutputTokens, withThinking), requestTimeout);
+        if (res.statusCode() != 400 || !withThinking) {
+            return res;
+        }
+        rememberThinkingConfigRejection(model);
+        return send(uri, buildRequestJson(userPrompt, maxOutputTokens, false), requestTimeout);
+    }
+
+    private static HttpResponse<String> send(URI uri, String jsonBody, Duration requestTimeout)
+            throws IOException, InterruptedException {
+        HttpClient client = HttpClient.newBuilder().connectTimeout(requestTimeout).build();
+        HttpRequest req =
+                HttpRequest.newBuilder(uri)
+                        .timeout(requestTimeout)
+                        .header("Content-Type", "application/json; charset=utf-8")
+                        .POST(HttpRequest.BodyPublishers.ofString(jsonBody, StandardCharsets.UTF_8))
+                        .build();
+        return client.send(req, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
     }
 
     /**
@@ -159,19 +204,8 @@ public final class GeminiGenerateContentRestClient {
                                 + ":generateContent?key="
                                 + encKey);
 
-        String jsonBody = buildRequestJson(userPrompt, maxOutputTokens);
-
-        HttpClient client =
-                HttpClient.newBuilder().connectTimeout(requestTimeout).build();
-        HttpRequest req =
-                HttpRequest.newBuilder(uri)
-                        .timeout(requestTimeout)
-                        .header("Content-Type", "application/json; charset=utf-8")
-                        .POST(HttpRequest.BodyPublishers.ofString(jsonBody, StandardCharsets.UTF_8))
-                        .build();
-
         long t0 = System.nanoTime();
-        HttpResponse<String> res = client.send(req, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+        HttpResponse<String> res = sendWithThinkingConfigFallback(uri, model, userPrompt, maxOutputTokens, requestTimeout);
         long dt = System.nanoTime() - t0;
 
         int code = res.statusCode();
@@ -213,6 +247,15 @@ public final class GeminiGenerateContentRestClient {
      * リクエスト本文。思考トークンはそのまま応答待ち時間になるため、抽出系用途では既定で無効にする。
      */
     static String buildRequestJson(String userPrompt, int maxOutputTokens) throws IOException {
+        return buildRequestJson(userPrompt, maxOutputTokens, true);
+    }
+
+    /**
+     * @param withThinkingConfig {@code false} なら {@code thinkingConfig} を付けない
+     *     （{@code thinkingBudget} を拒むモデル向け）
+     */
+    static String buildRequestJson(String userPrompt, int maxOutputTokens, boolean withThinkingConfig)
+            throws IOException {
         ObjectNode root = JsonNodeFactory.instance.objectNode();
         ObjectNode part = JsonNodeFactory.instance.objectNode();
         part.put("text", userPrompt != null ? userPrompt : "");
@@ -226,9 +269,11 @@ public final class GeminiGenerateContentRestClient {
         ObjectNode gen = JsonNodeFactory.instance.objectNode();
         gen.put("maxOutputTokens", Math.max(1, Math.min(maxOutputTokens, 8192)));
         gen.put("temperature", 0.0);
-        ObjectNode thinking = JsonNodeFactory.instance.objectNode();
-        thinking.put("thinkingBudget", 0);
-        gen.set("thinkingConfig", thinking);
+        if (withThinkingConfig) {
+            ObjectNode thinking = JsonNodeFactory.instance.objectNode();
+            thinking.put("thinkingBudget", 0);
+            gen.set("thinkingConfig", thinking);
+        }
         root.set("generationConfig", gen);
         return MAPPER.writeValueAsString(root);
     }

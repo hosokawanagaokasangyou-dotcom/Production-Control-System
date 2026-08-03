@@ -946,11 +946,30 @@ def _gemini_config_without_thinking(config):
             return None
     return clone
 def _gemini_is_thinking_config_unsupported_error(err_text: str) -> bool:
-    """thinkingBudget 非対応モデルが返す 400（思考設定を外せば通る）。"""
+    """thinkingBudget 非対応モデルが返す 400（思考設定を外せば通る）。
+
+    gemini-3.5-flash-lite は理由を書かず ``Request contains an invalid argument.`` だけを返すため、
+    400 INVALID_ARGUMENT なら思考設定が原因とみなして一度外して試す。原因が別なら同じ 400 で
+    落ちるだけで、通常の再試行・モデル切り替えに戻る。
+    """
     u = err_text.lower()
-    if "thinking" not in u:
+    if not u:
         return False
-    return ("not supported" in u) or ("unsupported" in u) or ("invalid_argument" in u)
+    if "invalid_argument" in u or "400" in u:
+        return True
+    return "thinking" in u and (("not supported" in u) or ("unsupported" in u))
+_GEMINI_THINKING_REJECTED_LOCK = threading.Lock()
+_gemini_models_rejecting_thinking_config: set[str] = set()
+def _gemini_forget_thinking_config_rejections() -> None:
+    """思考設定を拒んだモデルの記憶を消す（テスト用）。"""
+    with _GEMINI_THINKING_REJECTED_LOCK:
+        _gemini_models_rejecting_thinking_config.clear()
+def _gemini_model_rejects_thinking_config(model_id: str) -> bool:
+    with _GEMINI_THINKING_REJECTED_LOCK:
+        return str(model_id or "") in _gemini_models_rejecting_thinking_config
+def _gemini_remember_thinking_config_rejection(model_id: str) -> None:
+    with _GEMINI_THINKING_REJECTED_LOCK:
+        _gemini_models_rejecting_thinking_config.add(str(model_id or ""))
 def _gemini_parse_json_object(text) -> dict | None:
     """応答テキストから JSON オブジェクトを取り出す（コードフェンス・前後の地の文を許容）。"""
     s = str(text or "").strip()
@@ -968,6 +987,63 @@ def _gemini_parse_json_object(text) -> dict | None:
             return None
     return parsed if isinstance(parsed, dict) else None
 GEMINI_FREE_TIER_RPM_LIMIT = 15
+class _GeminiRateLimiter:
+    """直近 ``window_sec`` 秒あたり ``limit`` 件までに送信を絞る（無料枠 RPM 超過の予防）。
+
+    429 を受けてからの再試行はサーバ指定の待機（30〜60 秒）に従うため、超過してから直すと
+    並列化で稼いだ時間を失う。送信側で先に間隔を空けるほうが速い。
+    """
+
+    def __init__(self, limit: int, window_sec: float = 60.0):
+        self._limit = max(1, int(limit))
+        self._window = max(0.0, float(window_sec))
+        self._lock = threading.Lock()
+        self._sent: list[float] = []
+
+    def acquire(self) -> float:
+        """枠が空くまでブロックし、待った秒数を返す。"""
+        waited = 0.0
+        while True:
+            with self._lock:
+                now = time_module.monotonic()
+                cutoff = now - self._window
+                self._sent = [t for t in self._sent if t > cutoff]
+                if len(self._sent) < self._limit:
+                    self._sent.append(now)
+                    return waited
+                sleep_for = self._window - (now - self._sent[0])
+            sleep_for = max(0.01, sleep_for)
+            time_module.sleep(sleep_for)
+            waited += sleep_for
+def _gemini_requests_per_minute() -> int:
+    """1 分あたりの送信上限（``GEMINI_REQUESTS_PER_MINUTE``、既定は無料枠 RPM）。"""
+    raw = (os.environ.get("GEMINI_REQUESTS_PER_MINUTE") or "").strip()
+    try:
+        v = int(float(raw)) if raw else GEMINI_FREE_TIER_RPM_LIMIT
+    except (TypeError, ValueError):
+        v = GEMINI_FREE_TIER_RPM_LIMIT
+    return max(1, v)
+_GEMINI_RATE_LIMITER_LOCK = threading.Lock()
+_gemini_rate_limiter: _GeminiRateLimiter | None = None
+_gemini_rate_limiter_limit: int | None = None
+def _gemini_acquire_request_slot(prefix: str = "") -> float:
+    """送信直前に RPM 枠を確保する。プロセス内の全 Gemini 呼び出しで共有する。"""
+    global _gemini_rate_limiter, _gemini_rate_limiter_limit
+    limit = _gemini_requests_per_minute()
+    with _GEMINI_RATE_LIMITER_LOCK:
+        if _gemini_rate_limiter is None or _gemini_rate_limiter_limit != limit:
+            _gemini_rate_limiter = _GeminiRateLimiter(limit)
+            _gemini_rate_limiter_limit = limit
+        limiter = _gemini_rate_limiter
+    waited = limiter.acquire()
+    if waited > 0:
+        logging.info(
+            "%sGemini 送信レート制限（%s 件/分）のため %.1f 秒待機しました。",
+            prefix,
+            limit,
+            waited,
+        )
+    return waited
 def _gemini_batch_max_items() -> int:
     """1 リクエストに載せる明細行の上限（``GEMINI_BATCH_MAX_ITEMS``、既定 120）。
 
@@ -999,8 +1075,17 @@ def _gemini_batch_slices(total: int, batch_size: int) -> list[tuple[int, int]]:
 def _gemini_invoke_generate_content(client: genai.Client, model_id: str, contents, config):
     """1 回分の ``generate_content``。思考設定を拒むモデルのときだけ設定を外して即再送する。
 
+    一度拒まれたモデルはプロセス内で覚えておき、以降は最初から思考設定なしで送る
+    （バッチごとに無駄な 400 を踏まないため）。
+
     戻り値: ``(応答, 実際に通った設定)``。呼び出し側は次の試行から後者を使う。
     """
+    if (
+        config is not None
+        and getattr(config, "thinking_config", None) is not None
+        and _gemini_model_rejects_thinking_config(model_id)
+    ):
+        config = _gemini_config_without_thinking(config)
     try:
         if config is None:
             return client.models.generate_content(model=model_id, contents=contents), None
@@ -1014,9 +1099,10 @@ def _gemini_invoke_generate_content(client: genai.Client, model_id: str, content
         if not _gemini_is_thinking_config_unsupported_error(_gemini_err_text_for_exc(e)):
             raise
         logging.warning(
-            "Gemini モデル %s は thinkingBudget 指定に対応していないため、思考設定を外して再送します。",
+            "Gemini モデル %s は thinkingBudget 指定を受け付けないため、思考設定を外して再送します。",
             model_id,
         )
+        _gemini_remember_thinking_config_rejection(model_id)
         fallback = _gemini_config_without_thinking(config)
         if fallback is None:
             return client.models.generate_content(model=model_id, contents=contents), None
@@ -1148,6 +1234,7 @@ def _gemini_generate_content_with_retry(
         cur_config = effective_config
         for attempt in range(n):
             _gemini_pre_request_jitter_sleep()
+            _gemini_acquire_request_slot(prefix)
             try:
                 logging.info("%sGemini API を呼び出し中（モデル: %s）", prefix, mid)
                 _gemini_flush_log_handlers()

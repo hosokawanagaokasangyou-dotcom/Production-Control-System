@@ -69,7 +69,8 @@ GEMINI_PRE_REQUEST_JITTER_MAX_SEC	0.75	503/429 等対策: 呼び出し直前の�
 GEMINI_RETRY_BACKOFF_BASE_SEC	2.0	再試行の指数バックオフ基底（秒）
 GEMINI_PROGRESS_LOG_INTERVAL_SEC	12	応答待ちハートビートログ間隔（秒）。0 で無効。
 GEMINI_RETRY_MAX_ATTEMPTS	3	同一モデルあたりの最大試行。使い切ったら次モデルへ。
-GEMINI_REQUEST_TIMEOUT_SEC	60	generate_content の HTTP タイムアウト（秒）。0 で SDK 既定（非推奨）。
+GEMINI_REQUEST_TIMEOUT_SEC	90	generate_content の HTTP タイムアウト（秒）。0 で SDK 既定（非推奨）。
+GEMINI_REQUESTS_PER_MINUTE	15	1 分あたりの送信上限。無料枠 RPM 超過の 429（30〜60 秒待機）を予防する。
 GEMINI_THINKING_BUDGET	0	思考トークン上限。0 で思考無効（既定・最速）。-1 でモデル任せ。正数でその上限。
 GEMINI_BATCH_MAX_ITEMS	120	勤怠備考AI 等で 1 リクエストに載せる明細行の上限。小さいほど 1 回の出力が減る。
 GEMINI_MAX_PARALLEL_REQUESTS	4	バッチ分割した Gemini 呼び出しの並列数。無料枠 RPM 15 を超えない範囲に丸める。

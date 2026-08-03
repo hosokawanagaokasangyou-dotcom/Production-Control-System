@@ -167,8 +167,9 @@ class _FakeClient:
 
 @pytest.fixture
 def fast_gemini(monkeypatch):
-    """ジッター待機と課金集計の副作用を止める。"""
+    """ジッター待機・レート制限・課金集計の副作用を止める（フェイク API 相手のため）。"""
     monkeypatch.setattr(pc, "_GEMINI_PRE_REQUEST_JITTER_MAX", 0.0)
+    monkeypatch.setattr(pc, "_gemini_acquire_request_slot", lambda prefix="": 0.0)
     monkeypatch.setattr(pc, "record_gemini_response_usage", lambda *a, **k: None)
     monkeypatch.setattr(pc, "_gemini_progress_log_interval_sec", lambda: 0.0)
     monkeypatch.delenv("PM_AI_SKIP_GEMINI_API", raising=False)
@@ -419,6 +420,167 @@ def test_empty_shift_is_true_when_row_was_never_analyzed():
 def test_empty_shift_is_false_when_any_shift_time_exists(start, end):
     row = pd.Series({"出勤時間": start, "退勤時間": end})
     assert pc._attendance_is_empty_shift(row, key="k", analyzed_keys=set()) is False
+
+
+# --------------------------------------------------------------------------
+# thinkingBudget を拒むモデル（gemini-3.5-flash-lite は理由なしの 400 を返す）
+# --------------------------------------------------------------------------
+
+
+_GENERIC_INVALID_ARGUMENT = (
+    "400 INVALID_ARGUMENT. {'error': {'code': 400, "
+    "'message': 'Request contains an invalid argument.', 'status': 'INVALID_ARGUMENT'}}"
+)
+
+
+@pytest.mark.parametrize(
+    "err_text",
+    [
+        _GENERIC_INVALID_ARGUMENT,
+        "400 INVALID_ARGUMENT thinking_config is not supported",
+        "Thinking is unsupported for this model",
+    ],
+)
+def test_thinking_rejection_covers_generic_invalid_argument(err_text):
+    assert pc._gemini_is_thinking_config_unsupported_error(err_text) is True
+
+
+@pytest.mark.parametrize(
+    "err_text",
+    [
+        "429 RESOURCE_EXHAUSTED quota exceeded",
+        "503 UNAVAILABLE model is overloaded",
+        "404 NOT_FOUND models/foo is not found",
+        "",
+    ],
+)
+def test_thinking_rejection_ignores_unrelated_errors(err_text):
+    assert pc._gemini_is_thinking_config_unsupported_error(err_text) is False
+
+
+class _RejectsThinking:
+    """thinking_config 付きの要求だけ 400 を返すフェイク。"""
+
+    def __init__(self) -> None:
+        self.models = self
+        self.configs: list[object] = []
+
+    def generate_content(self, *, model, contents, config=None):
+        self.configs.append(config)
+        if config is not None and getattr(config, "thinking_config", None) is not None:
+            raise RuntimeError(_GENERIC_INVALID_ARGUMENT)
+        return _FakeResponse("{}")
+
+
+def test_invoke_drops_thinking_config_on_generic_invalid_argument():
+    pc._gemini_forget_thinking_config_rejections()
+    client = _RejectsThinking()
+    config = pc._gemini_generate_content_config(thinking_budget=0)
+    _res, used = pc._gemini_invoke_generate_content(
+        client, "gemini-3.5-flash-lite", "x", config
+    )
+    assert getattr(used, "thinking_config", None) is None
+    assert len(client.configs) == 2
+
+
+def test_invoke_remembers_models_that_reject_thinking_config():
+    pc._gemini_forget_thinking_config_rejections()
+    client = _RejectsThinking()
+    config = pc._gemini_generate_content_config(thinking_budget=0)
+    pc._gemini_invoke_generate_content(client, "gemini-3.5-flash-lite", "x", config)
+    pc._gemini_invoke_generate_content(client, "gemini-3.5-flash-lite", "y", config)
+    # 2 回目は最初から思考設定を外して送るので、余計な 400 を踏まない。
+    assert len(client.configs) == 3
+    assert getattr(client.configs[2], "thinking_config", None) is None
+
+
+def test_thinking_config_rejection_is_remembered_per_model():
+    pc._gemini_forget_thinking_config_rejections()
+    client = _RejectsThinking()
+    config = pc._gemini_generate_content_config(thinking_budget=0)
+    pc._gemini_invoke_generate_content(client, "gemini-3.5-flash-lite", "x", config)
+    pc._gemini_invoke_generate_content(client, "gemini-3.5-flash", "y", config)
+    # 別モデルでは記憶を流用せず、思考設定つきで一度試す。
+    assert getattr(client.configs[2], "thinking_config", None) is not None
+
+
+# --------------------------------------------------------------------------
+# 送信レート制限（無料枠 RPM 超過による 429 の予防）
+# --------------------------------------------------------------------------
+
+
+def test_requests_per_minute_defaults_to_free_tier_limit(monkeypatch):
+    monkeypatch.delenv("GEMINI_REQUESTS_PER_MINUTE", raising=False)
+    assert pc._gemini_requests_per_minute() == pc.GEMINI_FREE_TIER_RPM_LIMIT
+
+
+@pytest.mark.parametrize(("raw", "expected"), [("5", 5), ("1", 1), ("0", 1), ("x", 15)])
+def test_requests_per_minute_honors_env(monkeypatch, raw, expected):
+    monkeypatch.setenv("GEMINI_REQUESTS_PER_MINUTE", raw)
+    assert pc._gemini_requests_per_minute() == expected
+
+
+def test_rate_limiter_lets_a_burst_through_up_to_the_limit():
+    limiter = pc._GeminiRateLimiter(limit=3, window_sec=60.0)
+    t0 = time.perf_counter()
+    for _ in range(3):
+        limiter.acquire()
+    assert time.perf_counter() - t0 < 0.5
+
+
+def test_rate_limiter_blocks_once_the_window_is_full():
+    limiter = pc._GeminiRateLimiter(limit=2, window_sec=0.4)
+    limiter.acquire()
+    limiter.acquire()
+    t0 = time.perf_counter()
+    waited = limiter.acquire()
+    elapsed = time.perf_counter() - t0
+    assert elapsed >= 0.2
+    assert waited > 0
+
+
+def test_rate_limiter_frees_slots_after_the_window_passes():
+    limiter = pc._GeminiRateLimiter(limit=1, window_sec=0.2)
+    limiter.acquire()
+    time.sleep(0.25)
+    t0 = time.perf_counter()
+    limiter.acquire()
+    assert time.perf_counter() - t0 < 0.1
+
+
+def test_rate_limiter_never_exceeds_the_limit_under_threads():
+    limiter = pc._GeminiRateLimiter(limit=4, window_sec=0.5)
+    started = threading.Barrier(8)
+    stamps: list[float] = []
+    lock = threading.Lock()
+
+    def worker():
+        started.wait()
+        limiter.acquire()
+        with lock:
+            stamps.append(time.perf_counter())
+
+    threads = [threading.Thread(target=worker) for _ in range(8)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout=10)
+    assert len(stamps) == 8
+    stamps.sort()
+    # 先頭 4 件は即時、残り 4 件はウィンドウが空くまで待たされる。
+    assert stamps[4] - stamps[0] >= 0.4
+
+
+def test_retry_wrapper_takes_a_rate_limit_slot_per_attempt(fast_gemini, monkeypatch):
+    taken: list[str] = []
+    monkeypatch.setattr(
+        pc, "_gemini_acquire_request_slot", lambda prefix="": taken.append(prefix) or 0.0
+    )
+    client = _FakeClient(lambda m, c, cfg: _FakeResponse("{}"))
+    pc._gemini_generate_content_with_retry(
+        client, contents="x", model="gemini-3.5-flash", log_label="レート"
+    )
+    assert taken == ["レート: "]
 
 
 # --------------------------------------------------------------------------

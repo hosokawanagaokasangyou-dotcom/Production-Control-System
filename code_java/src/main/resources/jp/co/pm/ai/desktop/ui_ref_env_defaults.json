@@ -328,8 +328,12 @@
     "description" : "同一モデルあたりの最大試行回数（既定 3）。使い切ったら次モデルへ"
   }, {
     "key" : "GEMINI_REQUEST_TIMEOUT_SEC",
-    "value" : "240",
-    "description" : "Gemini generate_content の HTTP タイムアウト（秒）。超過時は同一モデルを再試行し、試行上限後は次モデルへ。0 で SDK 既定（非推奨）"
+    "value" : "90",
+    "description" : "Gemini generate_content の HTTP タイムアウト（秒）。差分出力とバッチ分割で 1 回の応答は数秒〜十数秒。超過時は同一モデルを再試行し、試行上限後は次モデルへ。0 で SDK 既定（非推奨）"
+  }, {
+    "key" : "GEMINI_REQUESTS_PER_MINUTE",
+    "value" : "15",
+    "description" : "1 分あたりの送信上限。無料枠 RPM を超えると 429 の指定待機（30〜60 秒）で並列化の効果が消えるため、送信側で間隔を空ける"
   }, {
     "key" : "GEMINI_THINKING_BUDGET",
     "value" : "0",
