@@ -32,11 +32,11 @@ import java.util.Map;
  *     default BOTH）
  * @param planInputComboSheetMayExceedNeed when true, combo-sheet presets may exceed need basic headcount (default on;
  *     配台計画_タスク入力 tab checkbox)
- * @param planInputStage2SkipGeminiApi when true, stage-2/2.1 skip Gemini API (配台計画_タスク入力 tab; default on)
+ * @param planInputStage2SkipGeminiApi when true, stage-2/2.1 skip Gemini API (配台計画_タスク入力 tab; default off)
  * @param planInputTodayDispatch when true, stage-1/2 use pinned morning sources (当日配台; default off)
  * @param mainRunStage2ResultBookFont stage-2 result Excel font family; empty with system default in UI means Python
  *     built-in default
- * @param mainRunSkipGeminiApi when true, skip Gemini generateContent calls (development; run tab checkbox)
+ * @param mainRunSkipGeminiApi when true, skip Gemini generateContent calls (run tab checkbox; default off)
  * @param mainRunStage1MarkAllExcludeAfterRun when true, after successful stage 1 mark all plan-input rows 配台不要=yes (development)
  * @param mainRunApplyLearnedSpeedFromActuals when true, apply learned speeds from actuals archive to 加工速度 on plan load (run tab checkbox; default off)
  * @param uiEnvRows persisted 環境変数 tab rows (empty uses bootstrap defaults only)
@@ -444,10 +444,10 @@ public record DesktopSessionState(
                 true,
                 "BOTH",
                 true,
-                true,
+                false,
                 false,
                 "",
-                true,
+                false,
                 false,
                 false,
                 List.of(),

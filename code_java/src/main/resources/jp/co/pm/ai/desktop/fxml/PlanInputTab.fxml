@@ -61,10 +61,10 @@
                                 <Tooltip text="ON のとき段階2.0 実行前に結果_配台表・段階2/2.1 計画・人員ブック・翌日配台キャッシュ等を残したまま実行します。既定は OFF（毎回クリア）。" />
                             </tooltip>
                         </CheckBox>
-                        <CheckBox fx:id="stage2SkipGeminiApiCheckBox" mnemonicParsing="false" selected="true"
-                                text="AI API 呼び出しをスキップ（開発用）">
+                        <CheckBox fx:id="stage2SkipGeminiApiCheckBox" mnemonicParsing="false" selected="false"
+                                text="AI API 呼び出しをスキップ">
                             <tooltip>
-                                <Tooltip text="ON のとき段階2/2.1 で Gemini への HTTP 呼び出しを行いません。本番運用では OFF にしてください。" />
+                                <Tooltip text="ON のとき段階2/2.1 で Gemini への HTTP 呼び出しを行いません。既定は OFF で、段階2/2.1 は AI API を呼び出します。" />
                             </tooltip>
                         </CheckBox>
                     </HBox>

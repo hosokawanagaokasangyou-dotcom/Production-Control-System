@@ -11,9 +11,10 @@
   "mainRunStage2SkipTodayDispatch" : true,
   "planInputStage2NextDayDialogMode" : "BOTH",
   "planInputComboSheetMayExceedNeed" : true,
-  "planInputStage2SkipGeminiApi" : true,
+  "planInputStage2SkipGeminiApi" : false,
+  "skipGeminiApiDefaultOffMigrated" : true,
   "planInputTodayDispatch" : false,
-  "mainRunSkipGeminiApi" : true,
+  "mainRunSkipGeminiApi" : false,
   "mainRunStage1MarkAllExcludeAfterRun" : false,
   "mainRunApplyLearnedSpeedFromActuals" : false,
   "uiEnvRows" : [ {
@@ -135,7 +136,7 @@
   }, {
     "name" : "PM_AI_SKIP_GEMINI_API",
     "value" : "0",
-    "description" : "1/true/yes/on のとき Gemini generateContent を呼ばない（開発用）。JavaFX 実行・ログタブ「その他」内のチェックが子プロセス起動時に上書きする。 — 1/true/yes/on のとき Gemini generateContent を呼ばない（開発用）。 JavaFX 実行・ログタブ「その他」内のチェックが子プロセス起動時に上書きする。 本番運用では 0 または未設定を推奨。"
+    "description" : "1/true/yes/on のとき Gemini generateContent を呼ばない。JavaFX 実行・ログタブ「その他」内のチェックが子プロセス起動時に上書きする。 — 1/true/yes/on のとき Gemini generateContent を呼ばない。 JavaFX 実行・ログタブ「その他」内のチェックが子プロセス起動時に上書きする。 既定は 0（段階1/2 は AI API を呼び出す）。"
   }, {
     "name" : "TASK_PLAN_SHEET",
     "value" : "タスク一覧",

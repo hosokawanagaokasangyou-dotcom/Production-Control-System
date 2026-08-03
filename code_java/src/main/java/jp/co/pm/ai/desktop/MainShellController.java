@@ -4956,13 +4956,13 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
             appendLog("--- start: " + script + " ---");
             if (STAGE1.equals(script) && mainRunTabController.snapshotSkipGeminiApi()) {
                 appendLog(
-                        "[dev] PM_AI_SKIP_GEMINI_API=1 — Gemini API 呼び出しをスキップします（開発用・段階1）。");
+                        "[run] PM_AI_SKIP_GEMINI_API=1 — Gemini API 呼び出しをスキップします（段階1）。");
             }
             if ((STAGE2.equals(script) || STAGE2_1.equals(script))
                     && planInputTabController != null
                     && planInputTabController.snapshotStage2SkipGeminiApi()) {
                 appendLog(
-                        "[dev] PM_AI_SKIP_GEMINI_API=1 — Gemini API 呼び出しをスキップします（開発用・段階2）。");
+                        "[run] PM_AI_SKIP_GEMINI_API=1 — Gemini API 呼び出しをスキップします（段階2）。");
             }
             if (mainRunTabController.snapshotApplyLearnedSpeedFromActuals()) {
                 appendLog(

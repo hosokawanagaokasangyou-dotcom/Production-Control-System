@@ -73,9 +73,9 @@
                         <Tooltip text="当日配台する。段階1前に加工計画の取得時刻を選び、段階1/2で同一ファイル束を固定します。「当日は配台しない」との排他2択です。" />
                     </tooltip>
                 </RadioButton>
-                <CheckBox fx:id="skipGeminiApiCheckBox" mnemonicParsing="false" selected="true" text="AI API 呼び出しをスキップ（開発用）">
+                <CheckBox fx:id="skipGeminiApiCheckBox" mnemonicParsing="false" selected="false" text="AI API 呼び出しをスキップ">
                     <tooltip>
-                        <Tooltip text="ON のとき Gemini への HTTP 呼び出しを行いません（段階1/2・配台不要ロジック等）。本番運用では必ず OFF にしてください。" />
+                        <Tooltip text="ON のとき Gemini への HTTP 呼び出しを行いません（段階1/2・配台不要ロジック等）。既定は OFF で、段階1/2 は AI API を呼び出します。" />
                     </tooltip>
                 </CheckBox>
                 <HBox alignment="CENTER_LEFT" spacing="8.0" styleClass="pm-run-book-open-inline">

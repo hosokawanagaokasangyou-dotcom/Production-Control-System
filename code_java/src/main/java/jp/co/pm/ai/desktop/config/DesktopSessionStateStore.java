@@ -44,6 +44,12 @@ public final class DesktopSessionStateStore {
     public static final Set<String> ENV_INITIALIZATION_SESSION_JSON_KEYS =
             Set.of("uiEnvRows", "excludeRulesPath", "mainRunWorkbook", "mainRunScriptDir");
 
+    /**
+     * AI API 呼び出しスキップの既定を OFF へ切り替えた移行済み印。無いセッション JSON は、旧既定で ON が
+     * 保存されただけとみなして OFF から始める。
+     */
+    public static final String SKIP_GEMINI_API_DEFAULT_OFF_MIGRATED_KEY = "skipGeminiApiDefaultOffMigrated";
+
     /** {@link #ENV_INITIALIZATION_SESSION_JSON_KEYS} をセッション JSON から除去する。 */
     public static void removeEnvInitializationFieldsFromSessionJson(ObjectNode root) {
         if (root == null) {
@@ -315,6 +321,7 @@ public final class DesktopSessionStateStore {
                 "planInputComboSheetMayExceedNeed",
                 state.planInputComboSheetMayExceedNeed());
         root.put("planInputStage2SkipGeminiApi", state.planInputStage2SkipGeminiApi());
+        root.put(SKIP_GEMINI_API_DEFAULT_OFF_MIGRATED_KEY, true);
         root.put("planInputTodayDispatch", state.planInputTodayDispatch());
         put(root, "mainRunStage2ResultBookFont", state.mainRunStage2ResultBookFont());
         root.put("mainRunSkipGeminiApi", state.mainRunSkipGeminiApi());
@@ -440,6 +447,17 @@ public final class DesktopSessionStateStore {
         return parseDesktopSessionState(root);
     }
 
+    /**
+     * AI API 呼び出しスキップの既定が ON だった頃に保存されたセッションは、その ON を一度だけ捨てる
+     * （段階1/2 は AI API を呼び出すのが既定）。移行後はユーザーのチェック操作をそのまま復元する。
+     */
+    private static boolean loadSkipGeminiApi(JsonNode root, String key) {
+        if (!optionalBoolean(root, SKIP_GEMINI_API_DEFAULT_OFF_MIGRATED_KEY, false)) {
+            return false;
+        }
+        return optionalBoolean(root, key, false);
+    }
+
     private static DesktopSessionState parseDesktopSessionState(JsonNode root) {
         return new DesktopSessionState(
                 text(root, "planInputPath"),
@@ -464,10 +482,10 @@ public final class DesktopSessionStateStore {
                 optionalBoolean(root, "mainRunStage2SkipTodayDispatch", true),
                 loadPlanInputStage2NextDayDialogMode(root),
                 optionalBoolean(root, "planInputComboSheetMayExceedNeed", true),
-                optionalBoolean(root, "planInputStage2SkipGeminiApi", true),
+                loadSkipGeminiApi(root, "planInputStage2SkipGeminiApi"),
                 optionalBoolean(root, "planInputTodayDispatch", false),
                 text(root, "mainRunStage2ResultBookFont"),
-                optionalBoolean(root, "mainRunSkipGeminiApi", true),
+                loadSkipGeminiApi(root, "mainRunSkipGeminiApi"),
                 optionalBoolean(root, "mainRunStage1MarkAllExcludeAfterRun", false),
                 optionalBoolean(root, "mainRunApplyLearnedSpeedFromActuals", false),
                 loadUiEnvRows(root),

@@ -1655,7 +1655,7 @@ def extract_retry_seconds(err_text):
             pass
     return None
 class GeminiApiSkippedError(RuntimeError):
-    """PM_AI_SKIP_GEMINI_API により generate_content を意図的にスキップ（開発用）。"""
+    """PM_AI_SKIP_GEMINI_API により generate_content を意図的にスキップ。"""
 def _normalize_product_dim_separators_for_roll_inference(s: str) -> str:
     """
     製品名に混ざる寸法区切りを ASCII の x に寄せる。

@@ -413,10 +413,10 @@ public final class ExcludeRulesTabController {
         }
         if (shell.mainRunSkipGeminiApi()) {
             shell.appendLog(
-                    "[exclude-json] AI: スキップ（PM_AI_SKIP_GEMINI_API=1・開発用）。チェックを OFF にしてください。");
+                    "[exclude-json] AI: スキップ（PM_AI_SKIP_GEMINI_API=1）。チェックを OFF にしてください。");
             shell.showWarningDialog(
                     "AI ロジック式",
-                    "実行・ログタブで「AI API 呼び出しをスキップ（開発用）」が ON のため、Gemini を呼び出しません。");
+                    "実行・ログタブで「AI API 呼び出しをスキップ」が ON のため、Gemini を呼び出しません。");
             return;
         }
         if (aiCompileLogicJsonButton != null) {

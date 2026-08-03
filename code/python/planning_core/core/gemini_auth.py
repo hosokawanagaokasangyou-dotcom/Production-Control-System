@@ -1224,7 +1224,7 @@ def _gemini_generate_content_with_retry(
     prefix = f"{log_label}: " if log_label else ""
     if _stage2_truthy_env("PM_AI_SKIP_GEMINI_API"):
         logging.warning(
-            "%sGemini API 呼び出しをスキップしました（PM_AI_SKIP_GEMINI_API=1・開発用）。",
+            "%sGemini API 呼び出しをスキップしました（PM_AI_SKIP_GEMINI_API=1）。",
             prefix,
         )
         raise GeminiApiSkippedError("PM_AI_SKIP_GEMINI_API")

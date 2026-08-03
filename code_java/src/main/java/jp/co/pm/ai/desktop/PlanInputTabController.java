@@ -226,7 +226,7 @@ public final class PlanInputTabController {
         installStageRunButtonDepth(stage2RunButton, Color.rgb(194, 65, 12, 0.35));
         installStageRunButtonDepth(stage21RunButton, Color.rgb(194, 65, 12, 0.35));
         if (stage2SkipGeminiApiCheckBox != null) {
-            stage2SkipGeminiApiCheckBox.setSelected(true);
+            stage2SkipGeminiApiCheckBox.setSelected(false);
             stage2SkipGeminiApiCheckBox
                     .selectedProperty()
                     .addListener(

@@ -68,7 +68,7 @@
   }, {
     "key" : "PM_AI_SKIP_GEMINI_API",
     "value" : "0",
-    "description" : "1/true/yes/on のとき Gemini generateContent を呼ばない（開発用）。JavaFX 実行・ログタブ「その他」内のチェックが子プロセス起動時に上書きする。"
+    "description" : "1/true/yes/on のとき Gemini generateContent を呼ばない。JavaFX 実行・ログタブ「その他」内のチェックが子プロセス起動時に上書きする。既定は 0（段階1/2 は AI API を呼び出す）。"
   }, {
     "key" : "TASK_PLAN_SHEET",
     "value" : "",

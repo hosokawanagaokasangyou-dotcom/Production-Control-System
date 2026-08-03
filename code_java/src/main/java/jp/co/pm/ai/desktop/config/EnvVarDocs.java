@@ -457,9 +457,9 @@ public final class EnvVarDocs {
                         + " JavaFX 段階2 起動時は常に無効（0）。加工途中は「配台計画_タスク入力」タブの翌日配台量ダイアログで指定。");
         put(
                 "PM_AI_SKIP_GEMINI_API",
-                "1/true/yes/on のとき Gemini generateContent を呼ばない（開発用）。"
+                "1/true/yes/on のとき Gemini generateContent を呼ばない。"
                         + " JavaFX 実行・ログタブ「その他」内のチェックが子プロセス起動時に上書きする。"
-                        + " 本番運用では 0 または未設定を推奨。");
+                        + " 既定は 0（段階1/2 は AI API を呼び出す）。");
         put(
                 "PM_AI_STAGE2_IN_PROGRESS_NEXT_DAY_DISPATCH_JSON",
                 "段階2直前に JavaFX が書く UTF-8 JSON（加工途中行の翌日配台量 m）。"
