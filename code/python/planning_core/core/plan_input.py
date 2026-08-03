@@ -3836,6 +3836,68 @@ def _parse_and_log_task_special_gemini_response(res, prompt_text=None):
         return None
     _log_task_special_ai_response(raw, parsed, extracted, prompt_text)
     return parsed
+def _task_special_ai_prompt(blob: str, ref_y: int) -> str:
+    """特別指定_備考 向け Gemini のプロンプト（読み取れた項目だけを返させる）。
+
+    全行・全項目を書き戻させると 1 リクエストの出力が膨らみ、応答時間がそのまま伸びる。
+    process_name / machine_name は照合側が空を許容するため、必要なときだけ書かせる。
+    """
+    return f"""
+あなたは工場の配台計画向けに、Excel「特別指定_備考」欄の自由記述を読み、配台ロジックが使うフィールドの値へ落とし込むアシスタントです。
+
+【最重要】
+1) 【特別指定原文】の各行は、ユーザーがセルに入力した文字列をそのまま渡しています（先頭末尾の空白のみ除去）。原文の事実や意図を別の文言に置き換えないでください。
+2) 応答は 1 個の JSON オブジェクトのみ（先頭は {{ 、末尾は }} ）。説明文・マークダウン・コードフェンスは禁止。
+3) トップレベルキーは各行の 依頼NO【…】 の括弧内の文字列と完全一致させること。備考本文に書かれた品番・原反番号・製品コード（例: 20010 で始まる番号列）をキーにしてはならない。
+
+【出力量の制約（最重要）】
+- 配台に反映できる指示が読み取れない行は、その依頼NOごと出力しない。
+- 読み取れる項目だけを書く。読み取れない項目・通常どおりの項目は省略する（null を書かない）。
+- 数値・日付は推測で補わない。
+
+【返却JSONの契約】
+■ トップレベル
+- 値は次のいずれか。
+  (A) JSONオブジェクト1つ … 当該依頼NOの備考がプロンプト上 1 行のとき。
+  (B) JSON配列（要素はオブジェクト）… 同一依頼NOで工程名・機械名が異なる備考行が複数あるとき。要素の順はプロンプトの行順に対応させる。
+
+■ process_name（文字列）・machine_name（文字列）
+- 同一依頼NOに備考行が複数あり、どの行の指示かを区別する必要があるときだけ書く。1 行だけなら省略する。
+- 書く場合は、対応するプロンプト行の 工程名「…」・機械名「…」 の値と一致させる。
+
+■ restrict_to_process_name（文字列）・restrict_to_machine_name（文字列）
+- 原文が「特定の工程だけ」「この機械だけ」など適用範囲を絞っているときだけ書く。
+- 原文に工程名・機械名の限定が無い（依頼全体への指示）ときは両方とも省略する。配台ロジックは同一依頼NOの別行（例: エンボス行と分割行）にも指示を適用する。
+
+■ その他フィールド
+- required_op: 正の整数
+- speed_override: 正の数（m/分）。※配台の実効速度は列「加工速度_上書き」「加工速度」のみ使用。本キーは速度計算には反映せず、列との食い違い検出に用いる。
+- task_efficiency: 0〜1
+- priority: 整数（小さいほど先に割付）
+- start_date: YYYY-MM-DD / start_time: HH:MM
+- target_completion_date, ship_by_date: YYYY-MM-DD
+
+【基準年（年なし日付用）】
+「4/5」「4/5に出荷」のように年が無い日付は、原則 西暦 {ref_y} 年として YYYY-MM-DD で出力。
+
+【解釈の指針】
+- 「間に合うように」「繰り上げる」→ priority を上げる（数値を下げる）。日付が文中にあれば target_completion_date または ship_by_date に入れる。
+
+【出力形式の例】（依頼NO・値は実データに合わせ替えること）
+{{
+  "Y3-26": {{
+    "priority": 1,
+    "ship_by_date": "{ref_y}-04-05"
+  }},
+  "Y4-2": [
+    {{"process_name": "エンボス", "required_op": 2}},
+    {{"process_name": "分割", "restrict_to_process_name": "分割", "task_efficiency": 0.8}}
+  ]
+}}
+
+【特別指定原文】（Excel からそのまま。1行＝依頼NOと備考のペア）
+{blob}
+"""
 def analyze_task_special_remarks(tasks_df, reference_year=None, ai_sheet_sink: dict | None = None):
     """
     「配台計画_タスク入力」の「特別指定_備考」を AI で構造化（セルに値はある項目は後段でセルを優先）。
@@ -3908,85 +3970,7 @@ def analyze_task_special_remarks(tasks_df, reference_year=None, ai_sheet_sink: d
             ai_sheet_sink["特別指定備考_Geminiモデル"] = "—（API キー未設定）"
         return {}
 
-    prompt = f"""
-あなたは工場の配台計画坑けに」Excel「特別指定_備考」欄への自由記述を読み」配台ロジックは使うるフィールドの値に蝽とし込むアシスタントです。
-
-」最針覝】
-1) 」特別指定原文】の坄行は」ユーザーはセルに入力した文字列を **改変・覝約・断う切りはしてよらう**（先頭末尾の空白のみ除去）」しのまま渡していした。**原文の事実や愝図を別の文言に置し杛ごないでしてさい。**
-2) あなたの応答は **1個の JSON オブジェクトのみ**（先頭は {{ 」末尾は }} ）。説明文・マークダウン・コードフェンスは禁止。
-3) JSON のトップレベルキーは」坄行の **依頼NO」と】の間の文字列のみ** と **完全一致** させること。**備考本文**に書かれた哝番・原板坝・製哝コード（例: 20010 で始まる番坷列）をキーにしてはならない。備考はしのよごな番坷で始まっていでも」キーは必う」】内の依頼NOの値とれる。
-
-」返坴JSONの契約（この節どよりに出力れること）】
-■ トップレベル
-- キー: 上記」特別指定原文】の **依頼NO」…】の括弧内** の文字列と **完全一致**（表記・ポイフン・英大文字尝文字を原文どより）。備考本文中の数字列をキーにしない。
-- 値: 次のいうれか。
-  (A) **JSONオブジェクト1つ** … 当該依頼NOの備考はプロンプト上 **1行の値** のとき。
-  (B) **JSON配列**（覝素はオブジェクト）… 同一依頼NOで工程名・機械名は異なる備考行は **複数** あるとし。覝素の順はプロンプトの行順と対応させる。
-
-■ process_name（文字列）・machine_name（文字列）— **必須**
-- 当該備考に対応れるプロンプト行の **工程名「…」**・**機械名「…」** の値と **一致** させる（「（空）」のときは空文字列 ""）。
-- ログ・トレース用。省略試行。
-
-■ restrict_to_process_name（文字列）・restrict_to_machine_name（文字列）— **任愝**
-- **原文は「特定の工程の値」「この機械の値」など」適用範囲を絞っているとしの値** 出力れる。
-- **原文に工程名・機械名の陝定は無い**（依頼全体・全行程への指示）としは **両方とも省略** れるか **空文字列 ""** とれる。
-- しの場合」配台ロジックは **同一依頼NOの別行（例: エンボス行と分割行）にも指示を適用** れる。
-- 絞る場合は」原文で示された識別名を入れる（Excel の工程名・機械名と照合しやれい表記）。
-
-■ しの他フィールド（required_op, speed_override, task_efficiency, priority, start_date, start_time, target_completion_date, ship_by_date）
-- 原文から **明確に** 読み坖れる場合のみ出力。読み取れない数値・日付は **省略**（推測で埋ゝない）。
-
-」同一依頼NO・複数工程の例】
-依頼NO Y4-2 に「エンボス」と「分割」の行はあり」備考は「4/5までに終ゝらせる」のみで工程の陝定は無い場合:
-- process_name / machine_name は **備考は書かれた行** の値を入れる。
-- restrict_to_* は **出さないか空** にし、**エンボス行・分割行の両方** にも優先度・日付等は効しよごにれる。
-
-」基準年（年なし日付用）】
-「4/5」「4/5に出蝷」のよごに **年は無い** 日付は原則 **西暦 {ref_y} 年** とし、YYYY-MM-DD で出力。
-
-」フィールド一覧（型の参考）】
-- process_name, machine_name: 文字列（必須。プロンプト行と一致）
-- restrict_to_process_name, restrict_to_machine_name: 文字列（任愝。陝定なら）
-- required_op: 正の整数
-- speed_override: 正の数（m/分）。※配台の実効速度は列「加工速度_上書き」「加工速度」のみ使用。本キーは速度計算には反映せず、列との食い違い検出に用いる。
-- task_efficiency: 0〜1
-- priority: 整数（尝さいろど先に割付）
-- start_date: YYYY-MM-DD / start_time: HH:MM
-- target_completion_date, ship_by_date: YYYY-MM-DD
-
-」解釈の指針】
-- 「間に坈ごよごに」「繰り上きる」→ priority を上きる（数値を下きる）。日付は文中にあれみ target_completion_date または ship_by_date に入れる。
-- 数値・日付は推測で補ゝない。
-- **備考は特定の工程・機械にの値言坊していない陝り**」restrict_to_* は空にし、同一依頼NOの他行にも適用される形にれる。
-
-」出力直後の自己検証（必う実行してから JSON を閉もる）】
-- 」特別指定原文】の **坄行** についで」対応れるオブジェクトに **process_name** と **machine_name** はあるか。
-- 同一依頼NOは複数行あるとしは **配列** で坄行に1オブジェクト」または革切にマージした坘一オブジェクト＋restrict の靋用を一貫させる。
-」出力形式の例】（依頼NO・値は実データに合わせ替ごること）
-{{
-  "W3-14": {{
-    "process_name": "検査",
-    "machine_name": "ラインA"
-  }},
-  "Y3-26": {{
-    "process_name": "コーティング",
-    "machine_name": "",
-    "priority": 1,
-    "ship_by_date": "{ref_y}-04-05",
-    "target_completion_date": "{ref_y}-04-05"
-  }},
-  "Y4-2": {{
-    "process_name": "エンボス",
-    "machine_name": "E1",
-    "priority": 2,
-    "restrict_to_process_name": "",
-    "restrict_to_machine_name": ""
-  }}
-}}
-
-」特別指定原文】（Excel からしのまま。1行＝依頼NOと備考のペア）
-{blob}
-"""
+    prompt = _task_special_ai_prompt(blob, ref_y)
     try:
         ppath = os.path.join(log_dir, "ai_task_special_last_prompt.txt")
         with open(ppath, "w", encoding="utf-8", newline="\n") as pf:

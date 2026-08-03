@@ -2,12 +2,25 @@
 # planning_core.core.gemini_auth — body only (loaded via _core exec chain)
 GEMINI_MODEL_IDS_BY_QUALITY: tuple[str, ...] = (
     "gemini-3.5-flash",
+    "gemini-3.5-flash-lite",
     "gemini-3.1-flash-lite",
     "gemini-3.1-flash-lite-preview",
-    "gemini-2.5-flash-lite",
-    "gemini-2.0-flash-lite",
+    "gemini-flash-latest",
 )
 GEMINI_MODEL_FLASH = "gemini-3.5-flash"
+# 無料枠の割り当ては世代ごとに打ち切られる。gemini-1.x / 2.x と pro 系は未使用のキーでも
+# 429 を返すため、待機付き再試行を誘発するだけの候補として試行列から除外する。
+GEMINI_EXHAUSTED_FREE_TIER_PREFIXES: tuple[str, ...] = ("gemini-1.", "gemini-2.")
+def _gemini_model_has_free_tier_allocation(model_id: str) -> bool:
+    """モデル ID が無料枠の割り当てを持つ世代・系統か（``models/`` 接頭辞は無視）。"""
+    mid = str(model_id or "").strip().lower()
+    if mid.startswith("models/"):
+        mid = mid[len("models/") :]
+    if not mid:
+        return False
+    if "pro" in mid:
+        return False
+    return not mid.startswith(GEMINI_EXHAUSTED_FREE_TIER_PREFIXES)
 _GEMINI_FLASH_IN_PER_M = float(
     os.environ.get("GEMINI_PRICE_USD_IN_PER_M", "0.075") or 0.075
 )
@@ -878,6 +891,220 @@ def _gemini_heartbeat_loop(
             model_id,
         )
         _gemini_flush_log_handlers()
+def _gemini_thinking_budget() -> int:
+    """``GEMINI_THINKING_BUDGET``: 0=思考無効（既定）、-1=モデル任せ、正数=思考トークン上限。
+
+    抽出・転記系のプロンプトに思考は不要で、思考トークンはそのまま応答待ち時間になる。
+    """
+    raw = (os.environ.get("GEMINI_THINKING_BUDGET") or "").strip()
+    if not raw:
+        return 0
+    try:
+        return int(float(raw))
+    except (TypeError, ValueError):
+        return 0
+def _gemini_generate_content_config(
+    *,
+    response_schema=None,
+    max_output_tokens: int | None = None,
+    thinking_budget: int | None = None,
+):
+    """``generate_content`` の設定。思考を既定で無効化し、スキーマ指定時は JSON 出力に固定する。
+
+    SDK に ``types`` が無い等で組み立てられないときは ``None``（SDK 既定で送信）。
+    """
+    try:
+        from google.genai import types as genai_types
+    except Exception:
+        logging.debug("Gemini: google.genai.types を読み込めないため生成設定を省略します。", exc_info=True)
+        return None
+    kwargs: dict = {}
+    budget = _gemini_thinking_budget() if thinking_budget is None else int(thinking_budget)
+    if budget >= 0:
+        kwargs["thinking_config"] = genai_types.ThinkingConfig(thinking_budget=budget)
+    if response_schema is not None:
+        kwargs["response_mime_type"] = "application/json"
+        kwargs["response_schema"] = response_schema
+    if max_output_tokens is not None and int(max_output_tokens) > 0:
+        kwargs["max_output_tokens"] = int(max_output_tokens)
+    try:
+        return genai_types.GenerateContentConfig(**kwargs)
+    except Exception:
+        logging.debug("Gemini: GenerateContentConfig の生成に失敗したため既定設定で送信します。", exc_info=True)
+        return None
+def _gemini_config_without_thinking(config):
+    """思考設定だけを外した複製（モデルが thinkingBudget を受け付けないとき用）。"""
+    if config is None:
+        return None
+    try:
+        clone = config.model_copy(update={"thinking_config": None})
+    except Exception:
+        try:
+            clone = copy.copy(config)
+            clone.thinking_config = None
+        except Exception:
+            return None
+    return clone
+def _gemini_is_thinking_config_unsupported_error(err_text: str) -> bool:
+    """thinkingBudget 非対応モデルが返す 400（思考設定を外せば通る）。"""
+    u = err_text.lower()
+    if "thinking" not in u:
+        return False
+    return ("not supported" in u) or ("unsupported" in u) or ("invalid_argument" in u)
+def _gemini_parse_json_object(text) -> dict | None:
+    """応答テキストから JSON オブジェクトを取り出す（コードフェンス・前後の地の文を許容）。"""
+    s = str(text or "").strip()
+    if not s:
+        return None
+    try:
+        parsed = json.loads(s)
+    except (TypeError, ValueError):
+        m = re.search(r"\{.*\}", s, re.DOTALL)
+        if not m:
+            return None
+        try:
+            parsed = json.loads(m.group(0))
+        except (TypeError, ValueError):
+            return None
+    return parsed if isinstance(parsed, dict) else None
+GEMINI_FREE_TIER_RPM_LIMIT = 15
+def _gemini_batch_max_items() -> int:
+    """1 リクエストに載せる明細行の上限（``GEMINI_BATCH_MAX_ITEMS``、既定 120）。
+
+    1 回の出力トークン量が応答時間を決めるため、行数で頭打ちにする。
+    """
+    raw = (os.environ.get("GEMINI_BATCH_MAX_ITEMS") or "").strip()
+    try:
+        v = int(float(raw)) if raw else 120
+    except (TypeError, ValueError):
+        v = 120
+    return max(1, v)
+def _gemini_max_parallel_requests() -> int:
+    """バッチ並列数（``GEMINI_MAX_PARALLEL_REQUESTS``、既定 4）。無料枠 RPM を超えない範囲に丸める。"""
+    raw = (os.environ.get("GEMINI_MAX_PARALLEL_REQUESTS") or "").strip()
+    try:
+        v = int(float(raw)) if raw else 4
+    except (TypeError, ValueError):
+        v = 4
+    return max(1, min(v, GEMINI_FREE_TIER_RPM_LIMIT))
+def _gemini_batch_slices(total: int, batch_size: int) -> list[tuple[int, int]]:
+    """``[0, total)`` を ``batch_size`` ごとの半開区間に分割する。"""
+    n = max(0, int(total))
+    if n <= 0:
+        return []
+    size = int(batch_size)
+    if size <= 0:
+        return [(0, n)]
+    return [(s, min(s + size, n)) for s in range(0, n, size)]
+def _gemini_invoke_generate_content(client: genai.Client, model_id: str, contents, config):
+    """1 回分の ``generate_content``。思考設定を拒むモデルのときだけ設定を外して即再送する。
+
+    戻り値: ``(応答, 実際に通った設定)``。呼び出し側は次の試行から後者を使う。
+    """
+    try:
+        if config is None:
+            return client.models.generate_content(model=model_id, contents=contents), None
+        return (
+            client.models.generate_content(model=model_id, contents=contents, config=config),
+            config,
+        )
+    except Exception as e:
+        if config is None or getattr(config, "thinking_config", None) is None:
+            raise
+        if not _gemini_is_thinking_config_unsupported_error(_gemini_err_text_for_exc(e)):
+            raise
+        logging.warning(
+            "Gemini モデル %s は thinkingBudget 指定に対応していないため、思考設定を外して再送します。",
+            model_id,
+        )
+        fallback = _gemini_config_without_thinking(config)
+        if fallback is None:
+            return client.models.generate_content(model=model_id, contents=contents), None
+        return (
+            client.models.generate_content(model=model_id, contents=contents, config=fallback),
+            fallback,
+        )
+_GEMINI_USAGE_RECORD_LOCK = threading.Lock()
+def _gemini_generate_json_map_in_batches(
+    client: genai.Client,
+    *,
+    items,
+    build_prompt,
+    log_label: str = "",
+    batch_size: int | None = None,
+    max_workers: int | None = None,
+    response_schema=None,
+    max_output_tokens: int | None = None,
+    parse_map=None,
+) -> tuple[dict, list[str], int]:
+    """明細を分割して並列に ``generate_content`` し、JSON オブジェクトをマージする。
+
+    1 リクエストの出力トークンを抑えることが目的で、並列化はその副次的な時間短縮。
+    1 バッチが失敗しても他バッチの結果は捨てない。
+
+    戻り値: ``(マージ済み dict, 使用モデル ID のリスト, 失敗バッチ数)``
+    """
+    rows = list(items or [])
+    if not rows:
+        return {}, [], 0
+    size = _gemini_batch_max_items() if batch_size is None else int(batch_size)
+    slices = _gemini_batch_slices(len(rows), size)
+    workers = _gemini_max_parallel_requests() if max_workers is None else int(max_workers)
+    workers = max(1, min(workers, len(slices)))
+    to_map = parse_map if parse_map is not None else (lambda payload: payload)
+    prefix = f"{log_label}: " if log_label else ""
+    logging.info(
+        "%sGemini へ %s 件を %s バッチ（並列 %s）で送信します。",
+        prefix,
+        len(rows),
+        len(slices),
+        workers,
+    )
+
+    def _run_one(index: int, lo: int, hi: int) -> tuple[int, dict, str | None]:
+        chunk = rows[lo:hi]
+        label = f"{log_label} {index + 1}/{len(slices)}" if log_label else f"{index + 1}/{len(slices)}"
+        config = _gemini_generate_content_config(
+            response_schema=response_schema, max_output_tokens=max_output_tokens
+        )
+        res, model_id = _gemini_generate_content_with_retry(
+            client, contents=build_prompt(chunk), log_label=label, config=config
+        )
+        with _GEMINI_USAGE_RECORD_LOCK:
+            record_gemini_response_usage(res, model_id)
+        payload = _gemini_parse_json_object(_gemini_result_text(res))
+        if payload is None:
+            logging.warning("%sバッチ %s の応答を JSON として読めませんでした。", prefix, index + 1)
+            return index, {}, model_id
+        parsed = to_map(payload)
+        return index, (parsed if isinstance(parsed, dict) else {}), model_id
+
+    from concurrent.futures import ThreadPoolExecutor
+
+    merged: dict = {}
+    model_ids: list[str | None] = [None] * len(slices)
+    failed = 0
+    with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="gemini-batch") as pool:
+        futures = [pool.submit(_run_one, i, lo, hi) for i, (lo, hi) in enumerate(slices)]
+        for fut in futures:
+            try:
+                index, parsed, model_id = fut.result()
+            except GeminiApiSkippedError:
+                raise
+            except Exception as ex:
+                failed += 1
+                logging.warning("%sバッチ呼び出しに失敗しました（続行）: %s", prefix, ex)
+                continue
+            model_ids[index] = model_id
+            merged.update(parsed)
+    used = [m for m in model_ids if m]
+    logging.info(
+        "%sGemini バッチ完了: 取得 %s 件・失敗 %s バッチ。",
+        prefix,
+        len(merged),
+        failed,
+    )
+    return merged, used, failed
 def _gemini_generate_content_with_retry(
     client: genai.Client,
     *,
@@ -885,6 +1112,7 @@ def _gemini_generate_content_with_retry(
     model: str | None = None,
     max_attempts: int | None = None,
     log_label: str = "",
+    config=None,
 ):
     """generate_content を再試行する（Gemini generateContent 共通）。
 
@@ -897,9 +1125,11 @@ def _gemini_generate_content_with_retry(
     - 一時エラー待機: (1) 429 等で本文に retry 秒数 (2) 指数バックオフ＋ジッター
     - HTTP タイムアウト（既定 60 秒・GEMINI_REQUEST_TIMEOUT_SEC）: 同一モデルに残試行があれば短待機で再試行。
       試行を使い切ったらモデル列の次点へ進む（_gemini_client の HttpOptions と併用）。
+    - 生成設定: 引数 ``config`` 未指定なら ``_gemini_generate_content_config()``（思考は既定で無効）。
 
     戻り値: (応答オブジェクト, 実際に成功したモデル ID)
     """
+    effective_config = config if config is not None else _gemini_generate_content_config()
     chain = _gemini_effective_model_chain(model)
     n = max_attempts if max_attempts is not None else _GEMINI_RETRY_MAX_ATTEMPTS
     if n < 1:
@@ -915,6 +1145,7 @@ def _gemini_generate_content_with_retry(
     hb_interval = _gemini_progress_log_interval_sec()
     last_raise: BaseException | None = None
     for mi, mid in enumerate(chain):
+        cur_config = effective_config
         for attempt in range(n):
             _gemini_pre_request_jitter_sleep()
             try:
@@ -932,7 +1163,9 @@ def _gemini_generate_content_with_retry(
                     hb_thread.start()
                 t_req = time_module.monotonic()
                 try:
-                    res = client.models.generate_content(model=mid, contents=contents)
+                    res, cur_config = _gemini_invoke_generate_content(
+                        client, mid, contents, cur_config
+                    )
                 finally:
                     stop_hb.set()
                     if hb_thread is not None:

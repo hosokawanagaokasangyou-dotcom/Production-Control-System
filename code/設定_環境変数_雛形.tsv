@@ -70,6 +70,9 @@ GEMINI_RETRY_BACKOFF_BASE_SEC	2.0	再試行の指数バックオフ基底（秒�
 GEMINI_PROGRESS_LOG_INTERVAL_SEC	12	応答待ちハートビートログ間隔（秒）。0 で無効。
 GEMINI_RETRY_MAX_ATTEMPTS	3	同一モデルあたりの最大試行。使い切ったら次モデルへ。
 GEMINI_REQUEST_TIMEOUT_SEC	60	generate_content の HTTP タイムアウト（秒）。0 で SDK 既定（非推奨）。
+GEMINI_THINKING_BUDGET	0	思考トークン上限。0 で思考無効（既定・最速）。-1 でモデル任せ。正数でその上限。
+GEMINI_BATCH_MAX_ITEMS	120	勤怠備考AI 等で 1 リクエストに載せる明細行の上限。小さいほど 1 回の出力が減る。
+GEMINI_MAX_PARALLEL_REQUESTS	4	バッチ分割した Gemini 呼び出しの並列数。無料枠 RPM 15 を超えない範囲に丸める。
 PM_AI_CMD_PAUSE_ON_ERROR	1	setup_environment 等: 成功・失敗とも終了時に pause。0/false/no/off で無効。pip 失敗直後は OS のみ有効の場合あり。
 PM_AI_SETUP_COMPLETION_MSGBOX	1	setup_environment: Windows で成功時に MessageBox。0/false/no/off で無効。
 PM_AI_PORTABLE_BUNDLE_SOURCE_DIR	\\192.168.0.101\共有フォルダ\湖南工場\湖南共有\002  加工G\●配台AIシステム\pm-ai-package-release	ポータブル配布の正本（UNC）。フォルダを指定するか、バージョンアップ用 ZIP のフルパス（固定名 PMD_version_upgrade.zip。ZIP 隣の外付け version.txt と比較）。空なら自動更新なし（情報表示のみ）。

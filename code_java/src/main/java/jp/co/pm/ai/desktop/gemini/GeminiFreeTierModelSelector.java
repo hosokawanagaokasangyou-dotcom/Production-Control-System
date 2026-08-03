@@ -9,6 +9,7 @@ import java.util.regex.Pattern;
 
 import jp.co.pm.ai.desktop.benchmark.GeminiGenerateContentRestClient;
 import jp.co.pm.ai.desktop.benchmark.GeminiModelsListRestClient.ListedModel;
+import jp.co.pm.ai.desktop.config.GeminiDispatchModelTryOrderDefaults;
 
 /**
  * {@code models.list} 結果から、無料枠運用向けの Flash-Lite 系（{@code generateContent} 対応）を抽出・並べ替えする。
@@ -45,6 +46,9 @@ public final class GeminiFreeTierModelSelector {
                 continue;
             }
             if (isExcludedSuffix(lower)) {
+                continue;
+            }
+            if (!GeminiDispatchModelTryOrderDefaults.hasFreeTierAllocation(id)) {
                 continue;
             }
             if (seen.add(id)) {

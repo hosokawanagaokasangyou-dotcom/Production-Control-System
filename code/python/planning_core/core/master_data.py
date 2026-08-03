@@ -846,6 +846,106 @@ def _ai_json_bool(v, default: bool = False) -> bool:
     if s in ("false", "0", "no", "n", "いいえ", "坽", "off", ""):
         return False
     return default
+ATTENDANCE_AI_ENTRY_KEY_FIELD = "対象キー"
+ATTENDANCE_REMARK_AI_RESPONSE_SCHEMA: dict = {
+    "type": "OBJECT",
+    "properties": {
+        "entries": {
+            "type": "ARRAY",
+            "items": {
+                "type": "OBJECT",
+                "properties": {
+                    ATTENDANCE_AI_ENTRY_KEY_FIELD: {"type": "STRING"},
+                    "出勤時刻": {"type": "STRING"},
+                    "退勤時刻": {"type": "STRING"},
+                    "中抜き開始": {"type": "STRING"},
+                    "中抜き終了": {"type": "STRING"},
+                    "作業効率": {"type": "NUMBER"},
+                    "is_holiday": {"type": "BOOLEAN"},
+                    "配台不参加": {"type": "BOOLEAN"},
+                },
+                "required": [ATTENDANCE_AI_ENTRY_KEY_FIELD],
+            },
+        }
+    },
+    "required": ["entries"],
+}
+def _attendance_remark_ai_prompt(remark_lines) -> str:
+    """勤怠備考 AI のプロンプト（通常勤務との差分だけを返させる）。
+
+    全行の全項目を書き戻させると 1 リクエストの出力が数万トークンに膨れ、応答が数分かかる。
+    """
+    joined = "\n".join(str(x) for x in remark_lines)
+    return f"""
+以下は勤怠の「備考」「休暇区分」の自由記述です。出退勤時刻の変更・中抜き・休日・配台不参加・作業効率のうち、
+通常勤務から**変わる点があるものだけ**を JSON で返してください。
+
+【出力量の制約（最重要）】
+- 通常どおりで変更がない行は entries に**含めない**。
+- 変更がある行でも、**読み取れる項目だけ**を書く。変更のない項目・不明な項目は**省略**する（null を書かない）。
+- 説明文・マークダウン（``` 等）は出力しない。JSON のみ。
+
+【出力形式】
+{{
+  "entries": [
+    {{"{ATTENDANCE_AI_ENTRY_KEY_FIELD}": "YYYY-MM-DD_メンバー名", "出勤時刻": "HH:MM"}}
+  ]
+}}
+
+【項目】
+- {ATTENDANCE_AI_ENTRY_KEY_FIELD}（必須）: 下の一覧の「YYYY-MM-DD_メンバー名」をそのまま写す。
+- 出勤時刻 / 退勤時刻: "HH:MM"。定時どおりなら省略。
+- 中抜き開始 / 中抜き終了: 一時的な離脱（中抜け・事務所・会議など）があるときだけ両方を書く。
+  例: 「午前中は事務所で作業」→ 中抜き開始 "08:45"・中抜き終了 "12:00"
+      「午後は会議」→ 中抜き開始 "13:00"・中抜き終了 "17:00"
+- is_holiday: 終日休暇・欠勤など**勤務自体がない**ときだけ true。
+  午前休・午後休など部分的な休みでは書かず、出退勤時刻や中抜きで表現する。
+- 配台不参加: 勤務はあるが**加工ラインへの配台（OP/AS の割当）に載せてはいけない**ときだけ true。
+  表記は問わず意味で判断する（「配台不可」「配台ＮＧ」「ラインに乗らない」「月次点検のみ」「点検で一日」
+  「事務のみ」「教育で現場不可」「手配なし」「アサイン不要」などの言い換えも含む）。
+  休暇区分が「-」（ハイフン1文字）のみのときは is_holiday を書かず、配台不参加 を true にする。
+- 作業効率: 0.0〜1.0。通常（1.0）なら省略。
+
+【特記事項リスト】
+{joined}
+"""
+def _attendance_ai_entries_to_map(payload) -> dict:
+    """勤怠備考 AI の応答を ``{"YYYY-MM-DD_メンバー": {...}}`` に正規化する。
+
+    新形式は ``entries`` 配列。旧形式（トップレベルが対象キーの辞書）もキャッシュ互換で受ける。
+    """
+    if not isinstance(payload, dict):
+        return {}
+    entries = payload.get("entries")
+    if entries is None:
+        return {
+            k: v
+            for k, v in payload.items()
+            if isinstance(k, str) and k.strip() and isinstance(v, dict)
+        }
+    if not isinstance(entries, list):
+        return {}
+    out: dict = {}
+    for ent in entries:
+        if not isinstance(ent, dict):
+            continue
+        key = str(ent.get(ATTENDANCE_AI_ENTRY_KEY_FIELD) or "").strip()
+        if not key:
+            continue
+        out[key] = {
+            k: v
+            for k, v in ent.items()
+            if k != ATTENDANCE_AI_ENTRY_KEY_FIELD and v is not None
+        }
+    return out
+def _attendance_is_empty_shift(row, *, key: str, analyzed_keys) -> bool:
+    """出退勤が両方空で、かつ AI 解析にも回らなかった行（備考も休暇区分も無い）か。
+
+    AI は変更のない行を返さないため、応答の有無ではなく解析対象だったかどうかで判定する。
+    """
+    if not (pd.isna(row.get("出勤時間")) and pd.isna(row.get("退勤時間"))):
+        return False
+    return key not in (analyzed_keys or ())
 def _parse_attendance_overtime_end_optional(v) -> time | None:
     """勤怠「残業(分)」列。有効な時刻のみ。空・不正は None（_excel_scalar_to_time_optional と同趣旨）。"""
     return _excel_scalar_to_time_optional(v)
@@ -959,6 +1059,7 @@ def load_attendance_and_analyze(members):
 
     # 2. AI による勤怠文脈の解析（備考は空でも休暇区分のみの行は AI に渡し、表記杺れはモデルに解釈させる）
     remarks_to_analyze = []
+    analyzed_keys: set[str] = set()
     for _, row in df.iterrows():
         m = str(row.get('メンバー', '')).strip()
         if m not in members:
@@ -966,12 +1067,15 @@ def load_attendance_and_analyze(members):
         rem = _attendance_remark_text(row)
         lt = _attendance_leave_type_text(row)
         d_str = row['日付'].strftime("%Y-%m-%d") if pd.notna(row['日付']) else ""
+        key = f"{d_str}_{m}"
         if rem:
-            remarks_to_analyze.append(f"{d_str}_{m} の備考: {rem}")
+            remarks_to_analyze.append(f"{key} の備考: {rem}")
+            analyzed_keys.add(key)
         elif lt and lt not in ("通常", ""):
             # 「-」は配台不参加をコード固定（API 不要）。他の休暇区分は従来どおり AI に渡す。
             if not _attendance_leave_type_is_calendar_no_dispatch(lt):
-                remarks_to_analyze.append(f"{d_str}_{m} の休暇区分（備考は空）: {lt}")
+                remarks_to_analyze.append(f"{key} の休暇区分（備考は空）: {lt}")
+                analyzed_keys.add(key)
 
     if remarks_to_analyze:
         remarks_blob = "\n".join(remarks_to_analyze)
@@ -983,7 +1087,7 @@ def load_attendance_and_analyze(members):
         # 同一備考セットはキャッシュを優先利用し、APIコールを節約
         cached_data = get_cached_ai_result(ai_cache, cache_key)
         if cached_data is not None:
-            ai_parsed = cached_data
+            ai_parsed = _attendance_ai_entries_to_map(cached_data)
             ai_log["勤怠備考_AI_API"] = "なし(キャッシュ使用)"
             ai_log["勤怠備考_AI_詳細"] = "キャッシュヒット"
             ai_log["勤怠備考_Geminiモデル"] = "—（キャッシュ利用・今回 API 未実行）"
@@ -999,55 +1103,28 @@ def load_attendance_and_analyze(members):
                 len(remarks_to_analyze),
             )
             ai_log["勤怠備考_AI_API"] = "あり"
-            
-            prompt = f"""
-            以下の坄日・メンバーの備考を読み取り」出退勤時刻の変更や中抜き」休日の判定を行い」JSON形式で出力してください。
-            マークダウン記坷(``` 等)は一切含むう」純粋なJSON文字列のみを返してください。
-
-            」JSONの出力形式（キー坝を厳密に守ること）】
-            {{
-              "YYYY-MM-DD_メンバー坝": {{
-                "出勤時刻": "HH:MM", 
-                "退勤時刻": "HH:MM", 
-                "中抜き開始": "HH:MM",
-                "中抜き終了": "HH:MM",
-                "作業効率": 1.0,     
-                "is_holiday": false,
-                "配台試行時": false
-              }}
-            }}
-            ・キー名は上記の日本語キーをそのまま使う（英語キーに置き換えない）
-            ・出勤時刻/退勤時刻: 当該行の「備考」または「休暇区分（備考は空）」の文脈から推測。不明や変更なしなら null
-            ・中抜け開始/終了: 一時的な離脱（中抜け・事務所・会議など）がある場合、その開始・終了。ない場合は null
-            ・曖昧語の解釈例:
-              - 「午前中は事務所で作業」=> 中抜け開始 "08:45", 中抜け終了 "12:00"
-              - 「午後は会議」=> 中抜け開始 "13:00", 中抜け終了 "17:00"
-            ・is_holiday: その日が会社に来ない・終日休暇・欠勤など **勤務自体がない** と判断できる場合のみ true。午前休・午後休など部分的な休みは false（中抜けや時刻で表現）
-            ・配台不参加: 勤務はあるが **加工ラインへの配台（OP/AS の割当）に載せてはいけない** と読み取れる場合は true。表記は問わず意味で判断すること。
-              例: 「配台不可」「配台ＮＧ」「ラインに乗らない」「月次点検のみ」「点検で一日」「事務のみ」「教育で現場不可」「手配なし」「アサイン不要」などの揺れや婉曲表現も含む。
-              休暇区分が「-」（ハイフン1文字）のみのときは **is_holiday false・配台不参加 true**（休日ではないが加工に入れない日のマスタ記号）。
-              通常勤務で特に制限が読み取れない場合は false
-            ・作業効率: 0.0〜1.0の数値
-            
-            」特記事項リスト】
-            {chr(10).join(remarks_to_analyze)}
-            """
             try:
                 client = _gemini_client(API_KEY)
-                res, gem_model_used = _gemini_generate_content_with_retry(
-                    client, contents=prompt, log_label="勤怠備考AI"
+                ai_parsed, models_used, failed_batches = (
+                    _gemini_generate_json_map_in_batches(
+                        client,
+                        items=remarks_to_analyze,
+                        build_prompt=_attendance_remark_ai_prompt,
+                        log_label="勤怠備考AI",
+                        response_schema=ATTENDANCE_REMARK_AI_RESPONSE_SCHEMA,
+                        parse_map=_attendance_ai_entries_to_map,
+                    )
                 )
-                record_gemini_response_usage(res, gem_model_used)
-                ai_log["勤怠備考_Geminiモデル"] = gem_model_used
-                match = re.search(r'\{.*\}', res.text, re.DOTALL)
-                if match:
-                    ai_parsed = json.loads(match.group(0))
+                ai_log["勤怠備考_Geminiモデル"] = (
+                    ", ".join(dict.fromkeys(models_used)) or "—（呼び出し失敗）"
+                )
+                if failed_batches:
+                    # 欠けたままキャッシュすると次回以降も欠けたままになるので保存しない
+                    ai_log["勤怠備考_AI_詳細"] = f"一部失敗（{failed_batches} バッチ）"
+                else:
                     put_cached_ai_result(ai_cache, cache_key, ai_parsed)
                     save_ai_cache(ai_cache)
                     ai_log["勤怠備考_AI_詳細"] = "解析成功"
-                else:
-                    ai_parsed = {}
-                    ai_log["勤怠備考_AI_詳細"] = "JSONパース失敗"
             except Exception as e:
                 ai_parsed = {}
                 logging.warning("AI通信エラー: %s", e)
@@ -1072,7 +1149,9 @@ def load_attendance_and_analyze(members):
         key = f"{curr_date.strftime('%Y-%m-%d')}_{m}"
         ai_info = ai_parsed.get(key, {})
 
-        is_empty_shift = pd.isna(row.get('出勤時間')) and pd.isna(row.get('退勤時間')) and not ai_info
+        is_empty_shift = _attendance_is_empty_shift(
+            row, key=key, analyzed_keys=analyzed_keys
+        )
         is_holiday = _ai_json_bool(ai_info.get("is_holiday"), False) or is_empty_shift
         forced_calendar_paid_leave = _attendance_leave_type_is_full_day_paid_leave(leave_type)
         if forced_calendar_paid_leave:

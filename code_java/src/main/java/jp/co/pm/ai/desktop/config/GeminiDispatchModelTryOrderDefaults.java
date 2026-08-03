@@ -3,6 +3,7 @@ package jp.co.pm.ai.desktop.config;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 import jp.co.pm.ai.desktop.benchmark.GeminiGenerateContentRestClient;
@@ -26,14 +27,38 @@ public final class GeminiDispatchModelTryOrderDefaults {
     public static final List<String> PLANNING_CORE_FALLBACK_TRY_ORDER =
             List.of(
                     PLANNING_CORE_TOP_PRIORITY_MODEL,
+                    "gemini-3.5-flash-lite",
                     "gemini-3.1-flash-lite",
                     "gemini-3.1-flash-lite-preview",
-                    "gemini-2.5-flash-lite",
-                    "gemini-2.0-flash-lite");
+                    "gemini-flash-latest");
+
+    /**
+     * 無料枠の割り当ては世代ごとに打ち切られる。{@code gemini-1.x} / {@code gemini-2.x} と pro 系は
+     * 未使用のキーでも 429 を返すため、待機付き再試行を誘発するだけの候補として試行列から外す。
+     */
+    private static final List<String> EXHAUSTED_FREE_TIER_PREFIXES = List.of("gemini-1.", "gemini-2.");
+
+    /** モデル ID が無料枠の割り当てを持つ世代・系統か（{@code models/} 接頭辞は無視）。 */
+    public static boolean hasFreeTierAllocation(String modelId) {
+        if (modelId == null) {
+            return false;
+        }
+        String id = GeminiGenerateContentRestClient.normalizeModelId(modelId).toLowerCase(Locale.ROOT);
+        if (id.isEmpty() || id.contains("pro")) {
+            return false;
+        }
+        for (String prefix : EXHAUSTED_FREE_TIER_PREFIXES) {
+            if (id.startsWith(prefix)) {
+                return false;
+            }
+        }
+        return true;
+    }
 
     /**
      * Flash-Lite 無料枠候補（models.list 等）の前に {@link #PLANNING_CORE_TOP_PRIORITY_MODEL} を置き、
      * 続けてコード既定 Flash-Lite 列を重複除去してマージする。
+     * 無料枠の割り当てが無い世代の候補は落とす。
      */
     public static List<String> withPlanningCorePriorityFirst(List<String> flashLiteCandidates) {
         if (flashLiteCandidates == null || flashLiteCandidates.isEmpty()) {
@@ -45,7 +70,7 @@ public final class GeminiDispatchModelTryOrderDefaults {
         seen.add(PLANNING_CORE_TOP_PRIORITY_MODEL);
         for (String raw : flashLiteCandidates) {
             String norm = GeminiGenerateContentRestClient.normalizeModelId(raw);
-            if (!norm.isEmpty() && seen.add(norm)) {
+            if (!norm.isEmpty() && hasFreeTierAllocation(norm) && seen.add(norm)) {
                 merged.add(norm);
             }
         }

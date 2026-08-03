@@ -15,27 +15,37 @@ class GeminiFreeTierModelSelectorTest {
     void selectsFlashLiteWithGenerateContent_sortedNewestFirst() {
         List<ListedModel> listed =
                 List.of(
-                        model("models/gemini-2.0-flash-lite", "generateContent"),
                         model("models/gemini-3.1-flash-lite-preview", "generateContent"),
                         model("models/gemini-3.1-flash-lite", "generateContent"),
-                        model("models/gemini-2.5-flash-lite", "generateContent"),
+                        model("models/gemini-3.5-flash-lite", "generateContent"),
                         model("models/gemini-2.5-flash", "generateContent"),
                         model("models/text-embedding-004", "embedContent"));
         List<String> out = GeminiFreeTierModelSelector.selectFlashLiteGenerateContentModels(listed);
         assertEquals(
                 List.of(
+                        "gemini-3.5-flash-lite",
                         "gemini-3.1-flash-lite",
-                        "gemini-3.1-flash-lite-preview",
-                        "gemini-2.5-flash-lite",
-                        "gemini-2.0-flash-lite"),
+                        "gemini-3.1-flash-lite-preview"),
                 out);
+    }
+
+    @Test
+    void dropsGenerationsWithoutFreeTierAllocation() {
+        List<ListedModel> listed =
+                List.of(
+                        model("models/gemini-2.0-flash-lite", "generateContent"),
+                        model("models/gemini-2.5-flash-lite", "generateContent"),
+                        model("models/gemini-1.5-flash-lite", "generateContent"),
+                        model("models/gemini-3.1-flash-lite", "generateContent"));
+        List<String> out = GeminiFreeTierModelSelector.selectFlashLiteGenerateContentModels(listed);
+        assertEquals(List.of("gemini-3.1-flash-lite"), out);
     }
 
     @Test
     void emptyWhenNoFlashLite() {
         List<String> out =
                 GeminiFreeTierModelSelector.selectFlashLiteGenerateContentModels(
-                        List.of(model("models/gemini-2.5-flash", "generateContent")));
+                        List.of(model("models/gemini-3.5-flash", "generateContent")));
         assertTrue(out.isEmpty());
     }
 

@@ -359,6 +359,18 @@
     "value" : "240",
     "description" : "Gemini generate_content の HTTP タイムアウト（秒）。超過時は同一モデルを再試行し、試行上限後は次モデルへ。0 で SDK 既定（非推奨）"
   }, {
+    "name" : "GEMINI_THINKING_BUDGET",
+    "value" : "0",
+    "description" : "思考トークンの上限。0 で思考無効（既定・応答時間が最短）。-1 でモデル任せ。正数でその上限。抽出・転記系では 0 のままでよい"
+  }, {
+    "name" : "GEMINI_BATCH_MAX_ITEMS",
+    "value" : "120",
+    "description" : "勤怠備考AI 等で 1 リクエストに載せる明細行の上限。小さいほど 1 回の出力トークンが減り応答が速い（既定 120）"
+  }, {
+    "name" : "GEMINI_MAX_PARALLEL_REQUESTS",
+    "value" : "4",
+    "description" : "バッチ分割した Gemini 呼び出しの並列数（既定 4）。無料枠 RPM 15 を超えない範囲に丸める"
+  }, {
     "name" : "PM_AI_CMD_PAUSE_ON_ERROR",
     "value" : "1",
     "description" : "環境構築 setup_environment: 終了時（成功・失敗とも）に pause／Enter 待ち。0 false no off で無効。その他の CLI は従来どおり非0時のみ pause。pip 成功後にシートを読むため初回 pip 失敗時は OS 環境変数のみ有効 — CLI 終了時の pause（Windows）。0/false で無効化（workbook_env_bootstrap 同様）。"

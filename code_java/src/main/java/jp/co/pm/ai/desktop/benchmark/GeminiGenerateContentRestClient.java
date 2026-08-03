@@ -209,7 +209,10 @@ public final class GeminiGenerateContentRestClient {
         return joined.isEmpty() ? Optional.empty() : Optional.of(joined);
     }
 
-    private static String buildRequestJson(String userPrompt, int maxOutputTokens) throws IOException {
+    /**
+     * リクエスト本文。思考トークンはそのまま応答待ち時間になるため、抽出系用途では既定で無効にする。
+     */
+    static String buildRequestJson(String userPrompt, int maxOutputTokens) throws IOException {
         ObjectNode root = JsonNodeFactory.instance.objectNode();
         ObjectNode part = JsonNodeFactory.instance.objectNode();
         part.put("text", userPrompt != null ? userPrompt : "");
@@ -223,6 +226,9 @@ public final class GeminiGenerateContentRestClient {
         ObjectNode gen = JsonNodeFactory.instance.objectNode();
         gen.put("maxOutputTokens", Math.max(1, Math.min(maxOutputTokens, 8192)));
         gen.put("temperature", 0.0);
+        ObjectNode thinking = JsonNodeFactory.instance.objectNode();
+        thinking.put("thinkingBudget", 0);
+        gen.set("thinkingConfig", thinking);
         root.set("generationConfig", gen);
         return MAPPER.writeValueAsString(root);
     }
