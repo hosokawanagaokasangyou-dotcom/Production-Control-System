@@ -3744,6 +3744,7 @@ def _try_write_plan_input_global_parse_and_conflicts_one_save(
     num_data_rows: int,
     conflicts_by_row,
     tasks_df=None,
+    ai_parse_by_row=None,
 ) -> None:
     try:
         write_plan_sheet_global_parse_and_conflict_styles_one_io(
@@ -3755,6 +3756,7 @@ def _try_write_plan_input_global_parse_and_conflicts_one_save(
             conflicts_by_row=conflicts_by_row,
             log_prefix="段階2",
             tasks_df=tasks_df,
+            ai_parse_by_row=ai_parse_by_row,
         )
     except Exception as ex:
         logging.warning(
@@ -4116,6 +4118,64 @@ def collect_planning_conflicts_by_excel_row(tasks_df, ai_by_tid):
         if cset:
             res[i + 2] = cset
     return res
+def collect_plan_input_ai_special_parse_by_excel_row(tasks_df, ai_by_tid):
+    """
+    Excel 行番号（1始まり・ヘッダー=1行目）-> 「AI特別指定_解析」列へ書くテキスト。
+
+    値は結果_タスク一覧「特別指定_AI」と同じ内容（当該行に適用される AI 抽出エントリの JSON）。
+    解析が無い行・配台対象外の行は空文字にして、前回実行の古い解析をシートに残さない。
+    """
+    res = {}
+    for i, (_, row) in enumerate(tasks_df.iterrows()):
+        excel_row = i + 2
+        if _plan_row_exclude_from_assignment(row) or _plan_row_stage2_dispatch_plan_excluded(row):
+            res[excel_row] = ""
+            continue
+        ai_one = _ai_task_special_entry_for_row(ai_by_tid, row)
+        if not ai_one:
+            res[excel_row] = ""
+            continue
+        try:
+            text = json.dumps(ai_one, ensure_ascii=False)
+        except (TypeError, ValueError):
+            text = str(ai_one)
+        res[excel_row] = text[:PLAN_AI_SPECIAL_PARSE_CELL_MAX_LEN]
+    return res
+def _plan_sheet_write_ai_special_parse_cells_to_ws(
+    ws, num_data_rows: int, ai_parse_by_row, *, log_prefix: str = "段階2"
+) -> int:
+    """
+    既に開いている配台計画シートの「AI特別指定_解析」列へ、行ごとの AI 解析結果を書く。
+    空文字の行はセルを空にする（古い解析を残さない）。保存は呼び出し側。
+    戻り値: 値を入れたセル数。
+    """
+    if not isinstance(ai_parse_by_row, dict):
+        return 0
+    header_map: dict[str, int] = {}
+    for col_idx in range(1, ws.max_column + 1):
+        v = ws.cell(1, col_idx).value
+        if v is not None:
+            header_map[str(v).strip()] = col_idx
+    ci = header_map.get(PLAN_COL_AI_PARSE)
+    if not ci:
+        return 0
+    last_row = max(2, 1 + int(num_data_rows))
+    n_done = 0
+    for r in range(2, last_row + 1):
+        text = str(ai_parse_by_row.get(r) or "").strip()
+        cell = ws.cell(row=r, column=ci)
+        if text:
+            cell.value = text
+            n_done += 1
+        else:
+            cell.value = None
+    logging.info(
+        "%s: 「%s」列へ AI 解析結果を %s 行分反映しました（解析なしの行は空にしました）。",
+        log_prefix,
+        PLAN_COL_AI_PARSE,
+        n_done,
+    )
+    return n_done
 def _plan_sheet_apply_conflict_styles_to_ws(ws, num_data_rows: int, conflicts_by_row) -> None:
     """既に開いている配台計画シートへ」矛盾列の着色（薄黄リセット→赤）を適用する。保存は呼び出し坴。"""
     header_map = {}
@@ -4291,6 +4351,7 @@ def write_plan_sheet_global_parse_and_conflict_styles_one_io(
     conflicts_by_row,
     log_prefix: str = "段階2",
     tasks_df=None,
+    ai_parse_by_row=None,
 ) -> bool:
     """
     段階2: グローバルコメント解析（AX:AY）と矛盾ハイライトを反映する。
@@ -4338,6 +4399,9 @@ def write_plan_sheet_global_parse_and_conflict_styles_one_io(
         _plan_sheet_apply_conflict_styles_to_ws(ws, num_data_rows, conflicts_by_row or {})
         _plan_sheet_apply_effective_roll_unit_cells_from_df(
             ws, tasks_df, num_data_rows, log_prefix=log_prefix
+        )
+        _plan_sheet_write_ai_special_parse_cells_to_ws(
+            ws, num_data_rows, ai_parse_by_row, log_prefix=log_prefix
         )
         lc = PLAN_SHEET_GLOBAL_PARSE_LABEL_COL
         vc = PLAN_SHEET_GLOBAL_PARSE_VALUE_COL

@@ -88,6 +88,57 @@ public final class SpreadsheetPlanInputCellEditDialog {
     }
 
     /**
+     * 表示専用セル向け: 値を折り返し表示するだけのダイアログ（編集不可・閉じるのみ）。
+     *
+     * @param note 何によって埋まる列かの説明（{@code null} 可）
+     */
+    public static void viewReadOnly(
+            Window owner,
+            String columnTitle,
+            String value,
+            String note,
+            double columnWidthHint,
+            double anchorScreenX,
+            double anchorScreenY) {
+        Dialog<ButtonType> dialog = new Dialog<>();
+        dialog.initOwner(owner);
+        dialog.initModality(Modality.WINDOW_MODAL);
+        String title =
+                columnTitle != null && !columnTitle.isBlank() ? columnTitle.strip() : "セルの内容";
+        dialog.setTitle(title);
+        dialog.setHeaderText(null);
+
+        String shown = value != null ? value : "";
+        TextArea area = new TextArea(shown);
+        area.setWrapText(true);
+        area.setEditable(false);
+        area.setPrefRowCount(Math.max(3, Math.min(18, shown.length() / 60 + 3)));
+        double w = Math.min(780, Math.max(360, columnWidthHint <= 0 ? 480 : columnWidthHint * 1.2 + 56));
+        area.setPrefWidth(w);
+
+        Label hint = new Label(note != null && !note.isBlank() ? note.strip() : "この列は編集できません。");
+        hint.setWrapText(true);
+        hint.setStyle("-fx-font-size: 11px; -fx-text-fill: derive(-fx-text-inner-color, 18%);");
+
+        VBox box = new VBox(10, hint, area);
+        VBox.setVgrow(area, Priority.ALWAYS);
+        dialog.getDialogPane().setContent(box);
+        dialog.getDialogPane().getButtonTypes().setAll(ButtonType.CLOSE);
+        dialog.getDialogPane().setPrefWidth(w + 40);
+
+        dialog.setOnShown(
+                e ->
+                        Platform.runLater(
+                                () ->
+                                        positionNearAnchor(
+                                                dialog.getDialogPane().getScene().getWindow(),
+                                                anchorScreenX,
+                                                anchorScreenY)));
+
+        dialog.showAndWait();
+    }
+
+    /**
      * 日付列向け: {@link DatePicker} で暦日を選ぶ（空にする「クリア」付き）。
      */
     public static Optional<String> editDate(

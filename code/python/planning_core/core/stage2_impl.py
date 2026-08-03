@@ -478,12 +478,14 @@ def _generate_plan_impl(
                     )
                 t["start_date_req"] = prev_work
     conflict_rows = collect_planning_conflicts_by_excel_row(tasks_df, ai_task_by_tid)
+    ai_parse_rows = collect_plan_input_ai_special_parse_by_excel_row(tasks_df, ai_task_by_tid)
     _try_write_plan_input_global_parse_and_conflicts_one_save(
         global_priority_override,
         data_extract_dt_str,
         len(tasks_df),
         conflict_rows,
         tasks_df=tasks_df,
+        ai_parse_by_row=ai_parse_rows,
     )
 
     if not task_queue:

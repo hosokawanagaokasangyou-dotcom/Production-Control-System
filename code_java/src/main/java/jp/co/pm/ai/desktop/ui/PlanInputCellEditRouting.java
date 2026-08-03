@@ -7,18 +7,24 @@ import java.util.Optional;
 public final class PlanInputCellEditRouting {
 
     public static final String COL_LIMITED_OPERATOR = "担当OP_限定";
+    public static final String COL_AI_SPECIAL_PARSE = PlanInputAiSpecialParseColumn.COLUMN_TITLE;
 
     public enum Editor {
         TEXT,
-        LIMITED_OPERATOR_CHECKLIST
+        LIMITED_OPERATOR_CHECKLIST,
+        READ_ONLY
     }
 
     private PlanInputCellEditRouting() {}
 
     public static Editor editorFor(String columnTitle) {
-        return COL_LIMITED_OPERATOR.equals(columnTitle)
-                ? Editor.LIMITED_OPERATOR_CHECKLIST
-                : Editor.TEXT;
+        if (COL_LIMITED_OPERATOR.equals(columnTitle)) {
+            return Editor.LIMITED_OPERATOR_CHECKLIST;
+        }
+        if (COL_AI_SPECIAL_PARSE.equals(columnTitle)) {
+            return Editor.READ_ONLY;
+        }
+        return Editor.TEXT;
     }
 
     public static String applyLimitedOperatorResult(

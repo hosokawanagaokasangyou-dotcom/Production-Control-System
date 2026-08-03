@@ -150,6 +150,22 @@ public final class SpreadsheetPlanInputCellEditSupport {
                     double colW = col != null ? col.getWidth() : 0;
 
                     if (PlanInputCellEditRouting.editorFor(columnTitle)
+                            == PlanInputCellEditRouting.Editor.READ_ONLY) {
+                        SpreadsheetPlanInputCellEditDialog.viewReadOnly(
+                                owner,
+                                columnTitle,
+                                cur,
+                                "段階2 が「"
+                                        + PlanInputAiSpecialParseColumn.SOURCE_COLUMN_TITLE
+                                        + "」を解析した結果です。表示専用で、手入力しても配台には反映されません。",
+                                colW,
+                                e.getScreenX(),
+                                e.getScreenY());
+                        e.consume();
+                        return;
+                    }
+
+                    if (PlanInputCellEditRouting.editorFor(columnTitle)
                             == PlanInputCellEditRouting.Editor.LIMITED_OPERATOR_CHECKLIST) {
                         if (limitedOperatorEditor != null) {
                             limitedOperatorEditor.edit(
@@ -161,6 +177,7 @@ public final class SpreadsheetPlanInputCellEditSupport {
                                             applyCellEditValue(
                                                     columnTitle,
                                                     colIndex,
+                                                    headersRef,
                                                     row,
                                                     newVal,
                                                     afterColumnEdit,
@@ -223,6 +240,7 @@ public final class SpreadsheetPlanInputCellEditSupport {
                                     newVal -> applyCellEditValue(
                                             columnTitle,
                                             colIndex,
+                                            headersRef,
                                             row,
                                             newVal,
                                             afterColumnEdit,
@@ -250,6 +268,7 @@ public final class SpreadsheetPlanInputCellEditSupport {
     private static void applyCellEditValue(
             String columnTitle,
             int colIndex,
+            List<String> headersRef,
             ObservableList<String> row,
             String newVal,
             Consumer<String> afterColumnEdit,
@@ -264,6 +283,7 @@ public final class SpreadsheetPlanInputCellEditSupport {
             newVal = trimmed;
         }
         row.set(colIndex, newVal);
+        PlanInputAiSpecialParseColumn.clearStaleParseAfterRemarkEdit(headersRef, row, columnTitle);
         if (afterColumnEdit != null) {
             afterColumnEdit.accept(columnTitle);
         }

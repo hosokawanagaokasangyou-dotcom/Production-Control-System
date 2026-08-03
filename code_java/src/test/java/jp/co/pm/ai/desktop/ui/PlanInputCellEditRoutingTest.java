@@ -20,6 +20,14 @@ class PlanInputCellEditRoutingTest {
     }
 
     @Test
+    void aiSpecialParseColumnIsReadOnly() {
+        assertEquals(
+                PlanInputCellEditRouting.Editor.READ_ONLY,
+                PlanInputCellEditRouting.editorFor(
+                        PlanInputCellEditRouting.COL_AI_SPECIAL_PARSE));
+    }
+
+    @Test
     void cancelledSelectionLeavesCurrentCellValueUnchanged() {
         String current = "[\"山田\"]";
 
