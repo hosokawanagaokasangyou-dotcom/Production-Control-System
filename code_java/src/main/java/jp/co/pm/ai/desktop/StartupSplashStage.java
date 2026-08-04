@@ -36,6 +36,7 @@ import javafx.util.Duration;
 
 import jp.co.pm.ai.desktop.config.AppVersionInfo;
 import jp.co.pm.ai.desktop.config.FactorySite;
+import jp.co.pm.ai.desktop.ui.AppWindowIconSupport;
 import jp.co.pm.ai.desktop.config.GlobalInitSettingTarget;
 
 /**
@@ -170,6 +171,11 @@ final class StartupSplashStage {
         stage.initModality(Modality.APPLICATION_MODAL);
         stage.setAlwaysOnTop(true);
         stage.setTitle("起動中");
+        AppWindowIconSupport.applyTo(
+                stage,
+                rdpLauncher
+                        ? AppWindowIconSupport.Variant.RDP_LAUNCHER
+                        : AppWindowIconSupport.Variant.DESKTOP);
 
         ImageView background = null;
         if (hasBackgroundResource(b.backgroundResource())) {

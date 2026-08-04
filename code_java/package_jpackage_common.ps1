@@ -1,6 +1,25 @@
 # Shared jpackage helpers for package_app.ps1 and package_rdp_launcher_app.ps1
 # UTF-8 BOM: Windows PowerShell 5.1
 
+function Add-JpackageIconArgs {
+    param(
+        [System.Collections.Generic.List[string]]$JpkgArgs,
+        [string]$CodeJavaRoot,
+        [string]$IconBaseName
+    )
+    if ($null -eq $JpkgArgs -or [string]::IsNullOrWhiteSpace($CodeJavaRoot) -or [string]::IsNullOrWhiteSpace($IconBaseName)) {
+        return
+    }
+    $ico = Join-Path $CodeJavaRoot ("branding\" + $IconBaseName + '.ico')
+    if (Test-Path -LiteralPath $ico) {
+        $JpkgArgs.Add('--icon')
+        $JpkgArgs.Add($ico)
+    }
+    else {
+        Write-Warning "jpackage icon missing: $ico (run scripts/build_app_icons.py)"
+    }
+}
+
 function Read-MavenPomProperties {
     param([string]$PomPath)
     [xml]$xml = Get-Content -LiteralPath $PomPath -Encoding UTF8

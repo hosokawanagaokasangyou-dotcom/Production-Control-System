@@ -21,6 +21,7 @@ import jp.co.pm.ai.desktop.audio.UiClickSound;
 import jp.co.pm.ai.desktop.config.StartupCrashLog;
 import jp.co.pm.ai.desktop.runtime.JvmMemoryMonitor;
 import jp.co.pm.ai.desktop.runtime.WindowsLauncherUserDir;
+import jp.co.pm.ai.desktop.ui.AppWindowIconSupport;
 import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
 
 /**
@@ -158,6 +159,7 @@ public class PmAiFxApp extends Application {
     @Override
     public void start(Stage primaryStage) {
         primaryStage.setTitle("工程管理 AI 配台");
+        AppWindowIconSupport.applyTo(primaryStage, AppWindowIconSupport.Variant.DESKTOP);
 
         AtomicLong splashVisibleSinceNanos = new AtomicLong();
         StartupSplashStage.createAndShow(

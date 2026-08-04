@@ -514,6 +514,7 @@ $jpkgArgs.Add('--copyright')
 $jpkgArgs.Add('Copyright (C) 2026')
 $jpkgArgs.Add('--description')
 $jpkgArgs.Add('Production Control Desktop (JavaFX)')
+Add-JpackageIconArgs -JpkgArgs $jpkgArgs -CodeJavaRoot $Root -IconBaseName 'app-icon'
 
 foreach ($opt in $javaOpts) {
     $jpkgArgs.Add('--java-options')

@@ -133,6 +133,25 @@ if (-not (Test-Path -LiteralPath $packageWorkspaceCopyScript)) {
 }
 . (Resolve-Path -LiteralPath $packageWorkspaceCopyScript).Path
 
+function Add-JpackageIconArgs {
+    param(
+        [System.Collections.Generic.List[string]]$JpkgArgs,
+        [string]$CodeJavaRoot,
+        [string]$IconBaseName
+    )
+    if ($null -eq $JpkgArgs -or [string]::IsNullOrWhiteSpace($CodeJavaRoot) -or [string]::IsNullOrWhiteSpace($IconBaseName)) {
+        return
+    }
+    $ico = Join-Path $CodeJavaRoot ("branding\" + $IconBaseName + '.ico')
+    if (Test-Path -LiteralPath $ico) {
+        $JpkgArgs.Add('--icon')
+        $JpkgArgs.Add($ico)
+    }
+    else {
+        Write-Warning "jpackage icon missing: $ico (run scripts/build_app_icons.py)"
+    }
+}
+
 function Read-MavenPomProperties {
     param([string]$PomPath)
     [xml]$xml = Get-Content -LiteralPath $PomPath -Encoding UTF8
@@ -1179,6 +1198,7 @@ $jpkgArgs.Add('--copyright')
 $jpkgArgs.Add('Copyright (C) 2026')
 $jpkgArgs.Add('--description')
 $jpkgArgs.Add('Production Control Desktop (JavaFX)')
+Add-JpackageIconArgs -JpkgArgs $jpkgArgs -CodeJavaRoot $CodeJavaRoot -IconBaseName 'app-icon'
 
 foreach ($opt in $javaOpts) {
     $jpkgArgs.Add('--java-options')

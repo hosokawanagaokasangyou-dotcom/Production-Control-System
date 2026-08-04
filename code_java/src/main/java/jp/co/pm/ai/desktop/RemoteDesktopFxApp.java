@@ -18,6 +18,7 @@ import javafx.util.Duration;
 import jp.co.pm.ai.desktop.config.StartupCrashLog;
 import jp.co.pm.ai.desktop.runtime.JvmMemoryMonitor;
 import jp.co.pm.ai.desktop.runtime.WindowsLauncherUserDir;
+import jp.co.pm.ai.desktop.ui.AppWindowIconSupport;
 
 /** リモートデスクトップ専用ポータブル（{@code rpa_luncher_release} の PmAiRpaLuncher.exe）の JavaFX エントリ。 */
 public final class RemoteDesktopFxApp extends Application {
@@ -39,6 +40,7 @@ public final class RemoteDesktopFxApp extends Application {
     @Override
     public void start(Stage primaryStage) {
         primaryStage.setTitle(RemoteDesktopLauncherAppIdentity.DISPLAY_TITLE);
+        AppWindowIconSupport.applyTo(primaryStage, AppWindowIconSupport.Variant.RDP_LAUNCHER);
 
         AtomicLong splashVisibleSinceNanos = new AtomicLong();
         StartupSplashStage.createAndShow(

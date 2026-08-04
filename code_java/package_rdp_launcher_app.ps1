@@ -432,6 +432,7 @@ $jpkgArgs.Add('--main-class'); $jpkgArgs.Add($MAIN_CLASS)
 $jpkgArgs.Add('--app-version'); $jpkgArgs.Add($APP_VERSION)
 $jpkgArgs.Add('--vendor'); $jpkgArgs.Add('jp.co.pm.ai')
 $jpkgArgs.Add('--description'); $jpkgArgs.Add('Remote Desktop RPA Launcher (JavaFX)')
+Add-JpackageIconArgs -JpkgArgs $jpkgArgs -CodeJavaRoot $Root -IconBaseName 'rdp-launcher-icon'
 foreach ($opt in $javaOpts) {
     $jpkgArgs.Add('--java-options'); $jpkgArgs.Add($opt)
 }
