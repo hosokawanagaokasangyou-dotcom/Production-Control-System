@@ -1003,61 +1003,104 @@ def load_attendance_and_analyze(members):
         "勤怠備考_Geminiモデル": "—（解析対象の備考行なし）",
     }
     
-    # 1. メンバー別シートからの読み込み
-    all_records = []
+    df = None
     try:
-        xls = _cached_master_pd_excel_file(_master_workbook_path_resolved())
-        if xls is None:
-            raise FileNotFoundError("マスタブックを開けません")
-        for sheet_name in xls.sheet_names:
-            if "カレンダー" in sheet_name or sheet_name.lower() in ['skills', 'need', 'tasks']:
-                continue 
-                
-            m_name = sheet_name.strip()
-            if m_name not in members:
-                continue 
-                
-            df_sheet = pd.read_excel(xls, sheet_name=sheet_name)
-            df_sheet.columns = df_sheet.columns.str.strip()
-            df_sheet['メンバー'] = m_name 
-            all_records.append(df_sheet)
-            
-        if all_records:
-            df = pd.concat(all_records, ignore_index=True)
-            if ATT_COL_OT_END_LEGACY in df.columns and ATT_COL_OT_END not in df.columns:
-                df = df.rename(columns={ATT_COL_OT_END_LEGACY: ATT_COL_OT_END})
-            df['日付'] = pd.to_datetime(df['日付'], errors='coerce').dt.date
-            df = df.dropna(subset=['日付'])
-            logging.info(f"「{MASTER_FILE}」の各メンバーの勤怠シートを読み込みました。")
-            _cols = {str(c).strip() for c in df.columns}
-            if ATT_COL_REMARK in _cols and ATT_COL_LEAVE_TYPE in _cols:
-                logging.info(
-                    "勤怠列: AI 入力は「%s」のみ。備考は空の日は「%s」（公休・後休・他拠点勤務など）を reason に反映しました。",
-                    ATT_COL_REMARK,
-                    ATT_COL_LEAVE_TYPE,
-                )
-            elif ATT_COL_REMARK not in _cols:
-                logging.warning(
-                    "勤怠データに「%s」列はありません。備考ベースの AI 解析は空扱いになりました。",
-                    ATT_COL_REMARK,
-                )
-            if ATT_COL_OT_END in _cols:
-                logging.info(
-                    "勤怠列: 任意「%s」は退勤上限の時刻、または定時退勤からの延長分（1〜720 の整数＝分）を指定できます（全日休み行では無視）。",
-                    ATT_COL_OT_END,
-                )
-        else:
-            raise FileNotFoundError("有効なメンバー別勤怠シートは見つかりません。")
-            
-    except Exception as e:
-        logging.warning(f"勤怠シート読み込みエラー: {e} デフォルトカレンダーを生成しした。")
-        default_dates = generate_default_calendar_dates(TARGET_YEAR, TARGET_MONTH)
-        records = []
-        for d in default_dates:
-            for m in members: records.append({'日付': d, 'メンバー': m, '備考': '通常'})
-        df = pd.DataFrame(records)
+        from planning_core.core.attendance_paths import attendance_data_json_path
+        from planning_core.core.attendance_store import (
+            apply_company_calendar_to_members,
+            load_attendance_store,
+            member_attendance_to_dataframe_records,
+        )
 
-    # 2. AI による勤怠文脈の解析（備考は空でも休暇区分のみの行は AI に渡し、表記杺れはモデルに解釈させる）
+        jp = attendance_data_json_path()
+        if jp.is_file():
+            store = load_attendance_store(jp)
+            json_records = member_attendance_to_dataframe_records(store, list(members))
+            if not json_records and members:
+                y = int(store.get("company_calendar", {}).get("year") or date.today().year)
+                for month in range(1, 13):
+                    apply_company_calendar_to_members(
+                        store, list(members), y, month, only_unedited=False
+                    )
+                json_records = member_attendance_to_dataframe_records(store, list(members))
+            if json_records:
+                df = pd.DataFrame(json_records)
+                df["日付"] = pd.to_datetime(df["日付"], errors="coerce").dt.date
+                df = df.dropna(subset=["日付"])
+                logging.info(
+                    "勤怠正本 attendance-data.json を読み込みました（%s、%d 行）。",
+                    jp,
+                    len(df),
+                )
+            else:
+                logging.info(
+                    "勤怠正本 attendance-data.json は存在しますがメンバー勤怠行がありません（%s）。"
+                    "レガシーシートへはフォールバックしません。",
+                    jp,
+                )
+                df = pd.DataFrame()
+    except Exception as e:
+        logging.warning("attendance-data.json 読込をスキップ: %s", e)
+
+    # 1. メンバー別シートからの読み込み（JSON 正本ファイルが無いときのフォールバック）
+    all_records = []
+    if df is None:
+        try:
+            xls = _cached_master_pd_excel_file(_master_workbook_path_resolved())
+            if xls is None:
+                raise FileNotFoundError("マスタブックを開けません")
+            for sheet_name in xls.sheet_names:
+                if "カレンダー" in sheet_name or sheet_name.lower() in ['skills', 'need', 'tasks']:
+                    continue
+
+                m_name = sheet_name.strip()
+                if m_name not in members:
+                    continue
+
+                df_sheet = pd.read_excel(xls, sheet_name=sheet_name)
+                df_sheet.columns = df_sheet.columns.str.strip()
+                df_sheet['メンバー'] = m_name
+                all_records.append(df_sheet)
+
+            if all_records:
+                df = pd.concat(all_records, ignore_index=True)
+                if ATT_COL_OT_END_LEGACY in df.columns and ATT_COL_OT_END not in df.columns:
+                    df = df.rename(columns={ATT_COL_OT_END_LEGACY: ATT_COL_OT_END})
+                df['日付'] = pd.to_datetime(df['日付'], errors='coerce').dt.date
+                df = df.dropna(subset=['日付'])
+                logging.info(f"「{MASTER_FILE}」の各メンバーの勤怠シートを読み込みました。")
+                _cols = {str(c).strip() for c in df.columns}
+                if ATT_COL_REMARK in _cols and ATT_COL_LEAVE_TYPE in _cols:
+                    logging.info(
+                        "勤怠列: AI 入力は「%s」のみ。備考は空の日は「%s」（公休・後休・他拠点勤務など）を reason に反映しました。",
+                        ATT_COL_REMARK,
+                        ATT_COL_LEAVE_TYPE,
+                    )
+                elif ATT_COL_REMARK not in _cols:
+                    logging.warning(
+                        "勤怠データに「%s」列はありません。備考ベースの AI 解析は空扱いになりました。",
+                        ATT_COL_REMARK,
+                    )
+                if ATT_COL_OT_END in _cols:
+                    logging.info(
+                        "勤怠列: 任意「%s」は退勤上限の時刻、または定時退勤からの延長分（1〜720 の整数＝分）を指定できます（全日休み行では無視）。",
+                        ATT_COL_OT_END,
+                    )
+            else:
+                raise FileNotFoundError("有効なメンバー別勤怠シートは見つかりません。")
+
+        except Exception as e:
+            logging.warning(
+                f"勤怠シート読み込みエラー: {e} デフォルトカレンダーを生成しした。"
+            )
+            default_dates = generate_default_calendar_dates(TARGET_YEAR, TARGET_MONTH)
+            records = []
+            for d in default_dates:
+                for m in members:
+                    records.append({"日付": d, "メンバー": m, "備考": "通常"})
+            df = pd.DataFrame(records)
+
+    # 2. AI による勤怠文脈の解析
     remarks_to_analyze = []
     analyzed_keys: set[str] = set()
     for _, row in df.iterrows():

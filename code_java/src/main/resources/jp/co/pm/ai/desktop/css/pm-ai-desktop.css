@@ -992,6 +992,18 @@
     -fx-border-width: 1;
 }
 
+.pm-company-calendar .pm-company-cal-public {
+    -fx-background-color: #ffe0e0;
+}
+
+.pm-company-calendar .pm-company-cal-special {
+    -fx-background-color: #fff3cd;
+}
+
+.pm-company-calendar .pm-company-cal-working {
+    -fx-background-color: #e8f4ea;
+}
+
 /* A4 preview: always paper-like (dark app themes must not wash out text on white). */
 .pm-operator-card-root {
     -fx-background-color: white;

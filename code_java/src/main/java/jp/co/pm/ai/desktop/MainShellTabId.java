@@ -18,6 +18,10 @@ public enum MainShellTabId {
     USER_PROFILES("userProfiles"),
     /** 工場別の配台システム操作者名（起動時選択・作成者表示）。 */
     OPERATOR_USER_MANAGEMENT("operatorUserManagement"),
+    /** 会社カレンダー（公休・特別休暇・出勤日）。 */
+    COMPANY_CALENDAR("companyCalendar"),
+    /** メンバー勤怠（カレンダー方式）。 */
+    MEMBER_ATTENDANCE("memberAttendance"),
     MASTER_SUMMARY("masterSummary"),
     PLAN_INPUT("planInput"),
     /** 段階3.0 前処理で生成する枝番タスク入力（配台計画_タスク入力3.0）。段階3.0/3.1/3.2 実行の起点。 */

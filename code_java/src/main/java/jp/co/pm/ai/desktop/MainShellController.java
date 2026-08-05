@@ -377,6 +377,12 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
     private OperatorUserManagementTabController operatorUserManagementTabController;
 
     @FXML
+    private CompanyCalendarTabController companyCalendarTabController;
+
+    @FXML
+    private MemberAttendanceTabController memberAttendanceTabController;
+
+    @FXML
     private PlanInputTabController planInputTabController;
 
     @FXML
@@ -485,6 +491,12 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
 
     @FXML
     private Tab mainShellTabOperatorUserManagement;
+
+    @FXML
+    private Tab mainShellTabCompanyCalendar;
+
+    @FXML
+    private Tab mainShellTabMemberAttendance;
 
     @FXML
     private Tab mainShellTabMasterSummary;
@@ -746,6 +758,12 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
             }
             if (operatorUserManagementTabController != null) {
                 operatorUserManagementTabController.bindShell(this);
+            }
+            if (companyCalendarTabController != null) {
+                companyCalendarTabController.bindShell(this);
+            }
+            if (memberAttendanceTabController != null) {
+                memberAttendanceTabController.bindShell(this);
             }
             masterReadSummaryTabController.bindShell(this);
             planResultViewerTabController.bindShell(this);
@@ -1990,6 +2008,12 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         if (t == mainShellTabOperatorUserManagement) {
             return MainShellTabId.OPERATOR_USER_MANAGEMENT;
         }
+        if (t == mainShellTabCompanyCalendar) {
+            return MainShellTabId.COMPANY_CALENDAR;
+        }
+        if (t == mainShellTabMemberAttendance) {
+            return MainShellTabId.MEMBER_ATTENDANCE;
+        }
         if (t == mainShellTabMasterSummary) {
             return MainShellTabId.MASTER_SUMMARY;
         }
@@ -2080,6 +2104,8 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
             case GLOBAL_SETTINGS -> mainShellTabGlobalSettings;
             case USER_PROFILES -> mainShellTabUserProfiles;
             case OPERATOR_USER_MANAGEMENT -> mainShellTabOperatorUserManagement;
+            case COMPANY_CALENDAR -> mainShellTabCompanyCalendar;
+            case MEMBER_ATTENDANCE -> mainShellTabMemberAttendance;
             case MASTER_SUMMARY -> mainShellTabMasterSummary;
             case PLAN_INPUT -> mainShellTabPlanInput;
             case PLAN_INPUT_STAGE3 -> mainShellTabPlanInputStage3;
@@ -6185,6 +6211,25 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                 childEnvForPython(uiRun));
     }
 
+    /** {@code attendance_data_io.py} — 勤怠 JSON / 会社カレンダー / master 新シート出力。 */
+    RunRequest buildAttendanceDataIoRequest(String... scriptArgs) {
+        Map<String, String> uiRun = collectUiEnv();
+        Path py = resolveStagePythonExecutablePath(uiRun);
+        Path dir =
+                Path.of(
+                        firstNonBlank(
+                                uiRun.get(AppPaths.KEY_PM_AI_CODE_PYTHON_DIR),
+                                mainRunTabController.getScriptDirField().getText().trim()));
+        String wb = effectiveTaskInputWorkbookPath();
+        return new RunRequest(
+                py,
+                dir,
+                "attendance_data_io.py",
+                wb,
+                childEnvForPython(uiRun),
+                List.of(scriptArgs));
+    }
+
     /** Probe script {@code pm_ai_actuals_status.py}: same env merge as stage1/2. */
     RunRequest buildActualsStatusRequest() {
         Map<String, String> uiRun = collectUiEnv();
@@ -6301,6 +6346,11 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                         startupSkipTaskInputSourceDirListing,
                         startupSkipActualDetailSourceDirListing);
         AgentDebugLog.overlayPythonChildDebugEnv(m);
+        Path attJson = AppPaths.attendanceDataJsonPath(m);
+        m.putIfAbsent(AppPaths.KEY_PM_AI_ATTENDANCE_JSON, attJson.toString());
+        m.putIfAbsent(
+                AppPaths.KEY_PM_AI_ATTENDANCE_VIEW_XLSX,
+                AppPaths.attendanceViewXlsxPath(m).toString());
         return m;
     }
 

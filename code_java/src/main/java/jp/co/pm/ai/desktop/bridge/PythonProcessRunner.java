@@ -162,7 +162,18 @@ public final class PythonProcessRunner {
             Path scriptDirectory,
             String scriptFileName,
             String taskInputWorkbook,
-            Map<String, String> extraEnv) {}
+            Map<String, String> extraEnv,
+            List<String> scriptArgs) {
+
+        public RunRequest(
+                Path pythonExecutable,
+                Path scriptDirectory,
+                String scriptFileName,
+                String taskInputWorkbook,
+                Map<String, String> extraEnv) {
+            this(pythonExecutable, scriptDirectory, scriptFileName, taskInputWorkbook, extraEnv, List.of());
+        }
+    }
 
     /**
      * Same environment and working directory as {@link #runAsync}, but returns the full merged stdout
@@ -196,6 +207,9 @@ public final class PythonProcessRunner {
                         List<String> cmd = new ArrayList<>();
                         cmd.add(req.pythonExecutable.toString());
                         cmd.add(req.scriptFileName);
+                        if (req.scriptArgs != null) {
+                            cmd.addAll(req.scriptArgs);
+                        }
                         ProcessBuilder pb = new ProcessBuilder(cmd);
                         pb.directory(req.scriptDirectory.toFile());
                         pb.redirectErrorStream(true);
@@ -230,6 +244,9 @@ public final class PythonProcessRunner {
         List<String> cmd = new ArrayList<>();
         cmd.add(req.pythonExecutable().toString());
         cmd.add(req.scriptFileName());
+        if (req.scriptArgs() != null) {
+            cmd.addAll(req.scriptArgs());
+        }
         ProcessBuilder pb = new ProcessBuilder(cmd);
         pb.directory(req.scriptDirectory().toFile());
         pb.redirectErrorStream(true);
@@ -292,6 +309,9 @@ public final class PythonProcessRunner {
         List<String> cmd = new ArrayList<>();
         cmd.add(req.pythonExecutable.toString());
         cmd.add(req.scriptFileName);
+        if (req.scriptArgs != null) {
+            cmd.addAll(req.scriptArgs);
+        }
 
         ProcessBuilder pb = new ProcessBuilder(cmd);
         pb.directory(req.scriptDirectory.toFile());

@@ -2338,6 +2338,37 @@ public final class AppPaths {
     public static final String PIPELINE_EXECUTION_TIMING_HISTORY_JSON =
             "pipeline-execution-timing-history.json";
 
+    /** 勤怠正本 JSON（サマリ Excel 同階層）。 */
+    public static final String ATTENDANCE_DATA_JSON_FILENAME = "attendance-data.json";
+
+    /** 勤怠閲覧用 Excel（自動生成）。 */
+    public static final String ATTENDANCE_VIEW_XLSX_FILENAME = "勤怠_表示用.xlsx";
+
+    public static final String KEY_PM_AI_ATTENDANCE_JSON = "PM_AI_ATTENDANCE_JSON";
+
+    public static final String KEY_PM_AI_ATTENDANCE_VIEW_XLSX = "PM_AI_ATTENDANCE_VIEW_XLSX";
+
+    /**
+     * 勤怠正本 JSON の絶対パス（親は {@link #summaryAiDispatchXlsxPath(Map)} と同一フォルダ）。
+     */
+    public static Path attendanceDataJsonPath(Map<String, String> ui) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        String explicit = u.get(KEY_PM_AI_ATTENDANCE_JSON);
+        if (explicit != null && !explicit.isBlank()) {
+            return Path.of(explicit.trim()).toAbsolutePath().normalize();
+        }
+        return siblingOfSummaryAiDispatchWorkbook(u, ATTENDANCE_DATA_JSON_FILENAME);
+    }
+
+    public static Path attendanceViewXlsxPath(Map<String, String> ui) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        String explicit = u.get(KEY_PM_AI_ATTENDANCE_VIEW_XLSX);
+        if (explicit != null && !explicit.isBlank()) {
+            return Path.of(explicit.trim()).toAbsolutePath().normalize();
+        }
+        return siblingOfSummaryAiDispatchWorkbook(u, ATTENDANCE_VIEW_XLSX_FILENAME);
+    }
+
     /**
      * リモートサポート用ログの共有出力を無効化する環境変数（{@code 0}/{@code false}/{@code off} 等）。
      * 空・未設定は有効。

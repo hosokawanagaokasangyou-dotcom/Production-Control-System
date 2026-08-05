@@ -47,6 +47,8 @@ public final class MainShellTabLayoutDefaults {
                     MainShellTabId.STAGE1_PREVIEW.key(),
                     MainShellTabId.CODE_LOOKUP_TABLES.key(),
                     MainShellTabId.RESULT_DISPATCH.key(),
+                    MainShellTabId.COMPANY_CALENDAR.key(),
+                    MainShellTabId.MEMBER_ATTENDANCE.key(),
                     MainShellTabId.MASTER_SUMMARY.key(),
                     MainShellTabId.EXCLUDE_RULES.key(),
                     MainShellTabId.SPECIAL_RULES.key(),
@@ -112,7 +114,10 @@ public final class MainShellTabLayoutDefaults {
                                 MainShellTabLayoutNode.tabNode(MainShellTabId.GLOBAL_SETTINGS.key(), ""),
                                 MainShellTabLayoutNode.tabNode(MainShellTabId.USER_PROFILES.key(), ""),
                                 MainShellTabLayoutNode.tabNode(
-                                        MainShellTabId.OPERATOR_USER_MANAGEMENT.key(), ""))));
+                                        MainShellTabId.OPERATOR_USER_MANAGEMENT.key(), ""),
+                                MainShellTabLayoutNode.tabNode(MainShellTabId.COMPANY_CALENDAR.key(), ""),
+                                MainShellTabLayoutNode.tabNode(
+                                        MainShellTabId.MEMBER_ATTENDANCE.key(), ""))));
 
         top.add(
                 MainShellTabLayoutNode.groupNode(

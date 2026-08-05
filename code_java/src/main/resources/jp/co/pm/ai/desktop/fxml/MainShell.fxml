@@ -90,6 +90,16 @@
                                     source="OperatorUserManagementTab.fxml"/>
                     </content>
                 </Tab>
+                <Tab fx:id="mainShellTabCompanyCalendar" closable="false" text="会社カレンダー">
+                    <content>
+                        <fx:include fx:id="companyCalendarTab" source="CompanyCalendarTab.fxml"/>
+                    </content>
+                </Tab>
+                <Tab fx:id="mainShellTabMemberAttendance" closable="false" text="メンバー勤怠">
+                    <content>
+                        <fx:include fx:id="memberAttendanceTab" source="MemberAttendanceTab.fxml"/>
+                    </content>
+                </Tab>
                 <Tab fx:id="mainShellTabMasterSummary" closable="false"
                      text="マスタ読込サマリ">
                     <content>

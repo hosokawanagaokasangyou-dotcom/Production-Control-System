@@ -122,7 +122,7 @@ public final class AttendanceOvertimePreview {
     public static final class MasterReadSummaryJson {
         private MasterReadSummaryJson() {}
 
-        static String extractLastJsonLine(String merged) {
+        public static String extractLastJsonLine(String merged) {
             if (merged == null || merged.isBlank()) {
                 return "{}";
             }
