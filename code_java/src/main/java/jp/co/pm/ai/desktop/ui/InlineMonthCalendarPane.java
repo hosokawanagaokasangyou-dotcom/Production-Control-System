@@ -33,11 +33,21 @@ public final class InlineMonthCalendarPane extends VBox {
     private final ObjectProperty<YearMonth> displayedMonth =
             new SimpleObjectProperty<>(YearMonth.now());
 
+    private final boolean monthOnly;
     private final Label monthLabel = new Label();
     private final GridPane dayGrid = new GridPane();
 
     public InlineMonthCalendarPane() {
+        this(false);
+    }
+
+    /** @param monthOnly true のとき日グリッドを出さず、◀▶ で月のみ切り替える */
+    public InlineMonthCalendarPane(boolean monthOnly) {
+        this.monthOnly = monthOnly;
         getStyleClass().add("pm-inline-month-calendar");
+        if (monthOnly) {
+            getStyleClass().add("pm-inline-month-calendar-month-only");
+        }
         setSpacing(6);
 
         Button prev = new Button("◀");
@@ -52,34 +62,41 @@ public final class InlineMonthCalendarPane extends VBox {
         prev.setOnAction(e -> displayedMonth.set(displayedMonth.get().minusMonths(1)));
         next.setOnAction(e -> displayedMonth.set(displayedMonth.get().plusMonths(1)));
 
-        dayGrid.setHgap(4);
-        dayGrid.setVgap(4);
-        dayGrid.getStyleClass().add("pm-inline-month-calendar-grid");
-        for (int i = 0; i < 7; i++) {
-            ColumnConstraints cc = new ColumnConstraints();
-            cc.setHgrow(Priority.ALWAYS);
-            cc.setMinWidth(28);
-            dayGrid.getColumnConstraints().add(cc);
+        if (!monthOnly) {
+            dayGrid.setHgap(4);
+            dayGrid.setVgap(4);
+            dayGrid.getStyleClass().add("pm-inline-month-calendar-grid");
+            for (int i = 0; i < 7; i++) {
+                ColumnConstraints cc = new ColumnConstraints();
+                cc.setHgrow(Priority.ALWAYS);
+                cc.setMinWidth(28);
+                dayGrid.getColumnConstraints().add(cc);
+            }
+            getChildren().addAll(header, dayGrid);
+        } else {
+            getChildren().add(header);
         }
 
-        getChildren().addAll(header, dayGrid);
-
-        displayedMonth.addListener((obs, oldMonth, newMonth) -> rebuildGrid());
+        displayedMonth.addListener(
+                (obs, oldMonth, newMonth) -> {
+                    syncSelectedDateToDisplayedMonth();
+                    refreshView();
+                });
         selectedDate.addListener(
                 (obs, oldDate, newDate) -> {
                     if (newDate == null) {
-                        rebuildGrid();
+                        refreshView();
                         return;
                     }
                     YearMonth month = YearMonth.from(newDate);
                     if (!Objects.equals(month, displayedMonth.get())) {
                         displayedMonth.set(month);
-                    } else {
-                        rebuildGrid();
+                    } else if (!monthOnly) {
+                        refreshView();
                     }
                 });
 
-        rebuildGrid();
+        refreshView();
     }
 
     public ObjectProperty<LocalDate> selectedDateProperty() {
@@ -94,14 +111,48 @@ public final class InlineMonthCalendarPane extends VBox {
         selectedDate.set(date);
     }
 
-    private void rebuildGrid() {
-        dayGrid.getChildren().clear();
+    public ObjectProperty<YearMonth> displayedMonthProperty() {
+        return displayedMonth;
+    }
+
+    public YearMonth getDisplayedMonth() {
+        return displayedMonth.get();
+    }
+
+    /** ◀▶ で表示月だけ変えたとき、選択日を同月内の同日（月末調整）へ追従する。 */
+    private void syncSelectedDateToDisplayedMonth() {
+        YearMonth month = displayedMonth.get();
+        if (month == null) {
+            return;
+        }
+        LocalDate sel = selectedDate.get();
+        if (sel == null) {
+            selectedDate.set(month.atDay(1));
+            return;
+        }
+        if (!YearMonth.from(sel).equals(month)) {
+            int day =
+                    monthOnly
+                            ? 1
+                            : Math.min(sel.getDayOfMonth(), month.lengthOfMonth());
+            selectedDate.set(month.atDay(day));
+        }
+    }
+
+    private void refreshView() {
         YearMonth month = displayedMonth.get();
         if (month == null) {
             monthLabel.setText("");
             return;
         }
         monthLabel.setText(MONTH_TITLE.format(month.atDay(1)));
+        if (!monthOnly) {
+            rebuildDayGrid(month);
+        }
+    }
+
+    private void rebuildDayGrid(YearMonth month) {
+        dayGrid.getChildren().clear();
 
         WeekFields weekFields = WeekFields.of(Locale.getDefault());
         DayOfWeek firstDayOfWeek = weekFields.getFirstDayOfWeek();

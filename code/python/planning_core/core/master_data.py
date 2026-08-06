@@ -1013,7 +1013,8 @@ def load_attendance_and_analyze(members):
         )
 
         jp = attendance_data_json_path()
-        if jp.is_file():
+        json_canonical = jp.is_file()
+        if json_canonical:
             store = load_attendance_store(jp)
             json_records = member_attendance_to_dataframe_records(store, list(members))
             if not json_records and members:
@@ -1040,6 +1041,11 @@ def load_attendance_and_analyze(members):
                 )
                 df = pd.DataFrame()
     except Exception as e:
+        jp_fail = attendance_data_json_path()
+        if jp_fail.is_file():
+            raise RuntimeError(
+                f"勤怠正本 {jp_fail} の読込に失敗しました。アプリで内容を確認・修復してください: {e}"
+            ) from e
         logging.warning("attendance-data.json 読込をスキップ: %s", e)
 
     # 1. メンバー別シートからの読み込み（JSON 正本ファイルが無いときのフォールバック）
@@ -1090,15 +1096,19 @@ def load_attendance_and_analyze(members):
                 raise FileNotFoundError("有効なメンバー別勤怠シートは見つかりません。")
 
         except Exception as e:
+            jp_legacy = attendance_data_json_path()
+            if jp_legacy.is_file():
+                raise RuntimeError(
+                    f"勤怠正本 {jp_legacy} があるためレガシーシートへフォールバックしません。"
+                    f" メンバー勤怠タブで同期・保存してください。原因: {e}"
+                ) from e
             logging.warning(
-                f"勤怠シート読み込みエラー: {e} デフォルトカレンダーを生成しした。"
+                f"勤怠シート読み込みエラー: {e}"
             )
-            default_dates = generate_default_calendar_dates(TARGET_YEAR, TARGET_MONTH)
-            records = []
-            for d in default_dates:
-                for m in members:
-                    records.append({"日付": d, "メンバー": m, "備考": "通常"})
-            df = pd.DataFrame(records)
+            raise RuntimeError(
+                "勤怠データを読み込めません。attendance-data.json を作成するか、"
+                "会社カレンダー／メンバー勤怠タブでセットアップしてください。"
+            ) from e
 
     # 2. AI による勤怠文脈の解析
     remarks_to_analyze = []

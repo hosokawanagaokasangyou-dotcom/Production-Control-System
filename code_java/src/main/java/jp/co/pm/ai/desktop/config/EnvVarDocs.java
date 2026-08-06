@@ -401,7 +401,19 @@ public final class EnvVarDocs {
                         + " stage1_exclude_rules.json を書出し"
                         + " PM_AI_EXCLUDE_RULES_JSON を自動設定。"
                         + " 特別ルール JSON は dispatch_special_rules/ 配下。"
-                        + " 操作者 bin・PDF・バックアップ・remote_log 等の出力先フォルダの基準パス。");
+                        + " 操作者 bin・PDF・バックアップ・remote_log 等の出力先フォルダの基準パス。"
+                        + " 同階層に attendance-data.json（勤怠正本）と"
+                        + " 勤怠_表示用.xlsx（閲覧用・自動生成）を置く。");
+        put(
+                AppPaths.KEY_PM_AI_ATTENDANCE_JSON,
+                "勤怠正本 JSON（attendance-data.json）の絶対パス。"
+                        + " 未設定時は PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK の親フォルダ直下。"
+                        + " アプリの会社カレンダー・メンバー勤怠タブが編集し、"
+                        + " 配台の load_attendance_and_analyze が優先読込する。");
+        put(
+                AppPaths.KEY_PM_AI_ATTENDANCE_VIEW_XLSX,
+                "勤怠閲覧用 Excel（勤怠_表示用.xlsx）の絶対パス。"
+                        + " 未設定時はサマリ Excel 同階層。JSON 保存時に自動生成（編集はアプリで行う）。");
         put(
                 "PM_AI_REMOTE_LOG",
                 "リモートサポート用ログ（サマリ Excel 同階層の remote_log/操作者/）への"

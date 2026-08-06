@@ -120,6 +120,9 @@ public final class MainRunTabController {
     private StackPane stage1NetworkCacheBadgeHost;
 
     @FXML
+    private StackPane attendanceReadinessBadgeHost;
+
+    @FXML
     private Button stage1RunButton;
 
     @FXML
@@ -1510,6 +1513,37 @@ public final class MainRunTabController {
                                             + "PM_AI_ACTUAL_DETAIL_SOURCE_DIR "
                                             + "を参照できず、リポジトリ配下の最終キャッシュを使用して段階1／段階2に渡します。"));
                     stage1NetworkCacheBadgeHost.getChildren().add(graphic);
+                });
+    }
+
+    /** 勤怠正本が段階2未準備のとき、段階1ボタン付近に警告バッジを表示する。 */
+    void setAttendanceReadinessBadge(
+            boolean visible,
+            PersonBadgeStyle style,
+            String labelText,
+            String tooltipText) {
+        Platform.runLater(
+                () -> {
+                    if (attendanceReadinessBadgeHost == null) {
+                        return;
+                    }
+                    attendanceReadinessBadgeHost.getChildren().clear();
+                    attendanceReadinessBadgeHost.setManaged(visible);
+                    attendanceReadinessBadgeHost.setVisible(visible);
+                    if (!visible || style == null) {
+                        return;
+                    }
+                    String t =
+                            labelText != null && !labelText.isBlank()
+                                    ? labelText.strip()
+                                    : "勤怠未準備";
+                    StackPane graphic = PersonBadgeNodeFactory.createBadge(t, style, 1.0, 14.0);
+                    String tip =
+                            tooltipText != null && !tooltipText.isBlank()
+                                    ? tooltipText.strip()
+                                    : "勤怠正本（attendance-data.json）が未準備です。会社カレンダー／メンバー勤怠タブでセットアップしてください。";
+                    Tooltip.install(graphic, new Tooltip(tip));
+                    attendanceReadinessBadgeHost.getChildren().add(graphic);
                 });
     }
 

@@ -60,7 +60,15 @@
   }, {
     "key" : "PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK",
     "value" : "",
-    "description" : "サマリ AI 配台 Excel（通常 サマリ_AI配台.xlsx）のフルパス。空は PM_AI_REPO_ROOT/code/ 既定名、ファイル名のみは code/ 相対。親フォルダは工場共有 DATA の根として扱い、操作者 bin・PIN PDF、stage1_exclude_rules.json、材料・製品ルックアップ CSV、実行時間履歴 JSON、設備ガント PDF、サマリ世代退避等が同階層または配下に置かれる。実行・ログ・納期管理からの Excel 出力先。詳細は EnvVarDocs。"
+    "description" : "サマリ AI 配台 Excel（通常 サマリ_AI配台.xlsx）のフルパス。空は PM_AI_REPO_ROOT/code/ 既定名、ファイル名のみは code/ 相対。親フォルダは工場共有 DATA の根として扱い、操作者 bin・PIN PDF、stage1_exclude_rules.json、材料・製品ルックアップ CSV、実行時間履歴 JSON、設備ガント PDF、サマリ世代退避、attendance-data.json、勤怠_表示用.xlsx 等が同階層または配下に置かれる。実行・ログ・納期管理からの Excel 出力先。詳細は EnvVarDocs。"
+  }, {
+    "key" : "PM_AI_ATTENDANCE_JSON",
+    "value" : "",
+    "description" : "勤怠正本 attendance-data.json のフルパス。未設定時は PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK 同階層。会社カレンダー・メンバー勤怠タブが編集、配台が優先読込。"
+  }, {
+    "key" : "PM_AI_ATTENDANCE_VIEW_XLSX",
+    "value" : "",
+    "description" : "勤怠閲覧用 勤怠_表示用.xlsx のフルパス。未設定時はサマリ Excel 同階層。JSON 保存時に自動生成。"
   }, {
     "key" : "PM_AI_SKIP_WORKBOOK_ENV_SHEET",
     "value" : "1",

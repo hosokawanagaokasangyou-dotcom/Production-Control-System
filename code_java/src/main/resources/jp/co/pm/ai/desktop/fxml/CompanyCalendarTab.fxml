@@ -15,14 +15,25 @@
     </padding>
     <children>
         <ToolBar>
-            <Label text="対象年"/>
-            <Spinner fx:id="yearSpinner" editable="true" prefWidth="90.0"/>
+            <Label text="年度"/>
+            <Spinner fx:id="fiscalYearSpinner" editable="true" prefWidth="72.0"/>
+            <Label text="期間開始"/>
+            <Spinner fx:id="fiscalStartMonthSpinner" editable="true" prefWidth="48.0"/>
+            <Label text="/"/>
+            <Spinner fx:id="fiscalStartDaySpinner" editable="true" prefWidth="48.0"/>
+            <Label text="セル"/>
+            <Spinner fx:id="cellSizeSpinner" editable="true" prefWidth="52.0"/>
             <Button fx:id="fetchHolidaysButton" text="祝日を取得" onAction="#onFetchHolidays"/>
             <Button fx:id="saveButton" text="JSON保存" onAction="#onSave"/>
+            <Button text="セットアップ" onAction="#onSetupWizard"/>
+            <Button text="世代から復元" onAction="#onRestoreFromHistory"/>
             <Button fx:id="exportMasterButton" text="master.xlsm に出力" onAction="#onExportMaster"/>
+            <Button text="master.xlsm を開く" onAction="#onOpenMasterXlsm"/>
+            <Button text="勤怠_表示用を開く" onAction="#onOpenViewXlsx"/>
             <Button text="再読込" onAction="#onRefresh"/>
         </ToolBar>
         <Label fx:id="statusLabel" text=""/>
+        <VBox fx:id="statusHost" spacing="4.0"/>
         <VBox fx:id="calendarHost" VBox.vgrow="ALWAYS"/>
     </children>
 </VBox>

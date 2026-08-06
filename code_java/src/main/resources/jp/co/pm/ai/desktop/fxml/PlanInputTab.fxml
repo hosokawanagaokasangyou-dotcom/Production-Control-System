@@ -51,6 +51,7 @@
                 </GridPane>
                 <VBox spacing="6.0">
                     <HBox alignment="CENTER_LEFT" spacing="12.0">
+                        <StackPane fx:id="attendanceReadinessBadgeHost" alignment="CENTER_LEFT" managed="false" styleClass="pm-attendance-readiness-badge-host" visible="false" />
                         <Button fx:id="stage2RunButton" mnemonicParsing="false" onAction="#onStage2RunButtonAction"
                                 styleClass="pm-stage-run-button,pm-stage-run-2" text="段階2.0 実行" />
                         <Button fx:id="stage21RunButton" mnemonicParsing="false" onAction="#onStage21RunButtonAction"

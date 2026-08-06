@@ -866,6 +866,39 @@ public final class AppPaths {
     }
 
     /**
+     * {@code scriptFileName} が実在する {@code code/python} を返す。{@link #resolvePythonScriptDir} の結果に無いときは
+     * リポジトリ根・作業ディレクトリからのウォークで補完（pm-ai-data 同梱が古い／{@code PM_AI_REPO_ROOT} ずれ対策）。
+     */
+    public static Path resolvePythonScriptDirForScript(Map<String, String> ui, String scriptFileName) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        String leaf =
+                scriptFileName != null && !scriptFileName.isBlank()
+                        ? scriptFileName.trim()
+                        : "attendance_data_io.py";
+        List<Path> candidates = new ArrayList<>();
+        candidates.add(resolvePythonScriptDir(u));
+        Path repo = resolveRepoRoot(u);
+        candidates.add(repo.resolve("code").resolve("python"));
+        String override = trim(u.get(KEY_PM_AI_CODE_PYTHON_DIR));
+        if (!override.isEmpty()) {
+            candidates.add(Path.of(override).toAbsolutePath().normalize());
+        }
+        findCodePythonFrom(repo).ifPresent(candidates::add);
+        findCodePythonFrom(Path.of(System.getProperty("user.dir", ".")).toAbsolutePath().normalize())
+                .ifPresent(candidates::add);
+        for (Path dir : candidates) {
+            if (dir == null) {
+                continue;
+            }
+            Path norm = dir.toAbsolutePath().normalize();
+            if (Files.isRegularFile(norm.resolve(leaf))) {
+                return norm;
+            }
+        }
+        return resolvePythonScriptDir(u);
+    }
+
+    /**
      * 材料テーブル CSV の正本 {@code code/} ディレクトリ。{@link #KEY_PM_AI_CODE_DIR} → {@link #resolvePythonScriptDir} の親
      * （{@code code}）→ {@link #resolveRepoRoot} の {@code code/} の順。
      */
@@ -2348,6 +2381,18 @@ public final class AppPaths {
 
     public static final String KEY_PM_AI_ATTENDANCE_VIEW_XLSX = "PM_AI_ATTENDANCE_VIEW_XLSX";
 
+    public static final String KEY_PM_AI_ATTENDANCE_JSON_HISTORY_DIR =
+            "PM_AI_ATTENDANCE_JSON_HISTORY_DIR";
+
+    public static final String KEY_PM_AI_ATTENDANCE_JSON_HISTORY_MAX =
+            "PM_AI_ATTENDANCE_JSON_HISTORY_MAX";
+
+    /** 勤怠 JSON 世代管理フォルダ名（正本 JSON と同階層）。 */
+    public static final String ATTENDANCE_JSON_HISTORY_DIR_NAME = "attendance-json-history";
+
+    /** 勤怠 JSON 世代保持上限（固定）。 */
+    public static final int ATTENDANCE_JSON_HISTORY_MAX_GENERATIONS = 20;
+
     /**
      * 勤怠正本 JSON の絶対パス（親は {@link #summaryAiDispatchXlsxPath(Map)} と同一フォルダ）。
      */
@@ -2357,7 +2402,16 @@ public final class AppPaths {
         if (explicit != null && !explicit.isBlank()) {
             return Path.of(explicit.trim()).toAbsolutePath().normalize();
         }
-        return siblingOfSummaryAiDispatchWorkbook(u, ATTENDANCE_DATA_JSON_FILENAME);
+        FactorySite site = GlobalInitSettingTarget.loadEffective(u);
+        Path parent = summaryAiDispatchXlsxPathForFactory(u, site).getParent();
+        if (parent != null) {
+            return parent.resolve(ATTENDANCE_DATA_JSON_FILENAME).toAbsolutePath().normalize();
+        }
+        return resolveRepoRoot(u)
+                .resolve("code")
+                .resolve(ATTENDANCE_DATA_JSON_FILENAME)
+                .toAbsolutePath()
+                .normalize();
     }
 
     public static Path attendanceViewXlsxPath(Map<String, String> ui) {
@@ -2366,7 +2420,30 @@ public final class AppPaths {
         if (explicit != null && !explicit.isBlank()) {
             return Path.of(explicit.trim()).toAbsolutePath().normalize();
         }
-        return siblingOfSummaryAiDispatchWorkbook(u, ATTENDANCE_VIEW_XLSX_FILENAME);
+        FactorySite site = GlobalInitSettingTarget.loadEffective(u);
+        Path parent = summaryAiDispatchXlsxPathForFactory(u, site).getParent();
+        if (parent != null) {
+            return parent.resolve(ATTENDANCE_VIEW_XLSX_FILENAME).toAbsolutePath().normalize();
+        }
+        return resolveRepoRoot(u)
+                .resolve("code")
+                .resolve(ATTENDANCE_VIEW_XLSX_FILENAME)
+                .toAbsolutePath()
+                .normalize();
+    }
+
+    /**
+     * 勤怠正本 JSON の世代管理ルート（{@link #ATTENDANCE_JSON_HISTORY_DIR_NAME}）。
+     * {@link #KEY_PM_AI_ATTENDANCE_JSON_HISTORY_DIR} で上書き可。
+     */
+    public static Path attendanceJsonHistoryRoot(Map<String, String> ui) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        String explicit = u.get(KEY_PM_AI_ATTENDANCE_JSON_HISTORY_DIR);
+        if (explicit != null && !explicit.isBlank()) {
+            return Path.of(explicit.trim()).toAbsolutePath().normalize();
+        }
+        Path json = attendanceDataJsonPath(u);
+        return json.getParent().resolve(ATTENDANCE_JSON_HISTORY_DIR_NAME).toAbsolutePath().normalize();
     }
 
     /**

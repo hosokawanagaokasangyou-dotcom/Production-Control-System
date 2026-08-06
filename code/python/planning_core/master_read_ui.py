@@ -183,6 +183,14 @@ def build_master_read_summary_dict() -> dict[str, Any]:
     member_set = set(members)
     attend_count = _count_attendance_sheets(sheet_names, member_set)
 
+    canonical_readiness: dict[str, Any] = {}
+    try:
+        from planning_core.core.attendance_readiness import build_attendance_readiness
+
+        canonical_readiness = build_attendance_readiness(members=members)
+    except Exception as e:
+        warnings.append(f"attendance readiness: {e}")
+
     sk_machine = c.SHEET_MACHINE_CALENDAR
     sk_combo = c.MASTER_SHEET_TEAM_COMBINATIONS
     sk_startup = c.SHEET_MACHINE_DAILY_STARTUP
@@ -237,6 +245,8 @@ def build_master_read_summary_dict() -> dict[str, Any]:
             "skills_member_count": len(members),
             "attendance_sheets_matched": attend_count,
             "note": "Sheets whose name matches a skills member (attendance candidates).",
+            "canonical_json": canonical_readiness,
+            "stage2_ready": bool(canonical_readiness.get("stage2_ready")),
         },
         "openpyxl_skip": openpyxl_skip,
         "all_sheet_names": sheet_names,

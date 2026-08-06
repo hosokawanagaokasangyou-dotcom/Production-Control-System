@@ -47,6 +47,8 @@ import org.controlsfx.control.spreadsheet.SpreadsheetColumn;
 import org.controlsfx.control.spreadsheet.SpreadsheetView;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
+import jp.co.pm.ai.desktop.config.PersonBadgeStyle;
+import jp.co.pm.ai.desktop.ui.PersonBadgeNodeFactory;
 import jp.co.pm.ai.desktop.dispatch.DispatchPlanInputInteractiveCoverageCheck;
 import jp.co.pm.ai.desktop.dispatch.DispatchPlanInputInteractiveCoverageCheck.TaskKey;
 import jp.co.pm.ai.desktop.io.ExcelCellReadSupport;
@@ -133,6 +135,9 @@ public final class PlanInputTabController {
     private Button stage2RunButton;
 
     @FXML
+    private StackPane attendanceReadinessBadgeHost;
+
+    @FXML
     private Button stage21RunButton;
 
     private static final String STAGE2_RUN_BUTTON_TEXT_DEFAULT = "段階2 実行";
@@ -210,6 +215,11 @@ public final class PlanInputTabController {
      */
     private boolean stage2BlockedByUnsavedPlanInputTableEdit;
     private long planInputDirtyGeneration;
+
+    /** 勤怠正本が段階2未準備のとき、段階2を抑止する。 */
+    private boolean stage2BlockedByAttendanceNotReady;
+
+    private String attendanceReadinessBlockTooltip = "";
 
     /** 納期管理ビュー再読み込み中（メインシェルから同期）。 */
     private boolean deliveryCalendarReloadBlocking;
@@ -411,6 +421,39 @@ public final class PlanInputTabController {
         applyStage2RunButtonEnabledState();
     }
 
+    void setAttendanceReadinessBlocked(boolean blocked, String tooltip) {
+        stage2BlockedByAttendanceNotReady = blocked;
+        attendanceReadinessBlockTooltip = tooltip != null ? tooltip.strip() : "";
+        applyStage2RunButtonEnabledState();
+    }
+
+    void setAttendanceReadinessBadge(boolean visible, String labelText, String tooltipText) {
+        Platform.runLater(
+                () -> {
+                    if (attendanceReadinessBadgeHost == null) {
+                        return;
+                    }
+                    attendanceReadinessBadgeHost.getChildren().clear();
+                    attendanceReadinessBadgeHost.setManaged(visible);
+                    attendanceReadinessBadgeHost.setVisible(visible);
+                    if (!visible) {
+                        return;
+                    }
+                    String t =
+                            labelText != null && !labelText.isBlank()
+                                    ? labelText.strip()
+                                    : "勤怠未準備";
+                    PersonBadgeStyle style = PersonBadgeStyle.networkSourceCacheBadgeDefault();
+                    StackPane graphic = PersonBadgeNodeFactory.createBadge(t, style, 1.0, 14.0);
+                    String tip =
+                            tooltipText != null && !tooltipText.isBlank()
+                                    ? tooltipText.strip()
+                                    : "勤怠正本（attendance-data.json）が未準備です。会社カレンダー／メンバー勤怠タブでセットアップしてください。";
+                    Tooltip.install(graphic, new Tooltip(tip));
+                    attendanceReadinessBadgeHost.getChildren().add(graphic);
+                });
+    }
+
     /** タスク入力表が「保存」または「再読み」後と同期しているか（段階2実行可否）。 */
     boolean isPlanInputTableDirtySinceSave() {
         return stage2BlockedByUnsavedPlanInputTableEdit;
@@ -441,7 +484,8 @@ public final class PlanInputTabController {
                 stage2RunPipelineBusy
                         || deliveryCalendarReloadBlocking
                         || stage2BlockedByDispatchUnsavedEdit
-                        || stage2BlockedByUnsavedPlanInputTableEdit;
+                        || stage2BlockedByUnsavedPlanInputTableEdit
+                        || stage2BlockedByAttendanceNotReady;
         if (stage2RunButton != null) {
             stage2RunButton.setDisable(disable);
         }
@@ -478,6 +522,18 @@ public final class PlanInputTabController {
             Tooltip blockedTip =
                     new Tooltip(
                             "配台計画_タスク入力タブの表に未保存の変更があります。「保存」または「再読み」で確定してから実行してください。");
+            if (stage2RunButton != null) {
+                stage2RunButton.setTooltip(blockedTip);
+            }
+            if (stage21RunButton != null) {
+                stage21RunButton.setTooltip(blockedTip);
+            }
+        } else if (stage2BlockedByAttendanceNotReady) {
+            Tooltip blockedTip =
+                    new Tooltip(
+                            attendanceReadinessBlockTooltip.isBlank()
+                                    ? "勤怠正本（attendance-data.json）が未準備です。会社カレンダー／メンバー勤怠タブでセットアップしてください。"
+                                    : attendanceReadinessBlockTooltip);
             if (stage2RunButton != null) {
                 stage2RunButton.setTooltip(blockedTip);
             }

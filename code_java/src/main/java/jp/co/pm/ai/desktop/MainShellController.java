@@ -149,6 +149,7 @@ import jp.co.pm.ai.desktop.config.EnvVarDocs;
 import jp.co.pm.ai.desktop.config.InitSettingPersistence;
 import jp.co.pm.ai.desktop.config.UiEnvRowSnapshot;
 import jp.co.pm.ai.desktop.config.UiRefEnvDefaults;
+import jp.co.pm.ai.desktop.ui.AttendanceGridCellSizing;
 import jp.co.pm.ai.desktop.ui.Stage1NewMaterialLookupDialog;
 import jp.co.pm.ai.desktop.ui.MissingSkillsSheetColumnDialog;
 import jp.co.pm.ai.desktop.ui.Stage2UnknownMasterCombinationDialog;
@@ -626,6 +627,11 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
     /** 納期管理ビュー再読み込み中のタブ差し戻しで {@link TabPane} の選択リスナーを再入しない。 */
     private final AtomicBoolean suppressDeliveryCalendarReloadTabGuard = new AtomicBoolean(false);
 
+    /** メンバー勤怠の未保存確認でタブ差し戻し時に選択リスナーを再入しない。 */
+    private final AtomicBoolean suppressMemberAttendanceUnsavedTabGuard = new AtomicBoolean(false);
+
+    private volatile boolean memberAttendanceDirtySinceSave = false;
+
     /** 納期管理ビュー再読み込み中は段階1～段階3.5 の実行ボタンを無効化する。 */
     private final AtomicBoolean deliveryCalendarReloadBlockingStageRuns = new AtomicBoolean(false);
 
@@ -889,6 +895,10 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
 
         primaryStage.setOnCloseRequest(
                 e -> {
+                    if (!confirmMemberAttendanceUnsavedBeforeLeave("終了")) {
+                        e.consume();
+                        return;
+                    }
                     if (!confirmApplicationClose()) {
                         e.consume();
                         return;
@@ -951,6 +961,9 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                                 } finally {
                                     suppressDeliveryCalendarReloadTabGuard.set(false);
                                 }
+                                return;
+                            }
+                            if (blockMemberAttendanceUnsavedTabNavigation(prevTab, newTab)) {
                                 return;
                             }
                             if (!suppressLazyMainShellTabContentSwap.get()) {
@@ -1455,6 +1468,77 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                 AppPaths.resolveMasterWorkbookPathForDesktopOpen(
                         collectUiEnv(), nz(mainRunTabController.getWorkbookField().getText()));
         return Files.isRegularFile(p) ? p.toAbsolutePath().normalize() : null;
+    }
+
+    /**
+     * master.xlsm を OS 既定アプリ（Excel）で開く。
+     *
+     * @param logPrefix ログ行の接頭辞（例: {@code "[company-calendar]"}）
+     * @return 開いたとき {@code true}
+     */
+    public boolean openMasterWorkbookInDesktop(String logPrefix) {
+        Path target = resolveMasterWorkbookIfPresent();
+        if (target == null) {
+            Path attempted =
+                    AppPaths.resolveMasterWorkbookPathForDesktopOpen(
+                            collectUiEnv(), nz(mainRunTabController.getWorkbookField().getText()));
+            appendLog(logPrefix + " master not found: " + attempted);
+            return false;
+        }
+        try {
+            DesktopFileOpener.openFile(target);
+            appendLog(logPrefix + " opened master: " + target);
+            return true;
+        } catch (Exception e) {
+            appendLog(logPrefix + " open master failed: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * 勤怠閲覧用 xlsx（{@link AppPaths#attendanceViewXlsxPath}）を開く。
+     *
+     * @param logPrefix ログ行の接頭辞
+     * @return 開いたとき {@code true}
+     */
+    public boolean openAttendanceViewXlsxInDesktop(String logPrefix) {
+        Path target = AppPaths.attendanceViewXlsxPath(snapshotUiEnv()).toAbsolutePath().normalize();
+        if (!Files.isRegularFile(target)) {
+            appendLog(logPrefix + " view xlsx not found: " + target);
+            return false;
+        }
+        try {
+            DesktopFileOpener.openFile(target);
+            appendLog(logPrefix + " opened view xlsx: " + target);
+            return true;
+        } catch (Exception e) {
+            appendLog(logPrefix + " open view xlsx failed: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /** 起動完了後に会社カレンダー・メンバー勤怠の JSON を読み込む。 */
+    private void reloadAttendanceTabsFromJson() {
+        Path jsonPath = AppPaths.attendanceDataJsonPath(collectUiEnv());
+        appendLog("[attendance] JSON 再読込: " + jsonPath);
+        if (companyCalendarTabController != null) {
+            companyCalendarTabController.reloadAttendanceDataFromJson();
+        }
+        if (memberAttendanceTabController != null) {
+            memberAttendanceTabController.reloadAttendanceDataFromJson();
+        }
+        refreshAttendanceReadiness();
+    }
+
+    /**
+     * 環境変数・工場ワークスペース確定後に勤怠 JSON を読み込む。
+     * 起動直後（操作者選択前）の誤パス読込を避ける。
+     */
+    private void maybeReloadAttendanceTabsAfterEnvReady() {
+        if (!envVarsStartupCheckCompleted.get() || isEnvVarsInitializationPending()) {
+            return;
+        }
+        reloadAttendanceTabsFromJson();
     }
 
     /** バッジデザイン変更後に設備ガント（グラフィック）のみ再描画する。 */
@@ -3435,6 +3519,9 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                                     if (blockMainShellTabSelectionIfEnvInitPending()) {
                                         return;
                                     }
+                                    if (blockMemberAttendanceUnsavedInnerTabNavigation(p, n, inner)) {
+                                        return;
+                                    }
                                     if (!suppressLazyMainShellTabContentSwap.get()) {
                                         deferMainShellTabBranchHeavyContent(p);
                                         activateMainShellTabHeavyContentRecursive(n);
@@ -4027,6 +4114,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         ensureUiRefOptionalDisplayDefaultsVisible(collectUiEnv());
         applyFactoryWorkspaceSessionFragment(snapshot);
         applyRepoFolderPathNormalization();
+        maybeReloadAttendanceTabsAfterEnvReady();
     }
 
     /**
@@ -4490,6 +4578,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         refreshEnvVarsInitializedAtToolbarLabel();
         applyRunTabGating();
         logEnvVarsBundledReset(factorySite);
+        maybeReloadAttendanceTabsAfterEnvReady();
     }
 
     private void refreshEnvVarsInitializedAtToolbarLabel() {
@@ -4526,6 +4615,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         if (!isEnvVarsInitializationPending()) {
             ensureMainShellRunTabSelected();
         }
+        maybeReloadAttendanceTabsAfterEnvReady();
     }
 
     /** 初期化記録・起動時照合の直前に、環境変数タブの表示値を安定化する（ブートストラップ補完・表示既定・フォルダ正規化）。 */
@@ -6136,6 +6226,185 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         alert.showAndWait();
     }
 
+    /** メインウィンドウと同じテーマ CSS をダイアログに載せる。 */
+    public void applyAlertStylesheets(Dialog<?> dialog) {
+        applyAlertStylesheetsFromOwner(dialog);
+    }
+
+    void onMemberAttendanceDirtyChanged(boolean dirty) {
+        memberAttendanceDirtySinceSave = dirty;
+    }
+
+    private boolean confirmMemberAttendanceUnsavedBeforeLeave(String actionDescription) {
+        if (memberAttendanceTabController == null || !memberAttendanceTabController.hasUnsavedEdits()) {
+            return true;
+        }
+        MemberAttendanceTabController.UnsavedPromptResult result =
+                memberAttendanceTabController.promptUnsavedChanges(actionDescription);
+        if (result == MemberAttendanceTabController.UnsavedPromptResult.CANCELLED) {
+            return false;
+        }
+        if (result == MemberAttendanceTabController.UnsavedPromptResult.DISCARDED) {
+            if ("終了".equals(actionDescription)) {
+                memberAttendanceTabController.clearUnsavedWithoutReload();
+            } else {
+                memberAttendanceTabController.discardUnsavedEdits();
+            }
+            return true;
+        }
+        memberAttendanceTabController.saveEditsAsync(
+                success -> {
+                    if (!success) {
+                        return;
+                    }
+                    Platform.runLater(
+                            () -> {
+                                if ("終了".equals(actionDescription)) {
+                                    if (confirmApplicationClose()) {
+                                        performApplicationShutdownOnClose();
+                                        if (primaryStage != null) {
+                                            primaryStage.close();
+                                        }
+                                    }
+                                } else if (pendingMemberAttendanceTabAfterSave != null) {
+                                    MainShellTabId target = pendingMemberAttendanceTabAfterSave;
+                                    pendingMemberAttendanceTabAfterSave = null;
+                                    suppressMemberAttendanceUnsavedTabGuard.set(true);
+                                    try {
+                                        selectMainShellTabRecursive(tabPane, target);
+                                    } finally {
+                                        suppressMemberAttendanceUnsavedTabGuard.set(false);
+                                    }
+                                }
+                            });
+                });
+        return false;
+    }
+
+    private MainShellTabId pendingMemberAttendanceTabAfterSave = null;
+
+    private boolean blockMemberAttendanceUnsavedTabNavigation(Tab prevTab, Tab newTab) {
+        if (suppressMemberAttendanceUnsavedTabGuard.get()) {
+            return false;
+        }
+        Tab prevLeaf = resolveEffectiveLeafTab(prevTab);
+        Tab newLeaf = resolveEffectiveLeafTab(newTab);
+        if (prevLeaf == null || newLeaf == null) {
+            return false;
+        }
+        MainShellTabId prevId = mainShellTabId(prevLeaf);
+        MainShellTabId newId = mainShellTabId(newLeaf);
+        if (prevId != MainShellTabId.MEMBER_ATTENDANCE || newId == MainShellTabId.MEMBER_ATTENDANCE) {
+            return false;
+        }
+        if (memberAttendanceTabController == null || !memberAttendanceTabController.hasUnsavedEdits()) {
+            return false;
+        }
+        MemberAttendanceTabController.UnsavedPromptResult result =
+                memberAttendanceTabController.promptUnsavedChanges("タブを切り替える");
+        if (result == MemberAttendanceTabController.UnsavedPromptResult.CANCELLED) {
+            suppressMemberAttendanceUnsavedTabGuard.set(true);
+            try {
+                selectMainShellTabRecursive(tabPane, MainShellTabId.MEMBER_ATTENDANCE);
+            } finally {
+                suppressMemberAttendanceUnsavedTabGuard.set(false);
+            }
+            return true;
+        }
+        if (result == MemberAttendanceTabController.UnsavedPromptResult.DISCARDED) {
+            memberAttendanceTabController.discardUnsavedEdits();
+            return false;
+        }
+        pendingMemberAttendanceTabAfterSave = newId;
+        suppressMemberAttendanceUnsavedTabGuard.set(true);
+        try {
+            selectMainShellTabRecursive(tabPane, MainShellTabId.MEMBER_ATTENDANCE);
+        } finally {
+            suppressMemberAttendanceUnsavedTabGuard.set(false);
+        }
+        memberAttendanceTabController.saveEditsAsync(
+                success -> {
+                    if (!success) {
+                        pendingMemberAttendanceTabAfterSave = null;
+                        return;
+                    }
+                    Platform.runLater(
+                            () -> {
+                                if (pendingMemberAttendanceTabAfterSave != null) {
+                                    MainShellTabId target = pendingMemberAttendanceTabAfterSave;
+                                    pendingMemberAttendanceTabAfterSave = null;
+                                    suppressMemberAttendanceUnsavedTabGuard.set(true);
+                                    try {
+                                        selectMainShellTabRecursive(tabPane, target);
+                                    } finally {
+                                        suppressMemberAttendanceUnsavedTabGuard.set(false);
+                                    }
+                                }
+                            });
+                });
+        return true;
+    }
+
+    private boolean blockMemberAttendanceUnsavedInnerTabNavigation(
+            Tab prevInner, Tab newInner, TabPane innerPane) {
+        if (suppressMemberAttendanceUnsavedTabGuard.get()) {
+            return false;
+        }
+        MainShellTabId prevId = mainShellTabId(prevInner);
+        MainShellTabId newId = mainShellTabId(newInner);
+        if (prevId != MainShellTabId.MEMBER_ATTENDANCE || newId == MainShellTabId.MEMBER_ATTENDANCE) {
+            return false;
+        }
+        if (memberAttendanceTabController == null || !memberAttendanceTabController.hasUnsavedEdits()) {
+            return false;
+        }
+        MemberAttendanceTabController.UnsavedPromptResult result =
+                memberAttendanceTabController.promptUnsavedChanges("タブを切り替える");
+        if (result == MemberAttendanceTabController.UnsavedPromptResult.CANCELLED) {
+            suppressMemberAttendanceUnsavedTabGuard.set(true);
+            try {
+                innerPane.getSelectionModel().select(prevInner);
+            } finally {
+                suppressMemberAttendanceUnsavedTabGuard.set(false);
+            }
+            return true;
+        }
+        if (result == MemberAttendanceTabController.UnsavedPromptResult.DISCARDED) {
+            memberAttendanceTabController.discardUnsavedEdits();
+            return false;
+        }
+        suppressMemberAttendanceUnsavedTabGuard.set(true);
+        try {
+            innerPane.getSelectionModel().select(prevInner);
+        } finally {
+            suppressMemberAttendanceUnsavedTabGuard.set(false);
+        }
+        final MainShellTabId targetId = newId;
+        memberAttendanceTabController.saveEditsAsync(
+                success -> {
+                    if (!success) {
+                        return;
+                    }
+                    Platform.runLater(
+                            () -> {
+                                suppressMemberAttendanceUnsavedTabGuard.set(true);
+                                try {
+                                    innerPane.getSelectionModel().select(tabForMainShellTabId(targetId));
+                                } finally {
+                                    suppressMemberAttendanceUnsavedTabGuard.set(false);
+                                }
+                            });
+                });
+        return true;
+    }
+
+    private Tab tabForMainShellTabId(MainShellTabId id) {
+        if (id == null) {
+            return null;
+        }
+        return mainShellTabFor(id);
+    }
+
     /** メインウィンドウと同じテーマ CSS をダイアログに載せる（Alert / ChoiceDialog は別 Scene のため未設定だと配色がずれる） */
     private void applyAlertStylesheetsFromOwner(Dialog<?> dialog) {
         if (primaryStage == null || dialog == null) {
@@ -6198,10 +6467,8 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         Map<String, String> uiRun = collectUiEnv();
         Path py = resolveStagePythonExecutablePath(uiRun);
         Path dir =
-                Path.of(
-                        firstNonBlank(
-                                uiRun.get(AppPaths.KEY_PM_AI_CODE_PYTHON_DIR),
-                                mainRunTabController.getScriptDirField().getText().trim()));
+                AppPaths.resolvePythonScriptDirForScript(
+                        uiRun, MasterReadSummaryTabController.scriptName());
         String wb = effectiveTaskInputWorkbookPath();
         return new RunRequest(
                 py,
@@ -6215,19 +6482,183 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
     RunRequest buildAttendanceDataIoRequest(String... scriptArgs) {
         Map<String, String> uiRun = collectUiEnv();
         Path py = resolveStagePythonExecutablePath(uiRun);
-        Path dir =
-                Path.of(
-                        firstNonBlank(
-                                uiRun.get(AppPaths.KEY_PM_AI_CODE_PYTHON_DIR),
-                                mainRunTabController.getScriptDirField().getText().trim()));
+        String scriptName = "attendance_data_io.py";
+        Path dir = AppPaths.resolvePythonScriptDirForScript(uiRun, scriptName);
         String wb = effectiveTaskInputWorkbookPath();
         return new RunRequest(
                 py,
                 dir,
-                "attendance_data_io.py",
+                scriptName,
                 wb,
                 childEnvForPython(uiRun),
                 List.of(scriptArgs));
+    }
+
+    private static final ObjectMapper ATTENDANCE_JSON = new ObjectMapper();
+
+    private int attendanceGridCellSizePx = AttendanceGridCellSizing.DEFAULT_CELL_PX;
+    private volatile boolean attendanceStage2Ready = false;
+    private volatile String attendanceReadinessTooltip = "";
+
+    /**
+     * {@code attendance_data_io.py} を非同期実行し、stdout 末尾 JSON をコールバックへ渡す。
+     */
+    public void runAttendanceDataIoAsync(
+            PythonProcessRunner.RunRequest req,
+            Consumer<JsonNode> onOk,
+            Consumer<String> onError) {
+        PythonProcessRunner.runCaptureAsync(req)
+                .whenComplete(
+                        (cap, err) ->
+                                Platform.runLater(
+                                        () -> {
+                                            if (err != null) {
+                                                if (onError != null) {
+                                                    onError.accept(err.getMessage());
+                                                }
+                                                return;
+                                            }
+                                            if (cap == null) {
+                                                if (onError != null) {
+                                                    onError.accept("プロセス結果なし");
+                                                }
+                                                return;
+                                            }
+                                            try {
+                                                JsonNode node =
+                                                        ATTENDANCE_JSON.readTree(
+                                                                AttendanceOvertimePreview
+                                                                        .MasterReadSummaryJson
+                                                                        .extractLastJsonLine(
+                                                                                cap.stdout()));
+                                                if (!node.path("ok").asBoolean(false)) {
+                                                    if (onError != null) {
+                                                        onError.accept(
+                                                                node.path("error")
+                                                                        .asText("失敗"));
+                                                    }
+                                                    markAttendanceReadinessUnknown();
+                                                    return;
+                                                }
+                                                if (cap.exitCode() != 0) {
+                                                    if (onError != null) {
+                                                        onError.accept(
+                                                                "exit=" + cap.exitCode());
+                                                    }
+                                                    markAttendanceReadinessUnknown();
+                                                    return;
+                                                }
+                                                if (onOk != null) {
+                                                    onOk.accept(node);
+                                                }
+                                            } catch (Exception e) {
+                                                if (onError != null) {
+                                                    onError.accept(e.getMessage());
+                                                }
+                                                markAttendanceReadinessUnknown();
+                                            }
+                                        }));
+    }
+
+    public int attendanceGridCellSizePx() {
+        return attendanceGridCellSizePx;
+    }
+
+  /** 会社カレンダー・メンバー勤怠のセルグリッド寸法（px）。両タブで共有。 */
+    public void setAttendanceGridCellSizePx(int px) {
+        int clamped = AttendanceGridCellSizing.clamp(px);
+        if (attendanceGridCellSizePx == clamped) {
+            return;
+        }
+        attendanceGridCellSizePx = clamped;
+        if (companyCalendarTabController != null) {
+            companyCalendarTabController.applyGridCellSizeToPane(clamped);
+            companyCalendarTabController.syncGridCellSizeSpinner(clamped);
+        }
+        if (memberAttendanceTabController != null) {
+            memberAttendanceTabController.applyGridCellSizeToPane(clamped);
+            memberAttendanceTabController.syncGridCellSizeSpinner(clamped);
+        }
+    }
+
+    public void refreshAttendanceReadiness() {
+        LocalDate today = LocalDate.now();
+        runAttendanceDataIoAsync(
+                buildAttendanceDataIoRequest(
+                        "readiness",
+                        Integer.toString(today.getYear()),
+                        Integer.toString(today.getMonthValue())),
+                this::applyAttendanceReadinessFromJson,
+                msg -> {
+                    appendLog("[attendance-readiness] " + msg);
+                    markAttendanceReadinessUnknown();
+                });
+    }
+
+    private void markAttendanceReadinessUnknown() {
+        attendanceStage2Ready = false;
+        attendanceReadinessTooltip = "勤怠状態の取得に失敗しました。再読込してください。";
+        applyAttendanceReadinessFromJson(null);
+    }
+
+    public void applyAttendanceReadinessFromJson(JsonNode node) {
+        if (node == null) {
+            String blockTooltip = attendanceReadinessTooltip;
+            PersonBadgeStyle badgeStyle = PersonBadgeStyle.networkSourceCacheBadgeDefault();
+            if (mainRunTabController != null) {
+                mainRunTabController.setAttendanceReadinessBadge(
+                        true, badgeStyle, "勤怠未確認", blockTooltip);
+            }
+            if (planInputTabController != null) {
+                planInputTabController.setAttendanceReadinessBadge(
+                        true, "勤怠未確認", blockTooltip);
+                planInputTabController.setAttendanceReadinessBlocked(true, blockTooltip);
+            }
+            return;
+        }
+        attendanceStage2Ready = node.path("stage2_ready").asBoolean(false);
+        StringBuilder issues = new StringBuilder();
+        if (node.path("issues").isArray()) {
+            for (JsonNode issue : node.path("issues")) {
+                if (issues.length() > 0) {
+                    issues.append('\n');
+                }
+                issues.append(issue.asText(""));
+            }
+        }
+        attendanceReadinessTooltip = issues.toString();
+        String badgeLabel = attendanceStage2Ready ? "" : "勤怠未準備";
+        String blockTooltip =
+                attendanceReadinessTooltip.isBlank()
+                        ? "勤怠正本（attendance-data.json）が未準備です。会社カレンダー／メンバー勤怠タブでセットアップしてください。"
+                        : attendanceReadinessTooltip;
+        PersonBadgeStyle badgeStyle = PersonBadgeStyle.networkSourceCacheBadgeDefault();
+        if (mainRunTabController != null) {
+            mainRunTabController.setAttendanceReadinessBadge(
+                    !attendanceStage2Ready,
+                    badgeStyle,
+                    badgeLabel,
+                    blockTooltip);
+        }
+        if (planInputTabController != null) {
+            planInputTabController.setAttendanceReadinessBadge(
+                    !attendanceStage2Ready, badgeLabel, blockTooltip);
+            planInputTabController.setAttendanceReadinessBlocked(
+                    !attendanceStage2Ready, blockTooltip);
+        }
+    }
+
+    private boolean blockIfAttendanceNotReadyForStage2() {
+        if (attendanceStage2Ready) {
+            return false;
+        }
+        String msg =
+                attendanceReadinessTooltip.isBlank()
+                        ? "勤怠正本（attendance-data.json）が未準備です。会社カレンダー／メンバー勤怠タブでセットアップしてください。"
+                        : attendanceReadinessTooltip;
+        appendLog("[stage2] " + msg.replace('\n', ' '));
+        showErrorDialog("段階2", msg.replace('\n', '\n'));
+        return true;
     }
 
     /** Probe script {@code pm_ai_actuals_status.py}: same env merge as stage1/2. */
@@ -6346,12 +6777,22 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                         startupSkipTaskInputSourceDirListing,
                         startupSkipActualDetailSourceDirListing);
         AgentDebugLog.overlayPythonChildDebugEnv(m);
-        Path attJson = AppPaths.attendanceDataJsonPath(m);
-        m.putIfAbsent(AppPaths.KEY_PM_AI_ATTENDANCE_JSON, attJson.toString());
-        m.putIfAbsent(
-                AppPaths.KEY_PM_AI_ATTENDANCE_VIEW_XLSX,
-                AppPaths.attendanceViewXlsxPath(m).toString());
+        overlayAttendancePathsForPython(m);
         return m;
+    }
+
+    /** 勤怠 JSON / 閲覧用 xlsx を工場既定サマリ同階層へ補完（空文字の env 行は上書き）。 */
+    private void overlayAttendancePathsForPython(Map<String, String> m) {
+        if (nz(m.get(AppPaths.KEY_PM_AI_ATTENDANCE_JSON)).isBlank()) {
+            m.put(
+                    AppPaths.KEY_PM_AI_ATTENDANCE_JSON,
+                    AppPaths.attendanceDataJsonPath(m).toString());
+        }
+        if (nz(m.get(AppPaths.KEY_PM_AI_ATTENDANCE_VIEW_XLSX)).isBlank()) {
+            m.put(
+                    AppPaths.KEY_PM_AI_ATTENDANCE_VIEW_XLSX,
+                    AppPaths.attendanceViewXlsxPath(m).toString());
+        }
     }
 
     /**
@@ -7864,6 +8305,9 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                     "[stage2] 配台計画_タスク入力タブの表に未保存の変更があります。「保存」または「再読み」で確定してから実行してください。");
             return;
         }
+        if (blockIfAttendanceNotReadyForStage2()) {
+            return;
+        }
         if (!guardTodayDispatchSourceBundleBeforeStageRun(
                 "段階2", this::continueStage2AfterSourceGuard)) {
             return;
@@ -8042,6 +8486,14 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
             showErrorDialog(
                     "段階2.1",
                     "配台計画手動修正タブの変更を「保存 (JSON+xlsx)」で確定してから段階2.1 を実行してください。");
+            return;
+        }
+        if (blockIfAttendanceNotReadyForStage2()) {
+            showErrorDialog(
+                    "段階2.1",
+                    attendanceReadinessTooltip.isBlank()
+                            ? "勤怠正本（attendance-data.json）が未準備です。会社カレンダー／メンバー勤怠タブでセットアップしてください。"
+                            : attendanceReadinessTooltip);
             return;
         }
         java.nio.file.Path mainJson = AppPaths.resolveResultDispatchTableJsonPath(collectUiEnv());
