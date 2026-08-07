@@ -152,6 +152,8 @@ import jp.co.pm.ai.desktop.config.UiRefEnvDefaults;
 import jp.co.pm.ai.desktop.ui.AttendanceGridCellSizing;
 import jp.co.pm.ai.desktop.ui.UiRowHoverDimmingSettings;
 import jp.co.pm.ai.desktop.ui.EnvVarsStartupCheckBusyDialog;
+import jp.co.pm.ai.desktop.ui.StageRunBusyDialog;
+import jp.co.pm.ai.desktop.ui.StageRunLogProgressParser;
 import jp.co.pm.ai.desktop.ui.Stage1NewMaterialLookupDialog;
 import jp.co.pm.ai.desktop.ui.MissingSkillsSheetColumnDialog;
 import jp.co.pm.ai.desktop.ui.Stage2UnknownMasterCombinationDialog;
@@ -702,6 +704,9 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
 
     /** 起動時／工場切替時の環境変数確認モーダル（表示中のみ非 null）。 */
     private EnvVarsStartupCheckBusyDialog envVarsStartupCheckBusy;
+
+    /** 段階1／2 実行中の進捗モーダル（表示中のみ非 null）。 */
+    private StageRunBusyDialog stageRunBusyDialog;
 
     /**
      * バージョンアップ後処理で操作者を復元済みなら、同起動での操作者ダイアログと依頼書原本フォルダ案内を省略する。
@@ -4698,6 +4703,55 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         }
     }
 
+    private static boolean usesStageRunBusyModal(String script) {
+        return STAGE1.equals(script) || STAGE2.equals(script);
+    }
+
+    private void beginStageRunBusyDialog(String script) {
+        if (!usesStageRunBusyModal(script)) {
+            return;
+        }
+        endStageRunBusyDialog();
+        String title = STAGE1.equals(script) ? "段階1 実行中" : "段階2 実行中";
+        String header =
+                STAGE1.equals(script)
+                        ? "段階1（成形）を実行しています"
+                        : "段階2（配台計画）を実行しています";
+        stageRunBusyDialog =
+                StageRunBusyDialog.show(
+                        primaryStage, title, header, "準備中…", this::cancelActiveStageRun);
+    }
+
+    private void updateStageRunBusyPhase(String phase) {
+        if (stageRunBusyDialog != null && stageRunBusyDialog.isShowing() && phase != null) {
+            stageRunBusyDialog.setPhase(phase);
+        }
+    }
+
+    private void onStageRunChildLogLine(String line) {
+        if (stageRunBusyDialog == null || !stageRunBusyDialog.isShowing()) {
+            return;
+        }
+        StageRunLogProgressParser.extractDetail(line).ifPresent(stageRunBusyDialog::setDetail);
+    }
+
+    void syncStageRunBusyFromStage2Progress(MainRunStage2Progress.State state, String detail) {
+        if (stageRunBusyDialog == null || !stageRunBusyDialog.isShowing() || state == null) {
+            return;
+        }
+        stageRunBusyDialog.setPhase(state.message());
+        if (detail != null && !detail.isBlank()) {
+            stageRunBusyDialog.setDetail(detail.strip());
+        }
+    }
+
+    private void endStageRunBusyDialog() {
+        if (stageRunBusyDialog != null) {
+            stageRunBusyDialog.close();
+            stageRunBusyDialog = null;
+        }
+    }
+
     /** スプラッシュ／操作者ダイアログのあと、進捗が見えるよう短いパルスを空けてから処理する。 */
     private void runAfterUiPulse(Runnable action) {
         PauseTransition pause = new PauseTransition(Duration.millis(50));
@@ -5114,6 +5168,12 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                     MainRunStage2Progress.State.RUNNING, "");
         }
         applyRunTabGating();
+        if (STAGE1.equals(script) || STAGE2.equals(script)) {
+            beginStageRunBusyDialog(script);
+            if (STAGE2.equals(script)) {
+                syncStageRunBusyFromStage2Progress(MainRunStage2Progress.State.RUNNING, "");
+            }
+        }
         mainRunTabController.beginLogTailFollowForRun();
         if (STAGE2.equals(script) && dispatchInteractiveTabController != null) {
             Runnable clearDispatch =
@@ -5237,6 +5297,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                         "[dev] 段階1正常終了後、配台計画_タスク入力の全行を配台不要 yes に更新します（開発用）。");
             }
             if (STAGE1.equals(script)) {
+                updateStageRunBusyPhase("キャッシュをクリアしています…");
                 appendLog("[stage1] キャッシュをクリアして実行します。");
                 try {
                     Stage1AiCacheClearer.ClearResult cacheClear =
@@ -5263,6 +5324,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                     activeStageChildProcess.set(null);
                     mainRunTabController.getStatusLabel().setText("キャッシュ退避失敗");
                     applyRunTabGating();
+                    endStageRunBusyDialog();
                     return;
                 }
             }
@@ -5330,6 +5392,9 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
             appendStageChildResolvedEnvForRun(script, childEnv);
             RunRequest req = new RunRequest(py, dir, script, wb, childEnv);
             mainRunTabController.getStatusLabel().setText("実行中…");
+            if (usesStageRunBusyModal(script)) {
+                updateStageRunBusyPhase("Python 実行中…");
+            }
             PipelineExecutionTimingKind stageTimingKind = pipelineTimingKindForStageScript(script);
             if (stageTimingKind != null) {
                 beginPipelineExecutionTiming(stageTimingKind);
@@ -5351,6 +5416,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                                     IpcStdoutTap.handleLine(payload, this::appendLog);
                                 } else {
                                     appendLog(line);
+                                    onStageRunChildLogLine(line);
                                     if (STAGE1.equals(script)
                                             && line.contains("製品厚みを決定できずスキップ")) {
                                         appendLog(
@@ -5386,6 +5452,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
             boolean stage3 = isStage3Script(script);
             Platform.runLater(
                     () -> {
+                        endStageRunBusyDialog();
                         applyRunTabGating();
                         if (stage3) {
                             endStage3RunButtonLock();
@@ -5452,6 +5519,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                             "段階1",
                             bundleResult.message() + "\n段階1は完了扱いにしません。再実行してください。");
                     mainRunTabController.flushPendingLogAppends();
+                    endStageRunBusyDialog();
                     maybeArchiveRemoteSupportLogAfterStage(script, code, err);
                     return;
                 }
@@ -5489,6 +5557,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                 MacroCompleteChime.playIfAvailable(collectUiEnv());
                 selectMainShellTab(MainShellTabId.PLAN_INPUT);
                 String completionMsg = buildStage1CompletionMessage();
+                endStageRunBusyDialog();
                 showStageCompletionDialog("段階1 完了", completionMsg);
             }
             if (STAGE2.equals(script)) {
@@ -5527,6 +5596,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                                                                 outcome -> {
                                                                     updateStage2ExcelProgress(
                                                                             outcome);
+                                                                    endStageRunBusyDialog();
                                                                     MacroCompleteChime
                                                                             .playIfAvailable(
                                                                                     collectUiEnv());
@@ -5737,6 +5807,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                 mainRunTabController.updateStage2Progress(
                         MainRunStage2Progress.State.STAGE2_FAILED, detail);
             }
+            endStageRunBusyDialog();
             if (STAGE2.equals(script) && err == null && code != null && code.intValue() == 3) {
                 showStage2FailureWithUnknownMasterComboRetry(code, tailSnap);
             } else {
@@ -5752,6 +5823,11 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                 STAGE2.equals(script) && err == null && code != null && code.intValue() == 0;
         if (!deferRemoteLogForStage2Success) {
             maybeArchiveRemoteSupportLogAfterStage(script, code, err);
+        }
+        boolean keepBusyForStage2PostProcess =
+                STAGE2.equals(script) && err == null && code != null && code.intValue() == 0;
+        if (usesStageRunBusyModal(script) && !keepBusyForStage2PostProcess) {
+            endStageRunBusyDialog();
         }
     }
 
@@ -6042,6 +6118,12 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         boolean stageScriptBusy = pipelineTimingKindForStageScript(script) != null;
         boolean dispatchTrialBusy = dispatchTrialKind != null;
         boolean show = stageScriptBusy || dispatchTrialBusy;
+        if (show
+                && stageRunBusyDialog != null
+                && stageRunBusyDialog.isShowing()
+                && (STAGE1.equals(script) || STAGE2.equals(script))) {
+            show = false;
+        }
         if (show) {
             shellStageProgressBox.setManaged(true);
             shellStageProgressBox.setVisible(true);

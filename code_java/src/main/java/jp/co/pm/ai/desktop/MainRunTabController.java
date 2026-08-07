@@ -1568,6 +1568,9 @@ public final class MainRunTabController {
         if (stage2ProgressAccordion != null && stage2ProgressPane != null) {
             stage2ProgressAccordion.setExpandedPane(stage2ProgressPane);
         }
+        if (shell != null) {
+            shell.syncStageRunBusyFromStage2Progress(state, detail);
+        }
     }
 
     String snapshotStage2ProductionPlanPath() {
