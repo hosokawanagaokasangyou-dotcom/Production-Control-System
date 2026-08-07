@@ -1,5 +1,6 @@
 package jp.co.pm.ai.desktop.ui;
 
+import javafx.geometry.Pos;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 
@@ -61,6 +62,18 @@ public final class AttendanceGridCellSizing {
     }
 
     public static void applyHeaderLabel(Label label, int cellPx) {
+        label.setStyle(headerFontStyle(cellPx));
+    }
+
+    /** メンバー名列の見出しセル（行の勤怠セル高さに揃える）。 */
+    public static void applyMemberNameLabel(Label label, int cellPx) {
+        int h = memberCellHeight(cellPx);
+        int w = memberNameColumnWidth(cellPx);
+        label.setMinSize(w, h);
+        label.setPrefSize(w, h);
+        label.setMaxWidth(w);
+        label.setAlignment(Pos.CENTER);
+        label.setWrapText(true);
         label.setStyle(headerFontStyle(cellPx));
     }
 }

@@ -147,6 +147,7 @@ public final class SpreadsheetTabularSupport {
             view.getStylesheets().add(url);
         }
         installEnhancedSpreadsheetClipboard(view);
+        TableRowHoverDimmingSupport.installOnSpreadsheet(view);
     }
 
     /**
@@ -167,6 +168,7 @@ public final class SpreadsheetTabularSupport {
         if (!table.getStylesheets().contains(url)) {
             table.getStylesheets().add(url);
         }
+        TableRowHoverDimmingSupport.install(table);
     }
 
     /**
@@ -822,6 +824,7 @@ public final class SpreadsheetTabularSupport {
                 view.setGrid(grid);
             }
         }
+        TableRowHoverDimmingSupport.scheduleSpreadsheetRehook(view);
     }
 
     private static GridBase newSingleCellScratchGrid() {
@@ -862,6 +865,7 @@ public final class SpreadsheetTabularSupport {
         clearSpreadsheetRowPresentationArtifacts(view);
         pinSpreadsheetFilterRow(view);
         view.requestLayout();
+        TableRowHoverDimmingSupport.scheduleSpreadsheetRehook(view);
     }
 
     /**
@@ -879,6 +883,7 @@ public final class SpreadsheetTabularSupport {
         pinSpreadsheetFilterRow(view);
         SpreadsheetMultiColumnFilterCoordinator.recomputeHiddenRows(view);
         view.requestLayout();
+        TableRowHoverDimmingSupport.scheduleSpreadsheetRehook(view);
     }
 
     /** 旧グリッド由来の固定行インデックスが残ると、行ヘッダに帯状の隙間が出ることがある。 */
@@ -1247,10 +1252,16 @@ public final class SpreadsheetTabularSupport {
             return;
         }
         applyUnconstrainedColumnResizePolicy(view);
+        TableRowHoverDimmingSupport.rehookSpreadsheet(view);
         Platform.runLater(
                 () -> {
                     applyUnconstrainedColumnResizePolicy(view);
-                    Platform.runLater(() -> applyUnconstrainedColumnResizePolicy(view));
+                    TableRowHoverDimmingSupport.rehookSpreadsheet(view);
+                    Platform.runLater(
+                            () -> {
+                                applyUnconstrainedColumnResizePolicy(view);
+                                TableRowHoverDimmingSupport.rehookSpreadsheet(view);
+                            });
                 });
     }
 

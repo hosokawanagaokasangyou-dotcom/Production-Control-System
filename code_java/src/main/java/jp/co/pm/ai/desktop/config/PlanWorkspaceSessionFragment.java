@@ -264,6 +264,7 @@ public record PlanWorkspaceSessionFragment(
                 base.equipmentStatusDashboardShowAladdinPlans(),
                 base.equipmentStatusDashboardShowDispatchPlans(),
                 base.equipmentStatusDashboardAppearance(),
+                base.tableRowHoverDimmingEnabled(),
                 base.requestFormComboChoices());
     }
 }

@@ -297,3 +297,16 @@
     -fx-text-fill: #ffffff;
     -fx-highlight-text-fill: #ffffff;
 }
+
+/* TableRowHoverDimmingSupport: 行ホバー時に他行を暗転 */
+.pm-ai-readable-spreadsheet .table-view .table-row.pm-grid-row-hover-row-dimmed,
+.pm-ai-readable-table .table-row.pm-grid-row-hover-row-dimmed {
+    -fx-opacity: 0.38;
+}
+
+.pm-ai-readable-spreadsheet .table-view .table-row.pm-grid-row-hover-row-focused,
+.pm-ai-readable-table .table-row.pm-grid-row-hover-row-focused {
+    -fx-background-color: rgba(56, 189, 248, 0.14);
+    -fx-border-color: #38bdf8;
+    -fx-border-width: 0 0 2 0;
+}

@@ -402,18 +402,20 @@ public final class EnvVarDocs {
                         + " PM_AI_EXCLUDE_RULES_JSON を自動設定。"
                         + " 特別ルール JSON は dispatch_special_rules/ 配下。"
                         + " 操作者 bin・PDF・バックアップ・remote_log 等の出力先フォルダの基準パス。"
-                        + " 同階層に attendance-data.json（勤怠正本）と"
-                        + " 勤怠_表示用.xlsx（閲覧用・自動生成）を置く。");
+                        + " 同階層に attendance-data.json（勤怠正本）と 勤怠カレンダー.xlsx を置く。"
+                        + " 勤怠の Excel 表示は 勤怠カレンダー.xlsx（APP_* シート）へ出力する。");
         put(
                 AppPaths.KEY_PM_AI_ATTENDANCE_JSON,
                 "勤怠正本 JSON（attendance-data.json）の絶対パス。"
                         + " 未設定時は PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK の親フォルダ直下。"
                         + " アプリの会社カレンダー・メンバー勤怠タブが編集し、"
-                        + " 配台の load_attendance_and_analyze が優先読込する。");
+                        + " 配台の load_attendance_and_analyze が優先読込する。"
+                        + " Excel 閲覧は 勤怠カレンダー.xlsx へ出力した APP_* シートを使う。");
         put(
-                AppPaths.KEY_PM_AI_ATTENDANCE_VIEW_XLSX,
-                "勤怠閲覧用 Excel（勤怠_表示用.xlsx）の絶対パス。"
-                        + " 未設定時はサマリ Excel 同階層。JSON 保存時に自動生成（編集はアプリで行う）。");
+                AppPaths.KEY_PM_AI_ATTENDANCE_CALENDAR_XLSX,
+                "勤怠カレンダー Excel（勤怠カレンダー.xlsx）の絶対パス。"
+                        + " 未設定時は master.xlsm と同一フォルダ。"
+                        + " 保存のたびに attendance-calendar-xlsx-history で世代退避（最大20）。");
         put(
                 "PM_AI_REMOTE_LOG",
                 "リモートサポート用ログ（サマリ Excel 同階層の remote_log/操作者/）への"

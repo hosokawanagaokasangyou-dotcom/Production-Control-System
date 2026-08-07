@@ -1,1225 +1,811 @@
 {
-  "planInputSheet" : "タスク一覧",
-  "stage1PreviewPath" : "C:\\システム開発\\工程管理AIプロジェクト_JAVA\\output\\stage1_task_input_table.xlsx",
-  "stage1PreviewSheet" : "タスク入力整形",
-  "mainRunWorkbook" : "C:\\システム開発\\工程管理AIプロジェクト_JAVA\\テスト_加工依頼書入力_国分.xlsm",
-  "mainRunScriptDir" : "C:\\システム開発\\工程管理AIプロジェクト_JAVA\\code\\python",
-  "uiTheme" : "midnight-blue",
-  "logFontSize" : 16.0,
-  "mainRunLogFilter" : "ALL",
-  "mainRunLogLines" : [ "[dashboard] ソース未変更のため読込を省略", "[env] 湖南工場の環境変数を ui_ref 既定に戻しました。", "[env] PM_AI_REQUEST_FORM_ORIGINAL_DIR=C:\\Users\\0585\\Box\\長岡産業（ＥＸ）\\加工依頼書（湖南）", "[env] PM_AI_REQUEST_FORM_ORIGINAL_DIR を設定: C:\\Users\\0585\\Box\\長岡産業（ＥＸ）\\加工依頼書（湖南）" ],
-  "mainRunStage2SkipTodayDispatch" : true,
-  "planInputStage2NextDayDialogMode" : "BOTH",
-  "planInputComboSheetMayExceedNeed" : true,
-  "planInputStage2SkipGeminiApi" : false,
-  "skipGeminiApiDefaultOffMigrated" : true,
-  "planInputTodayDispatch" : false,
-  "mainRunSkipGeminiApi" : false,
-  "mainRunStage1MarkAllExcludeAfterRun" : false,
-  "mainRunApplyLearnedSpeedFromActuals" : false,
-  "uiEnvRows" : [ {
-    "name" : "PM_AI_PYTHON",
-    "value" : "python",
-    "description" : "段階1/2 等の子プロセスで使う Python 実行ファイル（パスは実行ファイル。フォルダのみ指定すると実行時に python.exe 等へ補正）。編集は環境変数タブのみ（実行・ログタブに Python 入力は無い）。値が空のとき: まず user.dir 周辺で pm-ai-data/runtime/python-embed/python.exe が実在すればそれを使い、無ければ OS の PATH 上の python / python3（開発ツリーに python-embed を置いていない場合はここに落ちる）。複数 Python を PATH で切り替えている／特定の python.exe に固定したいときは、本変数にその絶対パスを明示する。環境変数タブを空にしても動くのはこのフォールバックのため。初期化・空欄補完では pm-ai-data/runtime/python-embed/python.exe を user.dir から親ディレクトリへ最大12段まで辿って探索し、見つかれば絶対パスで入れる（ショートカットで user.dir が bin 等になる場合のため）。見つからずインストール根がポータル配布なら相対パス。開発などでは同梱 exe が取れたら絶対パス、無ければ PATH の python/python3。"
-  }, {
-    "name" : "PM_AI_REPO_ROOT",
-    "value" : "C:\\システム開発\\工程管理AIプロジェクト_JAVA",
-    "description" : "Production-Control-System の親（リポジトリ根）。PM_AI_CODE_PYTHON_DIR 未指定時の推定に使用。"
-  }, {
-    "name" : "PM_AI_OUTPUT_DIR",
-    "value" : "C:\\システム開発\\工程管理AIプロジェクト_JAVA\\output",
-    "description" : "段階1/2の成果物フォルダ（plan_input_tasks.xlsx、計画*.xlsx、人員*.xlsx 等）。空のときは planning_core.bootstrap と同じ解決（PM_AI_REPO_ROOT 直下の output、または cwd 基準の output）。フルパス推奨。「フォルダ...」で選択可。 — 段階1/2 の出力先（plan_input_tasks.xlsx 等、従来 code/output に相当）。未設定時は PM_AI_REPO_ROOT 直下の output（JavaFX と planning_core.bootstrap と同解決）。"
-  }, {
-    "name" : "PM_AI_CODE_PYTHON_DIR",
-    "value" : "C:\\システム開発\\工程管理AIプロジェクト_JAVA\\code\\python",
-    "description" : "スクリプト根（task_extract_stage1.py 等）。自動検出は user.dir から code/python を探す。"
-  }, {
-    "name" : "PM_AI_WORKSPACE",
-    "value" : "",
-    "description" : "配台作業ルート（Python の cwd、ログ/output、Gemini 証明書の搜索先。JavaFX と planning_core.bootstrap で最優先される。未指定時は PM_AI_CODE_PYTHON_DIR の親（code）から推定する場合が多い。"
-  }, {
-    "name" : "GEMINI_CREDENTIALS_JSON",
-    "value" : "C:\\システム開発\\工程管理AIプロジェクト_JAVA\\gemini_credentials.encrypted.json",
-    "description" : "Gemini 暗号化証明書 JSON（例: gemini_credentials.encrypted.json）のフルパス。未設定時はマクロブック同階層または PM_AI_WORKSPACE 直下を参照。 — Gemini 暗号化証明書 JSON（例: gemini_credentials.encrypted.json）のフルパス。planning_core で最優先。JavaFX 環境変数タブの「ファイル...」で選択可。"
-  }, {
-    "name" : "PM_AI_EXCLUDE_RULES_JSON",
-    "value" : "C:\\システム開発\\工程管理AIプロジェクト_JAVA\\code\\stage1_exclude_rules.json",
-    "description" : "段階1の配台不要ルールを JSON に寄せる場合のフルパス（list または {\"rules\":[...]}）。既定は code/exclude_rules.json（実在時）、無ければ code/json/stage1_exclude_rules.json（実在時）。有効時はマクロブックの「設定_配台不要工程」Excel 保守も省略。 — 段階1（run_stage1_extract）で master.xlsm 「設定_配台不要工程」を PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK と同一フォルダの stage1_exclude_rules.json へ書き出し、本変数を その絶対パスに自動設定（子プロセス内）。 手動でも UTF-8 JSON（list または {\"rules\":[...]}、 列構造は設定シートと同槗。 有効ファイルがあれば read_excel 経路を省略可。 JavaFX 環境変数タブの既定はサマリ Excel 同フォルダの stage1_exclude_rules.json（無ければ code/exclude_rules.json または code/json/stage1_exclude_rules.json から初回コピー）。 JavaFX は「ファイル...」で選択可。"
-  }, {
-    "name" : "PM_AI_MASTER_WORKBOOK",
-    "value" : "\\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\002  加工G\\●配台AIシステム\\共有DATA\\master.xlsm",
-    "description" : "マスタブック（master.xlsm / 国分master.xlsm 等）のフルパス（UNC 可）。空のときは code/ 等から master.xlsm を探索して補完。ファイル名のみは planning cwd（通常 code/）相対。planning_core 子プロセス必須。環境変数タブ「ファイル...」で選択可。「マスタ読込サマリ」タブで内容確認可。 — master 系 .xlsm / .xlsx の絶対パス（UNC 可）。 planning_core 子プロセスの必須 env。 ファイル名のみのときは planning cwd（通常 code/）相対。 空のとき resolveMasterWorkbookCandidate 等で補完。 JavaFX の「マスタ読込サマリ」タブで内容を確認可。"
-  }, {
-    "name" : "PM_AI_COLUMN_CONFIG_WORKBOOK",
-    "value" : "",
-    "description" : "列設定_結果_タスク一覧 を含むブック。PM_AI_PLAN_INPUT_PATH と別ファイルのときに指定。空なら input_resolution の既定探索。 — 列設定_結果_タスク一覧シートを含む xlsx/xlsm。PM_AI_PLAN_INPUT_PATH と異なる列設定専用ブックを指す場合。"
-  }, {
-    "name" : "PM_AI_DATA_EXTRACTION_SOURCE_WORKBOOK",
-    "value" : "",
-    "description" : "計画シートのデータ抽出時刻列を読む元ブック（空なら planning_core の input_resolution が PM_AI_PLAN_INPUT_PATH 等から解決）。 — 加工計画DATA等から「データ抽出時間」列を読むブック（未指定時は planning_core の input_resolution による探索、PM_AI_PLAN_INPUT_PATH など）。"
-  }, {
-    "name" : "PM_AI_RESULT_TASK_COLUMN_CONFIG_CSV",
-    "value" : "",
-    "description" : "結果_タスク一覧の列表示設定 CSV のフルパス。実在時は列設定シート読みをスキップ可。 — 結果_タスク一覧の列設定（列名、表示列を持つ CSV。あれば列設定シート読みをスキップ。"
-  }, {
-    "name" : "PM_AI_SKIP_WORKBOOK_ENV_SHEET",
-    "value" : "1",
-    "description" : "1/true 等で workbook_env_bootstrap がマクロ「設定_環境変数」シートを読まず、JavaFX タブの値のみ子プロセスへ渡す。空のときランチャーは子へ 1 を付与。 — 1/true 等で workbook_env_bootstrap がマクロブックの「設定_環境変数」シートを読まない。JavaFX 環境変数タブが子プロセスの源。 空のときランチャーは 1 を付与。 OS 環境変数へは書き込まない運用を前提。"
-  }, {
-    "name" : "PM_AI_TASK_INPUT_SOURCE_DIR",
-    "value" : "\\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\生産管理システム\\管理システム\\●DATA\\生産計画問合せ",
-    "description" : "PQ-A 加工計画DATA取得元（plan/01_*.m の Folder.Files と同系）。未設定時は \\\\192.168.0.101\\共有...●DATA\\生産計画問合せ。JavaFX 初期値は AppPaths.resolveTaskInputSourceDir。Python は PM_AI_PROCESSING_PLAN_PATH が未設定または存在しないとき、このフォルダ内 CSV/Parquet/xlsx 等のうち更新時刻が最新の1件をタスク入力に使用。「納期管理ビュー」タブの計画側アラジン数量もこの解決パス由来の加工計画シートを参照する。"
-  }, {
-    "name" : "PM_AI_PROCESSING_PLAN_PATH",
-    "value" : "",
-    "description" : "段階1用：加工計画DATA相当の表（CSV/Parquet/xlsx）。Python は未設定またはファイル無しのとき、PM_AI_TASK_INPUT_SOURCE_DIR 内の最新表を自動でこの変数に設定（dispatch_workspace.resolve_processing_plan_path_from_env）。run_stage1_extract はこのパス（または SOURCE_DIR解決の実在ファイル）が必要。配台不要は master.xlsm から PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK 同フォルダの stage1_exclude_rules.json に書き出し。 正式な列構成は plan/01_加工計画DATA_単一ファイル.m と同等の Power Query 成形後の加工計画DATA相当。生の問合せ xlsx を直接指定する場合は Python 側でヘッダー行・列名の救済のみ（PQ の複合見出しや日付列名の展開は再現しない）。確実に合わせるときはクエリ更新後の CSV 等のパスを指定すること。"
-  }, {
-    "name" : "PM_AI_ACTUAL_DETAIL_SOURCE_DIR",
-    "value" : "\\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\002  加工G\\●検査表作成\\加工実績明細DATA",
-    "description" : "加工実績明細DATA 出力元（plan/02__q*.m の Folder.Files と同系）。planning_core はこのフォルダ内の最新 xlsx/xlsm を実績明細読込の元にする。 PM_AI_ACTUALS_DATA_WORKBOOK 未設定時は加工実績DATA 読込も同じ最新ファイルを使用。未設定時は 002  加工G\\●検査表作成\\加工実績明細DATA系 UNC。PM_AI_ACTUAL_DETAIL_WORKBOOK で単一ファイルを優先。"
-  }, {
-    "name" : "PM_AI_ALADDIN_MASTER_DIR",
-    "value" : "\\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\002  加工G\\●配台AIシステム\\共有DATA\\アラジンマスタ",
-    "description" : "依頼書入力タブのアラジンマスタフォルダ（フルパス）。後加工商品／加工内容／工程マスタとマスタリレーション統合結果.xlsx。空のときは工場既定 UNC（湖南: 共有DATA/アラジンマスタ、国分: DATA/アラジンマスタ）。環境変数初期化の工場選択でも設定。「フォルダ...」で選択可。 — 依頼書入力タブが参照するアラジンマスタフォルダ（フルパス）。後加工商品／加工内容／工程マスタ xlsx とマスタリレーション統合結果.xlsx を置く。空のときはグローバル設定の工場（湖南／国分）に応じた UNC 既定。湖南: 共有DATA/アラジンマスタ。国分: DATA/アラジンマスタ。環境変数を初期化（工場選択）でも上書きされる。環境変数タブのフォルダ選択可。統合スクリプト create_integrated_master.py にも渡される。"
-  }, {
-    "name" : "PM_AI_REQUEST_FORM_ORIGINAL_DIR",
-    "value" : "C:\\Users\\0585\\Box\\長岡産業（ＥＸ）\\加工依頼書（湖南）",
-    "description" : "依頼書原本フォルダ（フルパス）。*加工依頼書*.xlsm 等の原本 Excel を含むディレクトリ。初期値は空（任意）。未設定のままでも起動可能。起動時に未設定なら BOX フォルダ選択を1回案内（スキップ可）。未設定時の実行時解決は工場既定（受注ファイル既定の親フォルダ）にフォールバック。「フォルダ...」で選択可。 — 依頼書入力タブがスキャンする依頼書原本フォルダ（フルパス）。*加工依頼書*.xlsm 等の原本 Excel が置かれたディレクトリ。初期値は空（任意）。未設定のままでも起動可能。起動時に未設定なら BOX フォルダ選択を1回案内（スキップ可）。未設定時の実行時解決は工場既定（受注ファイル既定の親フォルダ）にフォールバック。環境変数タブのフォルダ選択可。プレビュー・照合・背景キャッシュの原本読込先。"
-  }, {
-    "name" : "PM_AI_REQUEST_FORM_JUCHU_FILE",
-    "value" : "\\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\生産管理システム\\管理システム\\加工依頼書入力.xlsm",
-    "description" : "依頼書入力タブの受注データベース Excel（受注ﾌｧｲﾙ シート）のフルパス。空のとき工場既定 UNC（湖南: 生産管理システム/管理システム/加工依頼書入力.xlsm、国分: 加工管理/加工計画関連/加工依頼書入力　国分コピー入力（2024年12月28））.xlsm）。環境変数初期化の工場選択でも設定。「ファイル...」で選択可。 — 依頼書入力タブの受注データベース Excel（受注ﾌｧｲﾙ シート）のフルパス。例: 加工依頼書入力.xlsm。空のときは工場既定 UNC（湖南: 生産管理システム/管理システム/加工依頼書入力.xlsm、国分: 加工管理/加工計画関連/加工依頼書入力　国分コピー入力（2024年12月28））.xlsm）。環境変数初期化の工場選択でも設定。環境変数タブのファイル選択可。設定タブのパス表示・自動転記先に使用。"
-  }, {
-    "name" : "PM_AI_REQUEST_FORM_TPI_PDF_DIR",
-    "value" : "\\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\002  加工G\\●配台AIシステム\\共有DATA\\TPI依頼書",
-    "description" : "TPI（東レペフ加工品）依頼書 PDF スキャン先フォルダ（フルパス）。空のとき湖南工場既定 UNC（共有DATA/TPI依頼書）。国分は空。依頼書入力タブの半自動取込・PDF プレビュー。「フォルダ...」で選択可。 — TPI（東レペフ加工品）依頼書 PDF のスキャン先フォルダ（フルパス）。ECOWD/JR 系・後加工/PN 系の *.pdf を半自動取込する。空のとき湖南工場既定 UNC（共有DATA/TPI依頼書）。国分は空（手動指定）。依頼書入力タブの照合・PDF プレビュー・parse キャッシュに使用。フォルダ配下は読取専用（書込・削除禁止）。環境変数タブのフォルダ選択可。"
-  }, {
-    "name" : "PM_AI_RESULT_DISPATCH_TABLE_DIR",
-    "value" : "C:\\システム開発\\工程管理AIプロジェクト_JAVA\\code\\output",
-    "description" : "Power Query _q結果_配台表 参照用の 結果_配台表.xlsx 出力先（マクロブック側に フォルダパス名を合わせる場合）。未設定時は段階2は PM_AI_WORKSPACE または PM_AI_PLAN_INPUT_PATH 親階層に合わせる場合がある、JavaFX 初期値は PM_AI_REPO_ROOT 下の code/output（例: Production-Control-System/code/output/結果_配台表.xlsx 同階層に 結果_配台表.json も出力）。「納期管理ビュー」の計画比較サブタブはこのフォルダ直下の 結果_配台表.json とタスク入力ソースのアラジン日別数量を突き合わせる。"
-  }, {
-    "name" : "PM_AI_PLAN_RESULT_TASK_JSON",
-    "value" : "",
-    "description" : "段階2 の production_plan_*.xlsx と同名ベースの 結果_タスク一覧.json（サイドカー）の読み書き。0/false/no/off/none で無効（無効時はサイドカー非出力・Excel 優先）。未設定で有効。 — 段階2 出力 production_plan_*.xlsx と同名ベースの 結果_タスク一覧.json（サイドカー）読み書き：0/false/no/off/none で無効。有効時は再読込を JSON 優先にして Excel I/O を削減。"
-  }, {
-    "name" : "PM_AI_PLAN_RESULT_TASK_JSON_PATH",
-    "value" : "",
-    "description" : "結果_タスク一覧 JSON を読む絶対パス（実在時は xlsx 横のサイドカーより優先）。空なら未使用。 — read_result_task_dataframe が読む JSON の絶対パス（実在ファイルのとき 出力 xlsx 横のサイドカーパスより優先）。"
-  }, {
-    "name" : "PM_AI_PORTABLE_BUNDLE_SOURCE_DIR",
-    "value" : "\\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\002  加工G\\●配台AIシステム\\pm-ai-package-release",
-    "description" : "ポータブル配布（PMD.exe と pm-ai-data）向け。正本は次のいずれか。（1）pm-ai-package-release フォルダの UNC（推奨。湖南／国分は工場既定で切替）。直下の外付け version.txt と PMD_version_upgrade.zip を参照する。（2）PMD_version_upgrade.zip のフルパス（ZIP 隣の version.txt で版比較）。空のときは自動更新しない（情報表示のみ）。"
-  }, {
-    "name" : "PM_AI_DISPATCH_SPECIAL_RULES_JSON",
-    "value" : "",
-    "description" : "§B 特別ルール DSL JSON。既定は PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK 同階層 dispatch_special_rules/dispatch_special_rules.json。段階1～3.5 開始時 run_snapshots へ凍結。"
-  }, {
-    "name" : "PM_AI_DISPATCH_RULE_ENGINE",
-    "value" : "0",
-    "description" : "1 で dispatch_rules DSL engine を有効化。ルール単位 executionMode（auto/dsl/legacy）と併用。"
-  }, {
-    "name" : "PM_AI_DISPATCH_RULE_LEGACY_FALLBACK",
-    "value" : "1",
-    "description" : "auto 時 DSL 不調なら従来 _core.py ルールへフォールバック。0 で DSL 専用試験。"
-  }, {
-    "name" : "PM_AI_EXCEL_TRACE_TASK_ID",
-    "value" : "",
-    "description" : "段階2 Excel 生成デバッグ: 追跡する依頼NO（例 Y5-14）。JavaFX「環境変数」タブのみ。空で無効。有効時 .cursor/debug-excel-trace.log に EX1/EX4/EX5（df vs サイドカーJSON 差分）等。詳細は EnvVarDocs。 — 段階2（配台試行含む）の Excel 生成経路を 1 依頼で追跡するデバッグ用依頼NO（例: Y5-14）。本アプリの「環境変数」タブにのみ設定（子プロセスへ引き渡し）。OS の PM_AI_* は起動に使わない（空のまま推奨）。有効時は .cursor/debug-excel-trace.log に NDJSON（EX1=df_tasks、EX4=サイドカー JSON、EX5=両者のセル差分）。全ブック JSON（PM_AI_PLAN_WORKBOOK_JSON）とは別。"
-  }, {
-    "name" : "PM_AI_STAGE2_ENGINE",
-    "value" : "",
-    "description" : "段階2エンジン（互換キー）。JavaFX からの段階2は常に Python 子 plan_simulation_stage2.py のみ。未設定・空・python で従来どおり。java は無視（旧 JVM 段階2は撤去済み）。 — 段階2の実行エンジン（互換用キー）。JavaFX 実行タブからの段階2は常に Python 子プロセス（plan_simulation_stage2.py）のみ。 未設定・空・python（大小無視）で従来どおり。java が指定されていても無視され Python が起動する（旧 JVM 段階2は撤去済み）。"
-  }, {
-    "name" : "PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK",
-    "value" : "\\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\002  加工G\\●配台AIシステム\\共有DATA\\サマリ_AI配台.xlsx",
-    "description" : "サマリ AI 配台 Excel（通常 サマリ_AI配台.xlsx）のフルパス。空は PM_AI_REPO_ROOT/code/ 既定名、ファイル名のみは code/ 相対。親フォルダは工場共有 DATA の根として扱い、操作者 bin・PIN PDF、stage1_exclude_rules.json、材料・製品ルックアップ CSV、実行時間履歴 JSON、設備ガント PDF、サマリ世代退避等が同階層または配下に置かれる。実行・ログ・納期管理からの Excel 出力先。詳細は EnvVarDocs。 — 利用工場と本パスが別工場を指すとき summaryAiDispatchXlsxPathForFactory が工場既定 UNC へ切替（操作者 bin・PDF・バックアップと整合）。 段階1（run_stage1_extract）は同フォルダへ stage1_exclude_rules.json を書出し PM_AI_EXCLUDE_RULES_JSON を自動設定。 特別ルール JSON は dispatch_special_rules/ 配下。 SummaryAiDispatchWorkbookExporter・納期管理ビュー・ 実行・ログ「開く」の出力先。 UI から Excel を開く操作は読取専用。"
-  }, {
-    "name" : "PM_AI_SKIP_GEMINI_API",
-    "value" : "0",
-    "description" : "1/true/yes/on のとき Gemini generateContent を呼ばない。JavaFX 実行・ログタブ「その他」内のチェックが子プロセス起動時に上書きする。 — 1/true/yes/on のとき Gemini generateContent を呼ばない。 JavaFX 実行・ログタブ「その他」内のチェックが子プロセス起動時に上書きする。 既定は 0（段階1/2 は AI API を呼び出す）。"
-  }, {
-    "name" : "TASK_PLAN_SHEET",
-    "value" : "タスク一覧",
-    "description" : "配台計画シート名（空なら既定 タスク一覧。マクロブック利用時は 配台計画_タスク入力） — 配台計画シート名（空で タスク一覧。マクロブックは 配台計画_タスク入力）。"
-  }, {
-    "name" : "PLAN_INPUT_DISPATCH_TRIAL_ORDER_LOCAL_ONLY",
-    "value" : "",
-    "description" : "1/true/yes/on/y のとき配台試行順更新で post_load（計画シートの事後変形）をスキップする用途。 — 配台試行順更新時に post_load（事後変形）をスキップ。"
-  }, {
-    "name" : "MASTER_USE_SPEED_SHEET",
-    "value" : "1",
-    "description" : "0=master.xlsm speed による加工速度上書きをしない — master 内 speed シートによる加工速度上書きを有効化。"
-  }, {
-    "name" : "MASTER_SPEED_SHEET_NAME",
-    "value" : "speed",
-    "description" : "空なら既定シート名 speed"
-  }, {
-    "name" : "MASTER_SPEED_FIRST_EXCEL_COL",
-    "value" : "4",
-    "description" : "空なら 4（D 列から設備列）"
-  }, {
-    "name" : "RAW_FABRIC_WIDTH_TABLE_PATH",
-    "value" : "C:\\システム開発\\工程管理AIプロジェクト_JAVA\\code\\使用原反, 加工幅.txt",
-    "description" : "原反幅 CSV のフルパス（空なら既定ファイル名をマクロブック同フォルダ等で探索） — 原反幅 CSV。既定は PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK 同フォルダ（無ければ code/ から初回コピー）。"
-  }, {
-    "name" : "ROLL_UNIT_BY_USED_RAW_TABLE_PATH",
-    "value" : "C:\\システム開発\\工程管理AIプロジェクト_JAVA\\code\\使用原反,ロール単位の長さ.txt",
-    "description" : "使用原反→ロール単位長さ(m) CSV のフルパス（空なら「使用原反,ロール単位の長さ.txt」をマクロブック同フォルダ・カレント・code で探索）"
-  }, {
-    "name" : "PRODUCT_WIDTH_TABLE_PATH",
-    "value" : "C:\\システム開発\\工程管理AIプロジェクト_JAVA\\code\\製品名, 製品幅.txt",
-    "description" : "製品幅 CSV のフルパス（同上） — 製品幅 CSV。既定はサマリ Excel 同フォルダ（無ければ code/ から初回コピー）。"
-  }, {
-    "name" : "PRODUCT_LENGTH_TABLE_PATH",
-    "value" : "C:\\システム開発\\工程管理AIプロジェクト_JAVA\\code\\製品名,製品長.txt",
-    "description" : "製品長 CSV のフルパス（同上）"
-  }, {
-    "name" : "PRODUCT_THICKNESS_TABLE_PATH",
-    "value" : "C:\\システム開発\\工程管理AIプロジェクト_JAVA\\code\\製品名,製品厚み.txt",
-    "description" : "製品厚み CSV のフルパス（同上）"
-  }, {
-    "name" : "STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST",
-    "value" : "1",
-    "description" : "日内配台: 1=試行順優先マルチパス（既定） 0=従来ソート — 日内配台フロー: 1=試行順優先マルチパス（既定）、0=従来ソート。"
-  }, {
-    "name" : "STAGE2_GLOBAL_DISPATCH_TRIAL_ORDER_STRICT",
-    "value" : "1",
-    "description" : "1（既定）=配台試行順の「枠」より大きい順は割り込まない。0 等で緩和。 — 配台試行順の「枠」より大きい順への割り込み制限。"
-  }, {
-    "name" : "STAGE2_SERIAL_DISPATCH_BY_TASK_ID",
-    "value" : "0",
-    "description" : "1=依頼NO直列 — 日内配台: 1=依頼NO出現順で直列（他依頼は進まない）。"
-  }, {
-    "name" : "STAGE2_MACRO_NOW_USE_DATA_EXTRACT_CLOCK",
-    "value" : "0",
-    "description" : "段階2の「当日」に macro_now: 既定 0=日付のみ（時刻は始業に正規化）。1=データ抽出時刻の時分まで反映する旧挙動。"
-  }, {
-    "name" : "STAGE2_COPY_COLUMN_CONFIG_SHAPES_FROM_INPUT",
-    "value" : "1",
-    "description" : "段階2後の列設定図形コピー（0 で無効） — 段階2後、列設定シートの図形を xlwings で複製（Excel アドイン/マクロ連携時。JavaFX での headless 段階2は通常関係なし）。"
-  }, {
-    "name" : "XLWINGS_SUSPEND_AUTO_CALCULATION",
-    "value" : "1",
-    "description" : "xlwings が Excel へ一括書き込み・保存する前後で自動計算を手動（完了時に復帰）。1/true/yes/on（既定）。0/false/no/off/無効 で無効（Calculation は変更しない）。 — xlwings が Excel 書き込み前後で自動計算を手動に切替えるか（Excel アドイン連携時のみ意味がある。JavaFX から子プロセスで Excel を操作しない限り実質未使用）。"
-  }, {
-    "name" : "PLANNING_B1_INSPECTION_EXCLUSIVE_MACHINE",
-    "value" : "1",
-    "description" : "§B-2/§B-3 設備占有（0 で無効） — B-2/B-3: 熱融着検査の設備占有制御。"
-  }, {
-    "name" : "PLANNING_B2_EC_FOLLOWER_DISJOINT_TEAMS",
-    "value" : "1",
-    "description" : "B-2/3 ECと後続の担当者分離（0 で無効） — B-2/B-3: EC と後続工程の担当者集合を分離。"
-  }, {
-    "name" : "WIP_LIMIT_EC_BEFORE_INSP_ROLLS",
-    "value" : "20",
-    "description" : "工程間 WIP: EC 前〜検査までのロール上限（0 以下で無効） — 工程間 WIP: EC前〜検査までのロール上限。"
-  }, {
-    "name" : "WIP_LIMIT_EC_BEFORE_INSP_AGGREGATE",
-    "value" : "task_id",
-    "description" : "L11 集計: task_id=当該依頼NO行のみ（既定） task_id_head=接頭辞グループ global=全依頼合算"
-  }, {
-    "name" : "WIP_LIMIT_SLIT_BEFORE_SEC_ROLLS",
-    "value" : "20",
-    "description" : "同上: スリット〜SEC 間のロール上限（0 以下で無効）"
-  }, {
-    "name" : "SLIT_BEFORE_SEC_MIN_SLIT_ROLLS",
-    "value" : "5",
-    "description" : "L10 B-4.1: 加工内容スリット→SEC の依頼で、同一依頼内（スリット完了−SEC完了）がこの値未満の間は SEC を候補から除外。0 以下で無効"
-  }, {
-    "name" : "WIP_LIMIT_CONNECTION_BEFORE_SEC_ROLLS",
-    "value" : "20",
-    "description" : "B-6: 接続〜SEC 間の総ロール WIP 上限（0 以下で無効）"
-  }, {
-    "name" : "CONNECTION_BEFORE_SEC_MIN_CONNECTION_ROLLS",
-    "value" : "5",
-    "description" : "B-6.1: 加工内容接続→SEC の依頼で、同一依頼内（接続完了−SEC完了）がこの値未満の間は SEC を候補から除外。0 以下で無効"
-  }, {
-    "name" : "TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF",
-    "value" : "0",
-    "description" : "1=人数最優先（従来）"
-  }, {
-    "name" : "TEAM_ASSIGN_START_SLACK_WAIT_MINUTES",
-    "value" : "60",
-    "description" : "スラック分（0 で開始のみ）"
-  }, {
-    "name" : "TEAM_ASSIGN_IGNORE_NEED_SURPLUS_ROW",
-    "value" : "0",
-    "description" : "1=need追加人数行を無視"
-  }, {
-    "name" : "TEAM_ASSIGN_USE_NEED_SURPLUS_IN_MAIN_PASS",
-    "value" : "",
-    "description" : "1=メインで req+追加上限まで探索"
-  }, {
-    "name" : "TEAM_ASSIGN_HEADCOUNT_FROM_NEED_ONLY",
-    "value" : "1",
-    "description" : "0=計画シート必要人数も参照"
-  }, {
-    "name" : "TEAM_ASSIGN_USE_MASTER_COMBO_SHEET",
-    "value" : "1",
-    "description" : "0=組合せ表プリセットを使わない"
-  }, {
-    "name" : "TEAM_ASSIGN_COMBO_SHEET_MAY_EXCEED_NEED",
-    "value" : "1",
-    "description" : "1（既定）=組み合わせ表の必須人数が need 基本人数を超えていてもプリセットを試行。0=need 上限を超える組み合わせ表は使わない。配台計画_タスク入力タブのチェックボックスでも上書き"
-  }, {
-    "name" : "DISPATCH_INTERVAL_MIRROR_ENFORCE",
-    "value" : "1",
-    "description" : "1=配台中の占有区間ミラーで二重検査（0 で無効）"
-  }, {
-    "name" : "DISPATCH_TRIAL_PATTERN_LIST_SHEET",
-    "value" : "配台試行順_パターン一覧",
-    "description" : "同: 出力シート名（空なら既定 配台試行順_パターン一覧）"
-  }, {
-    "name" : "DISPATCH_TRIAL_PATTERN_LIST_NO_EXCEL_TABLE",
-    "value" : "",
-    "description" : "1=true 等で Excel の表（ListObject）を付けない（説明行の結合・見出し太字は実施）"
-  }, {
-    "name" : "DISPATCH_PATTERN_STAGE2_SUMMARY_SHEET",
-    "value" : "配台試行順_パターン別段階2",
-    "description" : "パターン別段階2バッチ: マクロブックに作成するサマリシート名（空なら既定 配台試行順_パターン別段階2）"
-  }, {
-    "name" : "DISPATCH_PATTERN_STAGE2_MAX_PATTERNS",
-    "value" : "20",
-    "description" : "パターン別段階2バッチのみ: P1～P4（＋R*）を含む最大シミュレーション件数（1～50、既定 20）。一覧シートの列挙件数には影響しない"
-  }, {
-    "name" : "DISPATCH_PATTERN_SCORE_WEIGHT_DUE",
-    "value" : "3",
-    "description" : "参考スコア(自動) の納期遵守率(%)の重み（空なら 3）"
-  }, {
-    "name" : "DISPATCH_PATTERN_SCORE_WEIGHT_MEMBER",
-    "value" : "1",
-    "description" : "参考スコア: メンバー平均作業割合(%)の重み（空なら 1）"
-  }, {
-    "name" : "DISPATCH_PATTERN_SCORE_WEIGHT_EQUIP",
-    "value" : "0.0001",
-    "description" : "参考スコア: 設備稼働セル数（参考）の重み。単位が大きいため小さめ推奨（空なら 0.0001）"
-  }, {
-    "name" : "GANTT_COLOR_MODE",
-    "value" : "",
-    "description" : "結果_設備ガント: 空またはmonotone=従来淡色、full=依頼NO単位の帯色・周辺を鮮やかに"
-  }, {
-    "name" : "GANTT_PRINT_ONE_PAGE_PER_DAY",
-    "value" : "1",
-    "description" : "設備ガント系の印刷: 1/true/yes/on/y で縦を「表示した暦日の数」ページに合わせる（横1ページ・日境界の手動改ページと併用。機械が多いと縮小が強い）。GANTT_PRINT_SCALE_PERCENT 指定時は Python 側では無効"
-  }, {
-    "name" : "GANTT_PRINT_SCALE_PERCENT",
-    "value" : "",
-    "description" : "10〜400 の整数で印刷スケール%を固定（任意）。指定時は上記「1日1ページ」調整より優先。"
-  }, {
-    "name" : "GANTT_HDR_ROW_HEIGHT_PT",
-    "value" : "38",
-    "description" : "設備ガント系のヘッダ行の高さ（ポイント）"
-  }, {
-    "name" : "GANTT_MACHINE_ROW_HEIGHT_PT",
-    "value" : "60",
-    "description" : "設備ガント系の機械行の高さ（ポイント）"
-  }, {
-    "name" : "GANTT_TIMELINE_SHAPE_LABELS",
-    "value" : "1",
-    "description" : "タイムライン上の依頼NO等を角丸シェイプで描画（xlwings）。0 でセルのみ。"
-  }, {
-    "name" : "GANTT_TIMELINE_LABELS_DAY_FLATTEN",
-    "value" : "1",
-    "description" : "1（既定）=日ブロック単位で画像に集約して負荷低減。0=従来の大量シェイプ。"
-  }, {
-    "name" : "GANTT_DAY_IMAGE_CHROMA_TRANSPARENT",
-    "value" : "0",
-    "description" : "1=日別画像にクロマキー敷き色で透明化を試す（上級）"
-  }, {
-    "name" : "GANTT_DAY_IMAGE_CHROMA_HEX",
-    "value" : "FF00FF",
-    "description" : "上記の敷き色（RRGGBB、既定マゼンタ）"
-  }, {
-    "name" : "GANTT_DAY_IMAGE_COPY_PICTURE_FORMAT",
-    "value" : "",
-    "description" : "CopyPicture 形式: picture または bitmap（空なら既定 EMF 系）"
-  }, {
-    "name" : "GANTT_ACTUAL_DETAIL_DATE_FROM",
-    "value" : "",
-    "description" : "結果_設備ガント_実績明細: 表示する暦日の開始（空＝下限なし）。例 2026-04-01 または 2026/4/1 — 納期管理ビュー／実績明細ガント共通：実績側で表示する暦日の開始（空＝下限なし）。 planning_core の ENV と同じ。"
-  }, {
-    "name" : "GANTT_ACTUAL_DETAIL_DATE_TO",
-    "value" : "",
-    "description" : "結果_設備ガント_実績明細: 表示する暦日の終了（空＝上限なし）。段階2の xlsx 生成時のみ有効 — 納期管理ビュー／実績明細ガント共通：実績側で表示する暦日の終了（空＝上限なし）。"
-  }, {
-    "name" : "PM_AI_ACTUAL_DETAIL_RAW_MAX_BYTES",
-    "value" : "",
-    "description" : "JavaFX 加工実績明細タブ: 元 xlsx/xlsm/csv の読込前サイズ上限（バイト）。空で 20971520（20MiB）。0 で無制限。16M / 64MB 等。 — JavaFX「加工実績」明細タブ: 元 Excel/CSV を POI で読む前のファイルサイズ上限（バイト）。超過時は読込を中止しメッセージ表示（OOM 回避）。空または未設定で 20971520（20MiB）。0 以下で上限なし。例: 16777216、16M、64MB。"
-  }, {
-    "name" : "COMPARE_GANTT_SNAPSHOT_DIR",
-    "value" : "",
-    "description" : "plan_compare_gantt_from_snapshot.py: スナップショットフォルダ（未指定時の既定） — plan_compare_gantt_from_snapshot.py: 比較元の日時フォルダ（pdf 配下の最新を選択可）。"
-  }, {
-    "name" : "COMPARE_GANTT_ACTUAL_SHAPE_LINE_PT",
-    "value" : "2.5",
-    "description" : "比較用ガントの実績ライン太さ（ポイント）"
-  }, {
-    "name" : "ASSIGN_END_OF_DAY_DEFER_MINUTES",
-    "value" : "45",
-    "description" : "終業まで残りこの分数以下のときに上記と組み合わせる。0で明示無効"
-  }, {
-    "name" : "ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS",
-    "value" : "5",
-    "description" : "終業直前: このロール数以上は当日回せないとき新規加工を始めない（残ロール≦この値でも拒否）。ASSIGN_END_OF_DAY_DEFER_MINUTES>0 時"
-  }, {
-    "name" : "GEMINI_PRICE_USD_IN_PER_M",
-    "value" : "0.075",
-    "description" : ""
-  }, {
-    "name" : "GEMINI_PRICE_USD_OUT_PER_M",
-    "value" : "0.3",
-    "description" : ""
-  }, {
-    "name" : "GEMINI_JPY_PER_USD",
-    "value" : "160",
-    "description" : ""
-  }, {
-    "name" : "GEMINI_MODEL",
-    "value" : "",
-    "description" : "単一モデルに固定。空のときは GEMINI_MODEL_TRY_ORDER、さらに空なら planning_core のコード既定列"
-  }, {
-    "name" : "GEMINI_MODEL_TRY_ORDER",
-    "value" : "",
-    "description" : "カンマ区切りで試行順（例: gemini-3.5-flash,gemini-3.1-flash-lite,gemini-2.5-flash-lite）。GEMINI_MODEL 未設定時のみ有効。両方空ならコード既定（gemini-3.5-flash 最優先＋Flash-Lite 系）"
-  }, {
-    "name" : "GEMINI_PRE_REQUEST_JITTER_MAX_SEC",
-    "value" : "0.75",
-    "description" : "503/429 等対策: 呼び出し直前の最大ジッター秒。0 で無効。"
-  }, {
-    "name" : "GEMINI_RETRY_BACKOFF_BASE_SEC",
-    "value" : "2",
-    "description" : "再試行の指数バックオフ基底（秒）"
-  }, {
-    "name" : "GEMINI_PROGRESS_LOG_INTERVAL_SEC",
-    "value" : "12",
-    "description" : "Gemini 応答待ちのハートビートログ間隔（秒）。0 で無効"
-  }, {
-    "name" : "GEMINI_RETRY_MAX_ATTEMPTS",
-    "value" : "3",
-    "description" : "同一モデルあたりの最大試行回数（既定 3）。使い切ったら次モデルへ"
-  }, {
-    "name" : "GEMINI_REQUEST_TIMEOUT_SEC",
-    "value" : "90",
-    "description" : "Gemini generate_content の HTTP タイムアウト（秒）。差分出力とバッチ分割で 1 回の応答は数秒〜十数秒。超過時は同一モデルを再試行し、試行上限後は次モデルへ。0 で SDK 既定（非推奨）"
-  }, {
-    "name" : "GEMINI_REQUESTS_PER_MINUTE",
-    "value" : "15",
-    "description" : "1 分あたりの送信上限。無料枠 RPM を超えると 429 の指定待機（30〜60 秒）で並列化の効果が消えるため、送信側で間隔を空ける"
-  }, {
-    "name" : "GEMINI_THINKING_BUDGET",
-    "value" : "0",
-    "description" : "思考トークンの上限。0 で思考無効（既定・応答時間が最短）。-1 でモデル任せ。正数でその上限。抽出・転記系では 0 のままでよい"
-  }, {
-    "name" : "GEMINI_BATCH_MAX_ITEMS",
-    "value" : "120",
-    "description" : "勤怠備考AI 等で 1 リクエストに載せる明細行の上限。小さいほど 1 回の出力トークンが減り応答が速い（既定 120）"
-  }, {
-    "name" : "GEMINI_MAX_PARALLEL_REQUESTS",
-    "value" : "4",
-    "description" : "バッチ分割した Gemini 呼び出しの並列数（既定 4）。無料枠 RPM 15 を超えない範囲に丸める"
-  }, {
-    "name" : "PM_AI_CMD_PAUSE_ON_ERROR",
-    "value" : "1",
-    "description" : "環境構築 setup_environment: 終了時（成功・失敗とも）に pause／Enter 待ち。0 false no off で無効。その他の CLI は従来どおり非0時のみ pause。pip 成功後にシートを読むため初回 pip 失敗時は OS 環境変数のみ有効 — CLI 終了時の pause（Windows）。0/false で無効化（workbook_env_bootstrap 同様）。JavaFX デスクトップが起動する Python 子プロセスでは、環境タブの値に関わらず 0 に固定（pause によるハング防止）。"
-  }, {
-    "name" : "PM_AI_SETUP_COMPLETION_MSGBOX",
-    "value" : "1",
-    "description" : "環境構築 setup_environment: Windows で成功時に完了メッセージ（MessageBox）を表示。0 false no off で無効"
-  }, {
-    "name" : "PM_AI_DEBUG_STAGE3_PLAN_ACTUAL_SINGLE_LINE",
-    "value" : "0",
-    "description" : "配台手動修正: 段階3試行後の日付セルで（段階3前）（段階3後）を改行せず1行表示（スペース区切り）。1/true/yes/on で有効。0/false/no/off/none で2行（改行）表示。既定は0（2行表示）。 — 配台計画手動修正タブ: 段階3試行後の日付セル表示。 1/true/yes/on で（段階3前）（段階3後）を1行（スペース区切り）。 0/false/no/off/none（既定）で2行（改行）。2行は固定行高44px・wrap-text なし。 Spreadsheet の layout IOOBE 回避のため。"
-  }, {
-    "name" : "PM_AI_POSTPROC_PRODUCT_MASTER_UPLOAD",
-    "value" : "",
-    "description" : "後加工商品マスタのアップロード用 xlsx（フルパス）。依頼書入力【設定】タブのマスタ編集で使用。空のときは PM_AI_ALADDIN_MASTER_DIR 直下のアップロード用_後加工商品マスタ.xlsx。 — 後加工商品マスタのアップロード用 xlsx（フルパス）。依頼書入力【設定】タブのマスタ編集カードが読み書きする。空のときは PM_AI_ALADDIN_MASTER_DIR 直下のアップロード用_後加工商品マスタ.xlsx。見出し行は参照の後加工商品マスタ.xlsx と同一である必要がある。"
-  }, {
-    "name" : "PM_AI_TESSERACT_CMD",
-    "value" : "",
-    "description" : "Tesseract OCR 実行ファイル（tesseract.exe）のフルパス。TPI 依頼書 PDF が画像スキャンのとき OCR 読取に使用。空のとき Program Files\\Tesseract-OCR\\tesseract.exe 等を探索。「ファイル...」で選択可。 — Tesseract OCR 実行ファイル（tesseract.exe）のフルパス。TPI 依頼書 PDF が画像スキャン（テキスト抽出不可）と判定されたとき OCR 読取に使用。空のとき C:\\Program Files\\Tesseract-OCR\\tesseract.exe 等を探索。環境変数タブのファイル選択可。"
-  }, {
-    "name" : "PM_AI_TESSERACT_TESSDATA_DIR",
-    "value" : "",
-    "description" : "Tesseract 言語データ（tessdata）フォルダ。jpn.traineddata が必要。空のとき PM_AI_TESSERACT_CMD 近傍または Program Files\\Tesseract-OCR\\tessdata を探索。「フォルダ...」で選択可。 — Tesseract 言語データ（tessdata）フォルダ。jpn.traineddata が必要。空のとき PM_AI_TESSERACT_CMD 近傍または Program Files\\Tesseract-OCR\\tessdata を探索。環境変数タブのフォルダ選択可。"
-  }, {
-    "name" : "PM_AI_REQUEST_FORM_PREVIEW_PDF_CJK_SCALE",
-    "value" : "0.72",
-    "description" : "依頼書 PDF プレビュー: 日本語フォントサイズ補正係数（Excel の pt に乗算）。小さいほど文字が小さくなる。範囲 0.50～1.00。空または未設定で 0.72。はみ出しが残るときは 0.65～0.70、小さすぎるときは 0.80 前後を試す。変更後はプレビュー PDF が再生成される。 — 依頼書 PDF プレビュー: 日本語フォントサイズ補正係数（Excel pt に乗算）。範囲 0.50～1.00。空または未設定で 0.72。PDF が Excel より大きくはみ出すときは 0.65～0.70、小さすぎるときは 0.80 前後。変更後はプレビュー PDF キャッシュが再生成される。"
-  }, {
-    "name" : "PM_AI_REQUEST_FORM_RDP_PROFILE",
-    "value" : "",
-    "description" : "依頼書入力タブ「リモートデスクトップ」で起動する RDP プロファイル（.rdp）のフルパス。空のときは未設定。環境変数タブの「ファイル...」で選択可。 — 依頼書入力タブ「リモートデスクトップ」で起動する RDP プロファイル（.rdp）のフルパス。空のときは未設定。環境変数タブのファイル選択可。子タブの「リモートデスクトップを起動」で mstsc.exe に渡されます（Windows のみ）。"
-  }, {
-    "name" : "PM_AI_RDP_COMPANION_PROGRAM",
-    "value" : "C:\\Windows\\System32\\notepad.exe",
-    "description" : "接続先サーバー上で RDP 接続時に起動するプログラム。.rdp へ書き込む。 — RDP 接続先サーバー上で起動するプログラムのパス。「リモートデスクトップを起動」時に .rdp へ alternate shell（接続時の初期プログラム）として書き込む。例: C:\\Windows\\System32\\notepad.exe（接続先のパス）。空なら通常デスクトップ接続。"
-  }, {
-    "name" : "PM_AI_RDP_COMPANION_PROGRAM_ARGS",
-    "value" : "",
-    "description" : "接続先プログラムの引数（alternate shell に付与）。 — PM_AI_RDP_COMPANION_PROGRAM の引数。 .rdp の alternate shell の引数として書き込む。空なら引数なし。"
-  }, {
-    "name" : "PM_AI_RDP_FULLSCREEN",
-    "value" : "0",
-    "description" : "RDP 起動時に全画面にする。1/true/on=全画面、0/false/off=ウィンドウ（既定）。ウィンドウ時は PM_AI_RDP_DESKTOP_WIDTH/HEIGHT を .rdp に書き込む。 — RDP 起動時の全画面設定。1/true/on=全画面、0/false/off=ウィンドウ（既定）。 ウィンドウ時は PM_AI_RDP_DESKTOP_WIDTH/HEIGHT を .rdp へ書き込み mstsc をウィンドウ表示する。 配台計画システムの背面で接続先 RPA を動かす用途では 0 を推奨。"
-  }, {
-    "name" : "PM_AI_RDP_DESKTOP_WIDTH",
-    "value" : "1920",
-    "description" : "RDP ウィンドウ表示時の幅（ピクセル）。PM_AI_RDP_FULLSCREEN=0 のとき mstsc 起動前に .rdp へ反映。既定 1920。 — RDP ウィンドウ表示時の幅（ピクセル）。PM_AI_RDP_FULLSCREEN=0 のとき起動前に .rdp へ反映。既定 1920。"
-  }, {
-    "name" : "PM_AI_RDP_DESKTOP_HEIGHT",
-    "value" : "1080",
-    "description" : "RDP ウィンドウ表示時の高さ（ピクセル）。PM_AI_RDP_FULLSCREEN=0 のとき mstsc 起動前に .rdp へ反映。既定 1080。 — RDP ウィンドウ表示時の高さ（ピクセル）。PM_AI_RDP_FULLSCREEN=0 のとき起動前に .rdp へ反映。既定 1080。"
-  }, {
-    "name" : "PM_AI_RDP_LAUNCHER_EXE",
-    "value" : "",
-    "description" : "接続先 RDP ランチャー exe のフルパス。空のとき配備先フォルダ。 — 接続先 RDP ランチャー（PmAiRdpRemoteLauncher.exe）のフルパス。空のときは配備先フォルダ（配台 PMD: PM_AI_RDP_LAUNCHER_DEPLOY_DIR、専用ランチャー: PM_AI_RPA_LAUNCHER_DEPLOY_DIR、各未設定時の既定は AppPaths 参照）の PmAiRdpRemoteLauncher.exe。"
-  }, {
-    "name" : "PM_AI_RDP_LAUNCHER_INI",
-    "value" : "",
-    "description" : "RPA設定 ini のフルパス上書き。空のとき配備先フォルダ（PmAiRdpRemoteLauncher.exe と同階層）の {操作者名}_RPA設定.ini（操作者未設定時は RPA設定.ini）。レガシー RAP設定.ini / DATA は読取フォールバック。 — 接続先 RDP ランチャー設定 ini のフルパス上書き。空のときは配備先フォルダ（PmAiRdpRemoteLauncher.exe と同階層）の {操作者名}_RPA設定.ini（PM_AI_OPERATOR_USER / セッション操作者）。操作者未設定時は RPA設定.ini。 レガシー RAP設定.ini / DATA 配下は読取フォールバックのみ。 PmAiRdpRemoteLauncher.exe に操作者名を引数で渡すと同じ ini を参照する。"
-  }, {
-    "name" : "PM_AI_RDP_LAUNCHER_DEPLOY_DIR",
-    "value" : "\\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\002  加工G\\●配台AIシステム\\共有DATA",
-    "description" : "配台 PMD のリモートデスクトップタブ向け: 接続先 RDP ランチャー exe（PmAiRdpRemoteLauncher.exe）、RDP起動プロファイル.json、RPA設定.ini の配備先共有フォルダ（UNC 可）。 — 配台 PMD のリモートデスクトップタブ向け: 接続先 RDP ランチャー exe（PmAiRdpRemoteLauncher.exe）と RDP起動プロファイル.json、RPA設定.ini の配備先共有フォルダ（UNC 可）。 空のときは \\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\002  加工G\\●配台AIシステム\\共有DATA。 リモートデスクトップ専用ランチャー（PmAiRpaLuncher.exe）では PM_AI_RPA_LAUNCHER_DEPLOY_DIR を使用。"
-  }, {
-    "name" : "PM_AI_RPA_LAUNCHER_DEPLOY_DIR",
-    "value" : "M:\\湖南工場\\湖南共有\\002  加工G\\●配台AIシステム\\共有DATA",
-    "description" : "リモートデスクトップ専用ランチャー（PmAiRpaLuncher）向け: 接続先 RDP ランチャー exe・ini・起動プロファイル JSON の配備先共有フォルダ（UNC 可）。 — リモートデスクトップ専用ランチャー（PmAiRpaLuncher.exe）向け: 接続先 RDP ランチャー exe と RDP起動プロファイル.json、RPA設定.ini の配備先共有フォルダ（UNC 可）。 空のときは M:\\湖南工場\\湖南共有\\002  加工G\\●配台AIシステム\\共有DATA。 配台 PMD とは別キー（PM_AI_RDP_LAUNCHER_DEPLOY_DIR）。"
-  }, {
-    "name" : "PM_AI_RDP_PORTABLE_BUNDLE_SOURCE_DIR",
-    "value" : "M:\\湖南工場\\湖南共有\\002  加工G\\●配台AIシステム\\共有DATA\\PmAiRpaLuncher_portable",
-    "description" : "リモートデスクトップ専用ポータブル（PmAiRpaLuncher）の版アップ正本。ローカル出力 rpa_luncher_release。配台 PMD は pm-ai-package-release。 — リモートデスクトップ専用ポータブル（PmAiRpaLuncher.exe）の版アップ正本。 ローカルビルド出力はリポジトリ直下 rpa_luncher_release。 湖南工場既定: M:\\湖南工場\\…\\共有DATA\\PmAiRpaLuncher_portable（PmAiRpaLuncher\\PmAiRpaLuncher.exe の2段上。version.txt + PmAiRpaLuncher_version_upgrade.zip）。 配台 PMD の正本は PM_AI_PORTABLE_BUNDLE_SOURCE_DIR（pm-ai-package-release）。"
-  }, {
-    "name" : "PM_AI_RDP_OPERATOR_USERS_STORE_DIR",
-    "value" : "\\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\002  加工G\\●配台AIシステム\\共有DATA",
-    "description" : "配台 PMD のリモートデスクトップタブ向け: 操作者 bin 保存フォルダ（UNC 可）。 空のときは \\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\002  加工G\\●配台AIシステム\\共有DATA（rdp-launcher-operator-users.bin とバックアップ）。 専用ランチャーでは PM_AI_RPA_LAUNCHER_OPERATOR_USERS_STORE_DIR を使用。"
-  }, {
-    "name" : "PM_AI_RPA_LAUNCHER_OPERATOR_USERS_STORE_DIR",
-    "value" : "M:\\湖南工場\\湖南共有\\002  加工G\\●配台AIシステム\\共有DATA",
-    "description" : "リモートデスクトップ専用ランチャー向けの操作者 bin 保存フォルダ（UNC 可）。前回操作者選択は PC ローカル。 — リモートデスクトップ専用ランチャー向けの操作者 bin 保存フォルダ（UNC 可）。 空のときは掲示板共有 M:\\湖南工場\\湖南共有\\002  加工G\\●配台AIシステム\\共有DATA（rdp-launcher-operator-users.bin とバックアップ）。 前回選択した操作者名は PC ローカルの last-rdp-launcher-operator.txt に保存。 配台 PMD とは別キー（PM_AI_RDP_OPERATOR_USERS_STORE_DIR）。"
-  }, {
-    "name" : "PM_AI_RDP_LAUNCHER_AUTO_DEPLOY",
-    "value" : "",
-    "description" : "ランチャー exe の自動再配備。0/false/off で無効。 — 依頼書 UI から接続先共有フォルダへランチャー exe を自動再配備する。0/false/off で無効。既定は有効。"
-  }, {
-    "name" : "PM_AI_RDP_LAUNCH_PROFILE_NUMBER",
-    "value" : "",
-    "description" : "リモートデスクトップタブで最後に使用した起動プロファイル番号（1～9）。次回の ComboBox 既定値。未設定時は 1。 — リモートデスクトップタブで最後に使用した起動プロファイル番号（1～9）。 次回起動時の ComboBox 既定値。 RPA設定.ini の起動プログラム番号（スロット）と同一。 名称・説明は共有フォルダの RDP起動プロファイル.json に保存。"
-  }, {
-    "name" : "PM_AI_RDP_EMBED_STARTUP_IN_PROFILE",
-    "value" : "",
-    "description" : "1 で .rdp へ alternate shell 書込。既定 off。 — 1/true/on のときのみ PM_AI_RDP_COMPANION_PROGRAM を .rdp へ alternate shell として書込。既定は off（接続先はタスクスケジューラ + RPA設定.ini）。"
-  }, {
-    "name" : "PM_AI_FACTORY_SITE",
-    "value" : "KONAN",
-    "description" : "現在選択中の利用工場（KONAN / KOKUBU）。工場切替コンボ（実行タブ）に追従して自動更新。C# ランチャーの資格情報選択、および段階1の湖南工場限定ロジック（DISPATCHABLE_FROM_TIME_KONAN_STOCK 等）の判定に使用。未設定時は KONAN。 — 利用工場（KONAN / KOKUBU）。工場切替コンボ（実行タブ）に追従して自動更新。 C# ランチャーが operator-aladdin-credentials.launcher.json 内の工場ブロックを選ぶときに参照するほか、 段階1の湖南工場限定ロジック（DISPATCHABLE_FROM_TIME_KONAN_STOCK 等）の判定にも使用（未設定時は KONAN）。"
-  }, {
-    "name" : "DISPATCHABLE_FROM_TIME_KONAN_STOCK",
-    "value" : "09:30",
-    "description" : "湖南工場（PM_AI_FACTORY_SITE=KONAN）かつ受注ファイル「在庫場所」列に「湖南」を含むタスクのみ: 原反投入日と同日の配台開始下限（HH:MM）。既定 09:30。他タスクは従来通り DISPATCHABLE_FROM_TIME(12:45) を使用。 — 湖南工場（PM_AI_FACTORY_SITE=KONAN）かつ受注ファイル「在庫場所」列に「湖南」を含むタスクのみ: 原反投入日と同日の配台開始下限（HH:MM）。既定 09:30。 他タスクは従来通り DISPATCHABLE_FROM_TIME(12:45) を使用。"
-  } ],
-  "mainShellTabOrder" : [ "equipmentStatusDashboard", "remoteDesktop", "requestFormInput", "requestFormPipelineCheck", "run", "planInput", "dispatchInteractive", "planInputStage3", "equipmentGanttGraphic", "deliveryCalendarView", "operatorCard", "codeLookupTables", "env", "globalSettings", "userProfiles", "operatorUserManagement" ],
-  "mainShellTabLayout" : [ {
-    "kind" : "tab",
-    "color" : "#994d66",
-    "id" : "equipmentStatusDashboard"
-  }, {
-    "kind" : "tab",
-    "color" : "#0000ff",
-    "id" : "remoteDesktop"
-  }, {
-    "kind" : "tab",
-    "color" : "#336633",
-    "id" : "requestFormInput"
-  }, {
-    "kind" : "tab",
-    "color" : "#9980e6",
-    "id" : "requestFormPipelineCheck"
-  }, {
-    "kind" : "tab",
-    "color" : "#0000ff",
-    "id" : "run"
-  }, {
-    "kind" : "tab",
-    "color" : "#000080",
-    "id" : "planInput"
-  }, {
-    "kind" : "tab",
-    "color" : "#1a3399",
-    "id" : "dispatchInteractive"
-  }, {
-    "kind" : "tab",
-    "color" : "#800080",
-    "id" : "planInputStage3"
-  }, {
-    "kind" : "tab",
-    "color" : "#1a4d1a",
-    "id" : "equipmentGanttGraphic"
-  }, {
-    "kind" : "tab",
-    "color" : "#669966",
-    "id" : "deliveryCalendarView"
-  }, {
-    "kind" : "tab",
-    "color" : "#336666",
-    "id" : "operatorCard"
-  }, {
-    "kind" : "tab",
-    "color" : "#0000ff",
-    "id" : "codeLookupTables"
-  }, {
-    "kind" : "group",
-    "color" : "#ffff00",
-    "title" : "バッジ設定",
-    "children" : [ {
-      "kind" : "tab",
-      "id" : "uiBadgeDesign"
-    }, {
-      "kind" : "tab",
-      "id" : "pushButtonDesign"
-    }, {
-      "kind" : "tab",
-      "id" : "ganttPersonBadgeDesign"
-    }, {
-      "kind" : "tab",
-      "id" : "requestFormPreviewBadgeDesign"
-    } ]
-  }, {
-    "kind" : "group",
-    "color" : "#800080",
-    "title" : "結果情報(デバッグ用)",
-    "children" : [ {
-      "kind" : "tab",
-      "id" : "planResultViewer"
-    }, {
-      "kind" : "tab",
-      "id" : "stage1Preview"
-    }, {
-      "kind" : "tab",
-      "id" : "resultDispatch"
-    } ]
-  }, {
-    "kind" : "group",
-    "color" : "#666666",
-    "title" : "その他",
-    "children" : [ {
-      "kind" : "tab",
-      "id" : "masterSummary"
-    }, {
-      "kind" : "tab",
-      "id" : "excludeRules"
-    }, {
-      "kind" : "tab",
-      "id" : "specialRules"
-    }, {
-      "kind" : "tab",
-      "id" : "planWorkspaceHistory"
-    }, {
-      "kind" : "tab",
-      "id" : "summaryAiDispatchExportCustomize"
-    }, {
-      "kind" : "tab",
-      "id" : "memorySettings"
-    }, {
-      "kind" : "tab",
-      "id" : "apiModelBenchmark"
-    }, {
-      "kind" : "tab",
-      "id" : "actualsStatus"
-    }, {
-      "kind" : "tab",
-      "id" : "pipelineExecutionTiming"
-    }, {
-      "kind" : "tab",
-      "id" : "cacheHistory"
-    }, {
-      "kind" : "tab",
-      "id" : "summaryAiDispatchGeneration"
-    }, {
-      "kind" : "tab",
-      "id" : "learnedSpeedData"
-    } ]
-  }, {
-    "kind" : "group",
-    "color" : "#e64d4d",
-    "title" : "環境設定",
-    "children" : [ {
-      "kind" : "tab",
-      "id" : "env"
-    }, {
-      "kind" : "tab",
-      "id" : "globalSettings"
-    }, {
-      "kind" : "tab",
-      "id" : "userProfiles"
-    }, {
-      "kind" : "tab",
-      "id" : "operatorUserManagement"
-    } ]
-  } ],
-  "innerTabSelectedIndexByShellTabKey" : {
-    "deliveryCalendarView" : 1,
-    "dispatchInteractive" : 0,
-    "codeLookupTables" : 0
+  "planInputPath": "C:\\システム開発\\工程管理AIプロジェクト_JAVA\\pm-ai-package-release\\PMD_initial_install\\pm-ai-data\\output\\plan_input_tasks.xlsx",
+  "planInputSheet": "タスク一覧",
+  "stage1PreviewPath": "C:\\システム開発\\工程管理AIプロジェクト_JAVA\\pm-ai-package-release\\PMD_initial_install\\pm-ai-data\\output\\stage1_task_input_table.xlsx",
+  "stage1PreviewSheet": "タスク入力整形",
+  "uiTheme": "midnight-blue",
+  "logFontSize": 16.0,
+  "mainRunLogFilter": "ALL",
+  "mainRunLogLines": [
+    "[global-settings] グローバル設定を読み込みました（init_setting）。工場: 湖南工場",
+    "[exclude-json] restored session: C:\\システム開発\\工程管理AIプロジェクト_JAVA\\output\\stage1_exclude_rules.json"
+  ],
+  "mainRunLogScroll": 0.0,
+  "mainRunStage2ProductionPlan": "C:\\システム開発\\工程管理AIプロジェクト_JAVA\\pm-ai-package-release\\PMD_initial_install\\pm-ai-data\\output\\計画2608032030366040.xlsx",
+  "mainRunStage2MemberSchedule": "C:\\システム開発\\工程管理AIプロジェクト_JAVA\\pm-ai-package-release\\PMD_initial_install\\pm-ai-data\\output\\人員2608032030366040.xlsx",
+  "mainRunStage2SkipTodayDispatch": true,
+  "planInputStage2NextDayDialogMode": "BOTH",
+  "planInputComboSheetMayExceedNeed": true,
+  "planInputStage2SkipGeminiApi": false,
+  "skipGeminiApiDefaultOffMigrated": true,
+  "planInputTodayDispatch": false,
+  "mainRunSkipGeminiApi": false,
+  "mainRunStage1MarkAllExcludeAfterRun": false,
+  "mainRunApplyLearnedSpeedFromActuals": false,
+  "mainShellTabOrder": [
+    "equipmentStatusDashboard",
+    "remoteDesktop",
+    "requestFormInput",
+    "requestFormPipelineCheck",
+    "companyCalendar",
+    "memberAttendance",
+    "run",
+    "planInput",
+    "dispatchInteractive",
+    "equipmentGanttGraphic",
+    "deliveryCalendarView",
+    "operatorCard",
+    "codeLookupTables",
+    "uiBadgeDesign",
+    "pushButtonDesign",
+    "ganttPersonBadgeDesign",
+    "requestFormPreviewBadgeDesign",
+    "planResultViewer",
+    "stage1Preview",
+    "resultDispatch",
+    "masterSummary",
+    "excludeRules",
+    "specialRules",
+    "planWorkspaceHistory",
+    "memorySettings",
+    "apiModelBenchmark",
+    "actualsStatus",
+    "pipelineExecutionTiming",
+    "cacheHistory",
+    "learnedSpeedData",
+    "env",
+    "globalSettings",
+    "userProfiles",
+    "operatorUserManagement"
+  ],
+  "mainShellTabLayout": [
+    {
+      "kind": "tab",
+      "color": "#994d66",
+      "id": "equipmentStatusDashboard"
+    },
+    {
+      "kind": "tab",
+      "color": "#0000ff",
+      "id": "remoteDesktop"
+    },
+    {
+      "kind": "tab",
+      "color": "#336633",
+      "id": "requestFormInput"
+    },
+    {
+      "kind": "tab",
+      "color": "#9980e6",
+      "id": "requestFormPipelineCheck"
+    },
+    {
+      "kind": "tab",
+      "color": "#800080",
+      "id": "companyCalendar"
+    },
+    {
+      "kind": "tab",
+      "color": "#800080",
+      "id": "memberAttendance"
+    },
+    {
+      "kind": "tab",
+      "color": "#0000ff",
+      "id": "run"
+    },
+    {
+      "kind": "tab",
+      "color": "#800080",
+      "id": "planInputStage3"
+    },
+    {
+      "kind": "tab",
+      "color": "#000080",
+      "id": "planInput"
+    },
+    {
+      "kind": "tab",
+      "color": "#1a3399",
+      "id": "dispatchInteractive"
+    },
+    {
+      "kind": "tab",
+      "color": "#1a4d1a",
+      "id": "equipmentGanttGraphic"
+    },
+    {
+      "kind": "tab",
+      "color": "#669966",
+      "id": "deliveryCalendarView"
+    },
+    {
+      "kind": "tab",
+      "color": "#336666",
+      "id": "operatorCard"
+    },
+    {
+      "kind": "tab",
+      "color": "#0000ff",
+      "id": "codeLookupTables"
+    },
+    {
+      "kind": "group",
+      "color": "#ffff00",
+      "title": "バッジ設定",
+      "children": [
+        {
+          "kind": "tab",
+          "id": "uiBadgeDesign"
+        },
+        {
+          "kind": "tab",
+          "id": "pushButtonDesign"
+        },
+        {
+          "kind": "tab",
+          "id": "ganttPersonBadgeDesign"
+        },
+        {
+          "kind": "tab",
+          "id": "requestFormPreviewBadgeDesign"
+        }
+      ]
+    },
+    {
+      "kind": "group",
+      "color": "#800080",
+      "title": "結果情報(デバッグ用)",
+      "children": [
+        {
+          "kind": "tab",
+          "id": "planResultViewer"
+        },
+        {
+          "kind": "tab",
+          "id": "stage1Preview"
+        },
+        {
+          "kind": "tab",
+          "id": "resultDispatch"
+        }
+      ]
+    },
+    {
+      "kind": "group",
+      "color": "#666666",
+      "title": "その他",
+      "children": [
+        {
+          "kind": "tab",
+          "id": "masterSummary"
+        },
+        {
+          "kind": "tab",
+          "id": "excludeRules"
+        },
+        {
+          "kind": "tab",
+          "id": "specialRules"
+        },
+        {
+          "kind": "tab",
+          "id": "planWorkspaceHistory"
+        },
+        {
+          "kind": "tab",
+          "id": "memorySettings"
+        },
+        {
+          "kind": "tab",
+          "id": "apiModelBenchmark"
+        },
+        {
+          "kind": "tab",
+          "id": "actualsStatus"
+        },
+        {
+          "kind": "tab",
+          "id": "pipelineExecutionTiming"
+        },
+        {
+          "kind": "tab",
+          "id": "cacheHistory"
+        },
+        {
+          "kind": "tab",
+          "id": "learnedSpeedData"
+        }
+      ]
+    },
+    {
+      "kind": "group",
+      "color": "#e64d4d",
+      "title": "環境設定",
+      "children": [
+        {
+          "kind": "tab",
+          "id": "env"
+        },
+        {
+          "kind": "tab",
+          "id": "globalSettings"
+        },
+        {
+          "kind": "tab",
+          "id": "userProfiles"
+        },
+        {
+          "kind": "tab",
+          "id": "operatorUserManagement"
+        }
+      ]
+    }
+  ],
+  "innerTabSelectedIndexByShellTabKey": {
+    "dispatchInteractive": 0,
+    "codeLookupTables": 0,
+    "deliveryCalendarView": 1
   },
-  "innerTabHeaderColorByKey" : {
-    "requestFormInput\u0001マスター一覧\u0001加工内容マスタ" : "#e6e6e6",
-    "requestFormInput\u0001マスター一覧\u0001工程マスタ" : "#e6e6e6",
-    "requestFormInput\u0001マスター一覧\u0001機械コード" : "#cccccc",
-    "requestFormInput\u0001マスター一覧" : "#008080"
+  "innerTabHeaderColorByKey": {
+    "requestFormInput\u0001マスター一覧": "#008080",
+    "requestFormInput\u0001マスター一覧\u0001加工内容マスタ": "#e6e6e6",
+    "requestFormInput\u0001マスター一覧\u0001工程マスタ": "#e6e6e6",
+    "requestFormInput\u0001マスター一覧\u0001機械コード": "#cccccc"
   },
-  "equipmentGanttGraphicZoomPercent" : 150.57693591484662,
-  "equipmentGanttMachineColWidth" : 50.45043326712945,
-  "equipmentGanttProcessColWidth" : 57.65766453098606,
-  "equipmentGanttBarFontFamily" : "Meiryo UI",
-  "equipmentGanttBarFontPercent" : 98.78049594600026,
-  "equipmentGanttRowHeightPercent" : 50.0,
-  "equipmentGanttHeaderHeightPercent" : 100.0,
-  "equipmentGanttSlotWidthPercent" : 202.4390261347701,
-  "equipmentGanttShiftWheelHScrollPercent" : 200.0,
-  "equipmentGanttPrepTimeLabelsEnabled" : true,
-  "equipmentGanttPersonBadgeGapPx" : 32.78048706054687,
-  "equipmentGanttPersonBadgeBandVerticalOffsetPx" : -8.975611244759897,
-  "equipmentGanttGraphicDataFingerprint" : "07d37b69745acc51c8f8403bff684f398c847a2a5b9f891cb6f8e79d9d7b2efa",
-  "equipmentGanttPersonBadgeDragAdjustEnabled" : true,
-  "equipmentGanttPersonBadgeEnabled" : true,
-  "equipmentGanttPersonBadgeWireEnabled" : true,
-  "equipmentGanttPersonBadgeWireStrokeHex" : "#ccffff",
-  "equipmentGanttPersonBadgeWireWidthPx" : 1.756097979661895,
-  "equipmentGanttPersonBadgeWireDashStyleKey" : "SOLID",
-  "equipmentGanttPersonBadgeWireMaxLengthPx" : 39.02439489597223,
-  "equipmentGanttPersonBadgeFontPercent" : 106.0,
-  "equipmentGanttPersonBadgeFillHex" : "#2454ca",
-  "equipmentGanttPersonBadgeTextHex" : "#f0f2f7",
-  "equipmentGanttPersonBadgeStrokeHex" : "#011953",
-  "equipmentGanttPersonBadgeStrokeWidth" : 1.0,
-  "equipmentGanttPersonBadgeCornerRadius" : 3.0,
-  "equipmentGanttPersonBadgePill" : false,
-  "equipmentGanttPersonBadgeGlowColorHex" : "#6480c3",
-  "equipmentGanttPersonBadgeGlowRadius" : 21.7,
-  "equipmentGanttPersonBadgeGlowSpread" : 0.13440000000000005,
-  "equipmentGanttPersonBadgeOpacity" : 0.84,
-  "equipmentGanttPersonBadgeStylesByMemberKey" : {
-    "河合 直樹" : {
-      "fontFamily" : "French Script MT",
-      "fontPercent" : 88.0188639658802,
-      "fillHex" : "#632046",
-      "textHex" : "#f0f2f7",
-      "strokeHex" : "#360a23",
-      "strokeWidth" : 1.0,
-      "cornerRadius" : 18.0,
-      "pill" : false,
-      "glowColorHex" : "#e632cb",
-      "glowRadius" : 20.58,
-      "glowSpread" : 0.2772,
-      "opacity" : 0.73
+  "equipmentGanttGraphicZoomPercent": 150.57693591484662,
+  "equipmentGanttMachineColWidth": 50.45043326712945,
+  "equipmentGanttProcessColWidth": 57.65766453098606,
+  "equipmentGanttBarFontFamily": "Meiryo UI",
+  "equipmentGanttBarFontPercent": 98.78049594600026,
+  "equipmentGanttRowHeightPercent": 50.0,
+  "equipmentGanttHeaderHeightPercent": 100.0,
+  "equipmentGanttSlotWidthPercent": 202.4390261347701,
+  "equipmentGanttShiftWheelHScrollPercent": 200.0,
+  "equipmentGanttPrepTimeLabelsEnabled": true,
+  "equipmentGanttPersonBadgeGapPx": 32.78048706054687,
+  "equipmentGanttPersonBadgeBandVerticalOffsetPx": -8.975611244759897,
+  "equipmentGanttGraphicDataFingerprint": "ea9bab266fc49993b0af6a0fef323a09bd1c7b22b4fd8e4200d57a6d08520875",
+  "equipmentGanttPersonBadgeDragAdjustEnabled": true,
+  "equipmentGanttPersonBadgeEnabled": true,
+  "equipmentGanttPersonBadgeWireEnabled": true,
+  "equipmentGanttPersonBadgeWireStrokeHex": "#ccffff",
+  "equipmentGanttPersonBadgeWireWidthPx": 1.756097979661895,
+  "equipmentGanttPersonBadgeWireDashStyleKey": "SOLID",
+  "equipmentGanttPersonBadgeWireMaxLengthPx": 39.02439489597223,
+  "equipmentGanttPersonBadgeFontPercent": 106.0,
+  "equipmentGanttPersonBadgeFillHex": "#2454ca",
+  "equipmentGanttPersonBadgeTextHex": "#f0f2f7",
+  "equipmentGanttPersonBadgeStrokeHex": "#011953",
+  "equipmentGanttPersonBadgeStrokeWidth": 1.0,
+  "equipmentGanttPersonBadgeCornerRadius": 3.0,
+  "equipmentGanttPersonBadgePill": false,
+  "equipmentGanttPersonBadgeGlowColorHex": "#6480c3",
+  "equipmentGanttPersonBadgeGlowRadius": 21.7,
+  "equipmentGanttPersonBadgeGlowSpread": 0.13440000000000005,
+  "equipmentGanttPersonBadgeOpacity": 0.84,
+  "equipmentGanttPersonBadgeStylesByMemberKey": {
+    "沈 春光": {
+      "fontFamily": "Segoe UI Emoji",
+      "fontPercent": 88.0188639658802,
+      "fillHex": "#723974",
+      "textHex": "#f0f2f7",
+      "strokeHex": "#3d183e",
+      "strokeWidth": 2.5,
+      "cornerRadius": 10.0,
+      "pill": true,
+      "glowColorHex": "#def654",
+      "glowRadius": 28.28,
+      "glowSpread": 0.1988,
+      "opacity": 0.95
     },
-    "大平 有希子" : {
-      "fontFamily" : "MS Reference Sans Serif",
-      "fontPercent" : 88.0188639658802,
-      "fillHex" : "#5699be",
-      "textHex" : "#14171f",
-      "strokeHex" : "#214a60",
-      "strokeWidth" : 0.5,
-      "cornerRadius" : 15.0,
-      "pill" : false,
-      "glowColorHex" : "#c18bf7",
-      "glowRadius" : 15.959999999999999,
-      "glowSpread" : 0.3556,
-      "opacity" : 0.88
+    "吉岡 廣海": {
+      "fontFamily": "Old English Text MT",
+      "fontPercent": 88.0188639658802,
+      "fillHex": "#af2e14",
+      "textHex": "#f0f2f7",
+      "strokeHex": "#601000",
+      "strokeWidth": 3.5,
+      "cornerRadius": 17.0,
+      "pill": false,
+      "glowColorHex": "#ca5841",
+      "glowRadius": 12.18,
+      "glowSpread": 0.15680000000000002,
+      "opacity": 0.65
     },
-    "図司 智子" : {
-      "fontFamily" : "Dubai Medium",
-      "fontPercent" : 88.0188639658802,
-      "fillHex" : "#c9866f",
-      "textHex" : "#14171f",
-      "strokeHex" : "#603a2c",
-      "strokeWidth" : 2.0,
-      "cornerRadius" : 15.0,
-      "pill" : true,
-      "glowColorHex" : "#d165e8",
-      "glowRadius" : 9.1,
-      "glowSpread" : 0.5068,
-      "opacity" : 0.89
+    "森岡 真由美": {
+      "fontFamily": "HGSｺﾞｼｯｸE",
+      "fontPercent": 88.0188639658802,
+      "fillHex": "#a52b85",
+      "textHex": "#f0f2f7",
+      "strokeHex": "#5d0b47",
+      "strokeWidth": 2.5,
+      "cornerRadius": 2.0,
+      "pill": true,
+      "glowColorHex": "#9ceb83",
+      "glowRadius": 32.199999999999996,
+      "glowSpread": 0.5544,
+      "opacity": 0.75
     },
-    "松本 匡矢" : {
-      "fontFamily" : "Harlow Solid Italic",
-      "fontPercent" : 88.0188639658802,
-      "fillHex" : "#3963c4",
-      "textHex" : "#cbedba",
-      "strokeHex" : "#0d2459",
-      "strokeWidth" : 1.0,
-      "cornerRadius" : 0.0,
-      "pill" : false,
-      "glowColorHex" : "#3f6bd0",
-      "glowRadius" : 13.86,
-      "glowSpread" : 0.36680000000000007,
-      "opacity" : 0.92
+    "岩崎 智香": {
+      "fontFamily": "Sans Serif Collection",
+      "fontPercent": 88.0188639658802,
+      "fillHex": "#c338b9",
+      "textHex": "#f0f2f7",
+      "strokeHex": "#500b4c",
+      "strokeWidth": 0.0,
+      "cornerRadius": 7.0,
+      "pill": false,
+      "glowColorHex": "#2fde6b",
+      "glowRadius": 16.66,
+      "glowSpread": 0.11200000000000002,
+      "opacity": 0.67
     },
-    "森下  誠" : {
-      "fontFamily" : "HG明朝E",
-      "fontPercent" : 88.0188639658802,
-      "fillHex" : "#81239f",
-      "textHex" : "#f0f2f7",
-      "strokeHex" : "#3a054a",
-      "strokeWidth" : 2.0,
-      "cornerRadius" : 1.0,
-      "pill" : false,
-      "glowColorHex" : "#77d976",
-      "glowRadius" : 6.72,
-      "glowSpread" : 0.4732,
-      "opacity" : 0.97
+    "冨田 裕子": {
+      "fontFamily": "Agency FB",
+      "fontPercent": 88.0188639658802,
+      "fillHex": "#96b13a",
+      "textHex": "#14171f",
+      "strokeHex": "#455410",
+      "strokeWidth": 3.0,
+      "cornerRadius": 4.0,
+      "pill": false,
+      "glowColorHex": "#367cdc",
+      "glowRadius": 31.919999999999998,
+      "glowSpread": 0.13720000000000002,
+      "opacity": 0.9
     },
-    "増田 治樹" : {
-      "fontFamily" : "Brush Script MT",
-      "fontPercent" : 88.0188639658802,
-      "fillHex" : "#3d5072",
-      "textHex" : "#f0f2f7",
-      "strokeHex" : "#1b273e",
-      "strokeWidth" : 2.5,
-      "cornerRadius" : 8.0,
-      "pill" : true,
-      "glowColorHex" : "#89a6dd",
-      "glowRadius" : 9.24,
-      "glowSpread" : 0.24080000000000001,
-      "opacity" : 0.76
+    "宮島  剛": {
+      "fontFamily": "Colonna MT",
+      "fontPercent": 88.0188639658802,
+      "fillHex": "#5c9845",
+      "textHex": "#f0f2f7",
+      "strokeHex": "#274a19",
+      "strokeWidth": 3.0,
+      "cornerRadius": 16.0,
+      "pill": true,
+      "glowColorHex": "#5bd12c",
+      "glowRadius": 19.88,
+      "glowSpread": 0.5516000000000001,
+      "opacity": 0.67
     },
-    "大谷 晴香" : {
-      "fontFamily" : "",
-      "fontPercent" : 88.0188639658802,
-      "fillHex" : "#2367b9",
-      "textHex" : "#f0f2f7",
-      "strokeHex" : "#033168",
-      "strokeWidth" : 0.5,
-      "cornerRadius" : 6.0,
-      "pill" : false,
-      "glowColorHex" : "#f08bc8",
-      "glowRadius" : 17.78,
-      "glowSpread" : 0.36680000000000007,
-      "opacity" : 0.9
+    "河合 直樹": {
+      "fontFamily": "French Script MT",
+      "fontPercent": 88.0188639658802,
+      "fillHex": "#632046",
+      "textHex": "#f0f2f7",
+      "strokeHex": "#360a23",
+      "strokeWidth": 1.0,
+      "cornerRadius": 18.0,
+      "pill": false,
+      "glowColorHex": "#e632cb",
+      "glowRadius": 20.58,
+      "glowSpread": 0.2772,
+      "opacity": 0.73
     },
-    "角 正彦" : {
-      "fontFamily" : "HG教科書体",
-      "fontPercent" : 88.0188639658802,
-      "fillHex" : "#36702c",
-      "textHex" : "#f0f2f7",
-      "strokeHex" : "#173c10",
-      "strokeWidth" : 2.0,
-      "cornerRadius" : 6.0,
-      "pill" : true,
-      "glowColorHex" : "#85f772",
-      "glowRadius" : 30.38,
-      "glowSpread" : 0.462,
-      "opacity" : 0.82
+    "大平 有希子": {
+      "fontFamily": "MS Reference Sans Serif",
+      "fontPercent": 88.0188639658802,
+      "fillHex": "#5699be",
+      "textHex": "#14171f",
+      "strokeHex": "#214a60",
+      "strokeWidth": 0.5,
+      "cornerRadius": 15.0,
+      "pill": false,
+      "glowColorHex": "#c18bf7",
+      "glowRadius": 15.959999999999999,
+      "glowSpread": 0.3556,
+      "opacity": 0.88
     },
-    "河林 陽介" : {
-      "fontFamily" : "HGP明朝B",
-      "fontPercent" : 88.0188639658802,
-      "fillHex" : "#a9559b",
-      "textHex" : "#f0f2f7",
-      "strokeHex" : "#5b2452",
-      "strokeWidth" : 3.0,
-      "cornerRadius" : 12.0,
-      "pill" : true,
-      "glowColorHex" : "#c680bb",
-      "glowRadius" : 26.32,
-      "glowSpread" : 0.12600000000000003,
-      "opacity" : 0.73
+    "図司 智子": {
+      "fontFamily": "Dubai Medium",
+      "fontPercent": 88.0188639658802,
+      "fillHex": "#c9866f",
+      "textHex": "#14171f",
+      "strokeHex": "#603a2c",
+      "strokeWidth": 2.0,
+      "cornerRadius": 15.0,
+      "pill": true,
+      "glowColorHex": "#d165e8",
+      "glowRadius": 9.1,
+      "glowSpread": 0.5068,
+      "opacity": 0.89
     },
-    "坂野 香織" : {
-      "fontFamily" : "Informal Roman",
-      "fontPercent" : 88.0188639658802,
-      "fillHex" : "#426cbb",
-      "textHex" : "#f0f2f7",
-      "strokeHex" : "#142d5b",
-      "strokeWidth" : 1.0,
-      "cornerRadius" : 13.0,
-      "pill" : true,
-      "glowColorHex" : "#d6eb8c",
-      "glowRadius" : 22.26,
-      "glowSpread" : 0.4172,
-      "opacity" : 0.99
+    "松本 匡矢": {
+      "fontFamily": "Harlow Solid Italic",
+      "fontPercent": 88.0188639658802,
+      "fillHex": "#3963c4",
+      "textHex": "#cbedba",
+      "strokeHex": "#0d2459",
+      "strokeWidth": 1.0,
+      "cornerRadius": 0.0,
+      "pill": false,
+      "glowColorHex": "#3f6bd0",
+      "glowRadius": 13.86,
+      "glowSpread": 0.36680000000000007,
+      "opacity": 0.92
     },
-    "山本 敬" : {
-      "fontFamily" : "Segoe Fluent Icons",
-      "fontPercent" : 88.0188639658802,
-      "fillHex" : "#40c459",
-      "textHex" : "#c1ecac",
-      "strokeHex" : "#136423",
-      "strokeWidth" : 0.0,
-      "cornerRadius" : 20.0,
-      "pill" : false,
-      "glowColorHex" : "#45f065",
-      "glowRadius" : 30.240000000000002,
-      "glowSpread" : 0.1708,
-      "opacity" : 0.63
+    "森下  誠": {
+      "fontFamily": "HG明朝E",
+      "fontPercent": 88.0188639658802,
+      "fillHex": "#81239f",
+      "textHex": "#f0f2f7",
+      "strokeHex": "#3a054a",
+      "strokeWidth": 2.0,
+      "cornerRadius": 1.0,
+      "pill": false,
+      "glowColorHex": "#77d976",
+      "glowRadius": 6.72,
+      "glowSpread": 0.4732,
+      "opacity": 0.97
     },
-    "小野 眞太郎" : {
-      "fontFamily" : "Courier New",
-      "fontPercent" : 88.0188639658802,
-      "fillHex" : "#6dc159",
-      "textHex" : "#14171f",
-      "strokeHex" : "#2b5920",
-      "strokeWidth" : 1.5,
-      "cornerRadius" : 21.0,
-      "pill" : true,
-      "glowColorHex" : "#62c84a",
-      "glowRadius" : 21.84,
-      "glowSpread" : 0.4172,
-      "opacity" : 0.57
+    "増田 治樹": {
+      "fontFamily": "Brush Script MT",
+      "fontPercent": 88.0188639658802,
+      "fillHex": "#3d5072",
+      "textHex": "#f0f2f7",
+      "strokeHex": "#1b273e",
+      "strokeWidth": 2.5,
+      "cornerRadius": 8.0,
+      "pill": true,
+      "glowColorHex": "#89a6dd",
+      "glowRadius": 9.24,
+      "glowSpread": 0.24080000000000001,
+      "opacity": 0.76
     },
-    "近藤 厚生" : {
-      "fontFamily" : "HGｺﾞｼｯｸE",
-      "fontPercent" : 88.0188639658802,
-      "fillHex" : "#59c929",
-      "textHex" : "#14171f",
-      "strokeHex" : "#267205",
-      "strokeWidth" : 1.0,
-      "cornerRadius" : 0.0,
-      "pill" : false,
-      "glowColorHex" : "#dcf47f",
-      "glowRadius" : 11.479999999999999,
-      "glowSpread" : 0.5292,
-      "opacity" : 0.65
+    "大谷 晴香": {
+      "fontFamily": "",
+      "fontPercent": 88.0188639658802,
+      "fillHex": "#2367b9",
+      "textHex": "#f0f2f7",
+      "strokeHex": "#033168",
+      "strokeWidth": 0.5,
+      "cornerRadius": 6.0,
+      "pill": false,
+      "glowColorHex": "#f08bc8",
+      "glowRadius": 17.78,
+      "glowSpread": 0.36680000000000007,
+      "opacity": 0.9
     },
-    "京 直道" : {
-      "fontFamily" : "Constantia",
-      "fontPercent" : 88.0188639658802,
-      "fillHex" : "#361c7a",
-      "textHex" : "#f0f2f7",
-      "strokeHex" : "#15053f",
-      "strokeWidth" : 3.0,
-      "cornerRadius" : 19.0,
-      "pill" : false,
-      "glowColorHex" : "#7556c6",
-      "glowRadius" : 18.060000000000002,
-      "glowSpread" : 0.5544,
-      "opacity" : 0.73
+    "角 正彦": {
+      "fontFamily": "HG教科書体",
+      "fontPercent": 88.0188639658802,
+      "fillHex": "#36702c",
+      "textHex": "#f0f2f7",
+      "strokeHex": "#173c10",
+      "strokeWidth": 2.0,
+      "cornerRadius": 6.0,
+      "pill": true,
+      "glowColorHex": "#85f772",
+      "glowRadius": 30.38,
+      "glowSpread": 0.462,
+      "opacity": 0.82
     },
-    "飯田 剛成" : {
-      "fontFamily" : "Century",
-      "fontPercent" : 88.0188639658802,
-      "fillHex" : "#c4c852",
-      "textHex" : "#14171f",
-      "strokeHex" : "#595b1b",
-      "strokeWidth" : 1.0,
-      "cornerRadius" : 3.0,
-      "pill" : true,
-      "glowColorHex" : "#cfd370",
-      "glowRadius" : 29.259999999999998,
-      "glowSpread" : 0.40880000000000005,
-      "opacity" : 0.58
+    "河林 陽介": {
+      "fontFamily": "HGP明朝B",
+      "fontPercent": 88.0188639658802,
+      "fillHex": "#a9559b",
+      "textHex": "#f0f2f7",
+      "strokeHex": "#5b2452",
+      "strokeWidth": 3.0,
+      "cornerRadius": 12.0,
+      "pill": true,
+      "glowColorHex": "#c680bb",
+      "glowRadius": 26.32,
+      "glowSpread": 0.12600000000000003,
+      "opacity": 0.73
     },
-    "東 龍平" : {
-      "fontFamily" : "Lucida Console",
-      "fontPercent" : 88.0188639658802,
-      "fillHex" : "#7a301b",
-      "textHex" : "#f0f2f7",
-      "strokeHex" : "#370f03",
-      "strokeWidth" : 1.5,
-      "cornerRadius" : 21.0,
-      "pill" : false,
-      "glowColorHex" : "#e56a47",
-      "glowRadius" : 16.099999999999998,
-      "glowSpread" : 0.2632,
-      "opacity" : 0.58
+    "坂野 香織": {
+      "fontFamily": "Informal Roman",
+      "fontPercent": 88.0188639658802,
+      "fillHex": "#426cbb",
+      "textHex": "#f0f2f7",
+      "strokeHex": "#142d5b",
+      "strokeWidth": 1.0,
+      "cornerRadius": 13.0,
+      "pill": true,
+      "glowColorHex": "#d6eb8c",
+      "glowRadius": 22.26,
+      "glowSpread": 0.4172,
+      "opacity": 0.99
     },
-    "川島 吉伸" : {
-      "fontFamily" : "High Tower Text",
-      "fontPercent" : 88.0188639658802,
-      "fillHex" : "#6ea437",
-      "textHex" : "#bae9eb",
-      "strokeHex" : "#385d13",
-      "strokeWidth" : 1.5,
-      "cornerRadius" : 6.0,
-      "pill" : true,
-      "glowColorHex" : "#e653a5",
-      "glowRadius" : 21.7,
-      "glowSpread" : 0.32480000000000003,
-      "opacity" : 0.82
+    "山本 敬": {
+      "fontFamily": "Segoe Fluent Icons",
+      "fontPercent": 88.0188639658802,
+      "fillHex": "#40c459",
+      "textHex": "#c1ecac",
+      "strokeHex": "#136423",
+      "strokeWidth": 0.0,
+      "cornerRadius": 20.0,
+      "pill": false,
+      "glowColorHex": "#45f065",
+      "glowRadius": 30.240000000000002,
+      "glowSpread": 0.1708,
+      "opacity": 0.63
     },
-    "菅沼 めぐみ" : {
-      "fontFamily" : "Onyx",
-      "fontPercent" : 88.0188639658802,
-      "fillHex" : "#2c8927",
-      "textHex" : "#f0f2f7",
-      "strokeHex" : "#0e4c0b",
-      "strokeWidth" : 1.5,
-      "cornerRadius" : 9.0,
-      "pill" : true,
-      "glowColorHex" : "#4fda49",
-      "glowRadius" : 27.86,
-      "glowSpread" : 0.5124000000000001,
-      "opacity" : 0.62
+    "小野 眞太郎": {
+      "fontFamily": "Courier New",
+      "fontPercent": 88.0188639658802,
+      "fillHex": "#6dc159",
+      "textHex": "#14171f",
+      "strokeHex": "#2b5920",
+      "strokeWidth": 1.5,
+      "cornerRadius": 21.0,
+      "pill": true,
+      "glowColorHex": "#62c84a",
+      "glowRadius": 21.84,
+      "glowSpread": 0.4172,
+      "opacity": 0.57
     },
-    "中村 久男" : {
-      "fontFamily" : "Lucida Sans Typewriter",
-      "fontPercent" : 88.0188639658802,
-      "fillHex" : "#1b8d15",
-      "textHex" : "#f0f2f7",
-      "strokeHex" : "#033e00",
-      "strokeWidth" : 3.5,
-      "cornerRadius" : 15.0,
-      "pill" : false,
-      "glowColorHex" : "#79d374",
-      "glowRadius" : 21.28,
-      "glowSpread" : 0.4032,
-      "opacity" : 0.69
+    "近藤 厚生": {
+      "fontFamily": "HGｺﾞｼｯｸE",
+      "fontPercent": 88.0188639658802,
+      "fillHex": "#59c929",
+      "textHex": "#14171f",
+      "strokeHex": "#267205",
+      "strokeWidth": 1.0,
+      "cornerRadius": 0.0,
+      "pill": false,
+      "glowColorHex": "#dcf47f",
+      "glowRadius": 11.479999999999999,
+      "glowSpread": 0.5292,
+      "opacity": 0.65
     },
-    "中川 直也" : {
-      "fontFamily" : "Eras Medium ITC",
-      "fontPercent" : 88.0188639658802,
-      "fillHex" : "#803d8a",
-      "textHex" : "#f0f2f7",
-      "strokeHex" : "#3a1540",
-      "strokeWidth" : 0.5,
-      "cornerRadius" : 11.0,
-      "pill" : false,
-      "glowColorHex" : "#c6d32f",
-      "glowRadius" : 31.080000000000002,
-      "glowSpread" : 0.47600000000000003,
-      "opacity" : 0.57
+    "京 直道": {
+      "fontFamily": "Constantia",
+      "fontPercent": 88.0188639658802,
+      "fillHex": "#361c7a",
+      "textHex": "#f0f2f7",
+      "strokeHex": "#15053f",
+      "strokeWidth": 3.0,
+      "cornerRadius": 19.0,
+      "pill": false,
+      "glowColorHex": "#7556c6",
+      "glowRadius": 18.060000000000002,
+      "glowSpread": 0.5544,
+      "opacity": 0.73
     },
-    "大久保 俊彦" : {
-      "fontFamily" : "Agency FB",
-      "fontPercent" : 88.0188639658802,
-      "fillHex" : "#66c7ac",
-      "textHex" : "#f1b3bd",
-      "strokeHex" : "#2c6a58",
-      "strokeWidth" : 3.5,
-      "cornerRadius" : 4.0,
-      "pill" : false,
-      "glowColorHex" : "#ed3589",
-      "glowRadius" : 7.28,
-      "glowSpread" : 0.5516000000000001,
-      "opacity" : 0.87
+    "飯田 剛成": {
+      "fontFamily": "Century",
+      "fontPercent": 88.0188639658802,
+      "fillHex": "#c4c852",
+      "textHex": "#14171f",
+      "strokeHex": "#595b1b",
+      "strokeWidth": 1.0,
+      "cornerRadius": 3.0,
+      "pill": true,
+      "glowColorHex": "#cfd370",
+      "glowRadius": 29.259999999999998,
+      "glowSpread": 0.40880000000000005,
+      "opacity": 0.58
     },
-    "竹内 正美" : {
-      "fontFamily" : "",
-      "fontPercent" : 88.0188639658802,
-      "fillHex" : "#257236",
-      "textHex" : "#e1a8c9",
-      "strokeHex" : "#0c3f17",
-      "strokeWidth" : 2.5,
-      "cornerRadius" : 17.0,
-      "pill" : false,
-      "glowColorHex" : "#50da6e",
-      "glowRadius" : 18.900000000000002,
-      "glowSpread" : 0.3892,
-      "opacity" : 0.68
+    "東 龍平": {
+      "fontFamily": "Lucida Console",
+      "fontPercent": 88.0188639658802,
+      "fillHex": "#7a301b",
+      "textHex": "#f0f2f7",
+      "strokeHex": "#370f03",
+      "strokeWidth": 1.5,
+      "cornerRadius": 21.0,
+      "pill": false,
+      "glowColorHex": "#e56a47",
+      "glowRadius": 16.099999999999998,
+      "glowSpread": 0.2632,
+      "opacity": 0.58
     },
-    "沈 春光" : {
-      "fontFamily" : "Segoe UI Emoji",
-      "fontPercent" : 88.0188639658802,
-      "fillHex" : "#723974",
-      "textHex" : "#f0f2f7",
-      "strokeHex" : "#3d183e",
-      "strokeWidth" : 2.5,
-      "cornerRadius" : 10.0,
-      "pill" : true,
-      "glowColorHex" : "#def654",
-      "glowRadius" : 28.28,
-      "glowSpread" : 0.1988,
-      "opacity" : 0.95
+    "川島 吉伸": {
+      "fontFamily": "High Tower Text",
+      "fontPercent": 88.0188639658802,
+      "fillHex": "#6ea437",
+      "textHex": "#bae9eb",
+      "strokeHex": "#385d13",
+      "strokeWidth": 1.5,
+      "cornerRadius": 6.0,
+      "pill": true,
+      "glowColorHex": "#e653a5",
+      "glowRadius": 21.7,
+      "glowSpread": 0.32480000000000003,
+      "opacity": 0.82
     },
-    "吉岡 廣海" : {
-      "fontFamily" : "Old English Text MT",
-      "fontPercent" : 88.0188639658802,
-      "fillHex" : "#af2e14",
-      "textHex" : "#f0f2f7",
-      "strokeHex" : "#601000",
-      "strokeWidth" : 3.5,
-      "cornerRadius" : 17.0,
-      "pill" : false,
-      "glowColorHex" : "#ca5841",
-      "glowRadius" : 12.18,
-      "glowSpread" : 0.15680000000000002,
-      "opacity" : 0.65
+    "菅沼 めぐみ": {
+      "fontFamily": "Onyx",
+      "fontPercent": 88.0188639658802,
+      "fillHex": "#2c8927",
+      "textHex": "#f0f2f7",
+      "strokeHex": "#0e4c0b",
+      "strokeWidth": 1.5,
+      "cornerRadius": 9.0,
+      "pill": true,
+      "glowColorHex": "#4fda49",
+      "glowRadius": 27.86,
+      "glowSpread": 0.5124000000000001,
+      "opacity": 0.62
     },
-    "森岡 真由美" : {
-      "fontFamily" : "HGSｺﾞｼｯｸE",
-      "fontPercent" : 88.0188639658802,
-      "fillHex" : "#a52b85",
-      "textHex" : "#f0f2f7",
-      "strokeHex" : "#5d0b47",
-      "strokeWidth" : 2.5,
-      "cornerRadius" : 2.0,
-      "pill" : true,
-      "glowColorHex" : "#9ceb83",
-      "glowRadius" : 32.199999999999996,
-      "glowSpread" : 0.5544,
-      "opacity" : 0.75
+    "中村 久男": {
+      "fontFamily": "Lucida Sans Typewriter",
+      "fontPercent": 88.0188639658802,
+      "fillHex": "#1b8d15",
+      "textHex": "#f0f2f7",
+      "strokeHex": "#033e00",
+      "strokeWidth": 3.5,
+      "cornerRadius": 15.0,
+      "pill": false,
+      "glowColorHex": "#79d374",
+      "glowRadius": 21.28,
+      "glowSpread": 0.4032,
+      "opacity": 0.69
     },
-    "岩崎 智香" : {
-      "fontFamily" : "Sans Serif Collection",
-      "fontPercent" : 88.0188639658802,
-      "fillHex" : "#c338b9",
-      "textHex" : "#f0f2f7",
-      "strokeHex" : "#500b4c",
-      "strokeWidth" : 0.0,
-      "cornerRadius" : 7.0,
-      "pill" : false,
-      "glowColorHex" : "#2fde6b",
-      "glowRadius" : 16.66,
-      "glowSpread" : 0.11200000000000002,
-      "opacity" : 0.67
+    "中川 直也": {
+      "fontFamily": "Eras Medium ITC",
+      "fontPercent": 88.0188639658802,
+      "fillHex": "#803d8a",
+      "textHex": "#f0f2f7",
+      "strokeHex": "#3a1540",
+      "strokeWidth": 0.5,
+      "cornerRadius": 11.0,
+      "pill": false,
+      "glowColorHex": "#c6d32f",
+      "glowRadius": 31.080000000000002,
+      "glowSpread": 0.47600000000000003,
+      "opacity": 0.57
     },
-    "冨田 裕子" : {
-      "fontFamily" : "Agency FB",
-      "fontPercent" : 88.0188639658802,
-      "fillHex" : "#96b13a",
-      "textHex" : "#14171f",
-      "strokeHex" : "#455410",
-      "strokeWidth" : 3.0,
-      "cornerRadius" : 4.0,
-      "pill" : false,
-      "glowColorHex" : "#367cdc",
-      "glowRadius" : 31.919999999999998,
-      "glowSpread" : 0.13720000000000002,
-      "opacity" : 0.9
+    "大久保 俊彦": {
+      "fontFamily": "Agency FB",
+      "fontPercent": 88.0188639658802,
+      "fillHex": "#66c7ac",
+      "textHex": "#f1b3bd",
+      "strokeHex": "#2c6a58",
+      "strokeWidth": 3.5,
+      "cornerRadius": 4.0,
+      "pill": false,
+      "glowColorHex": "#ed3589",
+      "glowRadius": 7.28,
+      "glowSpread": 0.5516000000000001,
+      "opacity": 0.87
     },
-    "宮島  剛" : {
-      "fontFamily" : "Colonna MT",
-      "fontPercent" : 88.0188639658802,
-      "fillHex" : "#5c9845",
-      "textHex" : "#f0f2f7",
-      "strokeHex" : "#274a19",
-      "strokeWidth" : 3.0,
-      "cornerRadius" : 16.0,
-      "pill" : true,
-      "glowColorHex" : "#5bd12c",
-      "glowRadius" : 19.88,
-      "glowSpread" : 0.5516000000000001,
-      "opacity" : 0.67
+    "竹内 正美": {
+      "fontFamily": "",
+      "fontPercent": 88.0188639658802,
+      "fillHex": "#257236",
+      "textHex": "#e1a8c9",
+      "strokeHex": "#0c3f17",
+      "strokeWidth": 2.5,
+      "cornerRadius": 17.0,
+      "pill": false,
+      "glowColorHex": "#50da6e",
+      "glowRadius": 18.900000000000002,
+      "glowSpread": 0.3892,
+      "opacity": 0.68
     }
   },
-  "equipmentGanttPlanJsonPath" : "C:\\システム開発\\工程管理AIプロジェクト_JAVA\\output\\計画2607121004184350.json",
-  "stage1NetworkCacheBadgeLabel" : "キャッシュ",
-  "stage1NetworkCacheBadgeStyle" : {
-    "fontFamily" : "",
-    "fontPercent" : 92.0,
-    "fillHex" : "#ea580c",
-    "textHex" : "#fffbeb",
-    "strokeHex" : "#c2410c",
-    "strokeWidth" : 1.2,
-    "cornerRadius" : 8.0,
-    "pill" : false,
-    "glowColorHex" : "#fdba74",
-    "glowRadius" : 12.0,
-    "glowSpread" : 0.22000000000000003,
-    "opacity" : 1.0
+  "equipmentGanttPlanJsonPath": "C:\\システム開発\\工程管理AIプロジェクト_JAVA\\output\\計画2607121004184350.json",
+  "stage1NetworkCacheBadgeLabel": "キャッシュ",
+  "stage1NetworkCacheBadgeStyle": {
+    "fontFamily": "",
+    "fontPercent": 92.0,
+    "fillHex": "#ea580c",
+    "textHex": "#fffbeb",
+    "strokeHex": "#c2410c",
+    "strokeWidth": 1.2,
+    "cornerRadius": 8.0,
+    "pill": false,
+    "glowColorHex": "#fdba74",
+    "glowRadius": 12.0,
+    "glowSpread": 0.22000000000000003,
+    "opacity": 1.0
   },
-  "requestFormPreviewUpdateBadgeLabel" : "更新あります！",
-  "requestFormPreviewUpdateBadgeStyle" : {
-    "fontFamily" : "Meiryo",
-    "fontPercent" : 92.0,
-    "fillHex" : "#0000ff",
-    "textHex" : "#fffbeb",
-    "strokeHex" : "#ffffff",
-    "strokeWidth" : 1.2,
-    "cornerRadius" : 8.0,
-    "pill" : false,
-    "glowColorHex" : "#ffffff",
-    "glowRadius" : 10.0,
-    "glowSpread" : 0.4437735849056605,
-    "opacity" : 1.0
+  "requestFormPreviewUpdateBadgeLabel": "更新あります！",
+  "requestFormPreviewUpdateBadgeStyle": {
+    "fontFamily": "Meiryo",
+    "fontPercent": 92.0,
+    "fillHex": "#0000ff",
+    "textHex": "#fffbeb",
+    "strokeHex": "#ffffff",
+    "strokeWidth": 1.2,
+    "cornerRadius": 8.0,
+    "pill": false,
+    "glowColorHex": "#ffffff",
+    "glowRadius": 10.0,
+    "glowSpread": 0.4437735849056605,
+    "opacity": 1.0
   },
-  "mainShellTabOrganizerHeaderGlow" : true,
-  "mainShellTabOrganizerHeaderGlowStrength" : 0.1,
-  "pushButtonDesignPrefs" : {
-    "customizeGeneralRunTab" : true,
-    "customizeStageRunButtons" : true,
-    "generalBorderRadius" : 2.2739727072519798,
-    "generalPaddingV" : 3.9086759384364296,
-    "generalPaddingH" : 3.652967851455897,
-    "generalFontPx" : 12.0,
-    "generalBgHex" : "#f4f4f4",
-    "generalBorderHex" : "#c8c8c8",
-    "generalTextHex" : "#2b2b2b",
-    "generalHoverBgHex" : "#e8e8e8",
-    "generalPressedBgHex" : "#dedede",
-    "stageFontPx" : 12.041095890410958,
-    "stageMinWidth" : 129.68037017404217,
-    "stageMinHeight" : 36.0,
-    "stagePaddingV" : 5.780821604271453,
-    "stagePaddingH" : 10.831049879936323,
-    "stageBorderRadius" : 4.255707936744167,
-    "stage1BgHex" : "#0e7490",
-    "stage1BorderHex" : "#155e75",
-    "stage1HoverBgHex" : "#155e75",
-    "stage1PressedBgHex" : "#164e63",
-    "stage2BgHex" : "#c2410c",
-    "stage2BorderHex" : "#9a3412",
-    "stage2HoverBgHex" : "#9a3412",
-    "stage2PressedBgHex" : "#7c2d12",
-    "stage3BgHex" : "#15803d",
-    "stage3BorderHex" : "#166534",
-    "stage3HoverBgHex" : "#16a34a",
-    "stage3PressedBgHex" : "#14532d",
-    "customizeAlignAladdinPlanButton" : false,
-    "alignAladdinBorderRadius" : 6.0,
-    "alignAladdinPaddingV" : 8.0,
-    "alignAladdinPaddingH" : 14.0,
-    "alignAladdinFontPx" : 12.0,
-    "alignAladdinBgHex" : "#4338ca",
-    "alignAladdinBorderHex" : "#3730a3",
-    "alignAladdinTextHex" : "#ffffff",
-    "alignAladdinHoverBgHex" : "#4f46e5",
-    "alignAladdinPressedBgHex" : "#312e81",
-    "customizeDialogButtons" : true,
-    "dialogPrimaryBorderRadius" : 6.0,
-    "dialogPrimaryPaddingV" : 8.0,
-    "dialogPrimaryPaddingH" : 18.0,
-    "dialogPrimaryFontPx" : 12.0,
-    "dialogPrimaryBgHex" : "#2563eb",
-    "dialogPrimaryBorderHex" : "#1d4ed8",
-    "dialogPrimaryTextHex" : "#ffffff",
-    "dialogPrimaryHoverBgHex" : "#3b82f6",
-    "dialogPrimaryPressedBgHex" : "#1e40af",
-    "dialogSecondaryBorderRadius" : 6.0,
-    "dialogSecondaryPaddingV" : 8.0,
-    "dialogSecondaryPaddingH" : 14.0,
-    "dialogSecondaryFontPx" : 12.0,
-    "dialogSecondaryBgHex" : "#f4f4f4",
-    "dialogSecondaryBorderHex" : "#c8c8c8",
-    "dialogSecondaryTextHex" : "#2b2b2b",
-    "dialogSecondaryHoverBgHex" : "#e8e8e8",
-    "dialogSecondaryPressedBgHex" : "#dedede"
+  "mainShellTabOrganizerHeaderGlow": true,
+  "mainShellTabOrganizerHeaderGlowStrength": 0.1,
+  "pushButtonDesignPrefs": {
+    "customizeGeneralRunTab": true,
+    "customizeStageRunButtons": true,
+    "generalBorderRadius": 2.2739727072519798,
+    "generalPaddingV": 3.9086759384364296,
+    "generalPaddingH": 3.652967851455897,
+    "generalFontPx": 12.0,
+    "generalBgHex": "#f4f4f4",
+    "generalBorderHex": "#c8c8c8",
+    "generalTextHex": "#2b2b2b",
+    "generalHoverBgHex": "#e8e8e8",
+    "generalPressedBgHex": "#dedede",
+    "stageFontPx": 12.041095890410958,
+    "stageMinWidth": 129.68037017404217,
+    "stageMinHeight": 36.0,
+    "stagePaddingV": 5.780821604271453,
+    "stagePaddingH": 10.831049879936323,
+    "stageBorderRadius": 4.255707936744167,
+    "stage1BgHex": "#0e7490",
+    "stage1BorderHex": "#155e75",
+    "stage1HoverBgHex": "#155e75",
+    "stage1PressedBgHex": "#164e63",
+    "stage2BgHex": "#c2410c",
+    "stage2BorderHex": "#9a3412",
+    "stage2HoverBgHex": "#9a3412",
+    "stage2PressedBgHex": "#7c2d12",
+    "stage3BgHex": "#15803d",
+    "stage3BorderHex": "#166534",
+    "stage3HoverBgHex": "#16a34a",
+    "stage3PressedBgHex": "#14532d",
+    "customizeAlignAladdinPlanButton": false,
+    "alignAladdinBorderRadius": 6.0,
+    "alignAladdinPaddingV": 8.0,
+    "alignAladdinPaddingH": 14.0,
+    "alignAladdinFontPx": 12.0,
+    "alignAladdinBgHex": "#4338ca",
+    "alignAladdinBorderHex": "#3730a3",
+    "alignAladdinTextHex": "#ffffff",
+    "alignAladdinHoverBgHex": "#4f46e5",
+    "alignAladdinPressedBgHex": "#312e81",
+    "customizeDialogButtons": true,
+    "dialogPrimaryBorderRadius": 6.0,
+    "dialogPrimaryPaddingV": 8.0,
+    "dialogPrimaryPaddingH": 18.0,
+    "dialogPrimaryFontPx": 12.0,
+    "dialogPrimaryBgHex": "#2563eb",
+    "dialogPrimaryBorderHex": "#1d4ed8",
+    "dialogPrimaryTextHex": "#ffffff",
+    "dialogPrimaryHoverBgHex": "#3b82f6",
+    "dialogPrimaryPressedBgHex": "#1e40af",
+    "dialogSecondaryBorderRadius": 6.0,
+    "dialogSecondaryPaddingV": 8.0,
+    "dialogSecondaryPaddingH": 14.0,
+    "dialogSecondaryFontPx": 12.0,
+    "dialogSecondaryBgHex": "#f4f4f4",
+    "dialogSecondaryBorderHex": "#c8c8c8",
+    "dialogSecondaryTextHex": "#2b2b2b",
+    "dialogSecondaryHoverBgHex": "#e8e8e8",
+    "dialogSecondaryPressedBgHex": "#dedede"
   },
-  "memoryMonitorEnabled" : true,
-  "memoryMonitorIntervalSec" : 5,
-  "nextLaunchHeapFixed" : false,
-  "nextLaunchHeapMinMiB" : 5376,
-  "nextLaunchHeapMaxMiB" : 6144,
-  "equipmentStatusDashboardActualDate" : "2026-07-05",
-  "equipmentStatusDashboardPlanDate" : "2026-07-05",
-  "equipmentStatusDashboardAutoRefreshEnabled" : true,
-  "equipmentStatusDashboardAutoRefreshIntervalSec" : 300,
-  "equipmentStatusDashboardShowAladdinPlans" : true,
-  "equipmentStatusDashboardShowDispatchPlans" : true,
-  "equipmentStatusDashboardAppearance" : {
-    "columnCount" : 0,
-    "cardWidth" : 280.0,
-    "fullscreenCardWidthPercent" : 121.0,
-    "cardPadding" : 12.0,
-    "cardGapH" : 12.0,
-    "cardGapV" : 12.0,
-    "cardBorderRadius" : 8.0,
-    "cardShadowStyle" : "MEDIUM",
-    "fontFamily" : "Meiryo UI",
-    "machineFontPx" : 20.0,
-    "metaFontPx" : 17.0,
-    "planFontPx" : 18.0,
-    "pctFontPx" : 28.0,
-    "chartSizePx" : 194.0,
-    "chartDoneColorHex" : "#0000ff",
-    "chartRemainColorHex" : "#80b3b3",
-    "chartStyle" : "FLAT",
-    "chartShadowEnabled" : true,
-    "fullscreenTheme" : "DARK"
+  "memoryMonitorEnabled": true,
+  "memoryMonitorIntervalSec": 5,
+  "tableRowHoverDimmingEnabled": true,
+  "nextLaunchHeapFixed": false,
+  "nextLaunchHeapMinMiB": 5376,
+  "nextLaunchHeapMaxMiB": 6144,
+  "equipmentStatusDashboardActualDate": "2026-07-05",
+  "equipmentStatusDashboardPlanDate": "2026-07-05",
+  "equipmentStatusDashboardAutoRefreshEnabled": true,
+  "equipmentStatusDashboardAutoRefreshIntervalSec": 300,
+  "equipmentStatusDashboardShowAladdinPlans": true,
+  "equipmentStatusDashboardShowDispatchPlans": true,
+  "equipmentStatusDashboardAppearance": {
+    "columnCount": 0,
+    "cardWidth": 280.0,
+    "fullscreenCardWidthPercent": 121.0,
+    "cardPadding": 12.0,
+    "cardGapH": 12.0,
+    "cardGapV": 12.0,
+    "cardBorderRadius": 8.0,
+    "cardShadowStyle": "MEDIUM",
+    "fontFamily": "Meiryo UI",
+    "machineFontPx": 20.0,
+    "metaFontPx": 17.0,
+    "planFontPx": 18.0,
+    "pctFontPx": 28.0,
+    "chartSizePx": 194.0,
+    "chartDoneColorHex": "#0000ff",
+    "chartRemainColorHex": "#80b3b3",
+    "chartStyle": "FLAT",
+    "chartShadowEnabled": true,
+    "fullscreenTheme": "DARK"
   },
-  "windowWidth" : 2574.666748046875,
-  "windowHeight" : 1406.6666259765625,
-  "windowX" : 0.0,
-  "windowY" : 0.0
+  "windowWidth": 2574.666748046875,
+  "windowHeight": 1406.6666259765625,
+  "windowX": 0.0,
+  "windowY": 0.0
 }

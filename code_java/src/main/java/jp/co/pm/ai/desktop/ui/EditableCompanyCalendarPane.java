@@ -5,21 +5,28 @@ import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.format.TextStyle;
 import java.time.temporal.WeekFields;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.function.Consumer;
 
 import javafx.application.Platform;
 import javafx.geometry.HPos;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.scene.Node;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.Tooltip;
 import javafx.scene.layout.ColumnConstraints;
 import javafx.scene.layout.GridPane;
+import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
+import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 
 /** 会社カレンダー編集用の年度グリッド（公休・特別休暇・出勤日の塗りつぶし）。 */
@@ -44,6 +51,14 @@ public final class EditableCompanyCalendarPane extends VBox {
     private final Label fiscalTitleLabel = new Label();
     private final GridPane yearGrid = new GridPane();
     private final ScrollPane scroll = new ScrollPane();
+    private final AttendanceGridLoadingOverlay loadingOverlay =
+            new AttendanceGridLoadingOverlay("pm-company-calendar-grid-loading-overlay");
+    private final StackPane scrollHost = new StackPane();
+    private final GridRowHoverDimmingController rowDimming = new GridRowHoverDimmingController();
+    private int nextRowDimmingIndex = 0;
+    private Consumer<Boolean> dirtyListener;
+    /** 読込／保存直後の export スナップショット（JSON 正本との差分で未保存を判定）。 */
+    private Map<String, Map<String, Object>> savedBaseline = Map.of();
 
     private FiscalYearPeriod fiscalPeriod = FiscalYearPeriod.DEFAULT_APRIL_MARCH;
     private int fiscalYearLabel =
@@ -54,10 +69,19 @@ public final class EditableCompanyCalendarPane extends VBox {
         getStyleClass().add("pm-company-calendar");
         setSpacing(6);
 
-        Label legend =
-                new Label("クリックで切替: 出勤日 → 公休 → 特別休暇（祝日はピンク・祝表示）");
-        legend.getStyleClass().add("pm-company-calendar-legend");
-        legend.setWrapText(true);
+        Label legendHint =
+                new Label(
+                        "クリックで切替　祝日・週末の一括取得はツールバー「セットアップ」");
+        legendHint.getStyleClass().add("pm-company-calendar-legend");
+        legendHint.setWrapText(true);
+        HBox legendChips =
+                new HBox(
+                        6,
+                        legendChip("出勤", "pm-att-legend-work"),
+                        legendChip("公休", "pm-att-legend-off"),
+                        legendChip("祝日", "pm-att-legend-national"),
+                        legendChip("特別", "pm-att-legend-partial"));
+        legendChips.getStyleClass().add("pm-attendance-legend-chips");
 
         fiscalTitleLabel.getStyleClass().add("pm-company-calendar-fiscal-title");
 
@@ -68,10 +92,87 @@ public final class EditableCompanyCalendarPane extends VBox {
         scroll.setContent(yearGrid);
         scroll.setFitToWidth(true);
         scroll.setStyle("-fx-background-color: transparent;");
-        VBox.setVgrow(scroll, Priority.ALWAYS);
 
-        getChildren().addAll(legend, fiscalTitleLabel, scroll);
+        scrollHost.getChildren().addAll(scroll, loadingOverlay);
+        scrollHost.setMaxSize(Double.MAX_VALUE, Double.MAX_VALUE);
+        VBox.setVgrow(scrollHost, Priority.ALWAYS);
+        rowDimming.installScrollClearOnExit(scroll);
+
+        getChildren().addAll(legendChips, legendHint, fiscalTitleLabel, scrollHost);
         rebuildYearGrid();
+    }
+
+    public void refreshRowHoverDimming() {
+        rowDimming.refresh();
+    }
+
+    /** Python 読込・保存などの処理中にグリッドを暗転する。 */
+    public void setGridLoading(boolean loading) {
+        setGridLoading(loading, null);
+    }
+
+    private String gridLoadingMessage = null;
+
+    public void setGridLoading(boolean loading, String message) {
+        gridLoading = loading;
+        gridLoadingMessage = message;
+        applyGridOverlayState();
+    }
+
+    public void setGridLoadingMessage(String message) {
+        if (gridLoading) {
+            gridLoadingMessage = message;
+            loadingOverlay.setMessage(message);
+        }
+    }
+
+    /**
+     * 段階2未準備（会社カレンダー未設定など）のときグリッドを暗転する。
+     * 編集は可能（オーバーレイはマウス透過）。
+     */
+    public void setGridNeedsAttention(boolean needsAttention) {
+        gridNeedsAttention = needsAttention;
+        applyGridOverlayState();
+    }
+
+    private boolean gridLoading = false;
+    private boolean gridNeedsAttention = false;
+
+    private void applyGridOverlayState() {
+        boolean dim = gridLoading || gridNeedsAttention;
+        toggleStyleClass(scrollHost, "pm-company-calendar-grid-loading", dim);
+        if (gridLoading) {
+            loadingOverlay.setAttentionOnly(false);
+            loadingOverlay.setLoading(true, gridLoadingMessage);
+            scroll.setDisable(true);
+            setAllCellButtonsDisabled(true);
+        } else if (gridNeedsAttention) {
+            loadingOverlay.setLoading(false);
+            loadingOverlay.setAttentionOnly(true);
+            scroll.setDisable(false);
+            setAllCellButtonsDisabled(false);
+        } else {
+            loadingOverlay.setLoading(false);
+            loadingOverlay.setAttentionOnly(false);
+            scroll.setDisable(false);
+            setAllCellButtonsDisabled(false);
+        }
+    }
+
+    private void setAllCellButtonsDisabled(boolean disabled) {
+        for (Button cell : cellButtons.values()) {
+            cell.setDisable(disabled);
+        }
+    }
+
+    private static void toggleStyleClass(javafx.scene.Node node, String styleClass, boolean add) {
+        if (add) {
+            if (!node.getStyleClass().contains(styleClass)) {
+                node.getStyleClass().add(styleClass);
+            }
+        } else {
+            node.getStyleClass().remove(styleClass);
+        }
     }
 
     public int cellSizePx() {
@@ -112,6 +213,75 @@ public final class EditableCompanyCalendarPane extends VBox {
         rebuildYearGrid();
     }
 
+    public void setDirtyListener(Consumer<Boolean> listener) {
+        this.dirtyListener = listener;
+    }
+
+    public boolean hasUnsavedEdits() {
+        Map<String, Map<String, Object>> current =
+                exportDaysJsonForFiscalYear(fiscalYearLabel, fiscalPeriod);
+        boolean dirty = !exportMapsEqual(current, savedBaseline);
+        return dirty;
+    }
+
+    public void clearUnsavedEditFlags() {
+        captureSavedBaseline();
+        notifyDirtyChanged();
+    }
+
+    private void captureSavedBaseline() {
+        savedBaseline =
+                copyExportMap(exportDaysJsonForFiscalYear(fiscalYearLabel, fiscalPeriod));
+    }
+
+    private static Map<String, Map<String, Object>> copyExportMap(
+            Map<String, Map<String, Object>> src) {
+        Map<String, Map<String, Object>> out = new HashMap<>();
+        for (var e : src.entrySet()) {
+            out.put(e.getKey(), new HashMap<>(e.getValue()));
+        }
+        return out;
+    }
+
+    private static boolean exportMapsEqual(
+            Map<String, Map<String, Object>> a, Map<String, Map<String, Object>> b) {
+        if (a.size() != b.size()) {
+            return false;
+        }
+        for (var e : a.entrySet()) {
+            Map<String, Object> rowB = b.get(e.getKey());
+            if (rowB == null || !exportRowEquals(e.getValue(), rowB)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean exportRowEquals(Map<String, Object> a, Map<String, Object> b) {
+        if (!nz(a.get("kind")).equals(nz(b.get("kind")))) {
+            return false;
+        }
+        if (!nz(a.get("label")).equals(nz(b.get("label")))) {
+            return false;
+        }
+        if (!nz(a.get("source")).equals(nz(b.get("source")))) {
+            return false;
+        }
+        boolean ma = Boolean.TRUE.equals(a.get("manual_edit"));
+        boolean mb = Boolean.TRUE.equals(b.get("manual_edit"));
+        return ma == mb;
+    }
+
+    private static String nz(Object v) {
+        return v == null ? "" : String.valueOf(v).trim();
+    }
+
+    private void notifyDirtyChanged() {
+        if (dirtyListener != null) {
+            dirtyListener.accept(hasUnsavedEdits());
+        }
+    }
+
     private void loadDaysFromMap(Map<String, Map<String, Object>> days) {
         dayEntries.clear();
         if (days != null) {
@@ -134,6 +304,8 @@ public final class EditableCompanyCalendarPane extends VBox {
                 }
             }
         }
+        captureSavedBaseline();
+        notifyDirtyChanged();
     }
 
     public Map<String, Map<String, Object>> exportDaysJsonForFiscalYear(
@@ -192,6 +364,8 @@ public final class EditableCompanyCalendarPane extends VBox {
         double scrollPos = scroll.getVvalue();
         yearGrid.getChildren().clear();
         cellButtons.clear();
+        rowDimming.clear();
+        nextRowDimmingIndex = 0;
         fiscalTitleLabel.setText(fiscalPeriod.rangeLabel(fiscalYearLabel));
 
         int col = 0;
@@ -275,6 +449,32 @@ public final class EditableCompanyCalendarPane extends VBox {
             dayGrid.add(cell, index % 7, 1 + index / 7);
         }
 
+        for (int weekRow = 0; weekRow < 6; weekRow++) {
+            int gridRow = 1 + weekRow;
+            List<Node> weekNodes = new ArrayList<>();
+            for (Node child : dayGrid.getChildren()) {
+                Integer r = GridPane.getRowIndex(child);
+                if (r != null && r == gridRow) {
+                    weekNodes.add(child);
+                }
+            }
+            if (weekNodes.isEmpty()) {
+                continue;
+            }
+            Region band = new Region();
+            band.getStyleClass().add(GridRowHoverDimmingController.STYLE_BAND);
+            band.setMouseTransparent(true);
+            band.setMaxWidth(Double.MAX_VALUE);
+            band.setMaxHeight(Double.MAX_VALUE);
+            GridPane.setColumnSpan(band, 7);
+            dayGrid.add(band, 0, gridRow);
+            int dimIdx = nextRowDimmingIndex++;
+            rowDimming.addRow(band, null, weekNodes);
+            for (Node n : weekNodes) {
+                rowDimming.installHover(n, dimIdx);
+            }
+        }
+
         VBox panel = new VBox(2, monthTitle, dayGrid);
         panel.getStyleClass().add("pm-company-calendar-month-panel");
         return panel;
@@ -288,6 +488,7 @@ public final class EditableCompanyCalendarPane extends VBox {
                 date,
                 new DayEntry(next, defaultLabel(next), true, null));
         updateCellButton(date);
+        notifyDirtyChanged();
     }
 
     private static String nextKind(String current) {
@@ -397,4 +598,11 @@ public final class EditableCompanyCalendarPane extends VBox {
     }
 
     private record DayEntry(String kind, String label, boolean manualEdit, String source) {}
+
+    private static Label legendChip(String text, String styleClass) {
+        Label chip = new Label(text);
+        chip.getStyleClass().add("pm-attendance-legend-chip");
+        chip.getStyleClass().add(styleClass);
+        return chip;
+    }
 }

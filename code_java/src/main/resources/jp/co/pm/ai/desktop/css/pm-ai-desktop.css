@@ -1005,8 +1005,110 @@
     -fx-opacity: 0.9;
 }
 
+.pm-attendance-legend-chips {
+    -fx-spacing: 6;
+}
+
+.pm-attendance-legend-chip {
+    -fx-font-size: 10px;
+    -fx-padding: 2 6;
+    -fx-background-radius: 4;
+    -fx-border-radius: 4;
+}
+
+.pm-att-legend-work {
+    -fx-background-color: #dcfce7;
+    -fx-text-fill: #14532d;
+}
+
+.pm-att-legend-off {
+    -fx-background-color: #fecaca;
+    -fx-text-fill: #7f1d1d;
+}
+
+.pm-att-legend-paid-leave {
+    -fx-background-color: #fef9c3;
+    -fx-text-fill: #854d0e;
+}
+
+.pm-att-legend-absent {
+    -fx-background-color: #fce7f3;
+    -fx-text-fill: #9d174d;
+    -fx-font-weight: bold;
+}
+
+.pm-att-legend-national {
+    -fx-background-color: #f87171;
+    -fx-text-fill: #7f1d1d;
+    -fx-font-weight: bold;
+}
+
+.pm-att-legend-partial {
+    -fx-background-color: #fde68a;
+    -fx-text-fill: #78350f;
+}
+
+.pm-att-legend-holiday-work {
+    -fx-background-color: #fed7aa;
+    -fx-text-fill: #9a3412;
+}
+
+.pm-att-legend-holiday-work-partial {
+    -fx-background-color: #fdba74;
+    -fx-text-fill: #9a3412;
+}
+
+.pm-att-legend-nodispatch {
+    -fx-background-color: #e2e8f0;
+    -fx-text-fill: #334155;
+}
+
+.pm-destructive-button {
+    -fx-border-color: #dc2626;
+    -fx-border-width: 1;
+}
+
+.pm-four-digit-confirmation-code {
+    -fx-font-size: 28px;
+    -fx-font-weight: bold;
+}
+
+.pm-attendance-setup-wizard-help {
+    -fx-font-size: 11px;
+    -fx-opacity: 0.85;
+}
+
+.pm-attendance-setup-wizard-title {
+    -fx-font-size: 14px;
+    -fx-font-weight: bold;
+}
+
+.pm-attendance-setup-wizard-section {
+    -fx-font-size: 13px;
+    -fx-font-weight: bold;
+    -fx-padding: 4 0 2 0;
+}
+
+.pm-attendance-setup-wizard .button {
+    -fx-max-width: infinity;
+}
+
+.pm-attendance-setup-wizard .spinner {
+    -fx-min-height: 28px;
+}
+
+.pm-member-attendance-setup-hint {
+    -fx-font-size: 11px;
+    -fx-opacity: 0.85;
+    -fx-padding: 0 4 4 4;
+}
+
+.pm-attendance-sync-warn {
+    -fx-text-fill: #b45309;
+}
+
 .pm-company-calendar .pm-company-cal-national {
-    -fx-background-color: #fca5a5;
+    -fx-background-color: #f87171;
     -fx-text-fill: #7f1d1d;
     -fx-font-weight: bold;
 }
@@ -1023,6 +1125,52 @@
 .pm-company-calendar-fiscal-title {
     -fx-font-weight: bold;
     -fx-font-size: 12px;
+}
+
+.pm-company-calendar-grid-loading .scroll-pane {
+    -fx-opacity: 0.42;
+}
+
+.pm-company-calendar-grid-loading-overlay {
+    -fx-background-color: rgba(0, 0, 0, 0.38);
+}
+
+.pm-attendance-grid-loading-box {
+    -fx-alignment: center;
+    -fx-padding: 20 28 20 28;
+    -fx-background-color: derive(-fx-base, 10%);
+    -fx-background-radius: 12;
+    -fx-border-color: derive(-fx-base, -18%);
+    -fx-border-radius: 12;
+    -fx-border-width: 1;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.18), 10, 0, 0, 2);
+}
+
+.pm-attendance-grid-loading-message {
+    -fx-font-size: 14px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -fx-text-base-color;
+    -fx-alignment: center;
+    -fx-text-alignment: center;
+    -fx-wrap-text: true;
+}
+
+.pm-attendance-grid-loading-elapsed {
+    -fx-font-size: 12px;
+    -fx-text-fill: -fx-accent;
+    -fx-font-weight: bold;
+}
+
+.pm-company-calendar-grid-loading-label {
+    -fx-font-size: 13px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -fx-text-base-color;
+    -fx-background-color: derive(-fx-base, 10%);
+    -fx-background-radius: 6;
+    -fx-padding: 8 16 8 16;
+    -fx-border-color: derive(-fx-base, -18%);
+    -fx-border-radius: 6;
+    -fx-border-width: 1;
 }
 
 .pm-company-calendar-month-title {
@@ -1069,6 +1217,13 @@
 .pm-member-attendance-grid .pm-member-att-cell {
     -fx-padding: 1 2;
     -fx-font-size: 10px;
+    -fx-focus-color: transparent;
+    -fx-faint-focus-color: transparent;
+}
+
+.pm-member-attendance-grid .pm-member-att-cell:focused {
+    -fx-focus-color: transparent;
+    -fx-faint-focus-color: transparent;
 }
 
 .pm-member-att-cell-hourly {
@@ -1086,14 +1241,40 @@
     -fx-text-fill: #7f1d1d;
 }
 
+.pm-member-att-cell-paid-leave {
+    -fx-background-color: #fef9c3;
+    -fx-text-fill: #854d0e;
+}
+
+.pm-member-att-cell-absent {
+    -fx-background-color: #fce7f3;
+    -fx-text-fill: #9d174d;
+    -fx-font-weight: bold;
+}
+
 .pm-member-att-cell-partial {
     -fx-background-color: #fde68a;
     -fx-text-fill: #78350f;
 }
 
+.pm-member-att-cell-holiday-work {
+    -fx-background-color: #fed7aa;
+    -fx-text-fill: #9a3412;
+}
+
+.pm-member-att-cell-holiday-work-partial {
+    -fx-background-color: #fdba74;
+    -fx-text-fill: #9a3412;
+    -fx-font-weight: bold;
+}
+
 .pm-member-att-cell-nodispatch {
     -fx-background-color: #e2e8f0;
     -fx-text-fill: #334155;
+}
+
+.pm-member-att-cell-comment-mark {
+    -fx-fill: #f59e0b;
 }
 
 .pm-company-calendar-month-panel {
@@ -1122,6 +1303,51 @@
 
 .pm-member-attendance-grid-member {
     -fx-font-size: 11px;
+    -fx-alignment: center;
+    -fx-text-alignment: center;
+    -fx-padding: 2 6 2 6;
+}
+
+.pm-member-attendance-row-band {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+    -fx-border-width: 2;
+    -fx-border-radius: 4;
+    -fx-background-radius: 4;
+}
+
+.pm-grid-row-hover-band {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+    -fx-border-width: 2;
+    -fx-border-radius: 4;
+    -fx-background-radius: 4;
+}
+
+.pm-member-attendance-row-band-focused,
+.pm-grid-row-hover-band-focused {
+    -fx-border-color: #38bdf8;
+    -fx-background-color: rgba(56, 189, 248, 0.14);
+}
+
+.pm-member-attendance-row-band-dimmed,
+.pm-grid-row-hover-band-dimmed {
+    -fx-background-color: rgba(0, 0, 0, 0.28);
+}
+
+.pm-member-attendance-row-node-dimmed,
+.pm-grid-row-hover-node-dimmed {
+    -fx-opacity: 0.38;
+}
+
+.pm-grid-row-hover-row-focused {
+    -fx-background-color: rgba(56, 189, 248, 0.14);
+    -fx-border-color: #38bdf8;
+    -fx-border-width: 0 0 2 0;
+}
+
+.pm-grid-row-hover-row-dimmed {
+    -fx-opacity: 0.38;
 }
 
 .pm-member-attendance-company-off {

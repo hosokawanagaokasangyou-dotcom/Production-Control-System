@@ -16,9 +16,7 @@ from planning_core.core.attendance_paths import (
     APP_MASTER_COMPANY_SHEET,
     APP_MASTER_MEMBER_SHEET_PREFIX,
     attendance_data_json_path,
-    attendance_view_xlsx_path,
     is_app_master_export_sheet,
-    legacy_master_calendar_sheet_names,
 )
 from planning_core.core.japanese_holidays import fetch_national_holidays_for_year
 
@@ -38,9 +36,14 @@ DAY_KIND_SPECIAL = "special_holiday"
 
 PRESET_WORK = "WORK"
 PRESET_OFF_FULL = "OFF_FULL"
+PRESET_PAID_LEAVE = "PAID_LEAVE"
+PRESET_ABSENT = "ABSENT"
 PRESET_OFF_AM = "OFF_AM"
 PRESET_OFF_PM = "OFF_PM"
 PRESET_NO_DISPATCH = "NO_DISPATCH"
+PRESET_HOLIDAY_WORK = "HOLIDAY_WORK"
+PRESET_HOLIDAY_WORK_AM = "HOLIDAY_WORK_AM"
+PRESET_HOLIDAY_WORK_PM = "HOLIDAY_WORK_PM"
 
 HOURLY_AVAILABLE = "available"
 HOURLY_BREAK = "break"
@@ -58,8 +61,7 @@ def empty_store(year: int | None = None) -> dict:
             "updated_at": None,
             "company_calendar_revision": 0,
             "member_attendance_revision": 0,
-            "master_export_at": None,
-            "view_excel_generated_at": None,
+            "calendar_xlsx_export_at": None,
             "holidays_fetched_at": None,
         },
         "company_calendar": {
@@ -223,6 +225,7 @@ def preset_to_leave_and_times(
         "eligible_for_assignment": True,
         "hourly": {},
         "manual_edit": False,
+        "comment": "",
     }
     if preset == PRESET_WORK:
         row.update(
@@ -244,6 +247,14 @@ def preset_to_leave_and_times(
         else:
             row["leave_type"] = "年休"
             row["remark"] = "休"
+        row["eligible_for_assignment"] = False
+    elif preset == PRESET_PAID_LEAVE:
+        row["leave_type"] = "年休"
+        row["remark"] = "年休"
+        row["eligible_for_assignment"] = False
+    elif preset == PRESET_ABSENT:
+        row["leave_type"] = "欠勤"
+        row["remark"] = "欠勤"
         row["eligible_for_assignment"] = False
     elif preset == PRESET_OFF_AM:
         row.update(
@@ -273,7 +284,57 @@ def preset_to_leave_and_times(
         row["leave_type"] = "-"
         row["remark"] = "-"
         row["eligible_for_assignment"] = False
+    elif preset == PRESET_HOLIDAY_WORK:
+        row.update(
+            {
+                "clock_in": reg_start.strftime("%H:%M"),
+                "clock_out": reg_end.strftime("%H:%M"),
+                "leave_type": "休日出勤",
+                "remark": "休日出勤",
+                "breaks": [
+                    {"start": BREAK1_START.strftime("%H:%M"), "end": BREAK1_END.strftime("%H:%M")},
+                    {"start": BREAK2_START.strftime("%H:%M"), "end": BREAK2_END.strftime("%H:%M")},
+                ],
+            }
+        )
+    elif preset == PRESET_HOLIDAY_WORK_AM:
+        row.update(
+            {
+                "clock_in": reg_start.strftime("%H:%M"),
+                "clock_out": BREAK1_START.strftime("%H:%M"),
+                "leave_type": "午前休出",
+                "remark": "午前休出",
+            }
+        )
+    elif preset == PRESET_HOLIDAY_WORK_PM:
+        row.update(
+            {
+                "clock_in": BREAK1_END.strftime("%H:%M"),
+                "clock_out": reg_end.strftime("%H:%M"),
+                "leave_type": "午後休出",
+                "remark": "午後休出",
+                "breaks": [
+                    {
+                        "start": BREAK2_START.strftime("%H:%M"),
+                        "end": BREAK2_END.strftime("%H:%M"),
+                    }
+                ],
+            }
+        )
     return row
+
+
+LEGACY_PROTECTED_MEMBER_PRESETS = frozenset({PRESET_NO_DISPATCH})
+
+
+def _skip_company_calendar_member_sync(existing: dict | None, only_unedited: bool) -> bool:
+    if not only_unedited or not existing:
+        return False
+    if existing.get("manual_edit"):
+        return True
+    if str(existing.get("day_preset") or "") in LEGACY_PROTECTED_MEMBER_PRESETS:
+        return True
+    return False
 
 
 def apply_company_calendar_to_members(
@@ -295,7 +356,7 @@ def apply_company_calendar_to_members(
         day_bucket = ma.setdefault(d_key, {})
         for member in members:
             existing = day_bucket.get(member)
-            if only_unedited and existing and existing.get("manual_edit"):
+            if _skip_company_calendar_member_sync(existing, only_unedited):
                 skipped += 1
                 continue
             day_bucket[member] = preset_to_leave_and_times(preset, d, company_kind=kind)
@@ -304,6 +365,45 @@ def apply_company_calendar_to_members(
         store["meta"].get("member_attendance_revision") or 0
     ) + 1
     return {"applied": applied, "skipped": skipped}
+
+
+def apply_company_calendar_to_members_fiscal(
+    store: dict,
+    members: list[str],
+    fiscal_year_label: int,
+    start_month: int = 4,
+    start_day: int = 1,
+    only_unedited: bool = True,
+) -> dict:
+    """会計年度の全日についてメンバー勤怠を会社カレンダーに合わせる。"""
+    start, end = fiscal_year_date_range(fiscal_year_label, start_month, start_day)
+    applied = 0
+    skipped = 0
+    ma = store.setdefault("member_attendance", {})
+    d = start
+    while d <= end:
+        d_key = d.isoformat()
+        preset = day_preset_from_company(store, d)
+        kind = company_day_kind(store, d)
+        day_bucket = ma.setdefault(d_key, {})
+        for member in members:
+            existing = day_bucket.get(member)
+            if _skip_company_calendar_member_sync(existing, only_unedited):
+                skipped += 1
+                continue
+            day_bucket[member] = preset_to_leave_and_times(preset, d, company_kind=kind)
+            applied += 1
+        d += timedelta(days=1)
+    store["meta"]["member_attendance_revision"] = int(
+        store["meta"].get("member_attendance_revision") or 0
+    ) + 1
+    return {
+        "applied": applied,
+        "skipped": skipped,
+        "fiscal_year": fiscal_year_label,
+        "fiscal_start": start.isoformat(),
+        "fiscal_end": end.isoformat(),
+    }
 
 
 def apply_member_attendance_patch(store: dict, patch: dict) -> dict:
@@ -325,13 +425,20 @@ def apply_member_attendance_patch(store: dict, patch: dict) -> dict:
             preset = cell_patch.get("day_preset")
             if preset:
                 kind = company_day_kind(store, d)
+                existing = bucket.get(member)
                 entry = preset_to_leave_and_times(str(preset), d, company_kind=kind)
                 entry["manual_edit"] = True
+                if "comment" in cell_patch:
+                    entry["comment"] = str(cell_patch.get("comment") or "")
+                elif isinstance(existing, dict) and existing.get("comment"):
+                    entry["comment"] = existing.get("comment")
                 if cell_patch.get("overtime_minutes") is not None:
                     entry["overtime_minutes"] = int(cell_patch["overtime_minutes"])
                 hourly = cell_patch.get("hourly")
                 if isinstance(hourly, dict):
                     entry["hourly"] = hourly
+                elif isinstance(existing, dict) and isinstance(existing.get("hourly"), dict):
+                    entry["hourly"] = copy.deepcopy(existing.get("hourly"))
                 bucket[member] = entry
                 applied += 1
             else:
@@ -375,6 +482,7 @@ def build_editor_payload(store: dict, members: list[str], year: int, month: int)
                 "manual_edit": bool(entry.get("manual_edit")),
                 "company_kind": cc.get("kind") or company_day_kind(store, d),
                 "hourly": entry.get("hourly") or {},
+                "comment": entry.get("comment") or "",
             }
     return {
         "format_version": 1,
@@ -410,6 +518,38 @@ def fiscal_year_date_range(
     next_start = _clamp_fiscal_day(fiscal_year_label + 1, start_month, start_day)
     end = next_start - timedelta(days=1)
     return start, end
+
+
+def initialize_company_calendar(
+    store: dict,
+    fiscal_year: int,
+    start_month: int = 4,
+    start_day: int = 1,
+) -> dict:
+    """
+    表示中の会計年度範囲の会社カレンダー日次エントリを削除し、平日／週末の既定解釈に戻す。
+    メンバー勤怠・他年度の日次データは変更しない。
+    """
+    start, end = fiscal_year_date_range(fiscal_year, start_month, start_day)
+    days = store.setdefault("company_calendar", {}).setdefault("days", {})
+    removed = 0
+    d = start
+    while d <= end:
+        key = d.isoformat()
+        if key in days:
+            del days[key]
+            removed += 1
+        d += timedelta(days=1)
+    store["company_calendar"]["year"] = fiscal_year
+    meta = store.setdefault("meta", {})
+    meta["fiscal_start_month"] = start_month
+    meta["fiscal_start_day"] = start_day
+    meta["company_calendar_revision"] = int(meta.get("company_calendar_revision") or 0) + 1
+    return {
+        "removed": removed,
+        "fiscal_start": start.isoformat(),
+        "fiscal_end": end.isoformat(),
+    }
 
 
 def _clamp_fiscal_day(year: int, month: int, day: int) -> date:
@@ -548,6 +688,14 @@ def apply_holidays_to_fiscal_year(
     return {"applied": applied, "skipped": skipped, "source": "fiscal_year"}
 
 
+def _member_cell_remark_for_export(entry: dict) -> str:
+    remark = str(entry.get("remark") or "").strip()
+    comment = str(entry.get("comment") or "").strip()
+    if remark and comment:
+        return remark + " / " + comment
+    return remark or comment
+
+
 def member_attendance_to_dataframe_records(store: dict, members: list[str]) -> list[dict]:
     """Convert store to flat records for load_attendance_and_analyze compatibility."""
     records: list[dict] = []
@@ -567,7 +715,7 @@ def member_attendance_to_dataframe_records(store: dict, members: list[str]) -> l
                 "休憩時間2_終了": "",
                 "作業効率": entry.get("efficiency", 1.0),
                 "休暇区分": entry.get("leave_type") or "",
-                "備考": entry.get("remark") or "",
+                "備考": _member_cell_remark_for_export(entry),
                 "残業(分)": entry.get("overtime_minutes") or 0,
             }
             breaks = entry.get("breaks") or []
@@ -581,57 +729,81 @@ def member_attendance_to_dataframe_records(store: dict, members: list[str]) -> l
     return records
 
 
-def export_attendance_to_master_new_sheets(
+def export_attendance_to_calendar_workbook(
     store: dict,
-    master_path: str | Path,
+    calendar_path: str | Path | None = None,
     months: list[tuple[int, int]] | None = None,
 ) -> dict:
-    from openpyxl import load_workbook
+    """勤怠カレンダー.xlsx へ APP_* シートを出力（master.xlsm は触らない）。"""
+    from openpyxl import Workbook, load_workbook
 
-    path = Path(master_path)
-    if not path.is_file():
-        raise FileNotFoundError(f"master が見つかりません: {path}")
-    keep_vba = str(path).lower().endswith(".xlsm")
-    try:
-        wb = load_workbook(path, keep_vba=keep_vba)
-    except Exception:
-        if keep_vba:
-            wb = load_workbook(path, keep_vba=False)
-        else:
-            raise
-    legacy_before = legacy_master_calendar_sheet_names(list(wb.sheetnames))
+    from planning_core.core.attendance_calendar_xlsx_history_store import (
+        append_calendar_xlsx_snapshot,
+    )
+    from planning_core.core.attendance_paths import attendance_calendar_xlsx_path
+
+    path = Path(calendar_path or attendance_calendar_xlsx_path())
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    if path.is_file():
+        append_calendar_xlsx_snapshot(
+            path,
+            kind="export_calendar",
+            label="勤怠カレンダー出力",
+            store_meta=store.get("meta") or {},
+        )
+        wb = load_workbook(path)
+    else:
+        wb = Workbook()
+
+    replaced_sheets: set[str] = {APP_MASTER_COMPANY_SHEET}
     _write_app_company_sheet(wb, store)
     if months is None:
         months = _fiscal_months_for_export(store)
     updated: list[str] = []
     for year, month in months:
         sheet_name = f"{APP_MASTER_MEMBER_SHEET_PREFIX}{year}年{month}月"
+        replaced_sheets.add(sheet_name)
         _write_app_member_calendar_sheet(wb, store, year, month, sheet_name)
         updated.append(sheet_name)
-    legacy_after = legacy_master_calendar_sheet_names(list(wb.sheetnames))
-    if legacy_before != legacy_after:
-        missing = sorted(set(legacy_before) - set(legacy_after))
-        raise RuntimeError(
-            "レガシーカレンダーシートが削除されました（過去バージョン互換のため触らない）: "
-            + ", ".join(missing)
-        )
-    if legacy_before:
-        logger.info(
-            "master 出力: レガシーカレンダーシート %d 枚は未変更のまま保持 (%s)",
-            len(legacy_before),
-            ", ".join(legacy_before[:5]) + ("…" if len(legacy_before) > 5 else ""),
-        )
+
+    _drop_default_empty_sheet_if_present(wb)
+
     try:
         wb.save(path)
     except OSError as e:
-        raise RuntimeError(f"master.xlsm への保存に失敗（Excel で開いている可能性）: {e}") from e
-    store["meta"]["master_export_at"] = datetime.now().isoformat(timespec="seconds")
-    store["meta"]["master_export_sheets"] = [APP_MASTER_COMPANY_SHEET] + updated
+        raise RuntimeError(
+            f"勤怠カレンダー.xlsx への保存に失敗（Excel で開いている可能性）: {e}"
+        ) from e
+
+    export_at = datetime.now().isoformat(timespec="seconds")
+    store["meta"]["calendar_xlsx_export_at"] = export_at
+    store["meta"]["calendar_xlsx_path"] = str(path.resolve())
+    store["meta"]["calendar_xlsx_export_sheets"] = [APP_MASTER_COMPANY_SHEET] + updated
     return {
         "ok": True,
-        "sheets_updated": store["meta"]["master_export_sheets"],
-        "master_export_at": store["meta"]["master_export_at"],
+        "calendar_xlsx_path": str(path.resolve()),
+        "sheets_updated": store["meta"]["calendar_xlsx_export_sheets"],
+        "calendar_xlsx_export_at": export_at,
     }
+
+
+def _drop_default_empty_sheet_if_present(wb) -> None:
+    if "Sheet" in wb.sheetnames and len(wb.sheetnames) > 1:
+        wb.remove(wb["Sheet"])
+
+
+def export_attendance_to_master_new_sheets(
+    store: dict,
+    master_path: str | Path,
+    months: list[tuple[int, int]] | None = None,
+) -> dict:
+    """互換: 旧 API。勤怠カレンダー.xlsx へ出力する（master は更新しない）。"""
+    logger.warning(
+        "export_attendance_to_master_new_sheets は非推奨です。"
+        " export_attendance_to_calendar_workbook を使用してください。"
+    )
+    return export_attendance_to_calendar_workbook(store, months=months)
 
 
 def _months_in_store(store: dict) -> list[tuple[int, int]]:
@@ -809,60 +981,36 @@ def populate_member_calendar_worksheet(ws, store: dict, year: int, month: int) -
 
 
 def _cell_symbol(entry: dict) -> str:
-    lt = entry.get("leave_type") or ""
-    if lt == "年休" or lt == "公休" or entry.get("day_preset") == PRESET_OFF_FULL:
-        return "*"
-    if lt == "前休":
-        return "前休"
-    if lt == "後休":
-        return "後休"
-    if lt == "-":
+    """メンバー勤怠グリッド（JavaFX shortLabel）と同一の1文字／短記号。"""
+    preset = str(entry.get("day_preset") or "").strip()
+    lt = str(entry.get("leave_type") or "").strip()
+    remark = str(entry.get("remark") or "").strip()
+    if preset == PRESET_PAID_LEAVE or (not preset and remark == "年休" and lt == "年休"):
+        return "年休"
+    if preset == PRESET_ABSENT or lt == "欠勤" or (not preset and remark == "欠勤"):
+        return "欠"
+    if (
+        preset == PRESET_OFF_FULL
+        or lt in ("公休", "休")
+        or (not preset and remark == "休" and lt == "年休")
+    ):
+        return "休"
+    if preset == PRESET_OFF_AM or lt == "前休":
+        return "前"
+    if preset == PRESET_OFF_PM or lt == "後休":
+        return "後"
+    if preset == PRESET_NO_DISPATCH or lt == "-":
         return "-"
+    if preset == PRESET_HOLIDAY_WORK or lt == "休日出勤":
+        return "休出"
+    if preset == PRESET_HOLIDAY_WORK_AM or lt == "午前休出":
+        return "前出"
+    if preset == PRESET_HOLIDAY_WORK_PM or lt == "午後休出":
+        return "後出"
     hourly = entry.get("hourly") or {}
-    if any(v == HOURLY_AWAY for v in hourly.values()):
-        return "離"
-    return ""
-
-
-def generate_attendance_view_xlsx(store: dict, path: Path | None = None) -> Path:
-    from openpyxl import Workbook
-
-    from planning_core.core.attendance_excel_style import (
-        write_company_calendar_grid,
-        write_member_attendance_flat_table,
-    )
-
-    out = path or attendance_view_xlsx_path()
-    wb = Workbook()
-    ws0 = wb.active
-    ws0.title = "会社カレンダー"
-    fy_label, _, _, start, end = _fiscal_year_label_and_bounds(store)
-    days = build_dense_company_calendar_days_for_export(store)
-    months = _fiscal_months_for_export(store)
-    write_company_calendar_grid(ws0, days, fy_label, start, end, months)
-
-    for year, month in months:
-        sheet_name = f"メンバー勤怠_{year}年{month}月"
-        if len(sheet_name) > 31:
-            sheet_name = f"勤怠_{year}_{month:02d}"
-        ws = wb.create_sheet(sheet_name)
-        populate_member_calendar_worksheet(ws, store, year, month)
-
-    records = member_attendance_to_dataframe_records(store, _all_members_in_store(store))
-    ws_list = wb.create_sheet("明細一覧")
-    write_member_attendance_flat_table(ws_list, records)
-
-    out.parent.mkdir(parents=True, exist_ok=True)
-    wb.save(out)
-    store["meta"]["view_excel_generated_at"] = datetime.now().isoformat(timespec="seconds")
-    return out
-
-
-def _all_members_in_store(store: dict) -> list[str]:
-    members: set[str] = set()
-    for per in store.get("member_attendance", {}).values():
-        members.update(per.keys())
-    return sorted(members)
+    if hourly:
+        return "時"
+    return "·"
 
 
 def migrate_master_attendance_to_store(store: dict, master_path: str) -> dict:

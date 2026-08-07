@@ -566,6 +566,10 @@ public final class DesktopSessionStateStore {
                 optionalBoolean(root, "equipmentStatusDashboardShowAladdinPlans", true),
                 optionalBoolean(root, "equipmentStatusDashboardShowDispatchPlans", true),
                 loadEquipmentStatusDashboardAppearancePrefs(root),
+                optionalBoolean(
+                        root,
+                        "tableRowHoverDimmingEnabled",
+                        DesktopSessionState.DEFAULT_TABLE_ROW_HOVER_DIMMING_ENABLED),
                 jp.co.pm.ai.desktop.reconciliation.RequestFormComboChoices.fromJson(root));
     }
 
@@ -808,6 +812,7 @@ public final class DesktopSessionStateStore {
         root.put("equipmentStatusDashboardShowAladdinPlans", state.equipmentStatusDashboardShowAladdinPlans());
         root.put("equipmentStatusDashboardShowDispatchPlans", state.equipmentStatusDashboardShowDispatchPlans());
         putEquipmentStatusDashboardAppearancePrefs(root, state.equipmentStatusDashboardAppearance());
+        root.put("tableRowHoverDimmingEnabled", state.tableRowHoverDimmingEnabled());
     }
 
     private static EquipmentStatusDashboardAppearancePrefs loadEquipmentStatusDashboardAppearancePrefs(

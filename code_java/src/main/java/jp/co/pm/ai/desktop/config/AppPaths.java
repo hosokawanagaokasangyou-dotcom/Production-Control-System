@@ -1,6 +1,8 @@
 package jp.co.pm.ai.desktop.config;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.net.URI;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.nio.file.Files;
@@ -132,6 +134,12 @@ public final class AppPaths {
 
     /** Tesseract 言語データ（{@code tessdata}）フォルダ。未設定時は {@link #KEY_PM_AI_TESSERACT_CMD} 近傍を探索。 */
     public static final String KEY_PM_AI_TESSERACT_TESSDATA_DIR = "PM_AI_TESSERACT_TESSDATA_DIR";
+
+    /**
+     * リポジトリ同梱 Tesseract tessdata（{@code jpn.traineddata} / {@code eng.traineddata}）。
+     * {@link #resolveRepoRoot(Map)} 直下の相対パス。
+     */
+    public static final String REPO_TESSERACT_TESSDATA_REL = ".pm-ai-cache/tesseract-tessdata";
 
     /**
      * 依頼書入力タブ「リモートデスクトップ」で起動する RDP プロファイル（{@code *.rdp}）のフルパス。
@@ -1069,11 +1077,38 @@ public final class AppPaths {
     public static Optional<TesseractConfig> resolveTesseractConfig(Map<String, String> ui) {
         Map<String, String> u = ui != null ? ui : Map.of();
         Path executable = resolveTesseractExecutable(u);
-        Path tessData = resolveTesseractTessDataDir(u, executable);
-        if (tessData == null || !hasJapaneseTessData(tessData)) {
+        Path preferred = resolveTesseractTessDataDir(u, executable);
+        Path tessData = materializeTessDataForNativeOcr(preferred, u, executable);
+        if (executable == null || tessData == null || !hasJapaneseTessData(tessData)) {
             return Optional.empty();
         }
         return Optional.of(new TesseractConfig(executable, tessData));
+    }
+
+    /**
+     * Tesseract が解決できない理由をユーザー向けに説明する（TPI PDF OCR エラー表示用）。
+     */
+    public static String explainTesseractConfigMissing(Map<String, String> ui) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        Path executable = resolveTesseractExecutable(u);
+        if (executable == null) {
+            return "Tesseract OCR 実行ファイル（tesseract.exe）が見つかりません。"
+                    + " 環境変数タブで PM_AI_TESSERACT_CMD を設定するか、"
+                    + " Tesseract-OCR をインストールしてください。";
+        }
+        Path tessData = resolveTesseractTessDataDir(u, executable);
+        if (tessData == null) {
+            return "tesseract.exe は見つかりました（" + executable + "）が tessdata フォルダが見つかりません。"
+                    + " PM_AI_TESSERACT_TESSDATA_DIR を設定してください。";
+        }
+        if (!hasJapaneseTessData(tessData)) {
+            String langs = describeInstalledTesseractLanguages(executable);
+            return "Tesseract の tessdata に日本語データ（jpn.traineddata）がありません（" + tessData + "）。"
+                    + " インストーラで Japanese を追加するか、jpn.traineddata を tessdata に配置し"
+                    + " PM_AI_TESSERACT_TESSDATA_DIR で指定してください。"
+                    + (langs.isEmpty() ? "" : " 現在インストール済み言語: " + langs);
+        }
+        return "Tesseract OCR 設定を解決できません。";
     }
 
     private static Path resolveTesseractExecutable(Map<String, String> ui) {
@@ -1121,6 +1156,10 @@ public final class AppPaths {
                 return p;
             }
         }
+        Path bundled = resolveRepoBundledTessDataDir(ui);
+        if (bundled != null) {
+            return bundled;
+        }
         if (executable != null) {
             Path sibling = executable.getParent().resolve("tessdata");
             if (Files.isDirectory(sibling)) {
@@ -1142,9 +1181,206 @@ public final class AppPaths {
         return null;
     }
 
+    /** リポジトリ {@link #REPO_TESSERACT_TESSDATA_REL}（jpn 同梱）があれば返す。 */
+    public static Path resolveRepoBundledTessDataDir(Map<String, String> ui) {
+        Path dir =
+                resolveRepoRoot(ui != null ? ui : Map.of())
+                        .resolve(REPO_TESSERACT_TESSDATA_REL)
+                        .toAbsolutePath()
+                        .normalize();
+        if (Files.isDirectory(dir) && hasJapaneseTessData(dir)) {
+            return dir;
+        }
+        return null;
+    }
+
     private static boolean hasJapaneseTessData(Path tessDataDir) {
         return tessDataDir != null
                 && Files.isRegularFile(tessDataDir.resolve("jpn.traineddata"));
+    }
+
+    private static boolean hasEnglishTessData(Path tessDataDir) {
+        return tessDataDir != null
+                && Files.isRegularFile(tessDataDir.resolve("eng.traineddata"));
+    }
+
+    private static boolean isAsciiOnlyPath(Path path) {
+        if (path == null) {
+            return false;
+        }
+        for (int i = 0; i < path.toString().length(); i++) {
+            if (path.toString().charAt(i) > 127) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static Path resolveUserTessDataDir() {
+        String localAppData = System.getenv("LOCALAPPDATA");
+        if (localAppData == null || localAppData.isBlank()) {
+            return null;
+        }
+        return Path.of(localAppData, "pm-ai-tessdata").toAbsolutePath().normalize();
+    }
+
+    /**
+     * Tess4j / Tesseract ネイティブは Windows で非 ASCII パス（日本語リポジトリ等）を開けない。
+     * ASCII の {@code %LOCALAPPDATA%\\pm-ai-tessdata} へ同期してから返す。
+     */
+    private static Path materializeTessDataForNativeOcr(
+            Path preferred, Map<String, String> ui, Path executable) {
+        if (preferred != null
+                && isAsciiOnlyPath(preferred)
+                && hasJapaneseTessData(preferred)
+                && hasEnglishTessData(preferred)) {
+            return preferred;
+        }
+        Path userDir = resolveUserTessDataDir();
+        if (userDir == null) {
+            return preferred != null && hasJapaneseTessData(preferred) ? preferred : null;
+        }
+        try {
+            Files.createDirectories(userDir);
+            List<Path> sources = tessDataSourceDirs(preferred, ui, executable);
+            syncTessDataFile(userDir, sources, "jpn.traineddata", TESSDATA_JPN_URL);
+            syncTessDataFile(userDir, sources, "eng.traineddata", TESSDATA_ENG_URL);
+            syncTessDataFile(userDir, sources, "osd.traineddata", TESSDATA_OSD_URL);
+            if (hasJapaneseTessData(userDir) && hasEnglishTessData(userDir)) {
+                if (!userDir.equals(preferred)) {
+                    System.err.println(
+                            "[pm-ai] Tess4j 用 tessdata を配置しました: " + userDir);
+                }
+                return userDir;
+            }
+            Path systemTess =
+                    executable != null && executable.getParent() != null
+                            ? executable.getParent().resolve("tessdata")
+                            : null;
+            Path boot = tryBootstrapUserJapaneseTessData(systemTess);
+            if (boot != null && hasJapaneseTessData(boot) && hasEnglishTessData(boot)) {
+                return boot;
+            }
+            return hasJapaneseTessData(userDir) ? userDir : null;
+        } catch (IOException ex) {
+            System.err.println("[pm-ai] tessdata 配置失敗: " + ex.getMessage());
+            if (preferred != null && hasJapaneseTessData(preferred)) {
+                return preferred;
+            }
+            return null;
+        }
+    }
+
+    private static List<Path> tessDataSourceDirs(
+            Path preferred, Map<String, String> ui, Path executable) {
+        List<Path> out = new ArrayList<>();
+        if (preferred != null && Files.isDirectory(preferred)) {
+            out.add(preferred);
+        }
+        Path bundled = resolveRepoBundledTessDataDir(ui);
+        if (bundled != null) {
+            out.add(bundled);
+        }
+        if (executable != null && executable.getParent() != null) {
+            Path sibling = executable.getParent().resolve("tessdata");
+            if (Files.isDirectory(sibling)) {
+                out.add(sibling);
+            }
+        }
+        for (Path candidate : defaultTesseractTessDataCandidates()) {
+            if (Files.isDirectory(candidate)) {
+                out.add(candidate);
+            }
+        }
+        return out;
+    }
+
+    private static void syncTessDataFile(
+            Path destDir, List<Path> sourceDirs, String fileName, String downloadUrl)
+            throws IOException {
+        Path dest = destDir.resolve(fileName);
+        if (isValidTessDataFile(dest)) {
+            return;
+        }
+        for (Path srcDir : sourceDirs) {
+            Path src = srcDir.resolve(fileName);
+            if (isValidTessDataFile(src)) {
+                Files.copy(src, dest, StandardCopyOption.REPLACE_EXISTING);
+                return;
+            }
+        }
+        if (!isValidTessDataFile(dest) && downloadUrl != null && !downloadUrl.isBlank()) {
+            System.err.println("[pm-ai] Tesseract データを取得中: " + fileName);
+            downloadTessDataFile(URI.create(downloadUrl), dest);
+        }
+    }
+
+    private static boolean isValidTessDataFile(Path file) {
+        if (!Files.isRegularFile(file)) {
+            return false;
+        }
+        try {
+            return Files.size(file) > 4096L;
+        } catch (IOException ex) {
+            return false;
+        }
+    }
+
+    private static final String TESSDATA_JPN_URL =
+            "https://github.com/tesseract-ocr/tessdata/raw/main/jpn.traineddata";
+
+    private static final String TESSDATA_ENG_URL =
+            "https://github.com/tesseract-ocr/tessdata/raw/main/eng.traineddata";
+
+    private static final String TESSDATA_OSD_URL =
+            "https://github.com/tesseract-ocr/tessdata/raw/main/osd.traineddata";
+
+    /** {@code %LOCALAPPDATA%\\pm-ai-tessdata} に jpn（必要なら eng コピー）を用意する。 */
+    private static Path tryBootstrapUserJapaneseTessData(Path systemTessDataDir) {
+        Path userDir = resolveUserTessDataDir();
+        if (userDir == null) {
+            return null;
+        }
+        try {
+            Files.createDirectories(userDir);
+            syncTessDataFile(userDir, List.of(), "jpn.traineddata", TESSDATA_JPN_URL);
+            List<Path> engSources = new ArrayList<>();
+            if (systemTessDataDir != null && Files.isDirectory(systemTessDataDir)) {
+                engSources.add(systemTessDataDir);
+            }
+            syncTessDataFile(userDir, engSources, "eng.traineddata", TESSDATA_ENG_URL);
+            syncTessDataFile(userDir, engSources, "osd.traineddata", TESSDATA_OSD_URL);
+            return hasJapaneseTessData(userDir) ? userDir : null;
+        } catch (IOException ex) {
+            System.err.println(
+                    "[pm-ai] Tesseract 日本語データの自動取得に失敗: " + ex.getMessage());
+            return null;
+        }
+    }
+
+    private static void downloadTessDataFile(URI uri, Path dest) throws IOException {
+        try (InputStream in = uri.toURL().openStream()) {
+            Files.copy(in, dest, StandardCopyOption.REPLACE_EXISTING);
+        }
+    }
+
+    private static String describeInstalledTesseractLanguages(Path executable) {
+        if (executable == null || !Files.isRegularFile(executable)) {
+            return "";
+        }
+        Path tessDir = executable.getParent() != null ? executable.getParent().resolve("tessdata") : null;
+        if (tessDir == null || !Files.isDirectory(tessDir)) {
+            return "";
+        }
+        try (Stream<Path> stream = Files.list(tessDir)) {
+            return stream
+                    .filter(p -> p.getFileName().toString().endsWith(".traineddata"))
+                    .map(p -> p.getFileName().toString().replace(".traineddata", ""))
+                    .sorted()
+                    .collect(Collectors.joining(", "));
+        } catch (IOException ex) {
+            return "";
+        }
     }
 
     private static List<Path> defaultTesseractExecutableCandidates() {
@@ -2374,12 +2610,7 @@ public final class AppPaths {
     /** 勤怠正本 JSON（サマリ Excel 同階層）。 */
     public static final String ATTENDANCE_DATA_JSON_FILENAME = "attendance-data.json";
 
-    /** 勤怠閲覧用 Excel（自動生成）。 */
-    public static final String ATTENDANCE_VIEW_XLSX_FILENAME = "勤怠_表示用.xlsx";
-
     public static final String KEY_PM_AI_ATTENDANCE_JSON = "PM_AI_ATTENDANCE_JSON";
-
-    public static final String KEY_PM_AI_ATTENDANCE_VIEW_XLSX = "PM_AI_ATTENDANCE_VIEW_XLSX";
 
     public static final String KEY_PM_AI_ATTENDANCE_JSON_HISTORY_DIR =
             "PM_AI_ATTENDANCE_JSON_HISTORY_DIR";
@@ -2392,6 +2623,24 @@ public final class AppPaths {
 
     /** 勤怠 JSON 世代保持上限（固定）。 */
     public static final int ATTENDANCE_JSON_HISTORY_MAX_GENERATIONS = 20;
+
+    /** 勤怠カレンダー Excel（master.xlsm と同一フォルダ）。 */
+    public static final String ATTENDANCE_CALENDAR_XLSX_FILENAME = "勤怠カレンダー.xlsx";
+
+    public static final String KEY_PM_AI_ATTENDANCE_CALENDAR_XLSX =
+            "PM_AI_ATTENDANCE_CALENDAR_XLSX";
+
+    public static final String KEY_PM_AI_ATTENDANCE_CALENDAR_XLSX_HISTORY_DIR =
+            "PM_AI_ATTENDANCE_CALENDAR_XLSX_HISTORY_DIR";
+
+    public static final String KEY_PM_AI_ATTENDANCE_CALENDAR_XLSX_HISTORY_MAX =
+            "PM_AI_ATTENDANCE_CALENDAR_XLSX_HISTORY_MAX";
+
+    /** 勤怠カレンダー xlsx 世代管理フォルダ名（xlsx と同階層）。 */
+    public static final String ATTENDANCE_CALENDAR_XLSX_HISTORY_DIR_NAME =
+            "attendance-calendar-xlsx-history";
+
+    public static final int ATTENDANCE_CALENDAR_XLSX_HISTORY_MAX_GENERATIONS = 20;
 
     /**
      * 勤怠正本 JSON の絶対パス（親は {@link #summaryAiDispatchXlsxPath(Map)} と同一フォルダ）。
@@ -2414,24 +2663,6 @@ public final class AppPaths {
                 .normalize();
     }
 
-    public static Path attendanceViewXlsxPath(Map<String, String> ui) {
-        Map<String, String> u = ui != null ? ui : Map.of();
-        String explicit = u.get(KEY_PM_AI_ATTENDANCE_VIEW_XLSX);
-        if (explicit != null && !explicit.isBlank()) {
-            return Path.of(explicit.trim()).toAbsolutePath().normalize();
-        }
-        FactorySite site = GlobalInitSettingTarget.loadEffective(u);
-        Path parent = summaryAiDispatchXlsxPathForFactory(u, site).getParent();
-        if (parent != null) {
-            return parent.resolve(ATTENDANCE_VIEW_XLSX_FILENAME).toAbsolutePath().normalize();
-        }
-        return resolveRepoRoot(u)
-                .resolve("code")
-                .resolve(ATTENDANCE_VIEW_XLSX_FILENAME)
-                .toAbsolutePath()
-                .normalize();
-    }
-
     /**
      * 勤怠正本 JSON の世代管理ルート（{@link #ATTENDANCE_JSON_HISTORY_DIR_NAME}）。
      * {@link #KEY_PM_AI_ATTENDANCE_JSON_HISTORY_DIR} で上書き可。
@@ -2444,6 +2675,43 @@ public final class AppPaths {
         }
         Path json = attendanceDataJsonPath(u);
         return json.getParent().resolve(ATTENDANCE_JSON_HISTORY_DIR_NAME).toAbsolutePath().normalize();
+    }
+
+    /**
+     * 勤怠カレンダー Excel の絶対パス（既定は {@link #resolveMasterWorkbookPathForDesktopOpen} の親フォルダ）。
+     */
+    public static Path attendanceCalendarXlsxPath(Map<String, String> ui) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        String explicit = u.get(KEY_PM_AI_ATTENDANCE_CALENDAR_XLSX);
+        if (explicit != null && !explicit.isBlank()) {
+            return Path.of(explicit.trim()).toAbsolutePath().normalize();
+        }
+        Path master = resolveMasterWorkbookPathForDesktopOpen(u, "");
+        if (master.getParent() != null) {
+            return master.getParent()
+                    .resolve(ATTENDANCE_CALENDAR_XLSX_FILENAME)
+                    .toAbsolutePath()
+                    .normalize();
+        }
+        return attendanceDataJsonPath(u)
+                .getParent()
+                .resolve(ATTENDANCE_CALENDAR_XLSX_FILENAME)
+                .toAbsolutePath()
+                .normalize();
+    }
+
+    /** 勤怠カレンダー xlsx の世代管理ルート。 */
+    public static Path attendanceCalendarXlsxHistoryRoot(Map<String, String> ui) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        String explicit = u.get(KEY_PM_AI_ATTENDANCE_CALENDAR_XLSX_HISTORY_DIR);
+        if (explicit != null && !explicit.isBlank()) {
+            return Path.of(explicit.trim()).toAbsolutePath().normalize();
+        }
+        Path xlsx = attendanceCalendarXlsxPath(u);
+        return xlsx.getParent()
+                .resolve(ATTENDANCE_CALENDAR_XLSX_HISTORY_DIR_NAME)
+                .toAbsolutePath()
+                .normalize();
     }
 
     /**

@@ -4,14 +4,12 @@
 from __future__ import annotations
 
 import calendar
+import os
 from datetime import date
 from pathlib import Path
 from typing import Any
 
-from planning_core.core.attendance_paths import (
-    attendance_data_json_path,
-    attendance_view_xlsx_path,
-)
+from planning_core.core.attendance_paths import attendance_data_json_path
 from planning_core.core.attendance_store import load_attendance_store, fiscal_year_date_range
 
 
@@ -38,9 +36,32 @@ def build_attendance_readiness(
     y = year or today.year
     m = month or today.month
     jp = attendance_data_json_path()
-    vp = attendance_view_xlsx_path()
     json_exists = jp.is_file()
-    view_exists = vp.is_file()
+
+    master_path: Path | None = None
+    master_exists = False
+    calendar_xlsx_path: Path | None = None
+    calendar_xlsx_exists = False
+    try:
+        from planning_core.core.master_data import _master_workbook_path_resolved
+        from planning_core.core.attendance_paths import attendance_calendar_xlsx_path
+
+        master_path = Path(_master_workbook_path_resolved())
+        master_exists = master_path.is_file()
+        calendar_xlsx_path = attendance_calendar_xlsx_path()
+        calendar_xlsx_exists = calendar_xlsx_path.is_file()
+    except Exception:
+        alt = (os.environ.get("PM_AI_MASTER_WORKBOOK") or "").strip()
+        if alt:
+            master_path = Path(alt)
+            master_exists = master_path.is_file()
+        try:
+            from planning_core.core.attendance_paths import attendance_calendar_xlsx_path
+
+            calendar_xlsx_path = attendance_calendar_xlsx_path()
+            calendar_xlsx_exists = calendar_xlsx_path.is_file()
+        except Exception:
+            pass
 
     if store is None:
         store = load_attendance_store(jp) if json_exists else {}
@@ -76,9 +97,10 @@ def build_attendance_readiness(
 
     issues: list[str] = []
     if not json_exists:
-        issues.append("attendance-data.json が未作成です。会社カレンダータブでセットアップしてください。")
-    if json_exists and cc_days == 0:
-        issues.append("会社カレンダーが空です。祝日取得または手動編集が必要です。")
+        issues.append(
+            "attendance-data.json が未作成です。会社カレンダータブでセットアップしてください。"
+            "（段階2は実行不可。master.xlsm のレガシー勤怠シートへはフォールバックしません。）"
+        )
     if json_exists and members and member_cells_month == 0:
         issues.append(
             f"{y}年{m}月のメンバー勤怠が未登録です。「会社カレンダーに合わせる」またはグリッド編集してください。"
@@ -97,8 +119,10 @@ def build_attendance_readiness(
         "month": m,
         "json_path": str(jp),
         "json_exists": json_exists,
-        "view_xlsx_path": str(vp),
-        "view_xlsx_exists": view_exists,
+        "master_workbook_path": str(master_path) if master_path else "",
+        "master_workbook_exists": master_exists,
+        "calendar_xlsx_path": str(calendar_xlsx_path) if calendar_xlsx_path else "",
+        "calendar_xlsx_exists": calendar_xlsx_exists,
         "meta": meta,
         "company_calendar_day_count": cc_days,
         "company_calendar_revision": int(meta.get("company_calendar_revision") or 0),
@@ -107,10 +131,10 @@ def build_attendance_readiness(
         "member_cells_expected_in_month": expected_cells,
         "skills_member_count": len(members),
         "master_export_at": meta.get("master_export_at"),
-        "view_excel_generated_at": meta.get("view_excel_generated_at"),
+        "calendar_xlsx_export_at": meta.get("calendar_xlsx_export_at"),
         "holidays_fetched_at": meta.get("holidays_fetched_at"),
         "stage2_ready": stage2_ready,
         "issues": issues,
-        "needs_setup": not json_exists or cc_days == 0,
+        "needs_setup": not json_exists,
         "needs_member_sync": json_exists and member_cells_month == 0,
     }

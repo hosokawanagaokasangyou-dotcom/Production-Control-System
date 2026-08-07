@@ -80,12 +80,29 @@ def company_cell_style(kind: str, entry: dict | None) -> tuple[PatternFill, Font
 
 
 def member_symbol_style(symbol: str, company_kind: str) -> tuple[PatternFill | None, Font]:
-    if symbol in ("*", "前休", "後休"):
+    """APP_勤怠カレンダー セル記号の色（JavaFX メンバー勤怠グリッドと対応）。"""
+    if symbol in ("休出", "前出", "後出"):
+        if symbol in ("前出", "後出"):
+            return cached_fill("FDBA74"), _result_font(size=9, bold=True, color="9A3412")
+        return cached_fill("FED7AA"), _result_font(size=9, color="9A3412")
+    if symbol == "休":
         return cached_fill(FILL_PUBLIC), _result_font(size=9, color=FONT_PUBLIC)
+    if symbol == "年休":
+        return cached_fill("FEF9C3"), _result_font(size=9, color="854D0E")
+    if symbol == "欠":
+        return cached_fill("FCE7F3"), _result_font(size=9, bold=True, color="9D174D")
+    if symbol in ("前", "後"):
+        return cached_fill(FILL_SPECIAL), _result_font(size=9, color=FONT_SPECIAL)
     if symbol == "-":
         return cached_fill("E2E8F0"), _result_font(size=9, color="334155")
-    if symbol == "離":
-        return cached_fill(FILL_SPECIAL), _result_font(size=9, color=FONT_SPECIAL)
+    if symbol == "時":
+        return cached_fill("DBEAFE"), _result_font(size=9, color="1D4ED8")
+    if symbol == "·":
+        if company_kind == "public_holiday":
+            return cached_fill(FILL_MEMBER_OFF_COL), _result_font(size=9, color=FONT_PUBLIC)
+        if company_kind == "special_holiday":
+            return cached_fill(FILL_SPECIAL), _result_font(size=9, color=FONT_SPECIAL)
+        return cached_fill("DCFCE7"), _result_font(size=9, color=FONT_WORKING)
     if company_kind == "public_holiday":
         return cached_fill(FILL_MEMBER_OFF_COL), _result_font(size=9, color=FONT_PUBLIC)
     if company_kind == "special_holiday":
@@ -208,7 +225,7 @@ def format_member_calendar_sheet(
     title_cell = ws.cell(
         1,
         1,
-        f"{year}年{month}月 メンバー勤怠  —  凡例: （空）=出勤  *=休  前休/後休  -=配台外  離=離席",
+        f"{year}年{month}月 メンバー勤怠  —  凡例: ·=通常  休=全休  年休=有給休暇  欠=欠勤  前/後=前休/後休  休出/前出/後出=休出系  時=時間別",
     )
     title_cell.font = _result_font(size=11, bold=True, color=FONT_BANNER)
     title_cell.fill = cached_fill(FILL_MONTH_TITLE)

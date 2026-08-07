@@ -5,32 +5,52 @@ import java.nio.file.Path;
 import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Consumer;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import javafx.animation.KeyFrame;
 import javafx.animation.PauseTransition;
+import javafx.animation.Timeline;
 import javafx.application.Platform;
 import javafx.fxml.FXML;
+import javafx.geometry.Pos;
+import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
+import javafx.scene.control.ButtonBar;
+import javafx.scene.control.ButtonType;
 import javafx.scene.control.Label;
+import javafx.scene.control.ProgressIndicator;
 import javafx.scene.control.Spinner;
 import javafx.scene.control.SpinnerValueFactory;
+import javafx.scene.control.Tooltip;
+import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.util.Duration;
 
 import jp.co.pm.ai.desktop.bridge.PythonProcessRunner;
+import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.dispatch.AttendanceOvertimePreview;
 import jp.co.pm.ai.desktop.ui.AttendanceGridCellSizing;
 import jp.co.pm.ai.desktop.ui.AttendanceSyncStatusPane;
+import jp.co.pm.ai.desktop.ui.ButtonAttentionGlow;
 import jp.co.pm.ai.desktop.ui.EditableCompanyCalendarPane;
 import jp.co.pm.ai.desktop.ui.FiscalYearPeriod;
+import jp.co.pm.ai.desktop.ui.FourDigitConfirmationDialog;
 
 /** 会社カレンダー編集タブ。 */
 public class CompanyCalendarTabController {
 
     private static final ObjectMapper JSON = new ObjectMapper();
+
+    public enum UnsavedPromptResult {
+        CANCELLED,
+        DISCARDED,
+        SAVED
+    }
 
     @FXML
     private VBox calendarHost;
@@ -51,13 +71,22 @@ public class CompanyCalendarTabController {
     private Label statusLabel;
 
     @FXML
-    private Button fetchHolidaysButton;
-
-    @FXML
     private Button saveButton;
 
     @FXML
-    private Button exportMasterButton;
+    private Button initializeButton;
+
+    @FXML
+    private Button setupButton;
+
+    @FXML
+    private Button restoreButton;
+
+    @FXML
+    private Button refreshButton;
+
+    @FXML
+    private Button openCalendarButton;
 
     @FXML
     private Spinner<Integer> cellSizeSpinner;
@@ -65,9 +94,18 @@ public class CompanyCalendarTabController {
     private MainShellController shell;
     private EditableCompanyCalendarPane calendarPane;
     private AttendanceSyncStatusPane syncStatusPane;
+    private ButtonAttentionGlow saveButtonGlow;
     private final AtomicLong loadGeneration = new AtomicLong(0);
     private final PauseTransition fiscalDebounce = new PauseTransition(Duration.millis(350));
     private boolean attendanceLoadEnabled = false;
+    private boolean suppressFiscalSpinner = false;
+    private String pendingStatusOverride = null;
+    private int tabProcessingDepth = 0;
+    private int setupWizardGridOverlayDepth = 0;
+    private String activeLoadingMessage = "処理中";
+    private ProgressIndicator statusProgress;
+    private Timeline statusActivityTick;
+    private long statusActivityStartMs = 0L;
 
     public void bindShell(MainShellController shell) {
         this.shell = shell;
@@ -77,7 +115,11 @@ public class CompanyCalendarTabController {
         }
         if (calendarHost != null && calendarPane == null) {
             calendarPane = new EditableCompanyCalendarPane();
+            calendarPane.setDirtyListener(this::applyGridDirtyState);
             calendarHost.getChildren().add(calendarPane);
+        }
+        if (saveButton != null && saveButtonGlow == null) {
+            saveButtonGlow = new ButtonAttentionGlow(saveButton);
         }
         installGridCellSizeSpinner();
         applyGridCellSizeToPane(shell.attendanceGridCellSizePx());
@@ -89,7 +131,12 @@ public class CompanyCalendarTabController {
             fiscalYearSpinner.setValueFactory(
                     new SpinnerValueFactory.IntegerSpinnerValueFactory(
                             2020, 2040, defaultFiscalYear));
-            fiscalYearSpinner.valueProperty().addListener((obs, o, n) -> scheduleFiscalReload());
+            fiscalYearSpinner
+                    .valueProperty()
+                    .addListener(
+                            (obs, o, n) ->
+                                    onFiscalSpinnerChanged(
+                                            o, n, fiscalYearSpinner, "会計年度を変える"));
         }
         if (fiscalStartMonthSpinner != null) {
             fiscalStartMonthSpinner.setValueFactory(
@@ -97,13 +144,31 @@ public class CompanyCalendarTabController {
             fiscalStartMonthSpinner
                     .valueProperty()
                     .addListener((obs, o, n) -> updateFiscalStartDaySpinnerMax());
-            fiscalStartMonthSpinner.valueProperty().addListener((obs, o, n) -> scheduleFiscalReload());
+            fiscalStartMonthSpinner
+                    .valueProperty()
+                    .addListener(
+                            (obs, o, n) ->
+                                    onFiscalSpinnerChanged(
+                                            o,
+                                            n,
+                                            fiscalStartMonthSpinner,
+                                            "期間開始を変える"));
         }
         if (fiscalStartDaySpinner != null) {
             fiscalStartDaySpinner.setValueFactory(
                     new SpinnerValueFactory.IntegerSpinnerValueFactory(1, 31, 1));
-            fiscalStartDaySpinner.valueProperty().addListener((obs, o, n) -> scheduleFiscalReload());
+            fiscalStartDaySpinner
+                    .valueProperty()
+                    .addListener(
+                            (obs, o, n) ->
+                                    onFiscalSpinnerChanged(
+                                            o,
+                                            n,
+                                            fiscalStartDaySpinner,
+                                            "期間開始を変える"));
         }
+        installToolbarTooltips();
+        installStatusActivityRow();
         updateFiscalStartDaySpinnerMax();
         fiscalDebounce.setOnFinished(
                 e -> {
@@ -113,6 +178,30 @@ public class CompanyCalendarTabController {
                     }
                 });
         applyFiscalSettingsToPane();
+    }
+
+    private void installStatusActivityRow() {
+        if (statusLabel == null || statusLabel.getParent() == null) {
+            return;
+        }
+        statusProgress = new ProgressIndicator();
+        statusProgress.setPrefSize(16, 16);
+        statusProgress.setMaxSize(16, 16);
+        statusProgress.setVisible(false);
+        HBox row = new HBox(8, statusProgress, statusLabel);
+        row.setAlignment(Pos.CENTER_LEFT);
+        if (statusLabel.getParent() instanceof VBox parent) {
+            int idx = parent.getChildren().indexOf(statusLabel);
+            if (idx >= 0) {
+                parent.getChildren().set(idx, row);
+            }
+        }
+        statusActivityTick =
+                new Timeline(
+                        new KeyFrame(
+                                Duration.millis(400),
+                                e -> updateStatusActivityLabel()));
+        statusActivityTick.setCycleCount(Timeline.INDEFINITE);
     }
 
     private void installGridCellSizeSpinner() {
@@ -140,6 +229,12 @@ public class CompanyCalendarTabController {
         }
     }
 
+    public void refreshRowHoverDimming() {
+        if (calendarPane != null) {
+            calendarPane.refreshRowHoverDimming();
+        }
+    }
+
     public void syncGridCellSizeSpinner(int px) {
         if (cellSizeSpinner == null) {
             return;
@@ -148,6 +243,140 @@ public class CompanyCalendarTabController {
         if (vf instanceof SpinnerValueFactory.IntegerSpinnerValueFactory intVf
                 && intVf.getValue() != px) {
             intVf.setValue(px);
+        }
+    }
+
+    public boolean hasUnsavedEdits() {
+        return calendarPane != null && calendarPane.hasUnsavedEdits();
+    }
+
+    public void discardUnsavedEdits() {
+        refreshFromPython();
+    }
+
+    public void clearUnsavedWithoutReload() {
+        if (calendarPane != null) {
+            calendarPane.clearUnsavedEditFlags();
+            applyGridDirtyState(false);
+        }
+    }
+
+    public UnsavedPromptResult promptUnsavedChanges(String actionDescription) {
+        if (!hasUnsavedEdits()) {
+            return UnsavedPromptResult.DISCARDED;
+        }
+        Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+        if (shell != null) {
+            alert.initOwner(shell.primaryStageForDialogs());
+            shell.applyAlertStylesheets(alert);
+        }
+        alert.setTitle("未保存の変更");
+        alert.setHeaderText(null);
+        alert.setContentText(
+                "会社カレンダーに未保存の変更があります。"
+                        + actionDescription
+                        + "前に保存しますか？");
+        ButtonType save = new ButtonType("保存", ButtonBar.ButtonData.OK_DONE);
+        ButtonType discard = new ButtonType("保存しない", ButtonBar.ButtonData.NO);
+        alert.getButtonTypes().setAll(save, discard, ButtonType.CANCEL);
+        Optional<ButtonType> ans = alert.showAndWait();
+        if (ans.isEmpty() || ans.get() == ButtonType.CANCEL) {
+            return UnsavedPromptResult.CANCELLED;
+        }
+        if (ans.get() == discard) {
+            return UnsavedPromptResult.DISCARDED;
+        }
+        return UnsavedPromptResult.SAVED;
+    }
+
+    public void saveEditsAsync(Consumer<Boolean> onComplete) {
+        if (shell == null || calendarPane == null) {
+            if (onComplete != null) {
+                onComplete.accept(false);
+            }
+            return;
+        }
+        if (!confirmSaveWithFourDigit()) {
+            if (onComplete != null) {
+                onComplete.accept(false);
+            }
+            return;
+        }
+        try {
+            int fiscalYear = currentFiscalYearLabel();
+            FiscalYearPeriod period = currentFiscalPeriod();
+            Map<String, Object> patch = new HashMap<>();
+            patch.put("year", fiscalYear);
+            patch.put("fiscal_start_month", period.startMonth());
+            patch.put("fiscal_start_day", period.startDay());
+            patch.put("days", calendarPane.exportDaysJsonForFiscalYear(fiscalYear, period));
+            String json = JSON.writeValueAsString(patch);
+            Path tmp = Files.createTempFile("pm-ai-attendance-patch-", ".json");
+            Files.writeString(tmp, json);
+            runAsync(
+                    shell.buildAttendanceDataIoRequest(
+                            "merge_company_calendar", "--patch-file", tmp.toString()),
+                    mergeNode -> {
+                        setActiveLoadingMessage("勤怠カレンダー.xlsx を出力中");
+                        runAsync(
+                                shell.buildAttendanceDataIoRequest("export_calendar_xlsx"),
+                                exportNode -> {
+                                    calendarPane.clearUnsavedEditFlags();
+                                    applyGridDirtyState(false);
+                                    if (statusLabel != null) {
+                                        statusLabel.setText(
+                                                "保存・勤怠カレンダー.xlsx 出力完了: "
+                                                        + mergeNode.path("json_path").asText("")
+                                                        + " / "
+                                                        + exportNode.path("calendar_xlsx_path").asText("")
+                                                        + " / シート "
+                                                        + exportNode.path("sheets_updated")
+                                                                .toString());
+                                    }
+                                    shell.refreshAttendanceReadiness();
+                                    refreshLocalReadiness();
+                                },
+                                false,
+                                null,
+                                null,
+                                exportSuccess -> {
+                                    if (!exportSuccess && statusLabel != null) {
+                                        statusLabel.setText(
+                                                "JSON 保存済みだが勤怠カレンダー.xlsx の出力に失敗しました。"
+                                                        + mergeNode.path("json_path").asText(""));
+                                    }
+                                    if (onComplete != null) {
+                                        onComplete.accept(exportSuccess);
+                                    }
+                                });
+                    },
+                    false,
+                    tmp,
+                    null,
+                    mergeSuccess -> {
+                        if (!mergeSuccess && onComplete != null) {
+                            onComplete.accept(false);
+                        }
+                    },
+                    "会社カレンダーを JSON に保存中");
+        } catch (Exception e) {
+            statusLabel.setText("エラー: " + e.getMessage());
+            if (onComplete != null) {
+                onComplete.accept(false);
+            }
+        }
+    }
+
+    private void applyGridDirtyState(boolean dirty) {
+        if (saveButtonGlow != null) {
+            if (dirty) {
+                saveButtonGlow.startIfIdle();
+            } else {
+                saveButtonGlow.stop();
+            }
+        }
+        if (shell != null) {
+            shell.onCompanyCalendarDirtyChanged(dirty);
         }
     }
 
@@ -172,6 +401,93 @@ public class CompanyCalendarTabController {
         }
         refreshFromPython();
         refreshLocalReadiness();
+    }
+
+    public int getFiscalYearLabel() {
+        return currentFiscalYearLabel();
+    }
+
+    public FiscalYearPeriod getFiscalPeriod() {
+        return currentFiscalPeriod();
+    }
+
+    private void onFiscalSpinnerChanged(
+            Integer oldVal, Integer newVal, Spinner<Integer> spinner, String actionDescription) {
+        if (suppressFiscalSpinner || newVal == null) {
+            return;
+        }
+        if (oldVal != null && oldVal.equals(newVal)) {
+            return;
+        }
+        if (!attendanceLoadEnabled) {
+            applyFiscalSettingsToPane();
+            return;
+        }
+        handleUnsavedThen(
+                actionDescription,
+                () -> scheduleFiscalReload(),
+                () -> revertSpinner(spinner, oldVal));
+    }
+
+    private void revertSpinner(Spinner<Integer> spinner, Integer oldVal) {
+        if (spinner == null || oldVal == null) {
+            return;
+        }
+        suppressFiscalSpinner = true;
+        SpinnerValueFactory<Integer> vf = spinner.getValueFactory();
+        if (vf instanceof SpinnerValueFactory.IntegerSpinnerValueFactory intVf) {
+            intVf.setValue(oldVal);
+        }
+        suppressFiscalSpinner = false;
+    }
+
+    private void handleUnsavedThen(
+            String actionDescription, Runnable onProceed, Runnable onCancel) {
+        if (!hasUnsavedEdits()) {
+            onProceed.run();
+            return;
+        }
+        UnsavedPromptResult result = promptUnsavedChanges(actionDescription);
+        if (result == UnsavedPromptResult.CANCELLED) {
+            onCancel.run();
+            return;
+        }
+        if (result == UnsavedPromptResult.DISCARDED) {
+            onProceed.run();
+            return;
+        }
+        saveEditsAsync(
+                saved -> {
+                    if (saved) {
+                        onProceed.run();
+                    } else {
+                        onCancel.run();
+                    }
+                });
+    }
+
+    private void installToolbarTooltips() {
+        installTooltip(saveButton, "編集内容を JSON に保存し 勤怠カレンダー.xlsx を出力します");
+        installTooltip(
+                setupButton,
+                "祝日・週末公休の取得とメンバー勤怠の同期（初回／再取得）");
+        installTooltip(initializeButton, "表示中会計年度の手動設定を削除し平日／週末既定に戻します");
+        installTooltip(restoreButton, "attendance-data.json の過去リビジョンから復元します");
+        installTooltip(
+                openCalendarButton,
+                "勤怠カレンダー.xlsx を Excel で読み取り専用で開きます（未出力の場合は先に保存してください）");
+        installTooltip(
+                refreshButton,
+                "JSON 正本から再読込します（未保存の変更がある場合は確認します）");
+        if (cellSizeSpinner != null) {
+            installTooltip(cellSizeSpinner, "グリッドセルサイズ（メンバー勤怠と共通）");
+        }
+    }
+
+    private static void installTooltip(javafx.scene.control.Control control, String text) {
+        if (control != null) {
+            control.setTooltip(new Tooltip(text));
+        }
     }
 
     private void scheduleFiscalReload() {
@@ -211,6 +527,17 @@ public class CompanyCalendarTabController {
                         LocalDate.now(), FiscalYearPeriod.DEFAULT_APRIL_MARCH);
     }
 
+    private boolean confirmSaveWithFourDigit() {
+        if (shell == null) {
+            return false;
+        }
+        return FourDigitConfirmationDialog.confirm(
+                shell.primaryStageForDialogs(),
+                "会社カレンダー保存",
+                "編集内容を attendance-data.json（正本）と 勤怠カレンダー.xlsx に保存します。",
+                "保存");
+    }
+
     private void applyFiscalSettingsToPane() {
         if (calendarPane != null) {
             calendarPane.setFiscalYear(currentFiscalYearLabel(), currentFiscalPeriod());
@@ -220,14 +547,22 @@ public class CompanyCalendarTabController {
     @FXML
     private void onSetupWizard() {
         if (shell != null) {
+            beginSetupWizardGridOverlay();
+            LocalDate today = LocalDate.now();
             AttendanceSetupWizard.show(
                     shell,
+                    currentFiscalYearLabel(),
+                    currentFiscalPeriod(),
+                    today.getYear(),
+                    today.getMonthValue(),
                     ok -> {
+                        endSetupWizardGridOverlay();
                         if (ok) {
                             refreshFromPython();
                             shell.refreshAttendanceReadiness();
                         }
                     });
+            endSetupWizardGridOverlay();
         }
     }
 
@@ -259,6 +594,10 @@ public class CompanyCalendarTabController {
                     if (syncStatusPane != null) {
                         syncStatusPane.updateFromReadiness(node);
                     }
+                    if (calendarPane != null) {
+                        calendarPane.setGridNeedsAttention(
+                                node.path("needs_setup").asBoolean(false));
+                    }
                 },
                 err -> {
                     if (statusLabel != null) {
@@ -268,75 +607,71 @@ public class CompanyCalendarTabController {
     }
 
     @FXML
-    private void onFetchHolidays() {
+    private void onSave() {
+        saveEditsAsync(null);
+    }
+
+    @FXML
+    private void onInitializeCompanyCalendar() {
         if (shell == null) {
             return;
         }
+        if (hasUnsavedEdits()) {
+            UnsavedPromptResult unsaved = promptUnsavedChanges("初期化");
+            if (unsaved == UnsavedPromptResult.CANCELLED) {
+                return;
+            }
+            if (unsaved == UnsavedPromptResult.SAVED) {
+                saveEditsAsync(
+                        saved -> {
+                            if (saved) {
+                                runInitializeCompanyCalendarAfterConfirm();
+                            }
+                        });
+                return;
+            }
+        }
+        runInitializeCompanyCalendarAfterConfirm();
+    }
+
+    private void runInitializeCompanyCalendarAfterConfirm() {
         int fiscalYear = currentFiscalYearLabel();
         FiscalYearPeriod period = currentFiscalPeriod();
+        String range = period.rangeLabel(fiscalYear);
+        String message =
+                "表示中の会計年度（"
+                        + range
+                        + "）の会社カレンダーを初期化します。"
+                        + "手動設定した休日・特別休暇は削除され、平日／週末の既定表示に戻ります。"
+                        + "メンバー勤怠は変更しません。";
+        if (!FourDigitConfirmationDialog.confirm(
+                shell.primaryStageForDialogs(),
+                "会社カレンダー初期化",
+                message,
+                "初期化")) {
+            return;
+        }
         runAsync(
                 shell.buildAttendanceDataIoRequest(
-                        "fetch_holidays_fiscal",
+                        "initialize_company_calendar",
                         Integer.toString(fiscalYear),
                         Integer.toString(period.startMonth()),
-                        Integer.toString(period.startDay()),
-                        "--weekends"),
+                        Integer.toString(period.startDay())),
                 node -> {
-                    statusLabel.setText(
-                            "祝日取得: 適用 "
-                                    + node.path("applied").asInt(0)
-                                    + " 日 / スキップ "
-                                    + node.path("skipped").asInt(0));
+                    if (calendarPane != null) {
+                        calendarPane.clearUnsavedEditFlags();
+                        calendarPane.setGridNeedsAttention(false);
+                        applyGridDirtyState(false);
+                    }
+                    pendingStatusOverride =
+                            "初期化完了: "
+                                    + range
+                                    + " — 手動設定 "
+                                    + node.path("removed").asInt(0)
+                                    + " 日を削除";
                     shell.refreshAttendanceReadiness();
                     refreshLocalReadiness();
-                },
-                true,
-                null);
-    }
-
-    @FXML
-    private void onSave() {
-        if (shell == null || calendarPane == null) {
-            return;
-        }
-        try {
-            int fiscalYear = currentFiscalYearLabel();
-            FiscalYearPeriod period = currentFiscalPeriod();
-            Map<String, Object> patch = new HashMap<>();
-            patch.put("year", fiscalYear);
-            patch.put("fiscal_start_month", period.startMonth());
-            patch.put("fiscal_start_day", period.startDay());
-            patch.put("days", calendarPane.exportDaysJsonForFiscalYear(fiscalYear, period));
-            String json = JSON.writeValueAsString(patch);
-            Path tmp = Files.createTempFile("pm-ai-attendance-patch-", ".json");
-            Files.writeString(tmp, json);
-            runAsync(
-                    shell.buildAttendanceDataIoRequest(
-                            "merge_company_calendar", "--patch-file", tmp.toString()),
-                    node -> {
-                        statusLabel.setText("保存完了: " + node.path("json_path").asText(""));
-                        shell.refreshAttendanceReadiness();
-                        refreshLocalReadiness();
-                    },
-                    true,
-                    tmp);
-        } catch (Exception e) {
-            statusLabel.setText("エラー: " + e.getMessage());
-        }
-    }
-
-    @FXML
-    private void onExportMaster() {
-        if (shell == null) {
-            return;
-        }
-        runAsync(
-                shell.buildAttendanceDataIoRequest("export_master"),
-                node -> {
-                    statusLabel.setText(
-                            "master 出力: " + node.path("sheets_updated").toString());
-                    shell.refreshAttendanceReadiness();
-                    refreshLocalReadiness();
+                    refreshFromPython();
                 },
                 false,
                 null);
@@ -344,27 +679,33 @@ public class CompanyCalendarTabController {
 
     @FXML
     private void onRefresh() {
-        refreshFromPython();
-        refreshLocalReadiness();
+        handleUnsavedThen(
+                "再読込",
+                () -> {
+                    refreshFromPython();
+                    refreshLocalReadiness();
+                },
+                () -> {});
     }
 
     @FXML
-    private void onOpenMasterXlsm() {
+    private void onOpenAttendanceCalendar() {
         if (shell == null) {
             return;
         }
-        if (!shell.openMasterWorkbookInDesktop("[company-calendar]")) {
-            statusLabel.setText("master.xlsm が見つかりません");
-        }
-    }
-
-    @FXML
-    private void onOpenViewXlsx() {
-        if (shell == null) {
+        Path path = AppPaths.attendanceCalendarXlsxPath(shell.snapshotUiEnv());
+        if (!Files.isRegularFile(path)) {
+            shell.showWarningDialog(
+                    "勤怠カレンダーを開く",
+                    "ファイルが見つかりません。\n"
+                            + path
+                            + "\n「保存」で 勤怠カレンダー.xlsx を出力してから開いてください。");
             return;
         }
-        if (!shell.openAttendanceViewXlsxInDesktop("[company-calendar]")) {
-            statusLabel.setText("勤怠_表示用.xlsx が見つかりません");
+        if (!shell.openAttendanceCalendarXlsxInDesktop("[company-calendar]")) {
+            shell.showErrorDialog(
+                    "勤怠カレンダーを開く",
+                    "ファイルを開けませんでした。\n" + path);
         }
     }
 
@@ -408,13 +749,19 @@ public class CompanyCalendarTabController {
                         calendarPane.setFiscalYearAndDays(fiscalYear, period, days);
                     }
                     statusLabel.setText(
-                            "読込 "
-                                    + period.rangeLabel(fiscalYear)
-                                    + " revision="
-                                    + node.path("revision").asInt(0));
+                            pendingStatusOverride != null
+                                    ? pendingStatusOverride
+                                    : "読込 "
+                                            + period.rangeLabel(fiscalYear)
+                                            + " revision="
+                                            + node.path("revision").asInt(0));
+                    pendingStatusOverride = null;
                 },
                 false,
-                null);
+                null,
+                null,
+                null,
+                "会社カレンダーを読込中");
     }
 
     private void runAsync(
@@ -422,79 +769,210 @@ public class CompanyCalendarTabController {
             java.util.function.Consumer<JsonNode> onOk,
             boolean refreshAfter,
             Path tempPatchFile) {
-        if (statusLabel != null) {
-            statusLabel.setText("処理中…");
-        }
-        setToolbarBusy(true);
+        runAsync(req, onOk, refreshAfter, tempPatchFile, null, null, null);
+    }
+
+    private void runAsync(
+            PythonProcessRunner.RunRequest req,
+            java.util.function.Consumer<JsonNode> onOk,
+            boolean refreshAfter,
+            Path tempPatchFile,
+            Long gridLoadGen,
+            Consumer<Boolean> onFinished) {
+        runAsync(req, onOk, refreshAfter, tempPatchFile, gridLoadGen, onFinished, null);
+    }
+
+    private void runAsync(
+            PythonProcessRunner.RunRequest req,
+            java.util.function.Consumer<JsonNode> onOk,
+            boolean refreshAfter,
+            Path tempPatchFile,
+            Long gridLoadGen,
+            Consumer<Boolean> onFinished,
+            String loadingMessage) {
+        setActiveLoadingMessage(loadingMessage);
+        pushTabProcessing();
         PythonProcessRunner.runCaptureAsync(req)
                 .whenComplete(
                         (cap, err) ->
                                 Platform.runLater(
                                         () -> {
-                                            setToolbarBusy(false);
-                                            if (tempPatchFile != null) {
-                                                try {
-                                                    Files.deleteIfExists(tempPatchFile);
-                                                } catch (Exception ignored) {
-                                                    // ignore
-                                                }
-                                            }
-                                            if (err != null) {
-                                                statusLabel.setText("エラー: " + err.getMessage());
-                                                shell.appendLog("[company-calendar] " + err);
-                                                return;
-                                            }
-                                            if (cap == null) {
-                                                statusLabel.setText("失敗");
-                                                return;
-                                            }
                                             try {
-                                                JsonNode node =
-                                                        JSON.readTree(
-                                                                AttendanceOvertimePreview
-                                                                        .MasterReadSummaryJson
-                                                                        .extractLastJsonLine(
-                                                                                cap.stdout()));
-                                                if (!node.path("ok").asBoolean(false)) {
-                                                    statusLabel.setText(
-                                                            "エラー: "
-                                                                    + node.path("error")
-                                                                            .asText("失敗"));
-                                                    shell.appendLog(
-                                                            "[company-calendar] exit="
-                                                                    + cap.exitCode()
-                                                                    + " "
-                                                                    + cap.stdout());
+                                                if (tempPatchFile != null) {
+                                                    try {
+                                                        Files.deleteIfExists(tempPatchFile);
+                                                    } catch (Exception ignored) {
+                                                        // ignore
+                                                    }
+                                                }
+                                                if (err != null) {
+                                                    statusLabel.setText("エラー: " + err.getMessage());
+                                                    shell.appendLog("[company-calendar] " + err);
+                                                    if (onFinished != null) {
+                                                        onFinished.accept(false);
+                                                    }
                                                     return;
                                                 }
-                                                if (cap.exitCode() != 0) {
-                                                    statusLabel.setText(
-                                                            "失敗 exit=" + cap.exitCode());
-                                                    shell.appendLog(
-                                                            "[company-calendar] "
-                                                                    + cap.stdout());
+                                                if (cap == null) {
+                                                    statusLabel.setText("失敗");
+                                                    if (onFinished != null) {
+                                                        onFinished.accept(false);
+                                                    }
                                                     return;
                                                 }
-                                                onOk.accept(node);
-                                                if (refreshAfter) {
-                                                    refreshFromPython();
+                                                try {
+                                                    JsonNode node =
+                                                            JSON.readTree(
+                                                                    AttendanceOvertimePreview
+                                                                            .MasterReadSummaryJson
+                                                                            .extractLastJsonLine(
+                                                                                    cap.stdout()));
+                                                    if (!node.path("ok").asBoolean(false)) {
+                                                        statusLabel.setText(
+                                                                "エラー: "
+                                                                        + node.path("error")
+                                                                                .asText("失敗"));
+                                                        shell.appendLog(
+                                                                "[company-calendar] exit="
+                                                                        + cap.exitCode()
+                                                                        + " "
+                                                                        + cap.stdout());
+                                                        if (onFinished != null) {
+                                                            onFinished.accept(false);
+                                                        }
+                                                        return;
+                                                    }
+                                                    if (cap.exitCode() != 0) {
+                                                        statusLabel.setText(
+                                                                "失敗 exit=" + cap.exitCode());
+                                                        shell.appendLog(
+                                                                "[company-calendar] "
+                                                                        + cap.stdout());
+                                                        if (onFinished != null) {
+                                                            onFinished.accept(false);
+                                                        }
+                                                        return;
+                                                    }
+                                                    onOk.accept(node);
+                                                    if (onFinished != null) {
+                                                        onFinished.accept(true);
+                                                    }
+                                                    if (refreshAfter) {
+                                                        refreshFromPython();
+                                                    }
+                                                } catch (Exception e) {
+                                                    statusLabel.setText("JSON 解析失敗: " + e.getMessage());
+                                                    shell.appendLog("[company-calendar] " + e);
+                                                    if (onFinished != null) {
+                                                        onFinished.accept(false);
+                                                    }
                                                 }
-                                            } catch (Exception e) {
-                                                statusLabel.setText("JSON 解析失敗: " + e.getMessage());
-                                                shell.appendLog("[company-calendar] " + e);
+                                            } finally {
+                                                popTabProcessing();
                                             }
                                         }));
     }
 
-    private void setToolbarBusy(boolean busy) {
-        if (fetchHolidaysButton != null) {
-            fetchHolidaysButton.setDisable(busy);
+    private void pushTabProcessing() {
+        tabProcessingDepth++;
+        if (tabProcessingDepth == 1) {
+            setToolbarBusy(true);
+            beginStatusActivity();
         }
+    }
+
+    private void popTabProcessing() {
+        if (tabProcessingDepth > 0) {
+            tabProcessingDepth--;
+        }
+        if (tabProcessingDepth == 0) {
+            setToolbarBusy(false);
+            endStatusActivity();
+        }
+    }
+
+    private void setActiveLoadingMessage(String message) {
+        activeLoadingMessage =
+                message != null && !message.isBlank() ? message.strip() : "処理中";
+        updateGridLoadingOverlay();
+        if (tabProcessingDepth > 0) {
+            updateStatusActivityLabel();
+        }
+    }
+
+    private void beginStatusActivity() {
+        statusActivityStartMs = System.currentTimeMillis();
+        if (statusProgress != null) {
+            statusProgress.setVisible(true);
+        }
+        updateStatusActivityLabel();
+        if (statusActivityTick != null) {
+            statusActivityTick.play();
+        }
+    }
+
+    private void endStatusActivity() {
+        if (statusActivityTick != null) {
+            statusActivityTick.stop();
+        }
+        if (statusProgress != null) {
+            statusProgress.setVisible(false);
+        }
+    }
+
+    private void updateStatusActivityLabel() {
+        if (statusLabel == null) {
+            return;
+        }
+        double sec = (System.currentTimeMillis() - statusActivityStartMs) / 1000.0;
+        statusLabel.setText(
+                String.format("%s…（経過 %.1f 秒）", activeLoadingMessage, sec));
+    }
+
+    private void beginSetupWizardGridOverlay() {
+        setupWizardGridOverlayDepth++;
+        updateGridLoadingOverlay();
+    }
+
+    private void endSetupWizardGridOverlay() {
+        if (setupWizardGridOverlayDepth > 0) {
+            setupWizardGridOverlayDepth--;
+        }
+        updateGridLoadingOverlay();
+    }
+
+    private void updateGridLoadingOverlay() {
+        if (calendarPane == null) {
+            return;
+        }
+        boolean loading = setupWizardGridOverlayDepth > 0 || tabProcessingDepth > 0;
+        String message =
+                loading
+                        ? (setupWizardGridOverlayDepth > 0
+                                ? "セットアップ準備中"
+                                : activeLoadingMessage)
+                        : null;
+        calendarPane.setGridLoading(loading, message);
+    }
+
+    private void setToolbarBusy(boolean busy) {
         if (saveButton != null) {
             saveButton.setDisable(busy);
         }
-        if (exportMasterButton != null) {
-            exportMasterButton.setDisable(busy);
+        if (initializeButton != null) {
+            initializeButton.setDisable(busy);
+        }
+        if (setupButton != null) {
+            setupButton.setDisable(busy);
+        }
+        if (restoreButton != null) {
+            restoreButton.setDisable(busy);
+        }
+        if (refreshButton != null) {
+            refreshButton.setDisable(busy);
+        }
+        if (openCalendarButton != null) {
+            openCalendarButton.setDisable(busy);
         }
         if (fiscalYearSpinner != null) {
             fiscalYearSpinner.setDisable(busy);
@@ -505,5 +983,9 @@ public class CompanyCalendarTabController {
         if (fiscalStartDaySpinner != null) {
             fiscalStartDaySpinner.setDisable(busy);
         }
+        if (cellSizeSpinner != null) {
+            cellSizeSpinner.setDisable(busy);
+        }
+        updateGridLoadingOverlay();
     }
 }

@@ -14,15 +14,26 @@ import com.fasterxml.jackson.databind.JsonNode;
 import javafx.animation.PauseTransition;
 import javafx.geometry.HPos;
 import javafx.geometry.Pos;
+import javafx.geometry.VPos;
+import javafx.scene.Node;
 import javafx.scene.control.Button;
+import javafx.scene.control.ContextMenu;
 import javafx.scene.control.Label;
+import javafx.scene.control.Menu;
+import javafx.scene.control.MenuItem;
 import javafx.scene.control.ScrollPane;
+import javafx.scene.control.SeparatorMenuItem;
+import javafx.scene.control.Tooltip;
 import javafx.scene.layout.ColumnConstraints;
 import javafx.scene.layout.GridPane;
+import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
+import javafx.scene.shape.Polygon;
+import javafx.stage.Stage;
+import javafx.stage.Window;
 import javafx.util.Duration;
 
 /** メンバー×日付の勤怠プリセット編集グリッド。 */
@@ -30,9 +41,14 @@ public final class EditableMemberAttendanceGridPane extends VBox {
 
     public static final String PRESET_WORK = "WORK";
     public static final String PRESET_OFF_FULL = "OFF_FULL";
+    public static final String PRESET_PAID_LEAVE = "PAID_LEAVE";
+    public static final String PRESET_ABSENT = "ABSENT";
     public static final String PRESET_OFF_AM = "OFF_AM";
     public static final String PRESET_OFF_PM = "OFF_PM";
     public static final String PRESET_NO_DISPATCH = "NO_DISPATCH";
+    public static final String PRESET_HOLIDAY_WORK = "HOLIDAY_WORK";
+    public static final String PRESET_HOLIDAY_WORK_AM = "HOLIDAY_WORK_AM";
+    public static final String PRESET_HOLIDAY_WORK_PM = "HOLIDAY_WORK_PM";
 
     public static final String KIND_PUBLIC = "public_holiday";
     public static final String KIND_SPECIAL = "special_holiday";
@@ -41,18 +57,35 @@ public final class EditableMemberAttendanceGridPane extends VBox {
             new String[] {
                 PRESET_WORK,
                 PRESET_OFF_FULL,
+                PRESET_PAID_LEAVE,
+                PRESET_ABSENT,
                 PRESET_OFF_AM,
                 PRESET_OFF_PM,
-                PRESET_NO_DISPATCH
+                PRESET_HOLIDAY_WORK,
+                PRESET_HOLIDAY_WORK_AM,
+                PRESET_HOLIDAY_WORK_PM
             };
+
+    private record PresetMenuOption(String preset, String label) {}
+
+    private static final List<PresetMenuOption> PRESET_MENU_OPTIONS =
+            List.of(
+                    new PresetMenuOption(PRESET_WORK, "· 通常"),
+                    new PresetMenuOption(PRESET_OFF_FULL, "休 全休"),
+                    new PresetMenuOption(PRESET_PAID_LEAVE, "年 有給休暇(年休)"),
+                    new PresetMenuOption(PRESET_ABSENT, "欠 欠勤"),
+                    new PresetMenuOption(PRESET_OFF_AM, "前 前休"),
+                    new PresetMenuOption(PRESET_OFF_PM, "後 後休"),
+                    new PresetMenuOption(PRESET_HOLIDAY_WORK, "休出 休日出勤"),
+                    new PresetMenuOption(PRESET_HOLIDAY_WORK_AM, "前出 午前休出"),
+                    new PresetMenuOption(PRESET_HOLIDAY_WORK_PM, "後出 午後休出"));
 
     private final GridPane grid = new GridPane();
     private final ScrollPane scroll = new ScrollPane(grid);
     private final StackPane scrollHost = new StackPane();
-    private final Region loadingOverlay = new Region();
-    private final Label loadingLabel = new Label("読込中…");
-    private final StackPane loadingOverlayStack = new StackPane(loadingOverlay, loadingLabel);
-    private final Map<String, Button> cellButtons = new HashMap<>();
+    private final AttendanceGridLoadingOverlay loadingOverlay =
+            new AttendanceGridLoadingOverlay("pm-member-attendance-grid-loading-overlay");
+    private final Map<String, CellUi> cellUiMap = new HashMap<>();
     private final PauseTransition singleClickDelay = new PauseTransition(Duration.millis(280));
     private LocalDate pendingClickDate;
     private String pendingClickMember;
@@ -62,17 +95,38 @@ public final class EditableMemberAttendanceGridPane extends VBox {
     private List<String> members = List.of();
     private List<LocalDate> dates = List.of();
     private final Map<String, Map<String, CellState>> cells = new HashMap<>();
+    /** コメントを明示編集したセル（空文字での削除を保存に反映するため）。 */
+    private final java.util.Set<String> commentEditedCellKeys = new java.util.HashSet<>();
+    /** 時間別を明示編集／クリアしたセル（空 map での削除を保存に反映するため）。 */
+    private final java.util.Set<String> hourlyEditedCellKeys = new java.util.HashSet<>();
     private Consumer<CellEditRequest> cellDetailHandler;
     private int cellSizePx = AttendanceGridCellSizing.DEFAULT_CELL_PX;
     private Consumer<Boolean> dirtyListener;
+    /** 読込／保存直後の exportPatchJson スナップショット（JSON 正本との差分で未保存を判定）。 */
+    private Map<String, Object> savedBaselinePatch = Map.of();
+    private Window commentDialogOwner;
+    private final GridRowHoverDimmingController rowDimming = new GridRowHoverDimmingController();
+
+    private record CellUi(Button button, Polygon commentMark) {}
 
     public EditableMemberAttendanceGridPane() {
         getStyleClass().add("pm-member-attendance-grid");
         setSpacing(6);
 
+        HBox legendChips =
+                new HBox(
+                        6,
+                        legendChip("· 通常", "pm-att-legend-work"),
+                        legendChip("休", "pm-att-legend-off"),
+                        legendChip("年休", "pm-att-legend-paid-leave"),
+                        legendChip("欠勤", "pm-att-legend-absent"),
+                        legendChip("前/後", "pm-att-legend-partial"),
+                        legendChip("休出", "pm-att-legend-holiday-work"),
+                        legendChip("前出/後出", "pm-att-legend-holiday-work-partial"));
+        legendChips.getStyleClass().add("pm-attendance-legend-chips");
         Label legend =
                 new Label(
-                        "クリックで切替: 通常 → 全休 → 前休 → 後休 → 配台外（ダブルクリックで時間別編集）");
+                        "クリック: ·→休→年休→欠→前→後→休出→前出→後出　｜ダブルクリック: 時間別（青枠=時間別あり）　｜右クリック: コメント（▲=あり）");
         legend.getStyleClass().add("pm-member-attendance-grid-legend");
         legend.setWrapText(true);
 
@@ -90,24 +144,26 @@ public final class EditableMemberAttendanceGridPane extends VBox {
         grid.setHgap(2);
         grid.setVgap(2);
 
-        loadingOverlay.getStyleClass().add("pm-member-attendance-grid-loading-overlay");
-        loadingOverlay.setMaxSize(Double.MAX_VALUE, Double.MAX_VALUE);
-        loadingLabel.getStyleClass().add("pm-member-attendance-grid-loading-label");
-        loadingOverlayStack.setMaxSize(Double.MAX_VALUE, Double.MAX_VALUE);
-        loadingOverlayStack.setVisible(false);
-        loadingOverlayStack.setMouseTransparent(true);
+        scrollHost.getChildren().addAll(scroll, loadingOverlay);
+        rowDimming.installScrollClearOnExit(scroll);
 
-        scrollHost.getChildren().addAll(scroll, loadingOverlayStack);
+        getChildren().addAll(legendChips, legend, scrollHost);
+    }
 
-        getChildren().addAll(legend, scrollHost);
+    public void refreshRowHoverDimming() {
+        rowDimming.refresh();
     }
 
     /** 月変更などのグリッド再読込中に暗転オーバーレイを表示する。 */
     public void setGridLoading(boolean loading) {
-        loadingOverlayStack.setVisible(loading);
-        loadingOverlayStack.setMouseTransparent(!loading);
+        setGridLoading(loading, null);
+    }
+
+    public void setGridLoading(boolean loading, String message) {
+        loadingOverlay.setLoading(loading, message);
         scroll.setDisable(loading);
         if (loading) {
+            rowDimming.setHoveredRow(-1);
             if (!getStyleClass().contains("pm-member-attendance-grid-loading")) {
                 getStyleClass().add("pm-member-attendance-grid-loading");
             }
@@ -116,8 +172,14 @@ public final class EditableMemberAttendanceGridPane extends VBox {
         }
     }
 
+    public void setGridLoadingMessage(String message) {
+        if (loadingOverlay.isVisible()) {
+            loadingOverlay.setMessage(message);
+        }
+    }
+
     public boolean isGridLoading() {
-        return loadingOverlayStack.isVisible();
+        return loadingOverlay.isVisible();
     }
 
     public void setCellDetailHandler(Consumer<CellEditRequest> handler) {
@@ -128,33 +190,164 @@ public final class EditableMemberAttendanceGridPane extends VBox {
         this.dirtyListener = listener;
     }
 
+    public void setCommentDialogOwner(Window owner) {
+        this.commentDialogOwner = owner;
+    }
+
     public boolean hasUnsavedEdits() {
-        for (Map<String, CellState> row : cells.values()) {
-            for (CellState st : row.values()) {
-                if (st != null && st.manualEdit) {
-                    return true;
-                }
-            }
-        }
-        return false;
+        return !patchEquals(exportPatchJson(), savedBaselinePatch);
     }
 
     public void clearUnsavedEditFlags() {
-        for (Map<String, CellState> row : cells.values()) {
-            for (Map.Entry<String, CellState> e : row.entrySet()) {
-                CellState st = e.getValue();
-                if (st != null && st.manualEdit) {
-                    e.setValue(
-                            new CellState(
-                                    st.dayPreset,
-                                    st.leaveType,
-                                    st.companyKind,
-                                    false,
-                                    st.hourly));
+        captureSavedBaseline();
+        notifyDirtyChanged();
+    }
+
+    private void captureSavedBaseline() {
+        savedBaselinePatch = deepCopyPatch(exportPatchJson());
+    }
+
+    private static Map<String, Object> deepCopyPatch(Map<String, Object> patch) {
+        Map<String, Object> out = new HashMap<>();
+        out.put("year", patch.get("year"));
+        out.put("month", patch.get("month"));
+        Object cellsObj = patch.get("cells");
+        if (cellsObj instanceof Map<?, ?> cells) {
+            Map<String, Object> outCells = new HashMap<>();
+            for (Map.Entry<?, ?> dayEntry : cells.entrySet()) {
+                String dKey = String.valueOf(dayEntry.getKey());
+                Map<String, Object> outDay = new HashMap<>();
+                if (dayEntry.getValue() instanceof Map<?, ?> dayMap) {
+                    for (Map.Entry<?, ?> memberEntry : dayMap.entrySet()) {
+                        String member = String.valueOf(memberEntry.getKey());
+                        if (memberEntry.getValue() instanceof Map<?, ?> cellMap) {
+                            Map<String, Object> outCell = new HashMap<>();
+                            for (Map.Entry<?, ?> field : cellMap.entrySet()) {
+                                String key = String.valueOf(field.getKey());
+                                Object val = field.getValue();
+                                if ("hourly".equals(key) && val instanceof Map<?, ?> hourlyMap) {
+                                    Map<String, String> hourlyCopy = new HashMap<>();
+                                    for (Map.Entry<?, ?> h : hourlyMap.entrySet()) {
+                                        hourlyCopy.put(
+                                                String.valueOf(h.getKey()),
+                                                String.valueOf(h.getValue()));
+                                    }
+                                    outCell.put(key, hourlyCopy);
+                                } else {
+                                    outCell.put(key, val);
+                                }
+                            }
+                            outDay.put(member, outCell);
+                        }
+                    }
+                }
+                outCells.put(dKey, outDay);
+            }
+            out.put("cells", outCells);
+        } else {
+            out.put("cells", new HashMap<>());
+        }
+        return out;
+    }
+
+    private static boolean patchEquals(Map<String, Object> a, Map<String, Object> b) {
+        if (patchInt(a, "year") != patchInt(b, "year")) {
+            return false;
+        }
+        if (patchInt(a, "month") != patchInt(b, "month")) {
+            return false;
+        }
+        return patchCellMapsEqual(patchCells(a), patchCells(b));
+    }
+
+    private static int patchInt(Map<String, Object> patch, String key) {
+        Object v = patch.get(key);
+        if (v instanceof Number n) {
+            return n.intValue();
+        }
+        try {
+            return Integer.parseInt(String.valueOf(v));
+        } catch (NumberFormatException e) {
+            return 0;
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> patchCells(Map<String, Object> patch) {
+        Object cells = patch.get("cells");
+        if (cells instanceof Map<?, ?> m) {
+            return (Map<String, Object>) m;
+        }
+        return Map.of();
+    }
+
+    private static boolean patchCellMapsEqual(
+            Map<String, Object> a, Map<String, Object> b) {
+        if (a.size() != b.size()) {
+            return false;
+        }
+        for (Map.Entry<String, Object> dayEntry : a.entrySet()) {
+            Object rowB = b.get(dayEntry.getKey());
+            if (!(rowB instanceof Map<?, ?> memberMapB)) {
+                return false;
+            }
+            if (!(dayEntry.getValue() instanceof Map<?, ?> memberMapA)) {
+                return false;
+            }
+            if (memberMapA.size() != memberMapB.size()) {
+                return false;
+            }
+            for (Map.Entry<?, ?> memberEntry : memberMapA.entrySet()) {
+                String member = String.valueOf(memberEntry.getKey());
+                Object cellB = memberMapB.get(member);
+                if (!(memberEntry.getValue() instanceof Map<?, ?> cellA)
+                        || !(cellB instanceof Map<?, ?> cellBMap)) {
+                    return false;
+                }
+                if (!patchCellEquals(cellA, cellBMap)) {
+                    return false;
                 }
             }
         }
-        notifyDirtyChanged();
+        return true;
+    }
+
+    private static boolean patchCellEquals(Map<?, ?> a, Map<?, ?> b) {
+        if (!nz(a.get("day_preset")).equals(nz(b.get("day_preset")))) {
+            return false;
+        }
+        if (!nz(a.get("comment")).equals(nz(b.get("comment")))) {
+            return false;
+        }
+        return hourlyMapsEqual(a.get("hourly"), b.get("hourly"));
+    }
+
+    private static boolean hourlyMapsEqual(Object a, Object b) {
+        Map<String, String> ma = hourlyToStringMap(a);
+        Map<String, String> mb = hourlyToStringMap(b);
+        if (ma.size() != mb.size()) {
+            return false;
+        }
+        for (Map.Entry<String, String> e : ma.entrySet()) {
+            if (!nz(mb.get(e.getKey())).equals(nz(e.getValue()))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static Map<String, String> hourlyToStringMap(Object hourly) {
+        Map<String, String> out = new HashMap<>();
+        if (hourly instanceof Map<?, ?> m) {
+            for (Map.Entry<?, ?> e : m.entrySet()) {
+                out.put(String.valueOf(e.getKey()), String.valueOf(e.getValue()));
+            }
+        }
+        return out;
+    }
+
+    private static String nz(Object v) {
+        return v == null ? "" : String.valueOf(v).trim();
     }
 
     private void notifyDirtyChanged() {
@@ -192,6 +385,8 @@ public final class EditableMemberAttendanceGridPane extends VBox {
             }
         });
         cells.clear();
+        commentEditedCellKeys.clear();
+        hourlyEditedCellKeys.clear();
         JsonNode cellsNode = node.path("cells");
         cellsNode
                 .fields()
@@ -227,11 +422,13 @@ public final class EditableMemberAttendanceGridPane extends VBox {
                                                                 c.path("company_kind").asText(""),
                                                                 c.path("manual_edit")
                                                                         .asBoolean(false),
-                                                                hourly));
+                                                                hourly,
+                                                                c.path("comment").asText("")));
                                             });
                             cells.put(dKey, row);
                         });
         rebuildGrid();
+        captureSavedBaseline();
         notifyDirtyChanged();
     }
 
@@ -254,8 +451,15 @@ public final class EditableMemberAttendanceGridPane extends VBox {
                 }
                 Map<String, Object> cell = new HashMap<>();
                 cell.put("day_preset", st.dayPreset);
+                if (!st.comment.isBlank()) {
+                    cell.put("comment", st.comment);
+                } else if (commentEditedCellKeys.contains(cellKey(dKey, member))) {
+                    cell.put("comment", "");
+                }
                 if (!st.hourly.isEmpty()) {
                     cell.put("hourly", new HashMap<>(st.hourly));
+                } else if (hourlyEditedCellKeys.contains(cellKey(dKey, member))) {
+                    cell.put("hourly", new HashMap<>());
                 }
                 dayMap.put(member, cell);
             }
@@ -270,7 +474,8 @@ public final class EditableMemberAttendanceGridPane extends VBox {
     private void rebuildGrid() {
         grid.getChildren().clear();
         grid.getColumnConstraints().clear();
-        cellButtons.clear();
+        cellUiMap.clear();
+        rowDimming.clear();
         if (members.isEmpty() || dates.isEmpty()) {
             return;
         }
@@ -307,9 +512,22 @@ public final class EditableMemberAttendanceGridPane extends VBox {
 
         for (int row = 0; row < members.size(); row++) {
             String member = members.get(row);
+            Region rowBand = new Region();
+            rowBand.getStyleClass().add(GridRowHoverDimmingController.STYLE_BAND);
+            rowBand.setMouseTransparent(true);
+            rowBand.setMaxWidth(Double.MAX_VALUE);
+            rowBand.setMaxHeight(Double.MAX_VALUE);
+            GridPane.setColumnSpan(rowBand, dates.size() + 1);
+            grid.add(rowBand, 0, row + 1);
+
             Label name = new Label(member);
             name.getStyleClass().add("pm-member-attendance-grid-member");
+            AttendanceGridCellSizing.applyMemberNameLabel(name, cellSizePx);
+            GridPane.setHalignment(name, HPos.CENTER);
+            GridPane.setValignment(name, VPos.CENTER);
             grid.add(name, 0, row + 1);
+            List<StackPane> rowWraps = new ArrayList<>();
+            rowDimming.installHover(name, row);
             for (int col = 0; col < dates.size(); col++) {
                 LocalDate d = dates.get(col);
                 String dKey = d.toString();
@@ -323,7 +541,8 @@ public final class EditableMemberAttendanceGridPane extends VBox {
                                                         "通常",
                                                         companyKindFor(d, dKey),
                                                         false,
-                                                        Map.of()));
+                                                        Map.of(),
+                                                        ""));
                 Button cell = new Button(shortLabel(st));
                 cell.getStyleClass().add("pm-member-att-cell");
                 AttendanceGridCellSizing.applyMemberCell(cell, cellSizePx);
@@ -331,38 +550,45 @@ public final class EditableMemberAttendanceGridPane extends VBox {
                 if (!st.hourly.isEmpty()) {
                     cell.getStyleClass().add("pm-member-att-cell-hourly");
                 }
-                cell.setOnMouseClicked(
-                        e -> {
-                            if (e.getClickCount() >= 2) {
-                                singleClickDelay.stop();
-                                pendingClickDate = null;
-                                pendingClickMember = null;
-                                if (cellDetailHandler != null) {
-                                    CellState current = cells.get(dKey).get(member);
-                                    cellDetailHandler.accept(
-                                            new CellEditRequest(d, member, current));
-                                }
-                                return;
-                            }
-                            if (e.getClickCount() == 1) {
-                                pendingClickDate = d;
-                                pendingClickMember = member;
-                                singleClickDelay.playFromStart();
-                            }
-                        });
-                cellButtons.put(cellKey(dKey, member), cell);
-                grid.add(cell, col + 1, row + 1);
+                applyCellTooltip(cell, st);
+                Polygon commentMark = buildCommentMark();
+                commentMark.setVisible(hasComment(st.comment));
+                StackPane cellWrap = new StackPane(cell, commentMark);
+                cellWrap.setMaxSize(Region.USE_PREF_SIZE, Region.USE_PREF_SIZE);
+                installCellInteractions(cell, d, member, dKey);
+                cellUiMap.put(cellKey(dKey, member), new CellUi(cell, commentMark));
+                rowDimming.installHover(cellWrap, row);
+                rowWraps.add(cellWrap);
+                grid.add(cellWrap, col + 1, row + 1);
             }
+            rowDimming.addRow(rowBand, name, new ArrayList<>(rowWraps));
         }
     }
 
     private void cyclePreset(LocalDate date, String member) {
         String dKey = date.toString();
-        CellState prev = cells.get(dKey).get(member);
+        Map<String, CellState> row = cells.get(dKey);
+        CellState prev = row != null ? row.get(member) : null;
         String current = prev != null ? prev.dayPreset : PRESET_WORK;
-        String next = nextPreset(current);
+        applyPreset(date, member, nextPreset(current));
+    }
+
+    private void applyPreset(LocalDate date, String member, String preset) {
+        if (preset == null || preset.isBlank()) {
+            return;
+        }
+        singleClickDelay.stop();
+        pendingClickDate = null;
+        pendingClickMember = null;
+        String dKey = date.toString();
+        CellState prev =
+                cells.computeIfAbsent(dKey, k -> new HashMap<>()).get(member);
+        if (prev != null && preset.equals(prev.dayPreset)) {
+            return;
+        }
         Map<String, String> hourly =
                 prev != null ? new HashMap<>(prev.hourly) : new HashMap<>();
+        String comment = prev != null ? prev.comment : "";
         String companyKind =
                 prev != null && !prev.companyKind.isBlank()
                         ? prev.companyKind
@@ -371,36 +597,43 @@ public final class EditableMemberAttendanceGridPane extends VBox {
                 .put(
                         member,
                         new CellState(
-                                next,
-                                defaultLeaveForPreset(next),
+                                preset,
+                                defaultLeaveForPreset(preset),
                                 companyKind,
                                 true,
-                                hourly));
+                                hourly,
+                                comment));
         updateCellButton(dKey, member);
         notifyDirtyChanged();
     }
 
     private static String nextPreset(String current) {
+        if (PRESET_NO_DISPATCH.equals(current)) {
+            return PRESET_WORK;
+        }
         for (int i = 0; i < PRESET_CYCLE.length; i++) {
             if (PRESET_CYCLE[i].equals(current)) {
                 return PRESET_CYCLE[(i + 1) % PRESET_CYCLE.length];
             }
         }
-        return PRESET_OFF_FULL;
+        return PRESET_WORK;
     }
 
     private void updateCellButton(String dKey, String member) {
-        Button cell = cellButtons.get(cellKey(dKey, member));
+        CellUi ui = cellUiMap.get(cellKey(dKey, member));
         CellState st = cells.get(dKey).get(member);
-        if (cell == null || st == null) {
+        if (ui == null || st == null) {
             return;
         }
+        Button cell = ui.button();
         cell.setText(shortLabel(st));
         applyCellStyle(cell, st);
         cell.getStyleClass().remove("pm-member-att-cell-hourly");
         if (!st.hourly.isEmpty()) {
             cell.getStyleClass().add("pm-member-att-cell-hourly");
         }
+        applyCellTooltip(cell, st);
+        ui.commentMark().setVisible(hasComment(st.comment));
     }
 
     private static String cellKey(String dKey, String member) {
@@ -435,8 +668,13 @@ public final class EditableMemberAttendanceGridPane extends VBox {
     private static String defaultLeaveForPreset(String preset) {
         return switch (preset) {
             case PRESET_OFF_FULL -> "休";
+            case PRESET_PAID_LEAVE -> "年休";
+            case PRESET_ABSENT -> "欠勤";
             case PRESET_OFF_AM -> "前休";
             case PRESET_OFF_PM -> "後休";
+            case PRESET_HOLIDAY_WORK -> "休日出勤";
+            case PRESET_HOLIDAY_WORK_AM -> "午前休出";
+            case PRESET_HOLIDAY_WORK_PM -> "午後休出";
             case PRESET_NO_DISPATCH -> "-";
             default -> "通常";
         };
@@ -446,6 +684,12 @@ public final class EditableMemberAttendanceGridPane extends VBox {
         if (PRESET_OFF_FULL.equals(st.dayPreset)) {
             return "休";
         }
+        if (PRESET_PAID_LEAVE.equals(st.dayPreset)) {
+            return "年休";
+        }
+        if (PRESET_ABSENT.equals(st.dayPreset)) {
+            return "欠";
+        }
         if (PRESET_OFF_AM.equals(st.dayPreset)) {
             return "前";
         }
@@ -454,6 +698,15 @@ public final class EditableMemberAttendanceGridPane extends VBox {
         }
         if (PRESET_NO_DISPATCH.equals(st.dayPreset)) {
             return "-";
+        }
+        if (PRESET_HOLIDAY_WORK.equals(st.dayPreset)) {
+            return "休出";
+        }
+        if (PRESET_HOLIDAY_WORK_AM.equals(st.dayPreset)) {
+            return "前出";
+        }
+        if (PRESET_HOLIDAY_WORK_PM.equals(st.dayPreset)) {
+            return "後出";
         }
         if (!st.hourly.isEmpty()) {
             return "時";
@@ -466,11 +719,20 @@ public final class EditableMemberAttendanceGridPane extends VBox {
                 .removeAll(
                         "pm-member-att-cell-work",
                         "pm-member-att-cell-off",
+                        "pm-member-att-cell-paid-leave",
+                        "pm-member-att-cell-absent",
                         "pm-member-att-cell-partial",
+                        "pm-member-att-cell-holiday-work",
+                        "pm-member-att-cell-holiday-work-partial",
                         "pm-member-att-cell-nodispatch");
         switch (st.dayPreset) {
             case PRESET_OFF_FULL -> cell.getStyleClass().add("pm-member-att-cell-off");
+            case PRESET_PAID_LEAVE -> cell.getStyleClass().add("pm-member-att-cell-paid-leave");
+            case PRESET_ABSENT -> cell.getStyleClass().add("pm-member-att-cell-absent");
             case PRESET_OFF_AM, PRESET_OFF_PM -> cell.getStyleClass().add("pm-member-att-cell-partial");
+            case PRESET_HOLIDAY_WORK -> cell.getStyleClass().add("pm-member-att-cell-holiday-work");
+            case PRESET_HOLIDAY_WORK_AM, PRESET_HOLIDAY_WORK_PM ->
+                    cell.getStyleClass().add("pm-member-att-cell-holiday-work-partial");
             case PRESET_NO_DISPATCH -> cell.getStyleClass().add("pm-member-att-cell-nodispatch");
             default -> cell.getStyleClass().add("pm-member-att-cell-work");
         }
@@ -488,7 +750,8 @@ public final class EditableMemberAttendanceGridPane extends VBox {
                                         "通常",
                                         companyKindFor(date, dKey),
                                         false,
-                                        Map.of()));
+                                        Map.of(),
+                                        ""));
         cells.get(dKey)
                 .put(
                         member,
@@ -497,9 +760,19 @@ public final class EditableMemberAttendanceGridPane extends VBox {
                                 prev.leaveType,
                                 prev.companyKind,
                                 true,
-                                new HashMap<>(hourly)));
+                                new HashMap<>(hourly),
+                                prev.comment));
+        hourlyEditedCellKeys.add(cellKey(dKey, member));
         updateCellButton(dKey, member);
         notifyDirtyChanged();
+    }
+
+    public void clearHourlyEdit(LocalDate date, String member) {
+        applyHourlyEdit(date, member, Map.of(), null);
+        CellUi ui = cellUiMap.get(cellKey(date.toString(), member));
+        if (ui != null) {
+            releaseCellFocus(ui.button());
+        }
     }
 
     public record CellState(
@@ -507,5 +780,208 @@ public final class EditableMemberAttendanceGridPane extends VBox {
             String leaveType,
             String companyKind,
             boolean manualEdit,
-            Map<String, String> hourly) {}
+            Map<String, String> hourly,
+            String comment) {}
+
+    private static boolean hasComment(String comment) {
+        return comment != null && !comment.isBlank();
+    }
+
+    private Polygon buildCommentMark() {
+        double size = Math.max(7, cellSizePx / 4.5);
+        Polygon mark = new Polygon(0, 0, size, 0, size, size);
+        mark.getStyleClass().add("pm-member-att-cell-comment-mark");
+        mark.setMouseTransparent(true);
+        StackPane.setAlignment(mark, Pos.TOP_RIGHT);
+        return mark;
+    }
+
+    private void installCellInteractions(Button cell, LocalDate date, String member, String dKey) {
+        cell.setOnMouseClicked(
+                e -> {
+                    if (e.getClickCount() >= 2) {
+                        singleClickDelay.stop();
+                        pendingClickDate = null;
+                        pendingClickMember = null;
+                        if (cellDetailHandler != null) {
+                            CellState current = cells.get(dKey).get(member);
+                            cellDetailHandler.accept(new CellEditRequest(date, member, current));
+                        }
+                        return;
+                    }
+                    if (e.getClickCount() == 1) {
+                        pendingClickDate = date;
+                        pendingClickMember = member;
+                        singleClickDelay.playFromStart();
+                    }
+                });
+        cell.setOnContextMenuRequested(
+                e -> {
+                    e.consume();
+                    showCellContextMenu(cell, date, member, e.getScreenX(), e.getScreenY());
+                });
+    }
+
+    private Menu buildCategoryMenu(LocalDate date, String member, CellState st) {
+        Menu category = new Menu("カテゴリを選択");
+        String current = st != null ? st.dayPreset : PRESET_WORK;
+        for (PresetMenuOption opt : PRESET_MENU_OPTIONS) {
+            MenuItem item = new MenuItem(opt.label());
+            if (opt.preset().equals(current)) {
+                item.setDisable(true);
+            } else {
+                item.setOnAction(ev -> applyPreset(date, member, opt.preset()));
+            }
+            category.getItems().add(item);
+        }
+        return category;
+    }
+
+    private void showCellContextMenu(
+            Button anchor, LocalDate date, String member, double screenX, double screenY) {
+        String dKey = date.toString();
+        Map<String, CellState> row = cells.get(dKey);
+        CellState st = row != null ? row.get(member) : null;
+        boolean commentPresent = st != null && hasComment(st.comment);
+        boolean hasHourly = st != null && !st.hourly.isEmpty();
+        ContextMenu menu = new ContextMenu();
+        menu.getItems().add(buildCategoryMenu(date, member, st));
+        MenuItem edit = new MenuItem("コメントを入力…");
+        edit.setOnAction(ev -> openCommentDialog(date, member));
+        MenuItem delete = new MenuItem("コメントを削除");
+        delete.setDisable(!commentPresent);
+        delete.setOnAction(ev -> applyComment(date, member, ""));
+        MenuItem clearHourly = new MenuItem("時間別編集の内容をクリア");
+        clearHourly.setDisable(!hasHourly);
+        clearHourly.setOnAction(ev -> clearHourlyEdit(date, member));
+        menu.getItems()
+                .addAll(
+                        new SeparatorMenuItem(),
+                        edit,
+                        delete,
+                        new SeparatorMenuItem(),
+                        clearHourly);
+        menu.setOnHidden(ev -> releaseCellFocus(anchor));
+        menu.show(anchor, screenX, screenY);
+    }
+
+    private void releaseCellFocus(Button cell) {
+        if (cell != null && cell.isFocused()) {
+            scroll.requestFocus();
+        }
+    }
+
+    private void openCommentDialog(LocalDate date, String member) {
+        String dKey = date.toString();
+        Map<String, CellState> row = cells.get(dKey);
+        CellState st = row != null ? row.get(member) : null;
+        String initial = st != null ? st.comment : "";
+        Stage owner =
+                commentDialogOwner instanceof Stage s
+                        ? s
+                        : commentDialogOwner != null && commentDialogOwner.getScene() != null
+                                && commentDialogOwner.getScene().getWindow() instanceof Stage s2
+                                ? s2
+                                : null;
+        MemberAttendanceCellCommentDialog.show(
+                owner,
+                member,
+                dKey,
+                initial,
+                text -> applyComment(date, member, text));
+    }
+
+    private void applyComment(LocalDate date, String member, String comment) {
+        String dKey = date.toString();
+        String norm = comment != null ? comment.strip() : "";
+        CellState prev =
+                cells.computeIfAbsent(dKey, k -> new HashMap<>())
+                        .getOrDefault(
+                                member,
+                                new CellState(
+                                        PRESET_WORK,
+                                        "通常",
+                                        companyKindFor(date, dKey),
+                                        false,
+                                        Map.of(),
+                                        ""));
+        if (norm.equals(prev.comment.strip())) {
+            CellUi ui = cellUiMap.get(cellKey(dKey, member));
+            if (ui != null) {
+                releaseCellFocus(ui.button());
+            }
+            return;
+        }
+        commentEditedCellKeys.add(cellKey(dKey, member));
+        cells.get(dKey)
+                .put(
+                        member,
+                        new CellState(
+                                prev.dayPreset,
+                                prev.leaveType,
+                                prev.companyKind,
+                                true,
+                                new HashMap<>(prev.hourly),
+                                norm));
+        updateCellButton(dKey, member);
+        notifyDirtyChanged();
+        CellUi ui = cellUiMap.get(cellKey(dKey, member));
+        if (ui != null) {
+            releaseCellFocus(ui.button());
+        }
+    }
+
+    private static void applyCellTooltip(Button cell, CellState st) {
+        if (st == null) {
+            cell.setTooltip(null);
+            return;
+        }
+        String preset = presetLabel(st.dayPreset, st.leaveType);
+        StringBuilder tip = new StringBuilder(preset);
+        if (st.companyKind != null && !st.companyKind.isBlank()) {
+            tip.append("（会社: ").append(companyKindLabel(st.companyKind)).append("）");
+        }
+        if (hasComment(st.comment)) {
+            tip.append("\nコメント: ").append(st.comment.trim());
+        }
+        if (!st.hourly.isEmpty()) {
+            tip.append("\n時間別編集あり");
+        }
+        cell.setTooltip(new Tooltip(tip.toString()));
+    }
+
+    private static String presetLabel(String dayPreset, String leaveType) {
+        if (leaveType != null && !leaveType.isBlank()) {
+            return leaveType;
+        }
+        return switch (dayPreset != null ? dayPreset : PRESET_WORK) {
+            case PRESET_OFF_FULL -> "全休";
+            case PRESET_PAID_LEAVE -> "有給休暇(年休)";
+            case PRESET_ABSENT -> "欠勤";
+            case PRESET_OFF_AM -> "前休";
+            case PRESET_OFF_PM -> "後休";
+            case PRESET_HOLIDAY_WORK -> "休出（休日出勤）";
+            case PRESET_HOLIDAY_WORK_AM -> "午前休出";
+            case PRESET_HOLIDAY_WORK_PM -> "午後休出";
+            case PRESET_NO_DISPATCH -> "配台外";
+            default -> "通常";
+        };
+    }
+
+    private static String companyKindLabel(String kind) {
+        if (KIND_PUBLIC.equals(kind)) {
+            return "公休日";
+        }
+        if (KIND_SPECIAL.equals(kind)) {
+            return "特別休暇";
+        }
+        return "平日";
+    }
+
+    private static Label legendChip(String text, String styleClass) {
+        Label chip = new Label(text);
+        chip.getStyleClass().add("pm-attendance-legend-chip");
+        chip.getStyleClass().add(styleClass);
+        return chip;
+    }
 }

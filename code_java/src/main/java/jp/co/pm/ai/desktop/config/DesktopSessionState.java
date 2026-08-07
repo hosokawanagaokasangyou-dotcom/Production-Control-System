@@ -105,6 +105,7 @@ import java.util.Map;
  * @param equipmentStatusDashboardShowAladdinPlans ダッシュボードでアラジン予定を表示
  * @param equipmentStatusDashboardShowDispatchPlans ダッシュボードで配台予定を表示
  * @param equipmentStatusDashboardAppearance ダッシュボードカードの見た目設定
+ * @param tableRowHoverDimmingEnabled 表の行ホバー時に他行を暗転する（既定 ON）
  * @param requestFormComboChoices 依頼書入力フォームの ComboBox 候補（空は bundled 既定）
  */
 public record DesktopSessionState(
@@ -200,6 +201,7 @@ public record DesktopSessionState(
         boolean equipmentStatusDashboardShowAladdinPlans,
         boolean equipmentStatusDashboardShowDispatchPlans,
         EquipmentStatusDashboardAppearancePrefs equipmentStatusDashboardAppearance,
+        boolean tableRowHoverDimmingEnabled,
         jp.co.pm.ai.desktop.reconciliation.RequestFormComboChoices requestFormComboChoices) {
 
     /** 次回起動ヒープ: 変動（上限のみ）が既定。 */
@@ -230,6 +232,8 @@ public record DesktopSessionState(
     public static final int MIN_EQUIPMENT_STATUS_DASHBOARD_AUTO_REFRESH_INTERVAL_SEC = 5;
 
     public static final int MAX_EQUIPMENT_STATUS_DASHBOARD_AUTO_REFRESH_INTERVAL_SEC = 3600;
+
+    public static final boolean DEFAULT_TABLE_ROW_HOVER_DIMMING_ENABLED = true;
 
     /** 設備ガント・準備時間系バーラベル表示の既定（既定 OFF）。 */
     public static final boolean DEFAULT_EQUIPMENT_GANTT_PREP_TIME_LABELS_ENABLED = false;
@@ -514,6 +518,7 @@ public record DesktopSessionState(
                 true,
                 true,
                 EquipmentStatusDashboardAppearancePrefs.defaults(),
+                DEFAULT_TABLE_ROW_HOVER_DIMMING_ENABLED,
                 jp.co.pm.ai.desktop.reconciliation.RequestFormComboChoices.empty());
     }
 
@@ -615,6 +620,7 @@ public record DesktopSessionState(
                 equipmentStatusDashboardShowAladdinPlans(),
                 equipmentStatusDashboardShowDispatchPlans(),
                 equipmentStatusDashboardAppearance(),
+                tableRowHoverDimmingEnabled(),
                 requestFormComboChoices());
     }
 
@@ -713,6 +719,7 @@ public record DesktopSessionState(
                 equipmentStatusDashboardShowAladdinPlans(),
                 equipmentStatusDashboardShowDispatchPlans(),
                 equipmentStatusDashboardAppearance(),
+                DEFAULT_TABLE_ROW_HOVER_DIMMING_ENABLED,
                 requestFormComboChoices());
     }
 
@@ -813,6 +820,7 @@ public record DesktopSessionState(
                 equipmentStatusDashboardShowAladdinPlans(),
                 equipmentStatusDashboardShowDispatchPlans(),
                 equipmentStatusDashboardAppearance(),
+                tableRowHoverDimmingEnabled(),
                 requestFormComboChoices());
     }
 
@@ -914,6 +922,7 @@ public record DesktopSessionState(
                 factory.equipmentStatusDashboardShowAladdinPlans(),
                 factory.equipmentStatusDashboardShowDispatchPlans(),
                 factory.equipmentStatusDashboardAppearance(),
+                tableRowHoverDimmingEnabled(),
                 factory.requestFormComboChoices());
     }
 
@@ -1019,6 +1028,7 @@ public record DesktopSessionState(
                 factory.equipmentStatusDashboardShowAladdinPlans(),
                 factory.equipmentStatusDashboardShowDispatchPlans(),
                 factory.equipmentStatusDashboardAppearance(),
+                tableRowHoverDimmingEnabled(),
                 factory.requestFormComboChoices());
     }
 
@@ -1133,6 +1143,7 @@ public record DesktopSessionState(
                 e.equipmentStatusDashboardShowAladdinPlans(),
                 e.equipmentStatusDashboardShowDispatchPlans(),
                 e.equipmentStatusDashboardAppearance(),
+                tableRowHoverDimmingEnabled(),
                 e.requestFormComboChoices());
     }
 
@@ -1232,8 +1243,9 @@ public record DesktopSessionState(
                 equipmentStatusDashboardAutoRefreshEnabled(),
                 equipmentStatusDashboardAutoRefreshIntervalSec(),
                 equipmentStatusDashboardShowAladdinPlans(),
-                equipmentStatusDashboardShowDispatchPlans(),
-                equipmentStatusDashboardAppearance(),
+                shell.equipmentStatusDashboardShowDispatchPlans(),
+                shell.equipmentStatusDashboardAppearance(),
+                shell.tableRowHoverDimmingEnabled(),
                 requestFormComboChoices());
     }
 }

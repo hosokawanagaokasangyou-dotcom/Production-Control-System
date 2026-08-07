@@ -60,15 +60,15 @@
   }, {
     "key" : "PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK",
     "value" : "",
-    "description" : "サマリ AI 配台 Excel（通常 サマリ_AI配台.xlsx）のフルパス。空は PM_AI_REPO_ROOT/code/ 既定名、ファイル名のみは code/ 相対。親フォルダは工場共有 DATA の根として扱い、操作者 bin・PIN PDF、stage1_exclude_rules.json、材料・製品ルックアップ CSV、実行時間履歴 JSON、設備ガント PDF、サマリ世代退避、attendance-data.json、勤怠_表示用.xlsx 等が同階層または配下に置かれる。実行・ログ・納期管理からの Excel 出力先。詳細は EnvVarDocs。"
+    "description" : "サマリ AI 配台 Excel（通常 サマリ_AI配台.xlsx）のフルパス。空は PM_AI_REPO_ROOT/code/ 既定名、ファイル名のみは code/ 相対。親フォルダは工場共有 DATA の根として扱い、操作者 bin・PIN PDF、stage1_exclude_rules.json、材料・製品ルックアップ CSV、実行時間履歴 JSON、設備ガント PDF、サマリ世代退避、attendance-data.json、勤怠カレンダー.xlsx 等が同階層または配下に置かれる。実行・ログ・納期管理からの Excel 出力先。詳細は EnvVarDocs。"
   }, {
     "key" : "PM_AI_ATTENDANCE_JSON",
     "value" : "",
-    "description" : "勤怠正本 attendance-data.json のフルパス。未設定時は PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK 同階層。会社カレンダー・メンバー勤怠タブが編集、配台が優先読込。"
+    "description" : "勤怠正本 attendance-data.json のフルパス。未設定時は PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK 同階層。会社カレンダー・メンバー勤怠タブが編集、配台が優先読込。Excel 閲覧は 勤怠カレンダー.xlsx（APP_* シート）へ出力。"
   }, {
-    "key" : "PM_AI_ATTENDANCE_VIEW_XLSX",
+    "key" : "PM_AI_ATTENDANCE_CALENDAR_XLSX",
     "value" : "",
-    "description" : "勤怠閲覧用 勤怠_表示用.xlsx のフルパス。未設定時はサマリ Excel 同階層。JSON 保存時に自動生成。"
+    "description" : "勤怠カレンダー Excel（勤怠カレンダー.xlsx）のフルパス。未設定時は master.xlsm と同一フォルダ。保存時に attendance-calendar-xlsx-history で世代管理（最大20）。"
   }, {
     "key" : "PM_AI_SKIP_WORKBOOK_ENV_SHEET",
     "value" : "1",
@@ -392,12 +392,12 @@
     "description" : "TPI（東レペフ加工品）依頼書 PDF スキャン先フォルダ（フルパス）。空のとき湖南工場既定 UNC（共有DATA/TPI依頼書）。国分は空。依頼書入力タブの半自動取込・PDF プレビュー。「フォルダ...」で選択可。"
   }, {
     "key" : "PM_AI_TESSERACT_CMD",
-    "value" : "",
+    "value" : "C:\\Program Files\\Tesseract-OCR\\tesseract.exe",
     "description" : "Tesseract OCR 実行ファイル（tesseract.exe）のフルパス。TPI 依頼書 PDF が画像スキャンのとき OCR 読取に使用。空のとき Program Files\\Tesseract-OCR\\tesseract.exe 等を探索。「ファイル...」で選択可。"
   }, {
     "key" : "PM_AI_TESSERACT_TESSDATA_DIR",
     "value" : "",
-    "description" : "Tesseract 言語データ（tessdata）フォルダ。jpn.traineddata が必要。空のとき PM_AI_TESSERACT_CMD 近傍または Program Files\\Tesseract-OCR\\tessdata を探索。「フォルダ...」で選択可。"
+    "description" : "Tesseract 言語データ（tessdata）フォルダ。jpn.traineddata が必要。未設定時はリポジトリ .pm-ai-cache/tesseract-tessdata → tesseract.exe 近傍 → Program Files を探索。未導入時は %LOCALAPPDATA%\\pm-ai-tessdata へ自動取得を試行。「フォルダ...」で選択可。"
   }, {
     "key" : "PM_AI_REQUEST_FORM_PREVIEW_PDF_CJK_SCALE",
     "value" : "0.72",

@@ -23,6 +23,7 @@
   "mainShellTabTitleAliases": {},
   "mainShellTabOrganizerHeaderGlow": true,
   "mainShellTabOrganizerHeaderGlowStrength": 1.0,
+  "tableRowHoverDimmingEnabled": true,
   "equipmentGanttGraphicZoomPercent": 100,
   "equipmentGanttDateColWidth": 0,
   "equipmentGanttMachineColWidth": 0,

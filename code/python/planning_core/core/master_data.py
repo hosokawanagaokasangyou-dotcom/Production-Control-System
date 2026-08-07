@@ -821,6 +821,10 @@ def _attendance_leave_type_is_full_day_paid_leave(leave_type: str) -> bool:
     """休暇区分がマスタ上の『終日年休』とみなせるとき True（前休・後休は午前/午後のみ勤務のため除外）。"""
     lt = unicodedata.normalize("NFKC", str(leave_type or "").strip())
     return lt == "年休" or lt.startswith("年休 ")
+def _attendance_leave_type_is_absent(leave_type: str) -> bool:
+    """休暇区分が欠勤（終日非勤務・配台不参加）のとき True。"""
+    lt = unicodedata.normalize("NFKC", str(leave_type or "").strip())
+    return lt == "欠勤" or lt.startswith("欠勤 ")
 def _attendance_leave_type_is_calendar_no_dispatch(leave_type) -> bool:
     """
     master.xlsm カレンダー由来の休暇区分「-」（半角。NFKC で全角マイナス等も「-」に寄せる）。
@@ -828,6 +832,10 @@ def _attendance_leave_type_is_calendar_no_dispatch(leave_type) -> bool:
     """
     lt = unicodedata.normalize("NFKC", str(leave_type or "").strip())
     return lt == "-"
+def _attendance_leave_type_is_holiday_work(leave_type: str) -> bool:
+    """休暇区分が休日出勤（配台対象の稼働日）のとき True。"""
+    lt = unicodedata.normalize("NFKC", str(leave_type or "").strip())
+    return lt == "休日出勤" or lt.startswith("休日出勤 ") or lt in ("午前休出", "午後休出")
 def _ai_json_bool(v, default: bool = False) -> bool:
     """勤怠備考 AI の真偽値（bool / 数値 / 文字列の杺れを坸坎）。"""
     if v is None:
@@ -1003,112 +1011,51 @@ def load_attendance_and_analyze(members):
         "勤怠備考_Geminiモデル": "—（解析対象の備考行なし）",
     }
     
-    df = None
-    try:
-        from planning_core.core.attendance_paths import attendance_data_json_path
-        from planning_core.core.attendance_store import (
-            apply_company_calendar_to_members,
-            load_attendance_store,
-            member_attendance_to_dataframe_records,
+    from planning_core.core.attendance_paths import attendance_data_json_path
+    from planning_core.core.attendance_store import (
+        apply_company_calendar_to_members,
+        load_attendance_store,
+        member_attendance_to_dataframe_records,
+    )
+
+    jp = attendance_data_json_path()
+    if not jp.is_file():
+        raise RuntimeError(
+            "勤怠データを読み込めません。attendance-data.json が未作成です。"
+            "会社カレンダー／メンバー勤怠タブでセットアップしてください。"
+            " master.xlsm のレガシー勤怠シートへはフォールバックしません。"
         )
 
-        jp = attendance_data_json_path()
-        json_canonical = jp.is_file()
-        if json_canonical:
-            store = load_attendance_store(jp)
+    try:
+        store = load_attendance_store(jp)
+        json_records = member_attendance_to_dataframe_records(store, list(members))
+        if not json_records and members:
+            y = int(store.get("company_calendar", {}).get("year") or date.today().year)
+            for month in range(1, 13):
+                apply_company_calendar_to_members(
+                    store, list(members), y, month, only_unedited=False
+                )
             json_records = member_attendance_to_dataframe_records(store, list(members))
-            if not json_records and members:
-                y = int(store.get("company_calendar", {}).get("year") or date.today().year)
-                for month in range(1, 13):
-                    apply_company_calendar_to_members(
-                        store, list(members), y, month, only_unedited=False
-                    )
-                json_records = member_attendance_to_dataframe_records(store, list(members))
-            if json_records:
-                df = pd.DataFrame(json_records)
-                df["日付"] = pd.to_datetime(df["日付"], errors="coerce").dt.date
-                df = df.dropna(subset=["日付"])
-                logging.info(
-                    "勤怠正本 attendance-data.json を読み込みました（%s、%d 行）。",
-                    jp,
-                    len(df),
-                )
-            else:
-                logging.info(
-                    "勤怠正本 attendance-data.json は存在しますがメンバー勤怠行がありません（%s）。"
-                    "レガシーシートへはフォールバックしません。",
-                    jp,
-                )
-                df = pd.DataFrame()
-    except Exception as e:
-        jp_fail = attendance_data_json_path()
-        if jp_fail.is_file():
-            raise RuntimeError(
-                f"勤怠正本 {jp_fail} の読込に失敗しました。アプリで内容を確認・修復してください: {e}"
-            ) from e
-        logging.warning("attendance-data.json 読込をスキップ: %s", e)
-
-    # 1. メンバー別シートからの読み込み（JSON 正本ファイルが無いときのフォールバック）
-    all_records = []
-    if df is None:
-        try:
-            xls = _cached_master_pd_excel_file(_master_workbook_path_resolved())
-            if xls is None:
-                raise FileNotFoundError("マスタブックを開けません")
-            for sheet_name in xls.sheet_names:
-                if "カレンダー" in sheet_name or sheet_name.lower() in ['skills', 'need', 'tasks']:
-                    continue
-
-                m_name = sheet_name.strip()
-                if m_name not in members:
-                    continue
-
-                df_sheet = pd.read_excel(xls, sheet_name=sheet_name)
-                df_sheet.columns = df_sheet.columns.str.strip()
-                df_sheet['メンバー'] = m_name
-                all_records.append(df_sheet)
-
-            if all_records:
-                df = pd.concat(all_records, ignore_index=True)
-                if ATT_COL_OT_END_LEGACY in df.columns and ATT_COL_OT_END not in df.columns:
-                    df = df.rename(columns={ATT_COL_OT_END_LEGACY: ATT_COL_OT_END})
-                df['日付'] = pd.to_datetime(df['日付'], errors='coerce').dt.date
-                df = df.dropna(subset=['日付'])
-                logging.info(f"「{MASTER_FILE}」の各メンバーの勤怠シートを読み込みました。")
-                _cols = {str(c).strip() for c in df.columns}
-                if ATT_COL_REMARK in _cols and ATT_COL_LEAVE_TYPE in _cols:
-                    logging.info(
-                        "勤怠列: AI 入力は「%s」のみ。備考は空の日は「%s」（公休・後休・他拠点勤務など）を reason に反映しました。",
-                        ATT_COL_REMARK,
-                        ATT_COL_LEAVE_TYPE,
-                    )
-                elif ATT_COL_REMARK not in _cols:
-                    logging.warning(
-                        "勤怠データに「%s」列はありません。備考ベースの AI 解析は空扱いになりました。",
-                        ATT_COL_REMARK,
-                    )
-                if ATT_COL_OT_END in _cols:
-                    logging.info(
-                        "勤怠列: 任意「%s」は退勤上限の時刻、または定時退勤からの延長分（1〜720 の整数＝分）を指定できます（全日休み行では無視）。",
-                        ATT_COL_OT_END,
-                    )
-            else:
-                raise FileNotFoundError("有効なメンバー別勤怠シートは見つかりません。")
-
-        except Exception as e:
-            jp_legacy = attendance_data_json_path()
-            if jp_legacy.is_file():
-                raise RuntimeError(
-                    f"勤怠正本 {jp_legacy} があるためレガシーシートへフォールバックしません。"
-                    f" メンバー勤怠タブで同期・保存してください。原因: {e}"
-                ) from e
-            logging.warning(
-                f"勤怠シート読み込みエラー: {e}"
+        if json_records:
+            df = pd.DataFrame(json_records)
+            df["日付"] = pd.to_datetime(df["日付"], errors="coerce").dt.date
+            df = df.dropna(subset=["日付"])
+            logging.info(
+                "勤怠正本 attendance-data.json を読み込みました（%s、%d 行）。",
+                jp,
+                len(df),
             )
-            raise RuntimeError(
-                "勤怠データを読み込めません。attendance-data.json を作成するか、"
-                "会社カレンダー／メンバー勤怠タブでセットアップしてください。"
-            ) from e
+        else:
+            logging.info(
+                "勤怠正本 attendance-data.json は存在しますがメンバー勤怠行がありません（%s）。"
+                "レガシーシートへはフォールバックしません。",
+                jp,
+            )
+            df = pd.DataFrame()
+    except Exception as e:
+        raise RuntimeError(
+            f"勤怠正本 {jp} の読込に失敗しました。アプリで内容を確認・修復してください: {e}"
+        ) from e
 
     # 2. AI による勤怠文脈の解析
     remarks_to_analyze = []
@@ -1126,7 +1073,10 @@ def load_attendance_and_analyze(members):
             analyzed_keys.add(key)
         elif lt and lt not in ("通常", ""):
             # 「-」は配台不参加をコード固定（API 不要）。他の休暇区分は従来どおり AI に渡す。
-            if not _attendance_leave_type_is_calendar_no_dispatch(lt):
+            if (
+                not _attendance_leave_type_is_calendar_no_dispatch(lt)
+                and not _attendance_leave_type_is_holiday_work(lt)
+            ):
                 remarks_to_analyze.append(f"{key} の休暇区分（備考は空）: {lt}")
                 analyzed_keys.add(key)
 
@@ -1210,9 +1160,14 @@ def load_attendance_and_analyze(members):
         if forced_calendar_paid_leave:
             is_holiday = True
         exclude_from_line = _ai_json_bool(ai_info.get("配台不参加"), False)
+        if _attendance_leave_type_is_absent(leave_type):
+            is_holiday = True
+            exclude_from_line = True
         if _attendance_leave_type_is_calendar_no_dispatch(leave_type):
             exclude_from_line = True
             # 休日ではないが加工配台のみ除外（AI・空シフト推定で is_holiday になるのを防ぐ）
+            is_holiday = False
+        if _attendance_leave_type_is_holiday_work(leave_type):
             is_holiday = False
 
         ai_eff = ai_info.get("作業効率")

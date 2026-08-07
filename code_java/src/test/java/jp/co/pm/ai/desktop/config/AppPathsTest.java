@@ -1248,4 +1248,28 @@ class AppPathsTest {
             AppPaths.setDesktopAppHomeDirName(prior);
         }
     }
+
+    @Test
+    void resolveTesseractConfig_usesRepoBundledTessData(@TempDir Path repo) throws IOException {
+        Path tess = repo.resolve(AppPaths.REPO_TESSERACT_TESSDATA_REL);
+        Files.createDirectories(tess);
+        Files.writeString(tess.resolve("jpn.traineddata"), "stub");
+        Files.writeString(tess.resolve("eng.traineddata"), "stub");
+        Path exe = repo.resolve("tesseract.exe");
+        Files.writeString(exe, "stub");
+
+        Map<String, String> ui =
+                Map.of(
+                        AppPaths.KEY_PM_AI_REPO_ROOT,
+                        repo.toString(),
+                        AppPaths.KEY_PM_AI_TESSERACT_CMD,
+                        exe.toString());
+
+        Optional<AppPaths.TesseractConfig> config = AppPaths.resolveTesseractConfig(ui);
+        assertTrue(config.isPresent());
+        Path tessData = config.get().tessDataDir();
+        assertTrue(AppPaths.REPO_TESSERACT_TESSDATA_REL.contains("tesseract-tessdata"));
+        assertTrue(Files.isRegularFile(tessData.resolve("jpn.traineddata")));
+        assertTrue(Files.isRegularFile(tessData.resolve("eng.traineddata")));
+    }
 }

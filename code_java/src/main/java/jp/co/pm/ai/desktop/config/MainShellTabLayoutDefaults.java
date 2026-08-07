@@ -15,6 +15,8 @@ import jp.co.pm.ai.desktop.MainShellTabId;
  * <p>Add new {@link MainShellTabId} keys at the end of {@link #DEFAULT_FLAT_TAB_KEY_ORDER} (before tab organizer).
  *
  * <p>Rulebook: {@code .cursor/rules/main-shell-tab-management.mdc}
+ *
+ * <p>並び・グループ・色は {@code init_setting/session_defaults_*.json} のグローバル既定と同期する。
  */
 public final class MainShellTabLayoutDefaults {
 
@@ -24,40 +26,40 @@ public final class MainShellTabLayoutDefaults {
     public static final List<String> DEFAULT_FLAT_TAB_KEY_ORDER =
             List.of(
                     MainShellTabId.EQUIPMENT_STATUS_DASHBOARD.key(),
-                    MainShellTabId.RUN.key(),
-                    MainShellTabId.PIPELINE_EXECUTION_TIMING.key(),
-                    MainShellTabId.PLAN_INPUT.key(),
+                    MainShellTabId.REMOTE_DESKTOP.key(),
                     MainShellTabId.REQUEST_FORM_INPUT.key(),
                     MainShellTabId.REQUEST_FORM_PIPELINE_CHECK.key(),
-                    MainShellTabId.REMOTE_DESKTOP.key(),
-                    MainShellTabId.DISPATCH_INTERACTIVE.key(),
+                    MainShellTabId.COMPANY_CALENDAR.key(),
+                    MainShellTabId.MEMBER_ATTENDANCE.key(),
+                    MainShellTabId.RUN.key(),
                     MainShellTabId.PLAN_INPUT_STAGE3.key(),
-                    MainShellTabId.LEARNED_SPEED_DATA.key(),
+                    MainShellTabId.PLAN_INPUT.key(),
+                    MainShellTabId.DISPATCH_INTERACTIVE.key(),
                     MainShellTabId.EQUIPMENT_GANTT_GRAPHIC.key(),
                     MainShellTabId.DELIVERY_CALENDAR_VIEW.key(),
                     MainShellTabId.OPERATOR_CARD.key(),
+                    MainShellTabId.CODE_LOOKUP_TABLES.key(),
                     MainShellTabId.UI_BADGE_DESIGN.key(),
                     MainShellTabId.PUSH_BUTTON_DESIGN.key(),
                     MainShellTabId.GANTT_PERSON_BADGE_DESIGN.key(),
                     MainShellTabId.REQUEST_FORM_PREVIEW_BADGE_DESIGN.key(),
-                    MainShellTabId.ENV.key(),
-                    MainShellTabId.MEMORY_SETTINGS.key(),
-                    MainShellTabId.GLOBAL_SETTINGS.key(),
                     MainShellTabId.PLAN_RESULT_VIEWER.key(),
                     MainShellTabId.STAGE1_PREVIEW.key(),
-                    MainShellTabId.CODE_LOOKUP_TABLES.key(),
                     MainShellTabId.RESULT_DISPATCH.key(),
-                    MainShellTabId.COMPANY_CALENDAR.key(),
-                    MainShellTabId.MEMBER_ATTENDANCE.key(),
                     MainShellTabId.MASTER_SUMMARY.key(),
                     MainShellTabId.EXCLUDE_RULES.key(),
                     MainShellTabId.SPECIAL_RULES.key(),
-                    MainShellTabId.ACTUALS_STATUS.key(),
-                    MainShellTabId.USER_PROFILES.key(),
-                    MainShellTabId.OPERATOR_USER_MANAGEMENT.key(),
                     MainShellTabId.PLAN_WORKSPACE_HISTORY.key(),
+                    MainShellTabId.MEMORY_SETTINGS.key(),
+                    MainShellTabId.API_MODEL_BENCHMARK.key(),
+                    MainShellTabId.ACTUALS_STATUS.key(),
+                    MainShellTabId.PIPELINE_EXECUTION_TIMING.key(),
                     MainShellTabId.CACHE_HISTORY.key(),
-                    MainShellTabId.API_MODEL_BENCHMARK.key());
+                    MainShellTabId.LEARNED_SPEED_DATA.key(),
+                    MainShellTabId.ENV.key(),
+                    MainShellTabId.GLOBAL_SETTINGS.key(),
+                    MainShellTabId.USER_PROFILES.key(),
+                    MainShellTabId.OPERATOR_USER_MANAGEMENT.key());
 
     /**
      * All {@link MainShellTabId} keys except {@link MainShellTabId#TAB_ORGANIZER}: DEFAULT order then any enum-only
@@ -76,26 +78,25 @@ public final class MainShellTabLayoutDefaults {
     /** Default grouped layout when session has no {@code mainShellTabLayout}. */
     public static List<MainShellTabLayoutNode> groupedLayout() {
         List<MainShellTabLayoutNode> top = new ArrayList<>();
-        top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.EQUIPMENT_STATUS_DASHBOARD.key(), ""));
-        top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.RUN.key(), ""));
-        top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.PIPELINE_EXECUTION_TIMING.key(), ""));
-        top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.PLAN_INPUT.key(), ""));
-        top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.REQUEST_FORM_INPUT.key(), ""));
-        top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.REQUEST_FORM_PIPELINE_CHECK.key(), ""));
-        top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.REMOTE_DESKTOP.key(), ""));
-        top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.DISPATCH_INTERACTIVE.key(), ""));
-        top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.PLAN_INPUT_STAGE3.key(), ""));
-        top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.LEARNED_SPEED_DATA.key(), ""));
-        top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.EQUIPMENT_GANTT_GRAPHIC.key(), ""));
-        top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.DELIVERY_CALENDAR_VIEW.key(), ""));
-        top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.OPERATOR_CARD.key(), ""));
-        top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.PLAN_WORKSPACE_HISTORY.key(), ""));
-        top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.CACHE_HISTORY.key(), ""));
+        top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.EQUIPMENT_STATUS_DASHBOARD.key(), "#994d66"));
+        top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.REMOTE_DESKTOP.key(), "#0000ff"));
+        top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.REQUEST_FORM_INPUT.key(), "#336633"));
+        top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.REQUEST_FORM_PIPELINE_CHECK.key(), "#9980e6"));
+        top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.COMPANY_CALENDAR.key(), "#800080"));
+        top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.MEMBER_ATTENDANCE.key(), "#800080"));
+        top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.RUN.key(), "#0000ff"));
+        top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.PLAN_INPUT_STAGE3.key(), "#800080"));
+        top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.PLAN_INPUT.key(), "#000080"));
+        top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.DISPATCH_INTERACTIVE.key(), "#1a3399"));
+        top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.EQUIPMENT_GANTT_GRAPHIC.key(), "#1a4d1a"));
+        top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.DELIVERY_CALENDAR_VIEW.key(), "#669966"));
+        top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.OPERATOR_CARD.key(), "#336666"));
+        top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.CODE_LOOKUP_TABLES.key(), "#0000ff"));
 
         top.add(
                 MainShellTabLayoutNode.groupNode(
-                        "\u30d0\u30c3\u30b8\u8a2d\u5b9a",
-                        "",
+                        "バッジ設定",
+                        "#ffff00",
                         List.of(
                                 MainShellTabLayoutNode.tabNode(MainShellTabId.UI_BADGE_DESIGN.key(), ""),
                                 MainShellTabLayoutNode.tabNode(MainShellTabId.PUSH_BUTTON_DESIGN.key(), ""),
@@ -106,39 +107,39 @@ public final class MainShellTabLayoutDefaults {
 
         top.add(
                 MainShellTabLayoutNode.groupNode(
-                        "\u74b0\u5883\u8a2d\u5b9a",
-                        "",
-                        List.of(
-                                MainShellTabLayoutNode.tabNode(MainShellTabId.ENV.key(), ""),
-                                MainShellTabLayoutNode.tabNode(MainShellTabId.MEMORY_SETTINGS.key(), ""),
-                                MainShellTabLayoutNode.tabNode(MainShellTabId.GLOBAL_SETTINGS.key(), ""),
-                                MainShellTabLayoutNode.tabNode(MainShellTabId.USER_PROFILES.key(), ""),
-                                MainShellTabLayoutNode.tabNode(
-                                        MainShellTabId.OPERATOR_USER_MANAGEMENT.key(), ""),
-                                MainShellTabLayoutNode.tabNode(MainShellTabId.COMPANY_CALENDAR.key(), ""),
-                                MainShellTabLayoutNode.tabNode(
-                                        MainShellTabId.MEMBER_ATTENDANCE.key(), ""))));
-
-        top.add(
-                MainShellTabLayoutNode.groupNode(
-                        "\u7d50\u679c\u60c5\u5831",
-                        "",
+                        "結果情報(デバッグ用)",
+                        "#800080",
                         List.of(
                                 MainShellTabLayoutNode.tabNode(MainShellTabId.PLAN_RESULT_VIEWER.key(), ""),
                                 MainShellTabLayoutNode.tabNode(MainShellTabId.STAGE1_PREVIEW.key(), ""),
-                                MainShellTabLayoutNode.tabNode(MainShellTabId.CODE_LOOKUP_TABLES.key(), ""),
                                 MainShellTabLayoutNode.tabNode(MainShellTabId.RESULT_DISPATCH.key(), ""))));
 
         top.add(
                 MainShellTabLayoutNode.groupNode(
-                        "\u305d\u306e\u4ed6",
-                        "",
+                        "その他",
+                        "#666666",
                         List.of(
                                 MainShellTabLayoutNode.tabNode(MainShellTabId.MASTER_SUMMARY.key(), ""),
                                 MainShellTabLayoutNode.tabNode(MainShellTabId.EXCLUDE_RULES.key(), ""),
                                 MainShellTabLayoutNode.tabNode(MainShellTabId.SPECIAL_RULES.key(), ""),
+                                MainShellTabLayoutNode.tabNode(MainShellTabId.PLAN_WORKSPACE_HISTORY.key(), ""),
+                                MainShellTabLayoutNode.tabNode(MainShellTabId.MEMORY_SETTINGS.key(), ""),
+                                MainShellTabLayoutNode.tabNode(MainShellTabId.API_MODEL_BENCHMARK.key(), ""),
                                 MainShellTabLayoutNode.tabNode(MainShellTabId.ACTUALS_STATUS.key(), ""),
-                                MainShellTabLayoutNode.tabNode(MainShellTabId.API_MODEL_BENCHMARK.key(), ""))));
+                                MainShellTabLayoutNode.tabNode(MainShellTabId.PIPELINE_EXECUTION_TIMING.key(), ""),
+                                MainShellTabLayoutNode.tabNode(MainShellTabId.CACHE_HISTORY.key(), ""),
+                                MainShellTabLayoutNode.tabNode(MainShellTabId.LEARNED_SPEED_DATA.key(), ""))));
+
+        top.add(
+                MainShellTabLayoutNode.groupNode(
+                        "環境設定",
+                        "#e64d4d",
+                        List.of(
+                                MainShellTabLayoutNode.tabNode(MainShellTabId.ENV.key(), ""),
+                                MainShellTabLayoutNode.tabNode(MainShellTabId.GLOBAL_SETTINGS.key(), ""),
+                                MainShellTabLayoutNode.tabNode(MainShellTabId.USER_PROFILES.key(), ""),
+                                MainShellTabLayoutNode.tabNode(
+                                        MainShellTabId.OPERATOR_USER_MANAGEMENT.key(), ""))));
 
         return List.copyOf(top);
     }

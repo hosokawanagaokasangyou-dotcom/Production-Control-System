@@ -150,6 +150,8 @@ import jp.co.pm.ai.desktop.config.InitSettingPersistence;
 import jp.co.pm.ai.desktop.config.UiEnvRowSnapshot;
 import jp.co.pm.ai.desktop.config.UiRefEnvDefaults;
 import jp.co.pm.ai.desktop.ui.AttendanceGridCellSizing;
+import jp.co.pm.ai.desktop.ui.UiRowHoverDimmingSettings;
+import jp.co.pm.ai.desktop.ui.EnvVarsStartupCheckBusyDialog;
 import jp.co.pm.ai.desktop.ui.Stage1NewMaterialLookupDialog;
 import jp.co.pm.ai.desktop.ui.MissingSkillsSheetColumnDialog;
 import jp.co.pm.ai.desktop.ui.Stage2UnknownMasterCombinationDialog;
@@ -629,8 +631,10 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
 
     /** メンバー勤怠の未保存確認でタブ差し戻し時に選択リスナーを再入しない。 */
     private final AtomicBoolean suppressMemberAttendanceUnsavedTabGuard = new AtomicBoolean(false);
+    private final AtomicBoolean suppressCompanyCalendarUnsavedTabGuard = new AtomicBoolean(false);
 
     private volatile boolean memberAttendanceDirtySinceSave = false;
+    private volatile boolean companyCalendarDirtySinceSave = false;
 
     /** 納期管理ビュー再読み込み中は段階1～段階3.5 の実行ボタンを無効化する。 */
     private final AtomicBoolean deliveryCalendarReloadBlockingStageRuns = new AtomicBoolean(false);
@@ -695,6 +699,9 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
 
     /** 起動時の環境変数テンプレート照合が完了したら {@code true}（完了前は初期化済みでも保守的にブロック）。 */
     private final AtomicBoolean envVarsStartupCheckCompleted = new AtomicBoolean(false);
+
+    /** 起動時／工場切替時の環境変数確認モーダル（表示中のみ非 null）。 */
+    private EnvVarsStartupCheckBusyDialog envVarsStartupCheckBusy;
 
     /**
      * バージョンアップ後処理で操作者を復元済みなら、同起動での操作者ダイアログと依頼書原本フォルダ案内を省略する。
@@ -895,7 +902,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
 
         primaryStage.setOnCloseRequest(
                 e -> {
-                    if (!confirmMemberAttendanceUnsavedBeforeLeave("終了")) {
+                    if (!confirmAttendanceTabsUnsavedBeforeLeave("終了")) {
                         e.consume();
                         return;
                     }
@@ -964,6 +971,9 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                                 return;
                             }
                             if (blockMemberAttendanceUnsavedTabNavigation(prevTab, newTab)) {
+                                return;
+                            }
+                            if (blockCompanyCalendarUnsavedTabNavigation(prevTab, newTab)) {
                                 return;
                             }
                             if (!suppressLazyMainShellTabContentSwap.get()) {
@@ -1227,6 +1237,10 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         if (equipmentStatusDashboardTabController != null) {
             equipmentStatusDashboardTabController.applyDashboardSession(s);
         }
+        setTableRowHoverDimmingEnabled(s.tableRowHoverDimmingEnabled());
+        if (globalSettingsTabController != null) {
+            globalSettingsTabController.syncTableRowHoverDimmingCheckbox();
+        }
         if (uiBadgeDesignTabController != null) {
             uiBadgeDesignTabController.applyUiBadgeSession(s);
         }
@@ -1418,6 +1432,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                 equipmentStatusDashboardTabController != null
                         ? equipmentStatusDashboardTabController.snapshotAppearancePrefs()
                         : EquipmentStatusDashboardAppearancePrefs.defaults(),
+                tableRowHoverDimmingEnabled,
                 requestFormInputTabController != null
                         ? requestFormInputTabController.snapshotComboChoices()
                         : jp.co.pm.ai.desktop.reconciliation.RequestFormComboChoices.empty());
@@ -1477,6 +1492,17 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
      * @return 開いたとき {@code true}
      */
     public boolean openMasterWorkbookInDesktop(String logPrefix) {
+        return openMasterWorkbookInDesktop(logPrefix, false);
+    }
+
+    /**
+     * master.xlsm を OS 既定アプリ（Excel）で開く。
+     *
+     * @param logPrefix ログ行の接頭辞（例: {@code "[company-calendar]"}）
+     * @param readOnly 読み取り専用で開く（会社カレンダー・メンバー勤怠の閲覧向け）
+     * @return 開いたとき {@code true}
+     */
+    public boolean openMasterWorkbookInDesktop(String logPrefix, boolean readOnly) {
         Path target = resolveMasterWorkbookIfPresent();
         if (target == null) {
             Path attempted =
@@ -1486,8 +1512,13 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
             return false;
         }
         try {
-            DesktopFileOpener.openFile(target);
-            appendLog(logPrefix + " opened master: " + target);
+            if (readOnly) {
+                DesktopFileOpener.openFileReadOnly(target);
+                appendLog(logPrefix + " opened master (read-only): " + target);
+            } else {
+                DesktopFileOpener.openFile(target);
+                appendLog(logPrefix + " opened master: " + target);
+            }
             return true;
         } catch (Exception e) {
             appendLog(logPrefix + " open master failed: " + e.getMessage());
@@ -1496,23 +1527,23 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
     }
 
     /**
-     * 勤怠閲覧用 xlsx（{@link AppPaths#attendanceViewXlsxPath}）を開く。
+     * 勤怠カレンダー.xlsx を OS 既定アプリ（Excel）で読み取り専用で開く。
      *
-     * @param logPrefix ログ行の接頭辞
+     * @param logPrefix ログ行の接頭辞（例: {@code "[company-calendar]"}）
      * @return 開いたとき {@code true}
      */
-    public boolean openAttendanceViewXlsxInDesktop(String logPrefix) {
-        Path target = AppPaths.attendanceViewXlsxPath(snapshotUiEnv()).toAbsolutePath().normalize();
+    public boolean openAttendanceCalendarXlsxInDesktop(String logPrefix) {
+        Path target = AppPaths.attendanceCalendarXlsxPath(collectUiEnv());
         if (!Files.isRegularFile(target)) {
-            appendLog(logPrefix + " view xlsx not found: " + target);
+            appendLog(logPrefix + " attendance calendar xlsx not found: " + target);
             return false;
         }
         try {
-            DesktopFileOpener.openFile(target);
-            appendLog(logPrefix + " opened view xlsx: " + target);
+            DesktopFileOpener.openFileReadOnly(target);
+            appendLog(logPrefix + " opened attendance calendar (read-only): " + target);
             return true;
         } catch (Exception e) {
-            appendLog(logPrefix + " open view xlsx failed: " + e.getMessage());
+            appendLog(logPrefix + " open attendance calendar failed: " + e.getMessage());
             return false;
         }
     }
@@ -3522,6 +3553,9 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                                     if (blockMemberAttendanceUnsavedInnerTabNavigation(p, n, inner)) {
                                         return;
                                     }
+                                    if (blockCompanyCalendarUnsavedInnerTabNavigation(p, n, inner)) {
+                                        return;
+                                    }
                                     if (!suppressLazyMainShellTabContentSwap.get()) {
                                         deferMainShellTabBranchHeavyContent(p);
                                         activateMainShellTabHeavyContentRecursive(n);
@@ -4604,18 +4638,131 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
 
     /**
      * 操作者選択・工場ワークスペース復元の後に、環境変数タブの値を初期化テンプレートと一度だけ照合する。
+     *
+     * <p>進捗モーダル表示中は状況文言だけ更新する。未表示なら短いモーダルを出して閉じる。
      */
     private void completeEnvVarsStartupCheck() {
         if (envVarsStartupCheckCompleted.get()) {
             return;
         }
-        stabilizeEnvRowsForInitializationBaseline();
-        evaluateEnvVarsDifferFromInitialAtStartup();
-        applyRunTabGating();
-        if (!isEnvVarsInitializationPending()) {
-            ensureMainShellRunTabSelected();
+        boolean ownBusy = !isEnvVarsStartupCheckBusyShowing();
+        if (ownBusy) {
+            beginEnvVarsStartupCheckBusy(EnvVarsStartupCheckBusyDialog.STATUS_STABILIZE);
+        } else {
+            updateEnvVarsStartupCheckBusy(EnvVarsStartupCheckBusyDialog.STATUS_STABILIZE);
         }
-        maybeReloadAttendanceTabsAfterEnvReady();
+        try {
+            stabilizeEnvRowsForInitializationBaseline();
+            updateEnvVarsStartupCheckBusy(EnvVarsStartupCheckBusyDialog.STATUS_MATCH);
+            evaluateEnvVarsDifferFromInitialAtStartup();
+            applyRunTabGating();
+            if (!isEnvVarsInitializationPending()) {
+                ensureMainShellRunTabSelected();
+            }
+            maybeReloadAttendanceTabsAfterEnvReady();
+            if (ownBusy) {
+                updateEnvVarsStartupCheckBusy(EnvVarsStartupCheckBusyDialog.STATUS_DONE);
+            }
+        } finally {
+            if (ownBusy) {
+                endEnvVarsStartupCheckBusy();
+            }
+        }
+    }
+
+    private boolean isEnvVarsStartupCheckBusyShowing() {
+        return envVarsStartupCheckBusy != null && envVarsStartupCheckBusy.isShowing();
+    }
+
+    private void beginEnvVarsStartupCheckBusy(String status) {
+        if (isEnvVarsStartupCheckBusyShowing()) {
+            updateEnvVarsStartupCheckBusy(status);
+            return;
+        }
+        if (primaryStage == null) {
+            return;
+        }
+        envVarsStartupCheckBusy = EnvVarsStartupCheckBusyDialog.show(primaryStage, status);
+    }
+
+    private void updateEnvVarsStartupCheckBusy(String status) {
+        if (envVarsStartupCheckBusy != null) {
+            envVarsStartupCheckBusy.setStatus(status);
+        }
+    }
+
+    private void endEnvVarsStartupCheckBusy() {
+        if (envVarsStartupCheckBusy != null) {
+            envVarsStartupCheckBusy.close();
+            envVarsStartupCheckBusy = null;
+        }
+    }
+
+    /** スプラッシュ／操作者ダイアログのあと、進捗が見えるよう短いパルスを空けてから処理する。 */
+    private void runAfterUiPulse(Runnable action) {
+        PauseTransition pause = new PauseTransition(Duration.millis(50));
+        pause.setOnFinished(e -> Platform.runLater(action));
+        pause.play();
+    }
+
+    /**
+     * 工場ワークスペース復元 → 環境変数起動照合を進捗モーダル付きで実行し、完了後に依頼書原本案内を出す。
+     */
+    private void runOperatorStartupWorkspaceAndEnvCheckWithProgress() {
+        beginEnvVarsStartupCheckBusy(EnvVarsStartupCheckBusyDialog.STATUS_RESTORE_WORKSPACE);
+        runAfterUiPulse(
+                () -> {
+                    try {
+                        finalizeOperatorLocalWorkspaceAfterSessionEstablished();
+                        if (envVarsStartupCheckCompleted.get()) {
+                            finishEnvVarsStartupCheckBusyThenMaybePromptRequestFormDir();
+                            return;
+                        }
+                        updateEnvVarsStartupCheckBusy(EnvVarsStartupCheckBusyDialog.STATUS_STABILIZE);
+                        runAfterUiPulse(
+                                () -> {
+                                    try {
+                                        stabilizeEnvRowsForInitializationBaseline();
+                                        updateEnvVarsStartupCheckBusy(
+                                                EnvVarsStartupCheckBusyDialog.STATUS_MATCH);
+                                        runAfterUiPulse(
+                                                () -> {
+                                                    try {
+                                                        evaluateEnvVarsDifferFromInitialAtStartup();
+                                                        applyRunTabGating();
+                                                        if (!isEnvVarsInitializationPending()) {
+                                                            ensureMainShellRunTabSelected();
+                                                        }
+                                                        maybeReloadAttendanceTabsAfterEnvReady();
+                                                        updateEnvVarsStartupCheckBusy(
+                                                                EnvVarsStartupCheckBusyDialog
+                                                                        .STATUS_DONE);
+                                                        runAfterUiPulse(
+                                                                this
+                                                                        ::finishEnvVarsStartupCheckBusyThenMaybePromptRequestFormDir);
+                                                    } catch (RuntimeException ex) {
+                                                        endEnvVarsStartupCheckBusy();
+                                                        throw ex;
+                                                    }
+                                                });
+                                    } catch (RuntimeException ex) {
+                                        endEnvVarsStartupCheckBusy();
+                                        throw ex;
+                                    }
+                                });
+                    } catch (RuntimeException ex) {
+                        endEnvVarsStartupCheckBusy();
+                        throw ex;
+                    }
+                });
+    }
+
+    private void finishEnvVarsStartupCheckBusyThenMaybePromptRequestFormDir() {
+        endEnvVarsStartupCheckBusy();
+        if (!isEnvVarsInitializationPending()
+                && !shouldSuppressStartupRequestFormOriginalDirPrompt()) {
+            maybePromptRequestFormOriginalDirAtStartup();
+        }
     }
 
     /** 初期化記録・起動時照合の直前に、環境変数タブの表示値を安定化する（ブートストラップ補完・表示既定・フォルダ正規化）。 */
@@ -6231,8 +6378,59 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         applyAlertStylesheetsFromOwner(dialog);
     }
 
+    /** カスタム Stage / Scene にメインテーマ CSS を適用する。 */
+    public void applyStylesheetsToScene(javafx.scene.Scene scene) {
+        if (primaryStage == null || scene == null) {
+            return;
+        }
+        Scene ownerScene = primaryStage.getScene();
+        if (ownerScene == null) {
+            return;
+        }
+        for (String url : ownerScene.getStylesheets()) {
+            if (!scene.getStylesheets().contains(url)) {
+                scene.getStylesheets().add(url);
+            }
+        }
+    }
+
     void onMemberAttendanceDirtyChanged(boolean dirty) {
         memberAttendanceDirtySinceSave = dirty;
+        if (mainShellTabMemberAttendance != null) {
+            mainShellTabMemberAttendance.setText(dirty ? "メンバー勤怠 *" : "メンバー勤怠");
+        }
+    }
+
+    void onCompanyCalendarDirtyChanged(boolean dirty) {
+        companyCalendarDirtySinceSave = dirty;
+        if (mainShellTabCompanyCalendar != null) {
+            mainShellTabCompanyCalendar.setText(dirty ? "会社カレンダー *" : "会社カレンダー");
+        }
+    }
+
+    /** 会社カレンダータブの会計年度ラベル（メンバー勤怠セットアップ等で共有）。 */
+    public int attendanceFiscalYearLabel() {
+        if (companyCalendarTabController != null) {
+            return companyCalendarTabController.getFiscalYearLabel();
+        }
+        LocalDate today = LocalDate.now();
+        return jp.co.pm.ai.desktop.ui.FiscalYearPeriod.fiscalYearLabelFor(
+                today, jp.co.pm.ai.desktop.ui.FiscalYearPeriod.DEFAULT_APRIL_MARCH);
+    }
+
+    /** 会社カレンダータブの会計期間開始（未表示時は 4/1 既定）。 */
+    public jp.co.pm.ai.desktop.ui.FiscalYearPeriod attendanceFiscalPeriod() {
+        if (companyCalendarTabController != null) {
+            return companyCalendarTabController.getFiscalPeriod();
+        }
+        return jp.co.pm.ai.desktop.ui.FiscalYearPeriod.DEFAULT_APRIL_MARCH;
+    }
+
+    private boolean confirmAttendanceTabsUnsavedBeforeLeave(String actionDescription) {
+        if (!confirmCompanyCalendarUnsavedBeforeLeave(actionDescription)) {
+            return false;
+        }
+        return confirmMemberAttendanceUnsavedBeforeLeave(actionDescription);
     }
 
     private boolean confirmMemberAttendanceUnsavedBeforeLeave(String actionDescription) {
@@ -6260,6 +6458,9 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                     Platform.runLater(
                             () -> {
                                 if ("終了".equals(actionDescription)) {
+                                    if (!confirmCompanyCalendarUnsavedBeforeLeave("終了")) {
+                                        return;
+                                    }
                                     if (confirmApplicationClose()) {
                                         performApplicationShutdownOnClose();
                                         if (primaryStage != null) {
@@ -6282,6 +6483,171 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
     }
 
     private MainShellTabId pendingMemberAttendanceTabAfterSave = null;
+    private MainShellTabId pendingCompanyCalendarTabAfterSave = null;
+
+    private boolean confirmCompanyCalendarUnsavedBeforeLeave(String actionDescription) {
+        if (companyCalendarTabController == null || !companyCalendarTabController.hasUnsavedEdits()) {
+            return true;
+        }
+        CompanyCalendarTabController.UnsavedPromptResult result =
+                companyCalendarTabController.promptUnsavedChanges(actionDescription);
+        if (result == CompanyCalendarTabController.UnsavedPromptResult.CANCELLED) {
+            return false;
+        }
+        if (result == CompanyCalendarTabController.UnsavedPromptResult.DISCARDED) {
+            if ("終了".equals(actionDescription)) {
+                companyCalendarTabController.clearUnsavedWithoutReload();
+            } else {
+                companyCalendarTabController.discardUnsavedEdits();
+            }
+            return true;
+        }
+        companyCalendarTabController.saveEditsAsync(
+                success -> {
+                    if (!success) {
+                        return;
+                    }
+                    Platform.runLater(
+                            () -> {
+                                if ("終了".equals(actionDescription)) {
+                                    if (!confirmMemberAttendanceUnsavedBeforeLeave("終了")) {
+                                        return;
+                                    }
+                                    if (confirmApplicationClose()) {
+                                        performApplicationShutdownOnClose();
+                                        if (primaryStage != null) {
+                                            primaryStage.close();
+                                        }
+                                    }
+                                } else if (pendingCompanyCalendarTabAfterSave != null) {
+                                    MainShellTabId target = pendingCompanyCalendarTabAfterSave;
+                                    pendingCompanyCalendarTabAfterSave = null;
+                                    suppressCompanyCalendarUnsavedTabGuard.set(true);
+                                    try {
+                                        selectMainShellTabRecursive(tabPane, target);
+                                    } finally {
+                                        suppressCompanyCalendarUnsavedTabGuard.set(false);
+                                    }
+                                }
+                            });
+                });
+        return false;
+    }
+
+    private boolean blockCompanyCalendarUnsavedTabNavigation(Tab prevTab, Tab newTab) {
+        if (suppressCompanyCalendarUnsavedTabGuard.get()) {
+            return false;
+        }
+        Tab prevLeaf = resolveEffectiveLeafTab(prevTab);
+        Tab newLeaf = resolveEffectiveLeafTab(newTab);
+        if (prevLeaf == null || newLeaf == null) {
+            return false;
+        }
+        MainShellTabId prevId = mainShellTabId(prevLeaf);
+        MainShellTabId newId = mainShellTabId(newLeaf);
+        if (prevId != MainShellTabId.COMPANY_CALENDAR || newId == MainShellTabId.COMPANY_CALENDAR) {
+            return false;
+        }
+        if (companyCalendarTabController == null || !companyCalendarTabController.hasUnsavedEdits()) {
+            return false;
+        }
+        CompanyCalendarTabController.UnsavedPromptResult result =
+                companyCalendarTabController.promptUnsavedChanges("タブを切り替える");
+        if (result == CompanyCalendarTabController.UnsavedPromptResult.CANCELLED) {
+            suppressCompanyCalendarUnsavedTabGuard.set(true);
+            try {
+                selectMainShellTabRecursive(tabPane, MainShellTabId.COMPANY_CALENDAR);
+            } finally {
+                suppressCompanyCalendarUnsavedTabGuard.set(false);
+            }
+            return true;
+        }
+        if (result == CompanyCalendarTabController.UnsavedPromptResult.DISCARDED) {
+            companyCalendarTabController.discardUnsavedEdits();
+            return false;
+        }
+        pendingCompanyCalendarTabAfterSave = newId;
+        suppressCompanyCalendarUnsavedTabGuard.set(true);
+        try {
+            selectMainShellTabRecursive(tabPane, MainShellTabId.COMPANY_CALENDAR);
+        } finally {
+            suppressCompanyCalendarUnsavedTabGuard.set(false);
+        }
+        companyCalendarTabController.saveEditsAsync(
+                success -> {
+                    if (!success) {
+                        pendingCompanyCalendarTabAfterSave = null;
+                        return;
+                    }
+                    Platform.runLater(
+                            () -> {
+                                if (pendingCompanyCalendarTabAfterSave != null) {
+                                    MainShellTabId target = pendingCompanyCalendarTabAfterSave;
+                                    pendingCompanyCalendarTabAfterSave = null;
+                                    suppressCompanyCalendarUnsavedTabGuard.set(true);
+                                    try {
+                                        selectMainShellTabRecursive(tabPane, target);
+                                    } finally {
+                                        suppressCompanyCalendarUnsavedTabGuard.set(false);
+                                    }
+                                }
+                            });
+                });
+        return true;
+    }
+
+    private boolean blockCompanyCalendarUnsavedInnerTabNavigation(
+            Tab prevInner, Tab newInner, TabPane innerPane) {
+        if (suppressCompanyCalendarUnsavedTabGuard.get()) {
+            return false;
+        }
+        MainShellTabId prevId = mainShellTabId(prevInner);
+        MainShellTabId newId = mainShellTabId(newInner);
+        if (prevId != MainShellTabId.COMPANY_CALENDAR || newId == MainShellTabId.COMPANY_CALENDAR) {
+            return false;
+        }
+        if (companyCalendarTabController == null || !companyCalendarTabController.hasUnsavedEdits()) {
+            return false;
+        }
+        CompanyCalendarTabController.UnsavedPromptResult result =
+                companyCalendarTabController.promptUnsavedChanges("タブを切り替える");
+        if (result == CompanyCalendarTabController.UnsavedPromptResult.CANCELLED) {
+            suppressCompanyCalendarUnsavedTabGuard.set(true);
+            try {
+                innerPane.getSelectionModel().select(prevInner);
+            } finally {
+                suppressCompanyCalendarUnsavedTabGuard.set(false);
+            }
+            return true;
+        }
+        if (result == CompanyCalendarTabController.UnsavedPromptResult.DISCARDED) {
+            companyCalendarTabController.discardUnsavedEdits();
+            return false;
+        }
+        suppressCompanyCalendarUnsavedTabGuard.set(true);
+        try {
+            innerPane.getSelectionModel().select(prevInner);
+        } finally {
+            suppressCompanyCalendarUnsavedTabGuard.set(false);
+        }
+        final MainShellTabId targetId = newId;
+        companyCalendarTabController.saveEditsAsync(
+                success -> {
+                    if (!success) {
+                        return;
+                    }
+                    Platform.runLater(
+                            () -> {
+                                suppressCompanyCalendarUnsavedTabGuard.set(true);
+                                try {
+                                    innerPane.getSelectionModel().select(tabForMainShellTabId(targetId));
+                                } finally {
+                                    suppressCompanyCalendarUnsavedTabGuard.set(false);
+                                }
+                            });
+                });
+        return true;
+    }
 
     private boolean blockMemberAttendanceUnsavedTabNavigation(Tab prevTab, Tab newTab) {
         if (suppressMemberAttendanceUnsavedTabGuard.get()) {
@@ -6497,6 +6863,8 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
     private static final ObjectMapper ATTENDANCE_JSON = new ObjectMapper();
 
     private int attendanceGridCellSizePx = AttendanceGridCellSizing.DEFAULT_CELL_PX;
+    private boolean tableRowHoverDimmingEnabled =
+            DesktopSessionState.DEFAULT_TABLE_ROW_HOVER_DIMMING_ENABLED;
     private volatile boolean attendanceStage2Ready = false;
     private volatile String attendanceReadinessTooltip = "";
 
@@ -6562,6 +6930,32 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
 
     public int attendanceGridCellSizePx() {
         return attendanceGridCellSizePx;
+    }
+
+    public boolean tableRowHoverDimmingEnabled() {
+        return tableRowHoverDimmingEnabled;
+    }
+
+    public void setTableRowHoverDimmingEnabled(boolean enabled) {
+        if (tableRowHoverDimmingEnabled == enabled) {
+            return;
+        }
+        tableRowHoverDimmingEnabled = enabled;
+        UiRowHoverDimmingSettings.setEnabled(enabled);
+        refreshTableRowHoverDimmingPresentation();
+    }
+
+    public void persistGlobalDesktopSession() {
+        DesktopSessionStateStore.save(collectDesktopSessionForGlobalPersistence());
+    }
+
+    private void refreshTableRowHoverDimmingPresentation() {
+        if (memberAttendanceTabController != null) {
+            memberAttendanceTabController.refreshRowHoverDimming();
+        }
+        if (companyCalendarTabController != null) {
+            companyCalendarTabController.refreshRowHoverDimming();
+        }
     }
 
   /** 会社カレンダー・メンバー勤怠のセルグリッド寸法（px）。両タブで共有。 */
@@ -6781,17 +7175,17 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         return m;
     }
 
-    /** 勤怠 JSON / 閲覧用 xlsx を工場既定サマリ同階層へ補完（空文字の env 行は上書き）。 */
+    /** 勤怠 JSON を工場既定サマリ同階層へ補完（空文字の env 行は上書き）。 */
     private void overlayAttendancePathsForPython(Map<String, String> m) {
         if (nz(m.get(AppPaths.KEY_PM_AI_ATTENDANCE_JSON)).isBlank()) {
             m.put(
                     AppPaths.KEY_PM_AI_ATTENDANCE_JSON,
                     AppPaths.attendanceDataJsonPath(m).toString());
         }
-        if (nz(m.get(AppPaths.KEY_PM_AI_ATTENDANCE_VIEW_XLSX)).isBlank()) {
+        if (nz(m.get(AppPaths.KEY_PM_AI_ATTENDANCE_CALENDAR_XLSX)).isBlank()) {
             m.put(
-                    AppPaths.KEY_PM_AI_ATTENDANCE_VIEW_XLSX,
-                    AppPaths.attendanceViewXlsxPath(m).toString());
+                    AppPaths.KEY_PM_AI_ATTENDANCE_CALENDAR_XLSX,
+                    AppPaths.attendanceCalendarXlsxPath(m).toString());
         }
     }
 
@@ -7252,6 +7646,12 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         long t0 = System.nanoTime();
         factorySiteSwitchInProgress = true;
         setFactorySiteCombosDisabled(true);
+        boolean ownBusy = !isEnvVarsStartupCheckBusyShowing();
+        if (ownBusy) {
+            beginEnvVarsStartupCheckBusy(EnvVarsStartupCheckBusyDialog.STATUS_FACTORY_SWITCH);
+        } else {
+            updateEnvVarsStartupCheckBusy(EnvVarsStartupCheckBusyDialog.STATUS_FACTORY_SWITCH);
+        }
         try {
             String operator = FactoryOperatorUserStore.sessionOperatorName();
             if (!operator.isBlank() && oldSite != null && oldSite != FactorySite.RDP_LAUNCHER) {
@@ -7266,6 +7666,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                     operator.isBlank()
                             ? Optional.empty()
                             : FactorySiteWorkspaceStore.load(operator, newSite);
+            updateEnvVarsStartupCheckBusy(EnvVarsStartupCheckBusyDialog.STATUS_RESTORE_WORKSPACE);
             if (loaded.isPresent()) {
                 applyFactoryWorkspaceSnapshot(loaded.get());
             } else {
@@ -7286,6 +7687,9 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                             + " ms="
                             + ms);
         } finally {
+            if (ownBusy) {
+                endEnvVarsStartupCheckBusy();
+            }
             factorySiteSwitchInProgress = false;
             setFactorySiteCombosDisabled(false);
         }
@@ -7586,7 +7990,15 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
 
     private void maybePromptOperatorUserAtStartup() {
         if (skipOperatorPromptAfterPortableUpgrade.compareAndSet(true, false)) {
-            completeEnvVarsStartupCheck();
+            beginEnvVarsStartupCheckBusy(EnvVarsStartupCheckBusyDialog.STATUS_STABILIZE);
+            runAfterUiPulse(
+                    () -> {
+                        try {
+                            completeEnvVarsStartupCheck();
+                        } finally {
+                            endEnvVarsStartupCheckBusy();
+                        }
+                    });
             return;
         }
         if (deferOperatorPromptForPortableUpgrade.get()) {
@@ -7601,11 +8013,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                             + "）。グローバル設定の工場と環境変数のサマリパスを確認してください。");
         }
         requireOperatorSelectionForFactory(factory, true);
-        finalizeOperatorLocalWorkspaceAfterSessionEstablished();
-        completeEnvVarsStartupCheck();
-        if (!isEnvVarsInitializationPending() && !shouldSuppressStartupRequestFormOriginalDirPrompt()) {
-            maybePromptRequestFormOriginalDirAtStartup();
-        }
+        runOperatorStartupWorkspaceAndEnvCheckWithProgress();
     }
 
     private Optional<String> promptOperatorUserChoice(FactorySite site, boolean startup) {

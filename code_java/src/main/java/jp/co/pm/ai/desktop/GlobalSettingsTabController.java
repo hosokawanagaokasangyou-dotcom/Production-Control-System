@@ -8,6 +8,7 @@ import javafx.scene.control.Alert;
 import javafx.scene.control.Alert.AlertType;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
+import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.TextInputDialog;
 
@@ -29,6 +30,9 @@ public final class GlobalSettingsTabController {
     @FXML
     private ComboBox<FactorySite> initSettingTargetCombo;
 
+    @FXML
+    private CheckBox tableRowHoverDimmingCheckBox;
+
     private MainShellController shell;
 
     /** {@link ComboBox#setValue} によるリスナー発火を抑止（起動時の Scene 未設定ダイアログ回避）。 */
@@ -37,6 +41,23 @@ public final class GlobalSettingsTabController {
     void bindShell(MainShellController shell) {
         this.shell = shell;
         wireInitSettingTargetCombo();
+        syncTableRowHoverDimmingCheckbox();
+    }
+
+    void syncTableRowHoverDimmingCheckbox() {
+        if (tableRowHoverDimmingCheckBox == null || shell == null) {
+            return;
+        }
+        tableRowHoverDimmingCheckBox.setSelected(shell.tableRowHoverDimmingEnabled());
+    }
+
+    @FXML
+    private void onTableRowHoverDimmingChanged() {
+        if (shell == null || tableRowHoverDimmingCheckBox == null) {
+            return;
+        }
+        shell.setTableRowHoverDimmingEnabled(tableRowHoverDimmingCheckBox.isSelected());
+        shell.persistGlobalDesktopSession();
     }
 
     /** 環境タブの工場プリセットなどで {@link GlobalInitSettingTarget} が変わったあと、コンボをディスクに合わせる。 */

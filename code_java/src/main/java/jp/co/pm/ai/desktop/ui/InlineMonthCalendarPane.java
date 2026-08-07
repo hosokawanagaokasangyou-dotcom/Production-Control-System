@@ -35,6 +35,8 @@ public final class InlineMonthCalendarPane extends VBox {
 
     private final boolean monthOnly;
     private final Label monthLabel = new Label();
+    private final Button prevButton = new Button("◀");
+    private final Button nextButton = new Button("▶");
     private final GridPane dayGrid = new GridPane();
 
     public InlineMonthCalendarPane() {
@@ -50,17 +52,15 @@ public final class InlineMonthCalendarPane extends VBox {
         }
         setSpacing(6);
 
-        Button prev = new Button("◀");
-        Button next = new Button("▶");
-        prev.getStyleClass().add("pm-inline-month-calendar-nav");
-        next.getStyleClass().add("pm-inline-month-calendar-nav");
+        prevButton.getStyleClass().add("pm-inline-month-calendar-nav");
+        nextButton.getStyleClass().add("pm-inline-month-calendar-nav");
         monthLabel.getStyleClass().add("pm-inline-month-calendar-title");
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
-        HBox header = new HBox(8, prev, monthLabel, spacer, next);
+        HBox header = new HBox(8, prevButton, monthLabel, spacer, nextButton);
         header.setAlignment(Pos.CENTER_LEFT);
-        prev.setOnAction(e -> displayedMonth.set(displayedMonth.get().minusMonths(1)));
-        next.setOnAction(e -> displayedMonth.set(displayedMonth.get().plusMonths(1)));
+        prevButton.setOnAction(e -> displayedMonth.set(displayedMonth.get().minusMonths(1)));
+        nextButton.setOnAction(e -> displayedMonth.set(displayedMonth.get().plusMonths(1)));
 
         if (!monthOnly) {
             dayGrid.setHgap(4);
@@ -117,6 +117,12 @@ public final class InlineMonthCalendarPane extends VBox {
 
     public YearMonth getDisplayedMonth() {
         return displayedMonth.get();
+    }
+
+    /** 月ナビ（◀▶）の有効／無効。読込・保存中は false にする。 */
+    public void setNavigationEnabled(boolean enabled) {
+        prevButton.setDisable(!enabled);
+        nextButton.setDisable(!enabled);
     }
 
     /** ◀▶ で表示月だけ変えたとき、選択日を同月内の同日（月末調整）へ追従する。 */
