@@ -1301,6 +1301,36 @@
     -fx-font-weight: bold;
 }
 
+.pm-member-attendance-grid-member-selected {
+    -fx-background-color: rgba(56, 189, 248, 0.22);
+    -fx-background-radius: 4;
+}
+
+.pm-member-attendance-grid-role {
+    -fx-font-size: 10px;
+    -fx-alignment: center;
+    -fx-text-alignment: center;
+    -fx-padding: 2 4 2 4;
+}
+
+.pm-machine-calendar-grid-legend {
+    -fx-font-size: 11px;
+}
+
+.pm-machine-calendar-grid-header {
+    -fx-font-size: 10px;
+    -fx-font-weight: bold;
+}
+
+.pm-machine-calendar-grid-time {
+    -fx-font-size: 10px;
+    -fx-alignment: center;
+}
+
+.pm-machine-calendar-cell-occupied {
+    -fx-background-color: rgba(192, 132, 252, 0.45);
+}
+
 .pm-member-attendance-grid-member {
     -fx-font-size: 11px;
     -fx-alignment: center;

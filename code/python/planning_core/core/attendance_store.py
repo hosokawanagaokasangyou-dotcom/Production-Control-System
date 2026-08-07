@@ -73,6 +73,7 @@ def empty_store(year: int | None = None) -> dict:
             },
             "days": {},
         },
+        "member_roster": [],
         "member_attendance": {},
     }
 
@@ -407,7 +408,14 @@ def apply_company_calendar_to_members_fiscal(
 
 
 def apply_member_attendance_patch(store: dict, patch: dict) -> dict:
-    """Merge member cell edits from UI patch { year, month, cells: { date: { member: { day_preset } } } }."""
+    """Merge member cell edits from UI patch { year, month, cells, member_roster? }."""
+    roster_applied = 0
+    if "member_roster" in patch:
+        from planning_core.core.attendance_member_roster import apply_member_roster_patch
+
+        roster_result = apply_member_roster_patch(store, patch.get("member_roster") or [])
+        roster_applied = int(roster_result.get("roster_count") or 0)
+
     cells_patch = patch.get("cells") or {}
     ma = store.setdefault("member_attendance", {})
     applied = 0
@@ -452,10 +460,11 @@ def apply_member_attendance_patch(store: dict, patch: dict) -> dict:
                 existing["manual_edit"] = True
                 bucket[member] = existing
                 applied += 1
-    store["meta"]["member_attendance_revision"] = int(
-        store["meta"].get("member_attendance_revision") or 0
-    ) + 1
-    return {"applied": applied}
+    if applied > 0 or roster_applied > 0:
+        store["meta"]["member_attendance_revision"] = int(
+            store["meta"].get("member_attendance_revision") or 0
+        ) + 1
+    return {"applied": applied, "roster_count": roster_applied}
 
 
 def build_editor_payload(store: dict, members: list[str], year: int, month: int) -> dict:
@@ -484,16 +493,25 @@ def build_editor_payload(store: dict, members: list[str], year: int, month: int)
                 "hourly": entry.get("hourly") or {},
                 "comment": entry.get("comment") or "",
             }
+    from planning_core.core.attendance_member_roster import (
+        ensure_member_roster,
+        primary_roles_map,
+    )
+
+    roster = ensure_member_roster(store)
     return {
         "format_version": 1,
         "ok": True,
         "year": year,
         "month": month,
         "members": members,
+        "member_roster": roster,
+        "primary_roles": primary_roles_map(store),
         "dates": dates,
         "cells": cells,
         "company_calendar_revision": store.get("meta", {}).get("company_calendar_revision", 0),
         "member_attendance_revision": store.get("meta", {}).get("member_attendance_revision", 0),
+        "member_roster_revision": store.get("meta", {}).get("member_roster_revision", 0),
     }
 
 
@@ -939,18 +957,22 @@ def populate_member_calendar_worksheet(ws, store: dict, year: int, month: int) -
 
     format_member_calendar_sheet(ws, year, month, len(date_cols), dense_days)
 
-    try:
-        from planning_core.core.master_data import load_skills_and_needs
+    from planning_core.core.attendance_member_roster import attendance_grid_member_names
 
-        members = load_skills_and_needs()[1]
-    except Exception:
-        members = sorted(
-            {
-                m
-                for d_key in store.get("member_attendance", {})
-                for m in store["member_attendance"].get(d_key, {})
-            }
-        )
+    members = attendance_grid_member_names(store)
+    if not members:
+        try:
+            from planning_core.core.master_data import load_skills_and_needs
+
+            members = load_skills_and_needs()[1]
+        except Exception:
+            members = sorted(
+                {
+                    m
+                    for d_key in store.get("member_attendance", {})
+                    for m in store["member_attendance"].get(d_key, {})
+                }
+            )
     row = 3
     ma = store.get("member_attendance", {})
     align = Alignment(horizontal="center", vertical="center")

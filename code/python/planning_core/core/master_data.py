@@ -836,6 +836,35 @@ def _attendance_leave_type_is_holiday_work(leave_type: str) -> bool:
     """休暇区分が休日出勤（配台対象の稼働日）のとき True。"""
     lt = unicodedata.normalize("NFKC", str(leave_type or "").strip())
     return lt == "休日出勤" or lt.startswith("休日出勤 ") or lt in ("午前休出", "午後休出")
+def _attendance_leave_type_is_calendar_public_off(leave_type: str) -> bool:
+    """休暇区分が会社カレンダー公休・所定休（終日非勤務）のとき True。"""
+    lt = unicodedata.normalize("NFKC", str(leave_type or "").strip())
+    return lt in ("公休", "休") or lt.startswith("公休 ")
+def _attendance_preset_remark_markers() -> frozenset[str]:
+    """プリセット由来の既定備考（自由記述なし＝API 不要）。"""
+    return frozenset(
+        {"公休", "休", "年休", "欠勤", "-", "前休", "後休", "通常", "休日出勤", "午前休出", "午後休出"}
+    )
+def _attendance_skip_remark_ai(remark: str, leave_type: str) -> bool:
+    """コードで休暇・配台可否を確定できる行は勤怠備考 AI に載せない（トークン節約）。"""
+    rem = unicodedata.normalize("NFKC", str(remark or "").strip())
+    lt = unicodedata.normalize("NFKC", str(leave_type or "").strip())
+    if _attendance_leave_type_is_calendar_no_dispatch(lt):
+        return True
+    if _attendance_leave_type_is_holiday_work(lt):
+        return True
+    if _attendance_leave_type_is_full_day_paid_leave(lt):
+        return True
+    if _attendance_leave_type_is_absent(lt):
+        return True
+    if _attendance_leave_type_is_calendar_public_off(lt):
+        return True
+    markers = _attendance_preset_remark_markers()
+    if rem in markers and (not lt or lt in markers or lt == rem):
+        return True
+    if rem and lt and rem == lt and lt in markers:
+        return True
+    return False
 def _ai_json_bool(v, default: bool = False) -> bool:
     """勤怠備考 AI の真偽値（bool / 数値 / 文字列の杺れを坸坎）。"""
     if v is None:
@@ -1028,14 +1057,17 @@ def load_attendance_and_analyze(members):
 
     try:
         store = load_attendance_store(jp)
-        json_records = member_attendance_to_dataframe_records(store, list(members))
-        if not json_records and members:
+        from planning_core.core.attendance_member_roster import members_for_attendance_analysis
+
+        analysis_members = members_for_attendance_analysis(list(members), store)
+        json_records = member_attendance_to_dataframe_records(store, analysis_members)
+        if not json_records and analysis_members:
             y = int(store.get("company_calendar", {}).get("year") or date.today().year)
             for month in range(1, 13):
                 apply_company_calendar_to_members(
-                    store, list(members), y, month, only_unedited=False
+                    store, list(analysis_members), y, month, only_unedited=False
                 )
-            json_records = member_attendance_to_dataframe_records(store, list(members))
+            json_records = member_attendance_to_dataframe_records(store, analysis_members)
         if json_records:
             df = pd.DataFrame(json_records)
             df["日付"] = pd.to_datetime(df["日付"], errors="coerce").dt.date
@@ -1068,17 +1100,14 @@ def load_attendance_and_analyze(members):
         lt = _attendance_leave_type_text(row)
         d_str = row['日付'].strftime("%Y-%m-%d") if pd.notna(row['日付']) else ""
         key = f"{d_str}_{m}"
+        if _attendance_skip_remark_ai(rem, lt):
+            continue
         if rem:
             remarks_to_analyze.append(f"{key} の備考: {rem}")
             analyzed_keys.add(key)
         elif lt and lt not in ("通常", ""):
-            # 「-」は配台不参加をコード固定（API 不要）。他の休暇区分は従来どおり AI に渡す。
-            if (
-                not _attendance_leave_type_is_calendar_no_dispatch(lt)
-                and not _attendance_leave_type_is_holiday_work(lt)
-            ):
-                remarks_to_analyze.append(f"{key} の休暇区分（備考は空）: {lt}")
-                analyzed_keys.add(key)
+            remarks_to_analyze.append(f"{key} の休暇区分（備考は空）: {lt}")
+            analyzed_keys.add(key)
 
     if remarks_to_analyze:
         remarks_blob = "\n".join(remarks_to_analyze)
@@ -1163,6 +1192,8 @@ def load_attendance_and_analyze(members):
         if _attendance_leave_type_is_absent(leave_type):
             is_holiday = True
             exclude_from_line = True
+        if _attendance_leave_type_is_calendar_public_off(leave_type):
+            is_holiday = True
         if _attendance_leave_type_is_calendar_no_dispatch(leave_type):
             exclude_from_line = True
             # 休日ではないが加工配台のみ除外（AI・空シフト推定で is_holiday になるのを防ぐ）

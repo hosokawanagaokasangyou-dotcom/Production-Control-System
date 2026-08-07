@@ -10,7 +10,7 @@
 <?import javafx.scene.layout.VBox?>
 
 <HBox xmlns="http://javafx.com/javafx/26" xmlns:fx="http://javafx.com/fxml/1"
-      fx:controller="jp.co.pm.ai.desktop.MemberAttendanceTabController"
+      fx:controller="jp.co.pm.ai.desktop.MachineCalendarTabController"
       spacing="12.0">
     <padding>
         <Insets bottom="10.0" left="10.0" right="10.0" top="10.0"/>
@@ -21,21 +21,14 @@
             <ToolBar>
                 <Label text="セル"/>
                 <Spinner fx:id="cellSizeSpinner" editable="true" prefWidth="52.0"/>
-                <Button fx:id="addMemberButton" text="メンバー追加" onAction="#onAddMember"/>
-                <Button fx:id="editMemberButton" text="メンバー編集" onAction="#onEditMember"/>
-                <Button fx:id="removeMemberButton" text="メンバー削除" onAction="#onRemoveMember"/>
-                <Separator/>
+                <Button fx:id="importMasterButton" text="master から取込" onAction="#onImportFromMaster"/>
                 <Button fx:id="saveButton" text="保存" onAction="#onSave"/>
-                <Button fx:id="setupButton" text="セットアップ" onAction="#onSetupWizard"/>
-                <Button fx:id="restoreButton" text="世代から復元" onAction="#onRestoreFromHistory"/>
                 <Separator/>
-                <Button fx:id="openCalendarButton" text="勤怠カレンダーを開く" onAction="#onOpenAttendanceCalendar"/>
                 <Button fx:id="refreshButton" text="再読込" onAction="#onRefresh"/>
             </ToolBar>
-            <Label fx:id="setupHintLabel" wrapText="true"
-                   text="セットアップ: 祝日・週末取得 → メンバー勤怠を会社カレンダーに合わせる（対象はウィザード内の年月）"/>
             <Label fx:id="statusLabel" text=""/>
-            <VBox fx:id="statusHost" spacing="4.0"/>
+            <Label wrapText="true"
+                   text="正本: machine-calendar-data.json（サマリ Excel 同階層）。master.xlsm「機械カレンダー」は互換用（将来廃止）。"/>
             <VBox fx:id="gridHost" spacing="4.0"/>
         </VBox>
     </children>

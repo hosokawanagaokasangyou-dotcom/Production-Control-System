@@ -42,6 +42,7 @@ import jp.co.pm.ai.desktop.ui.EditableMemberAttendanceGridPane;
 import jp.co.pm.ai.desktop.ui.FiscalYearPeriod;
 import jp.co.pm.ai.desktop.ui.FourDigitConfirmationDialog;
 import jp.co.pm.ai.desktop.ui.InlineMonthCalendarPane;
+import jp.co.pm.ai.desktop.ui.MemberAttendanceMemberEditDialog;
 import jp.co.pm.ai.desktop.ui.MemberHourlyAttendanceDialog;
 
 /** メンバー勤怠（カレンダー方式）編集タブ。 */
@@ -78,6 +79,15 @@ public class MemberAttendanceTabController {
 
     @FXML
     private Button openCalendarButton;
+
+    @FXML
+    private Button addMemberButton;
+
+    @FXML
+    private Button editMemberButton;
+
+    @FXML
+    private Button removeMemberButton;
 
     @FXML
     private Spinner<Integer> cellSizeSpinner;
@@ -182,6 +192,11 @@ public class MemberAttendanceTabController {
         installTooltip(
                 refreshButton,
                 "JSON 正本から再読込します（未保存の変更がある場合は確認します）");
+        installTooltip(addMemberButton, "名簿にメンバーを追加します（保存で JSON に反映）");
+        installTooltip(editMemberButton, "選択したメンバー行の氏名・主担当を編集します");
+        installTooltip(
+                removeMemberButton,
+                "選択したメンバーを名簿から削除します（氏名列をクリックして選択）");
         if (cellSizeSpinner != null) {
             installTooltip(cellSizeSpinner, "グリッドセルサイズ（会社カレンダーと共通）");
         }
@@ -526,6 +541,57 @@ public class MemberAttendanceTabController {
     @FXML
     private void onSave() {
         saveEditsAsync(null);
+    }
+
+    @FXML
+    private void onAddMember() {
+        if (gridPane == null || shell == null) {
+            return;
+        }
+        MemberAttendanceMemberEditDialog.showAdd(shell.primaryStageForDialogs())
+                .ifPresent(
+                        r -> gridPane.addMember(r.name(), r.primaryRole()));
+    }
+
+    @FXML
+    private void onEditMember() {
+        if (gridPane == null || shell == null) {
+            return;
+        }
+        String selected = gridPane.selectedMemberName();
+        if (selected == null || selected.isBlank()) {
+            shell.showWarningDialog("メンバー編集", "編集するメンバー行（氏名列）をクリックして選択してください。");
+            return;
+        }
+        MemberAttendanceMemberEditDialog.showEdit(
+                        shell.primaryStageForDialogs(),
+                        selected,
+                        gridPane.primaryRoleFor(selected))
+                .ifPresent(
+                        r ->
+                                gridPane.updateMember(
+                                        selected, r.name(), r.primaryRole()));
+    }
+
+    @FXML
+    private void onRemoveMember() {
+        if (gridPane == null || shell == null) {
+            return;
+        }
+        String selected = gridPane.selectedMemberName();
+        if (selected == null || selected.isBlank()) {
+            shell.showWarningDialog("メンバー削除", "削除するメンバー行（氏名列）をクリックして選択してください。");
+            return;
+        }
+        Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+        alert.initOwner(shell.primaryStageForDialogs());
+        alert.setTitle("メンバー削除");
+        alert.setHeaderText(null);
+        alert.setContentText("「" + selected + "」を名簿から削除します。未保存の勤怠セルも行から消えます。");
+        if (alert.showAndWait().orElse(ButtonType.CANCEL) != ButtonType.OK) {
+            return;
+        }
+        gridPane.removeMember(selected);
     }
 
     private boolean confirmSaveWithFourDigit() {

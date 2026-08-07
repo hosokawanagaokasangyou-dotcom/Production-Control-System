@@ -31,6 +31,7 @@ public final class MainShellTabLayoutDefaults {
                     MainShellTabId.REQUEST_FORM_PIPELINE_CHECK.key(),
                     MainShellTabId.COMPANY_CALENDAR.key(),
                     MainShellTabId.MEMBER_ATTENDANCE.key(),
+                    MainShellTabId.MACHINE_CALENDAR.key(),
                     MainShellTabId.RUN.key(),
                     MainShellTabId.PLAN_INPUT_STAGE3.key(),
                     MainShellTabId.PLAN_INPUT.key(),
@@ -84,6 +85,7 @@ public final class MainShellTabLayoutDefaults {
         top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.REQUEST_FORM_PIPELINE_CHECK.key(), "#9980e6"));
         top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.COMPANY_CALENDAR.key(), "#800080"));
         top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.MEMBER_ATTENDANCE.key(), "#800080"));
+        top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.MACHINE_CALENDAR.key(), "#800080"));
         top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.RUN.key(), "#0000ff"));
         top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.PLAN_INPUT_STAGE3.key(), "#800080"));
         top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.PLAN_INPUT.key(), "#000080"));

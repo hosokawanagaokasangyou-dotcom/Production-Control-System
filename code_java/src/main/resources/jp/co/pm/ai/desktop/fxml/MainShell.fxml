@@ -100,6 +100,11 @@
                         <fx:include fx:id="memberAttendanceTab" source="MemberAttendanceTab.fxml"/>
                     </content>
                 </Tab>
+                <Tab fx:id="mainShellTabMachineCalendar" closable="false" text="機械カレンダー">
+                    <content>
+                        <fx:include fx:id="machineCalendarTab" source="MachineCalendarTab.fxml"/>
+                    </content>
+                </Tab>
                 <Tab fx:id="mainShellTabMasterSummary" closable="false"
                      text="マスタ読込サマリ">
                     <content>

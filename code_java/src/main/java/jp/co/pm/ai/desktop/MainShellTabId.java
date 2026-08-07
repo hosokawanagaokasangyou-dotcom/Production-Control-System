@@ -22,6 +22,8 @@ public enum MainShellTabId {
     COMPANY_CALENDAR("companyCalendar"),
     /** メンバー勤怠（カレンダー方式）。 */
     MEMBER_ATTENDANCE("memberAttendance"),
+    /** 機械カレンダー（JSON 正本）。 */
+    MACHINE_CALENDAR("machineCalendar"),
     MASTER_SUMMARY("masterSummary"),
     PLAN_INPUT("planInput"),
     /** 段階3.0 前処理で生成する枝番タスク入力（配台計画_タスク入力3.0）。段階3.0/3.1/3.2 実行の起点。 */

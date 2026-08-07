@@ -93,6 +93,8 @@ public final class EditableMemberAttendanceGridPane extends VBox {
     private int year;
     private int month;
     private List<String> members = List.of();
+    private Map<String, String> primaryRoles = new HashMap<>();
+    private String selectedMember = null;
     private List<LocalDate> dates = List.of();
     private final Map<String, Map<String, CellState>> cells = new HashMap<>();
     /** コメントを明示編集したセル（空文字での削除を保存に反映するため）。 */
@@ -247,6 +249,26 @@ public final class EditableMemberAttendanceGridPane extends VBox {
         } else {
             out.put("cells", new HashMap<>());
         }
+        Object rosterObj = patch.get("member_roster");
+        if (rosterObj instanceof List<?> roster) {
+            List<Map<String, Object>> rosterCopy = new ArrayList<>();
+            for (Object item : roster) {
+                if (item instanceof Map<?, ?> ent) {
+                    Map<String, Object> row = new HashMap<>();
+                    row.put("name", String.valueOf(ent.get("name")));
+                    row.put(
+                            "primary_role",
+                            String.valueOf(
+                                    ent.get("primary_role") != null
+                                            ? ent.get("primary_role")
+                                            : MemberAttendanceMemberEditDialog.ROLE_POST));
+                    rosterCopy.add(row);
+                }
+            }
+            out.put("member_roster", rosterCopy);
+        } else {
+            out.put("member_roster", List.of());
+        }
         return out;
     }
 
@@ -257,7 +279,42 @@ public final class EditableMemberAttendanceGridPane extends VBox {
         if (patchInt(a, "month") != patchInt(b, "month")) {
             return false;
         }
+        if (!patchRosterEqual(a.get("member_roster"), b.get("member_roster"))) {
+            return false;
+        }
         return patchCellMapsEqual(patchCells(a), patchCells(b));
+    }
+
+    private static boolean patchRosterEqual(Object a, Object b) {
+        List<Map<String, String>> la = rosterToList(a);
+        List<Map<String, String>> lb = rosterToList(b);
+        if (la.size() != lb.size()) {
+            return false;
+        }
+        for (int i = 0; i < la.size(); i++) {
+            Map<String, String> ea = la.get(i);
+            Map<String, String> eb = lb.get(i);
+            if (!nz(ea.get("name")).equals(nz(eb.get("name")))
+                    || !nz(ea.get("primary_role")).equals(nz(eb.get("primary_role")))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static List<Map<String, String>> rosterToList(Object rosterObj) {
+        List<Map<String, String>> out = new ArrayList<>();
+        if (rosterObj instanceof List<?> roster) {
+            for (Object item : roster) {
+                if (item instanceof Map<?, ?> ent) {
+                    Map<String, String> row = new HashMap<>();
+                    row.put("name", nz(ent.get("name")));
+                    row.put("primary_role", nz(ent.get("primary_role")));
+                    out.add(row);
+                }
+            }
+        }
+        return out;
     }
 
     private static int patchInt(Map<String, Object> patch, String key) {
@@ -375,7 +432,46 @@ public final class EditableMemberAttendanceGridPane extends VBox {
         year = node.path("year").asInt(LocalDate.now().getYear());
         month = node.path("month").asInt(LocalDate.now().getMonthValue());
         members = new ArrayList<>();
+        primaryRoles = new HashMap<>();
         node.path("members").forEach(m -> members.add(m.asText("")));
+        JsonNode rosterNode = node.path("member_roster");
+        if (rosterNode.isArray() && rosterNode.size() > 0) {
+            members.clear();
+            rosterNode.forEach(
+                    ent -> {
+                        String name = ent.path("name").asText("").trim();
+                        if (name.isEmpty()) {
+                            return;
+                        }
+                        members.add(name);
+                        String role =
+                                ent.path("primary_role")
+                                        .asText(MemberAttendanceMemberEditDialog.ROLE_POST)
+                                        .trim();
+                        if (!role.equals(MemberAttendanceMemberEditDialog.ROLE_LOGISTICS)) {
+                            role = MemberAttendanceMemberEditDialog.ROLE_POST;
+                        }
+                        primaryRoles.put(name, role);
+                    });
+        } else {
+            JsonNode rolesNode = node.path("primary_roles");
+            if (rolesNode.isObject()) {
+                rolesNode
+                        .fields()
+                        .forEachRemaining(
+                                e ->
+                                        primaryRoles.put(
+                                                e.getKey(),
+                                                e.getValue()
+                                                        .asText(
+                                                                MemberAttendanceMemberEditDialog
+                                                                        .ROLE_POST)));
+            }
+            for (String member : members) {
+                primaryRoles.putIfAbsent(
+                        member, MemberAttendanceMemberEditDialog.ROLE_POST);
+            }
+        }
         dates = new ArrayList<>();
         node.path("dates").forEach(d -> {
             try {
@@ -468,7 +564,151 @@ public final class EditableMemberAttendanceGridPane extends VBox {
             }
         }
         patch.put("cells", outCells);
+        patch.put("member_roster", exportMemberRoster());
         return patch;
+    }
+
+    public String primaryRoleFor(String member) {
+        if (member == null) {
+            return MemberAttendanceMemberEditDialog.ROLE_POST;
+        }
+        return primaryRoles.getOrDefault(member, MemberAttendanceMemberEditDialog.ROLE_POST);
+    }
+
+    private List<Map<String, Object>> exportMemberRoster() {
+        List<Map<String, Object>> roster = new ArrayList<>();
+        for (String member : members) {
+            Map<String, Object> row = new HashMap<>();
+            row.put("name", member);
+            row.put(
+                    "primary_role",
+                    primaryRoles.getOrDefault(
+                            member, MemberAttendanceMemberEditDialog.ROLE_POST));
+            roster.add(row);
+        }
+        return roster;
+    }
+
+    public String selectedMemberName() {
+        return selectedMember;
+    }
+
+    public void addMember(String name, String primaryRole) {
+        String n = name != null ? name.trim() : "";
+        if (n.isEmpty() || members.contains(n)) {
+            return;
+        }
+        String role =
+                MemberAttendanceMemberEditDialog.ROLE_LOGISTICS.equals(primaryRole)
+                        ? MemberAttendanceMemberEditDialog.ROLE_LOGISTICS
+                        : MemberAttendanceMemberEditDialog.ROLE_POST;
+        members.add(n);
+        primaryRoles.put(n, role);
+        selectedMember = n;
+        rebuildGrid();
+        notifyDirtyChanged();
+    }
+
+    public void updateMember(String oldName, String newName, String primaryRole) {
+        if (oldName == null || newName == null) {
+            return;
+        }
+        String oldN = oldName.trim();
+        String newN = newName.trim();
+        if (oldN.isEmpty() || newN.isEmpty()) {
+            return;
+        }
+        int idx = members.indexOf(oldN);
+        if (idx < 0) {
+            return;
+        }
+        if (!oldN.equals(newN) && members.contains(newN)) {
+            return;
+        }
+        String role =
+                MemberAttendanceMemberEditDialog.ROLE_LOGISTICS.equals(primaryRole)
+                        ? MemberAttendanceMemberEditDialog.ROLE_LOGISTICS
+                        : MemberAttendanceMemberEditDialog.ROLE_POST;
+        members.set(idx, newN);
+        primaryRoles.remove(oldN);
+        primaryRoles.put(newN, role);
+        if (!oldN.equals(newN)) {
+            migrateMemberCells(oldN, newN);
+        }
+        if (selectedMember != null && selectedMember.equals(oldN)) {
+            selectedMember = newN;
+        }
+        rebuildGrid();
+        notifyDirtyChanged();
+    }
+
+    public void removeMember(String name) {
+        if (name == null || name.isBlank()) {
+            return;
+        }
+        String n = name.trim();
+        if (!members.contains(n)) {
+            return;
+        }
+        members.remove(n);
+        primaryRoles.remove(n);
+        for (Map<String, CellState> day : cells.values()) {
+            day.remove(n);
+        }
+        if (selectedMember != null && selectedMember.equals(n)) {
+            selectedMember = null;
+        }
+        rebuildGrid();
+        notifyDirtyChanged();
+    }
+
+    private void migrateMemberCells(String oldName, String newName) {
+        for (Map<String, CellState> day : cells.values()) {
+            CellState st = day.remove(oldName);
+            if (st != null && !day.containsKey(newName)) {
+                day.put(newName, st);
+            }
+        }
+        for (String key : new ArrayList<>(commentEditedCellKeys)) {
+            if (key.endsWith("|".concat(oldName))) {
+                commentEditedCellKeys.remove(key);
+                commentEditedCellKeys.add(cellKey(key.substring(0, key.length() - oldName.length() - 1), newName));
+            }
+        }
+        for (String key : new ArrayList<>(hourlyEditedCellKeys)) {
+            if (key.endsWith("|".concat(oldName))) {
+                hourlyEditedCellKeys.remove(key);
+                hourlyEditedCellKeys.add(cellKey(key.substring(0, key.length() - oldName.length() - 1), newName));
+            }
+        }
+    }
+
+    private void selectMember(String member) {
+        selectedMember = member;
+        refreshMemberSelectionStyles();
+    }
+
+    private void refreshMemberSelectionStyles() {
+        grid.getChildren().stream()
+                .filter(n -> n instanceof Label)
+                .map(n -> (Label) n)
+                .filter(l -> l.getStyleClass().contains("pm-member-attendance-grid-member"))
+                .forEach(
+                        l -> {
+                            boolean sel =
+                                    selectedMember != null
+                                            && selectedMember.equals(l.getText());
+                            if (sel) {
+                                if (!l.getStyleClass()
+                                        .contains("pm-member-attendance-grid-member-selected")) {
+                                    l.getStyleClass()
+                                            .add("pm-member-attendance-grid-member-selected");
+                                }
+                            } else {
+                                l.getStyleClass()
+                                        .remove("pm-member-attendance-grid-member-selected");
+                            }
+                        });
     }
 
     private void rebuildGrid() {
@@ -480,6 +720,10 @@ public final class EditableMemberAttendanceGridPane extends VBox {
             return;
         }
 
+        ColumnConstraints roleCol = new ColumnConstraints();
+        roleCol.setMinWidth(AttendanceGridCellSizing.memberPrimaryRoleColumnWidth(cellSizePx));
+        roleCol.setPrefWidth(AttendanceGridCellSizing.memberPrimaryRoleColumnWidth(cellSizePx));
+        grid.getColumnConstraints().add(roleCol);
         ColumnConstraints nameCol = new ColumnConstraints();
         nameCol.setMinWidth(AttendanceGridCellSizing.memberNameColumnWidth(cellSizePx));
         nameCol.setPrefWidth(AttendanceGridCellSizing.memberNameColumnWidth(cellSizePx));
@@ -492,10 +736,14 @@ public final class EditableMemberAttendanceGridPane extends VBox {
             grid.getColumnConstraints().add(cc);
         }
 
+        Label roleHeader = new Label("主担当");
+        roleHeader.getStyleClass().add("pm-member-attendance-grid-header");
+        AttendanceGridCellSizing.applyHeaderLabel(roleHeader, cellSizePx);
+        grid.add(roleHeader, 0, 0);
         Label nameHeader = new Label("メンバー");
         nameHeader.getStyleClass().add("pm-member-attendance-grid-header");
         AttendanceGridCellSizing.applyHeaderLabel(nameHeader, cellSizePx);
-        grid.add(nameHeader, 0, 0);
+        grid.add(nameHeader, 1, 0);
         Locale locale = Locale.JAPAN;
         for (int col = 0; col < dates.size(); col++) {
             LocalDate d = dates.get(col);
@@ -507,7 +755,7 @@ public final class EditableMemberAttendanceGridPane extends VBox {
                 h.getStyleClass().add("pm-member-attendance-company-off");
             }
             GridPane.setHalignment(h, HPos.CENTER);
-            grid.add(h, col + 1, 0);
+            grid.add(h, col + 2, 0);
         }
 
         for (int row = 0; row < members.size(); row++) {
@@ -517,15 +765,30 @@ public final class EditableMemberAttendanceGridPane extends VBox {
             rowBand.setMouseTransparent(true);
             rowBand.setMaxWidth(Double.MAX_VALUE);
             rowBand.setMaxHeight(Double.MAX_VALUE);
-            GridPane.setColumnSpan(rowBand, dates.size() + 1);
+            GridPane.setColumnSpan(rowBand, dates.size() + 2);
             grid.add(rowBand, 0, row + 1);
+
+            Label roleLabel =
+                    new Label(
+                            primaryRoles.getOrDefault(
+                                    member, MemberAttendanceMemberEditDialog.ROLE_POST));
+            roleLabel.getStyleClass().add("pm-member-attendance-grid-role");
+            AttendanceGridCellSizing.applyMemberNameLabel(roleLabel, cellSizePx);
+            GridPane.setHalignment(roleLabel, HPos.CENTER);
+            GridPane.setValignment(roleLabel, VPos.CENTER);
+            grid.add(roleLabel, 0, row + 1);
+            rowDimming.installHover(roleLabel, row);
 
             Label name = new Label(member);
             name.getStyleClass().add("pm-member-attendance-grid-member");
+            if (selectedMember != null && selectedMember.equals(member)) {
+                name.getStyleClass().add("pm-member-attendance-grid-member-selected");
+            }
             AttendanceGridCellSizing.applyMemberNameLabel(name, cellSizePx);
             GridPane.setHalignment(name, HPos.CENTER);
             GridPane.setValignment(name, VPos.CENTER);
-            grid.add(name, 0, row + 1);
+            name.setOnMouseClicked(e -> selectMember(member));
+            grid.add(name, 1, row + 1);
             List<StackPane> rowWraps = new ArrayList<>();
             rowDimming.installHover(name, row);
             for (int col = 0; col < dates.size(); col++) {
@@ -559,7 +822,7 @@ public final class EditableMemberAttendanceGridPane extends VBox {
                 cellUiMap.put(cellKey(dKey, member), new CellUi(cell, commentMark));
                 rowDimming.installHover(cellWrap, row);
                 rowWraps.add(cellWrap);
-                grid.add(cellWrap, col + 1, row + 1);
+                grid.add(cellWrap, col + 2, row + 1);
             }
             rowDimming.addRow(rowBand, name, new ArrayList<>(rowWraps));
         }

@@ -4298,6 +4298,47 @@ def _machine_cal_resolve_column_to_equipment_key(
         return combo
     nk = _normalize_equipment_match_key(combo)
     return eq_lookup.get(nk)
+def _try_load_machine_calendar_blocks_from_json(
+    equipment_list: list,
+    *,
+    interactive_only_asterisk_occupancy: bool = False,
+) -> dict[date, dict[str, list[tuple[datetime, datetime]]]] | None:
+    """JSON 正本があれば占有ブロックを返す。無ければ None（master フォールバック）。"""
+    global _MACHINE_CALENDAR_INTERACTIVE_DEFINED_SLOTS_BY_DATE
+    try:
+        from planning_core.core.machine_calendar_paths import machine_calendar_data_json_path
+        from planning_core.core.machine_calendar_store import (
+            load_machine_calendar_store,
+            occupancy_blocks_from_store,
+            store_has_machine_calendar_data,
+        )
+
+        jp = machine_calendar_data_json_path()
+        if not jp.is_file():
+            return None
+        store = load_machine_calendar_store(jp)
+        if not store_has_machine_calendar_data(store):
+            return None
+        out, interactive_defined = occupancy_blocks_from_store(
+            store,
+            equipment_list,
+            interactive_only_asterisk_occupancy=interactive_only_asterisk_occupancy,
+        )
+        if interactive_only_asterisk_occupancy:
+            _MACHINE_CALENDAR_INTERACTIVE_DEFINED_SLOTS_BY_DATE = dict(interactive_defined)
+        else:
+            _MACHINE_CALENDAR_INTERACTIVE_DEFINED_SLOTS_BY_DATE = {}
+        logging.info(
+            "機械カレンダー: JSON 正本を読み込みました（%s、%d 日分）。",
+            jp,
+            len(out),
+        )
+        return out
+    except Exception as e:
+        logging.warning(
+            "機械カレンダー JSON 読込失敗のため master へフォールバックします (%s)", e
+        )
+        return None
 def load_machine_calendar_occupancy_blocks(
     master_path: str,
     equipment_list: list,
@@ -4305,7 +4346,9 @@ def load_machine_calendar_occupancy_blocks(
     interactive_only_asterisk_occupancy: bool = False,
 ) -> dict[date, dict[str, list[tuple[datetime, datetime]]]]:
     """
-    master.xlsm「機械カレンダー」を読み」設備列の非空セル＝当該スロット占有とみなす。
+    機械カレンダー占有ブロックを読み込む。
+
+    優先順: machine-calendar-data.json（正本）→ master.xlsm「機械カレンダー」（互換）。
     戻り: 日付 -> equipment_list のキー -> 半開区間 [start, end) のリスト（マージ済み）。
 
     interactive_only_asterisk_occupancy:
@@ -4313,6 +4356,13 @@ def load_machine_calendar_occupancy_blocks(
         列0にスロット行が無い時刻（工場計画窓内）はブロックとみなす（`_interactive_augment_machine_calendar_day_blocks`）。
     """
     global _MACHINE_CALENDAR_INTERACTIVE_DEFINED_SLOTS_BY_DATE
+    json_blocks = _try_load_machine_calendar_blocks_from_json(
+        equipment_list,
+        interactive_only_asterisk_occupancy=interactive_only_asterisk_occupancy,
+    )
+    if json_blocks is not None:
+        return json_blocks
+
     _MACHINE_CALENDAR_INTERACTIVE_DEFINED_SLOTS_BY_DATE = {}
     if not master_path or not os.path.isfile(master_path):
         return {}
@@ -7681,54 +7731,109 @@ def _validate_master_dispatch_prerequisites(
         )
 
     if SHEET_MACHINE_CALENDAR not in xls.sheet_names:
-        raise PlanningValidationError(
-            f"{context_label}: 機械カレンダーが作成されていません。"
-            " master.xlsm で VBA「機械カレンダーを作成」を実行してから実行してください。"
+        from planning_core.core.machine_calendar_paths import machine_calendar_data_json_path
+        from planning_core.core.machine_calendar_store import (
+            load_machine_calendar_store,
+            validate_store_for_dispatch,
         )
-    try:
-        raw = pd.read_excel(xls, sheet_name=SHEET_MACHINE_CALENDAR, header=None)
-    except Exception as e:
-        raise PlanningValidationError(
-            f"{context_label}: 機械カレンダーが読み込めません。"
-            f" ({e})"
-        ) from e
-    if raw.shape[0] < 3 or raw.shape[1] < 3:
-        raise PlanningValidationError(
-            f"{context_label}: 機械カレンダーが作成されていません（シートが空または未構成）。"
-            " VBA「機械カレンダーを作成」を実行してください。"
-        )
-    slot_rows = 0
-    for r in range(2, raw.shape[0]):
-        if _machine_cal_parse_slot_datetime(raw.iat[r, 0]) is not None:
-            slot_rows += 1
-    header_pairs = 0
-    for c in range(2, raw.shape[1]):
-        p = raw.iat[0, c]
-        m = raw.iat[1, c] if raw.shape[0] > 1 else None
-        if pd.isna(p) or pd.isna(m):
-            continue
-        p_s = str(p).strip()
-        m_s = str(m).strip()
-        if p_s and m_s and p_s.lower() != "nan" and m_s.lower() != "nan":
-            header_pairs += 1
-    if slot_rows == 0 or header_pairs == 0:
-        raise PlanningValidationError(
-            f"{context_label}: 機械カレンダーが作成されていません"
-            "（日時スロット行または設備列がありません）。"
-            " VBA「機械カレンダーを作成」を実行してください。"
-        )
-    if equipment_list:
-        blocks = load_machine_calendar_occupancy_blocks(
-            master_path,
-            equipment_list,
-            interactive_only_asterisk_occupancy=False,
-        )
-        if not blocks and slot_rows > 0 and header_pairs > 0:
-            logging.info(
-                "%s: 機械カレンダーは存在しますが、skills の設備列と一致する列がありません。"
-                " 占有ブロックは空として続行します。",
-                context_label,
+
+        jp = machine_calendar_data_json_path()
+        if jp.is_file() and validate_store_for_dispatch(load_machine_calendar_store(jp)):
+            pass
+        else:
+            raise PlanningValidationError(
+                f"{context_label}: 機械カレンダーが作成されていません。"
+                " アプリの機械カレンダータブで JSON を用意するか、"
+                " master.xlsm で VBA「機械カレンダーを作成」を実行してください。"
             )
+    if SHEET_MACHINE_CALENDAR in xls.sheet_names:
+        try:
+            raw = pd.read_excel(xls, sheet_name=SHEET_MACHINE_CALENDAR, header=None)
+        except Exception as e:
+            raise PlanningValidationError(
+                f"{context_label}: 機械カレンダーが読み込めません。"
+                f" ({e})"
+            ) from e
+        if raw.shape[0] < 3 or raw.shape[1] < 3:
+            from planning_core.core.machine_calendar_paths import machine_calendar_data_json_path
+            from planning_core.core.machine_calendar_store import (
+                load_machine_calendar_store,
+                validate_store_for_dispatch,
+            )
+
+            jp = machine_calendar_data_json_path()
+            if not (
+                jp.is_file()
+                and validate_store_for_dispatch(load_machine_calendar_store(jp))
+            ):
+                raise PlanningValidationError(
+                    f"{context_label}: 機械カレンダーが作成されていません（シートが空または未構成）。"
+                    " アプリの機械カレンダータブまたは VBA「機械カレンダーを作成」で用意してください。"
+                )
+        else:
+            slot_rows = 0
+            for r in range(2, raw.shape[0]):
+                if _machine_cal_parse_slot_datetime(raw.iat[r, 0]) is not None:
+                    slot_rows += 1
+            header_pairs = 0
+            for c in range(2, raw.shape[1]):
+                p = raw.iat[0, c]
+                m = raw.iat[1, c] if raw.shape[0] > 1 else None
+                if pd.isna(p) or pd.isna(m):
+                    continue
+                p_s = str(p).strip()
+                m_s = str(m).strip()
+                if p_s and m_s and p_s.lower() != "nan" and m_s.lower() != "nan":
+                    header_pairs += 1
+            if slot_rows == 0 or header_pairs == 0:
+                raise PlanningValidationError(
+                    f"{context_label}: 機械カレンダーが作成されていません"
+                    "（日時スロット行または設備列がありません）。"
+                    " アプリの機械カレンダータブまたは VBA「機械カレンダーを作成」で用意してください。"
+                )
+            if equipment_list:
+                blocks = load_machine_calendar_occupancy_blocks(
+                    master_path,
+                    equipment_list,
+                    interactive_only_asterisk_occupancy=False,
+                )
+                if not blocks and slot_rows > 0 and header_pairs > 0:
+                    logging.info(
+                        "%s: 機械カレンダーは存在しますが、skills の設備列と一致する列がありません。"
+                        " 占有ブロックは空として続行します。",
+                        context_label,
+                    )
+        return
+
+    from planning_core.core.machine_calendar_paths import machine_calendar_data_json_path
+    from planning_core.core.machine_calendar_store import (
+        load_machine_calendar_store,
+        validate_store_for_dispatch,
+    )
+
+    jp = machine_calendar_data_json_path()
+    if jp.is_file() and validate_store_for_dispatch(load_machine_calendar_store(jp)):
+        if equipment_list:
+            blocks = load_machine_calendar_occupancy_blocks(
+                master_path,
+                equipment_list,
+                interactive_only_asterisk_occupancy=False,
+            )
+            if not blocks:
+                logging.info(
+                    "%s: 機械カレンダー JSON は存在しますが、skills の設備列と一致する列がありません。"
+                    " 占有ブロックは空として続行します。",
+                    context_label,
+                )
+        return
+
+    raise PlanningValidationError(
+        f"{context_label}: 機械カレンダーが作成されていません。"
+        " アプリの機械カレンダータブで JSON を用意するか、"
+        " master.xlsm で VBA「機械カレンダーを作成」を実行してください。"
+    )
+
+
 def _validate_stage3_master_prerequisites(
     master_path: str,
     members: list,

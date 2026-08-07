@@ -388,6 +388,9 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
     private MemberAttendanceTabController memberAttendanceTabController;
 
     @FXML
+    private MachineCalendarTabController machineCalendarTabController;
+
+    @FXML
     private PlanInputTabController planInputTabController;
 
     @FXML
@@ -502,6 +505,9 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
 
     @FXML
     private Tab mainShellTabMemberAttendance;
+
+    @FXML
+    private Tab mainShellTabMachineCalendar;
 
     @FXML
     private Tab mainShellTabMasterSummary;
@@ -782,6 +788,9 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
             }
             if (memberAttendanceTabController != null) {
                 memberAttendanceTabController.bindShell(this);
+            }
+            if (machineCalendarTabController != null) {
+                machineCalendarTabController.bindShell(this);
             }
             masterReadSummaryTabController.bindShell(this);
             planResultViewerTabController.bindShell(this);
@@ -2134,6 +2143,9 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         if (t == mainShellTabMemberAttendance) {
             return MainShellTabId.MEMBER_ATTENDANCE;
         }
+        if (t == mainShellTabMachineCalendar) {
+            return MainShellTabId.MACHINE_CALENDAR;
+        }
         if (t == mainShellTabMasterSummary) {
             return MainShellTabId.MASTER_SUMMARY;
         }
@@ -2226,6 +2238,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
             case OPERATOR_USER_MANAGEMENT -> mainShellTabOperatorUserManagement;
             case COMPANY_CALENDAR -> mainShellTabCompanyCalendar;
             case MEMBER_ATTENDANCE -> mainShellTabMemberAttendance;
+            case MACHINE_CALENDAR -> mainShellTabMachineCalendar;
             case MASTER_SUMMARY -> mainShellTabMasterSummary;
             case PLAN_INPUT -> mainShellTabPlanInput;
             case PLAN_INPUT_STAGE3 -> mainShellTabPlanInputStage3;
@@ -6926,6 +6939,22 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                 childEnvForPython(uiRun));
     }
 
+    /** {@code machine_calendar_io.py} — 機械カレンダー JSON。 */
+    RunRequest buildMachineCalendarIoRequest(String... scriptArgs) {
+        Map<String, String> uiRun = collectUiEnv();
+        Path py = resolveStagePythonExecutablePath(uiRun);
+        String scriptName = "machine_calendar_io.py";
+        Path dir = AppPaths.resolvePythonScriptDirForScript(uiRun, scriptName);
+        String wb = effectiveTaskInputWorkbookPath();
+        return new RunRequest(
+                py,
+                dir,
+                scriptName,
+                wb,
+                childEnvForPython(uiRun),
+                List.of(scriptArgs));
+    }
+
     /** {@code attendance_data_io.py} — 勤怠 JSON / 会社カレンダー / master 新シート出力。 */
     RunRequest buildAttendanceDataIoRequest(String... scriptArgs) {
         Map<String, String> uiRun = collectUiEnv();
@@ -7054,6 +7083,10 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         if (memberAttendanceTabController != null) {
             memberAttendanceTabController.applyGridCellSizeToPane(clamped);
             memberAttendanceTabController.syncGridCellSizeSpinner(clamped);
+        }
+        if (machineCalendarTabController != null) {
+            machineCalendarTabController.applyGridCellSize(clamped);
+            machineCalendarTabController.syncGridCellSizeSpinner(clamped);
         }
     }
 

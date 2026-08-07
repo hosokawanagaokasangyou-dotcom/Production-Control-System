@@ -65,7 +65,16 @@ def main() -> int:
         from planning_core.core.master_data import load_skills_and_needs, _master_workbook_path_resolved
 
         store = load_attendance_store()
-        members = load_skills_and_needs()[1]
+        from planning_core.core.attendance_member_roster import (
+            attendance_grid_member_names,
+            ensure_member_roster,
+            members_for_attendance_analysis,
+        )
+
+        ensure_member_roster(store)
+        skills_members = load_skills_and_needs()[1]
+        members = attendance_grid_member_names(store)
+        analysis_members = members_for_attendance_analysis(skills_members, store)
 
         if action == "status":
             from pathlib import Path
@@ -74,7 +83,7 @@ def main() -> int:
             from planning_core.core.attendance_readiness import build_attendance_readiness
 
             jp = attendance_data_json_path()
-            readiness = build_attendance_readiness(store, members)
+            readiness = build_attendance_readiness(store, analysis_members)
             master_path = Path(_master_workbook_path_resolved())
             _emit(
                 {
@@ -94,7 +103,7 @@ def main() -> int:
 
             year = int(sys.argv[2]) if len(sys.argv) > 2 else __import__("datetime").date.today().year
             month = int(sys.argv[3]) if len(sys.argv) > 3 else __import__("datetime").date.today().month
-            _emit(build_attendance_readiness(store, members, year, month))
+            _emit(build_attendance_readiness(store, analysis_members, year, month))
             return 0
 
         if action == "company_calendar":

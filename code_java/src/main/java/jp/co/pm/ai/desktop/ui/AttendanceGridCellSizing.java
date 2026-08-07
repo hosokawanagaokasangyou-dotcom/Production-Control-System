@@ -27,7 +27,11 @@ public final class AttendanceGridCellSizing {
     }
 
     public static int memberNameColumnWidth(int cellPx) {
-        return Math.max(80, clamp(cellPx) + 56);
+        return Math.max(72, clamp(cellPx) + 48);
+    }
+
+    public static int memberPrimaryRoleColumnWidth(int cellPx) {
+        return Math.max(52, clamp(cellPx) + 28);
     }
 
     public static int memberDayColumnWidth(int cellPx) {
