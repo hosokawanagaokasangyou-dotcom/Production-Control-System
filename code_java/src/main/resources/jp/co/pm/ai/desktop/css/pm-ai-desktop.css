@@ -54,6 +54,11 @@
 .list-view.pm-log-view .list-cell.log-cell {
     -fx-text-fill: #1e293b;
     -fx-background-color: transparent;
+    -fx-alignment: top-left;
+}
+
+.list-view.pm-log-view .list-cell.log-cell .text-flow {
+    -fx-background-color: transparent;
 }
 
 .list-view.pm-log-view .list-cell.log-cell .text {

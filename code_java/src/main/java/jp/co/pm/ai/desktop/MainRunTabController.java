@@ -483,12 +483,14 @@ public final class MainRunTabController {
                                     return;
                                 }
                                 setText(null);
-                                setGraphic(buildLogLineGraphic(item));
+                                double w = Math.max(0, logListView.getWidth() - 28);
+                                TextFlow flow = buildLogLineGraphic(item, w);
+                                setGraphic(flow);
                                 setWrapText(false);
                                 setTextOverrun(OverrunStyle.CLIP);
-                                double w = logListView.getWidth() - 28;
                                 if (w > 0) {
                                     setMaxWidth(w);
+                                    flow.setMaxWidth(w);
                                 }
                                 getStyleClass().add("log-cell");
                                 if (shell != null && shell.currentDesktopTheme().isDarkUi()) {
@@ -557,7 +559,7 @@ public final class MainRunTabController {
             return;
         }
         double lineHeight = appliedLogFont.getSize() * 1.35;
-        double cell = Math.clamp(lineHeight * 1.45, 22.0, 52.0);
+        double cell = Math.clamp(Math.ceil(lineHeight) + 6, 24.0, 60.0);
         logListView.setFixedCellSize(cell);
     }
 
@@ -818,8 +820,13 @@ public final class MainRunTabController {
         return logSearchField.getText().trim();
     }
 
-    private TextFlow buildLogLineGraphic(String item) {
+    private TextFlow buildLogLineGraphic(String item, double maxWidth) {
         TextFlow flow = new TextFlow();
+        if (maxWidth > 0) {
+            flow.setMaxWidth(maxWidth);
+        }
+        double lineCap = appliedLogFont.getSize() * 1.45;
+        flow.setMaxHeight(lineCap);
         LogLineKind kind = LogLineKind.classify(item);
         Color baseFill = resolveLogTextFill(kind);
         String search = snapshotLogSearchText();
@@ -1719,6 +1726,38 @@ public final class MainRunTabController {
         if (line == null || line.isEmpty()) {
             return;
         }
+        List<String> parts = splitLogLineParts(line);
+        if (parts.size() > 1) {
+            for (String part : parts) {
+                appendLogLine(part, scrollToEnd);
+            }
+            return;
+        }
+        appendLogLine(line, scrollToEnd);
+    }
+
+    private static List<String> splitLogLineParts(String line) {
+        if (line == null || line.isEmpty()) {
+            return List.of();
+        }
+        if (line.indexOf('\n') < 0 && line.indexOf('\r') < 0) {
+            return List.of(line);
+        }
+        String normalized = line.replace("\r\n", "\n").replace('\r', '\n');
+        String[] raw = normalized.split("\n");
+        List<String> parts = new ArrayList<>(raw.length);
+        for (String part : raw) {
+            if (!part.isEmpty()) {
+                parts.add(part);
+            }
+        }
+        return parts;
+    }
+
+    private void appendLogLine(String line, boolean scrollToEnd) {
+        if (line == null || line.isEmpty()) {
+            return;
+        }
         if (!scrollToEnd) {
             Runnable addImmediate =
                     () -> {
@@ -1751,7 +1790,11 @@ public final class MainRunTabController {
                     suppressRunLogSessionPersistence.set(true);
                     try {
                         if (lines != null && !lines.isEmpty()) {
-                            logLinesAll.setAll(lines);
+                            List<String> expanded = new ArrayList<>(lines.size());
+                            for (String line : lines) {
+                                expanded.addAll(splitLogLineParts(line));
+                            }
+                            logLinesAll.setAll(expanded);
                         } else {
                             logLinesAll.clear();
                         }
