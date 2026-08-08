@@ -188,7 +188,8 @@ public final class MainRunTabController {
     private boolean deliveryCalendarReloadBlocking;
 
     private boolean stage1BlockedByPipelineCheck;
-    private boolean stage1BlockedByCalendarNotReady;
+    /** 起動直後は未確認のため段階1を抑止（readiness 応答後に解除）。 */
+    private boolean stage1BlockedByCalendarNotReady = true;
     private String calendarReadinessBlockTooltip = "";
 
     private String stage1PipelineCheckBlockTooltip = "";

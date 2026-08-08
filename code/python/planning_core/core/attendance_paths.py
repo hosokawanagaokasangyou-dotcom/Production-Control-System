@@ -80,13 +80,17 @@ def summary_workbook_parent() -> Path | None:
             return p.parent
     summary = os.environ.get(ENV_SUMMARY_AI_DISPATCH_WORKBOOK, "").strip()
     if summary:
-        p = Path(summary)
-        if p.is_file():
-            return p.parent
-    try:
-        from planning_core.core.task_queue import _resolve_summary_ai_dispatch_workbook_path
+        from planning_core.core.summary_shared_data_paths import (
+            resolve_summary_shared_data_dir_from_override,
+        )
 
-        parent = Path(_resolve_summary_ai_dispatch_workbook_path()).parent
+        p = Path(resolve_summary_shared_data_dir_from_override(summary))
+        if p.is_dir():
+            return p
+    try:
+        from planning_core.core.summary_shared_data_paths import resolve_summary_shared_data_dir
+
+        parent = Path(resolve_summary_shared_data_dir())
         if parent.is_dir():
             return parent
     except Exception:

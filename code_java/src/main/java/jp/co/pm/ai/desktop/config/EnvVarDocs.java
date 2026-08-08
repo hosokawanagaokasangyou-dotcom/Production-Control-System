@@ -394,20 +394,18 @@ public final class EnvVarDocs {
                         + " JavaFX の「マスタ読込サマリ」タブで内容を確認可。");
         put(
                 "PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK",
-                "利用工場と本パスが別工場を指すとき"
-                        + " summaryAiDispatchXlsxPathForFactory が工場既定 UNC へ切替"
-                        + "（操作者 bin・PDF・バックアップと整合）。"
-                        + " 段階1（run_stage1_extract）は同フォルダへ"
-                        + " stage1_exclude_rules.json を書出し"
-                        + " PM_AI_EXCLUDE_RULES_JSON を自動設定。"
-                        + " 特別ルール JSON は dispatch_special_rules/ 配下。"
-                        + " 操作者 bin・PDF・バックアップ・remote_log 等の出力先フォルダの基準パス。"
-                        + " 同階層に attendance-data.json（勤怠正本）と 勤怠・機械カレンダー.xlsx を置く。"
-                        + " 勤怠の Excel 表示は 勤怠・機械カレンダー.xlsx（APP_* シート）へ出力する。");
+                "工場共有 DATA フォルダの絶対パス（UNC 可）。"
+                        + " 操作者 bin・PDF・バックアップ・remote_log、"
+                        + " attendance-data.json、勤怠・機械カレンダー.xlsx、"
+                        + " stage1_exclude_rules.json、材料・製品ルックアップ CSV、"
+                        + " 実行時間履歴 JSON、設備ガント PDF、dispatch_special_rules/ 等の基準フォルダ。"
+                        + " 旧設定でサマリ_AI配台.xlsx 等のファイルパスが入っている場合は親フォルダへ正規化。"
+                        + " 利用工場と本パスが別工場を指すとき summarySharedDataDirForFactory が工場既定 UNC へ切替"
+                        + "（操作者 bin・PDF・バックアップと整合）。");
         put(
                 AppPaths.KEY_PM_AI_ATTENDANCE_JSON,
                 "勤怠正本 JSON（attendance-data.json）の絶対パス。"
-                        + " 未設定時は PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK の親フォルダ直下。"
+                        + " 未設定時は PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK と同一フォルダ直下。"
                         + " アプリの会社カレンダー・メンバー勤怠タブが編集し、"
                         + " 配台の load_attendance_and_analyze が優先読込する。"
                         + " Excel 閲覧は 勤怠・機械カレンダー.xlsx へ出力した APP_* シートを使う。");

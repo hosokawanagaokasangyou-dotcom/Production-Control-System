@@ -300,10 +300,10 @@ public final class AppPaths {
     public static final String KEY_MASTER_WORKBOOK_FILE = "MASTER_WORKBOOK_FILE";
 
     /**
-     * サマリ AI 配台 Excel（{@link #SUMMARY_AI_DISPATCH_XLSX} 等）の絶対パス、または {@code code/} 相対。
-     * 空で {@code code/} 既定名。親フォルダは工場共有 DATA の根（操作者 bin、配台除外 JSON、ルックアップ CSV、
-     * 実行時間履歴、設備ガント PDF、サマリ世代退避等の sibling 解決基準）。{@link #summaryAiDispatchXlsxPathForFactory}
-     * で利用工場と不一致のとき工場既定 UNC へ切替。
+     * 工場共有 DATA フォルダの絶対パス（UNC 可）。空で {@code code/}。
+     * 操作者 bin、配台除外 JSON、ルックアップ CSV、勤怠 JSON、実行時間履歴、設備ガント PDF 等の sibling 解決基準。
+     * 旧設定で {@link #SUMMARY_AI_DISPATCH_XLSX} 等の Excel ファイルパスが入っている場合は親フォルダへ正規化する。
+     * {@link #summarySharedDataDirForFactory} で利用工場と不一致のとき工場既定 UNC へ切替。
      */
     public static final String KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK =
             "PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK";
@@ -638,7 +638,8 @@ public final class AppPaths {
             KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR,
             KEY_PM_AI_RDP_OPERATOR_USERS_STORE_DIR,
             KEY_PM_AI_RPA_LAUNCHER_DEPLOY_DIR,
-            KEY_PM_AI_RPA_LAUNCHER_OPERATOR_USERS_STORE_DIR);
+            KEY_PM_AI_RPA_LAUNCHER_OPERATOR_USERS_STORE_DIR,
+            KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK);
 
     /**
      * {@link #normalizedFolderEnvOverrides(Map)} の処理順（{@link #KEY_PM_AI_REPO_ROOT} を先に確定）。
@@ -670,7 +671,6 @@ public final class AppPaths {
         s.add(KEY_PM_AI_COLUMN_CONFIG_WORKBOOK);
         s.add(KEY_PM_AI_DATA_EXTRACTION_SOURCE_WORKBOOK);
         s.add(KEY_PM_AI_RESULT_TASK_COLUMN_CONFIG_CSV);
-        s.add(KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK);
         s.add(KEY_PM_AI_PLAN_INPUT_PATH);
         s.add(KEY_PM_AI_PROCESSING_PLAN_PATH);
         s.add(KEY_PM_AI_ACTUAL_DETAIL_WORKBOOK);
@@ -740,7 +740,6 @@ public final class AppPaths {
         return KEY_PM_AI_MASTER_WORKBOOK.equals(k)
                 || KEY_PM_AI_COLUMN_CONFIG_WORKBOOK.equals(k)
                 || KEY_PM_AI_DATA_EXTRACTION_SOURCE_WORKBOOK.equals(k)
-                || KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK.equals(k)
                 || KEY_PM_AI_ACTUAL_DETAIL_WORKBOOK.equals(k)
                 || KEY_PM_AI_REQUEST_FORM_JUCHU_FILE.equals(k);
     }
@@ -1902,9 +1901,9 @@ public final class AppPaths {
     public static final String DEFAULT_PM_AI_MASTER_WORKBOOK_KONAN =
             DEFAULT_KONAN_SHARED_DATA_DIR + "\\master.xlsm";
 
-    /** {@link FactorySite#KONAN} の {@link #KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK} 既定（UNC）。 */
+    /** {@link FactorySite#KONAN} の {@link #KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK} 既定（共有 DATA フォルダ UNC）。 */
     public static final String DEFAULT_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK_KONAN =
-            DEFAULT_KONAN_SHARED_DATA_DIR + "\\" + SUMMARY_AI_DISPATCH_XLSX;
+            DEFAULT_KONAN_SHARED_DATA_DIR;
 
     /**
      * 国分工場・配台AIシステム共有フォルダ（UNC）。{@link #DEFAULT_KOKUBU_DATA_DIR} の親。
@@ -1923,9 +1922,9 @@ public final class AppPaths {
     public static final String DEFAULT_PM_AI_MASTER_WORKBOOK_KOKUBU =
             DEFAULT_KOKUBU_DATA_DIR + "\\国分master.xlsm";
 
-    /** {@link FactorySite#KOKUBU} の {@link #KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK} 既定（UNC）。 */
+    /** {@link FactorySite#KOKUBU} の {@link #KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK} 既定（共有 DATA フォルダ UNC）。 */
     public static final String DEFAULT_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK_KOKUBU =
-            DEFAULT_KOKUBU_DATA_DIR + "\\" + SUMMARY_AI_DISPATCH_XLSX;
+            DEFAULT_KOKUBU_DATA_DIR;
 
     /** {@link FactorySite#KONAN} の {@link #KEY_PM_AI_ALADDIN_MASTER_DIR} 既定（UNC）。 */
     public static final String DEFAULT_PM_AI_ALADDIN_MASTER_DIR_KONAN =
@@ -1963,19 +1962,18 @@ public final class AppPaths {
     public static final String KOKUBU_SUMMARY_AI_DISPATCH_WORKBOOK_XLSX = "国分サマリ_AI配台.xlsx";
 
     /**
-     * リポジトリ {@code code/} 内の {@link #SUMMARY_AI_DISPATCH_XLSX} の絶対パス（{@link #resolveRepoRoot} と同一のルート解決）。
-     * {@link #KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK} が非空のときはそのパス（絶対、または {@code code/} 基準の相対）を返す。
+     * 工場共有 DATA フォルダ（{@link #KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK} の正規化後パス）。
      */
-    public static Path summaryAiDispatchXlsxPath(Map<String, String> ui) {
-        return summaryAiDispatchXlsxPathForFactory(ui, null);
+    public static Path summarySharedDataDir(Map<String, String> ui) {
+        return summarySharedDataDirForFactory(ui, null);
     }
 
     /**
-     * 利用工場に合わせたサマリ Excel パス。
+     * 利用工場に合わせた共有 DATA フォルダ。
      *
-     * <p>環境変数のサマリパスが別工場を指すときは {@code site} の工場既定 UNC を使う（操作者 bin／PDF と整合）。
+     * <p>環境変数が別工場を指すときは {@code site} の工場既定 UNC を使う（操作者 bin／PDF と整合）。
      */
-    public static Path summaryAiDispatchXlsxPathForFactory(Map<String, String> ui, FactorySite site) {
+    public static Path summarySharedDataDirForFactory(Map<String, String> ui, FactorySite site) {
         Map<String, String> u = ui != null ? ui : Map.of();
         if (site != null) {
             String override = trim(u.get(KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK));
@@ -1983,7 +1981,7 @@ public final class AppPaths {
                 Optional<FactorySite> summarySite =
                         FactorySite.inferFromPortableBundleSourceValue(override);
                 if (summarySite.isEmpty() || summarySite.get() == site) {
-                    return summaryAiDispatchXlsxPathFromOverride(u, override);
+                    return normalizeSummarySharedDataDirFromOverride(u, override);
                 }
             }
             String factoryDefault = site.pmAiSummaryAiDispatchWorkbookEnvValue(u);
@@ -1993,21 +1991,46 @@ public final class AppPaths {
         }
         String override = trim(u.get(KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK));
         if (!override.isEmpty()) {
-            return summaryAiDispatchXlsxPathFromOverride(u, override);
+            return normalizeSummarySharedDataDirFromOverride(u, override);
         }
-        return resolveRepoRoot(u)
-                .resolve("code")
+        return resolveRepoRoot(u).resolve("code").toAbsolutePath().normalize();
+    }
+
+    /**
+     * 旧 {@link #SUMMARY_AI_DISPATCH_XLSX} ブックパス（レガシー参照用。ブック自体は未使用）。
+     */
+    public static Path summaryAiDispatchXlsxPath(Map<String, String> ui) {
+        return summaryAiDispatchXlsxPathForFactory(ui, null);
+    }
+
+    /**
+     * 利用工場に合わせたサマリ Excel パス（共有 DATA 内の {@link #SUMMARY_AI_DISPATCH_XLSX}）。
+     */
+    public static Path summaryAiDispatchXlsxPathForFactory(Map<String, String> ui, FactorySite site) {
+        return summarySharedDataDirForFactory(ui, site)
                 .resolve(SUMMARY_AI_DISPATCH_XLSX)
                 .toAbsolutePath()
                 .normalize();
     }
 
-    private static Path summaryAiDispatchXlsxPathFromOverride(Map<String, String> u, String override) {
+    private static Path normalizeSummarySharedDataDirFromOverride(
+            Map<String, String> u, String override) {
         Path p = Path.of(override);
         if (!p.isAbsolute()) {
             p = resolveRepoRoot(u).resolve("code").resolve(override);
         }
-        return p.toAbsolutePath().normalize();
+        p = p.toAbsolutePath().normalize();
+        if (Files.isDirectory(p)) {
+            return p;
+        }
+        String name = p.getFileName().toString().toLowerCase(Locale.ROOT);
+        if (name.endsWith(".xlsx") || name.endsWith(".xlsm")) {
+            Path parent = p.getParent();
+            if (parent != null) {
+                return parent;
+            }
+        }
+        return p;
     }
 
     /**
@@ -2589,10 +2612,7 @@ public final class AppPaths {
      */
     public static Path resolveDispatchLearningArchiveRoot(Map<String, String> ui) {
         Map<String, String> u = ui != null ? ui : Map.of();
-        Path parent = summaryAiDispatchXlsxPath(u).getParent();
-        if (parent == null) {
-            parent = resolveRepoRoot(u).resolve("code");
-        }
+        Path parent = summarySharedDataDir(u);
         String sub = trim(u.get(KEY_PM_AI_DISPATCH_LEARNING_ARCHIVE_SUBDIR));
         if (sub.isEmpty()) {
             sub = DEFAULT_PM_AI_DISPATCH_LEARNING_ARCHIVE_SUBDIR;
@@ -2676,15 +2696,8 @@ public final class AppPaths {
             return Path.of(explicit.trim()).toAbsolutePath().normalize();
         }
         FactorySite site = GlobalInitSettingTarget.loadEffective(u);
-        Path parent = summaryAiDispatchXlsxPathForFactory(u, site).getParent();
-        if (parent != null) {
-            return parent.resolve(ATTENDANCE_DATA_JSON_FILENAME).toAbsolutePath().normalize();
-        }
-        return resolveRepoRoot(u)
-                .resolve("code")
-                .resolve(ATTENDANCE_DATA_JSON_FILENAME)
-                .toAbsolutePath()
-                .normalize();
+        Path parent = summarySharedDataDirForFactory(u, site);
+        return parent.resolve(ATTENDANCE_DATA_JSON_FILENAME).toAbsolutePath().normalize();
     }
 
     /**
@@ -3017,12 +3030,10 @@ public final class AppPaths {
 
     private static Path siblingOfSummaryAiDispatchWorkbookForFactory(
             Map<String, String> ui, FactorySite site, String fileName) {
-        Path summary = summaryAiDispatchXlsxPathForFactory(ui, site);
-        Path parent = summary.getParent();
-        if (parent == null) {
-            return resolveRepoRoot(ui).resolve("code").resolve(fileName).toAbsolutePath().normalize();
-        }
-        return parent.resolve(fileName).toAbsolutePath().normalize();
+        return summarySharedDataDirForFactory(ui, site)
+                .resolve(fileName)
+                .toAbsolutePath()
+                .normalize();
     }
 
     /** @deprecated {@link #summaryAiDispatchXlsxPath(Map)} を使用 */

@@ -40,10 +40,11 @@ class AppPathsTest {
     @Test
     void masterAndRelatedPaths_useFilePickerKinds() {
         assertTrue(AppPaths.isFilePathEnvKey(AppPaths.KEY_PM_AI_MASTER_WORKBOOK));
-        assertTrue(AppPaths.isFilePathEnvKey(AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK));
+        assertTrue(AppPaths.isFolderPathEnvKey(AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK));
+        assertFalse(AppPaths.isFilePathEnvKey(AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK));
         assertTrue(AppPaths.isExcelWorkbookPathEnvKey(AppPaths.KEY_PM_AI_MASTER_WORKBOOK));
         assertTrue(AppPaths.isExcelWorkbookPathEnvKey(AppPaths.KEY_PM_AI_COLUMN_CONFIG_WORKBOOK));
-        assertTrue(AppPaths.isExcelWorkbookPathEnvKey(AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK));
+        assertFalse(AppPaths.isExcelWorkbookPathEnvKey(AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK));
         assertTrue(AppPaths.isExcelWorkbookPathEnvKey(AppPaths.KEY_PM_AI_ACTUAL_DETAIL_WORKBOOK));
         assertTrue(AppPaths.isCsvFilePathEnvKey(AppPaths.KEY_PM_AI_RESULT_TASK_COLUMN_CONFIG_CSV));
         assertFalse(AppPaths.isJsonFilePathEnvKey(AppPaths.KEY_PM_AI_MASTER_WORKBOOK));
@@ -873,7 +874,19 @@ class AppPathsTest {
         Files.createFile(custom);
         Map<String, String> ui =
                 Map.of(AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK, custom.toString());
-        assertEquals(custom.toAbsolutePath().normalize(), AppPaths.summaryAiDispatchXlsxPath(ui));
+        Path expected =
+                tmp.resolve(AppPaths.SUMMARY_AI_DISPATCH_XLSX).toAbsolutePath().normalize();
+        assertEquals(expected, AppPaths.summaryAiDispatchXlsxPath(ui));
+        assertEquals(tmp.toAbsolutePath().normalize(), AppPaths.summarySharedDataDir(ui));
+    }
+
+    @Test
+    void summarySharedDataDir_acceptsDirectoryOverride(@TempDir Path tmp) throws Exception {
+        Path dataDir = tmp.resolve("shared-data");
+        Files.createDirectories(dataDir);
+        Map<String, String> ui =
+                Map.of(AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK, dataDir.toString());
+        assertEquals(dataDir.toAbsolutePath().normalize(), AppPaths.summarySharedDataDir(ui));
     }
 
     @Test
@@ -889,7 +902,10 @@ class AppPathsTest {
                         fakeRepo.toString(),
                         AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK,
                         "alt.xlsm");
-        assertEquals(alt.toAbsolutePath().normalize(), AppPaths.summaryAiDispatchXlsxPath(ui));
+        Path expected =
+                code.resolve(AppPaths.SUMMARY_AI_DISPATCH_XLSX).toAbsolutePath().normalize();
+        assertEquals(expected, AppPaths.summaryAiDispatchXlsxPath(ui));
+        assertEquals(code.toAbsolutePath().normalize(), AppPaths.summarySharedDataDir(ui));
     }
 
     @Test

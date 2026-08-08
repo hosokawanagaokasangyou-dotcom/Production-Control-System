@@ -15,9 +15,8 @@ public final class FactorySiteOperatorAccess {
         if (site == null || site == FactorySite.RDP_LAUNCHER) {
             return false;
         }
-        var summary = AppPaths.summaryAiDispatchXlsxPathForFactory(ui != null ? ui : Map.of(), site);
-        var parent = summary.getParent();
-        return parent != null && NetworkSourceDirResolver.isDirectoryListingReachable(parent);
+        var shared = AppPaths.summarySharedDataDirForFactory(ui != null ? ui : Map.of(), site);
+        return NetworkSourceDirResolver.isDirectoryListingReachable(shared);
     }
 
     /**
@@ -56,10 +55,8 @@ public final class FactorySiteOperatorAccess {
             return "";
         }
         if (!isFactorySummaryFolderReachable(ui, site)) {
-            var summary = AppPaths.summaryAiDispatchXlsxPathForFactory(ui != null ? ui : Map.of(), site);
-            var parent = summary.getParent();
-            return "サマリ Excel フォルダにアクセスできません（当該工場のユーザーではありません）: "
-                    + (parent != null ? parent : summary);
+            var shared = AppPaths.summarySharedDataDirForFactory(ui != null ? ui : Map.of(), site);
+            return "共有 DATA フォルダにアクセスできません（当該工場のユーザーではありません）: " + shared;
         }
         String session = FactoryOperatorUserStore.sessionOperatorName();
         if (!session.isBlank()

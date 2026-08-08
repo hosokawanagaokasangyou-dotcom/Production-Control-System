@@ -19,13 +19,36 @@ class PlanInputAiSpecialParseColumnTest {
 
     @Test
     void remarkEditClearsStaleParseOnTheSameRow() {
+        List<String> headers =
+                List.of(
+                        "依頼NO",
+                        PlanInputAiSpecialParseColumn.SOURCE_COLUMN_TITLE,
+                        PlanInputAiSpecialParseColumn.COLUMN_TITLE);
         List<String> row = new ArrayList<>(List.of("Y3-26", "配台は9/1以降に", "{\"start_date\":\"2026-08-30\"}"));
 
         assertTrue(
                 PlanInputAiSpecialParseColumn.clearStaleParseAfterRemarkEdit(
-                        HEADERS, row, PlanInputAiSpecialParseColumn.SOURCE_COLUMN_TITLE));
+                        headers, row, PlanInputAiSpecialParseColumn.SOURCE_COLUMN_TITLE));
         assertEquals("", row.get(2));
         assertEquals("配台は9/1以降に", row.get(1));
+    }
+
+    @Test
+    void renamedRemarkColumnAlsoClearsParseCell() {
+        List<String> headers = List.of("依頼NO", "納期回答_備考", "AI納期回答_解析");
+        List<String> row = new ArrayList<>(List.of("Y3-26", "8/30以降", "{\"priority\":1}"));
+
+        assertTrue(
+                PlanInputAiSpecialParseColumn.clearStaleParseAfterRemarkEdit(
+                        headers, row, "納期回答_備考"));
+        assertEquals("", row.get(2));
+    }
+
+    @Test
+    void isParseColumnAcceptsAliases() {
+        assertTrue(PlanInputAiSpecialParseColumn.isParseColumn("AI納期回答_解析"));
+        assertTrue(PlanInputAiSpecialParseColumn.isParseColumn("AI特別指定_解析"));
+        assertFalse(PlanInputAiSpecialParseColumn.isParseColumn("特別指定_備考"));
     }
 
     @Test

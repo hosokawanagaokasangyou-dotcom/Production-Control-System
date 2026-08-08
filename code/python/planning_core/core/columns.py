@@ -338,6 +338,15 @@ PLAN_COL_SPECIAL_REMARK = "特別指定_備考"
 PLAN_COL_EXCLUDE_FROM_ASSIGNMENT = "配台不要"
 PLAN_COL_STAGE2_DISPATCH_PLAN_EXCLUDE_MARKER = "配台計画除外"
 PLAN_COL_AI_PARSE = "AI特別指定_解析"
+# 工場別に見出しを変えたブック向け（書き戻し・Java 表示専用列の解決に使用）
+PLAN_COL_AI_PARSE_ALIASES = (
+    PLAN_COL_AI_PARSE,
+    "AI納期回答_解析",
+)
+PLAN_COL_SPECIAL_REMARK_ALIASES = (
+    PLAN_COL_SPECIAL_REMARK,
+    "納期回答_備考",
+)
 PLAN_COL_PROCESS_FACTOR = "加工工程の決定プロセスの因子"
 PLAN_COL_ROLL_UNIT_LENGTH = "(製品)ロール単位長さ"
 PLAN_COL_ROLL_UNIT_LENGTH_LEGACY = "ロール単位長さ"
@@ -733,6 +742,7 @@ PLAN_STAGE1_MERGE_COLUMNS = tuple(
 PLAN_AI_SPECIAL_PARSE_CELL_MAX_LEN = 500
 PLAN_STAGE1_MERGE_EXTRA_COLUMNS = (PLAN_COL_ROLL_UNIT_LENGTH,)
 PLANNING_CONFLICT_SIDECAR = "planning_conflict_highlight.tsv"
+PLAN_INPUT_AI_SPECIAL_PARSE_SIDECAR = "plan_input_ai_special_parse.json"
 PLAN_SHEET_GLOBAL_PARSE_LABEL_COL = 50  # AX
 PLAN_SHEET_GLOBAL_PARSE_VALUE_COL = 51  # AY
 PLAN_SHEET_GLOBAL_PARSE_MAX_ROWS = 42
@@ -891,6 +901,46 @@ def _remove_planning_conflict_sidecar_safe():
         os.remove(_planning_conflict_sidecar_path())
     except OSError:
         pass
+def resolve_plan_sheet_header_column_index(header_map, aliases: tuple[str, ...]) -> int | None:
+    """見出し行の列名辞書から、別名リストのいずれかに一致する 1-based 列番号を返す。"""
+    if not isinstance(header_map, dict):
+        return None
+    for name in aliases:
+        ci = header_map.get(name)
+        if ci:
+            return int(ci)
+    return None
+
+
+def _plan_input_ai_special_parse_sidecar_path():
+    return os.path.join(json_data_dir, PLAN_INPUT_AI_SPECIAL_PARSE_SIDECAR)
+
+
+def _remove_plan_input_ai_special_parse_sidecar_safe():
+    try:
+        os.remove(_plan_input_ai_special_parse_sidecar_path())
+    except OSError:
+        pass
+
+
+def write_plan_input_ai_special_parse_sidecar(
+    sheet_name, ai_parse_by_row, *, workbook_path: str = ""
+) -> None:
+    """段階2: Excel 書込がスキップ／失敗したとき Java が再読込で拾える JSON。"""
+    if not isinstance(ai_parse_by_row, dict):
+        return
+    payload = {
+        "version": 1,
+        "sheet": str(sheet_name or ""),
+        "workbook_path": str(workbook_path or ""),
+        "by_excel_row": {str(int(k)): str(v or "") for k, v in ai_parse_by_row.items()},
+    }
+    path = _plan_input_ai_special_parse_sidecar_path()
+    with open(path, "w", encoding="utf-8", newline="\n") as f:
+        json.dump(payload, f, ensure_ascii=False, indent=2)
+        f.write("\n")
+
+
 def write_planning_conflict_highlight_sidecar(sheet_name, num_data_rows, conflicts_by_row):
     """
     Excel はブックを開いたままのとき保存でしない場合に」VBA 用の TSV を log に書き。

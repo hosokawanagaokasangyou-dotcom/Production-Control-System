@@ -131,4 +131,36 @@ class FactorySiteWorkspaceStoreTest {
         assertEquals(1200d, merged.windowWidth());
         assertEquals("dark", merged.uiTheme());
     }
+
+    @Test
+    void hasUiEnvRows_falseWhenEmpty() {
+        assertTrue(
+                new FactorySiteWorkspaceSnapshot(
+                                List.of(
+                                        new UiEnvRowSnapshot(
+                                                AppPaths.KEY_PM_AI_FACTORY_SITE, "KONAN", "")),
+                                DesktopSessionState.empty())
+                        .hasUiEnvRows());
+        assertTrue(
+                !new FactorySiteWorkspaceSnapshot(List.of(), DesktopSessionState.empty())
+                        .hasUiEnvRows());
+    }
+
+    @Test
+    void load_emptyUiEnvRowsArray_fileExistsButHasNoEnvRows() throws Exception {
+        Path path = AppPaths.operatorFactoryWorkspacePath("砂田", FactorySite.KOKUBU);
+        Files.createDirectories(path.getParent());
+        ObjectNode root = JSON.createObjectNode();
+        root.put("schemaVersion", FactorySiteWorkspaceStore.SCHEMA_VERSION);
+        root.putArray("uiEnvRows");
+        root.set("session", JSON.createObjectNode().put("planInputPath", "only-session"));
+        JSON.writeValue(path.toFile(), root);
+
+        FactorySiteWorkspaceStore.resetForTests();
+        Optional<FactorySiteWorkspaceSnapshot> loaded =
+                FactorySiteWorkspaceStore.load("砂田", FactorySite.KOKUBU);
+        assertTrue(loaded.isPresent());
+        assertTrue(!loaded.get().hasUiEnvRows());
+        assertEquals("only-session", loaded.get().sessionFragment().planInputPath());
+    }
 }

@@ -96,6 +96,21 @@ def test_write_ai_special_parse_cells_sets_and_clears_cells():
     assert ws.cell(3, 3).value is None
 
 
+def test_write_ai_special_parse_cells_accepts_renamed_column():
+    wb = Workbook()
+    ws = wb.active
+    ws.cell(1, 1).value = pc.TASK_COL_TASK_ID
+    ws.cell(1, 2).value = "AI納期回答_解析"
+    ws.cell(2, 1).value = "Y3-26"
+
+    n = pc._plan_sheet_write_ai_special_parse_cells_to_ws(
+        ws, 1, {2: '{"start_date": "2026-08-30"}'}
+    )
+
+    assert n == 1
+    assert ws.cell(2, 2).value == '{"start_date": "2026-08-30"}'
+
+
 def test_write_ai_special_parse_cells_is_noop_without_column():
     wb = Workbook()
     ws = wb.active

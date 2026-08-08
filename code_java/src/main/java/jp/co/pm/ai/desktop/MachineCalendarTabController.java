@@ -82,6 +82,7 @@ public class MachineCalendarTabController {
     private final AtomicLong companyCalendarLoadGeneration = new AtomicLong(0);
     private boolean suppressDateGuard = false;
     private boolean gridDirty = false;
+    private boolean machineCalendarLoadEnabled = false;
 
     public void bindShell(MainShellController shell) {
         this.shell = shell;
@@ -110,7 +111,31 @@ public class MachineCalendarTabController {
         applyColumnWidth(machineCalendarColumnWidthPx);
         applyColumnGap(machineCalendarColumnGapPx);
         installMonthCalendar(today);
+    }
+
+    /** メインシェルで当該タブが選択されたときに初回読込する。 */
+    void onMainShellTabSelected() {
+        if (!machineCalendarLoadEnabled) {
+            enableMachineCalendarLoadAndRefresh();
+        }
+        refreshCompanyCalendarMiniCalendar();
+    }
+
+    private void enableMachineCalendarLoadAndRefresh() {
+        if (machineCalendarLoadEnabled) {
+            loadGridFromPython();
+            return;
+        }
+        machineCalendarLoadEnabled = true;
         loadGridFromPython();
+    }
+
+    /** 起動後バックグラウンド読込（MainShell コーディネータから呼ぶ）。 */
+    void preloadInBackground(Consumer<Boolean> onComplete) {
+        if (!machineCalendarLoadEnabled) {
+            machineCalendarLoadEnabled = true;
+        }
+        loadGridFromPython(onComplete);
     }
 
     private void installCellSizeSpinner() {
@@ -206,6 +231,12 @@ public class MachineCalendarTabController {
         }
     }
 
+    public void refreshRowHoverDimming() {
+        if (gridPane != null) {
+            gridPane.refreshRowHoverDimming();
+        }
+    }
+
     private void installMonthCalendar(LocalDate today) {
         if (monthCalendarHost == null || monthCalendar != null) {
             return;
@@ -237,6 +268,11 @@ public class MachineCalendarTabController {
         loadCompanyCalendarForMiniCalendar();
     }
 
+    /** 会社カレンダー JSON 保存後・タブ表示時などにミニカレンダーを再同期する。 */
+    public void refreshCompanyCalendarMiniCalendar() {
+        loadCompanyCalendarForMiniCalendar();
+    }
+
     private void loadCompanyCalendarForMiniCalendar() {
         if (shell == null || monthCalendar == null) {
             return;
@@ -245,7 +281,7 @@ public class MachineCalendarTabController {
         FiscalYearPeriod period = shell.attendanceFiscalPeriod();
         int fiscalYear = FiscalYearPeriod.fiscalYearLabelFor(ref, period);
         long gen = companyCalendarLoadGeneration.incrementAndGet();
-        runAsync(
+        runAttendanceIoInBackground(
                 shell.buildAttendanceDataIoRequest(
                         "company_calendar",
                         Integer.toString(fiscalYear),
@@ -258,8 +294,7 @@ public class MachineCalendarTabController {
                     Map<LocalDate, CompanyCalendarDayVisual.DayInfo> days =
                             CompanyCalendarDayVisual.parseDays(node.path("days"));
                     monthCalendar.setCompanyCalendarDays(days);
-                },
-                null);
+                });
     }
 
     private LocalDate selectedDate() {
@@ -422,7 +457,8 @@ public class MachineCalendarTabController {
                         }
                         gridPane.setGridLoadingMessage(CALENDAR_XLSX_LABEL + " を出力中…");
                         runAsync(
-                                shell.buildAttendanceDataIoRequest("export_calendar_xlsx"),
+                                shell.buildAttendanceDataIoRequest(
+                                        "export_calendar_xlsx", "--scope", "machine"),
                                 exportNode -> {
                                     gridPane.captureSavedBaseline();
                                     applyGridDirtyState(false);
@@ -557,7 +593,14 @@ public class MachineCalendarTabController {
     }
 
     private void loadGridFromPython() {
+        loadGridFromPython(null);
+    }
+
+    private void loadGridFromPython(Consumer<Boolean> onComplete) {
         if (shell == null || gridPane == null) {
+            if (onComplete != null) {
+                onComplete.accept(false);
+            }
             return;
         }
         LocalDate d = selectedDate();
@@ -588,7 +631,8 @@ public class MachineCalendarTabController {
                                         + node.path("rows").size());
                     }
                 },
-                null);
+                null,
+                onComplete);
     }
 
     /** 保存・初期値作成など、既にグリッド暗転中の処理のあとに日次グリッドを再読込する。 */
@@ -689,10 +733,44 @@ public class MachineCalendarTabController {
         }
     }
 
+    private void runAttendanceIoInBackground(
+            PythonProcessRunner.RunRequest req, Consumer<JsonNode> onOk) {
+        PythonProcessRunner.runCaptureAsync(req)
+                .whenComplete(
+                        (cap, err) ->
+                                Platform.runLater(
+                                        () -> {
+                                            if (err != null || cap == null) {
+                                                return;
+                                            }
+                                            try {
+                                                JsonNode node =
+                                                        JSON.readTree(
+                                                                AttendanceOvertimePreview
+                                                                        .MasterReadSummaryJson
+                                                                        .extractLastJsonLine(
+                                                                                cap.stdout()));
+                                                if (node.path("ok").asBoolean(false)) {
+                                                    onOk.accept(node);
+                                                }
+                                            } catch (Exception ignored) {
+                                                // mini calendar はサイレント失敗
+                                            }
+                                        }));
+    }
+
     private void runAsync(
             PythonProcessRunner.RunRequest req,
             Consumer<JsonNode> onOk,
             Path tempPatchFile) {
+        runAsync(req, onOk, tempPatchFile, null);
+    }
+
+    private void runAsync(
+            PythonProcessRunner.RunRequest req,
+            Consumer<JsonNode> onOk,
+            Path tempPatchFile,
+            Consumer<Boolean> onFinished) {
         PythonProcessRunner.runCaptureAsync(req)
                 .whenComplete(
                         (cap, err) ->
@@ -711,12 +789,18 @@ public class MachineCalendarTabController {
                                                     statusLabel.setText(
                                                             "エラー: " + err.getMessage());
                                                 }
+                                                if (onFinished != null) {
+                                                    onFinished.accept(false);
+                                                }
                                                 return;
                                             }
                                             if (cap == null) {
                                                 endGridLoading();
                                                 if (statusLabel != null) {
                                                     statusLabel.setText("失敗");
+                                                }
+                                                if (onFinished != null) {
+                                                    onFinished.accept(false);
                                                 }
                                                 return;
                                             }
@@ -735,13 +819,22 @@ public class MachineCalendarTabController {
                                                                         + node.path("error")
                                                                                 .asText("失敗"));
                                                     }
+                                                    if (onFinished != null) {
+                                                        onFinished.accept(false);
+                                                    }
                                                     return;
                                                 }
                                                 onOk.accept(node);
+                                                if (onFinished != null) {
+                                                    onFinished.accept(true);
+                                                }
                                             } catch (Exception e) {
                                                 endGridLoading();
                                                 if (statusLabel != null) {
                                                     statusLabel.setText(e.getMessage());
+                                                }
+                                                if (onFinished != null) {
+                                                    onFinished.accept(false);
                                                 }
                                             }
                                         }));

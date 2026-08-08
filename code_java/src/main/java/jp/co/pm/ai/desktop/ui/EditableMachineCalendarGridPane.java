@@ -32,6 +32,7 @@ import javafx.scene.layout.ColumnConstraints;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.scene.shape.Polygon;
@@ -51,6 +52,7 @@ public final class EditableMachineCalendarGridPane extends VBox {
     private final StackPane scrollHost = new StackPane();
     private final AttendanceGridLoadingOverlay loadingOverlay =
             new AttendanceGridLoadingOverlay("pm-machine-calendar-grid-loading-overlay");
+    private final GridRowHoverDimmingController rowDimming = new GridRowHoverDimmingController();
     private final Map<String, Button> cellUiMap = new HashMap<>();
     private final Map<String, CellUi> cellUiByKey = new HashMap<>();
 
@@ -116,16 +118,21 @@ public final class EditableMachineCalendarGridPane extends VBox {
         grid.setVgap(0);
         scrollHost.getChildren().addAll(scroll, loadingOverlay);
         scrollHost.setMaxSize(Double.MAX_VALUE, Double.MAX_VALUE);
-        scrollHost.setMouseTransparent(true);
+        scrollHost.setMouseTransparent(false);
         VBox.setVgrow(scrollHost, Priority.ALWAYS);
         setMaxSize(Double.MAX_VALUE, Double.MAX_VALUE);
         scroll.setMaxSize(Double.MAX_VALUE, Double.MAX_VALUE);
         scroll.viewportBoundsProperty().addListener((obs, o, n) -> scheduleViewportFit());
         heightProperty().addListener((obs, o, n) -> scheduleViewportFit());
+        rowDimming.installScrollClearOnExit(scroll);
 
         installGridGestureFilters();
 
         getChildren().addAll(legendChips, legend, scrollHost);
+    }
+
+    public void refreshRowHoverDimming() {
+        rowDimming.refresh();
     }
 
     public void setGridLoading(boolean loading) {
@@ -135,6 +142,7 @@ public final class EditableMachineCalendarGridPane extends VBox {
     public void setGridLoading(boolean loading, String message) {
         gridLoading = loading;
         if (loading) {
+            rowDimming.setHoveredRow(-1);
             loadingOverlay.setLoading(true, message);
             scroll.setDisable(true);
             toggleStyleClass(this, "pm-machine-calendar-grid-loading", true);
@@ -145,7 +153,6 @@ public final class EditableMachineCalendarGridPane extends VBox {
             scroll.setDisable(false);
             toggleStyleClass(this, "pm-machine-calendar-grid-loading", false);
             toggleStyleClass(scrollHost, "pm-machine-calendar-grid-loading", false);
-            scrollHost.setMouseTransparent(true);
         }
     }
 
@@ -583,6 +590,7 @@ public final class EditableMachineCalendarGridPane extends VBox {
         grid.getColumnConstraints().clear();
         cellUiMap.clear();
         cellUiByKey.clear();
+        rowDimming.clear();
         if (columns.isEmpty() || rows.isEmpty()) {
             return;
         }
@@ -627,6 +635,15 @@ public final class EditableMachineCalendarGridPane extends VBox {
         }
         for (int r = 0; r < rows.size(); r++) {
             RowDef row = rows.get(r);
+            int gridRow = r + 1;
+            Region rowBand = new Region();
+            rowBand.getStyleClass().add(GridRowHoverDimmingController.STYLE_BAND);
+            rowBand.setMouseTransparent(true);
+            rowBand.setMaxWidth(Double.MAX_VALUE);
+            rowBand.setMaxHeight(Double.MAX_VALUE);
+            GridPane.setColumnSpan(rowBand, columns.size() + 1);
+            grid.add(rowBand, 0, gridRow);
+
             Label timeLabel = new Label(formatSlotLabel(row.slotIso()));
             timeLabel.getStyleClass().add("pm-machine-calendar-grid-time");
             timeLabel.getStyleClass().add("pm-machine-calendar-grid-header-interactive");
@@ -637,13 +654,18 @@ public final class EditableMachineCalendarGridPane extends VBox {
                     new Tooltip("クリック: ツールバーのモードでこの時間帯の全設備を一括"));
             int rowIndex = r;
             timeLabel.setOnMouseClicked(e -> applyPaintModeToRow(rowIndex));
-            grid.add(timeLabel, 0, r + 1);
+            rowDimming.installHover(timeLabel, rowIndex);
+            grid.add(timeLabel, 0, gridRow);
+            List<Node> rowNodes = new ArrayList<>();
             for (int c = 0; c < columns.size(); c++) {
                 ColumnDef col = columns.get(c);
                 CellCoord coord = new CellCoord(row.slotIso(), col.equipmentKey());
                 StackPane cellWrap = createCellWrap(coord, px, dataColW);
-                grid.add(cellWrap, c + 1, r + 1);
+                rowDimming.installHover(cellWrap, rowIndex);
+                rowNodes.add(cellWrap);
+                grid.add(cellWrap, c + 1, gridRow);
             }
+            rowDimming.addRow(rowBand, timeLabel, rowNodes);
         }
     }
 

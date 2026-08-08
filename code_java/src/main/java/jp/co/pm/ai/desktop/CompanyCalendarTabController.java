@@ -315,38 +315,23 @@ public class CompanyCalendarTabController {
                     shell.buildAttendanceDataIoRequest(
                             "merge_company_calendar", "--patch-file", tmp.toString()),
                     mergeNode -> {
-                        setActiveLoadingMessage("勤怠カレンダー.xlsx を出力中");
-                        runAsync(
-                                shell.buildAttendanceDataIoRequest("export_calendar_xlsx"),
-                                exportNode -> {
-                                    calendarPane.clearUnsavedEditFlags();
-                                    applyGridDirtyState(false);
-                                    if (statusLabel != null) {
-                                        statusLabel.setText(
-                                                "保存・勤怠カレンダー.xlsx 出力完了: "
-                                                        + mergeNode.path("json_path").asText("")
-                                                        + " / "
-                                                        + exportNode.path("calendar_xlsx_path").asText("")
-                                                        + " / シート "
-                                                        + exportNode.path("sheets_updated")
-                                                                .toString());
-                                    }
-                                    shell.refreshAttendanceReadiness();
-                                    refreshLocalReadiness();
-                                },
-                                false,
-                                null,
-                                null,
-                                exportSuccess -> {
-                                    if (!exportSuccess && statusLabel != null) {
-                                        statusLabel.setText(
-                                                "JSON 保存済みだが勤怠カレンダー.xlsx の出力に失敗しました。"
-                                                        + mergeNode.path("json_path").asText(""));
-                                    }
-                                    if (onComplete != null) {
-                                        onComplete.accept(exportSuccess);
-                                    }
-                                });
+                        calendarPane.clearUnsavedEditFlags();
+                        applyGridDirtyState(false);
+                        if (statusLabel != null) {
+                            statusLabel.setText(
+                                    "保存・勤怠カレンダー.xlsx 出力完了: "
+                                            + mergeNode.path("json_path").asText("")
+                                            + " / "
+                                            + mergeNode.path("calendar_xlsx_path").asText("")
+                                            + " / シート "
+                                            + mergeNode.path("sheets_updated").toString());
+                        }
+                        shell.refreshAttendanceReadiness();
+                        refreshLocalReadiness();
+                        shell.refreshMachineCalendarCompanyMiniCalendar();
+                        if (onComplete != null) {
+                            onComplete.accept(true);
+                        }
                     },
                     false,
                     tmp,
@@ -356,7 +341,7 @@ public class CompanyCalendarTabController {
                             onComplete.accept(false);
                         }
                     },
-                    "会社カレンダーを JSON に保存中");
+                    "会社カレンダーを保存・Excel 出力中");
         } catch (Exception e) {
             statusLabel.setText("エラー: " + e.getMessage());
             if (onComplete != null) {
@@ -402,6 +387,13 @@ public class CompanyCalendarTabController {
         refreshLocalReadiness();
     }
 
+    /** メインシェルで当該タブが選択されたときに初回読込する。 */
+    void onMainShellTabSelected() {
+        if (!attendanceLoadEnabled) {
+            enableAttendanceLoadAndRefresh();
+        }
+    }
+
     /** 環境変数・パス確定後の再読込（起動時・工場ワークスペース復元後）。 */
     public void reloadAttendanceDataFromJson() {
         if (!attendanceLoadEnabled) {
@@ -410,6 +402,24 @@ public class CompanyCalendarTabController {
         }
         refreshFromPython();
         refreshLocalReadiness();
+    }
+
+    /** タブ表示済みのときだけ JSON を再読込する（起動時の一括読込は避ける）。 */
+    void reloadAttendanceDataFromJsonIfEnabled() {
+        if (!attendanceLoadEnabled) {
+            return;
+        }
+        refreshFromPython();
+        refreshLocalReadiness();
+    }
+
+    /** 起動後バックグラウンド読込（MainShell コーディネータから呼ぶ）。 */
+    void preloadInBackground(Consumer<Boolean> onComplete) {
+        if (!attendanceLoadEnabled) {
+            attendanceLoadEnabled = true;
+            applyFiscalSettingsToPane();
+        }
+        refreshFromPython(onComplete);
     }
 
     public int getFiscalYearLabel() {
@@ -570,6 +580,7 @@ public class CompanyCalendarTabController {
                             refreshFromPython();
                             shell.refreshAttendanceReadiness();
                             refreshLocalReadiness();
+                            shell.refreshMachineCalendarCompanyMiniCalendar();
                         }
                     });
             endSetupWizardGridOverlay();
@@ -586,6 +597,7 @@ public class CompanyCalendarTabController {
                 () -> {
                     refreshFromPython();
                     refreshLocalReadiness();
+                    shell.refreshMachineCalendarCompanyMiniCalendar();
                 });
     }
 
@@ -683,6 +695,7 @@ public class CompanyCalendarTabController {
                     shell.refreshAttendanceReadiness();
                     refreshLocalReadiness();
                     refreshFromPython();
+                    shell.refreshMachineCalendarCompanyMiniCalendar();
                 },
                 false,
                 null);
@@ -721,7 +734,14 @@ public class CompanyCalendarTabController {
     }
 
     private void refreshFromPython() {
+        refreshFromPython(null);
+    }
+
+    private void refreshFromPython(Consumer<Boolean> onComplete) {
         if (shell == null) {
+            if (onComplete != null) {
+                onComplete.accept(false);
+            }
             return;
         }
         long gen = loadGeneration.incrementAndGet();
@@ -771,7 +791,7 @@ public class CompanyCalendarTabController {
                 false,
                 null,
                 null,
-                null,
+                onComplete,
                 "会社カレンダーを読込中");
     }
 

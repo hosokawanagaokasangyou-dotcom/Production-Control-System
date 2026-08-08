@@ -52,13 +52,17 @@ def test_write_calendar_workbook_menu_sheet_hyperlinks():
     write_calendar_workbook_menu_sheet(
         ws_menu,
         [APP_MASTER_COMPANY_SHEET, APP_MASTER_MACHINE_CALENDAR_SHEET],
-        export_at="2026-08-08T12:00:00",
+        export_at="2026-08-08T02:59:02+00:00",
     )
 
     link = ws_menu.cell(6, 1)
     assert link.value == "会社カレンダー"
     assert link.hyperlink is not None
     assert APP_MASTER_COMPANY_SHEET in str(link.hyperlink.target)
+    stamp = ws_menu.cell(3, 1).value
+    assert "2026/08/08" in str(stamp)
+    assert "日本時間" in str(stamp)
+    assert "T02:59" not in str(stamp)
 
 
 def test_export_calendar_xlsx_company_sheet_has_menu_back_link(tmp_path, monkeypatch):

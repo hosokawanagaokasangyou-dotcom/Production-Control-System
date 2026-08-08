@@ -21,7 +21,7 @@ public final class PlanInputCellEditRouting {
         if (COL_LIMITED_OPERATOR.equals(columnTitle)) {
             return Editor.LIMITED_OPERATOR_CHECKLIST;
         }
-        if (COL_AI_SPECIAL_PARSE.equals(columnTitle)) {
+        if (PlanInputAiSpecialParseColumn.isParseColumn(columnTitle)) {
             return Editor.READ_ONLY;
         }
         return Editor.TEXT;

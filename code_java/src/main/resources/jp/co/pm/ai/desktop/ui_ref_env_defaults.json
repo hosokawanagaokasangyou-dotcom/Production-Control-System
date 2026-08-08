@@ -60,7 +60,7 @@
   }, {
     "key" : "PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK",
     "value" : "",
-    "description" : "サマリ AI 配台 Excel（通常 サマリ_AI配台.xlsx）のフルパス。空は PM_AI_REPO_ROOT/code/ 既定名、ファイル名のみは code/ 相対。親フォルダは工場共有 DATA の根として扱い、操作者 bin・PIN PDF、stage1_exclude_rules.json、材料・製品ルックアップ CSV、実行時間履歴 JSON、設備ガント PDF、サマリ世代退避、attendance-data.json、勤怠・機械カレンダー.xlsx 等が同階層または配下に置かれる。実行・ログ・納期管理からの Excel 出力先。詳細は EnvVarDocs。"
+    "description" : "工場共有 DATA フォルダのフルパス（UNC 可）。空は PM_AI_REPO_ROOT/code/。操作者 bin・PIN PDF、stage1_exclude_rules.json、材料・製品ルックアップ CSV、実行時間履歴 JSON、設備ガント PDF、attendance-data.json、勤怠・機械カレンダー.xlsx 等の基準。旧設定のサマリ_AI配台.xlsx ファイルパスは親フォルダへ正規化。詳細は EnvVarDocs。"
   }, {
     "key" : "PM_AI_ATTENDANCE_JSON",
     "value" : "",

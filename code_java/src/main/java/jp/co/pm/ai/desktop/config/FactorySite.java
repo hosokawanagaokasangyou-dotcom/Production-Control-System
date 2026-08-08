@@ -125,7 +125,7 @@ public enum FactorySite {
     }
 
     /**
-     * {@link AppPaths#KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK} 環境タブへ書く既定（絶対パス）。
+     * {@link AppPaths#KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK} 環境タブへ書く既定（共有 DATA フォルダ UNC）。
      *
      * <p>湖南は {@link AppPaths#DEFAULT_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK_KONAN}。国分は
      * {@link AppPaths#DEFAULT_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK_KOKUBU}。

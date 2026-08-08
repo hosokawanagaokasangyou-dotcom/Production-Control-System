@@ -54,6 +54,7 @@ import jp.co.pm.ai.desktop.config.GeminiDispatchModelTryOrderDefaults;
 import jp.co.pm.ai.desktop.gemini.GeminiFreeTierModelsCache;
 import jp.co.pm.ai.desktop.gemini.GeminiFreeTierModelsRefreshService;
 import jp.co.pm.ai.desktop.crypto.GeminiCredentialsV2Crypto;
+import jp.co.pm.ai.desktop.ui.ButtonAttentionGlow;
 import jp.co.pm.ai.desktop.ui.ColumnVisibilitySupport;
 import jp.co.pm.ai.desktop.ui.FileChooserForEnvKey;
 import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
@@ -188,6 +189,9 @@ public final class EnvTabController {
     @FXML
     private Button encryptGeminiCredentialsButton;
 
+    /** 起動時チェックで初期化が必要なときの「環境変数を初期化」注目グロー。 */
+    private ButtonAttentionGlow resetEnvDefaultsGlow;
+
     private Stage ownerStage;
     private EnvTabShellHost shell;
     private ObservableList<EnvVarRow> envRows;
@@ -221,6 +225,9 @@ public final class EnvTabController {
         delRowButton.setText("行を削除");
         addMissingEnvVarsButton.setText("不足している環境変数を追加");
         resetEnvDefaultsButton.setText("環境変数を初期化");
+        if (resetEnvDefaultsButton != null && resetEnvDefaultsGlow == null) {
+            resetEnvDefaultsGlow = new ButtonAttentionGlow(resetEnvDefaultsButton);
+        }
         if (encryptGeminiCredentialsButton != null) {
             encryptGeminiCredentialsButton.setText("Gemini API キーを暗号化保存");
         }
@@ -258,6 +265,24 @@ public final class EnvTabController {
     private void onResetEnvDefaultsButtonAction() {
         if (shell != null) {
             shell.confirmAndResetEnvRowsToDefaults();
+        }
+    }
+
+    /**
+     * 起動時チェックで環境変数初期化が必要なとき、初期化ボタンをパルスグローで目立たせる。
+     * 初期化完了後は {@code false} で止める。
+     */
+    void setEnvInitAttention(boolean pending) {
+        if (resetEnvDefaultsButton != null && resetEnvDefaultsGlow == null) {
+            resetEnvDefaultsGlow = new ButtonAttentionGlow(resetEnvDefaultsButton);
+        }
+        if (resetEnvDefaultsGlow == null) {
+            return;
+        }
+        if (pending) {
+            resetEnvDefaultsGlow.ensureActive();
+        } else {
+            resetEnvDefaultsGlow.stop();
         }
     }
 

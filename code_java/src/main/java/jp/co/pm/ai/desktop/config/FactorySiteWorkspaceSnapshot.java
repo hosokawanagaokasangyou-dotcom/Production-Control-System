@@ -10,4 +10,9 @@ public record FactorySiteWorkspaceSnapshot(
         uiEnvRows = uiEnvRows != null ? List.copyOf(uiEnvRows) : List.of();
         sessionFragment = sessionFragment != null ? sessionFragment : DesktopSessionState.empty();
     }
+
+    /** 工場別に保存済みの環境変数行があるか（空ファイルのみのワークスペースを復元成功とみなさない）。 */
+    public boolean hasUiEnvRows() {
+        return !uiEnvRows.isEmpty();
+    }
 }

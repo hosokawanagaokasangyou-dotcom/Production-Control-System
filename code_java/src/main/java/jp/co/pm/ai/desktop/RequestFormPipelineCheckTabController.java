@@ -12,6 +12,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 
 import javafx.animation.KeyFrame;
 import javafx.animation.Timeline;
@@ -659,6 +660,7 @@ public final class RequestFormPipelineCheckTabController {
     /** 起動後に一度でも走査結果を反映したら true（手動「更新」は常に可）。 */
     private boolean scanApplied;
     private boolean refreshInProgress;
+    private volatile Consumer<Boolean> refreshCompleteCallback;
 
     private final List<MainColDef> mainColumnDefs = new ArrayList<>(defaultMainColumnDefs());
 
@@ -816,6 +818,33 @@ public final class RequestFormPipelineCheckTabController {
         }
     }
 
+    /** 起動後バックグラウンド読込（MainShell コーディネータから呼ぶ）。 */
+    void preloadInBackground(Consumer<Boolean> onComplete) {
+        if (shell == null) {
+            completeRefreshPreload(false, onComplete);
+            return;
+        }
+        if (refreshInProgress) {
+            completeRefreshPreload(false, onComplete);
+            return;
+        }
+        if (scanApplied && !isAladdinPlanSourceNewerThanLastScan(shell.snapshotUiEnv())) {
+            completeRefreshPreload(true, onComplete);
+            return;
+        }
+        refreshCompleteCallback = onComplete;
+        startRefresh(true);
+    }
+
+    private void completeRefreshPreload(boolean ok, Consumer<Boolean> onComplete) {
+        Consumer<Boolean> pending = onComplete != null ? onComplete : refreshCompleteCallback;
+        refreshCompleteCallback = null;
+        if (pending == null) {
+            return;
+        }
+        Platform.runLater(() -> pending.accept(ok));
+    }
+
     private void scheduleInitialRefreshIfNeeded() {
         scheduleRefreshIfNeededOnTabSelected();
     }
@@ -911,6 +940,7 @@ public final class RequestFormPipelineCheckTabController {
                                                             + (ex.getMessage() != null
                                                                     ? ex.getMessage()
                                                                     : ex.toString()));
+                                            completeRefreshPreload(false, null);
                                         });
                             }
                         },
@@ -1065,6 +1095,7 @@ public final class RequestFormPipelineCheckTabController {
         }
         captureLastScannedAladdinPlanRevision();
         refreshAladdinPlanWatchState();
+        completeRefreshPreload(true, null);
     }
 
     /**

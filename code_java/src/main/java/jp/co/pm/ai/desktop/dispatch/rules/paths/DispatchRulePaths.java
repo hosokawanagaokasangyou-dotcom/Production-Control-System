@@ -29,12 +29,7 @@ public final class DispatchRulePaths {
     private DispatchRulePaths() {}
 
     public static Path workDirectory(Map<String, String> ui) {
-        Path summary = AppPaths.summaryAiDispatchXlsxPath(ui);
-        Path parent = summary.getParent();
-        if (parent == null) {
-            return Path.of(".").resolve(DISPATCH_SPECIAL_RULES_DIR);
-        }
-        return parent.resolve(DISPATCH_SPECIAL_RULES_DIR);
+        return AppPaths.summarySharedDataDir(ui).resolve(DISPATCH_SPECIAL_RULES_DIR);
     }
 
     public static Path workJsonPath(Map<String, String> ui) {

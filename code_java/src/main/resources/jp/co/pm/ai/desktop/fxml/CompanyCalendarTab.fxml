@@ -38,8 +38,10 @@
             <Button fx:id="initializeButton" text="初期化" onAction="#onInitializeCompanyCalendar"
                     styleClass="pm-destructive-button"/>
         </ToolBar>
-        <Label fx:id="statusLabel" text=""/>
-        <VBox fx:id="statusHost" spacing="4.0"/>
         <VBox fx:id="calendarHost" VBox.vgrow="ALWAYS"/>
+        <VBox spacing="4.0" styleClass="pm-attendance-tab-status-footer">
+            <VBox fx:id="statusHost" spacing="4.0"/>
+            <Label fx:id="statusLabel" text=""/>
+        </VBox>
     </children>
 </VBox>

@@ -161,7 +161,12 @@ def load_skills_and_needs():
                 _validate_skills_op_as_priority_numbers_unique(
                     skills_dict, equipment_list
                 )
-                _validate_skills_members_have_attendance_sheets(members, mp)
+                from planning_core.core.attendance_readiness import (
+                    legacy_master_attendance_sheets_required,
+                )
+
+                if legacy_master_attendance_sheets_required():
+                    _validate_skills_members_have_attendance_sheets(members, mp)
 
             # need は header=None で読み」先頭の複数行を“見出し行”として解釈
             needs_raw = pd.read_excel(

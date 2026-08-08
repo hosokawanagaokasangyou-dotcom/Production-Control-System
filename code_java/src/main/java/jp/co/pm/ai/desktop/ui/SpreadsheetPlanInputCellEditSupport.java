@@ -156,7 +156,8 @@ public final class SpreadsheetPlanInputCellEditSupport {
                                 columnTitle,
                                 cur,
                                 "段階2 が「"
-                                        + PlanInputAiSpecialParseColumn.SOURCE_COLUMN_TITLE
+                                        + PlanInputAiSpecialParseColumn.resolveSourceColumnTitle(
+                                                headersRef)
                                         + "」を解析した結果です。表示専用で、手入力しても配台には反映されません。",
                                 colW,
                                 e.getScreenX(),

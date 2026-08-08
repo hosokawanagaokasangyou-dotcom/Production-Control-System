@@ -18,6 +18,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.config.DesktopSessionStateStore;
@@ -37,10 +39,13 @@ public final class RequestFormInputTabController {
     private MainShellController shell;
     private ReconciliationApp reconciliationApp;
     private boolean embeddedBuilt;
+    private final AtomicBoolean backgroundPreloadStarted = new AtomicBoolean(false);
+    private volatile boolean tabActive = false;
     /** 工場切替後、タブ表示時に {@link ReconciliationApp#reloadAfterFactoryWorkspaceChange()} が必要。 */
     private boolean factoryWorkspaceStale;
     private Parent tabLoadingPane;
     private RequestFormComboChoices pendingComboChoices = RequestFormComboChoices.empty();
+    private volatile Consumer<Boolean> pendingPreloadComplete;
 
     @FXML
     private StackPane contentHost;
@@ -56,16 +61,57 @@ public final class RequestFormInputTabController {
 
     /** メインシェルで当該タブが初めて実体化されたあとに呼ぶ。 */
     void onMainShellTabSelected() {
-        showTabLoadingIfNeeded();
+        tabActive = true;
         if (embeddedBuilt) {
             activateEmbeddedIfReady();
+            return;
+        }
+        showTabLoadingIfNeeded();
+        if (!backgroundPreloadStarted.get()) {
+            scheduleBackgroundPreload();
+        }
+    }
+
+    /**
+     * タブ未選択でも ReconciliationApp の埋め込み UI をバックグラウンドで構築する。
+     * 環境変数初期化完了後に MainShell から呼ぶ。
+     */
+    void scheduleBackgroundPreload() {
+        preloadInBackground(null);
+    }
+
+    /** 起動後バックグラウンド読込（MainShell コーディネータから呼ぶ）。 */
+    void preloadInBackground(Consumer<Boolean> onComplete) {
+        if (embeddedBuilt) {
+            completePreload(true, onComplete);
+            return;
+        }
+        if (shell == null || contentHost == null) {
+            completePreload(false, onComplete);
+            return;
+        }
+        pendingPreloadComplete = onComplete;
+        if (!backgroundPreloadStarted.compareAndSet(false, true)) {
+            if (embeddedBuilt) {
+                completePreload(true, onComplete);
+            }
             return;
         }
         scheduleEmbeddedMount();
     }
 
+    private void completePreload(boolean ok, Consumer<Boolean> onComplete) {
+        Consumer<Boolean> pending = onComplete != null ? onComplete : pendingPreloadComplete;
+        pendingPreloadComplete = null;
+        if (pending == null) {
+            return;
+        }
+        Platform.runLater(() -> pending.accept(ok));
+    }
+
     /** 依頼書入力タブから離れたとき（バックグラウンド監視停止）。 */
     void onMainShellTabDeselected() {
+        tabActive = false;
         if (reconciliationApp != null) {
             reconciliationApp.onEmbeddedTabDeactivated();
         }
@@ -100,7 +146,12 @@ public final class RequestFormInputTabController {
     }
 
     private void mountEmbedded(JuchuHeaderAliasRegistry registry, Map<String, String> ui) {
-        if (embeddedBuilt || contentHost == null) {
+        if (embeddedBuilt) {
+            completePreload(true, null);
+            return;
+        }
+        if (contentHost == null) {
+            completePreload(false, null);
             return;
         }
         showTabLoadingIfNeeded();
@@ -148,7 +199,10 @@ public final class RequestFormInputTabController {
                                 reconciliationApp.updateHostWindow(scene.getWindow());
                             }
                         });
-        activateEmbeddedIfReady();
+        if (tabActive) {
+            activateEmbeddedIfReady();
+        }
+        completePreload(true, null);
     }
 
     private void showTabLoadingIfNeeded() {
@@ -300,7 +354,7 @@ public final class RequestFormInputTabController {
         }
         factoryWorkspaceStale = true;
         Map<String, String> ui = shell.snapshotUiEnv();
-        FactorySite site = GlobalInitSettingTarget.loadEffective(ui);
+        FactorySite site = GlobalInitSettingTarget.load();
         if (reconciliationApp != null) {
             reconciliationApp.configureFromUiEnv(ui);
         }

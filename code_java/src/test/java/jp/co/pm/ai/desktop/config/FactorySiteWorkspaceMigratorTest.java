@@ -84,4 +84,18 @@ class FactorySiteWorkspaceMigratorTest {
                         .get(0)
                         .value());
     }
+
+    @Test
+    void migrateIfNeeded_doesNotSeedWorkspaceWhenUiEnvRowsEmpty() throws Exception {
+        ObjectNode sessionJson = JSON.createObjectNode();
+        sessionJson.put("planInputPath", "seed-plan.xlsx");
+        DesktopSessionState session = DesktopSessionStateStore.parseSessionFragment(sessionJson);
+
+        FactorySiteWorkspaceMigrator.migrateIfNeeded(
+                "砂田", FactorySite.KONAN, List.of(), session, Map.of());
+
+        Path marker = AppPaths.operatorLocalMigrationMarkerPath("砂田");
+        assertTrue(Files.isRegularFile(marker));
+        assertTrue(FactorySiteWorkspaceStore.load("砂田", FactorySite.KONAN).isEmpty());
+    }
 }

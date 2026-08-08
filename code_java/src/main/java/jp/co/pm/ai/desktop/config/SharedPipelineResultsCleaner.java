@@ -53,8 +53,8 @@ public final class SharedPipelineResultsCleaner {
         addIfPresent(roots, Path.of(AppPaths.DEFAULT_KONAN_SHARED_DATA_DIR));
         addIfPresent(roots, Path.of(AppPaths.DEFAULT_KONAN_SHARED_DATA_DIR_M));
         addIfPresent(roots, Path.of(AppPaths.DEFAULT_KOKUBU_SHARED_DATA_DIR));
-        Path summaryParent = AppPaths.summaryAiDispatchXlsxPath(u).getParent();
-        if (summaryParent != null && PipelineLocalResultsPolicy.isSharedOrUncPath(summaryParent)) {
+        Path summaryParent = AppPaths.summarySharedDataDir(u);
+        if (PipelineLocalResultsPolicy.isSharedOrUncPath(summaryParent)) {
             roots.add(summaryParent.toAbsolutePath().normalize());
         }
         String outOverride = trim(u.get(AppPaths.KEY_PM_AI_OUTPUT_DIR));

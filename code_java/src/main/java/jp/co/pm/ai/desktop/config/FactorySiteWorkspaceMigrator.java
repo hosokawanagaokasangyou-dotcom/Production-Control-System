@@ -35,15 +35,17 @@ public final class FactorySiteWorkspaceMigrator {
                         GlobalInitSettingTarget.load());
             }
             if (FactorySiteWorkspaceStore.load(operatorName, currentSite).isEmpty()) {
-                DesktopSessionState fragment =
-                        sessionState != null
-                                ? sessionState.extractFactoryScopedFields()
-                                : DesktopSessionState.empty();
-                FactorySiteWorkspaceStore.save(
-                        operatorName,
-                        currentSite,
-                        new FactorySiteWorkspaceSnapshot(
-                                uiEnvRows != null ? uiEnvRows : List.of(), fragment));
+                List<UiEnvRowSnapshot> rows = uiEnvRows != null ? uiEnvRows : List.of();
+                if (!rows.isEmpty()) {
+                    DesktopSessionState fragment =
+                            sessionState != null
+                                    ? sessionState.extractFactoryScopedFields()
+                                    : DesktopSessionState.empty();
+                    FactorySiteWorkspaceStore.save(
+                            operatorName,
+                            currentSite,
+                            new FactorySiteWorkspaceSnapshot(rows, fragment));
+                }
             }
             Files.writeString(marker, java.time.Instant.now().toString());
         } catch (Exception ignored) {

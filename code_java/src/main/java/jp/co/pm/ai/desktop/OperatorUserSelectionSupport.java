@@ -20,6 +20,7 @@ import javafx.stage.Stage;
 import jp.co.pm.ai.desktop.config.FactoryOperatorUserStore;
 import jp.co.pm.ai.desktop.config.FactorySite;
 import jp.co.pm.ai.desktop.config.FactorySiteOperatorAccess;
+import jp.co.pm.ai.desktop.config.FactorySiteWorkspaceStore;
 import jp.co.pm.ai.desktop.config.GlobalInitSettingTarget;
 
 /** 操作者名選択・PIN 認証フロー（PMD / リモートデスクトップ配布用シェル共通）。 */
@@ -269,6 +270,7 @@ public final class OperatorUserSelectionSupport {
         }
         try {
             FactoryOperatorUserStore.selectSessionOperator(factory, name);
+            FactorySiteWorkspaceStore.onOperatorSessionChanged(previousOperator, name);
             String dept = FactoryOperatorUserStore.sessionRdpDepartmentKey();
             host.appendLog(
                     operatorEventLogPrefix(false)

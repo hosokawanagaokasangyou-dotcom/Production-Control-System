@@ -45,6 +45,59 @@ def _load_json_from_argv(start_index: int) -> dict:
     return payload
 
 
+def _member_months_from_attendance_patch(patch: dict) -> list[tuple[int, int]]:
+    year = patch.get("year")
+    month = patch.get("month")
+    if year is None or month is None:
+        return []
+    try:
+        return [(int(year), int(month))]
+    except (TypeError, ValueError):
+        return []
+
+
+def _parse_calendar_export_scope_args(argv: list[str]) -> dict:
+    """export_calendar_xlsx の --scope / --month 引数を export 関数用 kwargs へ。"""
+    scope = "full"
+    member_months: list[tuple[int, int]] | None = None
+    i = 0
+    while i < len(argv):
+        token = argv[i]
+        if token == "--scope" and i + 1 < len(argv):
+            scope = argv[i + 1].strip().lower()
+            i += 2
+            continue
+        if token == "--month" and i + 2 < len(argv):
+            member_months = [(int(argv[i + 1]), int(argv[i + 2]))]
+            i += 3
+            continue
+        i += 1
+    if scope == "full":
+        return {}
+    if scope == "company":
+        return {
+            "months": [],
+            "refresh_company": True,
+            "refresh_machine": False,
+            "skip_snapshot": True,
+        }
+    if scope == "machine":
+        return {
+            "months": [],
+            "refresh_company": False,
+            "refresh_machine": True,
+            "skip_snapshot": True,
+        }
+    if scope == "members":
+        return {
+            "months": member_months or [],
+            "refresh_company": False,
+            "refresh_machine": False,
+            "skip_snapshot": True,
+        }
+    raise ValueError(f"export scope が不正です: {scope}")
+
+
 def main() -> int:
     try:
         action = (sys.argv[1] if len(sys.argv) > 1 else "status").strip().lower()
@@ -72,9 +125,15 @@ def main() -> int:
         )
 
         ensure_member_roster(store)
-        skills_members = load_skills_and_needs()[1]
         members = attendance_grid_member_names(store)
-        analysis_members = members_for_attendance_analysis(skills_members, store)
+
+        def analysis_members() -> list[str]:
+            skills_members: list[str] = []
+            try:
+                skills_members = list(load_skills_and_needs()[1])
+            except Exception:
+                pass
+            return members_for_attendance_analysis(skills_members, store)
 
         if action == "status":
             from pathlib import Path
@@ -83,7 +142,7 @@ def main() -> int:
             from planning_core.core.attendance_readiness import build_attendance_readiness
 
             jp = attendance_data_json_path()
-            readiness = build_attendance_readiness(store, analysis_members)
+            readiness = build_attendance_readiness(store, analysis_members())
             master_path = Path(_master_workbook_path_resolved())
             _emit(
                 {
@@ -103,7 +162,7 @@ def main() -> int:
 
             year = int(sys.argv[2]) if len(sys.argv) > 2 else __import__("datetime").date.today().year
             month = int(sys.argv[3]) if len(sys.argv) > 3 else __import__("datetime").date.today().month
-            _emit(build_attendance_readiness(store, analysis_members, year, month))
+            _emit(build_attendance_readiness(store, analysis_members(), year, month))
             return 0
 
         if action == "company_calendar":
@@ -233,6 +292,16 @@ def main() -> int:
             if "fiscal_start_day" in patch:
                 meta["fiscal_start_day"] = patch["fiscal_start_day"]
             meta["company_calendar_revision"] = int(meta.get("company_calendar_revision") or 0) + 1
+            from planning_core.core.attendance_paths import attendance_calendar_xlsx_path
+
+            export_result = export_attendance_to_calendar_workbook(
+                store,
+                attendance_calendar_xlsx_path(),
+                months=[],
+                refresh_company=True,
+                refresh_machine=False,
+                skip_snapshot=True,
+            )
             path = save_attendance_store(
                 store,
                 history_kind="merge_company_calendar",
@@ -243,6 +312,7 @@ def main() -> int:
                     "ok": True,
                     "json_path": str(path),
                     "revision": meta.get("company_calendar_revision"),
+                    **export_result,
                 }
             )
             return 0
@@ -250,19 +320,33 @@ def main() -> int:
         if action == "merge_member_attendance":
             patch = _load_json_from_argv(2)
             result = apply_member_attendance_patch(store, patch)
+            member_months = _member_months_from_attendance_patch(patch)
+            from planning_core.core.attendance_paths import attendance_calendar_xlsx_path
+
+            export_result = export_attendance_to_calendar_workbook(
+                store,
+                attendance_calendar_xlsx_path(),
+                months=member_months,
+                refresh_company=False,
+                refresh_machine=False,
+                skip_snapshot=True,
+            )
             path = save_attendance_store(
                 store,
                 history_kind="merge_member_attendance",
                 history_label="メンバー勤怠保存",
             )
-            _emit({"ok": True, **result, "json_path": str(path)})
+            _emit({"ok": True, **result, **export_result, "json_path": str(path)})
             return 0
 
         if action in ("export_calendar_xlsx", "export_master"):
             from planning_core.core.attendance_paths import attendance_calendar_xlsx_path
 
             calendar_xlsx = attendance_calendar_xlsx_path()
-            result = export_attendance_to_calendar_workbook(store, calendar_xlsx)
+            export_kwargs = _parse_calendar_export_scope_args(sys.argv[2:])
+            result = export_attendance_to_calendar_workbook(
+                store, calendar_xlsx, **export_kwargs
+            )
             save_attendance_store(
                 store,
                 history_kind="export_calendar_xlsx",

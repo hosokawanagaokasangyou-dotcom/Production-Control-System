@@ -2,6 +2,7 @@ package jp.co.pm.ai.desktop;
 
 import java.util.Map;
 import java.util.function.Consumer;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import javafx.application.Platform;
 import javafx.fxml.FXML;
@@ -23,6 +24,7 @@ public final class RemoteDesktopTabController {
 
     private DesktopShellHost shell;
     private boolean contentBuilt;
+    private final AtomicBoolean backgroundPreloadStarted = new AtomicBoolean(false);
     private Runnable remoteDesktopOperatorContextRefresh;
     private Consumer<Boolean> fetchedFilesTabActiveNotifier;
     private boolean tabActive;
@@ -51,6 +53,66 @@ public final class RemoteDesktopTabController {
         refreshForSessionOperatorChange();
     }
 
+    /**
+     * タブ未選択でも UI 構築と ini / ランチャーログの初回読込をバックグラウンドで開始する。
+     * 環境変数・操作者確定後（起動完了後）に MainShell / RDP シェルから呼ぶ。
+     */
+    void scheduleBackgroundPreload() {
+        scheduleBackgroundPreload(null);
+    }
+
+    /**
+     * タブ未選択でも UI 構築と ini / ランチャーログの初回読込をバックグラウンドで開始する。
+     *
+     * @param onComplete FX スレッドでマウント完了後に呼ぶ（失敗時も呼ぶ）
+     */
+    void scheduleBackgroundPreload(Runnable onComplete) {
+        if (contentBuilt) {
+            if (onComplete != null) {
+                Platform.runLater(onComplete);
+            }
+            return;
+        }
+        if (onComplete != null) {
+            pendingPreloadComplete = chainRunnables(pendingPreloadComplete, onComplete);
+        }
+        if (!backgroundPreloadStarted.compareAndSet(false, true)) {
+            return;
+        }
+        Thread preload =
+                new Thread(
+                        () -> {
+                            String error = preloadClasses();
+                            Platform.runLater(() -> mountContent(error));
+                        },
+                        "remote-desktop-tab-preload");
+        preload.setDaemon(true);
+        preload.start();
+    }
+
+    private Runnable pendingPreloadComplete;
+
+    private static Runnable chainRunnables(Runnable first, Runnable second) {
+        if (first == null) {
+            return second;
+        }
+        if (second == null) {
+            return first;
+        }
+        return () -> {
+            first.run();
+            second.run();
+        };
+    }
+
+    private void invokePreloadComplete() {
+        Runnable done = pendingPreloadComplete;
+        pendingPreloadComplete = null;
+        if (done != null) {
+            done.run();
+        }
+    }
+
     void onMainShellTabSelected() {
         tabActive = true;
         if (contentBuilt) {
@@ -60,15 +122,9 @@ public final class RemoteDesktopTabController {
             return;
         }
         showLoadingPane();
-        Thread preload =
-                new Thread(
-                        () -> {
-                            String error = preloadClasses();
-                            Platform.runLater(() -> mountContent(error));
-                        },
-                        "remote-desktop-tab-mount");
-        preload.setDaemon(true);
-        preload.start();
+        if (!backgroundPreloadStarted.get()) {
+            scheduleBackgroundPreload();
+        }
     }
 
     /** メインシェルで他タブへ切り替えたとき: 「取得データ最新ファイル」の5秒おき自動更新を止める。 */
@@ -103,6 +159,7 @@ public final class RemoteDesktopTabController {
             err.getStyleClass().add("request-form-tab-loading-label");
             contentHost.getChildren().setAll(err);
             contentBuilt = true;
+            invokePreloadComplete();
             return;
         }
 
@@ -170,6 +227,7 @@ public final class RemoteDesktopTabController {
         if (tabActive) {
             fetchedFilesTabActiveNotifier.accept(true);
         }
+        invokePreloadComplete();
     }
 
     private void showLoadingPane() {

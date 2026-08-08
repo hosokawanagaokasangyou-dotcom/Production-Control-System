@@ -3746,23 +3746,35 @@ def _try_write_plan_input_global_parse_and_conflicts_one_save(
     tasks_df=None,
     ai_parse_by_row=None,
 ) -> None:
-    try:
-        write_plan_sheet_global_parse_and_conflict_styles_one_io(
-            _excel_plan_input_wb(),
+    wb_path = _excel_plan_input_wb()
+    if isinstance(ai_parse_by_row, dict) and ai_parse_by_row:
+        write_plan_input_ai_special_parse_sidecar(
             PLAN_INPUT_SHEET_NAME,
-            global_priority_override,
-            when_str=when_str,
-            num_data_rows=num_data_rows,
-            conflicts_by_row=conflicts_by_row,
-            log_prefix="段階2",
-            tasks_df=tasks_df,
-            ai_parse_by_row=ai_parse_by_row,
+            ai_parse_by_row,
+            workbook_path=wb_path or "",
+        )
+    sheet_saved = False
+    try:
+        sheet_saved = bool(
+            write_plan_sheet_global_parse_and_conflict_styles_one_io(
+                wb_path,
+                PLAN_INPUT_SHEET_NAME,
+                global_priority_override,
+                when_str=when_str,
+                num_data_rows=num_data_rows,
+                conflicts_by_row=conflicts_by_row,
+                log_prefix="段階2",
+                tasks_df=tasks_df,
+                ai_parse_by_row=ai_parse_by_row,
+            )
         )
     except Exception as ex:
         logging.warning(
             "段階2: 配台シートへのグローバル解析＋矛盾着色（1回保存）で例外（続行）: %s",
             ex,
         )
+    if sheet_saved:
+        _remove_plan_input_ai_special_parse_sidecar_safe()
 def _log_task_special_ai_response(raw_text, parsed, extracted_json_str, prompt_text=None):
     """特別指定_備考坑け Gemini のプロンプト・生テキスト・抽出JSON・パース結果を1ファイルに残れ。"""
     path = os.path.join(log_dir, TASK_SPECIAL_AI_LAST_RESPONSE_FILE)
@@ -4145,7 +4157,7 @@ def _plan_sheet_write_ai_special_parse_cells_to_ws(
     ws, num_data_rows: int, ai_parse_by_row, *, log_prefix: str = "段階2"
 ) -> int:
     """
-    既に開いている配台計画シートの「AI特別指定_解析」列へ、行ごとの AI 解析結果を書く。
+    既に開いている配台計画シートの「AI特別指定_解析」列（別名含む）へ、行ごとの AI 解析結果を書く。
     空文字の行はセルを空にする（古い解析を残さない）。保存は呼び出し側。
     戻り値: 値を入れたセル数。
     """
@@ -4156,8 +4168,15 @@ def _plan_sheet_write_ai_special_parse_cells_to_ws(
         v = ws.cell(1, col_idx).value
         if v is not None:
             header_map[str(v).strip()] = col_idx
-    ci = header_map.get(PLAN_COL_AI_PARSE)
+    ci = resolve_plan_sheet_header_column_index(header_map, PLAN_COL_AI_PARSE_ALIASES)
     if not ci:
+        logging.warning(
+            "%s: 「%s」列（別名: %s）が見つからないため AI 解析結果をシートへ書き込めません。"
+            " 見出しを追加するか、code/json/plan_input_ai_special_parse.json を参照してください。",
+            log_prefix,
+            PLAN_COL_AI_PARSE,
+            " / ".join(PLAN_COL_AI_PARSE_ALIASES),
+        )
         return 0
     last_row = max(2, 1 + int(num_data_rows))
     n_done = 0
@@ -4169,10 +4188,14 @@ def _plan_sheet_write_ai_special_parse_cells_to_ws(
             n_done += 1
         else:
             cell.value = None
+    resolved_title = next(
+        (name for name in PLAN_COL_AI_PARSE_ALIASES if header_map.get(name) == ci),
+        PLAN_COL_AI_PARSE,
+    )
     logging.info(
         "%s: 「%s」列へ AI 解析結果を %s 行分反映しました（解析なしの行は空にしました）。",
         log_prefix,
-        PLAN_COL_AI_PARSE,
+        resolved_title,
         n_done,
     )
     return n_done
@@ -4193,6 +4216,10 @@ def _plan_sheet_apply_conflict_styles_to_ws(ws, num_data_rows: int, conflicts_by
     for r in range(2, last_row + 1):
         for name in PLAN_CONFLICT_STYLABLE_COLS:
             ci = header_map.get(name)
+            if not ci and name == PLAN_COL_AI_PARSE:
+                ci = resolve_plan_sheet_header_column_index(
+                    header_map, PLAN_COL_AI_PARSE_ALIASES
+                )
             if not ci:
                 continue
             cell = ws.cell(row=r, column=ci)
@@ -4333,6 +4360,10 @@ def _snapshot_plan_sheet_conflict_style_cells(
     for r in range(2, last_row + 1):
         for name in PLAN_CONFLICT_STYLABLE_COLS:
             ci = header_map.get(name)
+            if not ci and name == PLAN_COL_AI_PARSE:
+                ci = resolve_plan_sheet_header_column_index(
+                    header_map, PLAN_COL_AI_PARSE_ALIASES
+                )
             if not ci:
                 continue
             cell = ws.cell(row=r, column=ci)

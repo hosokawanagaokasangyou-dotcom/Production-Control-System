@@ -118,11 +118,15 @@ public final class RemoteDesktopShellController implements DesktopShellHost, Env
                         tabPane.getSelectionModel().selectFirst();
                     }
                     Tab selected = tabPane.getSelectionModel().getSelectedItem();
-                    if (selected == remoteDesktopTab && remoteDesktopTabContentController != null) {
-                        remoteDesktopTabContentController.onMainShellTabSelected();
-                    }
                     lastEffectiveTab = selected;
-                    Platform.runLater(this::promptOperatorAtStartupAfterSplash);
+                    Platform.runLater(
+                            () -> {
+                                promptOperatorAtStartupAfterSplash();
+                                if (tabPane.getSelectionModel().getSelectedItem() == remoteDesktopTab
+                                        && remoteDesktopTabContentController != null) {
+                                    remoteDesktopTabContentController.onMainShellTabSelected();
+                                }
+                            });
                 });
     }
 
@@ -215,6 +219,9 @@ public final class RemoteDesktopShellController implements DesktopShellHost, Env
     private void promptOperatorAtStartupAfterSplash() {
         requireOperatorSelectionForFactory(FactorySite.RDP_LAUNCHER, true);
         refreshOperatorUserPresentation();
+        if (remoteDesktopTabContentController != null) {
+            remoteDesktopTabContentController.scheduleBackgroundPreload();
+        }
     }
 
     @FXML

@@ -55,6 +55,14 @@ public final class CompanyCalendarDayVisual {
         return KIND_WORKING;
     }
 
+    /** 空 kind は週末／平日の既定にフォールバックする。 */
+    public static String resolveKind(LocalDate date, DayInfo entry) {
+        if (entry != null && entry.kind != null && !entry.kind.isBlank()) {
+            return entry.kind;
+        }
+        return defaultKindFor(date);
+    }
+
     public static String shortLabel(int day, String kind, DayInfo entry) {
         if (KIND_PUBLIC.equals(kind)) {
             return day + "公";
@@ -74,7 +82,7 @@ public final class CompanyCalendarDayVisual {
     }
 
     public static void applyToDayButton(Button cell, LocalDate date, DayInfo entry) {
-        String kind = entry != null ? entry.kind : defaultKindFor(date);
+        String kind = resolveKind(date, entry);
         cell.setText(shortLabel(date.getDayOfMonth(), kind, entry));
         cell.getStyleClass().add("pm-company-calendar-day");
         applyCellStyle(cell, kind, entry);

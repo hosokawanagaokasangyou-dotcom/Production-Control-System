@@ -46,6 +46,29 @@ def _member_cells_for_month(store: dict, members: list[str], year: int, month: i
     return count
 
 
+_skills_load_for_readiness = False
+
+
+def _attendance_json_ready_for_legacy_skip(store: dict, year: int, month: int) -> bool:
+    """JSON 正本のみで段階1/2 用メンバー勤怠が足りるか（skills 読込なし）。"""
+    if not store:
+        return False
+    meta = store.get("meta", {})
+    if int(meta.get("company_calendar_revision") or 0) <= 0:
+        return False
+    from planning_core.core.attendance_member_roster import attendance_grid_member_names
+
+    roster = attendance_grid_member_names(store)
+    if not roster:
+        return False
+    expected = len(roster) * calendar.monthrange(year, month)[1]
+    cells = _member_cells_for_month(store, roster, year, month)
+    if expected <= 0 or cells < expected:
+        return False
+    mc_ready, _, mc_exists = _machine_calendar_readiness()
+    return bool(mc_ready and mc_exists)
+
+
 def build_attendance_readiness(
     store: dict | None = None,
     members: list[str] | None = None,
@@ -86,12 +109,21 @@ def build_attendance_readiness(
     if store is None:
         store = load_attendance_store(jp) if json_exists else {}
     if members is None:
-        try:
-            from planning_core.core.master_data import load_skills_and_needs
+        skills_members: list[str] = []
+        global _skills_load_for_readiness
+        if not _skills_load_for_readiness:
+            try:
+                _skills_load_for_readiness = True
+                from planning_core.core.master_data import load_skills_and_needs
 
-            members = list(load_skills_and_needs()[1])
-        except Exception:
-            members = []
+                skills_members = list(load_skills_and_needs()[1])
+            except Exception:
+                skills_members = []
+            finally:
+                _skills_load_for_readiness = False
+        from planning_core.core.attendance_member_roster import members_for_attendance_analysis
+
+        members = members_for_attendance_analysis(skills_members, store if store else {})
 
     meta = store.get("meta", {}) if store else {}
     fiscal_start_month = int(meta.get("fiscal_start_month") or 4)
@@ -147,6 +179,10 @@ def build_attendance_readiness(
             "machine-calendar-data.json が未整備です（列またはスロットが空）。"
             " 機械カレンダータブで初期値を作成してください。"
         )
+    if json_exists and not members:
+        issues.append(
+            "メンバー名簿が未設定です。メンバー勤怠タブまたは attendance-data.json の member_roster を確認してください。"
+        )
     if json_exists and members and member_cells_month == 0:
         issues.append(
             f"{y}年{m}月のメンバー勤怠が未登録です。「会社カレンダーに合わせる」またはグリッド編集してください。"
@@ -163,6 +199,11 @@ def build_attendance_readiness(
         and machine_calendar_ready
         and not issues
     )
+    if not planning_stages_ready and not issues:
+        issues.append(
+            "カレンダー正本 JSON（attendance-data.json / machine-calendar-data.json）が未準備です。"
+            " 会社カレンダー・メンバー勤怠・機械カレンダータブでセットアップしてください。"
+        )
     stage2_ready = planning_stages_ready
     stage1_ready = planning_stages_ready
 
@@ -199,6 +240,29 @@ def build_attendance_readiness(
         "needs_setup": not json_exists,
         "needs_member_sync": json_exists and member_cells_month == 0,
     }
+
+
+def legacy_master_attendance_sheets_required() -> bool:
+    """
+    master.xlsm 上のメンバー別勤怠シート検証がまだ必要か。
+
+    attendance-data.json 正本でメンバー勤怠・機械カレンダーが整備済みなら不要
+    （段階1/2 の勤怠読込は JSON のみ。レガシーシートへはフォールバックしない）。
+
+    load_skills_and_needs 内から呼ばれるため build_attendance_readiness は使わない
+    （skills 再読込の無限再帰を避ける）。
+    """
+    jp = attendance_data_json_path()
+    if not jp.is_file():
+        return True
+    try:
+        store = load_attendance_store(jp)
+    except Exception:
+        return True
+    today = date.today()
+    if _attendance_json_ready_for_legacy_skip(store, today.year, today.month):
+        return False
+    return True
 
 
 def require_calendar_json_for_planning_stages(

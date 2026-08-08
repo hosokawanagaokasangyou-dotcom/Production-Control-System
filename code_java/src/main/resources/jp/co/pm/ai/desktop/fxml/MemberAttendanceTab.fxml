@@ -34,9 +34,11 @@
             </ToolBar>
             <Label fx:id="setupHintLabel" wrapText="true"
                    text="セットアップ: 祝日・週末取得 → メンバー勤怠を会社カレンダーに合わせる（対象はウィザード内の年月）"/>
-            <Label fx:id="statusLabel" text=""/>
-            <VBox fx:id="statusHost" spacing="4.0"/>
-            <VBox fx:id="gridHost" spacing="4.0"/>
+            <VBox fx:id="gridHost" spacing="4.0" VBox.vgrow="ALWAYS"/>
+            <VBox spacing="4.0" styleClass="pm-attendance-tab-status-footer">
+                <VBox fx:id="statusHost" spacing="4.0"/>
+                <Label fx:id="statusLabel" text=""/>
+            </VBox>
         </VBox>
     </children>
 </HBox>

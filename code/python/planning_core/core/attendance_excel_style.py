@@ -4,7 +4,8 @@
 from __future__ import annotations
 
 import calendar
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 from typing import Any
 
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
@@ -33,6 +34,12 @@ MONTHS_PER_ROW = 4
 MONTH_BLOCK_W = 8
 MONTH_BAND_H = 9
 GRID_START_ROW = 5
+
+# メンバー勤怠月次シート（メニュー行挿入後の行番号）
+MEMBER_CALENDAR_TITLE_ROW = 2
+MEMBER_CALENDAR_LEGEND_ROW = 3
+MEMBER_CALENDAR_HEADER_ROW = 4
+MEMBER_CALENDAR_DATA_START_ROW = 5
 GRID_START_COL = 1
 
 _FILL_CACHE: dict[str, PatternFill] = {}
@@ -151,7 +158,7 @@ def write_company_calendar_grid(
         title_cell = ws.cell(r0, c0, f"{month}月（{year}）")
         title_cell.font = _result_font(size=11, bold=True, color=FONT_BANNER)
         title_cell.fill = cached_fill(FILL_MONTH_TITLE)
-        title_cell.alignment = _CENTER
+        title_cell.alignment = Alignment(horizontal="left", vertical="center")
 
         for i, wd in enumerate(_weekday_labels()):
             hdr = ws.cell(r0 + 1, c0 + i, wd)
@@ -209,17 +216,37 @@ def format_member_calendar_sheet(
     num_day_cols: int,
     dense_days: dict[str, dict],
 ) -> None:
-    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=min(7, num_day_cols + 1))
-    title_cell = ws.cell(
-        1,
-        1,
-        f"{year}年{month}月 メンバー勤怠  —  凡例: ·=通常  休=全休  年休=有給休暇  欠=欠勤  前/後=前休/後休  休出/前出/後出=休出系  時=時間別",
-    )
-    title_cell.font = _result_font(size=11, bold=True, color=FONT_BANNER)
-    title_cell.fill = cached_fill(FILL_MONTH_TITLE)
-    title_cell.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
+    insert_menu_back_link_row(ws)
 
-    hdr = ws.cell(2, 1, "メンバー")
+    total_cols = num_day_cols + 1
+    ws.merge_cells(
+        start_row=MEMBER_CALENDAR_TITLE_ROW,
+        start_column=1,
+        end_row=MEMBER_CALENDAR_TITLE_ROW,
+        end_column=total_cols,
+    )
+    title_cell = ws.cell(MEMBER_CALENDAR_TITLE_ROW, 1, f"{year}年{month}月 メンバー勤怠")
+    title_cell.font = _result_font(size=12, bold=True, color=FONT_BANNER)
+    title_cell.fill = cached_fill(FILL_MONTH_TITLE)
+    title_cell.alignment = Alignment(horizontal="left", vertical="center")
+    ws.row_dimensions[MEMBER_CALENDAR_TITLE_ROW].height = 24
+
+    ws.merge_cells(
+        start_row=MEMBER_CALENDAR_LEGEND_ROW,
+        start_column=1,
+        end_row=MEMBER_CALENDAR_LEGEND_ROW,
+        end_column=total_cols,
+    )
+    legend_cell = ws.cell(
+        MEMBER_CALENDAR_LEGEND_ROW,
+        1,
+        "凡例: ·=通常  休=全休  年休=有給休暇  欠=欠勤  前/後=前休/後休  休出/前出/後出=休出系  時=時間別",
+    )
+    legend_cell.font = _result_font(size=8, color=FONT_HEADER)
+    legend_cell.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
+    ws.row_dimensions[MEMBER_CALENDAR_LEGEND_ROW].height = 18
+
+    hdr = ws.cell(MEMBER_CALENDAR_HEADER_ROW, 1, "メンバー")
     hdr.font = _result_font(size=9, bold=True, color=FONT_BANNER)
     hdr.fill = cached_fill(FILL_MEMBER_HDR)
     hdr.alignment = _CENTER
@@ -230,7 +257,7 @@ def format_member_calendar_sheet(
         d = date(year, month, day_num)
         col = 2 + day_num - 1
         dow = ["月", "火", "水", "木", "金", "土", "日"][d.weekday()]
-        cell = ws.cell(2, col, f"{day_num}{dow}")
+        cell = ws.cell(MEMBER_CALENDAR_HEADER_ROW, col, f"{day_num}{dow}")
         cell.font = _result_font(size=9, bold=True, color=FONT_HEADER)
         cell.fill = cached_fill(FILL_MEMBER_HDR)
         cell.alignment = _CENTER
@@ -249,16 +276,14 @@ def format_member_calendar_sheet(
 
     ws.column_dimensions["A"].width = 16
     for c in range(2, 2 + num_day_cols):
-        ws.column_dimensions[get_column_letter(c)].width = 6.0
+        ws.column_dimensions[get_column_letter(c)].width = 7.5
 
-    ws.row_dimensions[1].height = 22
-    ws.row_dimensions[2].height = 20
-    for r in range(3, ws.max_row + 1):
+    ws.row_dimensions[MEMBER_CALENDAR_HEADER_ROW].height = 20
+    for r in range(MEMBER_CALENDAR_DATA_START_ROW, ws.max_row + 1):
         ws.row_dimensions[r].height = 18
 
-    ws.freeze_panes = "B3"
+    ws.freeze_panes = f"B{MEMBER_CALENDAR_DATA_START_ROW}"
     ws.sheet_view.showGridLines = False
-    insert_menu_back_link_row(ws)
 
 
 def write_member_attendance_flat_table(ws, records: list[dict]) -> None:
@@ -316,6 +341,23 @@ def write_member_attendance_flat_table(ws, records: list[dict]) -> None:
         ws.auto_filter.ref = f"A2:G{row - 1}"
     ws.freeze_panes = "A3"
     ws.sheet_view.showGridLines = False
+
+
+def format_calendar_export_at_display(export_at: str | None) -> str:
+    """ISO 保存日時を日本時間の読みやすい表記へ。"""
+    if not export_at or not str(export_at).strip():
+        return ""
+    trimmed = str(export_at).strip()
+    try:
+        dt = datetime.fromisoformat(trimmed)
+    except ValueError:
+        return trimmed
+    jst = ZoneInfo("Asia/Tokyo")
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=jst)
+    else:
+        dt = dt.astimezone(jst)
+    return dt.strftime("%Y/%m/%d %H:%M:%S") + "（日本時間）"
 
 
 def menu_label_for_sheet(sheet_name: str) -> str:
@@ -396,16 +438,16 @@ def write_calendar_workbook_menu_sheet(
     export_at: str | None = None,
 ) -> None:
     """勤怠・機械カレンダー.xlsx の先頭メニューシート（各 APP_* シートへのリンク）。"""
-    ws.column_dimensions["A"].width = 34
-    ws.column_dimensions["B"].width = 28
-    ws.column_dimensions["C"].width = 22
+    ws.column_dimensions["A"].width = 36
+    ws.column_dimensions["B"].width = 40
 
-    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=3)
+    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=2)
     title = ws.cell(1, 1, "勤怠・機械カレンダー")
     title.font = _result_font(size=16, bold=True, color=FONT_BANNER)
     title.alignment = Alignment(horizontal="left", vertical="center")
+    ws.row_dimensions[1].height = 22
 
-    ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=3)
+    ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=2)
     intro = (
         "会社カレンダー・メンバー勤怠・機械カレンダーを1ファイルにまとめた閲覧用ブックです。"
         "下のリンクから各シートへ移動できます。編集はアプリで行い「保存」で反映してください。"
@@ -415,11 +457,14 @@ def write_calendar_workbook_menu_sheet(
     ws.row_dimensions[2].height = 36
 
     if export_at:
-        ws.merge_cells(start_row=3, start_column=1, end_row=3, end_column=3)
-        ws.cell(3, 1, f"最終出力: {export_at}").font = _result_font(size=8, color=FONT_HEADER)
+        ws.merge_cells(start_row=3, start_column=1, end_row=3, end_column=2)
+        stamp = ws.cell(3, 1, f"最終出力: {format_calendar_export_at_display(export_at)}")
+        stamp.font = _result_font(size=8, color=FONT_HEADER)
+        stamp.alignment = Alignment(horizontal="left", vertical="center")
+        ws.row_dimensions[3].height = 16
 
     hdr_row = 5
-    for col, text in enumerate(("移動先", "シート名", "説明"), start=1):
+    for col, text in enumerate(("移動先", "説明"), start=1):
         cell = ws.cell(hdr_row, col, text)
         cell.font = _result_font(size=10, bold=True, color=FONT_BANNER)
         cell.fill = cached_fill(FILL_MONTH_TITLE)
@@ -428,8 +473,30 @@ def write_calendar_workbook_menu_sheet(
 
     link_font = _result_font(size=11, color="0563C1", underline="single")
     body_font = _result_font(size=9, color=FONT_HEADER)
+    section_font = _result_font(size=9, bold=True, color=FONT_HEADER)
     row = hdr_row + 1
+    from planning_core.core.attendance_paths import (
+        APP_MASTER_COMPANY_SHEET,
+        APP_MASTER_MACHINE_CALENDAR_DATE_SHEET,
+        APP_MASTER_MACHINE_CALENDAR_SHEET,
+        APP_MASTER_MEMBER_SHEET_PREFIX,
+    )
+
+    prev_was_member = False
     for sheet_name in sheet_names:
+        is_member = sheet_name.startswith(APP_MASTER_MEMBER_SHEET_PREFIX)
+        if is_member and not prev_was_member:
+            section = ws.cell(row, 1, "── メンバー勤怠（月別）──")
+            section.font = section_font
+            section.alignment = Alignment(horizontal="left", vertical="center")
+            section.border = _GRID_BORDER
+            ws.cell(row, 2, "各月のメンバー別日次勤怠").font = body_font
+            ws.cell(row, 2).alignment = Alignment(horizontal="left", vertical="center")
+            ws.cell(row, 2).border = _GRID_BORDER
+            ws.row_dimensions[row].height = 18
+            row += 1
+        prev_was_member = is_member
+
         label = menu_label_for_sheet(sheet_name)
         link_cell = ws.cell(row, 1, label)
         link_cell.hyperlink = _sheet_hyperlink_target(sheet_name)
@@ -437,30 +504,18 @@ def write_calendar_workbook_menu_sheet(
         link_cell.alignment = Alignment(horizontal="left", vertical="center")
         link_cell.border = _GRID_BORDER
 
-        name_cell = ws.cell(row, 2, sheet_name)
-        name_cell.font = body_font
-        name_cell.alignment = Alignment(horizontal="left", vertical="center")
-        name_cell.border = _GRID_BORDER
-
         hint = ""
-        from planning_core.core.attendance_paths import (
-            APP_MASTER_COMPANY_SHEET,
-            APP_MASTER_MACHINE_CALENDAR_DATE_SHEET,
-            APP_MASTER_MACHINE_CALENDAR_SHEET,
-            APP_MASTER_MEMBER_SHEET_PREFIX,
-        )
-
         if sheet_name == APP_MASTER_COMPANY_SHEET:
             hint = "年度の公休・出勤日"
         elif sheet_name == APP_MASTER_MACHINE_CALENDAR_SHEET:
             hint = "設備の稼働可否（30分刻み）"
         elif sheet_name == APP_MASTER_MACHINE_CALENDAR_DATE_SHEET:
             hint = "月カレンダーで日付を選び表へジャンプ"
-        elif sheet_name.startswith(APP_MASTER_MEMBER_SHEET_PREFIX):
+        elif is_member:
             hint = "メンバー別の日次勤怠"
-        desc_cell = ws.cell(row, 3, hint)
+        desc_cell = ws.cell(row, 2, hint)
         desc_cell.font = body_font
-        desc_cell.alignment = Alignment(horizontal="left", vertical="center")
+        desc_cell.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
         desc_cell.border = _GRID_BORDER
 
         ws.row_dimensions[row].height = 20
@@ -480,7 +535,7 @@ def shift_freeze_panes_down(ws, rows: int = 1) -> None:
     if isinstance(fp, str):
         from openpyxl.utils import coordinate_to_tuple, get_column_letter
 
-        col, row = coordinate_to_tuple(fp)
+        row, col = coordinate_to_tuple(fp)
         ws.freeze_panes = f"{get_column_letter(col)}{row + rows}"
 
 

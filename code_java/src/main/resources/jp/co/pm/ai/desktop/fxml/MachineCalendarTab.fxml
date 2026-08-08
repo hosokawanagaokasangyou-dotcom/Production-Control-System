@@ -43,10 +43,12 @@
                 <Button fx:id="openCalendarButton" text="勤怠・機械カレンダーを開く" onAction="#onOpenAttendanceCalendar"/>
                 <Button fx:id="refreshButton" text="再読込" onAction="#onRefresh"/>
             </ToolBar>
-            <Label fx:id="statusLabel" text=""/>
             <Label wrapText="true"
                    text="正本: machine-calendar-data.json（サマリ Excel 同階層）。列は need シートの工程×機械。初期値は工場稼働枠 8:00〜19:00（土日祝も空＝稼働可。会社カレンダー非連動）。"/>
             <VBox fx:id="gridHost" spacing="4.0" VBox.vgrow="ALWAYS"/>
+            <VBox styleClass="pm-attendance-tab-status-footer">
+                <Label fx:id="statusLabel" text=""/>
+            </VBox>
         </VBox>
     </children>
 </HBox>

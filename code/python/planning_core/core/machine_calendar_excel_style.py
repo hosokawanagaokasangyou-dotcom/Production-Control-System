@@ -199,14 +199,28 @@ def write_machine_calendar_date_picker_sheet(
         "月カレンダーの日付をクリックすると「APP_機械カレンダー」シートのその日 08:00 付近へ移動します。",
     ).font = _result_font(size=9, color=FONT_HEADER)
 
+    ws.merge_cells(start_row=3, start_column=1, end_row=3, end_column=last_col)
+    ws.cell(
+        3,
+        1,
+        "■平日（緑）  ■土日（灰）  ■青字=表へジャンプ  ■オレンジ枠=今日  □灰=会計年度外",
+    ).font = _result_font(size=9, color=FONT_HEADER)
+
+    ws.merge_cells(start_row=4, start_column=1, end_row=4, end_column=last_col)
+    ws.cell(4, 1, "※本シートはアプリ自動出力（APP_機械カレンダー_日付）。").font = _result_font(
+        size=8, color=FONT_HEADER
+    )
+
     today = date.today()
+    pad_fill = cached_fill(FILL_WEEKEND_HDR)
+    out_of_fy_fill = cached_fill(FILL_WEEKEND_COL)
     for idx, (year, month) in enumerate(months):
         r0, c0 = _month_origin(idx)
         ws.merge_cells(start_row=r0, start_column=c0, end_row=r0, end_column=c0 + 6)
         title_cell = ws.cell(r0, c0, f"{month}月（{year}）")
         title_cell.font = _result_font(size=11, bold=True, color=FONT_BANNER)
         title_cell.fill = cached_fill(FILL_MONTH_TITLE)
-        title_cell.alignment = _CENTER
+        title_cell.alignment = Alignment(horizontal="left", vertical="center")
 
         for i, wd_label in enumerate(_weekday_labels()):
             hdr = ws.cell(r0 + 1, c0 + i, wd_label)
@@ -220,23 +234,33 @@ def write_machine_calendar_date_picker_sheet(
         ym_days = cal_mod.monthrange(year, month)[1]
         first = date(year, month, 1)
         offset = first.weekday()
+        for pad_idx in range(offset):
+            pad_row = r0 + 2 + pad_idx // 7
+            pad_col = c0 + pad_idx % 7
+            pad_cell = ws.cell(pad_row, pad_col, "")
+            pad_cell.fill = pad_fill
+            pad_cell.border = _GRID_BORDER
         for day_num in range(1, ym_days + 1):
             d = date(year, month, day_num)
-            if d < fiscal_start or d > fiscal_end:
-                continue
             cell_idx = offset + day_num - 1
             row = r0 + 2 + cell_idx // 7
             col = c0 + cell_idx % 7
+            if d < fiscal_start or d > fiscal_end:
+                out_cell = ws.cell(row, col, "")
+                out_cell.fill = out_of_fy_fill
+                out_cell.border = _GRID_BORDER
+                continue
             d_key = d.isoformat()
             target_row = day_to_row.get(d_key)
-            cell = ws.cell(row, col, str(day_num))
+            cell = ws.cell(row, col, day_num)
+            cell.number_format = "d"
             cell.alignment = _CENTER
             cell.border = _GRID_BORDER
             if d.weekday() >= 5:
                 cell.fill = cached_fill(FILL_WEEKEND_COL)
                 cell.font = _result_font(size=9, color=FONT_HEADER)
             else:
-                cell.fill = cached_fill("DCFCE7")
+                cell.fill = cached_fill(FILL_AVAILABLE)
                 cell.font = _result_font(size=9, color=FONT_WORKING)
             if target_row is not None:
                 cell.hyperlink = sheet_hyperlink_to_cell(target_sheet_name, target_row, 1)
@@ -248,6 +272,7 @@ def write_machine_calendar_date_picker_sheet(
                     top=Side(style="medium", color="F59E0B"),
                     bottom=Side(style="medium", color="F59E0B"),
                 )
+            ws.row_dimensions[row].height = 18
 
         spacer_col = c0 + 7
         ws.column_dimensions[get_column_letter(spacer_col)].width = 1.0

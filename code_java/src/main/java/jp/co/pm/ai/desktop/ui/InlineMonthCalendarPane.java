@@ -40,6 +40,7 @@ public final class InlineMonthCalendarPane extends VBox {
     private final Label monthLabel = new Label();
     private final Button prevButton = new Button("◀");
     private final Button nextButton = new Button("▶");
+    private final HBox companyLegendChips = new HBox(6);
     private final GridPane dayGrid = new GridPane();
 
     public InlineMonthCalendarPane() {
@@ -66,6 +67,14 @@ public final class InlineMonthCalendarPane extends VBox {
         nextButton.setOnAction(e -> displayedMonth.set(displayedMonth.get().plusMonths(1)));
 
         if (!monthOnly) {
+            companyLegendChips.getStyleClass().add("pm-attendance-legend-chips");
+            companyLegendChips.getChildren().addAll(
+                    companyLegendChip("出勤", "pm-att-legend-work"),
+                    companyLegendChip("公休", "pm-att-legend-off"),
+                    companyLegendChip("特別", "pm-att-legend-partial"));
+            companyLegendChips.setVisible(false);
+            companyLegendChips.setManaged(false);
+
             dayGrid.setHgap(4);
             dayGrid.setVgap(4);
             dayGrid.getStyleClass().add("pm-inline-month-calendar-grid");
@@ -75,7 +84,7 @@ public final class InlineMonthCalendarPane extends VBox {
                 cc.setMinWidth(28);
                 dayGrid.getColumnConstraints().add(cc);
             }
-            getChildren().addAll(header, dayGrid);
+            getChildren().addAll(header, companyLegendChips, dayGrid);
         } else {
             getChildren().add(header);
         }
@@ -106,6 +115,11 @@ public final class InlineMonthCalendarPane extends VBox {
     public void setCompanyCalendarMode(boolean enabled) {
         companyCalendarMode = enabled;
         toggleStyleClass(this, "pm-company-calendar", enabled);
+        toggleStyleClass(dayGrid, "pm-company-calendar", enabled);
+        if (!monthOnly) {
+            companyLegendChips.setVisible(enabled);
+            companyLegendChips.setManaged(enabled);
+        }
         refreshView();
     }
 
@@ -182,6 +196,13 @@ public final class InlineMonthCalendarPane extends VBox {
         if (!monthOnly) {
             rebuildDayGrid(month);
         }
+    }
+
+    private static Label companyLegendChip(String text, String styleClass) {
+        Label chip = new Label(text);
+        chip.getStyleClass().add("pm-attendance-legend-chip");
+        chip.getStyleClass().add(styleClass);
+        return chip;
     }
 
     private void rebuildDayGrid(YearMonth month) {

@@ -480,9 +480,11 @@ def build_editor_payload(store: dict, members: list[str], year: int, month: int)
         cells[d_key] = {}
         d = date.fromisoformat(d_key)
         cc = cc_days.get(d_key, {})
+        company_kind = str(cc.get("kind") or company_day_kind(store, d))
+        default_preset = day_preset_from_company(store, d)
         for m in members:
             entry = ma.get(d_key, {}).get(m) or preset_to_leave_and_times(
-                day_preset_from_company(store, d), d
+                default_preset, d, company_kind=company_kind
             )
             cells[d_key][m] = {
                 "day_preset": entry.get("day_preset", PRESET_WORK),
@@ -490,7 +492,7 @@ def build_editor_payload(store: dict, members: list[str], year: int, month: int)
                 "is_working": bool(entry.get("clock_in")),
                 "overtime_minutes": int(entry.get("overtime_minutes") or 0),
                 "manual_edit": bool(entry.get("manual_edit")),
-                "company_kind": cc.get("kind") or company_day_kind(store, d),
+                "company_kind": company_kind,
                 "hourly": entry.get("hourly") or {},
                 "comment": entry.get("comment") or "",
             }
@@ -765,8 +767,18 @@ def export_attendance_to_calendar_workbook(
     store: dict,
     calendar_path: str | Path | None = None,
     months: list[tuple[int, int]] | None = None,
+    *,
+    refresh_company: bool = True,
+    refresh_machine: bool = True,
+    skip_snapshot: bool = False,
 ) -> dict:
-    """勤怠・機械カレンダー.xlsx へ APP_* シートを出力（master.xlsm は触らない）。"""
+    """勤怠・機械カレンダー.xlsx へ APP_* シートを出力（master.xlsm は触らない）。
+
+    months: メンバー勤怠シートを更新する (年, 月) のリスト。
+      None のとき会計年度の全月、空リストのときメンバー勤怠シートは更新しない。
+    refresh_company / refresh_machine: 会社・機械シートの再生成を省略できる（部分更新用）。
+    skip_snapshot: True のとき xlsx 世代退避をスキップ（保存の高速化）。
+    """
     from openpyxl import Workbook, load_workbook
 
     from planning_core.core.attendance_calendar_xlsx_history_store import (
@@ -778,28 +790,36 @@ def export_attendance_to_calendar_workbook(
     path.parent.mkdir(parents=True, exist_ok=True)
 
     if path.is_file():
-        append_calendar_xlsx_snapshot(
-            path,
-            kind="export_calendar",
-            label="勤怠カレンダー出力",
-            store_meta=store.get("meta") or {},
-        )
-        wb = load_workbook(path)
+        if not skip_snapshot:
+            append_calendar_xlsx_snapshot(
+                path,
+                kind="export_calendar",
+                label="勤怠カレンダー出力",
+                store_meta=store.get("meta") or {},
+            )
+        wb = load_workbook(path, keep_links=False)
     else:
         wb = Workbook()
 
-    replaced_sheets: set[str] = {APP_MASTER_COMPANY_SHEET}
-    _write_app_company_sheet(wb, store)
-    machine_sheet_written = _write_app_machine_calendar_sheet(wb, store)
-    if machine_sheet_written:
-        replaced_sheets.add(APP_MASTER_MACHINE_CALENDAR_SHEET)
-        from planning_core.core.attendance_paths import APP_MASTER_MACHINE_CALENDAR_DATE_SHEET
+    replaced_sheets: set[str] = set()
+    if refresh_company:
+        replaced_sheets.add(APP_MASTER_COMPANY_SHEET)
+        _write_app_company_sheet(wb, store)
+    machine_sheet_written = False
+    if refresh_machine:
+        machine_sheet_written = _write_app_machine_calendar_sheet(wb, store)
+        if machine_sheet_written:
+            replaced_sheets.add(APP_MASTER_MACHINE_CALENDAR_SHEET)
+            from planning_core.core.attendance_paths import APP_MASTER_MACHINE_CALENDAR_DATE_SHEET
 
-        replaced_sheets.add(APP_MASTER_MACHINE_CALENDAR_DATE_SHEET)
+            replaced_sheets.add(APP_MASTER_MACHINE_CALENDAR_DATE_SHEET)
+
     if months is None:
-        months = _fiscal_months_for_export(store)
+        member_months = _fiscal_months_for_export(store)
+    else:
+        member_months = list(months)
     updated: list[str] = []
-    for year, month in months:
+    for year, month in member_months:
         sheet_name = f"{APP_MASTER_MEMBER_SHEET_PREFIX}{year}年{month}月"
         replaced_sheets.add(sheet_name)
         _write_app_member_calendar_sheet(wb, store, year, month, sheet_name)
@@ -1038,6 +1058,7 @@ def populate_member_calendar_worksheet(ws, store: dict, year: int, month: int) -
         _GRID_BORDER,
         format_member_calendar_sheet,
         member_symbol_style,
+        MEMBER_CALENDAR_DATA_START_ROW,
     )
     from planning_core.core.columns import _result_font
 
@@ -1063,7 +1084,7 @@ def populate_member_calendar_worksheet(ws, store: dict, year: int, month: int) -
                     for m in store["member_attendance"].get(d_key, {})
                 }
             )
-    row = 3
+    row = MEMBER_CALENDAR_DATA_START_ROW
     ma = store.get("member_attendance", {})
     align = Alignment(horizontal="center", vertical="center")
     name_align = Alignment(horizontal="left", vertical="center")

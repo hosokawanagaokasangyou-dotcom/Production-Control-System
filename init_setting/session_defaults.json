@@ -1336,8 +1336,8 @@
     },
     {
       "name": "PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK",
-      "value": "\\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\002  加工G\\●配台AIシステム\\共有DATA\\サマリ_AI配台.xlsx",
-      "description": "サマリ AI 配台 Excel（通常 サマリ_AI配台.xlsx）のフルパス。空は PM_AI_REPO_ROOT/code/ 既定名、ファイル名のみは code/ 相対。親フォルダは工場共有 DATA の根として扱い、操作者 bin・PIN PDF、stage1_exclude_rules.json、材料・製品ルックアップ CSV、実行時間履歴 JSON、設備ガント PDF、サマリ世代退避等が同階層または配下に置かれる。実行・ログ・納期管理からの Excel 出力先。 — 利用工場と本パスが別工場を指すとき summaryAiDispatchXlsxPathForFactory が工場既定 UNC へ切替（操作者 bin・PDF・バックアップと整合）。段階1（run_stage1_extract）は同フォルダへ stage1_exclude_rules.json を書出し PM_AI_EXCLUDE_RULES_JSON を自動設定。特別ルール JSON は dispatch_special_rules/ 配下。SummaryAiDispatchWorkbookExporter・納期管理ビュー・実行・ログ「開く」の出力先。UI から Excel を開く操作は読取専用。"
+      "value": "\\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\002  加工G\\●配台AIシステム\\共有DATA",
+      "description": "工場共有 DATA フォルダのフルパス（UNC 可）。操作者 bin・PIN PDF、stage1_exclude_rules.json、材料・製品ルックアップ CSV、実行時間履歴 JSON、設備ガント PDF、attendance-data.json、勤怠・機械カレンダー.xlsx 等の基準。旧設定のサマリ_AI配台.xlsx ファイルパスは親フォルダへ正規化。詳細は EnvVarDocs。"
     },
     {
       "name": "TASK_PLAN_SHEET",

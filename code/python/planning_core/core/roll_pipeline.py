@@ -7512,7 +7512,7 @@ def _validate_master_dispatch_prerequisites(
     """
     段階2標準・段階3（段階2同一パリティ）の master 前提。
     機械カレンダーは machine-calendar-data.json 正本が必須（master シートは使用しない）。
-    人の勤怠は master.xlsm 上のメンバーシートが必須。
+    人の勤怠は attendance-data.json 正本が整備済みなら JSON のみ。未整備時は master.xlsm 上のメンバーシートが必須。
     """
     xls = _cached_master_pd_excel_file(master_path)
     if xls is None:
@@ -7520,36 +7520,41 @@ def _validate_master_dispatch_prerequisites(
             f"{context_label}: master.xlsm を開けません。パスとファイルの存在を確認してください。"
         )
 
-    _validate_skills_members_have_attendance_sheets(
-        members, master_path, context_label=context_label
+    from planning_core.core.attendance_readiness import (
+        legacy_master_attendance_sheets_required,
     )
 
-    att_sheet_count = 0
-    att_date_rows = 0
-    for sheet_name in xls.sheet_names:
-        m_name = str(sheet_name).strip()
-        if m_name not in members:
-            continue
-        if "カレンダー" in sheet_name:
-            continue
-        try:
-            df_sheet = pd.read_excel(xls, sheet_name=sheet_name)
-        except Exception:
-            continue
-        df_sheet.columns = df_sheet.columns.str.strip()
-        if "日付" not in {str(c).strip() for c in df_sheet.columns}:
-            continue
-        att_sheet_count += 1
-        try:
-            dcol = pd.to_datetime(df_sheet["日付"], errors="coerce")
-            att_date_rows += int(dcol.notna().sum())
-        except Exception:
-            continue
-    if att_sheet_count == 0 or att_date_rows == 0:
-        raise PlanningValidationError(
-            f"{context_label}: 人の勤怠が作成されていません。"
-            " master.xlsm で各メンバーの勤怠シートを作成し、日付行を入力してから実行してください。"
+    if legacy_master_attendance_sheets_required():
+        _validate_skills_members_have_attendance_sheets(
+            members, master_path, context_label=context_label
         )
+
+        att_sheet_count = 0
+        att_date_rows = 0
+        for sheet_name in xls.sheet_names:
+            m_name = str(sheet_name).strip()
+            if m_name not in members:
+                continue
+            if "カレンダー" in sheet_name:
+                continue
+            try:
+                df_sheet = pd.read_excel(xls, sheet_name=sheet_name)
+            except Exception:
+                continue
+            df_sheet.columns = df_sheet.columns.str.strip()
+            if "日付" not in {str(c).strip() for c in df_sheet.columns}:
+                continue
+            att_sheet_count += 1
+            try:
+                dcol = pd.to_datetime(df_sheet["日付"], errors="coerce")
+                att_date_rows += int(dcol.notna().sum())
+            except Exception:
+                continue
+        if att_sheet_count == 0 or att_date_rows == 0:
+            raise PlanningValidationError(
+                f"{context_label}: 人の勤怠が作成されていません。"
+                " master.xlsm で各メンバーの勤怠シートを作成し、日付行を入力してから実行してください。"
+            )
 
     from planning_core.core.machine_calendar_store import require_machine_calendar_json_for_dispatch
 

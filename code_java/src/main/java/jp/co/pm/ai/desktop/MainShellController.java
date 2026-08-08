@@ -75,8 +75,8 @@ import javafx.util.StringConverter;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import jp.co.pm.ai.desktop.runtime.FxJvmMemoryStatusBar;
 
+import jp.co.pm.ai.desktop.ui.GlobalAppStatusBar;
 import jp.co.pm.ai.desktop.ui.TodayDispatchSourceSelectionDialog;
 import jp.co.pm.ai.planning.stage2.source.Stage1SourceBundle;
 import jp.co.pm.ai.planning.stage2.source.Stage1SourceBundleCompletionGate;
@@ -177,7 +177,8 @@ import jp.co.pm.ai.desktop.ipc.IpcStdoutTap;
  * Main window controller（従来は {@link PmAiFxApp} 内蔵だった業務ロジックを分離）。
  * Layout: {@code MainShell.fxml} and tab FXML files.
  */
-public final class MainShellController implements DesktopShellHost, EnvTabShellHost {
+public final class MainShellController
+        implements DesktopShellHost, EnvTabShellHost, StartupTabBackgroundLoadCoordinator.Host {
 
     /**
      * {@link Tab#getProperties()} に登録済みかどうか。選択変更時に見出し chrome を再適用するリスナーを二重登録しない。
@@ -355,10 +356,25 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
     private Region toolbarGrowSpacer;
 
     @FXML
-    private Label jvmMemoryStatusLabel;
+    private Label envVarsInitializedAtLabel;
 
     @FXML
-    private Label envVarsInitializedAtLabel;
+    private Label globalStatusMessageLabel;
+
+    @FXML
+    private Label globalStatusTabLabel;
+
+    @FXML
+    private Label globalStatusOperatorLabel;
+
+    @FXML
+    private Label globalStatusFactoryLabel;
+
+    @FXML
+    private Label globalStatusAttendanceLabel;
+
+    @FXML
+    private Label globalStatusMemoryLabel;
 
     @FXML
     private Button dispatchUsageGuideButton;
@@ -708,6 +724,11 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
 
     /** 起動時の環境変数テンプレート照合が完了したら {@code true}（完了前は初期化済みでも保守的にブロック）。 */
     private final AtomicBoolean envVarsStartupCheckCompleted = new AtomicBoolean(false);
+    private GlobalAppStatusBar globalAppStatusBar;
+    private StartupTabBackgroundLoadCoordinator startupTabBackgroundLoad;
+    private volatile String startupBackgroundLoadMessage = "";
+    private volatile boolean startupTabBackgroundLoadActive;
+    private String lastGlobalLogLine = "";
 
     /** 起動時／工場切替時の環境変数確認モーダル（表示中のみ非 null）。 */
     private EnvVarsStartupCheckBusyDialog envVarsStartupCheckBusy;
@@ -770,6 +791,8 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
             FactoryOperatorUserStore.configureFromUi(ui0);
 
             mainRunTabController.bindShell(this);
+            mainRunTabController.setCalendarReadinessBlocked(
+                    true, "勤怠・カレンダーの準備状態を確認中…");
             if (equipmentStatusDashboardTabController != null) {
                 equipmentStatusDashboardTabController.bindShell(this);
             }
@@ -843,6 +866,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         if (remoteDesktopTabController != null) {
             remoteDesktopTabController.bindShell(this);
         }
+        startupTabBackgroundLoad = new StartupTabBackgroundLoadCoordinator(this);
         stage1PreviewTabController.bindShell(this);
         if (codeDispatchLookupTablesTabController != null) {
             codeDispatchLookupTablesTabController.bindShell(this);
@@ -900,7 +924,16 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
             HBox.setHgrow(toolbarGrowSpacer, Priority.ALWAYS);
         }
 
-        FxJvmMemoryStatusBar.start(jvmMemoryStatusLabel, primaryStage);
+        globalAppStatusBar =
+                new GlobalAppStatusBar(
+                        globalStatusMessageLabel,
+                        globalStatusTabLabel,
+                        globalStatusOperatorLabel,
+                        globalStatusFactoryLabel,
+                        globalStatusAttendanceLabel,
+                        globalStatusMemoryLabel);
+        globalAppStatusBar.startMemoryMonitor(primaryStage);
+        refreshGlobalStatusBar();
 
         installUiEnvAutoSave();
 
@@ -996,6 +1029,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                                 activateMainShellTabHeavyContentRecursive(newTab);
                             }
                             emitShellTabNavigation();
+                            refreshGlobalStatusBar();
                             /* :selected 由来の -fx-text-fill がインラインより後勝ちになることがあるため再適用 */
                             if (!suppressMainShellTabChromeRefresh.get()) {
                                 refreshMainShellTabHeaderChromeFromStoredColors();
@@ -1005,12 +1039,14 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                                 equipmentStatusDashboardTabController.onMainShellTabSelected();
                             }
                             if (newTab == mainShellTabRequestFormInput
-                                    && requestFormInputTabController != null) {
+                                    && requestFormInputTabController != null
+                                    && !startupTabBackgroundLoadActive) {
                                 Platform.runLater(
                                         requestFormInputTabController::onMainShellTabSelected);
                             }
                             if (newTab == mainShellTabRequestFormPipelineCheck
-                                    && requestFormPipelineCheckTabController != null) {
+                                    && requestFormPipelineCheckTabController != null
+                                    && !startupTabBackgroundLoadActive) {
                                 Platform.runLater(
                                         requestFormPipelineCheckTabController
                                                 ::onMainShellTabSelected);
@@ -1019,6 +1055,24 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                                     && remoteDesktopTabController != null) {
                                 Platform.runLater(
                                         remoteDesktopTabController::onMainShellTabSelected);
+                            }
+                            if (newTab == mainShellTabCompanyCalendar
+                                    && companyCalendarTabController != null
+                                    && !startupTabBackgroundLoadActive) {
+                                Platform.runLater(
+                                        companyCalendarTabController::onMainShellTabSelected);
+                            }
+                            if (newTab == mainShellTabMemberAttendance
+                                    && memberAttendanceTabController != null
+                                    && !startupTabBackgroundLoadActive) {
+                                Platform.runLater(
+                                        memberAttendanceTabController::onMainShellTabSelected);
+                            }
+                            if (newTab == mainShellTabMachineCalendar
+                                    && machineCalendarTabController != null
+                                    && !startupTabBackgroundLoadActive) {
+                                Platform.runLater(
+                                        machineCalendarTabController::onMainShellTabSelected);
                             }
                             if (prevTab == mainShellTabEquipmentStatusDashboard
                                     && equipmentStatusDashboardTabController != null) {
@@ -1563,28 +1617,33 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         }
     }
 
-    /** 起動完了後に会社カレンダー・メンバー勤怠の JSON を読み込む。 */
+    /** 環境変数・工場ワークスペース確定後に勤怠 readiness を更新し、表示済みタブのみ再読込する。 */
     private void reloadAttendanceTabsFromJson() {
         Path jsonPath = AppPaths.attendanceDataJsonPath(collectUiEnv());
         appendLog("[attendance] JSON 再読込: " + jsonPath);
         if (companyCalendarTabController != null) {
-            companyCalendarTabController.reloadAttendanceDataFromJson();
+            companyCalendarTabController.reloadAttendanceDataFromJsonIfEnabled();
         }
         if (memberAttendanceTabController != null) {
-            memberAttendanceTabController.reloadAttendanceDataFromJson();
+            memberAttendanceTabController.reloadAttendanceDataFromJsonIfEnabled();
         }
         refreshAttendanceReadiness();
     }
 
     /**
-     * 環境変数・工場ワークスペース確定後に勤怠 JSON を読み込む。
-     * 起動直後（操作者選択前）の誤パス読込を避ける。
+     * 環境変数・工場ワークスペース確定後にタブを順次バックグラウンド読込する。
      */
     private void maybeReloadAttendanceTabsAfterEnvReady() {
         if (!envVarsStartupCheckCompleted.get() || isEnvVarsInitializationPending()) {
             return;
         }
         reloadAttendanceTabsFromJson();
+        runAfterUiPulse(
+                () -> {
+                    if (startupTabBackgroundLoad != null) {
+                        startupTabBackgroundLoad.resetAndSchedule();
+                    }
+                });
     }
 
     /** バッジデザイン変更後に設備ガント（グラフィック）のみ再描画する。 */
@@ -4156,8 +4215,25 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                 snapshotUiEnvRows(), collectDesktopSession().extractFactoryScopedFields());
     }
 
-    private void applyFactoryWorkspaceSnapshot(FactorySiteWorkspaceSnapshot snapshot) {
-        if (snapshot == null) {
+    /**
+     * 工場切替・起動復元: {@code init_setting} を適用し、保存済み env 行があれば復元、なければ ui_ref 既定＋工場 overlay。
+     */
+    private void applyFactorySiteWorkspaceRestore(
+            FactorySite site, Optional<FactorySiteWorkspaceSnapshot> workspace) {
+        FactorySite effective = site != null ? site : FactorySite.KONAN;
+        applyGlobalInitSettingBeforeEnvReset(effective);
+        if (workspace.isPresent() && workspace.get().hasUiEnvRows()) {
+            applyFactoryWorkspaceEnvSnapshot(workspace.get());
+            applyFactoryWorkspaceSessionFragment(workspace.get());
+        } else {
+            applyEnvRowsFullBundledResetAndPersist(false, effective);
+            workspace.ifPresent(this::applyFactoryWorkspaceSessionFragment);
+        }
+    }
+
+    /** 工場ワークスペースの環境変数行のみ復元（session は別途）。 */
+    private void applyFactoryWorkspaceEnvSnapshot(FactorySiteWorkspaceSnapshot snapshot) {
+        if (snapshot == null || !snapshot.hasUiEnvRows()) {
             return;
         }
         applyUiEnvRowSnapshots(snapshot.uiEnvRows());
@@ -4165,7 +4241,6 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         stripRemovedEnvVarRows(envRows);
         ensureBootstrapDefaultValuesVisible(collectUiEnv());
         ensureUiRefOptionalDisplayDefaultsVisible(collectUiEnv());
-        applyFactoryWorkspaceSessionFragment(snapshot);
         applyRepoFolderPathNormalization();
         maybeReloadAttendanceTabsAfterEnvReady();
     }
@@ -4308,7 +4383,9 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         }
         Optional<FactorySiteWorkspaceSnapshot> ws =
                 FactorySiteWorkspaceStore.load(operator, current);
-        ws.ifPresent(this::applyFactoryWorkspaceSnapshot);
+        if (ws.isPresent()) {
+            applyFactorySiteWorkspaceRestore(current, ws);
+        }
     }
 
     private void applyPortableUpgradeShellUiSnapshotIfPresent() {
@@ -4640,6 +4717,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         }
         envVarsInitializedAtLabel.setText(
                 "環境変数初期化: " + EnvVarsInitializedAtStore.formatForToolbar());
+        refreshGlobalStatusBar();
     }
 
     private boolean isEnvVarsInitializationPending() {
@@ -4861,7 +4939,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                 envVarsDifferFromInitialAtStartup.set(false);
                 return;
             }
-            FactorySite site = GlobalInitSettingTarget.loadEffective(collectUiEnv());
+            FactorySite site = GlobalInitSettingTarget.load();
             stabilizeEnvRowsForInitializationBaseline();
             Map<String, String> current = collectUiEnv();
             java.util.function.Predicate<String> keyFilter = MainShellController::includeInEnvInitFingerprint;
@@ -5131,6 +5209,10 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
     }
 
     private void runStage(String script) {
+        if (STAGE1.equals(script) && blockIfPlanningStagesCalendarNotReady("段階1")) {
+            releaseStage3RunButtonLockIfNeeded(script);
+            return;
+        }
         if (stage2SourceGuardCoordinator.isRunning() && !stage2SourceGuardRunHandoff) {
             appendLog("[busy] 固定ソース確認中のため段階処理を開始できません。");
             releaseStage3RunButtonLockIfNeeded(script);
@@ -5590,6 +5672,10 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                                 }
                                 Runnable afterDispatchReload =
                                         () -> {
+                                            if (planInputTabController != null) {
+                                                planInputTabController
+                                                        .reloadQuietlyFromDiskAfterStage2IfClean();
+                                            }
                                             // 反映漏れダイアログ／[配台整合] ログの後に remote_log を残す
                                             mainRunTabController.flushPendingLogAppends();
                                             maybeArchiveRemoteSupportLogAfterStage(
@@ -6011,6 +6097,121 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
             // リモートデスクトップ等「操作可能」葉への自動遷移を許容せず実行・ログへ固定する
             ensureMainShellRunTabSelected();
         }
+        refreshGlobalStatusBar();
+    }
+
+    private void refreshGlobalStatusBar() {
+        if (!Platform.isFxApplicationThread()) {
+            Platform.runLater(this::refreshGlobalStatusBar);
+            return;
+        }
+        if (globalAppStatusBar == null) {
+            return;
+        }
+        Tab tab =
+                tabPane != null && tabPane.getSelectionModel() != null
+                        ? tabPane.getSelectionModel().getSelectedItem()
+                        : null;
+        globalAppStatusBar.setTabName(tab != null ? tab.getText() : "—");
+        String operator = FactoryOperatorUserStore.sessionOperatorName();
+        globalAppStatusBar.setOperator(operator.isBlank() ? "（未選択）" : operator);
+        FactorySite site = GlobalInitSettingTarget.load();
+        globalAppStatusBar.setFactory(site != null ? site.displayLabelJa() : "—");
+        globalAppStatusBar.setAttendanceReady(attendanceStage2Ready, attendanceReadinessTooltip);
+        globalAppStatusBar.setMessage(resolveGlobalStatusMessage());
+    }
+
+    @Override
+    public void setStartupBackgroundLoadStatus(String message) {
+        startupBackgroundLoadMessage = message != null ? message : "";
+        refreshGlobalStatusBar();
+    }
+
+    @Override
+    public void appendStartupBackgroundLog(String line) {
+        appendLog(line);
+    }
+
+    @Override
+    public RemoteDesktopTabController remoteDesktopTab() {
+        return remoteDesktopTabController;
+    }
+
+    @Override
+    public CompanyCalendarTabController companyCalendarTab() {
+        return companyCalendarTabController;
+    }
+
+    @Override
+    public MemberAttendanceTabController memberAttendanceTab() {
+        return memberAttendanceTabController;
+    }
+
+    @Override
+    public MachineCalendarTabController machineCalendarTab() {
+        return machineCalendarTabController;
+    }
+
+    @Override
+    public RequestFormInputTabController requestFormInputTab() {
+        return requestFormInputTabController;
+    }
+
+    @Override
+    public RequestFormPipelineCheckTabController requestFormPipelineCheckTab() {
+        return requestFormPipelineCheckTabController;
+    }
+
+    @Override
+    public void onStartupBackgroundLoadFinished() {
+        refreshAttendanceReadiness();
+        refreshStage1PipelineCheckGate();
+        refreshGlobalStatusBar();
+    }
+
+    @Override
+    public void setStartupTabBackgroundLoadActive(boolean active) {
+        startupTabBackgroundLoadActive = active;
+    }
+
+    @Override
+    public boolean isStartupTabBackgroundLoadActive() {
+        return startupTabBackgroundLoadActive;
+    }
+
+    private String resolveGlobalStatusMessage() {
+        if (isEnvVarsInitializationPending()) {
+            return "環境変数の初期化が必要です。環境変数タブで確認してください。";
+        }
+        if (startupBackgroundLoadMessage != null && !startupBackgroundLoadMessage.isBlank()) {
+            return startupBackgroundLoadMessage;
+        }
+        String script = activeRunStageScript;
+        if (STAGE1.equals(script)) {
+            return "段階1 実行中…";
+        }
+        if (STAGE2.equals(script)) {
+            return "段階2.0 実行中…";
+        }
+        if (STAGE2_1.equals(script)) {
+            return "段階2.1 実行中…";
+        }
+        if (STAGE3_0.equals(script)) {
+            return "段階3.0 実行中…";
+        }
+        if (STAGE3_1.equals(script)) {
+            return "段階3.1 実行中…";
+        }
+        if (STAGE3_2.equals(script)) {
+            return "段階3.2 実行中…";
+        }
+        if (activeDispatchTrialKind != null || stage2SourceGuardCoordinator.isRunning()) {
+            return "配台パイプライン実行中…";
+        }
+        if (lastGlobalLogLine != null && !lastGlobalLogLine.isBlank()) {
+            return lastGlobalLogLine;
+        }
+        return "準備完了";
     }
 
     private void applyEnvVarsInitToolbarGating(boolean pending) {
@@ -6019,6 +6220,9 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         }
         if (dispatchUsageGuideButton != null) {
             dispatchUsageGuideButton.setDisable(pending);
+        }
+        if (envTabController != null) {
+            envTabController.setEnvInitAttention(pending);
         }
     }
 
@@ -6511,6 +6715,13 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         }
     }
 
+    /** 会社カレンダー正本更新後、機械カレンダータブのミニカレンダーを再読込する。 */
+    void refreshMachineCalendarCompanyMiniCalendar() {
+        if (machineCalendarTabController != null) {
+            machineCalendarTabController.refreshCompanyCalendarMiniCalendar();
+        }
+    }
+
     /** 会社カレンダータブの会計年度ラベル（メンバー勤怠セットアップ等で共有）。 */
     public int attendanceFiscalYearLabel() {
         if (companyCalendarTabController != null) {
@@ -6985,6 +7196,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
     private boolean tableRowHoverDimmingEnabled =
             DesktopSessionState.DEFAULT_TABLE_ROW_HOVER_DIMMING_ENABLED;
     private volatile boolean attendanceStage2Ready = false;
+    private volatile boolean attendanceReadinessResolved = false;
     private volatile String attendanceReadinessTooltip = "";
 
     /**
@@ -7129,6 +7341,9 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         if (memberAttendanceTabController != null) {
             memberAttendanceTabController.refreshRowHoverDimming();
         }
+        if (machineCalendarTabController != null) {
+            machineCalendarTabController.refreshRowHoverDimming();
+        }
     }
 
   /** 会社カレンダー・メンバー勤怠のセルグリッド寸法（px）。両タブで共有。 */
@@ -7168,6 +7383,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
 
     private void markAttendanceReadinessUnknown() {
         attendanceStage2Ready = false;
+        attendanceReadinessResolved = true;
         attendanceReadinessTooltip = "勤怠状態の取得に失敗しました。再読込してください。";
         applyAttendanceReadinessFromJson(null);
     }
@@ -7188,8 +7404,10 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                         true, "勤怠未確認", blockTooltip);
                 planInputTabController.setAttendanceReadinessBlocked(true, blockTooltip);
             }
+            refreshGlobalStatusBar();
             return;
         }
+        attendanceReadinessResolved = true;
         attendanceStage2Ready = node.path("stage2_ready").asBoolean(false);
         StringBuilder issues = new StringBuilder();
         if (node.path("issues").isArray()) {
@@ -7224,9 +7442,17 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
             planInputTabController.setAttendanceReadinessBlocked(
                     !attendanceStage2Ready, blockTooltip);
         }
+        refreshGlobalStatusBar();
     }
 
     private boolean blockIfPlanningStagesCalendarNotReady(String stageLabel) {
+        if (!attendanceReadinessResolved) {
+            String msg = "勤怠・カレンダーの準備状態を確認中です。数秒待ってから再実行してください。";
+            appendLog("[" + stageLabel + "] " + msg);
+            refreshAttendanceReadiness();
+            showErrorDialog(stageLabel, msg);
+            return true;
+        }
         if (attendanceStage2Ready) {
             return false;
         }
@@ -7783,7 +8009,11 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
     /** Same-package tab controllers append run-tab log lines here. */
     @Override
     public void appendLog(String line) {
+        if (line != null && !line.isBlank()) {
+            lastGlobalLogLine = line;
+        }
         mainRunTabController.appendLog(line);
+        refreshGlobalStatusBar();
     }
 
     void beginPipelineExecutionTiming(PipelineExecutionTimingKind kind) {
@@ -7807,6 +8037,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
 
     /**
      * 配台デスクトップの利用工場を切り替える。工場別ワークスペース（env + session 断片）を save→restore する。
+     * 保存 env 行が無い場合は ui_ref 既定へ初期化する。
      */
     public void switchActiveFactorySite(FactorySite newSite) {
         switchActiveFactorySite(newSite, false);
@@ -7853,6 +8084,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
             if (!operator.isBlank() && oldSite != null && oldSite != FactorySite.RDP_LAUNCHER) {
                 FactorySiteWorkspaceStore.save(
                         operator, oldSite, buildFactorySiteWorkspaceSnapshot());
+                FactorySiteWorkspaceStore.flushMemoryCacheToDisk(operator);
             }
             GlobalInitSettingTarget.save(newSite);
             if (!operator.isBlank()) {
@@ -7863,12 +8095,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                             ? Optional.empty()
                             : FactorySiteWorkspaceStore.load(operator, newSite);
             updateEnvVarsStartupCheckBusy(EnvVarsStartupCheckBusyDialog.STATUS_RESTORE_WORKSPACE);
-            if (loaded.isPresent()) {
-                applyFactoryWorkspaceSnapshot(loaded.get());
-            } else {
-                applyFactoryScopedGlobalAndEnvReset(newSite, false);
-            }
-            applyRepoFolderPathNormalization();
+            applyFactorySiteWorkspaceRestore(newSite, loaded);
             refreshFactoryDependentTabs(newSite, true);
             schedulePersistSessionDebounced();
             requireOperatorSelectionForFactory(newSite, startup);
@@ -7907,6 +8134,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
     public void refreshOperatorUserPresentation() {
         refreshMainRunTabOperatorLabel();
         refreshRemoteDesktopOperatorContext();
+        refreshGlobalStatusBar();
     }
 
     @Override
@@ -11153,7 +11381,7 @@ public PlanInputTabController planInputTabControllerForDispatchRollUnit() {
             case "MASTER_SPEED_SHEET_NAME" -> "speed";
             case "MASTER_SPEED_FIRST_EXCEL_COL" -> "4";
             case AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK ->
-                    AppPaths.summaryAiDispatchXlsxPath(u).toString();
+                    AppPaths.summarySharedDataDir(u).toString();
             case "RAW_FABRIC_WIDTH_TABLE_PATH" -> {
                 Path p = AppPaths.dispatchLookupTablePath(u, AppPaths.DISPATCH_LOOKUP_USED_RAW_WIDTH);
                 yield Files.isRegularFile(p)

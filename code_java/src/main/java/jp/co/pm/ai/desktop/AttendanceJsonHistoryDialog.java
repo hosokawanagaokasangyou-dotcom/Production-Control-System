@@ -3,7 +3,6 @@ package jp.co.pm.ai.desktop;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import java.util.function.Consumer;
 
 import com.fasterxml.jackson.databind.JsonNode;
 
@@ -14,9 +13,11 @@ import javafx.scene.control.Alert;
 import javafx.scene.control.Alert.AlertType;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
+import javafx.beans.property.SimpleIntegerProperty;
+import javafx.beans.property.SimpleStringProperty;
 import javafx.scene.control.Label;
-import javafx.scene.control.ListCell;
-import javafx.scene.control.ListView;
+import javafx.scene.control.TableColumn;
+import javafx.scene.control.TableView;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
@@ -26,6 +27,7 @@ import javafx.stage.Stage;
 import javafx.stage.StageStyle;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
+import jp.co.pm.ai.desktop.ui.JapanDateTimeDisplay;
 
 /**
  * 勤怠正本 JSON（attendance-data.json）の世代一覧表示と復元。
@@ -41,6 +43,10 @@ public final class AttendanceJsonHistoryDialog {
             int companyCalendarRevision,
             int memberAttendanceRevision) {
 
+        String savedAtDisplay() {
+            return JapanDateTimeDisplay.formatSavedAtForDisplay(savedAt);
+        }
+
         String displayText() {
             String head = label != null && !label.isBlank() ? label : id;
             return head
@@ -49,7 +55,7 @@ public final class AttendanceJsonHistoryDialog {
                     + " メンバー="
                     + memberAttendanceRevision
                     + "  "
-                    + (savedAt != null ? savedAt : "");
+                    + savedAtDisplay();
         }
     }
 
@@ -67,17 +73,46 @@ public final class AttendanceJsonHistoryDialog {
         Label pathLabel = new Label();
         pathLabel.setWrapText(true);
 
-        ListView<HistoryEntry> listView = new ListView<>();
-        listView.setCellFactory(
-                lv ->
-                        new ListCell<>() {
-                            @Override
-                            protected void updateItem(HistoryEntry item, boolean empty) {
-                                super.updateItem(item, empty);
-                                setText(empty || item == null ? null : item.displayText());
-                            }
-                        });
-        listView.setPrefHeight(280);
+        TableView<HistoryEntry> tableView = new TableView<>();
+        tableView.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
+        TableColumn<HistoryEntry, String> labelCol = new TableColumn<>("操作");
+        labelCol.setCellValueFactory(
+                cd -> {
+                    HistoryEntry e = cd.getValue();
+                    String head =
+                            e != null && e.label() != null && !e.label().isBlank()
+                                    ? e.label()
+                                    : e != null ? e.id() : "";
+                    return new SimpleStringProperty(head);
+                });
+        labelCol.setMinWidth(140);
+        TableColumn<HistoryEntry, Integer> companyCol = new TableColumn<>("会社 rev");
+        companyCol.setCellValueFactory(
+                cd ->
+                        new SimpleIntegerProperty(
+                                cd.getValue() != null
+                                        ? cd.getValue().companyCalendarRevision()
+                                        : 0)
+                                .asObject());
+        companyCol.setMinWidth(72);
+        TableColumn<HistoryEntry, Integer> memberCol = new TableColumn<>("メンバー rev");
+        memberCol.setCellValueFactory(
+                cd ->
+                        new SimpleIntegerProperty(
+                                cd.getValue() != null
+                                        ? cd.getValue().memberAttendanceRevision()
+                                        : 0)
+                                .asObject());
+        memberCol.setMinWidth(88);
+        TableColumn<HistoryEntry, String> savedAtCol = new TableColumn<>("保存日時");
+        savedAtCol.setCellValueFactory(
+                cd ->
+                        new SimpleStringProperty(
+                                cd.getValue() != null ? cd.getValue().savedAtDisplay() : ""));
+        savedAtCol.setMinWidth(150);
+        tableView.getColumns().addAll(labelCol, companyCol, memberCol, savedAtCol);
+        tableView.setMinHeight(220);
+        VBox.setVgrow(tableView, Priority.ALWAYS);
 
         Button refreshBtn = new Button("一覧更新");
         Button restoreBtn = new Button("選択世代を復元");
@@ -99,7 +134,10 @@ public final class AttendanceJsonHistoryDialog {
                                                         AppPaths.ATTENDANCE_JSON_HISTORY_MAX_GENERATIONS)
                                                 + " 世代");
                                 List<HistoryEntry> items = parseEntries(node.path("entries"));
-                                listView.setItems(FXCollections.observableArrayList(items));
+                                tableView.setItems(FXCollections.observableArrayList(items));
+                                if (!items.isEmpty()) {
+                                    tableView.getSelectionModel().select(0);
+                                }
                                 status.setText(
                                         items.isEmpty()
                                                 ? "保存済み世代がありません。"
@@ -114,7 +152,7 @@ public final class AttendanceJsonHistoryDialog {
 
         restoreBtn.setOnAction(
                 e -> {
-                    HistoryEntry sel = listView.getSelectionModel().getSelectedItem();
+                    HistoryEntry sel = tableView.getSelectionModel().getSelectedItem();
                     if (sel == null) {
                         status.setText("復元する世代を一覧から選んでください。");
                         return;
@@ -170,12 +208,15 @@ public final class AttendanceJsonHistoryDialog {
                         10,
                         new Label("会社カレンダー・メンバー勤怠の JSON 正本を過去世代から復元します。"),
                         pathLabel,
-                        listView,
+                        tableView,
                         status,
                         spacer,
                         buttons);
         root.setPadding(new Insets(16));
-        root.setPrefWidth(560);
+        root.setPrefWidth(640);
+        root.setPrefHeight(420);
+        stage.setMinWidth(520);
+        stage.setMinHeight(360);
         stage.setScene(new javafx.scene.Scene(root));
         stage.showAndWait();
     }

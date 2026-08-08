@@ -3074,19 +3074,12 @@ def _exclude_rules_json_env_supersedes_excel_sheet() -> bool:
     """
     return _get_exclude_rules_from_json_env() is not None
 def _resolve_summary_ai_dispatch_workbook_path() -> str:
-    """Java AppPaths.summaryAiDispatchXlsxPath と同じ解決（PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK）。"""
-    override = (os.environ.get(ENV_SUMMARY_AI_DISPATCH_WORKBOOK) or "").strip()
-    if override:
-        if os.path.isabs(override):
-            return os.path.normpath(os.path.abspath(override))
-        repo = (os.environ.get("PM_AI_REPO_ROOT") or "").strip()
-        if repo:
-            return os.path.normpath(os.path.join(repo, "code", override))
-        return os.path.normpath(os.path.join(os.getcwd(), "code", override))
-    repo = (os.environ.get("PM_AI_REPO_ROOT") or "").strip()
-    if repo:
-        return os.path.normpath(os.path.join(repo, "code", SUMMARY_AI_DISPATCH_XLSX))
-    return os.path.normpath(os.path.join(os.getcwd(), "code", SUMMARY_AI_DISPATCH_XLSX))
+    """Java AppPaths.summaryAiDispatchXlsxPath と同じ解決（共有 DATA 内のサマリ_AI配台.xlsx）。"""
+    from planning_core.core.summary_shared_data_paths import (
+        resolve_summary_ai_dispatch_workbook_path,
+    )
+
+    return resolve_summary_ai_dispatch_workbook_path()
 def _resolve_stage1_exclude_rules_json_work_path() -> str:
     """ローカル output 配下の stage1_exclude_rules.json 絶対パス（共有へは出さない）。"""
     override = (os.environ.get("PM_AI_OUTPUT_DIR") or "").strip()
@@ -3397,10 +3390,9 @@ def _raw_fabric_width_table_search_paths() -> list[str]:
         RAW_FABRIC_WIDTH_TABLE_DEFAULT_FILENAME, RAW_FABRIC_WIDTH_TABLE_PATH_ENV
     )
 def _summary_ai_dispatch_workbook_sibling_path(filename: str) -> str:
-    parent = os.path.dirname(_resolve_summary_ai_dispatch_workbook_path())
-    if not parent:
-        return ""
-    return os.path.normpath(os.path.join(parent, filename))
+    from planning_core.core.summary_shared_data_paths import summary_shared_data_sibling_path
+
+    return summary_shared_data_sibling_path(filename)
 def _planning_code_dir_candidates() -> list[str]:
     """Java {@code PM_AI_CODE_DIR} / python 隣接 code / repo/code の候補（順序付き・重複除去前）。"""
     out: list[str] = []

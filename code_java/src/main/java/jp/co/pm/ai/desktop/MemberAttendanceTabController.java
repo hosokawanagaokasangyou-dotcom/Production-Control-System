@@ -4,6 +4,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDate;
 import java.time.YearMonth;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
@@ -28,6 +32,7 @@ import javafx.scene.control.Spinner;
 import javafx.scene.control.SpinnerValueFactory;
 import javafx.scene.control.Tooltip;
 import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 import javafx.util.Duration;
@@ -49,6 +54,8 @@ import jp.co.pm.ai.desktop.ui.MemberHourlyAttendanceDialog;
 public class MemberAttendanceTabController {
 
     private static final ObjectMapper JSON = new ObjectMapper();
+    private static final int MEMBER_GRID_CACHE_MAX_MONTHS = 12;
+    private static final Duration MEMBER_GRID_IDLE_PREFETCH_DELAY = Duration.millis(650);
 
     @FXML
     private VBox gridHost;
@@ -100,6 +107,16 @@ public class MemberAttendanceTabController {
     private ButtonAttentionGlow setupButtonGlow;
     private final AtomicLong loadGeneration = new AtomicLong(0);
     private final PauseTransition gridReloadDebounce = new PauseTransition(Duration.millis(350));
+    private final PauseTransition memberGridIdlePrefetch =
+            new PauseTransition(MEMBER_GRID_IDLE_PREFETCH_DELAY);
+    private final LinkedHashMap<String, JsonNode> memberGridCache =
+            new LinkedHashMap<>(16, 0.75f, true) {
+                @Override
+                protected boolean removeEldestEntry(Map.Entry<String, JsonNode> eldest) {
+                    return size() > MEMBER_GRID_CACHE_MAX_MONTHS;
+                }
+            };
+    private volatile boolean memberGridPrefetchInFlight = false;
     private boolean attendanceLoadEnabled = false;
     private boolean suppressMonthGuard = false;
     private int tabProcessingDepth = 0;
@@ -142,6 +159,10 @@ public class MemberAttendanceTabController {
                     });
             gridPane.setDirtyListener(this::applyGridDirtyState);
             gridPane.setCommentDialogOwner(shell.primaryStageForDialogs());
+            VBox.setVgrow(gridPane, Priority.ALWAYS);
+            gridPane.setMaxHeight(Double.MAX_VALUE);
+            gridHost.setMaxHeight(Double.MAX_VALUE);
+            VBox.setVgrow(gridHost, Priority.ALWAYS);
             gridHost.getChildren().add(gridPane);
         }
         if (saveButton != null && saveButtonGlow == null) {
@@ -158,6 +179,11 @@ public class MemberAttendanceTabController {
         installToolbarTooltips();
         installStatusActivityRow();
         installMonthCalendar(today);
+        installMemberGridIdlePrefetch();
+    }
+
+    private void installMemberGridIdlePrefetch() {
+        memberGridIdlePrefetch.setOnFinished(e -> runMemberGridIdlePrefetchStep());
     }
 
     private void installStatusActivityRow() {
@@ -348,40 +374,23 @@ public class MemberAttendanceTabController {
                     shell.buildAttendanceDataIoRequest(
                             "merge_member_attendance", "--patch-file", tmp.toString()),
                     mergeNode -> {
-                        setActiveLoadingMessage("勤怠カレンダー.xlsx を出力中");
-                        runAsync(
-                                shell.buildAttendanceDataIoRequest("export_calendar_xlsx"),
-                                exportNode -> {
-                                    gridPane.clearUnsavedEditFlags();
-                                    applyGridDirtyState(false);
-                                    statusLabel.setText(
-                                            "保存・勤怠カレンダー.xlsx 出力完了: "
-                                                    + mergeNode.path("applied").asInt(0)
-                                                    + " セル → "
-                                                    + mergeNode.path("json_path").asText("")
-                                                    + " / "
-                                                    + exportNode.path("calendar_xlsx_path").asText("")
-                                                    + " / シート "
-                                                    + exportNode.path("sheets_updated")
-                                                            .toString());
-                                    shell.refreshAttendanceReadiness();
-                                    refreshLocalReadiness();
-                                },
-                                false,
-                                null,
-                                null,
-                                exportSuccess -> {
-                                    if (!exportSuccess && statusLabel != null) {
-                                        statusLabel.setText(
-                                                "JSON 保存済み（"
-                                                        + mergeNode.path("applied").asInt(0)
-                                                        + " セル）だが勤怠カレンダー.xlsx の出力に失敗しました。"
-                                                        + mergeNode.path("json_path").asText(""));
-                                    }
-                                    if (onComplete != null) {
-                                        onComplete.accept(exportSuccess);
-                                    }
-                                });
+                        gridPane.clearUnsavedEditFlags();
+                        applyGridDirtyState(false);
+                        clearMemberGridCache();
+                        statusLabel.setText(
+                                "保存・勤怠カレンダー.xlsx 出力完了: "
+                                        + mergeNode.path("applied").asInt(0)
+                                        + " セル → "
+                                        + mergeNode.path("json_path").asText("")
+                                        + " / "
+                                        + mergeNode.path("calendar_xlsx_path").asText("")
+                                        + " / シート "
+                                        + mergeNode.path("sheets_updated").toString());
+                        shell.refreshAttendanceReadiness();
+                        refreshLocalReadiness();
+                        if (onComplete != null) {
+                            onComplete.accept(true);
+                        }
                     },
                     false,
                     tmp,
@@ -391,7 +400,7 @@ public class MemberAttendanceTabController {
                             onComplete.accept(false);
                         }
                     },
-                    "メンバー勤怠を JSON に保存中");
+                    "メンバー勤怠を保存・Excel 出力中");
         } catch (Exception e) {
             statusLabel.setText("エラー: " + e.getMessage());
             if (onComplete != null) {
@@ -428,6 +437,161 @@ public class MemberAttendanceTabController {
         gridReloadDebounce.playFromStart();
     }
 
+    private static String memberGridCacheKey(int year, int month) {
+        return year + "-" + month;
+    }
+
+    private void clearMemberGridCache() {
+        memberGridCache.clear();
+    }
+
+    private void storeMemberGridCache(JsonNode node) {
+        if (node == null || !node.path("ok").asBoolean(false)) {
+            return;
+        }
+        int y = node.path("year").asInt(0);
+        int m = node.path("month").asInt(0);
+        if (y <= 0 || m <= 0) {
+            return;
+        }
+        memberGridCache.put(memberGridCacheKey(y, m), node);
+        prefetchAdjacentMemberGrids(y, m);
+    }
+
+    private void scheduleMemberGridIdlePrefetch() {
+        if (!attendanceLoadEnabled || shell == null) {
+            return;
+        }
+        memberGridIdlePrefetch.playFromStart();
+    }
+
+    private void runMemberGridIdlePrefetchStep() {
+        if (!attendanceLoadEnabled
+                || shell == null
+                || tabProcessingDepth > 0
+                || setupWizardGridOverlayDepth > 0
+                || memberGridPrefetchInFlight) {
+            scheduleMemberGridIdlePrefetch();
+            return;
+        }
+        YearMonth center = YearMonth.from(selectedCalendarDate());
+        YearMonth target = nextMemberGridPrefetchTarget(center);
+        if (target == null) {
+            return;
+        }
+        memberGridPrefetchInFlight = true;
+        prefetchMemberGridQuiet(
+                target,
+                () -> {
+                    memberGridPrefetchInFlight = false;
+                    scheduleMemberGridIdlePrefetch();
+                });
+    }
+
+    private YearMonth nextMemberGridPrefetchTarget(YearMonth center) {
+        for (YearMonth ym : memberGridPrefetchMonths(center)) {
+            String key = memberGridCacheKey(ym.getYear(), ym.getMonthValue());
+            if (!memberGridCache.containsKey(key)) {
+                return ym;
+            }
+        }
+        return null;
+    }
+
+    private List<YearMonth> memberGridPrefetchMonths(YearMonth center) {
+        if (shell == null) {
+            return List.of();
+        }
+        FiscalYearPeriod period = shell.attendanceFiscalPeriod();
+        LocalDate anchor = selectedCalendarDate();
+        int fiscalYear = FiscalYearPeriod.fiscalYearLabelFor(anchor, period);
+        List<YearMonth> candidates = new ArrayList<>(period.monthsInOrder(fiscalYear));
+        candidates.sort(
+                Comparator.comparingInt(ym -> memberGridMonthDistance(center, ym)));
+        return candidates;
+    }
+
+    private static int memberGridMonthDistance(YearMonth center, YearMonth other) {
+        return Math.abs(center.getYear() * 12 + center.getMonthValue()
+                - other.getYear() * 12 - other.getMonthValue());
+    }
+
+    private void prefetchAdjacentMemberGrids(int year, int month) {
+        if (!attendanceLoadEnabled || shell == null) {
+            return;
+        }
+        YearMonth center = YearMonth.of(year, month);
+        prefetchMemberGridQuiet(center.minusMonths(1));
+        prefetchMemberGridQuiet(center.plusMonths(1));
+    }
+
+    private void prefetchMemberGridQuiet(YearMonth ym) {
+        prefetchMemberGridQuiet(ym, null);
+    }
+
+    private void prefetchMemberGridQuiet(YearMonth ym, Runnable onComplete) {
+        if (shell == null) {
+            if (onComplete != null) {
+                onComplete.run();
+            }
+            return;
+        }
+        String key = memberGridCacheKey(ym.getYear(), ym.getMonthValue());
+        if (memberGridCache.containsKey(key)) {
+            if (onComplete != null) {
+                onComplete.run();
+            }
+            return;
+        }
+        PythonProcessRunner.runCaptureAsync(
+                        shell.buildAttendanceDataIoRequest(
+                                "member_grid",
+                                Integer.toString(ym.getYear()),
+                                Integer.toString(ym.getMonthValue())))
+                .whenComplete(
+                        (cap, err) ->
+                                Platform.runLater(
+                                        () -> {
+                                            try {
+                                                if (err == null
+                                                        && cap != null
+                                                        && cap.exitCode() == 0) {
+                                                    JsonNode node =
+                                                            JSON.readTree(
+                                                                    AttendanceOvertimePreview
+                                                                            .MasterReadSummaryJson
+                                                                            .extractLastJsonLine(
+                                                                                    cap.stdout()));
+                                                    if (node.path("ok").asBoolean(false)) {
+                                                        memberGridCache.put(key, node);
+                                                    }
+                                                }
+                                            } catch (Exception ignored) {
+                                                // ignore prefetch failures
+                                            } finally {
+                                                if (onComplete != null) {
+                                                    onComplete.run();
+                                                }
+                                            }
+                                        }));
+    }
+
+    private void applyMemberGridNode(JsonNode node, int year, int month) {
+        if (gridPane != null) {
+            gridPane.loadFromMemberGridJson(node);
+        }
+        statusLabel.setText(
+                "読込 "
+                        + year
+                        + "/"
+                        + month
+                        + " メンバー="
+                        + node.path("members").size()
+                        + " revision="
+                        + node.path("member_attendance_revision").asInt(0));
+        scheduleMemberGridIdlePrefetch();
+    }
+
     /** セッション・環境変数復元後に MainShell から呼ぶ。JSON 正本を読み込む。 */
     public void enableAttendanceLoadAndRefresh() {
         if (attendanceLoadEnabled) {
@@ -440,13 +604,40 @@ public class MemberAttendanceTabController {
         refreshLocalReadiness();
     }
 
+    /** メインシェルで当該タブが選択されたときに初回読込する。 */
+    void onMainShellTabSelected() {
+        if (!attendanceLoadEnabled) {
+            enableAttendanceLoadAndRefresh();
+        }
+    }
+
     /** 環境変数・パス確定後の再読込（起動時・工場ワークスペース復元後）。 */
     public void reloadAttendanceDataFromJson() {
         if (!attendanceLoadEnabled) {
             enableAttendanceLoadAndRefresh();
             return;
         }
+        clearMemberGridCache();
         loadGridFromPython();
+        refreshLocalReadiness();
+    }
+
+    /** タブ表示済みのときだけ JSON を再読込する（起動時の一括読込は避ける）。 */
+    void reloadAttendanceDataFromJsonIfEnabled() {
+        if (!attendanceLoadEnabled) {
+            return;
+        }
+        clearMemberGridCache();
+        loadGridFromPython();
+        refreshLocalReadiness();
+    }
+
+    /** 起動後バックグラウンド読込（MainShell コーディネータから呼ぶ）。 */
+    void preloadInBackground(Consumer<Boolean> onComplete) {
+        if (!attendanceLoadEnabled) {
+            attendanceLoadEnabled = true;
+        }
+        loadGridFromPython(onComplete);
         refreshLocalReadiness();
     }
 
@@ -509,6 +700,7 @@ public class MemberAttendanceTabController {
                     ok -> {
                         endSetupWizardGridOverlay();
                         if (ok) {
+                            clearMemberGridCache();
                             loadGridFromPython();
                             shell.refreshAttendanceReadiness();
                             refreshLocalReadiness();
@@ -526,6 +718,7 @@ public class MemberAttendanceTabController {
         AttendanceJsonHistoryDialog.show(
                 shell,
                 () -> {
+                    clearMemberGridCache();
                     loadGridFromPython();
                     refreshLocalReadiness();
                 });
@@ -566,7 +759,10 @@ public class MemberAttendanceTabController {
         }
         MemberAttendanceMemberEditDialog.showAdd(shell.primaryStageForDialogs())
                 .ifPresent(
-                        r -> gridPane.addMember(r.name(), r.primaryRole()));
+                        r -> {
+                            clearMemberGridCache();
+                            gridPane.addMember(r.name(), r.primaryRole());
+                        });
     }
 
     @FXML
@@ -584,9 +780,11 @@ public class MemberAttendanceTabController {
                         selected,
                         gridPane.primaryRoleFor(selected))
                 .ifPresent(
-                        r ->
-                                gridPane.updateMember(
-                                        selected, r.name(), r.primaryRole()));
+                        r -> {
+                            clearMemberGridCache();
+                            gridPane.updateMember(
+                                    selected, r.name(), r.primaryRole());
+                        });
     }
 
     @FXML
@@ -608,6 +806,7 @@ public class MemberAttendanceTabController {
             return;
         }
         gridPane.removeMember(selected);
+        clearMemberGridCache();
     }
 
     private boolean confirmSaveWithFourDigit() {
@@ -626,6 +825,7 @@ public class MemberAttendanceTabController {
         handleUnsavedThen(
                 "再読込",
                 () -> {
+                    clearMemberGridCache();
                     loadGridFromPython();
                     refreshLocalReadiness();
                 },
@@ -654,14 +854,32 @@ public class MemberAttendanceTabController {
     }
 
     private void loadGridFromPython() {
+        loadGridFromPython(null);
+    }
+
+    private void loadGridFromPython(Consumer<Boolean> onComplete) {
         if (shell == null) {
             updateGridLoadingOverlay();
+            if (onComplete != null) {
+                onComplete.accept(false);
+            }
             return;
         }
         LocalDate selected = selectedCalendarDate();
         long gen = loadGeneration.incrementAndGet();
         int year = selected.getYear();
         int month = selected.getMonthValue();
+        String cacheKey = memberGridCacheKey(year, month);
+        JsonNode cached = memberGridCache.get(cacheKey);
+        if (cached != null) {
+            if (gen == loadGeneration.get()) {
+                applyMemberGridNode(cached, year, month);
+            }
+            if (onComplete != null) {
+                onComplete.accept(true);
+            }
+            return;
+        }
         runAsync(
                 shell.buildAttendanceDataIoRequest(
                         "member_grid", Integer.toString(year), Integer.toString(month)),
@@ -669,23 +887,13 @@ public class MemberAttendanceTabController {
                     if (gen != loadGeneration.get()) {
                         return;
                     }
-                    if (gridPane != null) {
-                        gridPane.loadFromMemberGridJson(node);
-                    }
-                    statusLabel.setText(
-                            "読込 "
-                                    + year
-                                    + "/"
-                                    + month
-                                    + " メンバー="
-                                    + node.path("members").size()
-                                    + " revision="
-                                    + node.path("member_attendance_revision").asInt(0));
+                    storeMemberGridCache(node);
+                    applyMemberGridNode(node, year, month);
                 },
                 false,
                 null,
                 gen,
-                null,
+                onComplete,
                 year + "年" + month + "月を読込中");
     }
 
@@ -827,6 +1035,7 @@ public class MemberAttendanceTabController {
         if (tabProcessingDepth == 0) {
             setToolbarBusy(false);
             endStatusActivity();
+            scheduleMemberGridIdlePrefetch();
         }
     }
 

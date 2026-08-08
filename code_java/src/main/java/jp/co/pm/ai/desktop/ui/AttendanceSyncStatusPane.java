@@ -40,10 +40,11 @@ public final class AttendanceSyncStatusPane extends VBox {
         String calendarPath = node.path("calendar_xlsx_path").asText("");
         boolean calendarExists = node.path("calendar_xlsx_exists").asBoolean(false);
         String calendarAt = node.path("calendar_xlsx_export_at").asText("");
+        String calendarAtDisplay = JapanDateTimeDisplay.formatSavedAtForDisplay(calendarAt);
         String calendarLine =
                 calendarPath
                         + (calendarExists ? " ✓" : " 未作成")
-                        + (calendarAt.isBlank() ? "" : " / 出力 " + calendarAt);
+                        + (calendarAtDisplay.isBlank() ? "" : " / 出力 " + calendarAtDisplay);
         calendarXlsxLabel.setText(calendarLine);
         boolean ready = node.path("stage2_ready").asBoolean(false);
         String issues = "";

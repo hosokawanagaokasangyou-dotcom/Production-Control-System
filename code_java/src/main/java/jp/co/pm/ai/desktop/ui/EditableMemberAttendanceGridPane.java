@@ -80,9 +80,21 @@ public final class EditableMemberAttendanceGridPane extends VBox {
                     new PresetMenuOption(PRESET_HOLIDAY_WORK_AM, "前出 午前休出"),
                     new PresetMenuOption(PRESET_HOLIDAY_WORK_PM, "後出 午後休出"));
 
-    private final GridPane grid = new GridPane();
-    private final ScrollPane scroll = new ScrollPane(grid);
+    private final Label fixedRoleHeader = new Label("主担当");
+    private final Label fixedNameHeader = new Label("メンバー");
+    private final HBox headerLeftBox = new HBox(2);
+    private final GridPane headerDateGrid = new GridPane();
+    private final ScrollPane headerDateScroll = new ScrollPane(headerDateGrid);
+    private final GridPane leftBodyGrid = new GridPane();
+    private final ScrollPane leftBodyScroll = new ScrollPane(leftBodyGrid);
+    private final GridPane bodyDateGrid = new GridPane();
+    private final ScrollPane bodyScroll = new ScrollPane(bodyDateGrid);
+    private final HBox gridHeaderRow = new HBox(2);
+    private final HBox gridBodyRow = new HBox(2);
+    private final VBox gridViewport = new VBox(2);
     private final StackPane scrollHost = new StackPane();
+    private boolean scrollSyncGuard = false;
+    private int leftFixedColumnWidthPx = 0;
     private final AttendanceGridLoadingOverlay loadingOverlay =
             new AttendanceGridLoadingOverlay("pm-member-attendance-grid-loading-overlay");
     private final Map<String, CellUi> cellUiMap = new HashMap<>();
@@ -141,15 +153,105 @@ public final class EditableMemberAttendanceGridPane extends VBox {
                     }
                 });
 
-        scroll.setFitToHeight(false);
-        scroll.setPrefHeight(480);
-        grid.setHgap(2);
-        grid.setVgap(2);
+        fixedRoleHeader.getStyleClass().add("pm-member-attendance-grid-header");
+        fixedNameHeader.getStyleClass().add("pm-member-attendance-grid-header");
+        headerLeftBox.getChildren().addAll(fixedRoleHeader, fixedNameHeader);
+        headerLeftBox.getStyleClass().add("pm-member-attendance-grid-header-left");
+        headerLeftBox.getStyleClass().add("pm-member-attendance-grid-left-fixed");
+        leftBodyScroll.getStyleClass().add("pm-member-attendance-grid-left-fixed");
+        gridHeaderRow.getStyleClass().add("pm-member-attendance-grid-header-row");
+        gridHeaderRow.getChildren().addAll(headerLeftBox, headerDateScroll);
+        gridBodyRow.getChildren().addAll(leftBodyScroll, bodyScroll);
 
-        scrollHost.getChildren().addAll(scroll, loadingOverlay);
-        rowDimming.installScrollClearOnExit(scroll);
+        headerDateGrid.setHgap(2);
+        leftBodyGrid.setHgap(2);
+        leftBodyGrid.setVgap(2);
+        bodyDateGrid.setHgap(2);
+        bodyDateGrid.setVgap(2);
+
+        headerDateScroll.setFitToHeight(true);
+        headerDateScroll.setFitToWidth(false);
+        headerDateScroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        headerDateScroll.setVbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        headerDateScroll.setPannable(false);
+
+        leftBodyScroll.setFitToWidth(false);
+        leftBodyScroll.setFitToHeight(false);
+        leftBodyScroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        leftBodyScroll.setVbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        leftBodyScroll.setPannable(false);
+
+        bodyScroll.setFitToHeight(false);
+        bodyScroll.setFitToWidth(false);
+        bodyScroll.setMinHeight(120);
+
+        HBox.setHgrow(headerLeftBox, Priority.NEVER);
+        HBox.setHgrow(leftBodyScroll, Priority.NEVER);
+        HBox.setHgrow(headerDateScroll, Priority.ALWAYS);
+        HBox.setHgrow(bodyScroll, Priority.ALWAYS);
+        VBox.setVgrow(gridBodyRow, Priority.ALWAYS);
+        VBox.setVgrow(gridViewport, Priority.ALWAYS);
+        VBox.setVgrow(scrollHost, Priority.ALWAYS);
+        gridViewport.setMaxSize(Double.MAX_VALUE, Double.MAX_VALUE);
+        gridBodyRow.setMaxSize(Double.MAX_VALUE, Double.MAX_VALUE);
+        bodyScroll.setMaxSize(Double.MAX_VALUE, Double.MAX_VALUE);
+        scrollHost.setMaxSize(Double.MAX_VALUE, Double.MAX_VALUE);
+        setMaxSize(Double.MAX_VALUE, Double.MAX_VALUE);
+
+        gridViewport.getChildren().addAll(gridHeaderRow, gridBodyRow);
+        scrollHost.getChildren().addAll(gridViewport, loadingOverlay);
+        rowDimming.installScrollClearOnExit(bodyScroll);
+        bodyScroll.vvalueProperty().addListener((obs, o, n) -> syncBodyScrollToPeers());
+        bodyScroll.hvalueProperty().addListener((obs, o, n) -> syncBodyScrollToPeers());
+        bodyScroll.viewportBoundsProperty().addListener((obs, o, n) -> syncHeaderDateViewportWidth());
 
         getChildren().addAll(legendChips, legend, scrollHost);
+    }
+
+    private void applyLeftFixedColumnWidths(int leftWidth) {
+        leftFixedColumnWidthPx = leftWidth;
+        headerLeftBox.setMinWidth(leftWidth);
+        headerLeftBox.setPrefWidth(leftWidth);
+        headerLeftBox.setMaxWidth(leftWidth);
+        leftBodyScroll.setMinWidth(leftWidth);
+        leftBodyScroll.setPrefWidth(leftWidth);
+        leftBodyScroll.setMaxWidth(leftWidth);
+        syncHeaderDateViewportWidth();
+    }
+
+    /** 日付見出しと本体の横位置を、縦スクロールバー幅分だけ揃える。 */
+    private void syncHeaderDateViewportWidth() {
+        if (leftFixedColumnWidthPx <= 0) {
+            return;
+        }
+        javafx.geometry.Bounds vp = bodyScroll.getViewportBounds();
+        if (vp == null || vp.getWidth() <= 0) {
+            return;
+        }
+        double scrollbarPad = Math.max(0, bodyScroll.getWidth() - vp.getWidth());
+        headerDateScroll.setPadding(new javafx.geometry.Insets(0, scrollbarPad, 0, 0));
+    }
+
+    private void syncBodyScrollToPeers() {
+        if (scrollSyncGuard) {
+            return;
+        }
+        scrollSyncGuard = true;
+        double v = bodyScroll.getVvalue();
+        double h = bodyScroll.getHvalue();
+        if (leftBodyScroll.getVvalue() != v) {
+            leftBodyScroll.setVvalue(v);
+        }
+        if (headerDateScroll.getHvalue() != h) {
+            headerDateScroll.setHvalue(h);
+        }
+        scrollSyncGuard = false;
+    }
+
+    private void setGridScrollDisabled(boolean disabled) {
+        bodyScroll.setDisable(disabled);
+        leftBodyScroll.setDisable(disabled);
+        headerDateScroll.setDisable(disabled);
     }
 
     public void refreshRowHoverDimming() {
@@ -163,7 +265,7 @@ public final class EditableMemberAttendanceGridPane extends VBox {
 
     public void setGridLoading(boolean loading, String message) {
         loadingOverlay.setLoading(loading, message);
-        scroll.setDisable(loading);
+        setGridScrollDisabled(loading);
         if (loading) {
             rowDimming.setHoveredRow(-1);
             if (!getStyleClass().contains("pm-member-attendance-grid-loading")) {
@@ -689,7 +791,7 @@ public final class EditableMemberAttendanceGridPane extends VBox {
     }
 
     private void refreshMemberSelectionStyles() {
-        grid.getChildren().stream()
+        leftBodyGrid.getChildren().stream()
                 .filter(n -> n instanceof Label)
                 .map(n -> (Label) n)
                 .filter(l -> l.getStyleClass().contains("pm-member-attendance-grid-member"))
@@ -712,38 +814,51 @@ public final class EditableMemberAttendanceGridPane extends VBox {
     }
 
     private void rebuildGrid() {
-        grid.getChildren().clear();
-        grid.getColumnConstraints().clear();
+        headerDateGrid.getChildren().clear();
+        headerDateGrid.getColumnConstraints().clear();
+        leftBodyGrid.getChildren().clear();
+        leftBodyGrid.getColumnConstraints().clear();
+        bodyDateGrid.getChildren().clear();
+        bodyDateGrid.getColumnConstraints().clear();
         cellUiMap.clear();
         rowDimming.clear();
         if (members.isEmpty() || dates.isEmpty()) {
             return;
         }
 
-        ColumnConstraints roleCol = new ColumnConstraints();
-        roleCol.setMinWidth(AttendanceGridCellSizing.memberPrimaryRoleColumnWidth(cellSizePx));
-        roleCol.setPrefWidth(AttendanceGridCellSizing.memberPrimaryRoleColumnWidth(cellSizePx));
-        grid.getColumnConstraints().add(roleCol);
-        ColumnConstraints nameCol = new ColumnConstraints();
-        nameCol.setMinWidth(AttendanceGridCellSizing.memberNameColumnWidth(cellSizePx));
-        nameCol.setPrefWidth(AttendanceGridCellSizing.memberNameColumnWidth(cellSizePx));
-        grid.getColumnConstraints().add(nameCol);
+        int roleW = AttendanceGridCellSizing.memberPrimaryRoleColumnWidth(cellSizePx);
+        int nameW = AttendanceGridCellSizing.memberNameColumnWidth(cellSizePx);
+        int cellH = AttendanceGridCellSizing.memberCellHeight(cellSizePx);
+        int dayW = AttendanceGridCellSizing.memberDayColumnWidth(cellSizePx);
+        int leftWidth = roleW + nameW + (int) leftBodyGrid.getHgap();
+        applyLeftFixedColumnWidths(leftWidth);
+
+        ColumnConstraints leftRoleCol = new ColumnConstraints();
+        leftRoleCol.setMinWidth(roleW);
+        leftRoleCol.setPrefWidth(roleW);
+        leftBodyGrid.getColumnConstraints().add(leftRoleCol);
+        ColumnConstraints leftNameCol = new ColumnConstraints();
+        leftNameCol.setMinWidth(nameW);
+        leftNameCol.setPrefWidth(nameW);
+        leftBodyGrid.getColumnConstraints().add(leftNameCol);
+
         for (int i = 0; i < dates.size(); i++) {
             ColumnConstraints cc = new ColumnConstraints();
-            int dayW = AttendanceGridCellSizing.memberDayColumnWidth(cellSizePx);
             cc.setMinWidth(dayW);
             cc.setPrefWidth(dayW);
-            grid.getColumnConstraints().add(cc);
+            headerDateGrid.getColumnConstraints().add(cc);
+            bodyDateGrid.getColumnConstraints().add(cloneColumnConstraints(cc));
         }
 
-        Label roleHeader = new Label("主担当");
-        roleHeader.getStyleClass().add("pm-member-attendance-grid-header");
-        AttendanceGridCellSizing.applyHeaderLabel(roleHeader, cellSizePx);
-        grid.add(roleHeader, 0, 0);
-        Label nameHeader = new Label("メンバー");
-        nameHeader.getStyleClass().add("pm-member-attendance-grid-header");
-        AttendanceGridCellSizing.applyHeaderLabel(nameHeader, cellSizePx);
-        grid.add(nameHeader, 1, 0);
+        AttendanceGridCellSizing.applyHeaderLabel(fixedRoleHeader, cellSizePx);
+        fixedRoleHeader.setMinSize(roleW, cellH);
+        fixedRoleHeader.setPrefSize(roleW, cellH);
+        fixedRoleHeader.setMaxWidth(roleW);
+        AttendanceGridCellSizing.applyHeaderLabel(fixedNameHeader, cellSizePx);
+        fixedNameHeader.setMinSize(nameW, cellH);
+        fixedNameHeader.setPrefSize(nameW, cellH);
+        fixedNameHeader.setMaxWidth(nameW);
+
         Locale locale = Locale.JAPAN;
         for (int col = 0; col < dates.size(); col++) {
             LocalDate d = dates.get(col);
@@ -751,11 +866,14 @@ public final class EditableMemberAttendanceGridPane extends VBox {
             Label h = new Label(d.getDayOfMonth() + dow);
             h.getStyleClass().add("pm-member-attendance-grid-header");
             AttendanceGridCellSizing.applyHeaderLabel(h, cellSizePx);
+            h.setMinSize(dayW, cellH);
+            h.setPrefSize(dayW, cellH);
+            h.setMaxSize(dayW, cellH);
             if (isCompanyOffDay(d)) {
                 h.getStyleClass().add("pm-member-attendance-company-off");
             }
             GridPane.setHalignment(h, HPos.CENTER);
-            grid.add(h, col + 2, 0);
+            headerDateGrid.add(h, col, 0);
         }
 
         for (int row = 0; row < members.size(); row++) {
@@ -765,8 +883,8 @@ public final class EditableMemberAttendanceGridPane extends VBox {
             rowBand.setMouseTransparent(true);
             rowBand.setMaxWidth(Double.MAX_VALUE);
             rowBand.setMaxHeight(Double.MAX_VALUE);
-            GridPane.setColumnSpan(rowBand, dates.size() + 2);
-            grid.add(rowBand, 0, row + 1);
+            GridPane.setColumnSpan(rowBand, dates.size());
+            bodyDateGrid.add(rowBand, 0, row);
 
             Label roleLabel =
                     new Label(
@@ -776,7 +894,7 @@ public final class EditableMemberAttendanceGridPane extends VBox {
             AttendanceGridCellSizing.applyMemberNameLabel(roleLabel, cellSizePx);
             GridPane.setHalignment(roleLabel, HPos.CENTER);
             GridPane.setValignment(roleLabel, VPos.CENTER);
-            grid.add(roleLabel, 0, row + 1);
+            leftBodyGrid.add(roleLabel, 0, row);
             rowDimming.installHover(roleLabel, row);
 
             Label name = new Label(member);
@@ -788,7 +906,7 @@ public final class EditableMemberAttendanceGridPane extends VBox {
             GridPane.setHalignment(name, HPos.CENTER);
             GridPane.setValignment(name, VPos.CENTER);
             name.setOnMouseClicked(e -> selectMember(member));
-            grid.add(name, 1, row + 1);
+            leftBodyGrid.add(name, 1, row);
             List<StackPane> rowWraps = new ArrayList<>();
             rowDimming.installHover(name, row);
             for (int col = 0; col < dates.size(); col++) {
@@ -822,10 +940,20 @@ public final class EditableMemberAttendanceGridPane extends VBox {
                 cellUiMap.put(cellKey(dKey, member), new CellUi(cell, commentMark));
                 rowDimming.installHover(cellWrap, row);
                 rowWraps.add(cellWrap);
-                grid.add(cellWrap, col + 2, row + 1);
+                bodyDateGrid.add(cellWrap, col, row);
             }
             rowDimming.addRow(rowBand, name, new ArrayList<>(rowWraps));
         }
+        javafx.application.Platform.runLater(this::syncHeaderDateViewportWidth);
+    }
+
+    private static ColumnConstraints cloneColumnConstraints(ColumnConstraints src) {
+        ColumnConstraints cc = new ColumnConstraints();
+        cc.setMinWidth(src.getMinWidth());
+        cc.setPrefWidth(src.getPrefWidth());
+        cc.setMaxWidth(src.getMaxWidth());
+        cc.setHgrow(src.getHgrow());
+        return cc;
     }
 
     private void cyclePreset(LocalDate date, String member) {
@@ -1130,7 +1258,7 @@ public final class EditableMemberAttendanceGridPane extends VBox {
 
     private void releaseCellFocus(Button cell) {
         if (cell != null && cell.isFocused()) {
-            scroll.requestFocus();
+            bodyScroll.requestFocus();
         }
     }
 

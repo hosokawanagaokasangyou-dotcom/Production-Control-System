@@ -25,13 +25,12 @@ def bundled_template_path() -> Path:
 
 
 def work_dir_from_summary_workbook() -> Path | None:
-    summary = os.environ.get(SUMMARY_ENV_KEY, "").strip()
-    if not summary:
+    from planning_core.core.summary_shared_data_paths import resolve_summary_shared_data_dir
+
+    shared = resolve_summary_shared_data_dir()
+    if not shared:
         return None
-    p = Path(summary)
-    if not p.is_file():
-        return None
-    return p.parent / DISPATCH_SPECIAL_RULES_DIR
+    return Path(shared) / DISPATCH_SPECIAL_RULES_DIR
 
 
 def default_work_json_path() -> Path | None:

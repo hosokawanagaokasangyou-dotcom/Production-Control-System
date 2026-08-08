@@ -1004,6 +1004,27 @@
     -fx-text-fill: -fx-accent-contrast;
 }
 
+.pm-company-calendar .pm-inline-month-calendar-day-selected.pm-company-cal-working {
+    -fx-background-color: #bbf7d0;
+    -fx-text-fill: #14532d;
+    -fx-border-color: -fx-accent;
+    -fx-border-width: 2;
+}
+
+.pm-company-calendar .pm-inline-month-calendar-day-selected.pm-company-cal-public {
+    -fx-background-color: #fecaca;
+    -fx-text-fill: #7f1d1d;
+    -fx-border-color: -fx-accent;
+    -fx-border-width: 2;
+}
+
+.pm-company-calendar .pm-inline-month-calendar-day-selected.pm-company-cal-special {
+    -fx-background-color: #fde68a;
+    -fx-text-fill: #78350f;
+    -fx-border-color: -fx-accent;
+    -fx-border-width: 2;
+}
+
 .pm-inline-month-calendar-day-today {
     -fx-border-color: -fx-accent;
     -fx-border-width: 1;
@@ -1112,6 +1133,17 @@
     -fx-padding: 0 4 4 4;
 }
 
+.pm-attendance-tab-status-footer {
+    -fx-padding: 6 4 2 4;
+    -fx-border-color: derive(-fx-base, -12%);
+    -fx-border-width: 1 0 0 0;
+}
+
+.pm-attendance-tab-status-footer.label {
+    -fx-font-size: 11px;
+    -fx-opacity: 0.92;
+}
+
 .pm-attendance-sync-warn {
     -fx-text-fill: #b45309;
 }
@@ -1201,6 +1233,20 @@
 .pm-member-attendance-grid-legend {
     -fx-font-size: 11px;
     -fx-opacity: 0.9;
+}
+
+.pm-member-attendance-grid-header-row {
+    -fx-background-color: derive(-fx-base, 8%);
+}
+
+.pm-member-attendance-grid-header-left {
+    -fx-alignment: center-left;
+}
+
+.pm-member-attendance-grid-left-fixed {
+    -fx-background-color: derive(-fx-base, 6%);
+    -fx-border-color: derive(-fx-base, -12%);
+    -fx-border-width: 0 1 0 0;
 }
 
 .pm-member-attendance-grid-loading .scroll-pane {
@@ -1942,11 +1988,45 @@
     -fx-text-fill: -fx-light-text-color;
 }
 
-/* ツールバー右上：JVM ヒープ・メタスペース表示（FxJvmMemoryStatusBar） */
+/* ツールバー右上：JVM ヒープ・メタスペース表示（FxJvmMemoryStatusBar）— 旧ツールバー配置。現行は下部グローバルステータスバー。 */
 .label.pm-jvm-memory-status {
     -fx-font-size: 11px;
     -fx-text-fill: derive(-fx-text-inner-color, -8%);
     -fx-padding: 0 0 0 8;
+}
+
+.pm-global-status-bar {
+    -fx-background-color: linear-gradient(to bottom, #dbeafe 0%, #bfdbfe 100%);
+    -fx-border-color: #2563eb;
+    -fx-border-width: 2 0 0 0;
+    -fx-min-height: 38px;
+}
+
+.label.pm-global-status-message {
+    -fx-font-size: 13px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #1e3a8a;
+    -fx-padding: 2 6 2 0;
+}
+
+.label.pm-global-status-meta {
+    -fx-font-size: 12px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #1e40af;
+    -fx-padding: 2 6 2 6;
+    -fx-background-color: rgba(255, 255, 255, 0.55);
+    -fx-background-radius: 4;
+}
+
+.label.pm-global-status-meta.pm-global-status-warn {
+    -fx-text-fill: #b45309;
+    -fx-background-color: #fef3c7;
+}
+
+.label.pm-global-status-memory {
+    -fx-font-size: 11px;
+    -fx-text-fill: #475569;
+    -fx-padding: 2 0 2 8;
 }
 
 /* ツールバー：環境変数 ui_ref 既定への最終初期化日時 */

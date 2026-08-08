@@ -52,6 +52,7 @@ import jp.co.pm.ai.desktop.ui.PersonBadgeNodeFactory;
 import jp.co.pm.ai.desktop.dispatch.DispatchPlanInputInteractiveCoverageCheck;
 import jp.co.pm.ai.desktop.dispatch.DispatchPlanInputInteractiveCoverageCheck.TaskKey;
 import jp.co.pm.ai.desktop.io.ExcelCellReadSupport;
+import jp.co.pm.ai.desktop.io.PlanInputAiSpecialParseSidecar;
 import jp.co.pm.ai.desktop.io.PlanInputTabularIo;
 import jp.co.pm.ai.desktop.ui.ColumnVisibilitySupport;
 import jp.co.pm.ai.desktop.ui.LimitedOperatorCellEditor;
@@ -1229,6 +1230,20 @@ public final class PlanInputTabController {
         loadFromCurrentPath(false);
     }
 
+    /**
+     * 段階2 成功後: Python が Excel へ書き戻した AI 解析列を表に反映する。未保存の手編集があるときは上書きしない。
+     */
+    void reloadQuietlyFromDiskAfterStage2IfClean() {
+        if (isPlanInputTableDirtySinceSave()) {
+            if (shell != null) {
+                shell.appendLog(
+                        "[plan-input] 段階2 後の再読込をスキップしました（表に未保存の編集があります）。");
+            }
+            return;
+        }
+        reloadQuietlyFromDisk();
+    }
+
     /** 段階1「キャッシュをクリアして実行」等で、表表示を空にする（ディスク削除は {@link Stage1AiCacheClearer}）。 */
     void clearTableForStage1CacheClear() {
         headersRef.clear();
@@ -1602,6 +1617,18 @@ public final class PlanInputTabController {
             }
             PlanInputDeprecatedOverrideColumnSupport.migrateAndDropDeprecatedOverrideColumns(
                     headersRef, rows);
+            int sidecarMerged =
+                    PlanInputAiSpecialParseSidecar.applyIfPresent(
+                            shell.snapshotUiEnv(), sheetName, headersRef, rows);
+            if (sidecarMerged > 0 && shell != null) {
+                shell.appendLog(
+                        "[plan-input] AI解析サイドカーから "
+                                + sidecarMerged
+                                + " セルを表へ反映しました（"
+                                + PlanInputAiSpecialParseSidecar.resolveSidecarPath(
+                                                shell.snapshotUiEnv())
+                                        + "）。");
+            }
             normalizePlanInputDateOnlyColumns();
             List<TableColumnOrderPersistence.ColumnSpec> lay =
                     TableColumnOrderPersistence.loadLayout(TableColumnOrderPersistence.TableId.PLAN_INPUT);
