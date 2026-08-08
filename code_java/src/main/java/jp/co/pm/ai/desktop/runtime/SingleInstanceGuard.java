@@ -8,7 +8,6 @@ import java.io.PrintWriter;
 import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.net.SocketTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -37,6 +36,7 @@ public final class SingleInstanceGuard implements AutoCloseable {
     private volatile ServerSocket server;
     private volatile Thread acceptThread;
 
+    /** コールバックは accept スレッドで実行される。UI 操作は JavaFX スレッドへ dispatch すること。 */
     public void setOnActivateRequest(Runnable callback) {
         onActivate.set(callback);
     }
@@ -44,6 +44,9 @@ public final class SingleInstanceGuard implements AutoCloseable {
     public Role tryAcquire() {
         if (!isEnabled()) {
             return Role.DISABLED;
+        }
+        if (server != null) {
+            return Role.PRIMARY;
         }
         int port = resolvePort();
         if (sendActivate(port, 300)) {
@@ -120,8 +123,6 @@ public final class SingleInstanceGuard implements AutoCloseable {
         while (!ss.isClosed()) {
             try (Socket client = ss.accept()) {
                 handleClient(client);
-            } catch (SocketTimeoutException ignored) {
-                /* unused */
             } catch (IOException e) {
                 if (ss.isClosed()) {
                     break;
