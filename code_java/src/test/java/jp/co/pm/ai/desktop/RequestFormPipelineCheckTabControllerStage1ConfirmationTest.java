@@ -1,5 +1,6 @@
 package jp.co.pm.ai.desktop;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -212,6 +213,64 @@ class RequestFormPipelineCheckTabControllerStage1ConfirmationTest {
                         false,
                         "未確認");
         assertFalse(RequestFormPipelineCheckTabController.requiresStage1Confirmation(row));
+    }
+
+    @Test
+    void confirmAllRequiringConfirmation_checksOnlyUnconfirmedRequiringRows() {
+        LocalDate future = LocalDate.now().plusDays(5);
+        MainRow requiring =
+                sampleRow(
+                        future,
+                        future.getYear() + "/" + future.getMonthValue() + "/" + future.getDayOfMonth(),
+                        "―",
+                        RawInputDateCrossSourceCheck.STATUS_MISMATCH,
+                        true,
+                        true,
+                        "",
+                        false,
+                        "なし");
+        MainRow exempt =
+                sampleRow(
+                        future,
+                        future.getYear() + "/" + future.getMonthValue() + "/" + future.getDayOfMonth(),
+                        "完了",
+                        RawInputDateCrossSourceCheck.STATUS_MISMATCH,
+                        true,
+                        true,
+                        "",
+                        false,
+                        "なし");
+
+        int confirmed =
+                RequestFormPipelineCheckTabController.confirmAllRequiringConfirmation(
+                        List.of(requiring, exempt));
+
+        assertEquals(1, confirmed);
+        assertTrue(requiring.isIssueConfirmed());
+        assertFalse(exempt.isIssueConfirmed());
+    }
+
+    @Test
+    void confirmAllRequiringConfirmation_skipsAlreadyConfirmedRows() {
+        LocalDate future = LocalDate.now().plusDays(5);
+        MainRow row =
+                sampleRow(
+                        future,
+                        future.getYear() + "/" + future.getMonthValue() + "/" + future.getDayOfMonth(),
+                        "―",
+                        RawInputDateCrossSourceCheck.STATUS_MISMATCH,
+                        true,
+                        true,
+                        "",
+                        false,
+                        "なし");
+        row.issueConfirmedProperty().set(true);
+
+        int confirmed =
+                RequestFormPipelineCheckTabController.confirmAllRequiringConfirmation(List.of(row));
+
+        assertEquals(0, confirmed);
+        assertTrue(row.isIssueConfirmed());
     }
 
     private static MainRow sampleRow(

@@ -42,7 +42,7 @@ public final class MainShellInnerTabCatalog {
     public static List<String> nestedInnerTabLabelsUnderInnerTab(
             MainShellTabId parent, int innerTabIndex) {
         // 依頼書入力「マスター一覧」内 TabPane（ReconciliationApp）
-        if (parent == MainShellTabId.REQUEST_FORM_INPUT && innerTabIndex == 3) {
+        if (parent == MainShellTabId.REQUEST_FORM_INPUT && innerTabIndex == 4) {
             return List.of("機械コード", "工程マスタ", "加工内容マスタ");
         }
         return List.of();
@@ -95,6 +95,7 @@ public final class MainShellInnerTabCatalog {
             case REQUEST_FORM_INPUT ->
                     List.of(
                             "一括照合データベース・受注管理",
+                            "目次シート",
                             "【設定】",
                             "後加工商品マスタ",
                             "マスター一覧");

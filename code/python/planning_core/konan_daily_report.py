@@ -28,7 +28,7 @@ ENV_DAILY_REPORT_APPEND_MISSING = "PM_AI_DAILY_REPORT_APPEND_MISSING"
 
 DAILY_REPORT_FILENAME_PREFIX = "加工日報発行問合せ_"
 
-DEFAULT_DAILY_REPORT_SOURCE_DIR = (
+DEFAULT_DAILY_REPORT_SOURCE_DIR_KONAN = (
     "\\\\192.168.0.101\\"
     "\u5171\u6709\u30d5\u30a9\u30eb\u30c0\\"
     "\u6e56\u5357\u5de5\u5834\\"
@@ -38,6 +38,13 @@ DEFAULT_DAILY_REPORT_SOURCE_DIR = (
     "\u25cfDATA\\"
     "\u52a0\u5de5\u65e5\u5831"
 )
+
+DEFAULT_DAILY_REPORT_SOURCE_DIR_KOKUBU = (
+    r"\\192.168.0.101\共有フォルダ\国分工場\国分共有\●配台AIシステム\DATA\加工日報"
+)
+
+# 後方互換
+DEFAULT_DAILY_REPORT_SOURCE_DIR = DEFAULT_DAILY_REPORT_SOURCE_DIR_KONAN
 
 COL_TASK_ID = "依頼NO"
 COL_ORDER_NO = "受注NO"
@@ -134,6 +141,14 @@ def pick_newest_daily_report_csv(dir_path: str) -> str | None:
     return best
 
 
+def default_daily_report_source_dir() -> str:
+    """``PM_AI_FACTORY_SITE`` に応じた加工日報フォルダ既定（未設定時は湖南）。"""
+    v = (os.environ.get("PM_AI_FACTORY_SITE") or "KONAN").strip().upper()
+    if v == "KOKUBU":
+        return DEFAULT_DAILY_REPORT_SOURCE_DIR_KOKUBU
+    return DEFAULT_DAILY_REPORT_SOURCE_DIR_KONAN
+
+
 def resolve_daily_report_csv_path() -> str | None:
     """``PM_AI_DAILY_REPORT_CSV_PATH`` → ディレクトリ内最新 の順で解決。"""
     explicit = (os.environ.get(ENV_DAILY_REPORT_CSV_PATH) or "").strip()
@@ -141,7 +156,7 @@ def resolve_daily_report_csv_path() -> str | None:
         return os.path.normpath(os.path.abspath(explicit))
     src = (os.environ.get(ENV_DAILY_REPORT_SOURCE_DIR) or "").strip()
     if not src:
-        src = DEFAULT_DAILY_REPORT_SOURCE_DIR
+        src = default_daily_report_source_dir()
     picked = pick_newest_daily_report_csv(src)
     if picked:
         return os.path.normpath(os.path.abspath(picked))

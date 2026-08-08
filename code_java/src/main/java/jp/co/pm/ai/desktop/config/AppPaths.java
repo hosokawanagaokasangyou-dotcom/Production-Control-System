@@ -1111,7 +1111,7 @@ public final class AppPaths {
 
     /**
      * 依頼書原本フォルダ。{@link #KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR} が空のときは
-     * {@link GlobalInitSettingTarget#load()} の工場に応じ、受注ファイル既定の親ディレクトリ。
+     * {@link GlobalInitSettingTarget#loadEffective(Map)} の工場に応じ、受注ファイル既定の親ディレクトリ。
      */
     public static Path resolveRequestFormOriginalDir(Map<String, String> ui) {
         Map<String, String> u = ui != null ? ui : Map.of();
@@ -1119,7 +1119,9 @@ public final class AppPaths {
         if (!override.isEmpty()) {
             return Path.of(override).toAbsolutePath().normalize();
         }
-        return Path.of(defaultRequestFormOriginalDirForFactory(GlobalInitSettingTarget.load()))
+        return Path.of(
+                        defaultRequestFormOriginalDirForFactory(
+                                GlobalInitSettingTarget.loadEffective(u)))
                 .toAbsolutePath()
                 .normalize();
     }
@@ -2840,6 +2842,46 @@ public final class AppPaths {
                 machineCalendarDataJsonPath(scratch).toString());
         putFactoryManagedEnv(map, KEY_PM_AI_ATTENDANCE_JSON_HISTORY_DIR, "");
         putFactoryManagedEnv(map, KEY_PM_AI_ATTENDANCE_CALENDAR_XLSX_HISTORY_DIR, "");
+    }
+
+    /**
+     * 工場切替時に依頼書原本フォルダ・受注ファイル等の env 行を、当該工場の既定へ揃える。
+     * ワークスペースに残った他工場の UNC（国分／湖南）を上書きする。
+     */
+    public static void overlayFactorySiteRequestFormPaths(
+            Map<String, String> map, FactorySite site) {
+        if (map == null || site == null) {
+            return;
+        }
+        putFactoryManagedEnv(map, KEY_PM_AI_FACTORY_SITE, site.name());
+        String juchu = trim(map.get(KEY_PM_AI_REQUEST_FORM_JUCHU_FILE));
+        if (juchu.isEmpty() || factoryPathHintConflictsWithSite(juchu, site)) {
+            putFactoryManagedEnv(map, KEY_PM_AI_REQUEST_FORM_JUCHU_FILE, defaultRequestFormJuchuFileForFactory(site));
+        }
+        String originalDir = trim(map.get(KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR));
+        if (originalDir.isEmpty() || factoryPathHintConflictsWithSite(originalDir, site)) {
+            putFactoryManagedEnv(
+                    map, KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR, defaultRequestFormOriginalDirForFactory(site));
+        }
+        String tpiPdf = trim(map.get(KEY_PM_AI_REQUEST_FORM_TPI_PDF_DIR));
+        String tpiDefault = defaultRequestFormTpiPdfDirForFactory(site);
+        if (tpiDefault.isEmpty()) {
+            putFactoryManagedEnv(map, KEY_PM_AI_REQUEST_FORM_TPI_PDF_DIR, "");
+        } else if (tpiPdf.isEmpty() || factoryPathHintConflictsWithSite(tpiPdf, site)) {
+            putFactoryManagedEnv(map, KEY_PM_AI_REQUEST_FORM_TPI_PDF_DIR, tpiDefault);
+        }
+    }
+
+    /**
+     * パス文字列の国分／湖南ヒントが、指定工場と矛盾するとき true（ヒント無しは矛盾なし）。
+     */
+    public static boolean factoryPathHintConflictsWithSite(String path, FactorySite site) {
+        if (path == null || path.isBlank() || site == null) {
+            return false;
+        }
+        return FactorySite.inferFromPortableBundleSourceValue(path)
+                .filter(inferred -> inferred != site)
+                .isPresent();
     }
 
     private static void putFactoryManagedEnv(Map<String, String> map, String key, String value) {

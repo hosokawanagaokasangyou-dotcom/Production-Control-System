@@ -5,20 +5,35 @@ from __future__ import annotations
 
 from planning_core.core.attendance_member_roster import (
     DEFAULT_MEMBER_ROSTER,
+    KOKUBU_DEFAULT_MEMBER_ROSTER,
     apply_member_roster_patch,
     attendance_grid_member_names,
+    default_member_roster_for_factory,
     ensure_member_roster,
     members_for_attendance_analysis,
 )
 from planning_core.core.attendance_store import apply_member_attendance_patch, empty_store
 
 
-def test_default_roster_has_fourteen_members_in_order():
+def test_default_roster_has_fourteen_members_in_order(monkeypatch):
+    monkeypatch.delenv("PM_AI_FACTORY_SITE", raising=False)
     store = empty_store(2026)
     names = attendance_grid_member_names(store)
     assert len(names) == 14
     assert names[0] == DEFAULT_MEMBER_ROSTER[0]["name"]
     assert names[-1] == DEFAULT_MEMBER_ROSTER[-1]["name"]
+
+
+def test_kokubu_default_roster_has_twenty_one_members(monkeypatch):
+    monkeypatch.setenv("PM_AI_FACTORY_SITE", "KOKUBU")
+    store = empty_store(2026)
+    names = attendance_grid_member_names(store)
+    assert len(names) == 21
+    assert names[0] == KOKUBU_DEFAULT_MEMBER_ROSTER[0]["name"]
+    assert names[-1] == KOKUBU_DEFAULT_MEMBER_ROSTER[-1]["name"]
+    assert all(
+        e["primary_role"] == "後加工" for e in default_member_roster_for_factory()
+    )
 
 
 def test_members_for_attendance_analysis_merges_skills():

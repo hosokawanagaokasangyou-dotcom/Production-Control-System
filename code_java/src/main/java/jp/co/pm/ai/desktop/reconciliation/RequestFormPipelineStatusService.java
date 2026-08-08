@@ -20,6 +20,8 @@ import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
+import jp.co.pm.ai.desktop.config.FactorySite;
+import jp.co.pm.ai.desktop.config.GlobalInitSettingTarget;
 import jp.co.pm.ai.desktop.config.NetworkSourceDirResolver;
 import jp.co.pm.ai.desktop.dispatch.AladdinShapedPlanQtyLookup;
 import jp.co.pm.ai.desktop.dispatch.AladdinShapedPlanQtyLookup.PlanEntry;
@@ -101,6 +103,17 @@ public final class RequestFormPipelineStatusService {
             Map<String, String> ui,
             JuchuHeaderAliasRegistry registry,
             ScanProgressListener progress) {
+        return scan(ui, registry, progress, 0);
+    }
+
+    /**
+     * @param juchuInputHideDays 受注入力日がこの日数以上前の行は走査対象外（0 で無効）。UI の「受注入力日が N 日以上前を非表示」と同じ。
+     */
+    public static ScanResult scan(
+            Map<String, String> ui,
+            JuchuHeaderAliasRegistry registry,
+            ScanProgressListener progress,
+            int juchuInputHideDays) {
         Map<String, String> env = ui != null ? ui : Map.of();
         JuchuHeaderAliasRegistry reg =
                 registry != null ? registry : JuchuHeaderAliasRegistry.loadDefault();
@@ -128,8 +141,14 @@ public final class RequestFormPipelineStatusService {
                     "shaped_aladdin_plan.json に日付列が見つかりません。"
                             + " アラジン加工計画取得データを再読込してください。");
         }
+        AladdinShapedPlanQtyLookup.PipelineScanIndex shapedIndex =
+                aladdinJsonAvailable
+                        ? AladdinShapedPlanQtyLookup.buildPipelineScanIndex(
+                                shaped.headers(), shaped.rows())
+                        : AladdinShapedPlanQtyLookup.PipelineScanIndex.empty();
 
         List<Map<String, String>> rawRequests = loadOriginalRequests(env, warnings, progress);
+        Map<String, Map<String, String>> excelRawByIraiKey = indexExcelRawByIraiKey(rawRequests);
         Path parseCacheRootPath = AppPaths.resolveRepoRoot(env).resolve("preview_cache");
         File parseCacheRoot = parseCacheRootPath.toFile();
         reportProgress(progress, 0.72, "加工日報読込中…");
@@ -145,6 +164,12 @@ public final class RequestFormPipelineStatusService {
             }
             String normKey = JuchuTransferValueNormalizer.normalizeKey(iraiNo);
             processedOriginalKeys.add(normKey);
+            Map<String, String> juchuDb = dbRows.get(normKey);
+            if (shouldSkipJuchuRowDuringScan(juchuDb, juchuInputHideDays)) {
+                rowWorkDone++;
+                reportRowProgress(progress, rowWorkDone, rowWorkTotal);
+                continue;
+            }
             Map<String, String> originalDb = buildOriginalDbFromRaw(raw);
             rows.add(
                     buildRow(
@@ -152,11 +177,11 @@ public final class RequestFormPipelineStatusService {
                             resolveOriginalFileName(raw),
                             true,
                             originalDb,
-                            dbRows.get(normKey),
+                            juchuDb,
                             reg,
                             juchuPath,
                             aladdinJsonAvailable,
-                            shaped,
+                            shapedIndex,
                             planDateHeaders,
                             RequestFormOriginalIndexSheetMeta.IndexSheetDisplay.fromRaw(raw),
                             resolveSheetInputDateRaw(raw)));
@@ -168,14 +193,22 @@ public final class RequestFormPipelineStatusService {
                 continue;
             }
             Map<String, String> juchuDb = entry.getValue();
+            if (shouldSkipJuchuRowDuringScan(juchuDb, juchuInputHideDays)) {
+                rowWorkDone++;
+                reportRowProgress(progress, rowWorkDone, rowWorkTotal);
+                continue;
+            }
             String iraiNo =
                     firstNonBlank(
                             juchuDb.get("依頼No"),
                             juchuDb.get("依頼Ｎｏ"),
                             juchuDb.get("依頼NO"),
                             entry.getKey());
+            Map<String, String> linkedExcelRaw = excelRawByIraiKey.get(entry.getKey());
             Optional<Map<String, String>> linkedRaw =
-                    resolveLinkedExcelOriginalRaw(iraiNo, env, parseCacheRoot, warnings);
+                    linkedExcelRaw != null
+                            ? Optional.of(linkedExcelRaw)
+                            : Optional.empty();
             if (linkedRaw.isEmpty() && AppPaths.isRequestFormTpiPdfEnabled(env)) {
                 linkedRaw = resolveLinkedTpiPdfRaw(iraiNo, env, parseCacheRoot, warnings);
             }
@@ -192,7 +225,7 @@ public final class RequestFormPipelineStatusService {
                                 reg,
                                 juchuPath,
                                 aladdinJsonAvailable,
-                                shaped,
+                                shapedIndex,
                                 planDateHeaders,
                                 RequestFormOriginalIndexSheetMeta.IndexSheetDisplay.fromRaw(raw),
                                 resolveSheetInputDateRaw(raw)));
@@ -210,7 +243,7 @@ public final class RequestFormPipelineStatusService {
                             reg,
                             juchuPath,
                             aladdinJsonAvailable,
-                            shaped,
+                            shapedIndex,
                             planDateHeaders,
                             RequestFormOriginalIndexSheetMeta.IndexSheetDisplay.empty(),
                             ""));
@@ -260,7 +293,7 @@ public final class RequestFormPipelineStatusService {
             JuchuHeaderAliasRegistry reg,
             String juchuPath,
             boolean aladdinJsonAvailable,
-            AladdinShapedPlanQtyLookup.ShapedTable shaped,
+            AladdinShapedPlanQtyLookup.PipelineScanIndex shapedIndex,
             List<String> planDateHeaders,
             RequestFormOriginalIndexSheetMeta.IndexSheetDisplay indexSheet,
             String sheetInputDateRaw) {
@@ -273,10 +306,7 @@ public final class RequestFormPipelineStatusService {
                 JuchuTransferCoverageCheck.formatJuchuContractNoDisplay(
                         juchuDb, coverage.juchuRowExists());
         List<PlanEntry> planEntries =
-                aladdinJsonAvailable
-                        ? AladdinShapedPlanQtyLookup.collectEntriesForTaskIdFromTable(
-                                shaped.headers(), shaped.rows(), iraiNo)
-                        : List.of();
+                aladdinJsonAvailable ? shapedIndex.planEntriesFor(iraiNo) : List.of();
         List<String> planDayValues =
                 aladdinJsonAvailable
                         ? AladdinShapedPlanQtyLookup.aggregatePlanMetersByEntryDates(
@@ -306,10 +336,7 @@ public final class RequestFormPipelineStatusService {
                         ? indexSheet
                         : RequestFormOriginalIndexSheetMeta.IndexSheetDisplay.empty();
         String aladdinRawInputDate =
-                aladdinJsonAvailable
-                        ? AladdinShapedPlanQtyLookup.resolveRawInputDateDisplayForTaskId(
-                                shaped.headers(), shaped.rows(), iraiNo)
-                        : "";
+                aladdinJsonAvailable ? shapedIndex.rawInputDateDisplayFor(iraiNo) : "";
         String juchuRawInputDate = formatJuchuDateFieldDisplay(juchuDb, Col.TONYU_BI.dbKey());
         RawInputDateCrossSourceCheck.CrossSourceResult rawInputDateCrossCheck =
                 RawInputDateCrossSourceCheck.evaluate(
@@ -458,6 +485,31 @@ public final class RequestFormPipelineStatusService {
         return !inputDate.isAfter(cutoff);
     }
 
+    static boolean shouldSkipJuchuRowDuringScan(Map<String, String> juchuDb, int hideDays) {
+        return hideDays > 0 && shouldHideByJuchuInputDate(juchuDb, hideDays);
+    }
+
+    static Map<String, Map<String, String>> indexExcelRawByIraiKey(
+            List<Map<String, String>> rawRequests) {
+        Map<String, Map<String, String>> index = new HashMap<>();
+        if (rawRequests == null) {
+            return index;
+        }
+        for (Map<String, String> raw : rawRequests) {
+            if (raw == null || isTpiPdfRaw(raw)) {
+                continue;
+            }
+            String key =
+                    JuchuTransferValueNormalizer.normalizeKey(
+                            firstNonBlank(
+                                    raw.get("依頼Ｎｏ"), raw.get("依頼No"), raw.get("依頼NO")));
+            if (!key.isEmpty()) {
+                index.putIfAbsent(key, raw);
+            }
+        }
+        return index;
+    }
+
     /** {@link #parseJuchuInputDate} と {@link #shouldHideByJuchuInputDate} の合成。 */
     static boolean shouldHideByJuchuInputDate(Map<String, String> juchuDb, int excludeDays) {
         return shouldHideByJuchuInputDate(parseJuchuInputDate(juchuDb), excludeDays);
@@ -507,15 +559,19 @@ public final class RequestFormPipelineStatusService {
     }
 
     private static String resolveJuchuFilePath(Map<String, String> ui) {
+        Map<String, String> env = ui != null ? ui : Map.of();
+        FactorySite site = GlobalInitSettingTarget.loadEffective(env);
         Optional<RequestFormInputSettingsStore.Settings> settings =
-                RequestFormInputSettingsStore.load(ui);
+                RequestFormInputSettingsStore.load(env);
         if (settings.isPresent()) {
             String saved = settings.get().paths().juchuFilePath();
-            if (saved != null && !saved.isBlank()) {
+            if (saved != null
+                    && !saved.isBlank()
+                    && !AppPaths.factoryPathHintConflictsWithSite(saved, site)) {
                 return saved.strip();
             }
         }
-        return AppPaths.resolveRequestFormJuchuFile(ui).map(Path::toString).orElse("");
+        return AppPaths.resolveRequestFormJuchuFile(env).map(Path::toString).orElse("");
     }
 
     private static Map<String, Map<String, String>> loadJuchuRows(
@@ -593,9 +649,15 @@ public final class RequestFormPipelineStatusService {
         int pdfCount = pdfFiles != null ? pdfFiles.length : 0;
         int totalSources = excelCount + pdfCount;
         int processedSources = 0;
+        Set<String> scannedExcelCacheBaseNamesLower = new HashSet<>();
+        FactorySite factorySite = GlobalInitSettingTarget.loadEffective(ui);
 
         if (excelFiles != null) {
             for (File file : excelFiles) {
+                if (file != null && file.getName() != null) {
+                    scannedExcelCacheBaseNamesLower.add(
+                            file.getName().toLowerCase(java.util.Locale.ROOT));
+                }
                 try {
                     Optional<List<Map<String, String>>> cached =
                             RequestFormSourceCache.loadParseEntries(parseCacheRoot, file);
@@ -620,7 +682,12 @@ public final class RequestFormPipelineStatusService {
         }
 
         Set<String> excelRawKeys = collectIraiNormKeys(rawRequests);
-        appendExcelParseCacheFallback(rawRequests, excelRawKeys, parseCacheRoot);
+        appendExcelParseCacheFallback(
+                rawRequests,
+                excelRawKeys,
+                parseCacheRoot,
+                scannedExcelCacheBaseNamesLower,
+                factorySite);
         excelRawKeys = collectIraiNormKeys(rawRequests);
         appendTpiPdfRawRequests(
                 ui, rawRequests, excelRawKeys, parseCacheRoot, warnings, pdfFiles, progress, processedSources, totalSources);
@@ -743,7 +810,9 @@ public final class RequestFormPipelineStatusService {
     static void appendExcelParseCacheFallback(
             List<Map<String, String>> rawRequests,
             Set<String> existingKeys,
-            File parseCacheRoot) {
+            File parseCacheRoot,
+            Set<String> scannedExcelBaseNamesLower,
+            FactorySite factorySite) {
         if (rawRequests == null || existingKeys == null || parseCacheRoot == null) {
             return;
         }
@@ -756,6 +825,8 @@ public final class RequestFormPipelineStatusService {
         if (cacheFiles == null || cacheFiles.length == 0) {
             return;
         }
+        boolean restrictToScannedFiles =
+                scannedExcelBaseNamesLower != null && !scannedExcelBaseNamesLower.isEmpty();
         for (File cacheFile : cacheFiles) {
             Optional<List<Map<String, String>>> entries =
                     RequestFormSourceCache.loadExcelParseEntriesFromCacheFile(cacheFile);
@@ -765,6 +836,16 @@ public final class RequestFormPipelineStatusService {
             String cacheStem = cacheFile.getName();
             if (cacheStem.toLowerCase(java.util.Locale.ROOT).endsWith(".json")) {
                 cacheStem = cacheStem.substring(0, cacheStem.length() - 5);
+            }
+            String cacheSourceName = cacheStem + ".xlsm";
+            if (restrictToScannedFiles) {
+                if (!scannedExcelBaseNamesLower.contains(
+                        cacheSourceName.toLowerCase(java.util.Locale.ROOT))) {
+                    continue;
+                }
+            } else if (factorySite != null
+                    && AppPaths.factoryPathHintConflictsWithSite(cacheSourceName, factorySite)) {
+                continue;
             }
             for (Map<String, String> entry : entries.get()) {
                 if (entry == null || isTpiPdfRaw(entry)) {
@@ -781,7 +862,11 @@ public final class RequestFormPipelineStatusService {
                 }
                 Map<String, String> tagged = new HashMap<>(entry);
                 String sourceName =
-                        firstNonBlank(entry.get("原本ファイル名"), cacheStem + ".xlsm");
+                        firstNonBlank(entry.get("原本ファイル名"), cacheSourceName);
+                if (factorySite != null
+                        && AppPaths.factoryPathHintConflictsWithSite(sourceName, factorySite)) {
+                    continue;
+                }
                 tagged.put("_sourceFileName", sourceName);
                 rawRequests.add(tagged);
                 existingKeys.add(key);

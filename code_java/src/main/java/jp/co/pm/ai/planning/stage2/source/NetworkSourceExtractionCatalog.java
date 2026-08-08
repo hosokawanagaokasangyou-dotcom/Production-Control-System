@@ -14,7 +14,6 @@ import java.util.stream.Stream;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.config.NetworkSourceDirResolver;
-import jp.co.pm.ai.desktop.reconciliation.KonanDailyReportLookup;
 import jp.co.pm.ai.planning.stage2.Stage2PlanRunDateResolver;
 
 /** 加工計画・加工日報フォルダを走査し、取得時刻付きエントリ一覧を構築する。 */
@@ -50,12 +49,7 @@ public final class NetworkSourceExtractionCatalog {
     }
 
     public static List<SourceEntry> listDailyReports(Map<String, String> ui) {
-        Map<String, String> u = ui != null ? ui : Map.of();
-        String dirText = u.getOrDefault(KonanDailyReportLookup.KEY_DAILY_REPORT_SOURCE_DIR, "").strip();
-        if (dirText.isEmpty()) {
-            dirText = "\\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\生産管理システム\\管理システム\\●DATA\\加工日報";
-        }
-        Path dir = Path.of(dirText);
+        Path dir = AppPaths.resolveDailyReportSourceDir(ui);
         if (!isListableDir(dir)) {
             return List.of();
         }

@@ -49,6 +49,8 @@ import javafx.scene.control.ChoiceDialog;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.Labeled;
+import javafx.scene.control.ProgressBar;
+import javafx.scene.control.ProgressIndicator;
 import javafx.scene.control.PasswordField;
 import javafx.scene.control.ProgressBar;
 import javafx.scene.control.ProgressIndicator;
@@ -61,7 +63,9 @@ import javafx.scene.control.TextInputDialog;
 import javafx.scene.control.TreeItem;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
+import javafx.scene.image.ImageView;
 import javafx.scene.layout.Region;
+import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Text;
@@ -76,7 +80,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 
-import jp.co.pm.ai.desktop.ui.GlobalAppStatusBar;
 import jp.co.pm.ai.desktop.ui.TodayDispatchSourceSelectionDialog;
 import jp.co.pm.ai.planning.stage2.source.Stage1SourceBundle;
 import jp.co.pm.ai.planning.stage2.source.Stage1SourceBundleCompletionGate;
@@ -152,6 +155,9 @@ import jp.co.pm.ai.desktop.config.UiRefEnvDefaults;
 import jp.co.pm.ai.desktop.ui.AttendanceGridCellSizing;
 import jp.co.pm.ai.desktop.ui.UiRowHoverDimmingSettings;
 import jp.co.pm.ai.desktop.ui.EnvVarsStartupCheckBusyDialog;
+import jp.co.pm.ai.desktop.ui.FactorySiteSwitchBusyDialog;
+import jp.co.pm.ai.desktop.ui.GlobalAppStatusBar;
+import jp.co.pm.ai.desktop.ui.ShellFactoryOperatorToolbar;
 import jp.co.pm.ai.desktop.ui.StageRunBusyDialog;
 import jp.co.pm.ai.desktop.ui.StageRunLogProgressParser;
 import jp.co.pm.ai.desktop.ui.Stage1NewMaterialLookupDialog;
@@ -316,6 +322,8 @@ public final class MainShellController
                     AppPaths.KEY_PM_AI_TASK_INPUT_SOURCE_DIR,
                     AppPaths.KEY_PM_AI_PROCESSING_PLAN_PATH,
                     AppPaths.KEY_PM_AI_ACTUAL_DETAIL_SOURCE_DIR,
+                    AppPaths.KEY_PM_AI_DAILY_REPORT_SOURCE_DIR,
+                    AppPaths.KEY_PM_AI_ORDER_DETAIL_SOURCE_DIR,
                     AppPaths.KEY_PM_AI_ALADDIN_MASTER_DIR,
                     AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR,
                     AppPaths.KEY_PM_AI_REQUEST_FORM_JUCHU_FILE,
@@ -336,6 +344,27 @@ public final class MainShellController
 
     @FXML
     private ComboBox<DesktopTheme> themeCombo;
+
+    @FXML
+    private StackPane shellFactoryLogoHost;
+
+    @FXML
+    private ImageView shellFactoryLogoImageView;
+
+    @FXML
+    private Label shellFactoryLogoCaptionLabel;
+
+    @FXML
+    private ComboBox<FactorySite> shellFactorySiteCombo;
+
+    @FXML
+    private Label shellOperatorUserLabel;
+
+    @FXML
+    private Button shellChangeSessionOperatorButton;
+
+    @FXML
+    private Button shellChangeOperatorPinButton;
 
     @FXML
     private HBox shellStageProgressBox;
@@ -360,6 +389,12 @@ public final class MainShellController
 
     @FXML
     private Label globalStatusMessageLabel;
+
+    @FXML
+    private ProgressIndicator globalStatusProgressIndicator;
+
+    @FXML
+    private ProgressBar globalStatusProgressBar;
 
     @FXML
     private Label globalStatusTabLabel;
@@ -432,6 +467,9 @@ public final class MainShellController
 
     @FXML
     private ActualsStatusTabController actualsStatusTabController;
+
+    @FXML
+    private DailyReportCsvTabController dailyReportCsvTabController;
 
     @FXML
     private DeliveryCalendarViewTabController deliveryCalendarViewTabController;
@@ -554,6 +592,9 @@ public final class MainShellController
 
     @FXML
     private Tab mainShellTabActualsStatus;
+
+    @FXML
+    private Tab mainShellTabDailyReportCsvView;
 
     @FXML
     private Tab mainShellTabDeliveryCalendar;
@@ -714,6 +755,9 @@ public final class MainShellController
      */
     private final AtomicBoolean suppressEnvVarsInitTabGuard = new AtomicBoolean(false);
 
+    /** ゲスト操作者時に他タブへ遷移しようとしたとき、{@link #ensureMainShellRunTabSelected()} の再入を防ぐ。 */
+    private final AtomicBoolean suppressGuestSessionTabGuard = new AtomicBoolean(false);
+
     /**
      * ポータル自動バージョンアップ実行中は、起動時の操作者ダイアログと依頼書原本フォルダ案内を出さない。
      */
@@ -725,13 +769,19 @@ public final class MainShellController
     /** 起動時の環境変数テンプレート照合が完了したら {@code true}（完了前は初期化済みでも保守的にブロック）。 */
     private final AtomicBoolean envVarsStartupCheckCompleted = new AtomicBoolean(false);
     private GlobalAppStatusBar globalAppStatusBar;
+    private ShellFactoryOperatorToolbar factoryOperatorToolbar;
     private StartupTabBackgroundLoadCoordinator startupTabBackgroundLoad;
     private volatile String startupBackgroundLoadMessage = "";
+    private volatile String globalLongTaskDetail = "";
+    private volatile Double globalLongTaskProgress;
     private volatile boolean startupTabBackgroundLoadActive;
     private String lastGlobalLogLine = "";
 
-    /** 起動時／工場切替時の環境変数確認モーダル（表示中のみ非 null）。 */
+    /** 起動時の環境変数確認モーダル（表示中のみ非 null）。 */
     private EnvVarsStartupCheckBusyDialog envVarsStartupCheckBusy;
+
+    /** 工場切替中の進捗モーダル（表示中のみ非 null）。 */
+    private FactorySiteSwitchBusyDialog factorySiteSwitchBusy;
 
     /** 段階1／2 実行中の進捗モーダル（表示中のみ非 null）。 */
     private StageRunBusyDialog stageRunBusyDialog;
@@ -789,6 +839,17 @@ public final class MainShellController
             pipelineExecutionTimingHistory.configureFromUi(ui0);
             pipelineExecutionTimingHistory.setPersistLog(this::appendLog);
             FactoryOperatorUserStore.configureFromUi(ui0);
+
+            factoryOperatorToolbar =
+                    new ShellFactoryOperatorToolbar(
+                            shellFactoryLogoHost,
+                            shellFactoryLogoImageView,
+                            shellFactoryLogoCaptionLabel,
+                            shellFactorySiteCombo,
+                            shellOperatorUserLabel,
+                            shellChangeSessionOperatorButton,
+                            shellChangeOperatorPinButton);
+            factoryOperatorToolbar.wire(this);
 
             mainRunTabController.bindShell(this);
             mainRunTabController.setCalendarReadinessBlocked(
@@ -874,6 +935,9 @@ public final class MainShellController
         excludeRulesTabController.bindShell(this);
         specialRulesTabController.bindShell(this);
         actualsStatusTabController.bindShell(this);
+        if (dailyReportCsvTabController != null) {
+            dailyReportCsvTabController.bindShell(this);
+        }
         deliveryCalendarViewTabController.bindShell(this);
         resultDispatchTableTabController.bindShell(this);
         dispatchInteractiveTabController.bindShell(this);
@@ -903,7 +967,7 @@ public final class MainShellController
                 globalSettingsTabController.refreshInitSettingTargetComboFromStore();
             }
             if (mainRunTabController != null) {
-                mainRunTabController.refreshFactorySiteLogo();
+                factoryOperatorToolbar.refreshFactorySiteLogo();
             }
             refreshEnvVarsInitializedAtToolbarLabel();
             if (equipmentStatusDashboardTabController != null) {
@@ -927,6 +991,8 @@ public final class MainShellController
         globalAppStatusBar =
                 new GlobalAppStatusBar(
                         globalStatusMessageLabel,
+                        globalStatusProgressIndicator,
+                        globalStatusProgressBar,
                         globalStatusTabLabel,
                         globalStatusOperatorLabel,
                         globalStatusFactoryLabel,
@@ -1000,6 +1066,9 @@ public final class MainShellController
                 .addListener(
                         (obs, prevTab, newTab) -> {
                             if (blockMainShellTabSelectionIfEnvInitPending()) {
+                                return;
+                            }
+                            if (blockMainShellTabSelectionIfGuestSessionOnly()) {
                                 return;
                             }
                             if (!suppressDeliveryCalendarReloadTabGuard.get()
@@ -1332,7 +1401,7 @@ public final class MainShellController
             mainShellTabOrganizerPaneController.syncHeaderGlowControlsFromShell();
         }
         mainRunTabController.refreshOpenWorkbookHintLabels();
-        mainRunTabController.refreshFactorySiteLogo();
+        factoryOperatorToolbar.refreshFactorySiteLogo();
         applyStage3UiVisibility();
         Platform.runLater(() -> excludeRulesTabController.tryStartupLoadFromPathField());
     }
@@ -1619,6 +1688,10 @@ public final class MainShellController
 
     /** 環境変数・工場ワークスペース確定後に勤怠 readiness を更新し、表示済みタブのみ再読込する。 */
     private void reloadAttendanceTabsFromJson() {
+        reloadAttendanceTabsFromJson(false);
+    }
+
+    private void reloadAttendanceTabsFromJson(boolean force) {
         Path jsonPath = AppPaths.attendanceDataJsonPath(collectUiEnv());
         appendLog("[attendance] JSON 再読込: " + jsonPath);
         if (companyCalendarTabController != null) {
@@ -1627,14 +1700,28 @@ public final class MainShellController
         if (memberAttendanceTabController != null) {
             memberAttendanceTabController.reloadAttendanceDataFromJsonIfEnabled();
         }
-        refreshAttendanceReadiness();
+        refreshAttendanceReadiness(force);
+    }
+
+    /**
+     * 起動後バックグラウンド読込（勤怠 JSON 再読込・タブ順次プリロード）を許可するか。
+     * {@link #isEnvVarsInitializationPending()} より厳格（ポータブル版アップグレード待ち中も抑制）。
+     */
+    private boolean isStartupBackgroundLoadAllowed() {
+        if (!envVarsStartupCheckCompleted.get()) {
+            return false;
+        }
+        if (!EnvVarsInitializedAtStore.isRecorded()) {
+            return false;
+        }
+        return !envVarsDifferFromInitialAtStartup.get();
     }
 
     /**
      * 環境変数・工場ワークスペース確定後にタブを順次バックグラウンド読込する。
      */
     private void maybeReloadAttendanceTabsAfterEnvReady() {
-        if (!envVarsStartupCheckCompleted.get() || isEnvVarsInitializationPending()) {
+        if (!isStartupBackgroundLoadAllowed()) {
             return;
         }
         reloadAttendanceTabsFromJson();
@@ -2239,6 +2326,9 @@ public final class MainShellController
         if (t == mainShellTabActualsStatus) {
             return MainShellTabId.ACTUALS_STATUS;
         }
+        if (t == mainShellTabDailyReportCsvView) {
+            return MainShellTabId.DAILY_REPORT_CSV_VIEW;
+        }
         if (t == mainShellTabDeliveryCalendar) {
             return MainShellTabId.DELIVERY_CALENDAR_VIEW;
         }
@@ -2310,6 +2400,7 @@ public final class MainShellController
             case EXCLUDE_RULES -> mainShellTabExcludeRules;
             case SPECIAL_RULES -> mainShellTabSpecialRules;
             case ACTUALS_STATUS -> mainShellTabActualsStatus;
+            case DAILY_REPORT_CSV_VIEW -> mainShellTabDailyReportCsvView;
             case DELIVERY_CALENDAR_VIEW -> mainShellTabDeliveryCalendar;
             case RESULT_DISPATCH -> mainShellTabResultDispatch;
             case DISPATCH_INTERACTIVE -> mainShellTabDispatchInteractive;
@@ -4216,19 +4307,69 @@ public final class MainShellController
     }
 
     /**
-     * 工場切替・起動復元: {@code init_setting} を適用し、保存済み env 行があれば復元、なければ ui_ref 既定＋工場 overlay。
+     * 工場切替・起動復元: 保存済み env 行（または ui_ref 既定）を先に載せ替え、続けて {@code init_setting} と session 断片を適用する。
      */
     private void applyFactorySiteWorkspaceRestore(
             FactorySite site, Optional<FactorySiteWorkspaceSnapshot> workspace) {
         FactorySite effective = site != null ? site : FactorySite.KONAN;
-        applyGlobalInitSettingBeforeEnvReset(effective);
+        // #region agent log
+        logFactorySwitchDebug(
+                "B",
+                "MainShellController.applyFactorySiteWorkspaceRestore:entry",
+                "restore entry",
+                Map.of(
+                        "targetSite",
+                        effective.name(),
+                        "workspacePresent",
+                        workspace.isPresent(),
+                        "hasUiEnvRows",
+                        workspace.map(FactorySiteWorkspaceSnapshot::hasUiEnvRows).orElse(false),
+                        "uiEnvRowCount",
+                        workspace.map(w -> w.uiEnvRows().size()).orElse(0)));
+        // #endregion
         if (workspace.isPresent() && workspace.get().hasUiEnvRows()) {
+            // #region agent log
+            logFactorySwitchDebug(
+                    "E",
+                    "MainShellController.applyFactorySiteWorkspaceRestore:branch",
+                    "branch=workspaceEnvSnapshot",
+                    Map.of());
+            // #endregion
             applyFactoryWorkspaceEnvSnapshot(workspace.get());
-            applyFactoryWorkspaceSessionFragment(workspace.get());
+            applyFactorySitePortableAndNetworkDefaults(effective);
         } else {
+            // #region agent log
+            logFactorySwitchDebug(
+                    "B",
+                    "MainShellController.applyFactorySiteWorkspaceRestore:branch",
+                    "branch=fullBundledReset",
+                    Map.of());
+            // #endregion
             applyEnvRowsFullBundledResetAndPersist(false, effective);
-            workspace.ifPresent(this::applyFactoryWorkspaceSessionFragment);
         }
+        // #region agent log
+        logFactorySwitchDebug(
+                "D",
+                "MainShellController.applyFactorySiteWorkspaceRestore:afterEnv",
+                "after env restore/reset",
+                Map.of());
+        // #endregion
+        applyGlobalInitSettingBeforeEnvReset(effective);
+        // #region agent log
+        logFactorySwitchDebug(
+                "A",
+                "MainShellController.applyFactorySiteWorkspaceRestore:afterInitSetting",
+                "after applyGlobalInitSettingBeforeEnvReset",
+                Map.of());
+        // #endregion
+        workspace.ifPresent(this::applyFactoryWorkspaceSessionFragment);
+        // #region agent log
+        logFactorySwitchDebug(
+                "D",
+                "MainShellController.applyFactorySiteWorkspaceRestore:exit",
+                "restore complete",
+                Map.of());
+        // #endregion
     }
 
     /** 工場ワークスペースの環境変数行のみ復元（session は別途）。 */
@@ -4242,7 +4383,6 @@ public final class MainShellController
         ensureBootstrapDefaultValuesVisible(collectUiEnv());
         ensureUiRefOptionalDisplayDefaultsVisible(collectUiEnv());
         applyRepoFolderPathNormalization();
-        maybeReloadAttendanceTabsAfterEnvReady();
     }
 
     /**
@@ -4326,7 +4466,7 @@ public final class MainShellController
         }
         if (mainRunTabController != null) {
             mainRunTabController.refreshOpenWorkbookHintLabels();
-            mainRunTabController.refreshFactorySiteLogo();
+            factoryOperatorToolbar.refreshFactorySiteLogo();
         }
         if (globalSettingsTabController != null) {
             globalSettingsTabController.refreshInitSettingTargetComboFromStore();
@@ -4335,17 +4475,49 @@ public final class MainShellController
     }
 
     void refreshFactorySiteComboPresentation() {
-        if (mainRunTabController != null) {
-            mainRunTabController.refreshFactorySiteComboPresentation();
+        if (factoryOperatorToolbar != null) {
+            factoryOperatorToolbar.refreshFactorySiteComboPresentation();
         }
         if (globalSettingsTabController != null) {
             globalSettingsTabController.refreshInitSettingTargetComboPresentation();
         }
     }
 
+    void refreshShellFactoryOperatorToolbar() {
+        if (factoryOperatorToolbar != null) {
+            factoryOperatorToolbar.refreshFactorySiteLogo();
+        }
+    }
+
+    void refreshShellFactorySiteComboPresentation() {
+        refreshFactorySiteComboPresentation();
+    }
+
+    void setShellFactorySiteComboDisabled(boolean disabled) {
+        setFactorySiteCombosDisabled(disabled);
+    }
+
+    void refreshShellFactorySiteComboFromStore() {
+        if (factoryOperatorToolbar != null) {
+            factoryOperatorToolbar.refreshFactorySiteComboFromStore();
+        }
+    }
+
+    void refreshShellOperatorUserLabel() {
+        if (factoryOperatorToolbar != null) {
+            factoryOperatorToolbar.refreshOperatorUserLabel();
+        }
+    }
+
+    void setGuestSessionFactoryToolbar(boolean guestOnly) {
+        if (factoryOperatorToolbar != null) {
+            factoryOperatorToolbar.setGuestSessionFactorySwitchOnly(guestOnly);
+        }
+    }
+
     private void setFactorySiteCombosDisabled(boolean disabled) {
-        if (mainRunTabController != null) {
-            mainRunTabController.setFactorySiteComboDisabled(disabled);
+        if (factoryOperatorToolbar != null) {
+            factoryOperatorToolbar.setFactorySiteComboDisabled(disabled);
         }
         if (globalSettingsTabController != null) {
             globalSettingsTabController.setInitSettingTargetComboDisabled(disabled);
@@ -4584,8 +4756,8 @@ public final class MainShellController
                 globalSettingsTabController.refreshInitSettingTargetComboFromStore();
             }
             if (mainRunTabController != null) {
-                mainRunTabController.refreshFactorySiteComboFromStore();
-                mainRunTabController.refreshFactorySiteLogo();
+                factoryOperatorToolbar.refreshFactorySiteComboFromStore();
+                factoryOperatorToolbar.refreshFactorySiteLogo();
             }
         } finally {
             suppressEnvSessionPersistence.set(false);
@@ -4721,6 +4893,9 @@ public final class MainShellController
     }
 
     private boolean isEnvVarsInitializationPending() {
+        if (FactoryOperatorUserStore.isGuestSession()) {
+            return false;
+        }
         if (deferOperatorPromptForPortableUpgrade.get()) {
             return false;
         }
@@ -4742,15 +4917,21 @@ public final class MainShellController
         if (envVarsStartupCheckCompleted.get()) {
             return;
         }
-        boolean ownBusy = !isEnvVarsStartupCheckBusyShowing();
+        boolean ownBusy = !isEnvVarsStartupCheckBusyShowing() && !isFactorySiteSwitchBusyShowing();
         if (ownBusy) {
             beginEnvVarsStartupCheckBusy(EnvVarsStartupCheckBusyDialog.STATUS_STABILIZE);
+        } else if (isFactorySiteSwitchBusyShowing()) {
+            updateFactorySiteSwitchBusy(EnvVarsStartupCheckBusyDialog.STATUS_STABILIZE);
         } else {
             updateEnvVarsStartupCheckBusy(EnvVarsStartupCheckBusyDialog.STATUS_STABILIZE);
         }
         try {
             stabilizeEnvRowsForInitializationBaseline();
-            updateEnvVarsStartupCheckBusy(EnvVarsStartupCheckBusyDialog.STATUS_MATCH);
+            if (isFactorySiteSwitchBusyShowing()) {
+                updateFactorySiteSwitchBusy(FactorySiteSwitchBusyDialog.STATUS_MATCH);
+            } else {
+                updateEnvVarsStartupCheckBusy(EnvVarsStartupCheckBusyDialog.STATUS_MATCH);
+            }
             evaluateEnvVarsDifferFromInitialAtStartup();
             applyRunTabGating();
             if (!isEnvVarsInitializationPending()) {
@@ -4759,6 +4940,8 @@ public final class MainShellController
             maybeReloadAttendanceTabsAfterEnvReady();
             if (ownBusy) {
                 updateEnvVarsStartupCheckBusy(EnvVarsStartupCheckBusyDialog.STATUS_DONE);
+            } else if (isFactorySiteSwitchBusyShowing()) {
+                updateFactorySiteSwitchBusy(FactorySiteSwitchBusyDialog.STATUS_DONE);
             }
         } finally {
             if (ownBusy) {
@@ -4795,6 +4978,40 @@ public final class MainShellController
         }
     }
 
+    private boolean isFactorySiteSwitchBusyShowing() {
+        return factorySiteSwitchBusy != null && factorySiteSwitchBusy.isShowing();
+    }
+
+    private void beginFactorySiteSwitchBusy(FactorySite from, FactorySite to) {
+        if (isFactorySiteSwitchBusyShowing()) {
+            updateFactorySiteSwitchBusy(FactorySiteSwitchBusyDialog.STATUS_SAVING);
+            return;
+        }
+        if (primaryStage == null) {
+            return;
+        }
+        String header =
+                (from != null ? from.displayLabelJa() : "—")
+                        + " → "
+                        + (to != null ? to.displayLabelJa() : "—");
+        factorySiteSwitchBusy =
+                FactorySiteSwitchBusyDialog.show(
+                        primaryStage, header, FactorySiteSwitchBusyDialog.STATUS_SAVING);
+    }
+
+    private void updateFactorySiteSwitchBusy(String status) {
+        if (factorySiteSwitchBusy != null) {
+            factorySiteSwitchBusy.setStatus(status);
+        }
+    }
+
+    private void endFactorySiteSwitchBusy() {
+        if (factorySiteSwitchBusy != null) {
+            factorySiteSwitchBusy.close();
+            factorySiteSwitchBusy = null;
+        }
+    }
+
     private static boolean usesStageRunBusyModal(String script) {
         return STAGE1.equals(script) || STAGE2.equals(script);
     }
@@ -4828,13 +5045,29 @@ public final class MainShellController
     }
 
     void syncStageRunBusyFromStage2Progress(MainRunStage2Progress.State state, String detail) {
-        if (stageRunBusyDialog == null || !stageRunBusyDialog.isShowing() || state == null) {
+        if (state == null) {
+            return;
+        }
+        if (shouldCloseStageRunBusyForPostStage2AsyncWork(state)) {
+            endStageRunBusyDialog();
+            return;
+        }
+        if (stageRunBusyDialog == null || !stageRunBusyDialog.isShowing()) {
             return;
         }
         stageRunBusyDialog.setPhase(state.message());
         if (detail != null && !detail.isBlank()) {
             stageRunBusyDialog.setDetail(detail.strip());
         }
+    }
+
+    /**
+     * 段階2 Python 完了後の配台表再読込・納期管理更新・Excel 生成は非同期が長い。モーダルを閉じ、各タブの進捗 UI に任せる。
+     */
+    static boolean shouldCloseStageRunBusyForPostStage2AsyncWork(MainRunStage2Progress.State state) {
+        return state == MainRunStage2Progress.State.DISPATCH_RELOADING
+                || state == MainRunStage2Progress.State.DELIVERY_RELOADING
+                || state == MainRunStage2Progress.State.EXCEL_GENERATING;
     }
 
     private void endStageRunBusyDialog() {
@@ -5009,6 +5242,33 @@ public final class MainShellController
                             + "環境変数タブの「環境変数を初期化」を実行してください。");
         } finally {
             suppressEnvVarsInitTabGuard.set(false);
+        }
+        return true;
+    }
+
+    /**
+     * ゲスト操作者時、実行・ログ葉以外へ遷移しようとしたら戻す。
+     *
+     * @return ブロックして実行・ログタブへ戻したとき {@code true}
+     */
+    private boolean blockMainShellTabSelectionIfGuestSessionOnly() {
+        if (suppressGuestSessionTabGuard.get()
+                || !FactoryOperatorUserStore.isGuestSession()
+                || mainShellTabRun == null
+                || tabPane == null) {
+            return false;
+        }
+        Tab effective =
+                resolveEffectiveLeafTab(tabPane.getSelectionModel().getSelectedItem());
+        if (effective == mainShellTabRun) {
+            return false;
+        }
+        suppressGuestSessionTabGuard.set(true);
+        try {
+            ensureMainShellRunTabSelected();
+            appendLog("[guest] ゲスト操作者は工場切替のみ利用できます。");
+        } finally {
+            suppressGuestSessionTabGuard.set(false);
         }
         return true;
     }
@@ -6073,19 +6333,43 @@ public final class MainShellController
         }
         updateShellStageProgressOverlay(script, activeDispatchTrialKind);
         boolean envInitPending = isEnvVarsInitializationPending();
+        boolean guestSessionOnly = FactoryOperatorUserStore.isGuestSession();
         applyEnvVarsInitToolbarGating(envInitPending);
+        applyGuestSessionToolbarGating(guestSessionOnly);
         if (tabPane == null) {
+            if (mainRunTabController != null) {
+                mainRunTabController.setGuestSessionFactorySwitchOnly(guestSessionOnly);
+            }
             return;
         }
         ObservableList<Tab> tabs = tabPane.getTabs();
         if (tabs.isEmpty()) {
+            if (mainRunTabController != null) {
+                mainRunTabController.setGuestSessionFactorySwitchOnly(guestSessionOnly);
+            }
             return;
         }
         if (envInitPending) {
             Tab envLeaf = mainShellTabFor(MainShellTabId.ENV);
             MainShellRunTabGating.applyEnvInitPending(tabPane, envLeaf);
             ensureMainShellEnvTabSelected();
+            if (mainRunTabController != null) {
+                mainRunTabController.setGuestSessionFactorySwitchOnly(false);
+            }
             return;
+        }
+        if (guestSessionOnly) {
+            Tab runLeaf = mainShellTabFor(MainShellTabId.RUN);
+            MainShellRunTabGating.applyGuestSessionOnly(tabPane, runLeaf);
+            if (mainRunTabController != null) {
+                mainRunTabController.setGuestSessionFactorySwitchOnly(true);
+            }
+            ensureMainShellRunTabSelected();
+            refreshGlobalStatusBar();
+            return;
+        }
+        if (mainRunTabController != null) {
+            mainRunTabController.setGuestSessionFactorySwitchOnly(false);
         }
         MainShellRunTabGating.clearDisableRecursive(tabPane);
         MainShellRunTabGating.apply(
@@ -6118,12 +6402,30 @@ public final class MainShellController
         FactorySite site = GlobalInitSettingTarget.load();
         globalAppStatusBar.setFactory(site != null ? site.displayLabelJa() : "—");
         globalAppStatusBar.setAttendanceReady(attendanceStage2Ready, attendanceReadinessTooltip);
+        globalAppStatusBar.setTaskProgress(globalLongTaskProgress);
         globalAppStatusBar.setMessage(resolveGlobalStatusMessage());
+    }
+
+    @Override
+    public void setGlobalLongTaskProgress(double fraction, String detail) {
+        globalLongTaskProgress = fraction;
+        globalLongTaskDetail = detail != null ? detail : "";
+        refreshGlobalStatusBar();
+    }
+
+    @Override
+    public void clearGlobalLongTaskProgress() {
+        globalLongTaskProgress = null;
+        globalLongTaskDetail = "";
+        refreshGlobalStatusBar();
     }
 
     @Override
     public void setStartupBackgroundLoadStatus(String message) {
         startupBackgroundLoadMessage = message != null ? message : "";
+        if (startupBackgroundLoadMessage.isBlank()) {
+            clearGlobalLongTaskProgress();
+        }
         refreshGlobalStatusBar();
     }
 
@@ -6164,6 +6466,7 @@ public final class MainShellController
 
     @Override
     public void onStartupBackgroundLoadFinished() {
+        clearGlobalLongTaskProgress();
         refreshAttendanceReadiness();
         refreshStage1PipelineCheckGate();
         refreshGlobalStatusBar();
@@ -6179,13 +6482,30 @@ public final class MainShellController
         return startupTabBackgroundLoadActive;
     }
 
+    @Override
+    public boolean canScheduleStartupBackgroundLoad() {
+        return isStartupBackgroundLoadAllowed();
+    }
+
     private String resolveGlobalStatusMessage() {
         if (isEnvVarsInitializationPending()) {
             return "環境変数の初期化が必要です。環境変数タブで確認してください。";
         }
+        String base;
         if (startupBackgroundLoadMessage != null && !startupBackgroundLoadMessage.isBlank()) {
-            return startupBackgroundLoadMessage;
+            base = startupBackgroundLoadMessage;
+        } else if (globalLongTaskDetail != null && !globalLongTaskDetail.isBlank()) {
+            base = "計画確認";
+        } else {
+            base = resolveActiveRunStageStatusMessage();
         }
+        if (globalLongTaskDetail != null && !globalLongTaskDetail.isBlank()) {
+            return base + " — " + globalLongTaskDetail;
+        }
+        return base;
+    }
+
+    private String resolveActiveRunStageStatusMessage() {
         String script = activeRunStageScript;
         if (STAGE1.equals(script)) {
             return "段階1 実行中…";
@@ -6223,6 +6543,17 @@ public final class MainShellController
         }
         if (envTabController != null) {
             envTabController.setEnvInitAttention(pending);
+        }
+    }
+
+    private void applyGuestSessionToolbarGating(boolean guestOnly) {
+        if (guestOnly) {
+            if (themeCombo != null) {
+                themeCombo.setDisable(true);
+            }
+            if (dispatchUsageGuideButton != null) {
+                dispatchUsageGuideButton.setDisable(true);
+            }
         }
     }
 
@@ -7368,6 +7699,13 @@ public final class MainShellController
     }
 
     public void refreshAttendanceReadiness() {
+        refreshAttendanceReadiness(false);
+    }
+
+    private void refreshAttendanceReadiness(boolean force) {
+        if (!force && !isStartupBackgroundLoadAllowed()) {
+            return;
+        }
         LocalDate today = LocalDate.now();
         runAttendanceDataIoAsync(
                 buildAttendanceDataIoRequest(
@@ -7807,6 +8145,10 @@ public final class MainShellController
                 r.setValue(task);
             } else if (AppPaths.KEY_PM_AI_ACTUAL_DETAIL_SOURCE_DIR.equals(name)) {
                 r.setValue(actual);
+            } else if (AppPaths.KEY_PM_AI_DAILY_REPORT_SOURCE_DIR.equals(name)) {
+                r.setValue(site.dailyReportSourceDir());
+            } else if (AppPaths.KEY_PM_AI_ORDER_DETAIL_SOURCE_DIR.equals(name)) {
+                r.setValue(site.orderDetailSourceDir());
             } else if (AppPaths.KEY_PM_AI_PORTABLE_BUNDLE_SOURCE_DIR.equals(name)) {
                 r.setValue(portable);
             } else if (AppPaths.KEY_PM_AI_MASTER_WORKBOOK.equals(name)) {
@@ -7821,23 +8163,57 @@ public final class MainShellController
                 r.setValue(site.requestFormTpiPdfDir());
             } else if (AppPaths.KEY_PM_AI_RDP_PORTABLE_BUNDLE_SOURCE_DIR.equals(name)) {
                 r.setValue(site.rdpPortableBundleSourceDir());
-            } else if (AppPaths.KEY_PM_AI_RPA_LAUNCHER_DEPLOY_DIR.equals(name)
-                    && site == FactorySite.KONAN) {
-                r.setValue(AppPaths.DEFAULT_KONAN_SHARED_DATA_DIR_M);
-            } else if (AppPaths.KEY_PM_AI_RPA_LAUNCHER_OPERATOR_USERS_STORE_DIR.equals(name)
-                    && site == FactorySite.KONAN) {
-                r.setValue(AppPaths.DEFAULT_KONAN_SHARED_DATA_DIR_M);
+            } else if (AppPaths.KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR.equals(name)) {
+                r.setValue(site.rdpLauncherDeployDir());
+            } else if (AppPaths.KEY_PM_AI_RDP_OPERATOR_USERS_STORE_DIR.equals(name)) {
+                r.setValue(site.rdpOperatorUsersStoreDir());
+            } else if (AppPaths.KEY_PM_AI_RPA_LAUNCHER_DEPLOY_DIR.equals(name)) {
+                r.setValue(site.rpaLauncherDeployDir());
+            } else if (AppPaths.KEY_PM_AI_RPA_LAUNCHER_OPERATOR_USERS_STORE_DIR.equals(name)) {
+                r.setValue(site.rpaLauncherOperatorUsersStoreDir());
             } else if (AppPaths.KEY_PM_AI_FACTORY_SITE.equals(name)) {
                 r.setValue(site.name());
             }
         }
         GlobalInitSettingTarget.save(site);
+        syncFactorySiteAttendanceEnvRows(site);
+        syncFactorySiteRequestFormEnvRows(site);
         if (globalSettingsTabController != null) {
             globalSettingsTabController.refreshInitSettingTargetComboFromStore();
         }
         if (mainRunTabController != null) {
-            mainRunTabController.refreshFactorySiteLogo();
+            factoryOperatorToolbar.refreshFactorySiteLogo();
             mainRunTabController.refreshFactorySiteComboFromStore();
+        }
+    }
+
+    /** 工場別マスタ／サマリ更新後に勤怠 JSON・xlsx の env 行を同期する。 */
+    private void syncFactorySiteAttendanceEnvRows(FactorySite site) {
+        if (envRows == null || site == null) {
+            return;
+        }
+        Map<String, String> ui = new LinkedHashMap<>(collectUiEnv());
+        AppPaths.overlayFactorySiteAttendancePaths(ui, site);
+        for (EnvVarRow row : envRows) {
+            String name = row.getName() != null ? row.getName().trim() : "";
+            if (ui.containsKey(name)) {
+                row.setValue(ui.get(name));
+            }
+        }
+    }
+
+    /** 工場切替後に依頼書原本・受注ファイル等の env 行を当該工場へ揃える。 */
+    private void syncFactorySiteRequestFormEnvRows(FactorySite site) {
+        if (envRows == null || site == null) {
+            return;
+        }
+        Map<String, String> ui = new LinkedHashMap<>(collectUiEnv());
+        AppPaths.overlayFactorySiteRequestFormPaths(ui, site);
+        for (EnvVarRow row : envRows) {
+            String name = row.getName() != null ? row.getName().trim() : "";
+            if (ui.containsKey(name)) {
+                row.setValue(ui.get(name));
+            }
         }
     }
 
@@ -7908,6 +8284,10 @@ public final class MainShellController
         }
         if (isEnvVarsInitializationPending() && id != MainShellTabId.ENV) {
             ensureMainShellEnvTabSelected();
+            return;
+        }
+        if (FactoryOperatorUserStore.isGuestSession() && id != MainShellTabId.RUN) {
+            ensureMainShellRunTabSelected();
             return;
         }
         if (id == MainShellTabId.RUN) {
@@ -8031,7 +8411,7 @@ public final class MainShellController
     /** グローバル設定の工場切替などで実行・ログタブ上部ロゴを更新する。 */
     void refreshMainRunTabFactoryLogo() {
         if (mainRunTabController != null) {
-            mainRunTabController.refreshFactorySiteLogo();
+            factoryOperatorToolbar.refreshFactorySiteLogo();
         }
     }
 
@@ -8042,6 +8422,37 @@ public final class MainShellController
     public void switchActiveFactorySite(FactorySite newSite) {
         switchActiveFactorySite(newSite, false);
     }
+
+    // #region agent log
+    private static final String FACTORY_SWITCH_DEBUG_SESSION = "8f611f";
+
+    private void logFactorySwitchDebug(
+            String hypothesisId, String location, String message, Map<String, Object> extra) {
+        Map<String, Object> data = new LinkedHashMap<>();
+        Map<String, String> ui = collectUiEnv();
+        data.put("storedFactory", GlobalInitSettingTarget.load().name());
+        data.put(
+                "inferredFactory",
+                FactorySite.inferFromUiEnv(ui).map(FactorySite::name).orElse("NONE"));
+        data.put(
+                "taskInputDir",
+                ui.getOrDefault(AppPaths.KEY_PM_AI_TASK_INPUT_SOURCE_DIR, ""));
+        data.put(
+                "summaryShared",
+                ui.getOrDefault(AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK, ""));
+        data.put("masterWorkbook", ui.getOrDefault(AppPaths.KEY_PM_AI_MASTER_WORKBOOK, ""));
+        if (extra != null) {
+            data.putAll(extra);
+        }
+        AgentDebugLog.appendStructured(
+                collectUiEnv(),
+                FACTORY_SWITCH_DEBUG_SESSION,
+                hypothesisId,
+                location,
+                message,
+                data);
+    }
+    // #endregion
 
     private void switchActiveFactorySite(FactorySite newSite, boolean startup) {
         if (newSite == null || newSite == FactorySite.RDP_LAUNCHER) {
@@ -8054,6 +8465,21 @@ public final class MainShellController
         if (factorySiteSwitchInProgress) {
             return;
         }
+        // #region agent log
+        logFactorySwitchDebug(
+                "D",
+                "MainShellController.switchActiveFactorySite:entry",
+                "switch requested",
+                Map.of(
+                        "oldSite",
+                        oldSite.name(),
+                        "newSite",
+                        newSite.name(),
+                        "startup",
+                        startup,
+                        "operator",
+                        FactoryOperatorUserStore.sessionOperatorName()));
+        // #endregion
         Map<String, String> ui = collectUiEnv();
         FactoryOperatorUserStore.configureForCurrentApp(ui, newSite);
         if (!FactorySiteOperatorAccess.isSessionOperatorAllowedForFactory(ui, newSite)) {
@@ -8063,59 +8489,174 @@ public final class MainShellController
             }
             refreshFactorySiteComboPresentation();
             if (mainRunTabController != null) {
-                mainRunTabController.refreshFactorySiteComboFromStore();
+                factoryOperatorToolbar.refreshFactorySiteComboFromStore();
             }
             if (globalSettingsTabController != null) {
                 globalSettingsTabController.refreshInitSettingTargetComboFromStore();
             }
             return;
         }
-        long t0 = System.nanoTime();
         factorySiteSwitchInProgress = true;
         setFactorySiteCombosDisabled(true);
-        boolean ownBusy = !isEnvVarsStartupCheckBusyShowing();
-        if (ownBusy) {
-            beginEnvVarsStartupCheckBusy(EnvVarsStartupCheckBusyDialog.STATUS_FACTORY_SWITCH);
-        } else {
-            updateEnvVarsStartupCheckBusy(EnvVarsStartupCheckBusyDialog.STATUS_FACTORY_SWITCH);
+        if (startupTabBackgroundLoad != null) {
+            startupTabBackgroundLoad.cancelForFactorySwitch();
         }
+        beginFactorySiteSwitchBusy(oldSite, newSite);
+        FactorySiteSwitchContext ctx = new FactorySiteSwitchContext(oldSite, newSite, startup);
+        runAfterUiPulse(() -> runFactorySiteSwitchStep(ctx, 0));
+    }
+
+    private static final class FactorySiteSwitchContext {
+        private final FactorySite oldSite;
+        private final FactorySite newSite;
+        private final boolean startup;
+        private final long t0Nanos;
+        private Optional<FactorySiteWorkspaceSnapshot> loaded = Optional.empty();
+
+        private FactorySiteSwitchContext(FactorySite oldSite, FactorySite newSite, boolean startup) {
+            this.oldSite = oldSite;
+            this.newSite = newSite;
+            this.startup = startup;
+            this.t0Nanos = System.nanoTime();
+        }
+
+        private FactorySite oldSite() {
+            return oldSite;
+        }
+
+        private FactorySite newSite() {
+            return newSite;
+        }
+
+        private boolean startup() {
+            return startup;
+        }
+
+        private long t0Nanos() {
+            return t0Nanos;
+        }
+
+        private Optional<FactorySiteWorkspaceSnapshot> loaded() {
+            return loaded;
+        }
+
+        private void setLoaded(Optional<FactorySiteWorkspaceSnapshot> value) {
+            loaded = value != null ? value : Optional.empty();
+        }
+    }
+
+    private void runFactorySiteSwitchStep(FactorySiteSwitchContext ctx, int step) {
         try {
-            String operator = FactoryOperatorUserStore.sessionOperatorName();
-            if (!operator.isBlank() && oldSite != null && oldSite != FactorySite.RDP_LAUNCHER) {
-                FactorySiteWorkspaceStore.save(
-                        operator, oldSite, buildFactorySiteWorkspaceSnapshot());
-                FactorySiteWorkspaceStore.flushMemoryCacheToDisk(operator);
+            switch (step) {
+                case 0 -> {
+                    GlobalInitSettingTarget.setSuppressUiEnvInferencePersist(true);
+                    updateFactorySiteSwitchBusy(FactorySiteSwitchBusyDialog.STATUS_SAVING);
+                    String operator = FactoryOperatorUserStore.sessionOperatorName();
+                    if (!operator.isBlank()
+                            && ctx.oldSite() != null
+                            && ctx.oldSite() != FactorySite.RDP_LAUNCHER) {
+                        FactorySiteWorkspaceStore.save(
+                                operator, ctx.oldSite(), buildFactorySiteWorkspaceSnapshot());
+                        FactorySiteWorkspaceStore.flushMemoryCacheToDisk(operator);
+                    }
+                    GlobalInitSettingTarget.save(ctx.newSite());
+                    if (!operator.isBlank()) {
+                        FactorySiteWorkspaceStore.saveLastFactorySite(operator, ctx.newSite());
+                    }
+                    runAfterUiPulse(() -> runFactorySiteSwitchStep(ctx, 1));
+                }
+                case 1 -> {
+                    updateFactorySiteSwitchBusy(FactorySiteSwitchBusyDialog.STATUS_LOADING);
+                    String operator = FactoryOperatorUserStore.sessionOperatorName();
+                    Optional<FactorySiteWorkspaceSnapshot> loaded =
+                            operator.isBlank()
+                                    ? Optional.empty()
+                                    : FactorySiteWorkspaceStore.load(operator, ctx.newSite());
+                    // #region agent log
+                    logFactorySwitchDebug(
+                            "E",
+                            "MainShellController.switchActiveFactorySite:loaded",
+                            "workspace loaded for new site",
+                            Map.of(
+                                    "hasUiEnvRows",
+                                    loaded.map(FactorySiteWorkspaceSnapshot::hasUiEnvRows)
+                                            .orElse(false),
+                                    "uiEnvRowCount",
+                                    loaded.map(w -> w.uiEnvRows().size()).orElse(0)));
+                    // #endregion
+                    ctx.setLoaded(loaded);
+                    runAfterUiPulse(() -> runFactorySiteSwitchStep(ctx, 2));
+                }
+                case 2 -> {
+                    updateFactorySiteSwitchBusy(FactorySiteSwitchBusyDialog.STATUS_ENV);
+                    applyFactorySiteWorkspaceRestore(ctx.newSite(), ctx.loaded());
+                    runAfterUiPulse(() -> runFactorySiteSwitchStep(ctx, 3));
+                }
+                case 3 -> {
+                    updateFactorySiteSwitchBusy(FactorySiteSwitchBusyDialog.STATUS_REFRESH);
+                    refreshFactoryDependentTabs(ctx.newSite(), true);
+                    schedulePersistSessionDebounced();
+                    runAfterUiPulse(() -> runFactorySiteSwitchStep(ctx, 4));
+                }
+                case 4 -> {
+                    updateFactorySiteSwitchBusy(FactorySiteSwitchBusyDialog.STATUS_OPERATOR);
+                    runAfterUiPulse(() -> runFactorySiteSwitchStep(ctx, 5));
+                }
+                case 5 -> {
+                    completeEnvVarsStartupCheck();
+                    long ms = (System.nanoTime() - ctx.t0Nanos()) / 1_000_000L;
+                    appendLog(
+                            "[factory] 切替完了 "
+                                    + ctx.oldSite().displayLabelJa()
+                                    + "→"
+                                    + ctx.newSite().displayLabelJa()
+                                    + " ms="
+                                    + ms);
+                    // #region agent log
+                    logFactorySwitchDebug(
+                            "C",
+                            "MainShellController.switchActiveFactorySite:done",
+                            "switch complete",
+                            Map.of("elapsedMs", ms));
+                    // #endregion
+                    runAfterUiPulse(() -> finishFactorySiteSwitch(ctx.newSite(), ctx.startup()));
+                }
+                default -> finishFactorySiteSwitch(null, false);
             }
-            GlobalInitSettingTarget.save(newSite);
-            if (!operator.isBlank()) {
-                FactorySiteWorkspaceStore.saveLastFactorySite(operator, newSite);
-            }
-            Optional<FactorySiteWorkspaceSnapshot> loaded =
-                    operator.isBlank()
-                            ? Optional.empty()
-                            : FactorySiteWorkspaceStore.load(operator, newSite);
-            updateEnvVarsStartupCheckBusy(EnvVarsStartupCheckBusyDialog.STATUS_RESTORE_WORKSPACE);
-            applyFactorySiteWorkspaceRestore(newSite, loaded);
-            refreshFactoryDependentTabs(newSite, true);
-            schedulePersistSessionDebounced();
-            requireOperatorSelectionForFactory(newSite, startup);
-            Platform.runLater(this::notifyActiveMainShellTabAfterWorkspaceChange);
-            completeEnvVarsStartupCheck();
-            long ms = (System.nanoTime() - t0) / 1_000_000L;
-            appendLog(
-                    "[factory] 切替完了 "
-                            + oldSite.displayLabelJa()
-                            + "→"
-                            + newSite.displayLabelJa()
-                            + " ms="
-                            + ms);
-        } finally {
-            if (ownBusy) {
-                endEnvVarsStartupCheckBusy();
-            }
-            factorySiteSwitchInProgress = false;
-            setFactorySiteCombosDisabled(false);
+        } catch (RuntimeException ex) {
+            finishFactorySiteSwitch(null, false);
+            throw ex;
         }
+    }
+
+    /** 工場切替の進行中（モーダル表示前後を含む）。タブ再走査の抑止に使う。 */
+    boolean isFactorySiteSwitchInProgress() {
+        return factorySiteSwitchInProgress;
+    }
+
+    /**
+     * 工場切替モーダルを閉じ、操作者確認・タブ更新・起動後読込を実行する。
+     *
+     * <p>モーダル表示中に計画確認走査や操作者ダイアログを起動すると FX スレッドが詰まるため、
+     * 必ずモーダルを閉じてから後処理する。
+     */
+    private void finishFactorySiteSwitch(FactorySite newSite, boolean startup) {
+        GlobalInitSettingTarget.setSuppressUiEnvInferencePersist(false);
+        endFactorySiteSwitchBusy();
+        factorySiteSwitchInProgress = false;
+        setFactorySiteCombosDisabled(false);
+        FactorySite site = newSite != null ? newSite : GlobalInitSettingTarget.load();
+        if (!FactoryOperatorUserStore.isGuestSession()) {
+            requireOperatorSelectionForFactory(site, startup);
+        }
+        reloadAttendanceTabsFromJson(true);
+        runAfterUiPulse(
+                () -> {
+                    notifyActiveMainShellTabAfterWorkspaceChange();
+                    if (startupTabBackgroundLoad != null && isStartupBackgroundLoadAllowed()) {
+                        startupTabBackgroundLoad.resetAndSchedule();
+                    }
+                });
     }
 
     @Override
@@ -8147,7 +8688,7 @@ public final class MainShellController
     /** 実行・ログタブの操作者表示を更新する。 */
     void refreshMainRunTabOperatorLabel() {
         if (mainRunTabController != null) {
-            mainRunTabController.refreshOperatorUserLabel();
+            factoryOperatorToolbar.refreshOperatorUserLabel();
         }
         if (operatorUserManagementTabController != null) {
             operatorUserManagementTabController.refreshPresentationQuietly();
@@ -8169,13 +8710,31 @@ public final class MainShellController
 
     @Override
     public void changeSessionOperator(FactorySite site) {
+        if (FactoryOperatorUserStore.isGuestSession()) {
+            showWarningDialog(
+                    "操作不可",
+                    "ゲスト操作者は工場切替のみ利用できます。\n"
+                            + "登録操作者で利用するには、アプリを再起動して操作者を選び直してください。");
+            return;
+        }
         OperatorUserSelectionSupport.changeSessionOperator(this, site);
         scheduleDesktopSessionSave();
+        applyRunTabGating();
     }
 
     /** 実行・ログタブなどから、現在の工場向けに操作者を変更する。 */
     public void changeSessionOperator() {
         changeSessionOperator(GlobalInitSettingTarget.load());
+    }
+
+    @FXML
+    private void onShellChangeSessionOperatorAction() {
+        changeSessionOperator();
+    }
+
+    @FXML
+    private void onShellChangeOperatorPinAction() {
+        promptChangeSessionOperatorPin();
     }
 
     private Optional<String> promptAndVerifyOperatorPin(FactorySite factory, String operatorName) {
@@ -10916,7 +11475,7 @@ public PlanInputTabController planInputTabControllerForDispatchRollUnit() {
         DesktopSessionStateStore.save(collectDesktopSessionForGlobalPersistence());
         mainRunTabController.refreshAppVersionLabel();
         mainRunTabController.refreshOpenWorkbookHintLabels();
-        mainRunTabController.refreshFactorySiteLogo();
+        factoryOperatorToolbar.refreshFactorySiteLogo();
         refreshFactorySiteComboPresentation();
         PortableBundleUpgradeFollowUp.clear();
         refreshEnvVarsInitializedAtToolbarLabel();
@@ -11217,6 +11776,12 @@ public PlanInputTabController planInputTabControllerForDispatchRollUnit() {
             }
             case AppPaths.KEY_PM_AI_ACTUAL_DETAIL_SOURCE_DIR -> {
                 return AppPaths.DEFAULT_PM_AI_ACTUAL_DETAIL_SOURCE_DIR;
+            }
+            case AppPaths.KEY_PM_AI_DAILY_REPORT_SOURCE_DIR -> {
+                return AppPaths.defaultDailyReportSourceDirForFactory(GlobalInitSettingTarget.load());
+            }
+            case AppPaths.KEY_PM_AI_ORDER_DETAIL_SOURCE_DIR -> {
+                return "";
             }
             case AppPaths.KEY_PM_AI_ALADDIN_MASTER_DIR -> {
                 return AppPaths.resolveAladdinMasterDir(u).toString();

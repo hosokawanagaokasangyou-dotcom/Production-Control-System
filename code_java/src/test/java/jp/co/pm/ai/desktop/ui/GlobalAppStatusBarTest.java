@@ -23,7 +23,7 @@ class GlobalAppStatusBarTest {
     void setMessage_shortensLongLines() {
         Label message = new Label();
         GlobalAppStatusBar bar =
-                new GlobalAppStatusBar(message, null, null, null, null, null);
+                new GlobalAppStatusBar(message, null, null, null, null, null, null, null);
         String longLine = "x".repeat(300);
         bar.setMessage(longLine);
         assertEquals(240, message.getText().length());

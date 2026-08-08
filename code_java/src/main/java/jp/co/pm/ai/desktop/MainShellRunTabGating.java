@@ -100,6 +100,23 @@ final class MainShellRunTabGating {
      * <p>他タブのブロックは {@code Tab#setDisable} ではなく選択ガードで行う（無効化された兄弟タブが選択されたままだと
      * コンテンツ全体が灰色になる JavaFX の挙動を避ける）。
      */
+    /**
+     * ゲスト操作者時: 実行・ログ葉を選択し、当該タブとコンテンツの {@code disable} を解除する。
+     *
+     * <p>他タブのブロックは {@code Tab#setDisable} ではなく選択ガードで行う（環境変数初期化待ちと同様）。
+     */
+    static void applyGuestSessionOnly(TabPane pane, Tab runLeaf) {
+        if (pane == null) {
+            return;
+        }
+        clearDisableRecursive(pane);
+        if (runLeaf != null) {
+            selectInTree(pane, runLeaf);
+            enableOperableSubtree(runLeaf);
+            selectInTree(pane, runLeaf);
+        }
+    }
+
     static void applyEnvInitPending(TabPane pane, Tab envLeaf) {
         if (pane == null) {
             return;

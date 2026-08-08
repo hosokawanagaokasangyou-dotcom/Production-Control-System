@@ -164,13 +164,24 @@
     -fx-cursor: default;
 }
 
-.pm-factory-logo-konan.pm-run-factory-logo-host {
+.pm-app-toolbar {
+    -fx-padding: 4 10 4 10;
+    -fx-spacing: 8;
+}
+
+.pm-app-toolbar .pm-run-factory-logo-host {
+    -fx-alignment: center;
+}
+
+.pm-factory-logo-konan.pm-run-factory-logo-host,
+.pm-app-toolbar .pm-factory-logo-konan.pm-run-factory-logo-host {
     -fx-background-color: rgba(30, 58, 95, 0.55);
     -fx-border-color: transparent transparent transparent #5a8ec8;
     -fx-border-width: 0 0 0 3;
 }
 
-.pm-factory-logo-kokubu.pm-run-factory-logo-host {
+.pm-factory-logo-kokubu.pm-run-factory-logo-host,
+.pm-app-toolbar .pm-factory-logo-kokubu.pm-run-factory-logo-host {
     -fx-background-color: rgba(26, 107, 58, 0.55);
     -fx-border-color: transparent transparent transparent #5ec48a;
     -fx-border-width: 0 0 0 3;
@@ -2009,6 +2020,15 @@
     -fx-padding: 2 6 2 0;
 }
 
+.pm-global-status-progress-bar {
+    -fx-accent: #2563eb;
+    -fx-pref-height: 10px;
+}
+
+.pm-global-status-progress-indicator {
+    -fx-progress-color: #2563eb;
+}
+
 .label.pm-global-status-meta {
     -fx-font-size: 12px;
     -fx-font-weight: bold;
@@ -3017,4 +3037,8 @@
 .table-view.pipeline-check-main-table:focused .table-row-cell:filled:selected .table-cell.pipeline-check-cell-issue {
     -fx-background-color: rgba(56, 189, 248, 0.58);
     -fx-text-fill: #ffffff;
+}
+
+.table-view.pipeline-check-main-table > .virtual-flow > .scroll-bar:horizontal {
+    -fx-pref-height: 14px;
 }

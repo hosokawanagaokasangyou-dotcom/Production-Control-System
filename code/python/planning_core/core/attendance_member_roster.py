@@ -3,13 +3,14 @@
 
 from __future__ import annotations
 
+import os
 from typing import Any
 
 PRIMARY_ROLE_POST = "後加工"
 PRIMARY_ROLE_LOGISTICS = "物流"
 PRIMARY_ROLE_CHOICES = (PRIMARY_ROLE_POST, PRIMARY_ROLE_LOGISTICS)
 
-# 既定名簿（並び順＝メンバー勤怠グリッドの行順）
+# 湖南工場の既定名簿（並び順＝メンバー勤怠グリッドの行順）
 DEFAULT_MEMBER_ROSTER: list[dict[str, str]] = [
     {"name": "細川　守", "primary_role": PRIMARY_ROLE_POST},
     {"name": "砂田　　奈美", "primary_role": PRIMARY_ROLE_LOGISTICS},
@@ -26,6 +27,42 @@ DEFAULT_MEMBER_ROSTER: list[dict[str, str]] = [
     {"name": "近藤　清高", "primary_role": PRIMARY_ROLE_LOGISTICS},
     {"name": "東出　繫利", "primary_role": PRIMARY_ROLE_LOGISTICS},
 ]
+
+# 国分工場の既定名簿（全員 primary_role=後加工。勤怠グリッド表記は全角スペース）
+KOKUBU_DEFAULT_MEMBER_ROSTER: list[dict[str, str]] = [
+    {"name": "河合　直樹", "primary_role": PRIMARY_ROLE_POST},
+    {"name": "河林　陽介", "primary_role": PRIMARY_ROLE_POST},
+    {"name": "角　正彦", "primary_role": PRIMARY_ROLE_POST},
+    {"name": "岩崎　智香", "primary_role": PRIMARY_ROLE_POST},
+    {"name": "吉岡　廣海", "primary_role": PRIMARY_ROLE_POST},
+    {"name": "京　直道", "primary_role": PRIMARY_ROLE_POST},
+    {"name": "近藤　厚生", "primary_role": PRIMARY_ROLE_POST},
+    {"name": "坂野　香織", "primary_role": PRIMARY_ROLE_POST},
+    {"name": "山本　敬", "primary_role": PRIMARY_ROLE_POST},
+    {"name": "小野　眞太郎", "primary_role": PRIMARY_ROLE_POST},
+    {"name": "松本　匡矢", "primary_role": PRIMARY_ROLE_POST},
+    {"name": "川島　吉伸", "primary_role": PRIMARY_ROLE_POST},
+    {"name": "増田　治樹", "primary_role": PRIMARY_ROLE_POST},
+    {"name": "大久保　俊彦", "primary_role": PRIMARY_ROLE_POST},
+    {"name": "大谷　晴香", "primary_role": PRIMARY_ROLE_POST},
+    {"name": "大平　有希子", "primary_role": PRIMARY_ROLE_POST},
+    {"name": "中川　直也", "primary_role": PRIMARY_ROLE_POST},
+    {"name": "中村　久男", "primary_role": PRIMARY_ROLE_POST},
+    {"name": "沈　春光", "primary_role": PRIMARY_ROLE_POST},
+    {"name": "東　龍平", "primary_role": PRIMARY_ROLE_POST},
+    {"name": "飯田　剛成", "primary_role": PRIMARY_ROLE_POST},
+]
+
+
+def _factory_site_from_env() -> str:
+    return (os.environ.get("PM_AI_FACTORY_SITE") or "KONAN").strip().upper()
+
+
+def default_member_roster_for_factory() -> list[dict[str, str]]:
+    """``PM_AI_FACTORY_SITE`` に応じた勤怠名簿の既定（コピー返却）。"""
+    if _factory_site_from_env() == "KOKUBU":
+        return [dict(e) for e in KOKUBU_DEFAULT_MEMBER_ROSTER]
+    return [dict(e) for e in DEFAULT_MEMBER_ROSTER]
 
 
 def _normalize_role(role: str) -> str:
@@ -45,10 +82,10 @@ def _normalize_entry(raw: dict[str, Any]) -> dict[str, str] | None:
 
 
 def ensure_member_roster(store: dict) -> list[dict[str, str]]:
-    """名簿が空なら既定14名を投入（既存 store は上書きしない）。"""
+    """名簿が空なら工場別既定名簿を投入（既存 store は上書きしない）。"""
     roster = store.get("member_roster")
     if not isinstance(roster, list) or not roster:
-        normalized = [dict(e) for e in DEFAULT_MEMBER_ROSTER]
+        normalized = default_member_roster_for_factory()
         store["member_roster"] = normalized
         return normalized
     out: list[dict[str, str]] = []

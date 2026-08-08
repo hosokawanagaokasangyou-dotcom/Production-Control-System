@@ -23,33 +23,17 @@
 <?import javafx.scene.layout.StackPane?>
 <?import javafx.scene.layout.VBox?>
 
-<BorderPane styleClass="pm-run-tab" xmlns="http://javafx.com/javafx/26" xmlns:fx="http://javafx.com/fxml/1" fx:controller="jp.co.pm.ai.desktop.MainRunTabController">
+<BorderPane fx:id="runTabRoot" styleClass="pm-run-tab" xmlns="http://javafx.com/javafx/26" xmlns:fx="http://javafx.com/fxml/1" fx:controller="jp.co.pm.ai.desktop.MainRunTabController">
     <padding>
         <Insets bottom="12.0" left="16.0" right="16.0" top="12.0" />
     </padding>
     <top>
         <VBox fillWidth="true" spacing="10.0">
-            <HBox alignment="CENTER_LEFT" spacing="10.0" styleClass="pm-run-header-bar">
-                <StackPane fx:id="factoryLogoHost" alignment="CENTER" maxHeight="24.0" minHeight="22.0" minWidth="-1.0" prefHeight="22.0" prefWidth="-1.0" styleClass="pm-run-factory-logo-host">
-                    <ImageView fx:id="factoryLogoImageView" fitHeight="18.0" fitWidth="72.0" mouseTransparent="true" preserveRatio="true" />
-                    <Label fx:id="factoryLogoCaptionLabel" alignment="CENTER" contentDisplay="CENTER" maxWidth="80.0" mouseTransparent="true" styleClass="pm-run-factory-logo-caption" text="" textAlignment="CENTER" wrapText="false" />
-                </StackPane>
-                <ComboBox fx:id="factorySiteCombo" prefHeight="25.0" prefWidth="132.0">
-                    <tooltip>
-                        <Tooltip text="利用工場を切り替えます。計画／実績フォルダ・マスタ・受注ファイル等の環境変数既定と操作者選択が更新されます。" />
-                    </tooltip>
-                </ComboBox>
-                <Label fx:id="operatorUserLabel" styleClass="pm-muted-label" text="操作者: （未選択）" />
-                <Button fx:id="changeSessionOperatorButton" mnemonicParsing="false"
-                        onAction="#onChangeSessionOperatorAction" text="操作者変更" />
-                <Button fx:id="changeOperatorPinButton" mnemonicParsing="false" onAction="#onChangeOperatorPinAction" text="PIN変更" />
-                <Region HBox.hgrow="ALWAYS" />
-                <HBox alignment="CENTER_RIGHT" spacing="8.0">
-                    <Button mnemonicParsing="false" onAction="#onOpenDispatchUsageGuideDocxAction" text="配台の使い方" />
-                    <Button mnemonicParsing="false" onAction="#onOpenDispatchRulesHtmlAction" text="配台ルール" />
-                    <Button mnemonicParsing="false" onAction="#onOpenManualAction" text="マニュアルを開く" />
-                    <Label fx:id="appVersionLabel" styleClass="pm-app-version-label" text="" />
-                </HBox>
+            <HBox alignment="CENTER_RIGHT" spacing="8.0" styleClass="pm-run-header-bar">
+                <Region HBox.hgrow="ALWAYS"/>
+                <Button mnemonicParsing="false" onAction="#onOpenDispatchRulesHtmlAction" text="配台ルール"/>
+                <Button mnemonicParsing="false" onAction="#onOpenManualAction" text="マニュアルを開く"/>
+                <Label fx:id="appVersionLabel" styleClass="pm-app-version-label" text=""/>
             </HBox>
             <HBox alignment="CENTER_LEFT" spacing="12.0" styleClass="pm-run-primary-bar">
                 <StackPane fx:id="stage1NetworkCacheBadgeHost" alignment="CENTER_LEFT" managed="false" styleClass="pm-stage1-network-cache-badge-host" visible="false" />

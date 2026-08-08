@@ -44,8 +44,14 @@ public final class GlobalInitSettingTarget {
      * 環境変数タブの工場別 UNC から推定した工場を優先し、{@link #load()} の永続ファイルと同期する。
      *
      * <p>推定できない／同点のときは {@link #load()}（global-init-setting-target-factory.txt）を使う。
+     *
+     * <p>工場切替中（{@link #setSuppressUiEnvInferencePersist(boolean)}）は推定による {@link #save} と
+     * 推定戻り値を抑止し、明示保存された {@link #load()} のみを返す。
      */
     public static FactorySite loadEffective(Map<String, String> ui) {
+        if (suppressUiEnvInferencePersist.get()) {
+            return load();
+        }
         Optional<FactorySite> inferred = FactorySite.inferFromUiEnv(ui);
         if (inferred.isPresent()) {
             FactorySite site = inferred.get();
@@ -56,6 +62,14 @@ public final class GlobalInitSettingTarget {
         }
         return load();
     }
+
+    /** 工場切替中に {@link #loadEffective} が旧工場 UNC から永続工場を巻き戻さないようにする。 */
+    public static void setSuppressUiEnvInferencePersist(boolean suppress) {
+        suppressUiEnvInferencePersist.set(suppress);
+    }
+
+    private static final ThreadLocal<Boolean> suppressUiEnvInferencePersist =
+            ThreadLocal.withInitial(() -> Boolean.FALSE);
 
     public static void save(FactorySite site) {
         if (site == null) {

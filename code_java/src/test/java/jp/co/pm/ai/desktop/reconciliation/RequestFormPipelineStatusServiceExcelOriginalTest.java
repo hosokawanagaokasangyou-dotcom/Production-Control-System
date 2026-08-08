@@ -116,11 +116,43 @@ class RequestFormPipelineStatusServiceExcelOriginalTest {
         Set<String> keys = new HashSet<>();
 
         RequestFormPipelineStatusService.appendExcelParseCacheFallback(
-                rawRequests, keys, parseRoot);
+                rawRequests, keys, parseRoot, Set.of(), FactorySite.KOKUBU);
 
         assertEquals(1, rawRequests.size());
         assertEquals("Y8-99", rawRequests.getFirst().get("依頼Ｎｏ"));
         assertTrue(keys.contains(JuchuTransferValueNormalizer.normalizeKey("Y8-99")));
+    }
+
+    @Test
+    void appendExcelParseCacheFallback_skipsKokubuCacheForKonanSite(@TempDir Path temp) throws Exception {
+        File parseRoot = temp.resolve("preview_cache").toFile();
+        File parseDir = RequestFormSourceCache.parseDir(parseRoot);
+        String payload =
+                """
+                {
+                  "schemaVersion": "%s",
+                  "cachedAtMillis": %d,
+                  "entries": [
+                    {
+                      "依頼Ｎｏ": "Y8-99",
+                      "原本ファイル名": "Y-8月（2026年）加工依頼書（国分Y）.xlsm"
+                    }
+                  ]
+                }
+                """
+                        .formatted(
+                                RequestFormSourceCache.PARSE_SCHEMA_VERSION,
+                                System.currentTimeMillis());
+        Files.writeString(
+                new File(parseDir, "Y-8月（2026年）加工依頼書（国分Y）.json").toPath(), payload);
+
+        List<Map<String, String>> rawRequests = new ArrayList<>();
+        Set<String> keys = new HashSet<>();
+
+        RequestFormPipelineStatusService.appendExcelParseCacheFallback(
+                rawRequests, keys, parseRoot, Set.of(), FactorySite.KONAN);
+
+        assertTrue(rawRequests.isEmpty());
     }
 
     @Test

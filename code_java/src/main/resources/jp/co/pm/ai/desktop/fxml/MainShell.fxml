@@ -10,9 +10,12 @@
 <?import javafx.scene.control.Tab?>
 <?import javafx.scene.control.TabPane?>
 <?import javafx.scene.control.ToolBar?>
+<?import javafx.scene.control.Tooltip?>
+<?import javafx.scene.image.ImageView?>
 <?import javafx.scene.layout.BorderPane?>
 <?import javafx.scene.layout.HBox?>
 <?import javafx.scene.layout.Region?>
+<?import javafx.scene.layout.StackPane?>
 
 <!-- UI 文言は UTF-8 の日本語リテラル（XML 宣言の encoding と一致）。 -->
 <BorderPane xmlns="http://javafx.com/javafx/26" xmlns:fx="http://javafx.com/fxml/1"
@@ -21,6 +24,25 @@
             fx:controller="jp.co.pm.ai.desktop.MainShellController">
     <top>
         <ToolBar styleClass="pm-app-toolbar">
+            <StackPane fx:id="shellFactoryLogoHost" alignment="CENTER" maxHeight="24.0" minHeight="22.0"
+                       prefHeight="22.0" styleClass="pm-run-factory-logo-host">
+                <ImageView fx:id="shellFactoryLogoImageView" fitHeight="18.0" fitWidth="72.0"
+                           mouseTransparent="true" preserveRatio="true"/>
+                <Label fx:id="shellFactoryLogoCaptionLabel" alignment="CENTER" contentDisplay="CENTER"
+                       maxWidth="80.0" mouseTransparent="true" styleClass="pm-run-factory-logo-caption"
+                       text="" textAlignment="CENTER" wrapText="false"/>
+            </StackPane>
+            <ComboBox fx:id="shellFactorySiteCombo" prefHeight="25.0" prefWidth="132.0">
+                <tooltip>
+                    <Tooltip text="利用工場を切り替えます。計画／実績フォルダ・マスタ・受注ファイル等の環境変数既定と操作者選択が更新されます。"/>
+                </tooltip>
+            </ComboBox>
+            <Label fx:id="shellOperatorUserLabel" styleClass="pm-muted-label" text="操作者: （未選択）"/>
+            <Button fx:id="shellChangeSessionOperatorButton" mnemonicParsing="false"
+                    onAction="#onShellChangeSessionOperatorAction" text="操作者変更"/>
+            <Button fx:id="shellChangeOperatorPinButton" mnemonicParsing="false"
+                    onAction="#onShellChangeOperatorPinAction" text="PIN変更"/>
+            <Separator orientation="VERTICAL"/>
             <Label text="テーマ"/>
             <ComboBox fx:id="themeCombo" prefWidth="196.0"/>
             <Separator orientation="VERTICAL"/>
@@ -37,11 +59,13 @@
         </ToolBar>
     </top>
     <bottom>
-        <HBox alignment="CENTER_LEFT" spacing="16.0" styleClass="pm-global-status-bar">
+        <HBox alignment="CENTER_LEFT" spacing="12.0" styleClass="pm-global-status-bar">
             <padding>
                 <Insets bottom="9.0" left="14.0" right="14.0" top="9.0"/>
             </padding>
             <Label fx:id="globalStatusMessageLabel" maxWidth="Infinity" styleClass="pm-global-status-message" text="準備完了"/>
+            <ProgressIndicator fx:id="globalStatusProgressIndicator" managed="false" prefHeight="18.0" prefWidth="18.0" styleClass="pm-global-status-progress-indicator" visible="false"/>
+            <ProgressBar fx:id="globalStatusProgressBar" managed="false" maxWidth="180.0" prefWidth="180.0" styleClass="pm-global-status-progress-bar" visible="false"/>
             <Region maxWidth="Infinity" minWidth="8.0" HBox.hgrow="ALWAYS"/>
             <Label fx:id="globalStatusTabLabel" styleClass="pm-global-status-meta" text="タブ: —"/>
             <Label fx:id="globalStatusOperatorLabel" styleClass="pm-global-status-meta" text="操作者: —"/>
@@ -174,6 +198,11 @@
                      text="実績DATA・明細の取得状態">
                     <content>
                         <fx:include fx:id="actualsStatusTab" source="ActualsStatusTab.fxml"/>
+                    </content>
+                </Tab>
+                <Tab fx:id="mainShellTabDailyReportCsvView" closable="false" text="加工日報 CSV">
+                    <content>
+                        <fx:include fx:id="dailyReportCsvTab" source="DailyReportCsvTab.fxml"/>
                     </content>
                 </Tab>
                 <Tab fx:id="mainShellTabDeliveryCalendar" closable="false"

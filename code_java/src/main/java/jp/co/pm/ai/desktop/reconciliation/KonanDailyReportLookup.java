@@ -8,11 +8,14 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Stream;
+
+import jp.co.pm.ai.desktop.config.AppPaths;
 
 /**
  * 湖南工場「加工日報発行問合せ」CSV から (依頼NO, 工程名, 機械名) ごとの {@code 完了区分} を引く。
@@ -21,7 +24,7 @@ import java.util.stream.Stream;
  */
 public final class KonanDailyReportLookup {
 
-    public static final String KEY_DAILY_REPORT_SOURCE_DIR = "PM_AI_DAILY_REPORT_SOURCE_DIR";
+    public static final String KEY_DAILY_REPORT_SOURCE_DIR = AppPaths.KEY_PM_AI_DAILY_REPORT_SOURCE_DIR;
     public static final String KEY_DAILY_REPORT_CSV_PATH = "PM_AI_DAILY_REPORT_CSV_PATH";
     public static final String KEY_DAILY_REPORT_LOOKUP = "PM_AI_DAILY_REPORT_LOOKUP";
 
@@ -33,16 +36,6 @@ public final class KonanDailyReportLookup {
     private static final String COL_MACHINE = "機械名";
     private static final String COL_DAY = "加工日付";
     private static final String COL_COMPLETION = "完了区分";
-
-    private static final String DEFAULT_SOURCE_DIR =
-            "\\\\192.168.0.101\\"
-                    + "共有フォルダ\\"
-                    + "湖南工場\\"
-                    + "湖南共有\\"
-                    + "生産管理システム\\"
-                    + "管理システム\\"
-                    + "●DATA\\"
-                    + "加工日報";
 
     private final Map<TaskKey, String> completionByKey;
     private final Map<TaskKey2, List<TaskKey>> keysByTaskProcess;
@@ -195,6 +188,59 @@ public final class KonanDailyReportLookup {
         }
     }
 
+    /** 加工日報 CSV の表形式（先頭3行メタ＋ヘッダ行＋データ行）。 */
+    public record DailyReportCsvTable(
+            String sourcePath,
+            List<String> metaLines,
+            List<String> headers,
+            List<Map<String, String>> rows) {}
+
+    /** 環境変数から解決した最新 CSV を表形式で読む。 */
+    public static DailyReportCsvTable readLatestTable(Map<String, String> ui) throws IOException {
+        Path path = resolveCsvPath(ui);
+        if (path == null) {
+            throw new IOException(
+                    "加工日報 CSV が見つかりません（"
+                            + KEY_DAILY_REPORT_CSV_PATH
+                            + " / "
+                            + KEY_DAILY_REPORT_SOURCE_DIR
+                            + "）。");
+        }
+        return readTableFromPath(path);
+    }
+
+    /** 指定 CSV を表形式で読む（照合ロジックと同じ先頭3行スキップ・UTF-8）。 */
+    public static DailyReportCsvTable readTableFromPath(Path path) throws IOException {
+        String pathText = path.toAbsolutePath().normalize().toString();
+        List<String> lines = readAllLines(path);
+        List<String> meta =
+                lines.size() >= META_SKIP_LINES
+                        ? List.copyOf(lines.subList(0, META_SKIP_LINES))
+                        : List.copyOf(lines);
+        if (lines.size() <= META_SKIP_LINES) {
+            return new DailyReportCsvTable(pathText, meta, List.of(), List.of());
+        }
+        List<String> headers = new ArrayList<>(parseCsvLine(lines.get(META_SKIP_LINES)));
+        stripBomFromFirstHeader(headers);
+        List<String> headerCopy = List.copyOf(headers);
+        List<Map<String, String>> dataRows = new ArrayList<>();
+        for (int i = META_SKIP_LINES + 1; i < lines.size(); i++) {
+            List<String> cells = parseCsvLine(lines.get(i));
+            if (cells.isEmpty() || cells.stream().allMatch(c -> c == null || c.isBlank())) {
+                continue;
+            }
+            Map<String, String> row = new LinkedHashMap<>();
+            for (int h = 0; h < headerCopy.size(); h++) {
+                String header = headerCopy.get(h);
+                String value =
+                        h < cells.size() && cells.get(h) != null ? cells.get(h).strip() : "";
+                row.put(header, value);
+            }
+            dataRows.add(row);
+        }
+        return new DailyReportCsvTable(pathText, meta, headerCopy, List.copyOf(dataRows));
+    }
+
     public static KonanDailyReportLookup load(Map<String, String> ui, List<String> warnings) {
         if (!lookupEnabled(ui)) {
             return empty();
@@ -290,7 +336,7 @@ public final class KonanDailyReportLookup {
         }
         String dir = ui != null ? ui.getOrDefault(KEY_DAILY_REPORT_SOURCE_DIR, "").strip() : "";
         if (dir.isEmpty()) {
-            dir = DEFAULT_SOURCE_DIR;
+            dir = AppPaths.resolveDailyReportSourceDir(ui).toString();
         }
         Path dirPath = Path.of(dir);
         if (!Files.isDirectory(dirPath)) {

@@ -9,7 +9,9 @@
 <?import javafx.scene.control.Spinner?>
 <?import javafx.scene.control.TableView?>
 <?import javafx.scene.control.TextField?>
+<?import javafx.scene.layout.FlowPane?>
 <?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.StackPane?>
 <?import javafx.scene.layout.VBox?>
 
 <VBox xmlns="http://javafx.com/javafx/26" xmlns:fx="http://javafx.com/fxml/1"
@@ -17,22 +19,24 @@
     <padding>
         <Insets bottom="12.0" left="12.0" right="12.0" top="12.0"/>
     </padding>
-    <HBox alignment="CENTER_LEFT" spacing="8.0">
+    <HBox alignment="CENTER_LEFT" spacing="8.0" maxWidth="Infinity">
         <Button fx:id="refreshButton" mnemonicParsing="false" text="更新"
                 onAction="#onRefreshButtonAction"/>
         <ProgressIndicator fx:id="refreshProgressIndicator" managed="false" prefHeight="22.0"
                            prefWidth="22.0" visible="false"/>
         <Label text="検索文字列"/>
         <TextField fx:id="filterField" promptText="依頼No / ユーザー" prefWidth="220.0"/>
-        <Label fx:id="statusLabel" wrapText="true" HBox.hgrow="ALWAYS"/>
+        <Label fx:id="statusLabel" wrapText="true" HBox.hgrow="ALWAYS" maxWidth="Infinity"/>
     </HBox>
-    <HBox alignment="CENTER_LEFT" spacing="16.0">
+    <FlowPane fx:id="filterOptionsPane" hgap="16.0" vgap="6.0" maxWidth="Infinity">
         <CheckBox fx:id="hideNoOriginalCheck" mnemonicParsing="false"
                   text="依頼書原本が存在しないものを非表示"/>
-        <CheckBox fx:id="hideOldJuchuInputCheck" mnemonicParsing="false"
-                  text="受注入力日が" selected="true"/>
-        <Spinner fx:id="juchuInputHideDaysSpinner" editable="true" prefWidth="72.0"/>
-        <Label text="日以上前を非表示"/>
+        <HBox alignment="CENTER_LEFT" spacing="6.0">
+            <CheckBox fx:id="hideOldJuchuInputCheck" mnemonicParsing="false"
+                      text="受注入力日が" selected="true"/>
+            <Spinner fx:id="juchuInputHideDaysSpinner" editable="true" prefWidth="72.0"/>
+            <Label text="日以上前を非表示"/>
+        </HBox>
         <CheckBox fx:id="showNoAladdinCheck" mnemonicParsing="false"
                   text="アラジン計画無しを表示"/>
         <CheckBox fx:id="showAdjustDeliveryFromTodayCheck" mnemonicParsing="false"
@@ -41,51 +45,59 @@
                   text="日報未了のみ表示" selected="true"/>
         <CheckBox fx:id="showRawInputMismatchOnlyCheck" mnemonicParsing="false"
                   text="原反投入日不一致のみ表示" selected="true"/>
-    </HBox>
-    <Label fx:id="stage1GateLabel" wrapText="true"
+    </FlowPane>
+    <Label fx:id="stage1GateLabel" wrapText="true" maxWidth="Infinity"
            styleClass="pipeline-check-stage1-gate-label"/>
-    <Label fx:id="hintLabel" wrapText="true"
+    <Label fx:id="hintLabel" wrapText="true" maxWidth="Infinity"
            style="-fx-font-size: 11px; -fx-text-fill: #555555;"/>
-    <Label fx:id="aladdinPlanSourceLabel" wrapText="true"
+    <Label fx:id="aladdinPlanSourceLabel" wrapText="true" maxWidth="Infinity"
            style="-fx-font-size: 10px; -fx-text-fill: #555555;"/>
-    <Label fx:id="dailyReportSourceLabel" wrapText="true"
+    <Label fx:id="dailyReportSourceLabel" wrapText="true" maxWidth="Infinity"
            style="-fx-font-size: 10px; -fx-text-fill: #555555;"/>
-    <VBox spacing="4.0" VBox.vgrow="ALWAYS">
-        <HBox alignment="CENTER_LEFT" spacing="8.0">
-            <Button fx:id="copyMainTableButton" mnemonicParsing="false"
-                    text="表としてコピー" onAction="#onCopyMainTableButtonAction"/>
-            <Button fx:id="copyMainTableForEmailButton" mnemonicParsing="false"
-                    text="メール貼り付け用" onAction="#onCopyMainTableForEmailButtonAction"/>
-            <Button fx:id="copyMainTableHtmlButton" mnemonicParsing="false"
-                    text="HTML形式でコピー" onAction="#onCopyMainTableHtmlButtonAction"/>
-            <Button fx:id="copyMainTableCsvButton" mnemonicParsing="false"
-                    text="カンマ区切りでコピー" onAction="#onCopyMainTableCsvButtonAction"/>
-        </HBox>
-        <HBox fx:id="mainColumnStripHost" alignment="CENTER_LEFT" spacing="0.0"/>
-        <TableView fx:id="mainTable" minHeight="180.0" styleClass="pipeline-check-main-table" VBox.vgrow="ALWAYS"/>
-    </VBox>
-    <SplitPane dividerPositions="0.5" minHeight="160.0" prefHeight="200.0" VBox.vgrow="ALWAYS">
-        <VBox spacing="4.0">
-            <HBox alignment="CENTER_LEFT" spacing="8.0">
-                <Label text="原反投入日 4ソース照合（アラジン／受注／目次／依頼シート）"/>
-                <Button fx:id="copyCrossSourceTableButton" mnemonicParsing="false"
-                        text="表としてコピー" onAction="#onCopyCrossSourceTableButtonAction"/>
-                <Button fx:id="copyCrossSourceTableForEmailButton" mnemonicParsing="false"
-                        text="メール貼り付け用" onAction="#onCopyCrossSourceTableForEmailButtonAction"/>
-            </HBox>
-            <TableView fx:id="crossSourceTable" minHeight="120.0"/>
-            <Label text="未一致・未転記項目"/>
-            <TableView fx:id="mismatchTable" VBox.vgrow="ALWAYS"/>
+    <SplitPane fx:id="mainDetailSplitPane" dividerPositions="0.62" minHeight="360.0" orientation="VERTICAL"
+               VBox.vgrow="ALWAYS">
+        <VBox spacing="4.0" minHeight="200.0">
+            <FlowPane hgap="8.0" vgap="4.0" maxWidth="Infinity">
+                <Button fx:id="copyMainTableButton" mnemonicParsing="false"
+                        text="表としてコピー" onAction="#onCopyMainTableButtonAction"/>
+                <Button fx:id="copyMainTableForEmailButton" mnemonicParsing="false"
+                        text="メール貼り付け用" onAction="#onCopyMainTableForEmailButtonAction"/>
+                <Button fx:id="copyMainTableHtmlButton" mnemonicParsing="false"
+                        text="HTML形式でコピー" onAction="#onCopyMainTableHtmlButtonAction"/>
+                <Button fx:id="copyMainTableCsvButton" mnemonicParsing="false"
+                        text="カンマ区切りでコピー" onAction="#onCopyMainTableCsvButtonAction"/>
+                <Button fx:id="confirmAllVisibleIssuesButton" mnemonicParsing="false"
+                        text="確認を一括チェック" onAction="#onConfirmAllVisibleIssuesButtonAction"/>
+            </FlowPane>
+            <HBox fx:id="mainColumnStripHost" alignment="CENTER_LEFT" spacing="0.0" maxWidth="Infinity"/>
+            <StackPane fx:id="mainTableHost" minHeight="180.0" VBox.vgrow="ALWAYS">
+                <TableView fx:id="mainTable" maxHeight="Infinity" maxWidth="Infinity"
+                           styleClass="pipeline-check-main-table"/>
+            </StackPane>
         </VBox>
-        <VBox spacing="4.0">
-            <HBox alignment="CENTER_LEFT" spacing="8.0">
-                <Label text="アラジン加工計画（日付×m・日報完了）"/>
-                <Button fx:id="copyPlanTableButton" mnemonicParsing="false"
-                        text="表としてコピー" onAction="#onCopyPlanTableButtonAction"/>
-                <Button fx:id="copyPlanTableForEmailButton" mnemonicParsing="false"
-                        text="メール貼り付け用" onAction="#onCopyPlanTableForEmailButtonAction"/>
-            </HBox>
-            <TableView fx:id="planTable" VBox.vgrow="ALWAYS"/>
-        </VBox>
+        <SplitPane dividerPositions="0.5" minHeight="160.0">
+            <VBox spacing="4.0">
+                <FlowPane hgap="8.0" vgap="4.0" maxWidth="Infinity">
+                    <Label text="原反投入日 4ソース照合（アラジン／受注／目次／依頼シート）"/>
+                    <Button fx:id="copyCrossSourceTableButton" mnemonicParsing="false"
+                            text="表としてコピー" onAction="#onCopyCrossSourceTableButtonAction"/>
+                    <Button fx:id="copyCrossSourceTableForEmailButton" mnemonicParsing="false"
+                            text="メール貼り付け用" onAction="#onCopyCrossSourceTableForEmailButtonAction"/>
+                </FlowPane>
+                <TableView fx:id="crossSourceTable" minHeight="120.0" VBox.vgrow="NEVER"/>
+                <Label text="未一致・未転記項目"/>
+                <TableView fx:id="mismatchTable" VBox.vgrow="ALWAYS"/>
+            </VBox>
+            <VBox spacing="4.0">
+                <FlowPane hgap="8.0" vgap="4.0" maxWidth="Infinity">
+                    <Label text="アラジン加工計画（日付×m・日報完了）"/>
+                    <Button fx:id="copyPlanTableButton" mnemonicParsing="false"
+                            text="表としてコピー" onAction="#onCopyPlanTableButtonAction"/>
+                    <Button fx:id="copyPlanTableForEmailButton" mnemonicParsing="false"
+                            text="メール貼り付け用" onAction="#onCopyPlanTableForEmailButtonAction"/>
+                </FlowPane>
+                <TableView fx:id="planTable" VBox.vgrow="ALWAYS"/>
+            </VBox>
+        </SplitPane>
     </SplitPane>
 </VBox>

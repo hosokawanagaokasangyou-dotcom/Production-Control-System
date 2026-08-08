@@ -775,6 +775,8 @@ public final class TableColumnOrderPersistence {
         DELIVERY_CALENDAR_COMPARE("deliveryCalendarCompare"),
         /** 依頼書パイプライン確認タブ上段一覧 */
         REQUEST_FORM_PIPELINE_CHECK("requestFormPipelineCheck"),
+        /** 加工日報 CSV 閲覧タブ */
+        DAILY_REPORT_CSV("dailyReportCsv"),
         /** 納期管理ビュー「配台結果（タスク集約）」 */
         DELIVERY_CALENDAR_DISPATCH_TASK_SUMMARY("deliveryCalendarDispatchTaskSummary");
 

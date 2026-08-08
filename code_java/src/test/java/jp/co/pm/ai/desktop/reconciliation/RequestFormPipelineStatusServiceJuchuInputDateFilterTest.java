@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Map;
 
 import org.junit.jupiter.api.Test;
@@ -12,6 +13,31 @@ import org.junit.jupiter.api.Test;
 class RequestFormPipelineStatusServiceJuchuInputDateFilterTest {
 
     private static final int DAYS = RequestFormPipelineStatusService.DEFAULT_JUCHU_INPUT_DATE_HIDE_DAYS;
+
+    @Test
+    void shouldSkipJuchuRowDuringScan_whenHideDaysEnabled() {
+        LocalDate old = LocalDate.now().minusDays(31);
+        Map<String, String> juchu = Map.of("入力日", old.toString());
+        assertTrue(
+                RequestFormPipelineStatusService.shouldSkipJuchuRowDuringScan(juchu, DAYS));
+        assertFalse(RequestFormPipelineStatusService.shouldSkipJuchuRowDuringScan(juchu, 0));
+    }
+
+    @Test
+    void indexExcelRawByIraiKey_skipsTpiAndIndexesExcel() {
+        List<Map<String, String>> raw =
+                List.of(
+                        Map.of(
+                                RequestFormTpiPdfFieldLayout.META_SOURCE_KIND,
+                                RequestFormTpiPdfFieldLayout.META_SOURCE_KIND_TPI_PDF,
+                                "依頼Ｎｏ",
+                                "GB60604"),
+                        Map.of("依頼Ｎｏ", "Y8-99", "_sourceFileName", "book.xlsm"));
+        Map<String, Map<String, String>> index =
+                RequestFormPipelineStatusService.indexExcelRawByIraiKey(raw);
+        assertEquals(1, index.size());
+        assertEquals("Y8-99", index.get(JuchuTransferValueNormalizer.normalizeKey("Y8-99")).get("依頼Ｎｏ"));
+    }
 
     @Test
     void shouldHide_whenInputDateIs31DaysAgo() {

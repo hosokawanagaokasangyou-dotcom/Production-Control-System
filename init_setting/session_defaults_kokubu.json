@@ -111,6 +111,16 @@
       "description": "加工実績明細DATA 出力元（plan/02__q*.m の Folder.Files と同系）。planning_core はこのフォルダ内の最新 xlsx/xlsm を実績明細読込の元にする。 PM_AI_ACTUALS_DATA_WORKBOOK 未設定時は加工実績DATA 読込も同じ最新ファイルを使用。未設定時は 002  加工G\\●検査表作成\\加工実績明細DATA系 UNC。PM_AI_ACTUAL_DETAIL_WORKBOOK で単一ファイルを優先。"
     },
     {
+      "name": "PM_AI_DAILY_REPORT_SOURCE_DIR",
+      "value": "\\\\192.168.0.101\\共有フォルダ\\国分工場\\国分共有\\●配台AIシステム\\DATA\\加工日報",
+      "description": "加工日報発行問合せ CSV の取得元フォルダ（UNC 可）。原本転記・計画確認タブ・取得データ最新ファイル画面が参照。未設定時は PM_AI_FACTORY_SITE（またはグローバル設定の工場）に応じた UNC。湖南: ●DATA\\加工日報。国分: ●配台AIシステム\\DATA\\加工日報。環境変数を初期化（工場選択）でも上書きされる。フォルダ選択可。"
+    },
+    {
+      "name": "PM_AI_ORDER_DETAIL_SOURCE_DIR",
+      "value": "",
+      "description": "受注明細表 RPA 出力フォルダ（UNC 可）。将来の取得ロジック用。現状未設定のままでよい（未設定時は最新ファイル解決を行わない）。フォルダ選択可。"
+    },
+    {
       "name": "PM_AI_ALADDIN_MASTER_DIR",
       "value": "\\\\192.168.0.101\\共有フォルダ\\国分工場\\国分共有\\●配台AIシステム\\DATA\\アラジンマスタ",
       "description": "依頼書入力タブのアラジンマスタフォルダ（フルパス）。後加工商品／加工内容／工程マスタとマスタリレーション統合結果.xlsx。空のときは工場既定 UNC（湖南: 共有DATA/アラジンマスタ、国分: DATA/アラジンマスタ）。環境変数初期化の工場選択でも設定。「フォルダ...」で選択可。 — 依頼書入力タブが参照するアラジンマスタフォルダ（フルパス）。後加工商品／加工内容／工程マスタ xlsx とマスタリレーション統合結果.xlsx を置く。空のときはグローバル設定の工場（湖南／国分）に応じた UNC 既定。湖南: 共有DATA/アラジンマスタ。国分: DATA/アラジンマスタ。環境変数を初期化（工場選択）でも上書きされる。環境変数タブのフォルダ選択可。統合スクリプト create_integrated_master.py にも渡される。"
@@ -592,12 +602,12 @@
     },
     {
       "name": "PM_AI_RDP_LAUNCHER_DEPLOY_DIR",
-      "value": "\\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\002  加工G\\●配台AIシステム\\共有DATA",
+      "value": "\\\\192.168.0.101\\共有フォルダ\\国分工場\\国分共有\\●配台AIシステム\\DATA",
       "description": "配台 PMD のリモートデスクトップタブ向け: 接続先 RDP ランチャー exe（PmAiRdpRemoteLauncher.exe）、RDP起動プロファイル.json、RPA設定.ini の配備先共有フォルダ（UNC 可）。 — 配台 PMD のリモートデスクトップタブ向け: 接続先 RDP ランチャー exe（PmAiRdpRemoteLauncher.exe）と RDP起動プロファイル.json、RPA設定.ini の配備先共有フォルダ（UNC 可）。 空のときは \\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\002  加工G\\●配台AIシステム\\共有DATA。 リモートデスクトップ専用ランチャー（PmAiRpaLuncher.exe）では PM_AI_RPA_LAUNCHER_DEPLOY_DIR を使用。"
     },
     {
       "name": "PM_AI_RPA_LAUNCHER_DEPLOY_DIR",
-      "value": "\\\\192.168.0.101\\共有フォルダ\\掲示板\\rpa_luncher\\RDPランチャ",
+      "value": "\\\\192.168.0.101\\共有フォルダ\\国分工場\\国分共有\\●配台AIシステム\\DATA",
       "description": "リモートデスクトップ専用ランチャー（PmAiRpaLuncher）向け: 接続先 RDP ランチャー exe・ini・起動プロファイル JSON の配備先共有フォルダ（UNC 可）。 — リモートデスクトップ専用ランチャー（PmAiRpaLuncher.exe）向け: 接続先 RDP ランチャー exe と RDP起動プロファイル.json、RPA設定.ini の配備先共有フォルダ（UNC 可）。 空のときは \\\\192.168.0.101\\共有フォルダ\\掲示板\\rpa_luncher\\RDPランチャ。 配台 PMD とは別キー（PM_AI_RDP_LAUNCHER_DEPLOY_DIR）。"
     },
     {
@@ -607,12 +617,12 @@
     },
     {
       "name": "PM_AI_RDP_OPERATOR_USERS_STORE_DIR",
-      "value": "\\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\002  加工G\\●配台AIシステム\\共有DATA",
+      "value": "\\\\192.168.0.101\\共有フォルダ\\国分工場\\国分共有\\●配台AIシステム\\DATA",
       "description": "配台 PMD のリモートデスクトップタブ向け: 操作者 bin 保存フォルダ（UNC 可）。 空のときは \\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\002  加工G\\●配台AIシステム\\共有DATA（rdp-launcher-operator-users.bin とバックアップ）。 専用ランチャーでは PM_AI_RPA_LAUNCHER_OPERATOR_USERS_STORE_DIR を使用。"
     },
     {
       "name": "PM_AI_RPA_LAUNCHER_OPERATOR_USERS_STORE_DIR",
-      "value": "\\\\192.168.0.101\\共有フォルダ\\掲示板\\rpa_luncher\\DATA",
+      "value": "\\\\192.168.0.101\\共有フォルダ\\国分工場\\国分共有\\●配台AIシステム\\DATA",
       "description": "リモートデスクトップ専用ランチャー向けの操作者 bin 保存フォルダ（UNC 可）。前回操作者選択は PC ローカル。 — リモートデスクトップ専用ランチャー向けの操作者 bin 保存フォルダ（UNC 可）。 空のときは掲示板共有 \\\\192.168.0.101\\共有フォルダ\\掲示板\\rpa_luncher\\DATA（rdp-launcher-operator-users.bin とバックアップ）。 前回選択した操作者名は PC ローカルの last-rdp-launcher-operator.txt に保存。 配台 PMD とは別キー（PM_AI_RDP_OPERATOR_USERS_STORE_DIR）。"
     },
     {

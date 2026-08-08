@@ -40,6 +40,8 @@ public enum MainShellTabId {
     EXCLUDE_RULES("excludeRules"),
     SPECIAL_RULES("specialRules"),
     ACTUALS_STATUS("actualsStatus"),
+    /** 加工日報発行問合せ CSV の表形式閲覧。 */
+    DAILY_REPORT_CSV_VIEW("dailyReportCsvView"),
     /** 納期管理（アラジン計画）風ビュー（計画＋実績・計画比較表）。 */
     DELIVERY_CALENDAR_VIEW("deliveryCalendarView"),
     RESULT_DISPATCH("resultDispatch"),

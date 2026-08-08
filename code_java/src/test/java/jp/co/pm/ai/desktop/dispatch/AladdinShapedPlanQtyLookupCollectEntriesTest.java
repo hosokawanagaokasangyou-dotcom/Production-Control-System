@@ -40,6 +40,18 @@ class AladdinShapedPlanQtyLookupCollectEntriesTest {
     }
 
     @Test
+    void buildPipelineScanIndex_matchesCollectEntriesForTaskIdFromTable() {
+        AladdinShapedPlanQtyLookup.PipelineScanIndex index =
+                AladdinShapedPlanQtyLookup.buildPipelineScanIndex(HEADERS, ROWS);
+        List<AladdinShapedPlanQtyLookup.PlanEntry> fromIndex = index.planEntriesFor("E6-1");
+        List<AladdinShapedPlanQtyLookup.PlanEntry> direct =
+                AladdinShapedPlanQtyLookup.collectEntriesForTaskIdFromTable(HEADERS, ROWS, "E6-1");
+        assertEquals(direct, fromIndex);
+        assertTrue(AladdinShapedPlanQtyLookup.collectEntriesForTaskIdFromTable(HEADERS, ROWS, "E6-2").size()
+                == index.planEntriesFor("E6-2").size());
+    }
+
+    @Test
     void collectEntriesForTaskIdFromTable_preservesDisplayNames() {
         List<AladdinShapedPlanQtyLookup.PlanEntry> entries =
                 AladdinShapedPlanQtyLookup.collectEntriesForTaskIdFromTable(HEADERS, ROWS, "E6-1");

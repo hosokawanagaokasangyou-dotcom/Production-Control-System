@@ -25,23 +25,13 @@ import jp.co.pm.ai.desktop.config.NetworkSourceDirResolver;
 public final class RemoteDesktopLatestSourceFiles {
 
     /** 受注明細表 RPA 出力フォルダ（環境マップ上書き可）。 */
-    public static final String KEY_ORDER_DETAIL_SOURCE_DIR = "PM_AI_ORDER_DETAIL_SOURCE_DIR";
+    public static final String KEY_ORDER_DETAIL_SOURCE_DIR = AppPaths.KEY_PM_AI_ORDER_DETAIL_SOURCE_DIR;
 
     private static final String NOT_FOUND = "（該当ファイルなし）";
     private static final String NO_ACQUIRED_AT = "—";
 
     private static final DateTimeFormatter ACQUIRED_AT_DISPLAY =
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss", Locale.JAPAN);
-
-    private static final String DEFAULT_ORDER_DETAIL_SOURCE_DIR =
-            "\\\\192.168.0.101\\"
-                    + "共有フォルダ\\"
-                    + "湖南工場\\"
-                    + "湖南共有\\"
-                    + "生産管理システム\\"
-                    + "管理システム\\"
-                    + "●DATA\\"
-                    + "受注明細表";
 
     private static final String ORDER_DETAIL_NAME_MARKER = "受注明細";
 
@@ -148,13 +138,12 @@ public final class RemoteDesktopLatestSourceFiles {
     }
 
     private static Optional<ResolvedFile> resolveNewestOrderDetailFile(Map<String, String> ui) {
-        String dirText = trim(ui.get(KEY_ORDER_DETAIL_SOURCE_DIR));
-        if (dirText.isEmpty()) {
-            dirText = DEFAULT_ORDER_DETAIL_SOURCE_DIR;
+        Optional<Path> dirOpt = AppPaths.resolveOrderDetailSourceDir(ui);
+        if (dirOpt.isEmpty()) {
+            return Optional.empty();
         }
-        Path dir = Path.of(dirText);
         return pickNewestInDir(
-                        dir,
+                        dirOpt.get(),
                         p -> {
                             String name =
                                     p.getFileName() != null

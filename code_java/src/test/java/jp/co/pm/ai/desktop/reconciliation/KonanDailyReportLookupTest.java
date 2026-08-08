@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -50,6 +51,31 @@ class KonanDailyReportLookupTest {
         assertEquals("未了", lookup.completionDisplay("Y6-19", "スライス", "スライス機1　湖南"));
         assertEquals("完了", lookup.completionDisplay("Y6-18", "スライス", "スライス機1　湖南"));
         assertEquals("", lookup.completionDisplay("UNKNOWN", "スライス", "スライス機1　湖南"));
+    }
+
+    @Test
+    void readTableFromPath_returnsAllDataRows(@TempDir Path temp) throws Exception {
+        Path csv = temp.resolve("table.csv");
+        String body =
+                "meta1\n"
+                        + "meta2\n"
+                        + "meta3\n"
+                        + HEADER
+                        + "\n"
+                        + row("スライス機1　湖南", "スライス", "2026/06/22", "Y6-19", "0:未完")
+                        + "\n"
+                        + row("スライス機1　湖南", "スライス", "2026/06/23", "Y6-18", "1:完了");
+        Files.writeString(csv, body, StandardCharsets.UTF_8);
+
+        KonanDailyReportLookup.DailyReportCsvTable table =
+                KonanDailyReportLookup.readTableFromPath(csv);
+        assertEquals(csv.toAbsolutePath().normalize().toString(), table.sourcePath());
+        assertEquals(List.of("meta1", "meta2", "meta3"), table.metaLines());
+        assertEquals(HEADER.split(",", -1).length, table.headers().size());
+        assertEquals(2, table.rows().size());
+        assertEquals("Y6-19", table.rows().getFirst().get("依頼NO"));
+        assertEquals("0:未完", table.rows().getFirst().get("完了区分"));
+        assertEquals("1:完了", table.rows().get(1).get("完了区分"));
     }
 
     @Test

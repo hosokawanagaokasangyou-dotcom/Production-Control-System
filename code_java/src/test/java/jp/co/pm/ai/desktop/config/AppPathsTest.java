@@ -1364,4 +1364,23 @@ class AppPathsTest {
         assertTrue(map.get(AppPaths.KEY_PM_AI_ATTENDANCE_CALENDAR_XLSX).contains("国分"));
         assertFalse(map.get(AppPaths.KEY_PM_AI_ATTENDANCE_CALENDAR_XLSX).contains("湖南"));
     }
+
+    @Test
+    void overlayFactorySiteRequestFormPaths_replacesStaleKokubuPathsWhenSwitchingToKonan() {
+        LinkedHashMap<String, String> map = new LinkedHashMap<>();
+        map.put(AppPaths.KEY_PM_AI_FACTORY_SITE, "KONAN");
+        map.put(
+                AppPaths.KEY_PM_AI_REQUEST_FORM_JUCHU_FILE,
+                AppPaths.DEFAULT_PM_AI_REQUEST_FORM_JUCHU_FILE_KOKUBU);
+        map.put(
+                AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR,
+                "\\\\192.168.0.101\\共有フォルダ\\国分工場\\国分共有\\●配台AIシステム\\DATA");
+
+        AppPaths.overlayFactorySiteRequestFormPaths(map, FactorySite.KONAN);
+
+        assertTrue(map.get(AppPaths.KEY_PM_AI_REQUEST_FORM_JUCHU_FILE).contains("湖南"));
+        assertFalse(map.get(AppPaths.KEY_PM_AI_REQUEST_FORM_JUCHU_FILE).contains("国分"));
+        assertTrue(map.get(AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR).contains("湖南"));
+        assertFalse(map.get(AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR).contains("国分"));
+    }
 }

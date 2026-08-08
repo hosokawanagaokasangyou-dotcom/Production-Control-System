@@ -153,6 +153,26 @@ class RemoteDesktopLatestSourceFilesTest {
         assertTrue(stale.isEmpty());
     }
 
+    @Test
+    void resolveAll_orderDetailUnsetShowsEmptyPath() throws Exception {
+        Path planDir = temp.resolve("plan-only");
+        Files.createDirectories(planDir);
+        Path planFile = planDir.resolve("工程別生産計画問合せ_20260101.xlsx");
+        Files.writeString(planFile, "p");
+
+        Map<String, String> ui =
+                Map.of(
+                        AppPaths.KEY_PM_AI_TASK_INPUT_SOURCE_DIR,
+                        planDir.toString(),
+                        KonanDailyReportLookup.KEY_DAILY_REPORT_SOURCE_DIR,
+                        temp.resolve("missing-daily").toString(),
+                        AppPaths.KEY_PM_AI_ACTUAL_DETAIL_SOURCE_DIR,
+                        temp.resolve("missing-actual").toString());
+
+        List<RemoteDesktopLatestSourceFiles.Row> rows = RemoteDesktopLatestSourceFiles.resolveAll(ui);
+        assertTrue(pathFor(rows, "受注明細表").isBlank());
+    }
+
     private static void bumpMtime(Path newer, Path older) throws Exception {
         long olderMillis = Files.getLastModifiedTime(older).toMillis();
         Files.setLastModifiedTime(newer, FileTime.fromMillis(olderMillis + 60_000));

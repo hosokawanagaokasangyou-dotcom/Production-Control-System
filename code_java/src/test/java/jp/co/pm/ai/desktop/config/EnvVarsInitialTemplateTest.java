@@ -32,9 +32,18 @@ class EnvVarsInitialTemplateTest {
     LinkedHashMap<String, String> map = new LinkedHashMap<>();
     map.put(AppPaths.KEY_PM_AI_TASK_INPUT_SOURCE_DIR, "old");
     map.put(AppPaths.KEY_PM_AI_FACTORY_SITE, "old");
+    map.put(AppPaths.KEY_PM_AI_ATTENDANCE_JSON, "\\\\server\\湖南\\attendance-data.json");
+    map.put(AppPaths.KEY_PM_AI_ATTENDANCE_CALENDAR_XLSX, "\\\\server\\湖南\\勤怠カレンダー.xlsx");
+    map.put(AppPaths.KEY_PM_AI_MASTER_WORKBOOK, "");
+    map.put(AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK, "");
     EnvVarsInitialTemplate.overlayFactorySiteValues(map, FactorySite.KOKUBU, Map.of());
     assertTrue(map.get(AppPaths.KEY_PM_AI_TASK_INPUT_SOURCE_DIR).contains("国分"));
     assertEquals("KOKUBU", map.get(AppPaths.KEY_PM_AI_FACTORY_SITE));
+    assertTrue(map.get(AppPaths.KEY_PM_AI_DAILY_REPORT_SOURCE_DIR).contains("加工日報"));
+    assertEquals("", map.get(AppPaths.KEY_PM_AI_ORDER_DETAIL_SOURCE_DIR));
+    assertTrue(map.get(AppPaths.KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR).contains("国分"));
+    assertTrue(map.get(AppPaths.KEY_PM_AI_ATTENDANCE_JSON).contains("国分"));
+    assertTrue(map.get(AppPaths.KEY_PM_AI_ATTENDANCE_CALENDAR_XLSX).contains("国分"));
   }
 
   @Test

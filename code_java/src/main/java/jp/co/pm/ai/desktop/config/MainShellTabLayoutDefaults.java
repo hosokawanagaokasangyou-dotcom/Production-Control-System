@@ -54,6 +54,7 @@ public final class MainShellTabLayoutDefaults {
                     MainShellTabId.MEMORY_SETTINGS.key(),
                     MainShellTabId.API_MODEL_BENCHMARK.key(),
                     MainShellTabId.ACTUALS_STATUS.key(),
+                    MainShellTabId.DAILY_REPORT_CSV_VIEW.key(),
                     MainShellTabId.PIPELINE_EXECUTION_TIMING.key(),
                     MainShellTabId.CACHE_HISTORY.key(),
                     MainShellTabId.LEARNED_SPEED_DATA.key(),
@@ -128,6 +129,7 @@ public final class MainShellTabLayoutDefaults {
                                 MainShellTabLayoutNode.tabNode(MainShellTabId.MEMORY_SETTINGS.key(), ""),
                                 MainShellTabLayoutNode.tabNode(MainShellTabId.API_MODEL_BENCHMARK.key(), ""),
                                 MainShellTabLayoutNode.tabNode(MainShellTabId.ACTUALS_STATUS.key(), ""),
+                                MainShellTabLayoutNode.tabNode(MainShellTabId.DAILY_REPORT_CSV_VIEW.key(), ""),
                                 MainShellTabLayoutNode.tabNode(MainShellTabId.PIPELINE_EXECUTION_TIMING.key(), ""),
                                 MainShellTabLayoutNode.tabNode(MainShellTabId.CACHE_HISTORY.key(), ""),
                                 MainShellTabLayoutNode.tabNode(MainShellTabId.LEARNED_SPEED_DATA.key(), ""))));

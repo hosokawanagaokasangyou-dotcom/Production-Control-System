@@ -42,6 +42,7 @@ import javafx.scene.input.Clipboard;
 import javafx.scene.input.ClipboardContent;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
+import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.stage.Window;
 import javafx.util.Duration;
@@ -84,7 +85,7 @@ public final class RequestFormPipelineCheckTabController {
             "「更新」…加工計画の再読込・原本走査・転記率と shaped_aladdin_plan.json を照合。\n"
                     + "・①〜⑦ … 依頼ごとの計画日（昇順・最大7日。例: 7/3 100m）\n"
                     + "・投入日一致 … 原反投入日を4ソース照合（全一致のみ「一致」）\n"
-                    + "・確認 … 要チェック行はフィルタ無視で表示（日報「完了」は不要）\n"
+                    + "・確認 … 要チェック行はフィルタ無視で表示（日報「完了」は不要）。一括チェック可\n"
                     + "・段階1 … 未確認がある間は実行不可。計画更新で確認リセット（1分監視）\n"
                     + "・依頼NO先頭「2」… 自社加工品（配台対象外・段階1要確認対象外）";
 
@@ -590,6 +591,9 @@ public final class RequestFormPipelineCheckTabController {
     private TableView<MainRow> mainTable;
 
     @FXML
+    private StackPane mainTableHost;
+
+    @FXML
     private Button copyMainTableButton;
 
     @FXML
@@ -600,6 +604,9 @@ public final class RequestFormPipelineCheckTabController {
 
     @FXML
     private Button copyMainTableCsvButton;
+
+    @FXML
+    private Button confirmAllVisibleIssuesButton;
 
     @FXML
     private HBox mainColumnStripHost;
@@ -683,7 +690,7 @@ public final class RequestFormPipelineCheckTabController {
         crossSourceTable.setItems(crossSourceRows);
         crossSourceTable.setPlaceholder(new Label("行を選択すると原反投入日の照合結果を表示"));
         planTable.setItems(planRows);
-        VBox.setVgrow(mainTable, Priority.ALWAYS);
+        installMainTableScrollLayout();
 
         setupCrossSourceColumns();
         setupMismatchColumns();
@@ -700,6 +707,9 @@ public final class RequestFormPipelineCheckTabController {
         }
         if (copyMainTableCsvButton != null) {
             copyMainTableCsvButton.disableProperty().bind(Bindings.isEmpty(filteredRows));
+        }
+        if (confirmAllVisibleIssuesButton != null) {
+            confirmAllVisibleIssuesButton.setDisable(true);
         }
         if (copyPlanTableButton != null) {
             copyPlanTableButton.disableProperty().bind(Bindings.isEmpty(planRows));
@@ -744,7 +754,7 @@ public final class RequestFormPipelineCheckTabController {
             juchuInputHideDaysSpinner.setEditable(true);
             juchuInputHideDaysSpinner
                     .valueProperty()
-                    .addListener((obs, o, n) -> applyFilter());
+                    .addListener((obs, o, n) -> onJuchuInputHideScanSettingChanged());
         }
         if (hideOldJuchuInputCheck != null) {
             hideOldJuchuInputCheck
@@ -754,7 +764,7 @@ public final class RequestFormPipelineCheckTabController {
                                 if (juchuInputHideDaysSpinner != null) {
                                     juchuInputHideDaysSpinner.setDisable(!n);
                                 }
-                                applyFilter();
+                                onJuchuInputHideScanSettingChanged();
                             });
             if (juchuInputHideDaysSpinner != null) {
                 juchuInputHideDaysSpinner.setDisable(!hideOldJuchuInputCheck.isSelected());
@@ -764,6 +774,18 @@ public final class RequestFormPipelineCheckTabController {
         mainTable.getSelectionModel()
                 .selectedItemProperty()
                 .addListener((obs, oldRow, newRow) -> showDetail(newRow));
+    }
+
+    /** 親幅に収め、列合計が広いときは TableView 内の横スクロールを有効にする。 */
+    private void installMainTableScrollLayout() {
+        if (mainTable == null || mainTableHost == null) {
+            return;
+        }
+        VBox.setVgrow(mainTableHost, Priority.ALWAYS);
+        mainTable.setMaxSize(Double.MAX_VALUE, Double.MAX_VALUE);
+        mainTable.prefWidthProperty().bind(mainTableHost.widthProperty());
+        mainTable.prefHeightProperty().bind(mainTableHost.heightProperty());
+        mainTable.setColumnResizePolicy(TableView.UNCONSTRAINED_RESIZE_POLICY);
     }
 
     void bindShell(MainShellController shell) {
@@ -805,7 +827,7 @@ public final class RequestFormPipelineCheckTabController {
     }
 
     private void scheduleRefreshIfNeededOnTabSelected() {
-        if (refreshInProgress || shell == null) {
+        if (refreshInProgress || shell == null || shell.isFactorySiteSwitchInProgress()) {
             return;
         }
         if (!scanApplied) {
@@ -822,6 +844,10 @@ public final class RequestFormPipelineCheckTabController {
     /** 起動後バックグラウンド読込（MainShell コーディネータから呼ぶ）。 */
     void preloadInBackground(Consumer<Boolean> onComplete) {
         if (shell == null) {
+            completeRefreshPreload(false, onComplete);
+            return;
+        }
+        if (shell.isFactorySiteSwitchInProgress()) {
             completeRefreshPreload(false, onComplete);
             return;
         }
@@ -914,9 +940,10 @@ public final class RequestFormPipelineCheckTabController {
                                     shell.appendLog("[pipeline-check] " + msg);
                                 }
                                 Platform.runLater(() -> statusLabel.setText("走査中…"));
+                                int juchuInputHideDays = resolveJuchuInputHideDaysForScan();
                                 ScanResult result =
                                         RequestFormPipelineStatusService.scan(
-                                                ui, registry, scanProgress);
+                                                ui, registry, scanProgress, juchuInputHideDays);
                                 if (!reloadWarnings.isEmpty()) {
                                     List<String> mergedWarnings = new ArrayList<>(reloadWarnings);
                                     mergedWarnings.addAll(result.warnings());
@@ -1448,6 +1475,23 @@ public final class RequestFormPipelineCheckTabController {
                 || requiresStage1ConfirmationForAladdinMissingWithDelivery(row);
     }
 
+    /**
+     * 段階1要確認かつ未確認の行に確認チェックを付ける。新たに確認した件数を返す。
+     */
+    static int confirmAllRequiringConfirmation(Iterable<MainRow> rows) {
+        if (rows == null) {
+            return 0;
+        }
+        int count = 0;
+        for (MainRow row : rows) {
+            if (row != null && requiresStage1Confirmation(row) && !row.isIssueConfirmed()) {
+                row.issueConfirmedProperty().set(true);
+                count++;
+            }
+        }
+        return count;
+    }
+
     /** 調整納期の解釈（ソース行と表示列の両方から）。 */
     static LocalDate resolveAdjustDeliveryDate(MainRow row) {
         if (row == null) {
@@ -1487,42 +1531,51 @@ public final class RequestFormPipelineCheckTabController {
     }
 
     private void updateStage1GateLabel() {
-        if (stage1GateLabel == null) {
+        if (stage1GateLabel != null) {
+            if (!scanApplied) {
+                stage1GateLabel.setText("段階1: 未走査 — 「更新」で照合してから実行してください。");
+                stage1GateLabel.getStyleClass().setAll("pipeline-check-stage1-gate-label", "warn");
+            } else {
+                Stage1ConfirmationCounts counts = countStage1ConfirmationRequirements();
+                if (counts.totalIssues() == 0) {
+                    stage1GateLabel.setText("段階1: 問題なし — 実行できます。");
+                    stage1GateLabel.getStyleClass().setAll("pipeline-check-stage1-gate-label", "ok");
+                } else if (counts.unconfirmedRequiringConfirmation() > 0) {
+                    stage1GateLabel.setText(
+                            "段階1: 要確認 "
+                                    + counts.requiringConfirmation()
+                                    + " 件（未確認 "
+                                    + counts.unconfirmedRequiringConfirmation()
+                                    + " 件）— 確認チェック対象行のみ要確認");
+                    stage1GateLabel.getStyleClass().setAll("pipeline-check-stage1-gate-label", "warn");
+                } else if (counts.requiringConfirmation() == 0) {
+                    stage1GateLabel.setText(
+                            "段階1: 問題 "
+                                    + counts.totalIssues()
+                                    + " 件（確認チェック対象外あり）— 実行できます。");
+                    stage1GateLabel.getStyleClass().setAll("pipeline-check-stage1-gate-label", "ok");
+                } else {
+                    stage1GateLabel.setText(
+                            "段階1: 要確認 "
+                                    + counts.requiringConfirmation()
+                                    + " 件 — すべて確認済み。実行できます。");
+                    stage1GateLabel.getStyleClass().setAll("pipeline-check-stage1-gate-label", "ok");
+                }
+            }
+        }
+        refreshConfirmAllIssuesButtonState();
+    }
+
+    private void refreshConfirmAllIssuesButtonState() {
+        if (confirmAllVisibleIssuesButton == null) {
             return;
         }
-        if (!scanApplied) {
-            stage1GateLabel.setText("段階1: 未走査 — 「更新」で照合してから実行してください。");
-            stage1GateLabel.getStyleClass().setAll("pipeline-check-stage1-gate-label", "warn");
+        if (!scanApplied || filteredRows == null) {
+            confirmAllVisibleIssuesButton.setDisable(true);
             return;
         }
-        Stage1ConfirmationCounts counts = countStage1ConfirmationRequirements();
-        if (counts.totalIssues() == 0) {
-            stage1GateLabel.setText("段階1: 問題なし — 実行できます。");
-            stage1GateLabel.getStyleClass().setAll("pipeline-check-stage1-gate-label", "ok");
-            return;
-        }
-        if (counts.unconfirmedRequiringConfirmation() > 0) {
-            stage1GateLabel.setText(
-                    "段階1: 要確認 "
-                            + counts.requiringConfirmation()
-                            + " 件（未確認 "
-                            + counts.unconfirmedRequiringConfirmation()
-                            + " 件）— 確認チェック対象行のみ要確認");
-            stage1GateLabel.getStyleClass().setAll("pipeline-check-stage1-gate-label", "warn");
-            return;
-        }
-        if (counts.requiringConfirmation() == 0) {
-            stage1GateLabel.setText(
-                    "段階1: 問題 "
-                            + counts.totalIssues()
-                            + " 件（確認チェック対象外あり）— 実行できます。");
-        } else {
-            stage1GateLabel.setText(
-                    "段階1: 要確認 "
-                            + counts.requiringConfirmation()
-                            + " 件 — すべて確認済み。実行できます。");
-        }
-        stage1GateLabel.getStyleClass().setAll("pipeline-check-stage1-gate-label", "ok");
+        confirmAllVisibleIssuesButton.setDisable(
+                countStage1ConfirmationRequirements().unconfirmedRequiringConfirmation() <= 0);
     }
 
     private void showDetail(MainRow row) {
@@ -1560,6 +1613,21 @@ public final class RequestFormPipelineCheckTabController {
                                         0.0),
                                 dr.completionStatus()));
             }
+        }
+    }
+
+    @FXML
+    private void onConfirmAllVisibleIssuesButtonAction() {
+        if (!scanApplied || filteredRows == null) {
+            return;
+        }
+        int confirmed = confirmAllRequiringConfirmation(filteredRows);
+        if (confirmed <= 0) {
+            return;
+        }
+        mainTable.refresh();
+        if (shell != null) {
+            shell.appendLog("[pipeline-check] 確認チェックを " + confirmed + " 件一括で付けました");
         }
     }
 
@@ -2162,6 +2230,7 @@ public final class RequestFormPipelineCheckTabController {
                     return matchesPipelineCheckQuickSearch(row, src, q);
                 });
         updateStatusLabel();
+        refreshConfirmAllIssuesButtonState();
     }
 
     /** 依頼No・ユーザー名のクイック検索（空なら常に一致）。 */
@@ -2181,6 +2250,24 @@ public final class RequestFormPipelineCheckTabController {
             return RequestFormPipelineStatusService.DEFAULT_JUCHU_INPUT_DATE_HIDE_DAYS;
         }
         return Math.max(0, juchuInputHideDaysSpinner.getValue());
+    }
+
+    /** 走査時に古い受注行をスキップする日数（チェック OFF なら 0）。 */
+    private int resolveJuchuInputHideDaysForScan() {
+        if (hideOldJuchuInputCheck == null || !hideOldJuchuInputCheck.isSelected()) {
+            return 0;
+        }
+        return resolveJuchuInputHideDays();
+    }
+
+    /**
+     * 受注入力日フィルタは走査時にも適用する。設定変更後は再走査して結果を揃える。
+     */
+    private void onJuchuInputHideScanSettingChanged() {
+        applyFilter();
+        if (scanApplied && !refreshInProgress) {
+            startRefresh(true);
+        }
     }
 
     private int countHiddenByJuchuInputDate() {

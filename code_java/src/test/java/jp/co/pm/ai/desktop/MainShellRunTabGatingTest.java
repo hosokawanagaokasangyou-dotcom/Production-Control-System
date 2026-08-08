@@ -134,4 +134,43 @@ class MainShellRunTabGatingTest {
             throw failure.get();
         }
     }
+
+    @Test
+    void guestSessionOnlyKeepsRunLeafOperableWhenBlockedSiblingWasSelected() throws Exception {
+        CountDownLatch completed = new CountDownLatch(1);
+        AtomicReference<AssertionError> failure = new AtomicReference<>();
+        Platform.runLater(
+                () -> {
+                    try {
+                        Tab run = new Tab("run");
+                        run.setContent(new javafx.scene.layout.Pane());
+                        Tab blocked = new Tab("blocked");
+                        blocked.setContent(new javafx.scene.layout.Pane());
+                        TabPane inner = new TabPane(blocked, run);
+                        inner.getSelectionModel().select(blocked);
+                        Tab group = new Tab("group", inner);
+                        Tab other = new Tab("other");
+                        TabPane outer = new TabPane(group, other);
+
+                        MainShellRunTabGating.applyGuestSessionOnly(outer, run);
+
+                        assertFalse(group.isDisable());
+                        assertFalse(run.isDisable());
+                        assertFalse(run.getContent().isDisable());
+                        assertFalse(blocked.isDisable());
+                        assertFalse(other.isDisable());
+                        assertEquals(run, inner.getSelectionModel().getSelectedItem());
+                        assertEquals(group, outer.getSelectionModel().getSelectedItem());
+                    } catch (AssertionError error) {
+                        failure.set(error);
+                    } finally {
+                        completed.countDown();
+                    }
+                });
+
+        assertTrue(completed.await(5, TimeUnit.SECONDS));
+        if (failure.get() != null) {
+            throw failure.get();
+        }
+    }
 }

@@ -121,6 +121,8 @@ public final class EnvVarsInitialTemplate {
     Map<String, String> ctx = ui != null ? ui : Map.of();
     putIfManaged(map, AppPaths.KEY_PM_AI_TASK_INPUT_SOURCE_DIR, site.taskInputSourceDir());
     putIfManaged(map, AppPaths.KEY_PM_AI_ACTUAL_DETAIL_SOURCE_DIR, site.actualDetailSourceDir());
+    putIfManaged(map, AppPaths.KEY_PM_AI_DAILY_REPORT_SOURCE_DIR, site.dailyReportSourceDir());
+    putIfManaged(map, AppPaths.KEY_PM_AI_ORDER_DETAIL_SOURCE_DIR, site.orderDetailSourceDir());
     putIfManaged(map, AppPaths.KEY_PM_AI_PORTABLE_BUNDLE_SOURCE_DIR, site.portableBundleSourceDir());
     putIfManaged(
         map,
@@ -135,15 +137,15 @@ public final class EnvVarsInitialTemplate {
     putIfManaged(map, AppPaths.KEY_PM_AI_REQUEST_FORM_TPI_PDF_DIR, site.requestFormTpiPdfDir());
     putIfManaged(
         map, AppPaths.KEY_PM_AI_RDP_PORTABLE_BUNDLE_SOURCE_DIR, site.rdpPortableBundleSourceDir());
+    putIfManaged(map, AppPaths.KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR, site.rdpLauncherDeployDir());
+    putIfManaged(map, AppPaths.KEY_PM_AI_RDP_OPERATOR_USERS_STORE_DIR, site.rdpOperatorUsersStoreDir());
+    putIfManaged(map, AppPaths.KEY_PM_AI_RPA_LAUNCHER_DEPLOY_DIR, site.rpaLauncherDeployDir());
+    putIfManaged(
+        map,
+        AppPaths.KEY_PM_AI_RPA_LAUNCHER_OPERATOR_USERS_STORE_DIR,
+        site.rpaLauncherOperatorUsersStoreDir());
     putIfManaged(map, AppPaths.KEY_PM_AI_FACTORY_SITE, site.name());
-    if (site == FactorySite.KONAN) {
-      putIfManaged(
-          map, AppPaths.KEY_PM_AI_RPA_LAUNCHER_DEPLOY_DIR, AppPaths.DEFAULT_KONAN_SHARED_DATA_DIR_M);
-      putIfManaged(
-          map,
-          AppPaths.KEY_PM_AI_RPA_LAUNCHER_OPERATOR_USERS_STORE_DIR,
-          AppPaths.DEFAULT_KONAN_SHARED_DATA_DIR_M);
-    }
+    AppPaths.overlayFactorySiteAttendancePaths(map, site);
   }
 
   private static void putIfManaged(Map<String, String> map, String key, String value) {

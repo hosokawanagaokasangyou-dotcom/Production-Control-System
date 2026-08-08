@@ -1,6 +1,7 @@
 package jp.co.pm.ai.desktop;
 
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 
 import javafx.application.Platform;
 
@@ -33,6 +34,9 @@ final class StartupTabBackgroundLoadCoordinator {
         void setStartupTabBackgroundLoadActive(boolean active);
 
         boolean isStartupTabBackgroundLoadActive();
+
+        /** 環境変数の起動チェック完了かつ初期化済みのときのみ true。 */
+        boolean canScheduleStartupBackgroundLoad();
     }
 
     private static final int STEP_REMOTE = 1;
@@ -45,16 +49,41 @@ final class StartupTabBackgroundLoadCoordinator {
 
     private final Host host;
     private final AtomicBoolean runScheduled = new AtomicBoolean(false);
+    /** {@link #cancelForFactorySwitch()} で増加。実行中チェーンが無効になったら後続ステップを進めない。 */
+    private final AtomicLong loadGeneration = new AtomicLong(0);
+    private volatile long activeRunGeneration = -1L;
 
     StartupTabBackgroundLoadCoordinator(Host host) {
         this.host = host;
     }
 
-    /** 未実行なら読込チェーンを開始する。 */
+    /**
+     * 工場切替開始時に呼ぶ。進行中の起動後バックグラウンド読込チェーンを中断し、工場切替を優先する。
+     */
+    void cancelForFactorySwitch() {
+        loadGeneration.incrementAndGet();
+        runScheduled.set(false);
+        activeRunGeneration = -1L;
+        if (host.isStartupTabBackgroundLoadActive()) {
+            host.setStartupTabBackgroundLoadActive(false);
+            host.setStartupBackgroundLoadStatus("");
+            host.appendStartupBackgroundLog("[startup-bg] 工場切替のためバックグラウンド読込を中断");
+        }
+    }
+
+    private boolean isRunObsolete() {
+        return activeRunGeneration != loadGeneration.get();
+    }
+
+    /** 未実行なら読込チェーンを開始する。環境変数初期化未完了時は何もしない。 */
     void scheduleIfIdle() {
+        if (!host.canScheduleStartupBackgroundLoad()) {
+            return;
+        }
         if (!runScheduled.compareAndSet(false, true)) {
             return;
         }
+        activeRunGeneration = loadGeneration.get();
         host.setStartupTabBackgroundLoadActive(true);
         Platform.runLater(this::beginRemoteDesktop);
     }
@@ -66,6 +95,9 @@ final class StartupTabBackgroundLoadCoordinator {
     }
 
     private void beginRemoteDesktop() {
+        if (isRunObsolete()) {
+            return;
+        }
         setStatus(STEP_REMOTE, "リモートデスクトップ");
         host.appendStartupBackgroundLog("[startup-bg] リモートデスクトップを読込中…");
         RemoteDesktopTabController rdp = host.remoteDesktopTab();
@@ -77,6 +109,9 @@ final class StartupTabBackgroundLoadCoordinator {
     }
 
     private void beginCompanyCalendar() {
+        if (isRunObsolete()) {
+            return;
+        }
         setStatus(STEP_COMPANY, "会社カレンダー");
         host.appendStartupBackgroundLog("[startup-bg] 会社カレンダーを読込中…");
         CompanyCalendarTabController tab = host.companyCalendarTab();
@@ -89,6 +124,9 @@ final class StartupTabBackgroundLoadCoordinator {
     }
 
     private void beginMemberAttendance() {
+        if (isRunObsolete()) {
+            return;
+        }
         setStatus(STEP_MEMBER, "メンバー勤怠");
         host.appendStartupBackgroundLog("[startup-bg] メンバー勤怠を読込中…");
         MemberAttendanceTabController tab = host.memberAttendanceTab();
@@ -101,6 +139,9 @@ final class StartupTabBackgroundLoadCoordinator {
     }
 
     private void beginMachineCalendar() {
+        if (isRunObsolete()) {
+            return;
+        }
         setStatus(STEP_MACHINE, "機械カレンダー");
         host.appendStartupBackgroundLog("[startup-bg] 機械カレンダーを読込中…");
         MachineCalendarTabController tab = host.machineCalendarTab();
@@ -113,6 +154,9 @@ final class StartupTabBackgroundLoadCoordinator {
     }
 
     private void beginRequestFormInput() {
+        if (isRunObsolete()) {
+            return;
+        }
         setStatus(STEP_REQUEST_FORM, "原本転記");
         host.appendStartupBackgroundLog("[startup-bg] 原本転記を読込中…");
         RequestFormInputTabController tab = host.requestFormInputTab();
@@ -125,6 +169,9 @@ final class StartupTabBackgroundLoadCoordinator {
     }
 
     private void beginPipelineCheck() {
+        if (isRunObsolete()) {
+            return;
+        }
         setStatus(STEP_PIPELINE_CHECK, "計画確認");
         host.appendStartupBackgroundLog("[startup-bg] 計画確認を走査中…");
         RequestFormPipelineCheckTabController tab = host.requestFormPipelineCheckTab();
@@ -137,12 +184,18 @@ final class StartupTabBackgroundLoadCoordinator {
     }
 
     private void finishStep(String label, boolean ok, Runnable next) {
+        if (isRunObsolete()) {
+            return;
+        }
         host.appendStartupBackgroundLog(
                 "[startup-bg] " + label + (ok ? " 読込完了" : " 読込失敗（続行）"));
         next.run();
     }
 
     private void completeAll() {
+        if (isRunObsolete()) {
+            return;
+        }
         host.setStartupTabBackgroundLoadActive(false);
         host.setStartupBackgroundLoadStatus("");
         host.appendStartupBackgroundLog("[startup-bg] 起動後バックグラウンド読込完了");

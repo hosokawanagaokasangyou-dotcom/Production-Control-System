@@ -6,6 +6,7 @@ import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -35,6 +36,32 @@ public final class AladdinShapedPlanQtyLookup {
     private AladdinShapedPlanQtyLookup() {}
 
     public record ShapedTable(List<String> headers, List<List<String>> rows) {}
+
+    /**
+     * 原本転記・計画確認の走査用。shaped 表を 1 回走査して依頼NO別に索引化する。
+     */
+    public record PipelineScanIndex(
+            Map<String, List<PlanEntry>> planEntriesByTaskId,
+            Map<String, String> rawInputDateDisplayByTaskId) {
+
+        public static PipelineScanIndex empty() {
+            return new PipelineScanIndex(Map.of(), Map.of());
+        }
+
+        public List<PlanEntry> planEntriesFor(String taskId) {
+            if (taskId == null || taskId.isBlank()) {
+                return List.of();
+            }
+            return planEntriesByTaskId.getOrDefault(normalizeTaskIdKey(taskId), List.of());
+        }
+
+        public String rawInputDateDisplayFor(String taskId) {
+            if (taskId == null || taskId.isBlank()) {
+                return "";
+            }
+            return rawInputDateDisplayByTaskId.getOrDefault(normalizeTaskIdKey(taskId), "");
+        }
+    }
 
     /**
      * shaped 表ヘッダから日付列（{@code yyyy/MM/dd}）を昇順で抽出する。
@@ -372,6 +399,83 @@ public final class AladdinShapedPlanQtyLookup {
                     return a.processName().compareTo(b.processName());
                 });
         return List.copyOf(out);
+    }
+
+    /** shaped 表を 1 回走査し、走査ループ用の依頼NO索引を構築する。 */
+    public static PipelineScanIndex buildPipelineScanIndex(
+            List<String> headers, List<List<String>> rows) {
+        if (headers == null || rows == null || rows.isEmpty()) {
+            return PipelineScanIndex.empty();
+        }
+        int mkIdx = colIdx(headers, COL_MK_NAME);
+        int tidIdx = colIdx(headers, COL_TID_ALIASES);
+        int procIdx = colIdx(headers, COL_PROCESS);
+        int dateIdx = colIdx(headers, COL_RAW_INPUT_DATE_ALIASES);
+        if (mkIdx < 0 || tidIdx < 0) {
+            return PipelineScanIndex.empty();
+        }
+        Map<Integer, String> dateCols = new LinkedHashMap<>();
+        for (int i = 0; i < headers.size(); i++) {
+            String h = headers.get(i);
+            if (isPlanDateColumnHeader(h)) {
+                dateCols.put(i, h);
+            }
+        }
+        Map<String, List<PlanEntry>> planByTid = new HashMap<>();
+        Map<String, LinkedHashSet<String>> rawDatesByTid = new HashMap<>();
+        for (List<String> row : rows) {
+            String tidKey = normalizeTaskIdKey(cellAt(row, tidIdx));
+            if (tidKey.isEmpty()) {
+                continue;
+            }
+            if (dateIdx >= 0) {
+                String rawDate = cellAt(row, dateIdx).strip();
+                if (!rawDate.isEmpty()) {
+                    rawDatesByTid.computeIfAbsent(tidKey, k -> new LinkedHashSet<>()).add(rawDate);
+                }
+            }
+            if (dateCols.isEmpty()) {
+                continue;
+            }
+            String machine = cellAt(row, mkIdx).strip();
+            String process = procIdx >= 0 ? cellAt(row, procIdx).strip() : "";
+            List<PlanEntry> bucket = planByTid.computeIfAbsent(tidKey, k -> new ArrayList<>());
+            for (Map.Entry<Integer, String> e : dateCols.entrySet()) {
+                double qty = parseCellDouble(cellAt(row, e.getKey()));
+                if (Math.abs(qty) > 1e-12) {
+                    String dsKey = normaliseDateStr(e.getValue());
+                    bucket.add(
+                            new PlanEntry(
+                                    machine,
+                                    process,
+                                    dsKey != null ? dsKey : e.getValue(),
+                                    qty));
+                }
+            }
+        }
+        for (List<PlanEntry> entries : planByTid.values()) {
+            entries.sort(
+                    (a, b) -> {
+                        int c = a.dateYmd().compareTo(b.dateYmd());
+                        if (c != 0) {
+                            return c;
+                        }
+                        c = a.machineName().compareTo(b.machineName());
+                        if (c != 0) {
+                            return c;
+                        }
+                        return a.processName().compareTo(b.processName());
+                    });
+        }
+        Map<String, String> rawInputByTid = new HashMap<>();
+        for (Map.Entry<String, LinkedHashSet<String>> e : rawDatesByTid.entrySet()) {
+            rawInputByTid.put(e.getKey(), String.join("\n", e.getValue()));
+        }
+        Map<String, List<PlanEntry>> frozenPlan = new HashMap<>();
+        for (Map.Entry<String, List<PlanEntry>> e : planByTid.entrySet()) {
+            frozenPlan.put(e.getKey(), List.copyOf(e.getValue()));
+        }
+        return new PipelineScanIndex(Map.copyOf(frozenPlan), Map.copyOf(rawInputByTid));
     }
 
     /** shaped 表から依頼NO の計画エントリを収集（表示用の機械名・工程名を保持）。 */

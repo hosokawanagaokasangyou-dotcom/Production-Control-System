@@ -43,10 +43,12 @@ import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyCodeCombination;
 import javafx.scene.input.KeyCombination;
 import javafx.scene.effect.DropShadow;
-import javafx.scene.image.ImageView;
 import javafx.scene.input.KeyEvent;
+import javafx.scene.Node;
+import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.StackPane;
+import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import javafx.scene.text.Text;
@@ -55,11 +57,6 @@ import javafx.util.StringConverter;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.config.AppVersionInfo;
-import jp.co.pm.ai.desktop.config.FactoryOperatorUserStore;
-import jp.co.pm.ai.desktop.config.FactorySite;
-import jp.co.pm.ai.desktop.config.FactorySiteLogoSupport;
-import jp.co.pm.ai.desktop.config.GlobalInitSettingTarget;
-import jp.co.pm.ai.desktop.ui.FactorySiteComboPresentation;
 import jp.co.pm.ai.desktop.config.PersonBadgeStyle;
 import jp.co.pm.ai.desktop.config.Stage3UiVisibility;
 import jp.co.pm.ai.desktop.io.DesktopFileOpener;
@@ -85,6 +82,9 @@ public final class MainRunTabController {
 
     @FXML
     private ListView<String> logListView;
+
+    @FXML
+    private BorderPane runTabRoot;
 
     @FXML
     private ComboBox<LogViewFilter> logFilterCombo;
@@ -178,9 +178,6 @@ public final class MainRunTabController {
     @FXML
     private Label masterWorkbookOpenHintLabel;
 
-    @FXML
-    private StackPane factoryLogoHost;
-
     /** 段階1／段階2 の Python 実行中（メインシェルから同期）。 */
     private boolean stage1RunPipelineBusy;
 
@@ -196,26 +193,8 @@ public final class MainRunTabController {
 
     private String stage1PipelineCheckBlockBadgeText = "";
 
-    @FXML
-    private ImageView factoryLogoImageView;
-
-    @FXML
-    private Label factoryLogoCaptionLabel;
-
-    @FXML
-    private ComboBox<FactorySite> factorySiteCombo;
-
-    /** {@link ComboBox#setValue} によるリスナー発火を抑止（工場切替の双方向同期用）。 */
-    private boolean suppressFactorySiteComboEvents;
-
-    @FXML
-    private Label operatorUserLabel;
-
-    @FXML
-    private Button changeOperatorPinButton;
-
-    @FXML
-    private Button changeSessionOperatorButton;
+    /** ゲスト操作者時は実行・ログタブ本体を抑止する。 */
+    private boolean guestSessionFactorySwitchOnly;
 
     @FXML
     private Label pipelineTimingStage1Label;
@@ -880,11 +859,8 @@ public final class MainRunTabController {
             this.shell.pipelineExecutionTimingHistory().removeChangeListener(pipelineTimingHistoryListener);
         }
         this.shell = shell;
-        wireFactorySiteCombo();
         refreshAppVersionLabel();
         refreshOpenWorkbookHintLabels();
-        refreshFactorySiteLogo();
-        refreshOperatorUserLabel();
         pipelineTimingHistoryListener = () -> Platform.runLater(this::refreshPipelineExecutionTimingLabels);
         if (shell != null) {
             shell.pipelineExecutionTimingHistory().addChangeListener(pipelineTimingHistoryListener);
@@ -898,107 +874,65 @@ public final class MainRunTabController {
         Stage3UiVisibility.apply(pipelineTimingDispatchTrialRow, visible);
     }
 
-    /** {@link GlobalInitSettingTarget} の工場に合わせて実行・ログタブ上部のロゴを更新する。 */
+    /** {@link GlobalInitSettingTarget} の工場に合わせてロゴを更新する（ツールバー側）。 */
     void refreshFactorySiteLogo() {
-        if (factoryLogoHost == null || factoryLogoCaptionLabel == null) {
-            return;
+        if (shell != null) {
+            shell.refreshShellFactoryOperatorToolbar();
         }
-        FactorySite site = GlobalInitSettingTarget.load();
-        factoryLogoCaptionLabel.setText(site.displayLabelJa());
-        factoryLogoHost.getStyleClass().removeIf(c -> c.startsWith("pm-factory-logo-"));
-        factoryLogoHost.getStyleClass().add("pm-factory-logo-" + site.name().toLowerCase());
-        Map<String, String> ui = shell != null ? shell.snapshotUiEnv() : Map.of();
-        if (factoryLogoImageView != null) {
-            FactorySiteLogoSupport.applyBrandingOverrideToImageView(factoryLogoImageView, site, ui);
-        }
-        if (factoryLogoCaptionLabel != null) {
-            boolean branding = factoryLogoImageView != null && factoryLogoImageView.isVisible();
-            factoryLogoCaptionLabel.setVisible(!branding);
-            factoryLogoCaptionLabel.setManaged(!branding);
-        }
-        Tooltip.install(
-                factoryLogoHost,
-                new Tooltip(site.displayLabelJa() + "（利用工場）"));
-    }
-
-    private void wireFactorySiteCombo() {
-        if (factorySiteCombo == null) {
-            return;
-        }
-        factorySiteCombo.getItems().setAll(FactorySite.dispatchProductionSites());
-        FactorySiteComboPresentation.wire(factorySiteCombo, () -> shell != null ? shell.snapshotUiEnv() : Map.of());
-        factorySiteCombo
-                .valueProperty()
-                .addListener(
-                        (obs, oldV, newV) -> {
-                            if (suppressFactorySiteComboEvents || newV == null || shell == null) {
-                                return;
-                            }
-                            Map<String, String> ui = shell.snapshotUiEnv();
-                            if (!FactorySiteComboPresentation.isSelectable(newV, ui)) {
-                                refreshFactorySiteComboFromStore();
-                                return;
-                            }
-                            shell.switchActiveFactorySite(newV);
-                        });
-        refreshFactorySiteComboFromStore();
     }
 
     void refreshFactorySiteComboPresentation() {
-        if (factorySiteCombo != null) {
-            factorySiteCombo.requestLayout();
-            factorySiteCombo.getSelectionModel().select(factorySiteCombo.getValue());
+        if (shell != null) {
+            shell.refreshShellFactorySiteComboPresentation();
         }
     }
 
     void setFactorySiteComboDisabled(boolean disabled) {
-        if (factorySiteCombo != null) {
-            factorySiteCombo.setDisable(disabled);
+        if (shell != null) {
+            shell.setShellFactorySiteComboDisabled(disabled);
         }
     }
 
-    /** {@link GlobalInitSettingTarget} の永続値に合わせて工場コンボを更新する（リスナーは発火しない）。 */
     void refreshFactorySiteComboFromStore() {
-        if (factorySiteCombo == null) {
-            return;
-        }
-        FactorySite disk = GlobalInitSettingTarget.load();
-        if (factorySiteCombo.getValue() != disk) {
-            suppressFactorySiteComboEvents = true;
-            try {
-                factorySiteCombo.setValue(disk);
-            } finally {
-                suppressFactorySiteComboEvents = false;
-            }
+        if (shell != null) {
+            shell.refreshShellFactorySiteComboFromStore();
         }
     }
 
-    /** 起動時選択した操作者名をヘッダーに表示する。 */
     void refreshOperatorUserLabel() {
-        if (operatorUserLabel == null) {
-            return;
-        }
-        String op = FactoryOperatorUserStore.sessionOperatorName();
-        operatorUserLabel.setText(op.isBlank() ? "操作者: （未選択）" : "操作者: " + op);
-        if (changeOperatorPinButton != null) {
-            changeOperatorPinButton.setDisable(op.isBlank() || FactoryOperatorUserStore.isGuestSession());
+        if (shell != null) {
+            shell.refreshShellOperatorUserLabel();
         }
     }
 
-    @FXML
-    private void onChangeOperatorPinAction() {
-        if (shell == null) {
-            return;
+    /** ゲスト操作者時は実行・ログタブ本体のみ抑止する（工場コンボは最上部ツールバー）。 */
+    void setGuestSessionFactorySwitchOnly(boolean guestOnly) {
+        guestSessionFactorySwitchOnly = guestOnly;
+        if (shell != null) {
+            shell.setGuestSessionFactoryToolbar(guestOnly);
         }
-        shell.promptChangeSessionOperatorPin();
+        applyGuestSessionFactorySwitchOnlyState();
+        applyStage1RunButtonEnabledState();
     }
 
-    @FXML
-    private void onChangeSessionOperatorAction() {
-        if (shell == null) {
+    private void applyGuestSessionFactorySwitchOnlyState() {
+        boolean guestOnly = guestSessionFactorySwitchOnly;
+        if (runTabRoot == null) {
             return;
         }
-        shell.changeSessionOperator();
+        if (runTabRoot.getCenter() != null) {
+            runTabRoot.getCenter().setDisable(guestOnly);
+        }
+        if (runTabRoot.getBottom() != null) {
+            runTabRoot.getBottom().setDisable(guestOnly);
+        }
+        javafx.scene.Node top = runTabRoot.getTop();
+        if (!(top instanceof VBox topVBox) || topVBox.getChildren().isEmpty()) {
+            return;
+        }
+        for (javafx.scene.Node child : topVBox.getChildren()) {
+            child.setDisable(guestOnly);
+        }
     }
 
     /**
@@ -1462,7 +1396,8 @@ public final class MainRunTabController {
             return;
         }
         stage1RunButton.setDisable(
-                stage1RunPipelineBusy
+                guestSessionFactorySwitchOnly
+                        || stage1RunPipelineBusy
                         || deliveryCalendarReloadBlocking
                         || stage1BlockedByPipelineCheck
                         || stage1BlockedByCalendarNotReady);

@@ -1,6 +1,8 @@
 package jp.co.pm.ai.desktop.ui;
 
 import javafx.scene.control.Label;
+import javafx.scene.control.ProgressBar;
+import javafx.scene.control.ProgressIndicator;
 import javafx.scene.control.Tooltip;
 import javafx.stage.Stage;
 
@@ -12,6 +14,8 @@ public final class GlobalAppStatusBar {
     private static final int MESSAGE_MAX = 240;
 
     private final Label messageLabel;
+    private final ProgressIndicator progressIndicator;
+    private final ProgressBar progressBar;
     private final Label tabLabel;
     private final Label operatorLabel;
     private final Label factoryLabel;
@@ -20,12 +24,16 @@ public final class GlobalAppStatusBar {
 
     public GlobalAppStatusBar(
             Label messageLabel,
+            ProgressIndicator progressIndicator,
+            ProgressBar progressBar,
             Label tabLabel,
             Label operatorLabel,
             Label factoryLabel,
             Label attendanceLabel,
             Label memoryLabel) {
         this.messageLabel = messageLabel;
+        this.progressIndicator = progressIndicator;
+        this.progressBar = progressBar;
         this.tabLabel = tabLabel;
         this.operatorLabel = operatorLabel;
         this.factoryLabel = factoryLabel;
@@ -48,6 +56,32 @@ public final class GlobalAppStatusBar {
         } else {
             messageLabel.setTooltip(null);
         }
+    }
+
+    /**
+     * 長時間タスクの進捗表示。
+     *
+     * @param fraction 0.0–1.0。{@code null} で非表示。{@link Double#isNaN} で不定（スピナー）。
+     */
+    public void setTaskProgress(Double fraction) {
+        boolean showIndeterminate = fraction != null && fraction.isNaN();
+        boolean showBar = fraction != null && !showIndeterminate;
+        if (progressIndicator != null) {
+            progressIndicator.setVisible(showIndeterminate);
+            progressIndicator.setManaged(showIndeterminate);
+        }
+        if (progressBar != null) {
+            progressBar.setVisible(showBar);
+            progressBar.setManaged(showBar);
+            if (showBar) {
+                double clamped = Math.max(0.0, Math.min(1.0, fraction));
+                progressBar.setProgress(clamped);
+            }
+        }
+    }
+
+    public void clearTaskProgress() {
+        setTaskProgress(null);
     }
 
     public void setTabName(String tabName) {
@@ -83,18 +117,17 @@ public final class GlobalAppStatusBar {
         if (label == null) {
             return;
         }
-        String v = value != null && !value.isBlank() ? value.strip() : "—";
-        label.setText(prefix + ": " + v);
+        String text = value != null && !value.isBlank() ? value : "—";
+        label.setText(prefix + ": " + text);
     }
 
-    private static String shorten(String raw, int max) {
-        if (raw == null || raw.isBlank()) {
+    private static String shorten(String message, int max) {
+        if (message == null) {
             return "";
         }
-        String oneLine = raw.replace('\r', ' ').replace('\n', ' ').strip();
-        if (oneLine.length() <= max) {
-            return oneLine;
+        if (message.length() <= max) {
+            return message;
         }
-        return oneLine.substring(0, max - 1) + "…";
+        return message.substring(0, max - 1) + "…";
     }
 }

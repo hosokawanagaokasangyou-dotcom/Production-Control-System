@@ -35,4 +35,15 @@ public interface DesktopShellHost {
     void showWarningDialog(String title, String message);
 
     void showInformationDialog(String title, String message);
+
+    /**
+     * グローバルステータスバーに長時間タスクの進捗を表示する。
+     *
+     * @param fraction 0.0–1.0。{@link Double#isNaN()} で不定（スピナー）。
+     * @param detail 状況文言（メッセージに追記）
+     */
+    default void setGlobalLongTaskProgress(double fraction, String detail) {}
+
+    /** {@link #setGlobalLongTaskProgress} の表示を消す。 */
+    default void clearGlobalLongTaskProgress() {}
 }
