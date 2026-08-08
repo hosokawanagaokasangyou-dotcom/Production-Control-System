@@ -780,6 +780,12 @@ public final class MainShellController
     /** 起動時の環境変数確認モーダル（表示中のみ非 null）。 */
     private EnvVarsStartupCheckBusyDialog envVarsStartupCheckBusy;
 
+    /** 起動シーケンス（ワークスペース復元〜環境照合〜BG 読込）の進行中。 */
+    private volatile boolean startupSequenceActive;
+
+    /** 起動 BG 読込完了後に進捗モーダルを閉じる。 */
+    private volatile boolean startupAwaitingBackgroundLoadBeforeModalClose;
+
     /** 工場切替中の進捗モーダル（表示中のみ非 null）。 */
     private FactorySiteSwitchBusyDialog factorySiteSwitchBusy;
 
@@ -4312,64 +4318,23 @@ public final class MainShellController
     private void applyFactorySiteWorkspaceRestore(
             FactorySite site, Optional<FactorySiteWorkspaceSnapshot> workspace) {
         FactorySite effective = site != null ? site : FactorySite.KONAN;
-        // #region agent log
-        logFactorySwitchDebug(
-                "B",
-                "MainShellController.applyFactorySiteWorkspaceRestore:entry",
-                "restore entry",
-                Map.of(
-                        "targetSite",
-                        effective.name(),
-                        "workspacePresent",
-                        workspace.isPresent(),
-                        "hasUiEnvRows",
-                        workspace.map(FactorySiteWorkspaceSnapshot::hasUiEnvRows).orElse(false),
-                        "uiEnvRowCount",
-                        workspace.map(w -> w.uiEnvRows().size()).orElse(0)));
-        // #endregion
         if (workspace.isPresent() && workspace.get().hasUiEnvRows()) {
-            // #region agent log
-            logFactorySwitchDebug(
-                    "E",
-                    "MainShellController.applyFactorySiteWorkspaceRestore:branch",
-                    "branch=workspaceEnvSnapshot",
-                    Map.of());
-            // #endregion
-            applyFactoryWorkspaceEnvSnapshot(workspace.get());
-            applyFactorySitePortableAndNetworkDefaults(effective);
+            suppressEnvSessionPersistence.set(true);
+            envResetInProgress.set(true);
+            try {
+                applyFactoryWorkspaceEnvSnapshot(workspace.get());
+                applyFactorySitePortableAndNetworkDefaults(effective);
+                applyRepoFolderPathNormalization();
+            } finally {
+                envResetInProgress.set(false);
+                suppressEnvSessionPersistence.set(false);
+                uiEnvSaveDebounce.stop();
+            }
         } else {
-            // #region agent log
-            logFactorySwitchDebug(
-                    "B",
-                    "MainShellController.applyFactorySiteWorkspaceRestore:branch",
-                    "branch=fullBundledReset",
-                    Map.of());
-            // #endregion
             applyEnvRowsFullBundledResetAndPersist(false, effective);
         }
-        // #region agent log
-        logFactorySwitchDebug(
-                "D",
-                "MainShellController.applyFactorySiteWorkspaceRestore:afterEnv",
-                "after env restore/reset",
-                Map.of());
-        // #endregion
         applyGlobalInitSettingBeforeEnvReset(effective);
-        // #region agent log
-        logFactorySwitchDebug(
-                "A",
-                "MainShellController.applyFactorySiteWorkspaceRestore:afterInitSetting",
-                "after applyGlobalInitSettingBeforeEnvReset",
-                Map.of());
-        // #endregion
         workspace.ifPresent(this::applyFactoryWorkspaceSessionFragment);
-        // #region agent log
-        logFactorySwitchDebug(
-                "D",
-                "MainShellController.applyFactorySiteWorkspaceRestore:exit",
-                "restore complete",
-                Map.of());
-        // #endregion
     }
 
     /** 工場ワークスペースの環境変数行のみ復元（session は別途）。 */
@@ -4382,7 +4347,6 @@ public final class MainShellController
         stripRemovedEnvVarRows(envRows);
         ensureBootstrapDefaultValuesVisible(collectUiEnv());
         ensureUiRefOptionalDisplayDefaultsVisible(collectUiEnv());
-        applyRepoFolderPathNormalization();
     }
 
     /**
@@ -4524,10 +4488,13 @@ public final class MainShellController
         }
     }
 
-    private void finalizeOperatorLocalWorkspaceAfterSessionEstablished() {
+    /**
+     * @return 起動時の工場切替を開始したとき {@code true}（呼び出し元は後続の環境照合を工場切替完了後に続行する）
+     */
+    private boolean finalizeOperatorLocalWorkspaceAfterSessionEstablished() {
         String operator = FactoryOperatorUserStore.sessionOperatorName();
         if (operator.isBlank() || FactoryOperatorUserStore.isGuestOperator(operator)) {
-            return;
+            return false;
         }
         FactorySite current = GlobalInitSettingTarget.load();
         FactorySiteWorkspaceMigrator.migrateIfNeeded(
@@ -4550,7 +4517,7 @@ public final class MainShellController
                 FactoryOperatorUserStore.configureForCurrentApp(ui, current);
             } else {
                 switchActiveFactorySite(target, true);
-                return;
+                return true;
             }
         }
         Optional<FactorySiteWorkspaceSnapshot> ws =
@@ -4558,6 +4525,7 @@ public final class MainShellController
         if (ws.isPresent()) {
             applyFactorySiteWorkspaceRestore(current, ws);
         }
+        return false;
     }
 
     private void applyPortableUpgradeShellUiSnapshotIfPresent() {
@@ -4914,15 +4882,19 @@ public final class MainShellController
      * <p>進捗モーダル表示中は状況文言だけ更新する。未表示なら短いモーダルを出して閉じる。
      */
     private void completeEnvVarsStartupCheck() {
+        completeEnvVarsStartupCheck(true);
+    }
+
+    private void completeEnvVarsStartupCheck(boolean schedulePostStartupWork) {
         if (envVarsStartupCheckCompleted.get()) {
             return;
         }
         boolean ownBusy = !isEnvVarsStartupCheckBusyShowing() && !isFactorySiteSwitchBusyShowing();
-        if (ownBusy) {
+        if (ownBusy && !startupSequenceActive) {
             beginEnvVarsStartupCheckBusy(EnvVarsStartupCheckBusyDialog.STATUS_STABILIZE);
         } else if (isFactorySiteSwitchBusyShowing()) {
             updateFactorySiteSwitchBusy(EnvVarsStartupCheckBusyDialog.STATUS_STABILIZE);
-        } else {
+        } else if (isEnvVarsStartupCheckBusyShowing()) {
             updateEnvVarsStartupCheckBusy(EnvVarsStartupCheckBusyDialog.STATUS_STABILIZE);
         }
         try {
@@ -4934,17 +4906,19 @@ public final class MainShellController
             }
             evaluateEnvVarsDifferFromInitialAtStartup();
             applyRunTabGating();
-            if (!isEnvVarsInitializationPending()) {
-                ensureMainShellRunTabSelected();
+            if (schedulePostStartupWork && !startupSequenceActive) {
+                if (!isEnvVarsInitializationPending()) {
+                    ensureMainShellRunTabSelected();
+                }
+                maybeReloadAttendanceTabsAfterEnvReady();
             }
-            maybeReloadAttendanceTabsAfterEnvReady();
-            if (ownBusy) {
+            if (ownBusy && !startupSequenceActive) {
                 updateEnvVarsStartupCheckBusy(EnvVarsStartupCheckBusyDialog.STATUS_DONE);
             } else if (isFactorySiteSwitchBusyShowing()) {
                 updateFactorySiteSwitchBusy(FactorySiteSwitchBusyDialog.STATUS_DONE);
             }
         } finally {
-            if (ownBusy) {
+            if (ownBusy && !startupSequenceActive) {
                 endEnvVarsStartupCheckBusy();
             }
         }
@@ -4966,9 +4940,30 @@ public final class MainShellController
     }
 
     private void updateEnvVarsStartupCheckBusy(String status) {
-        if (envVarsStartupCheckBusy != null) {
-            envVarsStartupCheckBusy.setStatus(status);
+        if (envVarsStartupCheckBusy == null) {
+            return;
         }
+        Runnable update =
+                () -> {
+                    envVarsStartupCheckBusy.setHeader(resolveStartupCheckDialogHeader(status));
+                    envVarsStartupCheckBusy.setStatus(status);
+                };
+        if (Platform.isFxApplicationThread()) {
+            update.run();
+        } else {
+            Platform.runLater(update);
+        }
+    }
+
+    private static String resolveStartupCheckDialogHeader(String status) {
+        if (status == null || status.isBlank()) {
+            return EnvVarsStartupCheckBusyDialog.HEADER;
+        }
+        if (EnvVarsStartupCheckBusyDialog.STATUS_BACKGROUND_LOAD.equals(status)
+                || status.startsWith("起動後読込")) {
+            return EnvVarsStartupCheckBusyDialog.HEADER_BACKGROUND_LOAD;
+        }
+        return EnvVarsStartupCheckBusyDialog.HEADER;
     }
 
     private void endEnvVarsStartupCheckBusy() {
@@ -4983,6 +4978,10 @@ public final class MainShellController
     }
 
     private void beginFactorySiteSwitchBusy(FactorySite from, FactorySite to) {
+        if (startupSequenceActive && isEnvVarsStartupCheckBusyShowing()) {
+            updateEnvVarsStartupCheckBusy(EnvVarsStartupCheckBusyDialog.STATUS_FACTORY_SWITCH);
+            return;
+        }
         if (isFactorySiteSwitchBusyShowing()) {
             updateFactorySiteSwitchBusy(FactorySiteSwitchBusyDialog.STATUS_SAVING);
             return;
@@ -5000,12 +4999,19 @@ public final class MainShellController
     }
 
     private void updateFactorySiteSwitchBusy(String status) {
+        if (startupSequenceActive && isEnvVarsStartupCheckBusyShowing()) {
+            updateEnvVarsStartupCheckBusy(status);
+            return;
+        }
         if (factorySiteSwitchBusy != null) {
             factorySiteSwitchBusy.setStatus(status);
         }
     }
 
     private void endFactorySiteSwitchBusy() {
+        if (startupSequenceActive) {
+            return;
+        }
         if (factorySiteSwitchBusy != null) {
             factorySiteSwitchBusy.close();
             factorySiteSwitchBusy = null;
@@ -5085,58 +5091,71 @@ public final class MainShellController
     }
 
     /**
-     * 工場ワークスペース復元 → 環境変数起動照合を進捗モーダル付きで実行し、完了後に依頼書原本案内を出す。
+     * 工場ワークスペース復元 → 環境変数起動照合 → 起動後 BG 読込まで進捗モーダル付きで実行し、完了後に依頼書原本案内を出す。
      */
     private void runOperatorStartupWorkspaceAndEnvCheckWithProgress() {
+        startupSequenceActive = true;
         beginEnvVarsStartupCheckBusy(EnvVarsStartupCheckBusyDialog.STATUS_RESTORE_WORKSPACE);
         runAfterUiPulse(
                 () -> {
                     try {
-                        finalizeOperatorLocalWorkspaceAfterSessionEstablished();
-                        if (envVarsStartupCheckCompleted.get()) {
-                            finishEnvVarsStartupCheckBusyThenMaybePromptRequestFormDir();
+                        if (finalizeOperatorLocalWorkspaceAfterSessionEstablished()) {
                             return;
                         }
-                        updateEnvVarsStartupCheckBusy(EnvVarsStartupCheckBusyDialog.STATUS_STABILIZE);
-                        runAfterUiPulse(
-                                () -> {
-                                    try {
-                                        stabilizeEnvRowsForInitializationBaseline();
-                                        updateEnvVarsStartupCheckBusy(
-                                                EnvVarsStartupCheckBusyDialog.STATUS_MATCH);
-                                        runAfterUiPulse(
-                                                () -> {
-                                                    try {
-                                                        evaluateEnvVarsDifferFromInitialAtStartup();
-                                                        applyRunTabGating();
-                                                        if (!isEnvVarsInitializationPending()) {
-                                                            ensureMainShellRunTabSelected();
-                                                        }
-                                                        maybeReloadAttendanceTabsAfterEnvReady();
-                                                        updateEnvVarsStartupCheckBusy(
-                                                                EnvVarsStartupCheckBusyDialog
-                                                                        .STATUS_DONE);
-                                                        runAfterUiPulse(
-                                                                this
-                                                                        ::finishEnvVarsStartupCheckBusyThenMaybePromptRequestFormDir);
-                                                    } catch (RuntimeException ex) {
-                                                        endEnvVarsStartupCheckBusy();
-                                                        throw ex;
-                                                    }
-                                                });
-                                    } catch (RuntimeException ex) {
-                                        endEnvVarsStartupCheckBusy();
-                                        throw ex;
-                                    }
-                                });
+                        continueStartupEnvCheckAfterWorkspaceReady();
                     } catch (RuntimeException ex) {
-                        endEnvVarsStartupCheckBusy();
+                        finishStartupSequenceProgressAndPrompt();
                         throw ex;
                     }
                 });
     }
 
-    private void finishEnvVarsStartupCheckBusyThenMaybePromptRequestFormDir() {
+    private void continueStartupEnvCheckAfterWorkspaceReady() {
+        if (envVarsStartupCheckCompleted.get()) {
+            finishStartupSequenceAfterEnvCheck();
+            return;
+        }
+        updateEnvVarsStartupCheckBusy(EnvVarsStartupCheckBusyDialog.STATUS_STABILIZE);
+        runAfterUiPulse(
+                () -> {
+                    try {
+                        completeEnvVarsStartupCheck(false);
+                        finishStartupSequenceAfterEnvCheck();
+                    } catch (RuntimeException ex) {
+                        finishStartupSequenceProgressAndPrompt();
+                        throw ex;
+                    }
+                });
+    }
+
+    private void finishStartupSequenceAfterEnvCheck() {
+        if (!isEnvVarsInitializationPending()) {
+            ensureMainShellRunTabSelected();
+        }
+        if (!isStartupBackgroundLoadAllowed()) {
+            runAfterUiPulse(this::finishStartupSequenceProgressAndPrompt);
+            return;
+        }
+        updateEnvVarsStartupCheckBusy(EnvVarsStartupCheckBusyDialog.STATUS_BACKGROUND_LOAD);
+        startupAwaitingBackgroundLoadBeforeModalClose = true;
+        reloadAttendanceTabsFromJson(true);
+        runAfterUiPulse(
+                () -> {
+                    if (startupTabBackgroundLoad != null) {
+                        startupTabBackgroundLoad.resetAndSchedule();
+                    } else {
+                        finishStartupSequenceProgressAndPrompt();
+                    }
+                });
+    }
+
+    private void finishStartupSequenceProgressAndPrompt() {
+        startupSequenceActive = false;
+        startupAwaitingBackgroundLoadBeforeModalClose = false;
+        if (factorySiteSwitchBusy != null) {
+            factorySiteSwitchBusy.close();
+            factorySiteSwitchBusy = null;
+        }
         endEnvVarsStartupCheckBusy();
         if (!isEnvVarsInitializationPending()
                 && !shouldSuppressStartupRequestFormOriginalDirPrompt()) {
@@ -5202,6 +5221,8 @@ public final class MainShellController
     }
 
     private Map<String, String> buildExpectedEnvMapAfterFullInit(FactorySite site) {
+        Map<String, String> ui = collectUiEnv();
+        AppPaths.ensureAllDispatchLookupTablesFromRepoIfMissing(ui);
         return EnvVarsInitialTemplate.buildExpectedMap(
                 BOOTSTRAP_ORDER,
                 site,
@@ -6420,13 +6441,45 @@ public final class MainShellController
         refreshGlobalStatusBar();
     }
 
+    private static final int STARTUP_BACKGROUND_LOAD_STEP_COUNT = 6;
+    private static final int STARTUP_BACKGROUND_LOAD_STEP_REQUEST_FORM = 5;
+
     @Override
     public void setStartupBackgroundLoadStatus(String message) {
         startupBackgroundLoadMessage = message != null ? message : "";
         if (startupBackgroundLoadMessage.isBlank()) {
             clearGlobalLongTaskProgress();
+        } else if (isEnvVarsStartupCheckBusyShowing()
+                && startupAwaitingBackgroundLoadBeforeModalClose) {
+            updateEnvVarsStartupCheckBusy(startupBackgroundLoadMessage);
         }
         refreshGlobalStatusBar();
+    }
+
+    /** 起動後読込の「原本転記」段階で、依頼書照合の詳細進捗をダイアログへ反映する。 */
+    void reportStartupRequestFormReloadProgress(String detail) {
+        if (!startupTabBackgroundLoadActive) {
+            return;
+        }
+        String body = detail != null ? detail.strip() : "";
+        String message;
+        if (body.isBlank()) {
+            message =
+                    "起動後読込 ("
+                            + STARTUP_BACKGROUND_LOAD_STEP_REQUEST_FORM
+                            + "/"
+                            + STARTUP_BACKGROUND_LOAD_STEP_COUNT
+                            + "): 原本転記…";
+        } else {
+            message =
+                    "起動後読込 ("
+                            + STARTUP_BACKGROUND_LOAD_STEP_REQUEST_FORM
+                            + "/"
+                            + STARTUP_BACKGROUND_LOAD_STEP_COUNT
+                            + "): 原本転記\n"
+                            + body;
+        }
+        setStartupBackgroundLoadStatus(message);
     }
 
     @Override
@@ -6466,6 +6519,9 @@ public final class MainShellController
 
     @Override
     public void onStartupBackgroundLoadFinished() {
+        if (startupAwaitingBackgroundLoadBeforeModalClose) {
+            finishStartupSequenceProgressAndPrompt();
+        }
         clearGlobalLongTaskProgress();
         refreshAttendanceReadiness();
         refreshStage1PipelineCheckGate();
@@ -8423,37 +8479,6 @@ public final class MainShellController
         switchActiveFactorySite(newSite, false);
     }
 
-    // #region agent log
-    private static final String FACTORY_SWITCH_DEBUG_SESSION = "8f611f";
-
-    private void logFactorySwitchDebug(
-            String hypothesisId, String location, String message, Map<String, Object> extra) {
-        Map<String, Object> data = new LinkedHashMap<>();
-        Map<String, String> ui = collectUiEnv();
-        data.put("storedFactory", GlobalInitSettingTarget.load().name());
-        data.put(
-                "inferredFactory",
-                FactorySite.inferFromUiEnv(ui).map(FactorySite::name).orElse("NONE"));
-        data.put(
-                "taskInputDir",
-                ui.getOrDefault(AppPaths.KEY_PM_AI_TASK_INPUT_SOURCE_DIR, ""));
-        data.put(
-                "summaryShared",
-                ui.getOrDefault(AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK, ""));
-        data.put("masterWorkbook", ui.getOrDefault(AppPaths.KEY_PM_AI_MASTER_WORKBOOK, ""));
-        if (extra != null) {
-            data.putAll(extra);
-        }
-        AgentDebugLog.appendStructured(
-                collectUiEnv(),
-                FACTORY_SWITCH_DEBUG_SESSION,
-                hypothesisId,
-                location,
-                message,
-                data);
-    }
-    // #endregion
-
     private void switchActiveFactorySite(FactorySite newSite, boolean startup) {
         if (newSite == null || newSite == FactorySite.RDP_LAUNCHER) {
             return;
@@ -8465,21 +8490,6 @@ public final class MainShellController
         if (factorySiteSwitchInProgress) {
             return;
         }
-        // #region agent log
-        logFactorySwitchDebug(
-                "D",
-                "MainShellController.switchActiveFactorySite:entry",
-                "switch requested",
-                Map.of(
-                        "oldSite",
-                        oldSite.name(),
-                        "newSite",
-                        newSite.name(),
-                        "startup",
-                        startup,
-                        "operator",
-                        FactoryOperatorUserStore.sessionOperatorName()));
-        // #endregion
         Map<String, String> ui = collectUiEnv();
         FactoryOperatorUserStore.configureForCurrentApp(ui, newSite);
         if (!FactorySiteOperatorAccess.isSessionOperatorAllowedForFactory(ui, newSite)) {
@@ -8572,18 +8582,6 @@ public final class MainShellController
                             operator.isBlank()
                                     ? Optional.empty()
                                     : FactorySiteWorkspaceStore.load(operator, ctx.newSite());
-                    // #region agent log
-                    logFactorySwitchDebug(
-                            "E",
-                            "MainShellController.switchActiveFactorySite:loaded",
-                            "workspace loaded for new site",
-                            Map.of(
-                                    "hasUiEnvRows",
-                                    loaded.map(FactorySiteWorkspaceSnapshot::hasUiEnvRows)
-                                            .orElse(false),
-                                    "uiEnvRowCount",
-                                    loaded.map(w -> w.uiEnvRows().size()).orElse(0)));
-                    // #endregion
                     ctx.setLoaded(loaded);
                     runAfterUiPulse(() -> runFactorySiteSwitchStep(ctx, 2));
                 }
@@ -8603,7 +8601,7 @@ public final class MainShellController
                     runAfterUiPulse(() -> runFactorySiteSwitchStep(ctx, 5));
                 }
                 case 5 -> {
-                    completeEnvVarsStartupCheck();
+                    completeEnvVarsStartupCheck(!(ctx.startup() && startupSequenceActive));
                     long ms = (System.nanoTime() - ctx.t0Nanos()) / 1_000_000L;
                     appendLog(
                             "[factory] 切替完了 "
@@ -8612,19 +8610,16 @@ public final class MainShellController
                                     + ctx.newSite().displayLabelJa()
                                     + " ms="
                                     + ms);
-                    // #region agent log
-                    logFactorySwitchDebug(
-                            "C",
-                            "MainShellController.switchActiveFactorySite:done",
-                            "switch complete",
-                            Map.of("elapsedMs", ms));
-                    // #endregion
                     runAfterUiPulse(() -> finishFactorySiteSwitch(ctx.newSite(), ctx.startup()));
                 }
                 default -> finishFactorySiteSwitch(null, false);
             }
         } catch (RuntimeException ex) {
-            finishFactorySiteSwitch(null, false);
+            if (startupSequenceActive) {
+                finishStartupSequenceProgressAndPrompt();
+            } else {
+                finishFactorySiteSwitch(null, false);
+            }
             throw ex;
         }
     }
@@ -8646,14 +8641,19 @@ public final class MainShellController
         factorySiteSwitchInProgress = false;
         setFactorySiteCombosDisabled(false);
         FactorySite site = newSite != null ? newSite : GlobalInitSettingTarget.load();
-        if (!FactoryOperatorUserStore.isGuestSession()) {
+        if (!FactoryOperatorUserStore.isGuestSession() && !(startup && startupSequenceActive)) {
             requireOperatorSelectionForFactory(site, startup);
         }
-        reloadAttendanceTabsFromJson(true);
+        if (!startupSequenceActive) {
+            reloadAttendanceTabsFromJson(true);
+        }
         runAfterUiPulse(
                 () -> {
                     notifyActiveMainShellTabAfterWorkspaceChange();
-                    if (startupTabBackgroundLoad != null && isStartupBackgroundLoadAllowed()) {
+                    if (startupSequenceActive) {
+                        finishStartupSequenceAfterEnvCheck();
+                    } else if (startupTabBackgroundLoad != null
+                            && isStartupBackgroundLoadAllowed()) {
                         startupTabBackgroundLoad.resetAndSchedule();
                     }
                 });
@@ -8973,13 +8973,16 @@ public final class MainShellController
 
     private void maybePromptOperatorUserAtStartup() {
         if (skipOperatorPromptAfterPortableUpgrade.compareAndSet(true, false)) {
+            startupSequenceActive = true;
             beginEnvVarsStartupCheckBusy(EnvVarsStartupCheckBusyDialog.STATUS_STABILIZE);
             runAfterUiPulse(
                     () -> {
                         try {
-                            completeEnvVarsStartupCheck();
-                        } finally {
-                            endEnvVarsStartupCheckBusy();
+                            completeEnvVarsStartupCheck(false);
+                            finishStartupSequenceAfterEnvCheck();
+                        } catch (RuntimeException ex) {
+                            finishStartupSequenceProgressAndPrompt();
+                            throw ex;
                         }
                     });
             return;
@@ -10558,6 +10561,11 @@ public PlanInputTabController planInputTabControllerForDispatchRollUnit() {
     @Override
     public void updateEnvTabValue(String envKey, String value) {
         syncEnvTabValue(envKey, value);
+        if (AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR.equals(envKey)
+                && AppPaths.isRequestFormOriginalDirEnvConfigured(collectUiEnv())
+                && requestFormPipelineCheckTabController != null) {
+            requestFormPipelineCheckTabController.onRequestFormOriginalDirEnvConfigured();
+        }
     }
 
     /**
@@ -11915,6 +11923,7 @@ public PlanInputTabController planInputTabControllerForDispatchRollUnit() {
             return;
         }
         Map<String, String> ctx = ui != null ? ui : Map.of();
+        AppPaths.ensureAllDispatchLookupTablesFromRepoIfMissing(ctx);
         for (EnvVarRow row : envRows) {
             String k = row.getName() != null ? row.getName().trim() : "";
             if (k.isEmpty()) {
@@ -11939,7 +11948,6 @@ public PlanInputTabController planInputTabControllerForDispatchRollUnit() {
         if (k == null || k.isBlank()) {
             return "";
         }
-        AppPaths.ensureAllDispatchLookupTablesFromRepoIfMissing(u);
         return switch (k) {
             case PlanInputTabController.ENV_TASK_PLAN_SHEET ->
                     PlanInputTabController.DEFAULT_PLAN_INPUT_SHEET_NAME;

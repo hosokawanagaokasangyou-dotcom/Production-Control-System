@@ -80,9 +80,19 @@ public final class RequestFormPipelineCheckTabController {
     private static final String DAILY_REPORT_ORDER_STATUS_COMPLETE = "完了";
 
     private static final Duration ALADDIN_PLAN_WATCH_INTERVAL = Duration.minutes(1);
+    private static final int APPLY_SCAN_RESULT_BATCH_SIZE = 50;
+    private static final long PIPELINE_PROGRESS_UI_INTERVAL_MS = 300L;
+
+    private static final String ORIGINAL_DIR_UNCONFIGURED_STATUS =
+            "依頼書原本フォルダ未設定: 環境変数タブで "
+                    + AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR
+                    + " を設定してください（走査は実行しません）";
 
     private static final String HINT_TEXT =
             "「更新」…加工計画の再読込・原本走査・転記率と shaped_aladdin_plan.json を照合。\n"
+                    + "・依頼書原本フォルダ（環境変数 "
+                    + AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR
+                    + "）を設定するまで走査しません\n"
                     + "・①〜⑦ … 依頼ごとの計画日（昇順・最大7日。例: 7/3 100m）\n"
                     + "・投入日一致 … 原反投入日を4ソース照合（全一致のみ「一致」）\n"
                     + "・確認 … 要チェック行はフィルタ無視で表示（日報「完了」は不要）。一括チェック可\n"
@@ -669,6 +679,9 @@ public final class RequestFormPipelineCheckTabController {
     private boolean scanApplied;
     private boolean refreshInProgress;
     private volatile Consumer<Boolean> refreshCompleteCallback;
+    private volatile long lastPipelineProgressUiAt;
+    private volatile String latestPipelineProgressDetail = "";
+    private volatile double latestPipelineProgressFraction = Double.NaN;
 
     private final List<MainColDef> mainColumnDefs = new ArrayList<>(defaultMainColumnDefs());
 
@@ -826,8 +839,46 @@ public final class RequestFormPipelineCheckTabController {
         scheduleRefreshIfNeededOnTabSelected();
     }
 
+    /** 依頼書原本フォルダが環境変数タブで設定されたあと、必要なら走査を予約する。 */
+    void onRequestFormOriginalDirEnvConfigured() {
+        scanApplied = false;
+        scheduleRefreshIfNeededOnTabSelected();
+    }
+
+    private boolean isRequestFormOriginalDirEnvConfigured() {
+        return shell != null
+                && AppPaths.isRequestFormOriginalDirEnvConfigured(shell.snapshotUiEnv());
+    }
+
+    private void applyPendingOriginalDirSetupState() {
+        scanApplied = false;
+        allRows.clear();
+        mismatchRows.clear();
+        crossSourceRows.clear();
+        planRows.clear();
+        planContextRow = null;
+        lastScanWarnings = "";
+        if (statusLabel != null) {
+            statusLabel.setText(ORIGINAL_DIR_UNCONFIGURED_STATUS);
+        }
+        updateStage1GateLabel();
+        notifyStage1GateChanged();
+    }
+
+    private boolean ensureRequestFormOriginalDirConfiguredForScan() {
+        if (isRequestFormOriginalDirEnvConfigured()) {
+            return true;
+        }
+        applyPendingOriginalDirSetupState();
+        return false;
+    }
+
     private void scheduleRefreshIfNeededOnTabSelected() {
         if (refreshInProgress || shell == null || shell.isFactorySiteSwitchInProgress()) {
+            return;
+        }
+        if (!isRequestFormOriginalDirEnvConfigured()) {
+            Platform.runLater(this::applyPendingOriginalDirSetupState);
             return;
         }
         if (!scanApplied) {
@@ -848,6 +899,11 @@ public final class RequestFormPipelineCheckTabController {
             return;
         }
         if (shell.isFactorySiteSwitchInProgress()) {
+            completeRefreshPreload(false, onComplete);
+            return;
+        }
+        if (!isRequestFormOriginalDirEnvConfigured()) {
+            Platform.runLater(this::applyPendingOriginalDirSetupState);
             completeRefreshPreload(false, onComplete);
             return;
         }
@@ -896,6 +952,10 @@ public final class RequestFormPipelineCheckTabController {
             return;
         }
         if (refreshInProgress) {
+            return;
+        }
+        if (!ensureRequestFormOriginalDirConfiguredForScan()) {
+            completeRefreshPreload(false, null);
             return;
         }
         refreshInProgress = true;
@@ -979,6 +1039,7 @@ public final class RequestFormPipelineCheckTabController {
                         },
                         "request-form-pipeline-check");
         worker.setDaemon(true);
+        worker.setPriority(Thread.MIN_PRIORITY);
         worker.start();
     }
 
@@ -1039,7 +1100,30 @@ public final class RequestFormPipelineCheckTabController {
         if (shell == null) {
             return;
         }
-        Platform.runLater(() -> shell.setGlobalLongTaskProgress(fraction, detail));
+        latestPipelineProgressFraction = fraction;
+        latestPipelineProgressDetail = detail != null ? detail : "";
+        long now = System.currentTimeMillis();
+        boolean force = !Double.isNaN(fraction) && (fraction <= 0.02 || fraction >= 0.99);
+        if (!force && now - lastPipelineProgressUiAt < PIPELINE_PROGRESS_UI_INTERVAL_MS) {
+            return;
+        }
+        lastPipelineProgressUiAt = now;
+        final double fractionToShow = latestPipelineProgressFraction;
+        final String detailToShow = latestPipelineProgressDetail;
+        Platform.runLater(() -> shell.setGlobalLongTaskProgress(fractionToShow, detailToShow));
+    }
+
+    private void flushPipelineCheckProgressUi() {
+        if (shell == null) {
+            return;
+        }
+        final double fractionToShow = latestPipelineProgressFraction;
+        final String detailToShow = latestPipelineProgressDetail;
+        if (Platform.isFxApplicationThread()) {
+            shell.setGlobalLongTaskProgress(fractionToShow, detailToShow);
+        } else {
+            Platform.runLater(() -> shell.setGlobalLongTaskProgress(fractionToShow, detailToShow));
+        }
     }
 
     private void clearPipelineCheckProgress() {
@@ -1069,8 +1153,22 @@ public final class RequestFormPipelineCheckTabController {
                 result.dailyReportLookup() != null
                         ? result.dailyReportLookup()
                         : KonanDailyReportLookup.empty();
+        if (statusLabel != null) {
+            statusLabel.setText("一覧を反映中…");
+        }
+        applyScanResultBatch(result, resetIssueConfirmations, previousConfirmations, 0);
+    }
 
-        for (PipelineStatusRow row : result.rows()) {
+    private void applyScanResultBatch(
+            ScanResult result,
+            boolean resetIssueConfirmations,
+            Map<String, Boolean> previousConfirmations,
+            int startIndex) {
+        List<PipelineStatusRow> sourceRows = result.rows();
+        int endIndex =
+                Math.min(startIndex + APPLY_SCAN_RESULT_BATCH_SIZE, sourceRows.size());
+        for (int i = startIndex; i < endIndex; i++) {
+            PipelineStatusRow row = sourceRows.get(i);
             MainRow ui = new MainRow();
             ui.setIraiNo(row.iraiNo());
             ui.setOriginalFile(
@@ -1114,6 +1212,20 @@ public final class RequestFormPipelineCheckTabController {
             applyIssueState(ui, row, previousConfirmations);
             allRows.add(ui);
         }
+        if (endIndex < sourceRows.size()) {
+            Platform.runLater(
+                    () ->
+                            applyScanResultBatch(
+                                    result,
+                                    resetIssueConfirmations,
+                                    previousConfirmations,
+                                    endIndex));
+            return;
+        }
+        finishApplyScanResult(result, resetIssueConfirmations);
+    }
+
+    private void finishApplyScanResult(ScanResult result, boolean resetIssueConfirmations) {
         lastScanWarnings =
                 result.warnings().isEmpty() ? "" : String.join(" | ", result.warnings());
         applyFilter();
@@ -1142,6 +1254,8 @@ public final class RequestFormPipelineCheckTabController {
         }
         captureLastScannedAladdinPlanRevision();
         refreshAladdinPlanWatchState();
+        flushPipelineCheckProgressUi();
+        clearPipelineCheckProgress();
         completeRefreshPreload(true, null);
     }
 
@@ -1320,6 +1434,14 @@ public final class RequestFormPipelineCheckTabController {
 
     /** 段階1実行可否（未走査・未確認の問題があれば不可）。 */
     public Stage1GateStatus evaluateStage1Gate() {
+        if (shell != null
+                && !AppPaths.isRequestFormOriginalDirEnvConfigured(shell.snapshotUiEnv())) {
+            return Stage1GateStatus.blocked(
+                    "依頼書原本フォルダ（環境変数 "
+                            + AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR
+                            + "）を設定してから、原本転記・計画確認で「更新」を実行してください。",
+                    "原本転記: 原本フォルダ未設定");
+        }
         if (!scanApplied) {
             return Stage1GateStatus.blocked(
                     "原本転記・計画確認で「更新」を実行し、問題の有無を確認してください。",
@@ -1532,7 +1654,11 @@ public final class RequestFormPipelineCheckTabController {
 
     private void updateStage1GateLabel() {
         if (stage1GateLabel != null) {
-            if (!scanApplied) {
+            if (!isRequestFormOriginalDirEnvConfigured()) {
+                stage1GateLabel.setText(
+                        "段階1: 依頼書原本フォルダ未設定 — 環境変数タブで設定してください。");
+                stage1GateLabel.getStyleClass().setAll("pipeline-check-stage1-gate-label", "warn");
+            } else if (!scanApplied) {
                 stage1GateLabel.setText("段階1: 未走査 — 「更新」で照合してから実行してください。");
                 stage1GateLabel.getStyleClass().setAll("pipeline-check-stage1-gate-label", "warn");
             } else {

@@ -164,6 +164,28 @@ public class ReconciliationApp {
     private StackPane mainStackPane;
     private VBox loadingOverlay;
     private Label loadingOverlayLabel;
+    /** プレビュー領域のみの読込表示（左ペイン操作はブロックしない）。 */
+    private VBox previewReloadOverlay;
+    private Label previewReloadOverlayLabel;
+    private volatile boolean dataReloadInProgress;
+    private final AtomicLong dataReloadGeneration = new AtomicLong(0);
+    private Consumer<Boolean> initialDataReloadCompleteListener;
+    private Consumer<String> reloadProgressReporter;
+    private static final long RELOAD_PROGRESS_UI_INTERVAL_MS = 300L;
+    private volatile long lastReloadProgressUiAt;
+    private volatile String latestReloadProgressText = "";
+    /** TPI PDF 本文の依頼Ｎｏ → 束ね原本 PDF（照合マージ時の全文走査を避ける）。 */
+    private Map<String, File> tpiIraiNoToSourcePdf = Map.of();
+    /** TPI PDF ファイル名由来の依頼Ｎｏ → PDF。 */
+    private Map<String, File> tpiFilenameIraiToSourcePdf = Map.of();
+    private File[] tpiPdfFilesSnapshot = new File[0];
+    private final java.util.concurrent.atomic.AtomicBoolean reloadProgressHeartbeatActive =
+            new java.util.concurrent.atomic.AtomicBoolean(false);
+    private volatile Thread reloadProgressHeartbeatThread;
+    private static final int ORDER_RECORDS_UI_CHUNK_SIZE = 20;
+    private volatile String reloadUiProgressPhase = "";
+    private volatile int reloadUiProgressCurrent;
+    private volatile int reloadUiProgressTotal;
     
     // Bottom Form inputs (Reconciliation View)
     private TextField txtReqNo;
@@ -304,6 +326,18 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
     /** 段階1～段階3.5 実行中は PDF プレビュー生成を抑制するための判定（メインシェルから注入）。 */
     public void setPlanningPipelineStageBusyChecker(Supplier<Boolean> checker) {
         this.planningPipelineStageBusyChecker = checker != null ? checker : () -> false;
+    }
+
+    /**
+     * 埋め込み UI 構築後の初回 {@link #reloadData()} 完了時に一度だけ呼ぶ（起動後バックグラウンド読込の直列化用）。
+     */
+    public void setOnInitialDataReloadComplete(Consumer<Boolean> listener) {
+        this.initialDataReloadCompleteListener = listener;
+    }
+
+    /** 起動後バックグラウンド読込など、外部へ照合進捗を通知する（任意）。 */
+    public void setReloadProgressReporter(Consumer<String> reporter) {
+        this.reloadProgressReporter = reporter;
     }
 
     private boolean isPlanningPipelineStageBusy() {
@@ -851,13 +885,31 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         sheetGrid.setHgap(1);
         sheetGrid.setVgap(1);
         sheetScrollPane.setContent(sheetGrid);
+
+        previewReloadOverlay = new VBox(12);
+        previewReloadOverlay.setAlignment(Pos.CENTER);
+        previewReloadOverlay.getStyleClass().add("request-form-loading-overlay");
+        ProgressIndicator previewReloadIndicator = new ProgressIndicator();
+        previewReloadIndicator.setStyle("-fx-progress-color: -fx-accent;");
+        previewReloadIndicator.setPrefSize(48, 48);
+        previewReloadOverlayLabel = new Label("プレビューを準備しています…");
+        previewReloadOverlayLabel.getStyleClass().add("request-form-loading-label");
+        previewReloadOverlayLabel.setWrapText(true);
+        previewReloadOverlayLabel.setMaxWidth(420);
+        previewReloadOverlay.getChildren().addAll(previewReloadIndicator, previewReloadOverlayLabel);
+        previewReloadOverlay.setVisible(false);
+        previewReloadOverlay.setManaged(false);
+
+        StackPane previewContentHost = new StackPane();
+        previewContentHost.getChildren().addAll(sheetScrollPane, previewReloadOverlay);
+        VBox.setVgrow(previewContentHost, Priority.ALWAYS);
         
         discrepancyLabel = new Label("原本と受注ファイルのデータは一致しています。");
         discrepancyLabel.setWrapText(true);
         discrepancyLabel.getStyleClass().add("discrepancy-label-info");
         discrepancyLabel.setMaxWidth(Double.MAX_VALUE);
         
-        rightPane.getChildren().addAll(viewerHeaderBox, indexSheetConflictBanner, sheetScrollPane, discrepancyLabel);
+        rightPane.getChildren().addAll(viewerHeaderBox, indexSheetConflictBanner, previewContentHost, discrepancyLabel);
 
         splitPane.getItems().addAll(leftScrollPane, rightPane);
         splitPane.setDividerPositions(SPLIT_LEFT_RATIO);
@@ -921,7 +973,8 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
 
         applyGuestSessionRestrictions();
         loadMasterProductListAsync(null);
-        reloadData();
+        beginDataReloadUiBlock();
+        Platform.runLater(this::reloadData);
         return mainStackPane;
     }
 
@@ -2444,7 +2497,30 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         if (juchuTransferInProgress) {
             return "受注ファイルへの転記処理を実行中です。完了までお待ちください。";
         }
+        if (dataReloadInProgress) {
+            return "依頼書データの照合中です。照合が完了するまで受注ファイルへの書き込みはできません。";
+        }
         return describeJuchuWriteBlockExcludingTransfer();
+    }
+
+    /**
+     * 受注ファイルへの書き込み（転記・一括転記・取り消し等）がブロックされているとき {@code true}。
+     * ボタン無効化とハンドラ先頭の二重防御用。
+     */
+    private boolean rejectJuchuFileWriteIfBlocked(String featureLabel) {
+        String reason = resolveTransferBlockedReason();
+        if (reason == null) {
+            return false;
+        }
+        showAlert("エラー", featureLabel + "は現在できません。\n" + reason);
+        updateTransferButtonState();
+        return true;
+    }
+
+    /** 照合開始時に転記系ボタンを直ちに無効化する（UI 構築直後・再読込開始時）。 */
+    private void beginDataReloadUiBlock() {
+        dataReloadInProgress = true;
+        updateTransferButtonState();
     }
 
     private void showJuchuWriteBlockedAlert() {
@@ -2469,7 +2545,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         }
         if (transferBlockedReasonLabel != null) {
             transferBlockedReasonLabel.setText(
-                    blocked ? "自動転記不可: " + blockedReason : "");
+                    blocked ? "受注ファイルへの書き込み不可: " + blockedReason : "");
             transferBlockedReasonLabel.setManaged(blocked);
             transferBlockedReasonLabel.setVisible(blocked);
         }
@@ -2612,6 +2688,19 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
     private void transferAllPendingLocalSavesAsync(
             boolean showSuccessDialog, Consumer<Boolean> onComplete) {
         if (juchuTransferInProgress) {
+            if (onComplete != null) {
+                onComplete.accept(false);
+            }
+            return;
+        }
+        if (dataReloadInProgress) {
+            if (showSuccessDialog) {
+                showAlert(
+                        "エラー",
+                        "一時保存分の一括転記は現在できません。\n"
+                                + resolveTransferBlockedReason());
+            }
+            updateTransferButtonState();
             if (onComplete != null) {
                 onComplete.accept(false);
             }
@@ -3204,6 +3293,9 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
     }
 
     private void addNewOrderToExcel() {
+        if (rejectJuchuFileWriteIfBlocked("受注ファイルへの新規登録")) {
+            return;
+        }
         String reqNo = newTxtIraiNo.getText().trim();
         if (reqNo.isEmpty()) {
             showAlert("エラー", "依頼Ｎｏを入力してください。");
@@ -3283,267 +3375,783 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
 
     // --- LOGIC: DATA RE-READING & PARSING ---
     private void reloadData() {
-        showLoadingOverlay(true, "データベースおよび原本ファイルを読み込んでいます...");
-        
-        Thread loadThread = new Thread(() -> {
-            List<OrderRecord> loadedRecords = new ArrayList<>();
-            String statusMsg = "";
-            boolean success = false;
-            List<String> headerWarningsFinal = List.of();
-            
-            try {
-                File juchuFile = new File(juchuFilePath);
-                if (!juchuFile.exists()) {
-                    showLoadingOverlay(false, "");
-                    Platform.runLater(() -> statusLabel.setText("エラー: 受注ファイルが見つかりません。"));
-                    return;
-                }
-                
-                FileInputStream fis = new FileInputStream(juchuFile);
-                Workbook wbJuchu = PoiWorkbookOpener.open(fis);
-                Sheet sJuchu = wbJuchu.getSheet("受注ﾌｧｲﾙ");
-                Row hRow = sJuchu.getRow(juchuHeaderRowIndex0());
-                List<String> headerWarnings =
-                        JuchuSheetColumnLayout.validateHeaders(
-                                hRow, juchuHeaderAliasRegistry, juchuFilePath);
-                headerWarningsFinal = headerWarnings;
+        final long generation = dataReloadGeneration.incrementAndGet();
+        beginDataReloadUiBlock();
+        latestReloadProgressText = "受注ファイルを読み込んでいます…";
+        lastReloadProgressUiAt = 0L;
+        flushReloadProgressUiNow();
 
-                Map<String, Map<String, String>> dbRows = new HashMap<>();
-                int lastDataRowIndex = findJuchuSheetLastPopulatedDataRowIndex(sJuchu);
-                int firstDataRow = juchuFirstDataRowIndex0();
+        Thread loadThread =
+                new Thread(
+                        () -> {
+                            List<OrderRecord> loadedRecords = new ArrayList<>();
+                            String statusMsg = "";
+                            boolean success = false;
+                            List<String> headerWarningsFinal = List.of();
+                            Map<String, Map<String, String>> dbRows = Map.of();
 
-                int reqNoColIdx =
-                        JuchuSheetColumnLayout.resolveTransferColumnIndex(
-                                JuchuSheetColumnLayout.Col.IRAI_NO,
-                                juchuHeaderAliasRegistry,
-                                juchuFilePath);
-                for (int r = firstDataRow; r <= lastDataRowIndex; r++) {
-                    Row row = sJuchu.getRow(r);
-                    if (row == null) continue;
-                    Cell reqCell = row.getCell(reqNoColIdx);
-                    if (reqCell == null || reqCell.getCellType() == CellType.BLANK) continue;
+                            try {
+                                File juchuFile = new File(juchuFilePath);
+                                if (!juchuFile.exists()) {
+                                    finishDataReload(
+                                            generation,
+                                            false,
+                                            List.of(),
+                                            List.of(),
+                                            "受注ファイルが見つかりません。");
+                                    return;
+                                }
 
-                    String reqNo = getCellValueAsString(reqCell).trim();
-                    if (reqNo.isEmpty()) continue;
-                    
-                    Map<String, String> vals =
-                            JuchuSheetColumnLayout.readDbValuesFromRow(
-                                    row, juchuHeaderAliasRegistry, juchuFilePath);
-                    dbRows.put(normalize_key(reqNo), vals);
-                }
-                wbJuchu.close();
-                fis.close();
-                
-                File[] files = null;
-                if (NetworkSourceDirResolver.isRequestFormOriginalDirReachable(uiEnvSnapshot)) {
-                    File folder = new File(targetFolder);
-                    files = listOriginalWorkbooks(folder);
-                } else {
-                    System.err.println(
-                            "[request-form] 依頼書原本フォルダにアクセスできないためスキップ: "
-                                    + targetFolder);
-                }
-                
-                List<Map<String, String>> rawRequests = new ArrayList<>();
-                File parseCacheRoot = previewCacheDirectory();
-                RequestFormSourceCache.pruneStaleDiskCaches(parseCacheRoot);
-                
-                if (files != null) {
-                    final int totalFiles = files.length;
-                    for (int i = 0; i < totalFiles; i++) {
-                        File file = files[i];
-                        final String currentFileName = file.getName();
-                        final int fileIdx = i + 1;
-                        Optional<List<Map<String, String>>> cachedEntries =
-                                RequestFormSourceCache.loadParseEntries(parseCacheRoot, file);
-                        if (cachedEntries.isPresent()) {
-                            rawRequests.addAll(cachedEntries.get());
-                            Platform.runLater(
-                                    () ->
-                                            updateLoadingOverlayText(
+                                try (FileInputStream fis = new FileInputStream(juchuFile);
+                                        Workbook wbJuchu = PoiWorkbookOpener.open(fis)) {
+                                    Sheet sJuchu = wbJuchu.getSheet("受注ﾌｧｲﾙ");
+                                    Row hRow = sJuchu.getRow(juchuHeaderRowIndex0());
+                                    List<String> headerWarnings =
+                                            JuchuSheetColumnLayout.validateHeaders(
+                                                    hRow,
+                                                    juchuHeaderAliasRegistry,
+                                                    juchuFilePath);
+                                    headerWarningsFinal = headerWarnings;
+
+                                    Map<String, Map<String, String>> loadedDbRows = new HashMap<>();
+                                    int lastDataRowIndex =
+                                            findJuchuSheetLastPopulatedDataRowIndex(sJuchu);
+                                    int firstDataRow = juchuFirstDataRowIndex0();
+
+                                    int reqNoColIdx =
+                                            JuchuSheetColumnLayout.resolveTransferColumnIndex(
+                                                    JuchuSheetColumnLayout.Col.IRAI_NO,
+                                                    juchuHeaderAliasRegistry,
+                                                    juchuFilePath);
+                                    for (int r = firstDataRow; r <= lastDataRowIndex; r++) {
+                                        Row row = sJuchu.getRow(r);
+                                        if (row == null) {
+                                            continue;
+                                        }
+                                        Cell reqCell = row.getCell(reqNoColIdx);
+                                        if (reqCell == null
+                                                || reqCell.getCellType() == CellType.BLANK) {
+                                            continue;
+                                        }
+
+                                        String reqNo = getCellValueAsString(reqCell).trim();
+                                        if (reqNo.isEmpty()) {
+                                            continue;
+                                        }
+
+                                        Map<String, String> vals =
+                                                JuchuSheetColumnLayout.readDbValuesFromRow(
+                                                        row,
+                                                        juchuHeaderAliasRegistry,
+                                                        juchuFilePath);
+                                        loadedDbRows.put(normalize_key(reqNo), vals);
+                                    }
+                                    dbRows = loadedDbRows;
+                                }
+
+                                if (isDataReloadObsolete(generation)) {
+                                    return;
+                                }
+
+                                final Map<String, Map<String, String>> dbRowsSnapshot = dbRows;
+                                final int juchuCount = dbRowsSnapshot.size();
+                                Platform.runLater(
+                                        () -> {
+                                            if (isDataReloadObsolete(generation)) {
+                                                return;
+                                            }
+                                            orderRecords.setAll(
+                                                    buildProvisionalRecordsFromJuchu(
+                                                            dbRowsSnapshot));
+                                            applyRecordFilter();
+                                        });
+                                updateReloadProgressText(
+                                        String.format(
+                                                "受注 %d 件を読込。原本 Excel を走査中…", juchuCount));
+
+                                File[] files = null;
+                                if (NetworkSourceDirResolver.isRequestFormOriginalDirReachable(
+                                        uiEnvSnapshot)) {
+                                    File folder = new File(targetFolder);
+                                    files = listOriginalWorkbooks(folder);
+                                } else {
+                                    System.err.println(
+                                            "[request-form] 依頼書原本フォルダにアクセスできないためスキップ: "
+                                                    + targetFolder);
+                                }
+
+                                List<Map<String, String>> rawRequests = new ArrayList<>();
+                                final File parseCacheRootFinal = previewCacheDirectory();
+                                RequestFormSourceCache.pruneStaleDiskCaches(parseCacheRootFinal);
+
+                                if (files != null) {
+                                    final int totalFiles = files.length;
+                                    for (int i = 0; i < totalFiles; i++) {
+                                        if (isDataReloadObsolete(generation)) {
+                                            return;
+                                        }
+                                        File file = files[i];
+                                        final String currentFileName = file.getName();
+                                        final int fileIdx = i + 1;
+                                        updateReloadProgressTextForced(
+                                                String.format(
+                                                        "原本 Excel (%d / %d)\n%s",
+                                                        fileIdx, totalFiles, currentFileName));
+                                        Optional<List<Map<String, String>>> cachedEntries =
+                                                RequestFormSourceCache.loadParseEntries(
+                                                        parseCacheRootFinal, file);
+                                        if (cachedEntries.isPresent()) {
+                                            rawRequests.addAll(cachedEntries.get());
+                                            updateReloadProgressTextForced(
                                                     String.format(
                                                             "原本キャッシュ使用 (%d / %d)\n%s",
-                                                            fileIdx, totalFiles, currentFileName)));
-                            continue;
-                        }
-                        Platform.runLater(
-                                () ->
-                                        updateLoadingOverlayText(
+                                                            fileIdx, totalFiles, currentFileName));
+                                            continue;
+                                        }
+                                        updateReloadProgressTextForced(
                                                 String.format(
                                                         "原本ファイルを解析中 (%d / %d)\n%s",
-                                                        fileIdx, totalFiles, currentFileName)));
-                        try {
-                            List<Map<String, String>> parsed = parseOriginalWorkbook(file);
-                            RequestFormSourceCache.saveParseEntries(parseCacheRoot, file, parsed);
-                            rawRequests.addAll(parsed);
-                        } catch (Exception ex) {
-                            System.err.println("Error reading " + file.getName() + ": " + ex.getMessage());
-                        }
+                                                        fileIdx, totalFiles, currentFileName));
+                                        try {
+                                            List<Map<String, String>> parsed =
+                                                    parseOriginalWorkbook(file);
+                                            RequestFormSourceCache.saveParseEntries(
+                                                    parseCacheRootFinal, file, parsed);
+                                            rawRequests.addAll(parsed);
+                                        } catch (Exception ex) {
+                                            System.err.println(
+                                                    "Error reading "
+                                                            + file.getName()
+                                                            + ": "
+                                                            + ex.getMessage());
+                                        }
+                                    }
+                                }
+
+                                if (isDataReloadObsolete(generation)) {
+                                    return;
+                                }
+
+                                updateReloadProgressText("TPI PDF を照合中…");
+
+                                Set<String> excelRawKeys = new HashSet<>();
+                                for (Map<String, String> raw : rawRequests) {
+                                    String key = normalize_key(raw.get("依頼Ｎｏ"));
+                                    if (!key.isEmpty()) {
+                                        excelRawKeys.add(key);
+                                    }
+                                }
+                                appendTpiPdfRawRequests(
+                                        rawRequests, excelRawKeys, parseCacheRootFinal, generation);
+
+                                if (isDataReloadObsolete(generation)) {
+                                    return;
+                                }
+
+                                rebuildTpiContentIndex(parseCacheRootFinal, generation);
+                                updateReloadProgressTextForced("受注と原本を照合中…");
+
+                                loadedRecords =
+                                        buildMergedOrderRecords(
+                                                dbRowsSnapshot,
+                                                rawRequests,
+                                                parseCacheRootFinal,
+                                                true,
+                                                generation);
+                                updateReloadProgressTextForced(
+                                        String.format(
+                                                "照合結果を画面へ反映中…（%d 件）",
+                                                loadedRecords != null ? loadedRecords.size() : 0));
+                                success = true;
+                            } catch (Exception e) {
+                                statusMsg = e.getMessage();
+                                e.printStackTrace();
+                            }
+
+                            finishDataReload(
+                                    generation,
+                                    success,
+                                    loadedRecords,
+                                    headerWarningsFinal,
+                                    statusMsg);
+                        },
+                        "request-form-data-reload");
+        loadThread.setDaemon(true);
+        loadThread.setPriority(Thread.MIN_PRIORITY);
+        loadThread.start();
+    }
+
+    static List<OrderRecord> buildProvisionalRecordsFromJuchu(
+            Map<String, Map<String, String>> dbRows) {
+        if (dbRows == null || dbRows.isEmpty()) {
+            return List.of();
+        }
+        List<OrderRecord> records = new ArrayList<>(dbRows.size());
+        for (Map.Entry<String, Map<String, String>> entry : dbRows.entrySet()) {
+            Map<String, String> dbRow = entry.getValue();
+            String reqNoDisplay =
+                    firstNonBlank(dbRow.get("依頼No"), dbRow.get("依頼Ｎｏ"), entry.getKey());
+            records.add(
+                    new OrderRecord(
+                            reqNoDisplay,
+                            "既存登録 (照合中…)",
+                            dbRow.get("ユーザー"),
+                            dbRow.get("製品"),
+                            "原本・TPI PDF の照合を実行中",
+                            Map.of(),
+                            dbRow));
+        }
+        return records;
+    }
+
+    private List<OrderRecord> buildMergedOrderRecords(
+            Map<String, Map<String, String>> dbRows,
+            List<Map<String, String>> rawRequests,
+            File parseCacheRoot,
+            boolean linkTpiForJuchuOnlyRows,
+            long reloadGeneration) {
+        List<OrderRecord> loadedRecords = new ArrayList<>();
+        Set<String> processedKeys = new HashSet<>();
+
+        for (Map<String, String> raw : rawRequests) {
+            String reqNo = raw.get("依頼Ｎｏ");
+            String normK = normalize_key(reqNo);
+            processedKeys.add(normK);
+            boolean tpiPdf = isTpiPdfRaw(raw);
+
+            if (dbRows.containsKey(normK)) {
+                Map<String, String> dbRow = dbRows.get(normK);
+
+                List<String> diffs = new ArrayList<>();
+                if (!normalize_text(raw.get("品名")).equals(normalize_text(dbRow.get("品名")))) {
+                    diffs.add("品名相違");
+                }
+                if (!normalize_text(raw.get("製品")).equals(normalize_text(dbRow.get("製品")))) {
+                    diffs.add("製品コード相違");
+                }
+                if (normalize_numeric(raw.get("数量1")) != normalize_numeric(dbRow.get("数量1"))) {
+                    diffs.add("数量1相違");
+                }
+                String ru = normalize_text(raw.get("ユーザー"));
+                String dbu = normalize_text(dbRow.get("ユーザー"));
+                if (!ru.equals(dbu) && !ru.contains(dbu) && !dbu.contains(ru)) {
+                    diffs.add("ユーザー相違");
+                }
+                if (!normalize_date_val(raw.get("希望納期"))
+                        .equals(normalize_date_val(dbRow.get("希望納期")))) {
+                    diffs.add("希望納期相違");
+                }
+                if (!normalize_text(raw.get("原反")).equals(normalize_text(dbRow.get("原反")))) {
+                    diffs.add("原反相違");
+                }
+                String r_p =
+                        normalize_text(raw.get("加工内容")).replace(",", "").replace("、", "");
+                String db_p =
+                        normalize_text(dbRow.get("加工内容")).replace(",", "").replace("、", "");
+                if (!r_p.equals(db_p)) {
+                    diffs.add("加工内容相違");
+                }
+                if (!normalize_text(raw.get("契約Ｎｏ"))
+                        .equals(normalize_text(dbRow.get("契約Ｎｏ")))) {
+                    if (!normalize_text(raw.get("契約Ｎｏ")).isEmpty()
+                            || !normalize_text(dbRow.get("契約Ｎｏ")).isEmpty()) {
+                        diffs.add("契約No相違");
                     }
                 }
 
-                Set<String> excelRawKeys = new HashSet<>();
-                for (Map<String, String> raw : rawRequests) {
-                    String key = normalize_key(raw.get("依頼Ｎｏ"));
-                    if (!key.isEmpty()) {
-                        excelRawKeys.add(key);
-                    }
-                }
-                appendTpiPdfRawRequests(rawRequests, excelRawKeys, parseCacheRoot);
-                
-                Set<String> processedKeys = new HashSet<>();
-                
-                for (Map<String, String> raw : rawRequests) {
-                    String reqNo = raw.get("依頼Ｎｏ");
-                    String normK = normalize_key(reqNo);
-                    processedKeys.add(normK);
-                    boolean tpiPdf = isTpiPdfRaw(raw);
-                    
-                    if (dbRows.containsKey(normK)) {
-                        Map<String, String> dbRow = dbRows.get(normK);
-                        
-                        List<String> diffs = new ArrayList<>();
-                        if (!normalize_text(raw.get("品名")).equals(normalize_text(dbRow.get("品名")))) {
-                            diffs.add("品名相違");
-                        }
-                        if (!normalize_text(raw.get("製品")).equals(normalize_text(dbRow.get("製品")))) {
-                            diffs.add("製品コード相違");
-                        }
-                        if (normalize_numeric(raw.get("数量1")) != normalize_numeric(dbRow.get("数量1"))) {
-                            diffs.add("数量1相違");
-                        }
-                        String ru = normalize_text(raw.get("ユーザー"));
-                        String dbu = normalize_text(dbRow.get("ユーザー"));
-                        if (!ru.equals(dbu) && !ru.contains(dbu) && !dbu.contains(ru)) {
-                            diffs.add("ユーザー相違");
-                        }
-                        if (!normalize_date_val(raw.get("希望納期")).equals(normalize_date_val(dbRow.get("希望納期")))) {
-                            diffs.add("希望納期相違");
-                        }
-                        if (!normalize_text(raw.get("原反")).equals(normalize_text(dbRow.get("原反")))) {
-                            diffs.add("原反相違");
-                        }
-                        String r_p = normalize_text(raw.get("加工内容")).replace(",","").replace("、","");
-                        String db_p = normalize_text(dbRow.get("加工内容")).replace(",","").replace("、","");
-                        if (!r_p.equals(db_p)) {
-                            diffs.add("加工内容相違");
-                        }
-                        if (!normalize_text(raw.get("契約Ｎｏ"))
-                                .equals(normalize_text(dbRow.get("契約Ｎｏ")))) {
-                            if (!normalize_text(raw.get("契約Ｎｏ")).isEmpty()
-                                    || !normalize_text(dbRow.get("契約Ｎｏ")).isEmpty()) {
-                                diffs.add("契約No相違");
-                            }
-                        }
-                        
-                        String status =
-                                diffs.isEmpty()
-                                        ? "既存登録 (原本一致" + (tpiPdf ? "・TPI PDF" : "") + ")"
-                                        : "既存登録 (相違あり" + (tpiPdf ? "・TPI PDF" : "") + ")";
-                        String discrepancy = diffs.isEmpty() ? "原本と完全一致" : "相違詳細: " + String.join(", ", diffs);
-                        
-                        loadedRecords.add(new OrderRecord(
-                            reqNo, status, raw.get("ユーザー"), raw.get("製品"), discrepancy, raw, dbRow
-                        ));
-                    } else {
-                        loadedRecords.add(new OrderRecord(
-                            reqNo,
-                            tpiPdf ? "新規自動追加 (TPI PDF)" : "新規自動追加 (未登録)",
-                            raw.get("ユーザー"),
-                            raw.get("製品"),
-                            tpiPdf
-                                    ? "TPI PDF から自動追加（要確認）"
-                                    : "受注ファイル未入力のため自動追加",
-                            raw,
-                            tpiPdf
-                                    ? RequestFormOriginalExtractor.buildTpiDbDefaultsFromRaw(raw)
-                                    : RequestFormOriginalExtractor.buildDbDefaultsFromRaw(raw)));
-                    }
-                }
-                
-                for (Map.Entry<String, Map<String, String>> entry : dbRows.entrySet()) {
-                    if (!processedKeys.contains(entry.getKey())) {
-                        Map<String, String> dbRow = entry.getValue();
-                        String reqNoDisplay =
-                                firstNonBlank(dbRow.get("依頼No"), dbRow.get("依頼Ｎｏ"), entry.getKey());
-                        Map<String, String> raw = new HashMap<>();
-                        String status = "既存登録 (原本未確認)";
-                        String discrepancy = "原本ファイル未検出（過去データ）";
-                        Optional<File> linkedTpiPdf =
-                                resolveLinkedTpiPdf(reqNoDisplay, parseCacheRoot);
-                        if (linkedTpiPdf.isPresent()) {
-                            raw = loadTpiPdfRawLinked(linkedTpiPdf.get(), reqNoDisplay, parseCacheRoot);
-                        }
-                        if (linkedTpiPdf.isPresent() && !raw.isEmpty()) {
-                            status = "既存登録 (TPI PDF)";
-                            discrepancy = "TPI PDF を本文照合で関連付け";
-                        }
-                        loadedRecords.add(
-                                new OrderRecord(
-                                        reqNoDisplay,
-                                        status,
-                                        dbRow.get("ユーザー"),
-                                        dbRow.get("製品"),
-                                        discrepancy,
-                                        raw,
-                                        dbRow));
-                    }
-                }
-                
-                success = true;
-            } catch (Exception e) {
-                statusMsg = e.getMessage();
-                e.printStackTrace();
+                String status =
+                        diffs.isEmpty()
+                                ? "既存登録 (原本一致" + (tpiPdf ? "・TPI PDF" : "") + ")"
+                                : "既存登録 (相違あり" + (tpiPdf ? "・TPI PDF" : "") + ")";
+                String discrepancy =
+                        diffs.isEmpty() ? "原本と完全一致" : "相違詳細: " + String.join(", ", diffs);
+
+                loadedRecords.add(
+                        new OrderRecord(
+                                reqNo,
+                                status,
+                                raw.get("ユーザー"),
+                                raw.get("製品"),
+                                discrepancy,
+                                raw,
+                                dbRow));
+            } else {
+                loadedRecords.add(
+                        new OrderRecord(
+                                reqNo,
+                                tpiPdf ? "新規自動追加 (TPI PDF)" : "新規自動追加 (未登録)",
+                                raw.get("ユーザー"),
+                                raw.get("製品"),
+                                tpiPdf
+                                        ? "TPI PDF から自動追加（要確認）"
+                                        : "受注ファイル未入力のため自動追加",
+                                raw,
+                                tpiPdf
+                                        ? RequestFormOriginalExtractor.buildTpiDbDefaultsFromRaw(raw)
+                                        : RequestFormOriginalExtractor.buildDbDefaultsFromRaw(
+                                                raw)));
             }
-            
-            final boolean finalSuccess = success;
-            final List<OrderRecord> finalLoaded = loadedRecords;
-            final String finalStatusMsg = statusMsg;
-            final List<String> finalHeaderWarnings = headerWarningsFinal;
-            Platform.runLater(() -> {
-                showLoadingOverlay(false, "");
-                if (finalSuccess) {
-                    orderRecords.clear();
-                    orderRecords.addAll(finalLoaded);
-                    applyRecordFilter();
-                    int withOriginalCount =
-                            (int) orderRecords.stream().filter(this::hasExistingFile).count();
-                    int juchuOnlyCount =
-                            (int)
-                                    orderRecords.stream()
-                                            .filter(this::isJuchuRowWithoutRequestFormOriginal)
-                                            .count();
-                    statusLabel.setText(
-                            String.format(
-                                    "読込完了: 全 %d 件 / 依頼書あり %d 件 / 原本なし・受注のみ %d 件",
-                                    orderRecords.size(), withOriginalCount, juchuOnlyCount));
-                    if (!finalHeaderWarnings.isEmpty()) {
+        }
+
+        List<Map.Entry<String, Map<String, String>>> juchuOnlyRows = new ArrayList<>();
+        for (Map.Entry<String, Map<String, String>> entry : dbRows.entrySet()) {
+            if (!processedKeys.contains(entry.getKey())) {
+                juchuOnlyRows.add(entry);
+            }
+        }
+        final int juchuOnlyTotal = juchuOnlyRows.size();
+        int juchuOnlyIdx = 0;
+        for (Map.Entry<String, Map<String, String>> entry : juchuOnlyRows) {
+            if (isDataReloadObsolete(reloadGeneration)) {
+                return loadedRecords;
+            }
+            juchuOnlyIdx++;
+            Map<String, String> dbRow = entry.getValue();
+            String reqNoDisplay =
+                    firstNonBlank(dbRow.get("依頼No"), dbRow.get("依頼Ｎｏ"), entry.getKey());
+            if (linkTpiForJuchuOnlyRows
+                    && (juchuOnlyIdx == 1
+                            || juchuOnlyIdx == juchuOnlyTotal
+                            || juchuOnlyIdx % 25 == 0)) {
+                updateReloadProgressTextForced(
+                        String.format(
+                                "受注行 TPI 関連付け (%d / %d)\n%s",
+                                juchuOnlyIdx, juchuOnlyTotal, reqNoDisplay));
+            }
+            Map<String, String> raw = new HashMap<>();
+            String status = "既存登録 (原本未確認)";
+            String discrepancy = "原本ファイル未検出（過去データ）";
+            if (linkTpiForJuchuOnlyRows) {
+                Optional<File> linkedTpiPdf =
+                        resolveLinkedTpiPdf(reqNoDisplay, parseCacheRoot, true);
+                if (linkedTpiPdf.isPresent()) {
+                    raw =
+                            loadTpiPdfRawLinkedFromCache(
+                                    linkedTpiPdf.get(), reqNoDisplay, parseCacheRoot);
+                }
+                if (linkedTpiPdf.isPresent() && !raw.isEmpty()) {
+                    status = "既存登録 (TPI PDF)";
+                    discrepancy = "TPI PDF を本文照合で関連付け";
+                }
+            }
+            loadedRecords.add(
+                    new OrderRecord(
+                            reqNoDisplay,
+                            status,
+                            dbRow.get("ユーザー"),
+                            dbRow.get("製品"),
+                            discrepancy,
+                            raw,
+                            dbRow));
+        }
+        if (linkTpiForJuchuOnlyRows && juchuOnlyTotal > 0) {
+            updateReloadProgressTextForced(
+                    String.format("受注行 TPI 関連付け 完了（%d 件）", juchuOnlyTotal));
+        }
+        return loadedRecords;
+    }
+
+    private void rebuildTpiContentIndex(File parseCacheRoot, long reloadGeneration) {
+        if (!AppPaths.isRequestFormTpiPdfEnabled(uiEnvSnapshot)
+                || tpiPdfFolder == null
+                || tpiPdfFolder.isBlank()) {
+            tpiIraiNoToSourcePdf = Map.of();
+            tpiFilenameIraiToSourcePdf = Map.of();
+            tpiPdfFilesSnapshot = new File[0];
+            return;
+        }
+        if (!NetworkSourceDirResolver.isRequestFormTpiPdfDirReachable(uiEnvSnapshot)) {
+            tpiIraiNoToSourcePdf = Map.of();
+            tpiFilenameIraiToSourcePdf = Map.of();
+            tpiPdfFilesSnapshot = new File[0];
+            return;
+        }
+        File tpiDir = new File(tpiPdfFolder);
+        File[] pdfFiles =
+                tpiDir.listFiles(
+                        (dir, name) ->
+                                name != null
+                                        && name.toLowerCase(Locale.ROOT).endsWith(".pdf")
+                                        && !name.startsWith("~$"));
+        if (pdfFiles == null || pdfFiles.length == 0) {
+            tpiIraiNoToSourcePdf = Map.of();
+            tpiFilenameIraiToSourcePdf = Map.of();
+            tpiPdfFilesSnapshot = new File[0];
+            return;
+        }
+        tpiPdfFilesSnapshot = pdfFiles.clone();
+        Map<String, File> filenameIndex = new HashMap<>();
+        for (File pdf : pdfFiles) {
+            String stem = RequestFormTpiPdfCatalog.stemWithoutExtension(pdf.getName());
+            String normStem = normalize_key(stem);
+            if (!normStem.isEmpty()) {
+                filenameIndex.putIfAbsent(normStem, pdf);
+            }
+        }
+        for (File pdf : pdfFiles) {
+            String fromName = RequestFormTpiPdfFieldLayout.parseIraiNoFromFileName(pdf.getName());
+            if (!fromName.isBlank()) {
+                filenameIndex.putIfAbsent(normalize_key(fromName), pdf);
+            }
+        }
+        tpiFilenameIraiToSourcePdf = Map.copyOf(filenameIndex);
+        Map<String, File> index = new HashMap<>();
+        final int totalPdf = pdfFiles.length;
+        for (int i = 0; i < totalPdf; i++) {
+            if (isDataReloadObsolete(reloadGeneration)) {
+                return;
+            }
+            File pdf = pdfFiles[i];
+            final int pdfIdx = i + 1;
+            if (pdfIdx == 1 || pdfIdx == totalPdf || pdfIdx % 3 == 0) {
+                updateReloadProgressTextForced(
+                        String.format(
+                                "TPI PDF 索引 (%d / %d)\n%s",
+                                pdfIdx, totalPdf, pdf.getName()));
+                requestReloadUiPulse();
+            }
+            Optional<List<Map<String, String>>> cached =
+                    RequestFormSourceCache.loadParseEntries(parseCacheRoot, pdf);
+            if (cached.isEmpty()) {
+                continue;
+            }
+            for (Map<String, String> entry : cached.get()) {
+                String k = normalize_key(entry.get("依頼Ｎｏ"));
+                if (!k.isEmpty()) {
+                    index.putIfAbsent(k, pdf);
+                }
+            }
+        }
+        tpiIraiNoToSourcePdf = Map.copyOf(index);
+        updateReloadProgressTextForced(
+                String.format("TPI PDF 索引完了（%d 件の依頼Ｎｏ）", index.size()));
+    }
+
+    private boolean isDataReloadObsolete(long generation) {
+        return generation != dataReloadGeneration.get();
+    }
+
+    private void finishDataReload(
+            long generation,
+            boolean success,
+            List<OrderRecord> loadedRecords,
+            List<String> headerWarnings,
+            String statusMsg) {
+        if (isDataReloadObsolete(generation)) {
+            return;
+        }
+        final boolean finalSuccess = success;
+        final List<OrderRecord> finalLoaded = loadedRecords;
+        final String finalStatusMsg = statusMsg != null ? statusMsg : "";
+        final List<String> finalHeaderWarnings =
+                headerWarnings != null ? headerWarnings : List.of();
+        final int finalRecordCount = finalLoaded != null ? finalLoaded.size() : 0;
+        startReloadProgressHeartbeat("一覧を更新中", finalRecordCount);
+        Platform.runLater(
+                () -> {
+                    if (isDataReloadObsolete(generation)) {
+                        stopReloadProgressHeartbeat();
+                        return;
+                    }
+                    dataReloadInProgress = false;
+                    updateTransferButtonState();
+                    if (finalSuccess) {
+                        applyOrderRecordsInChunks(
+                                finalLoaded,
+                                generation,
+                                () ->
+                                        Platform.runLater(
+                                                () -> {
+                                                    if (isDataReloadObsolete(generation)) {
+                                                        stopReloadProgressHeartbeat();
+                                                        return;
+                                                    }
+                                                    updateReloadProgressTextForced(
+                                                            "コンボボックスを更新中…");
+                                                    applyRecordFilter();
+                                                    int withOriginalCount =
+                                                            (int)
+                                                                    orderRecords.stream()
+                                                                            .filter(
+                                                                                    this
+                                                                                            ::hasExistingFile)
+                                                                            .count();
+                                                    int juchuOnlyCount =
+                                                            (int)
+                                                                    orderRecords.stream()
+                                                                            .filter(
+                                                                                    this
+                                                                                            ::isJuchuRowWithoutRequestFormOriginal)
+                                                                            .count();
+                                                    stopReloadProgressHeartbeat();
+                                                    latestReloadProgressText =
+                                                            String.format(
+                                                                    "照合完了: 全 %d 件 / 依頼書あり %d 件 / 原本なし・受注のみ %d 件",
+                                                                    orderRecords.size(),
+                                                                    withOriginalCount,
+                                                                    juchuOnlyCount);
+                                                    flushReloadProgressUiNow();
+                                                    statusLabel.setText(latestReloadProgressText);
+                                                    if (!finalHeaderWarnings.isEmpty()) {
+                                                        statusLabel.setText(
+                                                                statusLabel.getText()
+                                                                        + " / 列定義警告 "
+                                                                        + finalHeaderWarnings.size()
+                                                                        + " 件");
+                                                        File juchuForHeaders =
+                                                                juchuFilePath != null
+                                                                                && !juchuFilePath
+                                                                                        .isBlank()
+                                                                        ? new File(juchuFilePath)
+                                                                        : null;
+                                                        if (juchuForHeaders != null
+                                                                && juchuForHeaders.isFile()) {
+                                                            confirmJuchuHeaderWarnings(
+                                                                    juchuForHeaders,
+                                                                    finalHeaderWarnings);
+                                                        } else {
+                                                            confirmJuchuHeaderWarnings(
+                                                                    null, finalHeaderWarnings);
+                                                        }
+                                                    }
+
+                                                    syncOriginalFileMonitorAfterReload();
+                                                    enqueueBackgroundCacheTasks();
+                                                    setPreviewReloadOverlay(false, "");
+                                                    Consumer<Boolean> initialComplete =
+                                                            initialDataReloadCompleteListener;
+                                                    if (initialComplete != null) {
+                                                        initialDataReloadCompleteListener = null;
+                                                        initialComplete.accept(finalSuccess);
+                                                    }
+                                                }));
+                    } else {
+                        stopReloadProgressHeartbeat();
+                        latestReloadProgressText =
+                                "照合失敗: "
+                                        + (finalStatusMsg.isBlank()
+                                                ? "不明なエラー"
+                                                : finalStatusMsg);
+                        flushReloadProgressUiNow();
                         statusLabel.setText(
-                                statusLabel.getText()
-                                        + " / 列定義警告 "
-                                        + finalHeaderWarnings.size()
-                                        + " 件");
-                        File juchuForHeaders =
-                                juchuFilePath != null && !juchuFilePath.isBlank()
-                                        ? new File(juchuFilePath)
-                                        : null;
-                        if (juchuForHeaders != null && juchuForHeaders.isFile()) {
-                            confirmJuchuHeaderWarnings(juchuForHeaders, finalHeaderWarnings);
-                        } else {
-                            confirmJuchuHeaderWarnings(null, finalHeaderWarnings);
+                                "エラー: データの読み込みに失敗しました。" + finalStatusMsg);
+                    }
+                    if (!finalSuccess) {
+                        setPreviewReloadOverlay(false, "");
+                        Consumer<Boolean> initialComplete = initialDataReloadCompleteListener;
+                        if (initialComplete != null) {
+                            initialDataReloadCompleteListener = null;
+                            initialComplete.accept(finalSuccess);
                         }
                     }
-                    
-                    syncOriginalFileMonitorAfterReload();
-                    enqueueBackgroundCacheTasks();
-                } else {
-                    statusLabel.setText("エラー: データの読み込みに失敗しました。" + finalStatusMsg);
+                });
+    }
+
+    private void startReloadProgressHeartbeat(String phase, int total) {
+        stopReloadProgressHeartbeat();
+        reloadUiProgressPhase = phase != null ? phase : "";
+        reloadUiProgressTotal = Math.max(0, total);
+        reloadUiProgressCurrent = 0;
+        reloadProgressHeartbeatActive.set(true);
+        Thread heartbeat =
+                new Thread(
+                        () -> {
+                            long startedAt = System.currentTimeMillis();
+                            int pulse = 0;
+                            while (reloadProgressHeartbeatActive.get()) {
+                                long elapsedSec =
+                                        (System.currentTimeMillis() - startedAt) / 1000L;
+                                String anim =
+                                        switch (pulse % 4) {
+                                            case 0 -> "｜";
+                                            case 1 -> "／";
+                                            case 2 -> "―";
+                                            default -> "＼";
+                                        };
+                                pulse++;
+                                updateReloadProgressTextForced(
+                                        formatReloadHeartbeatMessage(anim, elapsedSec));
+                                try {
+                                    Thread.sleep(400L);
+                                } catch (InterruptedException ex) {
+                                    Thread.currentThread().interrupt();
+                                    break;
+                                }
+                            }
+                        },
+                        "request-form-reload-heartbeat");
+        heartbeat.setDaemon(true);
+        reloadProgressHeartbeatThread = heartbeat;
+        heartbeat.start();
+    }
+
+    private String formatReloadHeartbeatMessage(String anim, long elapsedSec) {
+        String phase = reloadUiProgressPhase;
+        int total = reloadUiProgressTotal;
+        int current = reloadUiProgressCurrent;
+        if (current > 0 && total > 0) {
+            return String.format(
+                    "%s %s\n%d / %d — 経過 %d 秒", phase, anim, current, total, elapsedSec);
+        }
+        return String.format("%s %s\n%d 件 — 経過 %d 秒", phase, anim, total, elapsedSec);
+    }
+
+    private String formatReloadListProgressMessage(int current, int total) {
+        return String.format("一覧を更新中… %d / %d", current, total);
+    }
+
+    private void stopReloadProgressHeartbeat() {
+        reloadProgressHeartbeatActive.set(false);
+        Thread heartbeat = reloadProgressHeartbeatThread;
+        reloadProgressHeartbeatThread = null;
+        if (heartbeat != null) {
+            heartbeat.interrupt();
+        }
+    }
+
+    private void applyOrderRecordsInChunks(
+            List<OrderRecord> records, long generation, Runnable onComplete) {
+        if (isDataReloadObsolete(generation)) {
+            stopReloadProgressHeartbeat();
+            return;
+        }
+        List<OrderRecord> safe = records != null ? records : List.of();
+        final int total = safe.size();
+        reloadUiProgressPhase = "一覧を更新中";
+        reloadUiProgressTotal = total;
+        reloadUiProgressCurrent = 0;
+        if (total == 0) {
+            orderRecords.clear();
+            if (onComplete != null) {
+                onComplete.run();
+            }
+            return;
+        }
+        applyOrderRecordsChunk(
+                safe, generation, 0, total, ORDER_RECORDS_UI_CHUNK_SIZE, onComplete);
+    }
+
+    private void applyOrderRecordsChunk(
+            List<OrderRecord> records,
+            long generation,
+            int start,
+            int total,
+            int chunkSize,
+            Runnable onComplete) {
+        if (isDataReloadObsolete(generation)) {
+            stopReloadProgressHeartbeat();
+            return;
+        }
+        int end = Math.min(start + chunkSize, total);
+        if (start == 0) {
+            orderRecords.clear();
+        }
+        reloadUiProgressCurrent = end;
+        orderRecords.addAll(records.subList(start, end));
+        updateReloadProgressTextForced(formatReloadListProgressMessage(end, total));
+        if (end < total) {
+            javafx.animation.PauseTransition pause =
+                    new javafx.animation.PauseTransition(javafx.util.Duration.millis(16));
+            pause.setOnFinished(
+                    e ->
+                            applyOrderRecordsChunk(
+                                    records, generation, end, total, chunkSize, onComplete));
+            pause.play();
+        } else if (onComplete != null) {
+            reloadUiProgressPhase = "コンボボックスを更新中";
+            reloadUiProgressCurrent = total;
+            onComplete.run();
+        }
+    }
+
+    private void setPreviewReloadOverlay(boolean show, String text) {
+        if (previewReloadOverlay == null) {
+            return;
+        }
+        Platform.runLater(
+                () -> {
+                    if (previewReloadOverlayLabel != null && text != null) {
+                        previewReloadOverlayLabel.setText(text);
+                    }
+                    previewReloadOverlay.setVisible(show);
+                    previewReloadOverlay.setManaged(show);
+                });
+    }
+
+    private void updateReloadStatusLabel(String text) {
+        if (statusLabel == null || text == null) {
+            return;
+        }
+        Platform.runLater(() -> statusLabel.setText(text));
+    }
+
+    private void updateReloadProgressText(String text) {
+        updateReloadProgressTextInternal(text, false);
+    }
+
+    /** スロットルを無視して即時反映（長時間処理の開始時・OCR ページ単位など）。 */
+    private void updateReloadProgressTextForced(String text) {
+        updateReloadProgressTextInternal(text, true);
+    }
+
+    private void updateReloadProgressTextInternal(String text, boolean force) {
+        if (text == null) {
+            return;
+        }
+        latestReloadProgressText = text;
+        long now = System.currentTimeMillis();
+        if (!force && now - lastReloadProgressUiAt < RELOAD_PROGRESS_UI_INTERVAL_MS) {
+            return;
+        }
+        lastReloadProgressUiAt = now;
+        flushReloadProgressUiNow();
+        requestReloadUiPulse();
+    }
+
+    /** バックグラウンド読込中に JavaFX スレッドへ制御を戻し、スピナーが止まって見えるのを抑える。 */
+    private void requestReloadUiPulse() {
+        Platform.runLater(() -> {});
+    }
+
+    private void flushReloadProgressUiNow() {
+        String text = latestReloadProgressText;
+        if (text == null || text.isBlank()) {
+            return;
+        }
+        if (statusLabel != null) {
+            statusLabel.setText(text);
+        }
+        if (previewReloadOverlay != null) {
+            if (Platform.isFxApplicationThread()) {
+                if (previewReloadOverlayLabel != null) {
+                    previewReloadOverlayLabel.setText(text);
                 }
-            });
-        });
-        
-        loadThread.setDaemon(true);
-        loadThread.start();
+                previewReloadOverlay.setVisible(true);
+                previewReloadOverlay.setManaged(true);
+            } else {
+                Platform.runLater(
+                        () -> {
+                            if (previewReloadOverlayLabel != null) {
+                                previewReloadOverlayLabel.setText(text);
+                            }
+                            previewReloadOverlay.setVisible(true);
+                            previewReloadOverlay.setManaged(true);
+                        });
+            }
+        }
+        notifyReloadProgressReporter(text);
+    }
+
+    private void notifyReloadProgressReporter(String text) {
+        Consumer<String> reporter = reloadProgressReporter;
+        if (reporter == null || text == null || text.isBlank()) {
+            return;
+        }
+        try {
+            reporter.accept(text);
+        } catch (RuntimeException | Error ignored) {
+            // 起動進捗表示の失敗で照合を止めない
+        }
     }
 
     private List<Map<String, String>> parseOriginalWorkbook(File file) throws Exception {
@@ -3553,7 +4161,8 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
     private void appendTpiPdfRawRequests(
             List<Map<String, String>> rawRequests,
             Set<String> excelRawKeys,
-            File parseCacheRoot) {
+            File parseCacheRoot,
+            long reloadGeneration) {
         if (!AppPaths.isRequestFormTpiPdfEnabled(uiEnvSnapshot)) {
             return;
         }
@@ -3577,16 +4186,31 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         }
         final int totalPdf = pdfFiles.length;
         for (int i = 0; i < totalPdf; i++) {
+            if (isDataReloadObsolete(reloadGeneration)) {
+                return;
+            }
             File pdf = pdfFiles[i];
             final String pdfName = pdf.getName();
             final int pdfIdx = i + 1;
-            String normKey = normalize_key(RequestFormTpiPdfFieldLayout.parseIraiNoFromFileName(pdfName));
+            requestReloadUiPulse();
+            updateReloadProgressTextForced(
+                    String.format("TPI PDF (%d / %d)\n%s", pdfIdx, totalPdf, pdfName));
+            String normKey =
+                    normalize_key(RequestFormTpiPdfFieldLayout.parseIraiNoFromFileName(pdfName));
             if (!normKey.isEmpty() && excelRawKeys.contains(normKey)) {
+                updateReloadProgressTextForced(
+                        String.format(
+                                "TPI PDF スキップ (%d / %d)\n%s（Excel 原本に存在）",
+                                pdfIdx, totalPdf, pdfName));
                 continue;
             }
             Optional<List<Map<String, String>>> cached =
                     RequestFormSourceCache.loadParseEntries(parseCacheRoot, pdf);
             if (cached.isPresent()) {
+                updateReloadProgressTextForced(
+                        String.format(
+                                "TPI PDF キャッシュ確認中 (%d / %d)\n%s",
+                                pdfIdx, totalPdf, pdfName));
                 try {
                     List<Map<String, String>> entries =
                             RequestFormTpiPdfSplitter.ensureSplitPdfs(
@@ -3607,24 +4231,27 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                     System.err.println(
                             "Error reading TPI PDF cache " + pdf.getName() + ": " + ex.getMessage());
                 }
-                Platform.runLater(
-                        () ->
-                                updateLoadingOverlayText(
-                                        String.format(
-                                                "TPI PDF キャッシュ使用 (%d / %d)\n%s",
-                                                pdfIdx, totalPdf, pdfName)));
+                updateReloadProgressTextForced(
+                        String.format(
+                                "TPI PDF キャッシュ使用 (%d / %d)\n%s",
+                                pdfIdx, totalPdf, pdfName));
                 continue;
             }
-            Platform.runLater(
-                    () ->
-                            updateLoadingOverlayText(
-                                    String.format(
-                                            "TPI PDF を解析中 (%d / %d)\n%s",
-                                            pdfIdx, totalPdf, pdfName)));
+            updateReloadProgressTextForced(
+                    String.format(
+                            "TPI PDF OCR 開始 (%d / %d)\n%s",
+                            pdfIdx, totalPdf, pdfName));
             try {
                 List<Map<String, String>> parsed =
                         RequestFormTpiPdfExtractor.extractEntriesWithSplit(
-                                pdf, uiEnvSnapshot, parseCacheRoot);
+                                pdf,
+                                uiEnvSnapshot,
+                                parseCacheRoot,
+                                pageDetail ->
+                                        updateReloadProgressTextForced(
+                                                String.format(
+                                                        "TPI PDF OCR (%d / %d)\n%s\n%s",
+                                                        pdfIdx, totalPdf, pdfName, pageDetail)));
                 RequestFormSourceCache.saveParseEntries(parseCacheRoot, pdf, parsed);
                 for (Map<String, String> entry : parsed) {
                     String k = normalize_key(entry.get("依頼Ｎｏ"));
@@ -3637,6 +4264,10 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                     }
                     rawRequests.add(entry);
                 }
+                updateReloadProgressTextForced(
+                        String.format(
+                                "TPI PDF 解析完了 (%d / %d)\n%s",
+                                pdfIdx, totalPdf, pdfName));
             } catch (Exception ex) {
                 System.err.println("Error reading TPI PDF " + pdf.getName() + ": " + ex.getMessage());
             }
@@ -3675,6 +4306,25 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         return new HashMap<>();
     }
 
+    /** 起動時一括照合向け。parse キャッシュのみ参照し OCR / 分割 PDF 生成は行わない。 */
+    private Map<String, String> loadTpiPdfRawLinkedFromCache(
+            File pdf, String iraiNo, File parseCacheRoot) {
+        if (pdf == null || !pdf.isFile()) {
+            return new HashMap<>();
+        }
+        try {
+            Optional<List<Map<String, String>>> cached =
+                    RequestFormSourceCache.loadParseEntries(parseCacheRoot, pdf);
+            if (cached.isPresent() && !cached.get().isEmpty()) {
+                return reconcileLinkedTpiRaw(selectLinkedEntry(cached.get(), iraiNo), iraiNo);
+            }
+        } catch (Exception ex) {
+            System.err.println(
+                    "TPI PDF キャッシュ関連付け失敗 " + pdf.getName() + ": " + ex.getMessage());
+        }
+        return new HashMap<>();
+    }
+
     private Map<String, String> selectLinkedEntry(List<Map<String, String>> entries, String iraiNo) {
         if (entries == null || entries.isEmpty()) {
             return Map.of();
@@ -3705,16 +4355,50 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
     }
 
     private Optional<File> resolveLinkedTpiPdf(String reqNo, File parseCacheRoot) {
+        return resolveLinkedTpiPdf(reqNo, parseCacheRoot, false);
+    }
+
+    private Optional<File> resolveLinkedTpiPdf(
+            String reqNo, File parseCacheRoot, boolean bulkReloadFastPath) {
         if (!AppPaths.isRequestFormTpiPdfEnabled(uiEnvSnapshot)) {
             return Optional.empty();
+        }
+        if (bulkReloadFastPath) {
+            return resolveLinkedTpiPdfIndexed(reqNo);
         }
         Optional<File> linked =
                 RequestFormTpiPdfCatalog.findForIraiNo(reqNo, tpiPdfFolder);
         if (linked.isPresent()) {
             return linked;
         }
+        String normKey = normalize_key(reqNo);
+        File indexed = tpiIraiNoToSourcePdf.get(normKey);
+        if (indexed != null && indexed.isFile()) {
+            return Optional.of(indexed);
+        }
         return RequestFormTpiPdfCatalog.findForIraiNoByPdfContent(
                 reqNo, tpiPdfFolder, uiEnvSnapshot, parseCacheRoot);
+    }
+
+    private Optional<File> resolveLinkedTpiPdfIndexed(String reqNo) {
+        String normKey = normalize_key(reqNo);
+        if (normKey.isEmpty()) {
+            return Optional.empty();
+        }
+        File indexed = tpiFilenameIraiToSourcePdf.get(normKey);
+        if (indexed != null && indexed.isFile()) {
+            return Optional.of(indexed);
+        }
+        indexed = tpiIraiNoToSourcePdf.get(normKey);
+        if (indexed != null && indexed.isFile()) {
+            return Optional.of(indexed);
+        }
+        for (File pdf : tpiPdfFilesSnapshot) {
+            if (normalize_key(pdf.getName()).contains(normKey)) {
+                return Optional.of(pdf);
+            }
+        }
+        return Optional.empty();
     }
 
     private Map<String, String> reconcileLinkedTpiRaw(Map<String, String> parsed, String iraiNo) {
@@ -3898,14 +4582,24 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
             if (resolved != null && resolved.isFile()) {
                 return true;
             }
+            if (isTpiPdfRaw(raw)) {
+                return true;
+            }
         }
-        return resolveLinkedTpiPdf(rec.getReqNo(), previewCacheDirectory())
-                .filter(
-                        pdf ->
-                                !loadTpiPdfRawLinked(
-                                                pdf, rec.getReqNo(), previewCacheDirectory())
-                                        .isEmpty())
-                .isPresent();
+        String status = rec.getStatus();
+        if (status != null
+                && (status.contains("原本一致")
+                        || status.contains("TPI PDF")
+                        || status.contains("相違あり"))) {
+            return true;
+        }
+        Optional<File> linked = resolveLinkedTpiPdfIndexed(rec.getReqNo());
+        if (linked.isEmpty()) {
+            return false;
+        }
+        return !loadTpiPdfRawLinkedFromCache(
+                        linked.get(), rec.getReqNo(), previewCacheDirectory())
+                .isEmpty();
     }
 
     /**
@@ -4726,6 +5420,9 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
 
     private void transferToExcel() {
         if (rejectGuestMutation("受注ファイルへの自動転記")) {
+            return;
+        }
+        if (rejectJuchuFileWriteIfBlocked("受注ファイルへの自動転記")) {
             return;
         }
         if (juchuTransferInProgress) {

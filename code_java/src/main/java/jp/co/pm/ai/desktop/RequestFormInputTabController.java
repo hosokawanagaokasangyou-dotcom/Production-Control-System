@@ -97,10 +97,20 @@ public final class RequestFormInputTabController {
             }
             return;
         }
+        reportStartupProgressIfActive("依頼書入力の準備を開始しています…");
         scheduleEmbeddedMount();
     }
 
+    private void reportStartupProgressIfActive(String detail) {
+        if (shell != null && shell.isStartupTabBackgroundLoadActive()) {
+            shell.reportStartupRequestFormReloadProgress(detail);
+        }
+    }
+
     private void completePreload(boolean ok, Consumer<Boolean> onComplete) {
+        if (reconciliationApp != null) {
+            reconciliationApp.setReloadProgressReporter(null);
+        }
         Consumer<Boolean> pending = onComplete != null ? onComplete : pendingPreloadComplete;
         pendingPreloadComplete = null;
         if (pending == null) {
@@ -132,6 +142,7 @@ public final class RequestFormInputTabController {
 
     private void scheduleEmbeddedMount() {
         Map<String, String> ui = shell != null ? shell.snapshotUiEnv() : Map.of();
+        reportStartupProgressIfActive("列定義・マスタを読込中…");
         Thread prep =
                 new Thread(
                         () -> {
@@ -155,7 +166,10 @@ public final class RequestFormInputTabController {
             return;
         }
         showTabLoadingIfNeeded();
+        reportStartupProgressIfActive("依頼書入力画面を構築中…");
         reconciliationApp = new ReconciliationApp();
+        reconciliationApp.setOnInitialDataReloadComplete(ok -> completePreload(ok, null));
+        reconciliationApp.setReloadProgressReporter(this::reportStartupProgressIfActive);
         reconciliationApp.setStartupComboChoices(pendingComboChoices.mergedWithDefaults());
         reconciliationApp.configureJuchuHeaderAliasRegistry(registry);
         reconciliationApp.setOriginalDirChangeHandler(
@@ -202,7 +216,6 @@ public final class RequestFormInputTabController {
         if (tabActive) {
             activateEmbeddedIfReady();
         }
-        completePreload(true, null);
     }
 
     private void showTabLoadingIfNeeded() {

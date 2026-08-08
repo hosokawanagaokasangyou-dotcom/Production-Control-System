@@ -21,18 +21,22 @@ public final class EnvVarsStartupCheckBusyDialog {
 
     public static final String TITLE = "起動時チェック";
     public static final String HEADER = "環境変数を確認しています";
+    public static final String HEADER_BACKGROUND_LOAD = "タブデータを読み込んでいます";
 
     public static final String STATUS_RESTORE_WORKSPACE = "工場ワークスペースを復元しています…";
     public static final String STATUS_STABILIZE = "環境変数の値を安定化しています…";
     public static final String STATUS_MATCH = "初期値と照合しています…";
     public static final String STATUS_FACTORY_SWITCH = "工場ワークスペースを切り替えています…";
+    public static final String STATUS_BACKGROUND_LOAD = "タブデータを読み込んでいます…";
     public static final String STATUS_DONE = "完了しました";
 
     private final Stage stage;
+    private final Label headerLabel;
     private final Label statusLabel;
 
-    private EnvVarsStartupCheckBusyDialog(Stage stage, Label statusLabel) {
+    private EnvVarsStartupCheckBusyDialog(Stage stage, Label headerLabel, Label statusLabel) {
         this.stage = stage;
+        this.headerLabel = headerLabel;
         this.statusLabel = statusLabel;
     }
 
@@ -76,7 +80,13 @@ public final class EnvVarsStartupCheckBusyDialog {
         if (owner != null) {
             stage.centerOnScreen();
         }
-        return new EnvVarsStartupCheckBusyDialog(stage, status);
+        return new EnvVarsStartupCheckBusyDialog(stage, header, status);
+    }
+
+    public void setHeader(String text) {
+        if (text != null && headerLabel != null) {
+            headerLabel.setText(text);
+        }
     }
 
     public void setStatus(String text) {

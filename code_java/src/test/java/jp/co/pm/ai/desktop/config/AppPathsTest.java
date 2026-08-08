@@ -1366,6 +1366,34 @@ class AppPathsTest {
     }
 
     @Test
+    void isRequestFormOriginalDirEnvConfigured_falseWhenUnset() {
+        assertFalse(AppPaths.isRequestFormOriginalDirEnvConfigured(Map.of()));
+        assertFalse(
+                AppPaths.isRequestFormOriginalDirEnvConfigured(
+                        Map.of(AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR, "  ")));
+    }
+
+    @Test
+    void isRequestFormOriginalDirEnvConfigured_trueWhenExplicitPath() {
+        assertTrue(
+                AppPaths.isRequestFormOriginalDirEnvConfigured(
+                        Map.of(
+                                AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR,
+                                "C:\\Users\\me\\Box\\依頼書原本")));
+    }
+
+    @Test
+    void overlayFactorySiteRequestFormPaths_leavesEmptyOriginalDirUntouched() {
+        LinkedHashMap<String, String> map = new LinkedHashMap<>();
+        map.put(AppPaths.KEY_PM_AI_FACTORY_SITE, "KONAN");
+        map.put(AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR, "");
+
+        AppPaths.overlayFactorySiteRequestFormPaths(map, FactorySite.KONAN);
+
+        assertEquals("", map.get(AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR));
+    }
+
+    @Test
     void overlayFactorySiteRequestFormPaths_replacesStaleKokubuPathsWhenSwitchingToKonan() {
         LinkedHashMap<String, String> map = new LinkedHashMap<>();
         map.put(AppPaths.KEY_PM_AI_FACTORY_SITE, "KONAN");

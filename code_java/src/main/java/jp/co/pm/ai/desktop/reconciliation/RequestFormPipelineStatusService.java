@@ -724,6 +724,9 @@ public final class RequestFormPipelineStatusService {
         if (progress == null || total <= 0) {
             return;
         }
+        if (processed % 3 != 0 && processed != total) {
+            return;
+        }
         double fraction = 0.12 + (0.60 * processed / (double) total);
         String shortName = fileName != null && fileName.length() > 28 ? "…" + fileName.substring(fileName.length() - 27) : fileName;
         reportProgress(progress, fraction, "原本 " + processed + "/" + total + " " + shortName);

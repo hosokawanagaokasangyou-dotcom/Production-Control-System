@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
+import java.util.function.Consumer;
 
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
@@ -29,6 +30,15 @@ final class RequestFormTpiPdfOcrReader {
     }
 
     static String readPdfText(File pdfFile, Map<String, String> ui) throws IOException {
+        return readPdfText(pdfFile, ui, null);
+    }
+
+    /**
+     * @param pageProgress OCR ページ単位の進捗（例: {@code ページ 2/5}）。{@code null} 可。
+     */
+    static String readPdfText(
+            File pdfFile, Map<String, String> ui, Consumer<String> pageProgress)
+            throws IOException {
         TesseractConfig config =
                 AppPaths.resolveTesseractConfig(ui)
                         .orElseThrow(
@@ -41,6 +51,9 @@ final class RequestFormTpiPdfOcrReader {
             StringBuilder sb = new StringBuilder();
             int pages = document.getNumberOfPages();
             for (int pageIndex = 0; pageIndex < pages; pageIndex++) {
+                if (pageProgress != null) {
+                    pageProgress.accept("OCR ページ " + (pageIndex + 1) + " / " + pages);
+                }
                 BufferedImage image =
                         renderer.renderImageWithDPI(pageIndex, OCR_RENDER_DPI, ImageType.RGB);
                 try {

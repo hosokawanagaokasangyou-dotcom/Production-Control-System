@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
@@ -34,6 +35,15 @@ public final class RequestFormTpiPdfExtractor {
      */
     public static List<Map<String, String>> extractEntries(File pdfFile, Map<String, String> ui)
             throws IOException {
+        return extractEntries(pdfFile, ui, null);
+    }
+
+    /**
+     * @param ocrPageProgress 画像 PDF の OCR 中にページ進捗を通知する（{@code null} 可）。
+     */
+    public static List<Map<String, String>> extractEntries(
+            File pdfFile, Map<String, String> ui, Consumer<String> ocrPageProgress)
+            throws IOException {
         if (pdfFile == null || !pdfFile.isFile()) {
             return List.of();
         }
@@ -41,7 +51,7 @@ public final class RequestFormTpiPdfExtractor {
         String text =
                 contentKind == RequestFormTpiPdfContentKind.TEXT
                         ? readPdfText(pdfFile)
-                        : RequestFormTpiPdfOcrReader.readPdfText(pdfFile, ui);
+                        : RequestFormTpiPdfOcrReader.readPdfText(pdfFile, ui, ocrPageProgress);
         String readMode =
                 contentKind == RequestFormTpiPdfContentKind.TEXT
                         ? RequestFormTpiPdfFieldLayout.READ_MODE_TEXT
@@ -55,7 +65,16 @@ public final class RequestFormTpiPdfExtractor {
      */
     static List<Map<String, String>> extractEntriesWithSplit(
             File pdfFile, Map<String, String> ui, File parseCacheRoot) throws IOException {
-        List<Map<String, String>> entries = extractEntries(pdfFile, ui);
+        return extractEntriesWithSplit(pdfFile, ui, parseCacheRoot, null);
+    }
+
+    static List<Map<String, String>> extractEntriesWithSplit(
+            File pdfFile,
+            Map<String, String> ui,
+            File parseCacheRoot,
+            Consumer<String> ocrPageProgress)
+            throws IOException {
+        List<Map<String, String>> entries = extractEntries(pdfFile, ui, ocrPageProgress);
         if (parseCacheRoot == null || entries.size() <= 1) {
             return entries;
         }

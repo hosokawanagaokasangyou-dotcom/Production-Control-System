@@ -1127,6 +1127,15 @@ public final class AppPaths {
     }
 
     /**
+     * 環境変数タブで {@link #KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR} が明示設定されているか。
+     * 空のときは未設定（実行時フォールバックは {@link #resolveRequestFormOriginalDir}）。
+     */
+    public static boolean isRequestFormOriginalDirEnvConfigured(Map<String, String> ui) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        return !trim(u.get(KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR)).isEmpty();
+    }
+
+    /**
      * TPI 依頼書 PDF フォルダ。{@link #KEY_PM_AI_REQUEST_FORM_TPI_PDF_DIR} が空のときは工場既定（湖南のみ UNC）。
      * 国分など未設定工場では empty。
      */
@@ -2847,6 +2856,9 @@ public final class AppPaths {
     /**
      * 工場切替時に依頼書原本フォルダ・受注ファイル等の env 行を、当該工場の既定へ揃える。
      * ワークスペースに残った他工場の UNC（国分／湖南）を上書きする。
+     *
+     * <p>{@link #KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR} は空のままにする（任意設定・BOX 案内用）。
+     * 他工場ヒントと矛盾するパスのみ工場既定へ置換する。
      */
     public static void overlayFactorySiteRequestFormPaths(
             Map<String, String> map, FactorySite site) {
@@ -2859,7 +2871,8 @@ public final class AppPaths {
             putFactoryManagedEnv(map, KEY_PM_AI_REQUEST_FORM_JUCHU_FILE, defaultRequestFormJuchuFileForFactory(site));
         }
         String originalDir = trim(map.get(KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR));
-        if (originalDir.isEmpty() || factoryPathHintConflictsWithSite(originalDir, site)) {
+        // 未設定は空のまま（ui_ref 既定・BOX フォルダ案内用）。実行時フォールバックは resolveRequestFormOriginalDir。
+        if (!originalDir.isEmpty() && factoryPathHintConflictsWithSite(originalDir, site)) {
             putFactoryManagedEnv(
                     map, KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR, defaultRequestFormOriginalDirForFactory(site));
         }
