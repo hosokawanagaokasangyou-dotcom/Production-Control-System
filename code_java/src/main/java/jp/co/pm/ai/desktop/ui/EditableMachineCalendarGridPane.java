@@ -78,6 +78,7 @@ public final class EditableMachineCalendarGridPane extends VBox {
     private Consumer<Boolean> dirtyListener;
     private Consumer<Boolean> undoStateListener;
     private Map<String, Object> savedBaseline = Map.of();
+    private boolean gridLoading = false;
 
     public record ColumnDef(String equipmentKey, String process, String machine) {}
 
@@ -115,6 +116,7 @@ public final class EditableMachineCalendarGridPane extends VBox {
         grid.setVgap(0);
         scrollHost.getChildren().addAll(scroll, loadingOverlay);
         scrollHost.setMaxSize(Double.MAX_VALUE, Double.MAX_VALUE);
+        scrollHost.setMouseTransparent(true);
         VBox.setVgrow(scrollHost, Priority.ALWAYS);
         setMaxSize(Double.MAX_VALUE, Double.MAX_VALUE);
         scroll.setMaxSize(Double.MAX_VALUE, Double.MAX_VALUE);
@@ -131,19 +133,41 @@ public final class EditableMachineCalendarGridPane extends VBox {
     }
 
     public void setGridLoading(boolean loading, String message) {
-        loadingOverlay.setLoading(loading, message);
-        scroll.setDisable(loading);
+        gridLoading = loading;
         if (loading) {
-            if (!getStyleClass().contains("pm-machine-calendar-grid-loading")) {
-                getStyleClass().add("pm-machine-calendar-grid-loading");
-            }
+            loadingOverlay.setLoading(true, message);
+            scroll.setDisable(true);
+            toggleStyleClass(this, "pm-machine-calendar-grid-loading", true);
+            toggleStyleClass(scrollHost, "pm-machine-calendar-grid-loading", true);
+            scrollHost.setMouseTransparent(false);
         } else {
-            getStyleClass().remove("pm-machine-calendar-grid-loading");
+            loadingOverlay.setLoading(false);
+            scroll.setDisable(false);
+            toggleStyleClass(this, "pm-machine-calendar-grid-loading", false);
+            toggleStyleClass(scrollHost, "pm-machine-calendar-grid-loading", false);
+            scrollHost.setMouseTransparent(true);
         }
     }
 
     public void setGridLoadingMessage(String message) {
+        if (!gridLoading) {
+            return;
+        }
         loadingOverlay.setMessage(message);
+    }
+
+    public boolean isGridLoading() {
+        return gridLoading;
+    }
+
+    private static void toggleStyleClass(javafx.scene.Node node, String styleClass, boolean add) {
+        if (add) {
+            if (!node.getStyleClass().contains(styleClass)) {
+                node.getStyleClass().add(styleClass);
+            }
+        } else {
+            node.getStyleClass().remove(styleClass);
+        }
     }
 
     public void setCommentDialogOwner(Window owner) {

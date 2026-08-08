@@ -475,32 +475,43 @@ public class MachineCalendarTabController {
                 "初期値を作る")) {
             return;
         }
-        runAsync(
-                shell.buildMachineCalendarIoRequest(
-                        "initialize_defaults",
-                        Integer.toString(fiscalYear),
-                        Integer.toString(period.startMonth()),
-                        Integer.toString(period.startDay())),
-                node -> {
-                    if (statusLabel != null) {
-                        statusLabel.setText("勤怠カレンダー.xlsx を出力中…");
-                    }
-                    runAsync(
-                            shell.buildAttendanceDataIoRequest("export_calendar_xlsx"),
-                            exportNode -> {
-                                if (statusLabel != null) {
-                                    statusLabel.setText(
-                                            "初期値作成: 列="
-                                                    + node.path("columns").asInt(0)
-                                                    + " / Excel: "
-                                                    + exportNode.path("calendar_xlsx_path")
-                                                            .asText(""));
-                                }
-                                loadGridFromPython();
-                            },
-                            null);
-                },
-                null);
+        gridPane.setGridLoading(true, "機械カレンダー初期値を作成中…");
+        setToolbarBusy(true);
+        Platform.runLater(
+                () ->
+                        runAsync(
+                                shell.buildMachineCalendarIoRequest(
+                                        "initialize_defaults",
+                                        Integer.toString(fiscalYear),
+                                        Integer.toString(period.startMonth()),
+                                        Integer.toString(period.startDay())),
+                                node -> {
+                                    if (statusLabel != null) {
+                                        statusLabel.setText(
+                                                CALENDAR_XLSX_LABEL + " を出力中…");
+                                    }
+                                    gridPane.setGridLoadingMessage(
+                                            CALENDAR_XLSX_LABEL + " を出力中…");
+                                    runAsync(
+                                            shell.buildAttendanceDataIoRequest(
+                                                    "export_calendar_xlsx"),
+                                            exportNode -> {
+                                                if (statusLabel != null) {
+                                                    statusLabel.setText(
+                                                            "初期値作成: 列="
+                                                                    + node.path("columns")
+                                                                            .asInt(0)
+                                                                    + " / Excel: "
+                                                                    + exportNode
+                                                                            .path(
+                                                                                    "calendar_xlsx_path")
+                                                                            .asText(""));
+                                                }
+                                                reloadGridAfterBackgroundWork();
+                                            },
+                                            null);
+                                },
+                                null));
     }
 
     @FXML
@@ -551,6 +562,12 @@ public class MachineCalendarTabController {
         }
         LocalDate d = selectedDate();
         long gen = loadGeneration.incrementAndGet();
+        if (!gridPane.isGridLoading()) {
+            gridPane.setGridLoading(true, "グリッドを読込中…");
+            setToolbarBusy(true);
+        } else {
+            gridPane.setGridLoadingMessage("グリッドを読込中…");
+        }
         runAsync(
                 shell.buildMachineCalendarIoRequest("day_grid", d.toString()),
                 node -> {
@@ -558,6 +575,39 @@ public class MachineCalendarTabController {
                         return;
                     }
                     gridPane.loadFromDayGridJson(node);
+                    if (gridPane.isGridLoading()) {
+                        endGridLoading();
+                    }
+                    if (statusLabel != null) {
+                        statusLabel.setText(
+                                "読込 "
+                                        + d
+                                        + " 列="
+                                        + node.path("columns").size()
+                                        + " 行="
+                                        + node.path("rows").size());
+                    }
+                },
+                null);
+    }
+
+    /** 保存・初期値作成など、既にグリッド暗転中の処理のあとに日次グリッドを再読込する。 */
+    private void reloadGridAfterBackgroundWork() {
+        if (shell == null || gridPane == null) {
+            endGridLoading();
+            return;
+        }
+        LocalDate d = selectedDate();
+        long gen = loadGeneration.incrementAndGet();
+        gridPane.setGridLoadingMessage("グリッドを読込中…");
+        runAsync(
+                shell.buildMachineCalendarIoRequest("day_grid", d.toString()),
+                node -> {
+                    if (gen != loadGeneration.get()) {
+                        return;
+                    }
+                    gridPane.loadFromDayGridJson(node);
+                    endGridLoading();
                     if (statusLabel != null) {
                         statusLabel.setText(
                                 "読込 "

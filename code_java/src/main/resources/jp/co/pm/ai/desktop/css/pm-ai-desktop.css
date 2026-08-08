@@ -1318,11 +1318,11 @@
 }
 
 .pm-machine-calendar-grid-loading .scroll-pane {
-    -fx-opacity: 0.42;
+    -fx-opacity: 0.32;
 }
 
 .pm-machine-calendar-grid-loading-overlay {
-    -fx-background-color: rgba(0, 0, 0, 0.38);
+    -fx-background-color: rgba(0, 0, 0, 0.52);
 }
 
 .pm-machine-calendar-grid-legend {

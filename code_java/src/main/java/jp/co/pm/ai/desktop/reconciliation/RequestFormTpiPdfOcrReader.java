@@ -34,9 +34,7 @@ final class RequestFormTpiPdfOcrReader {
                         .orElseThrow(
                                 () ->
                                         new IOException(
-                                                "Tesseract OCR が見つかりません。"
-                                                        + " 環境変数 PM_AI_TESSERACT_CMD（tesseract.exe）"
-                                                        + " または PM_AI_TESSERACT_TESSDATA_DIR を設定してください。"));
+                                                AppPaths.explainTesseractConfigMissing(ui)));
         try (PDDocument document = Loader.loadPDF(pdfFile)) {
             PDFRenderer renderer = new PDFRenderer(document);
             Tesseract tesseract = createTesseract(config);
@@ -63,14 +61,18 @@ final class RequestFormTpiPdfOcrReader {
         Tesseract tesseract = new Tesseract();
         Path tessData = config.tessDataDir();
         if (tessData != null && Files.isDirectory(tessData)) {
-            tesseract.setDatapath(tessData.toString());
+            String dataPath =
+                    tessData.toAbsolutePath().normalize().toString().replace('\\', '/');
+            tesseract.setDatapath(dataPath);
+            System.setProperty("TESSDATA_PREFIX", dataPath.endsWith("/") ? dataPath : dataPath + "/");
         }
         Path executable = config.executable();
         if (executable != null && Files.isRegularFile(executable)) {
             System.setProperty("net.sourceforge.tess4j.extractor.TesseractExtractor.tesseractPath", executable.toString());
         }
         tesseract.setLanguage("jpn+eng");
-        tesseract.setPageSegMode(1);
+        // 1 = OSD 必須（osd.traineddata）。スキャン PDF 全文 OCR は 3（自動分割・OSD 不要）。
+        tesseract.setPageSegMode(3);
         tesseract.setOcrEngineMode(1);
         return tesseract;
     }

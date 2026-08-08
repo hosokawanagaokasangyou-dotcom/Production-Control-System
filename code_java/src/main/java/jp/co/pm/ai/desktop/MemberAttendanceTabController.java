@@ -97,6 +97,7 @@ public class MemberAttendanceTabController {
     private AttendanceSyncStatusPane syncStatusPane;
     private InlineMonthCalendarPane monthCalendar;
     private ButtonAttentionGlow saveButtonGlow;
+    private ButtonAttentionGlow setupButtonGlow;
     private final AtomicLong loadGeneration = new AtomicLong(0);
     private final PauseTransition gridReloadDebounce = new PauseTransition(Duration.millis(350));
     private boolean attendanceLoadEnabled = false;
@@ -145,6 +146,9 @@ public class MemberAttendanceTabController {
         }
         if (saveButton != null && saveButtonGlow == null) {
             saveButtonGlow = new ButtonAttentionGlow(saveButton);
+        }
+        if (setupButton != null && setupButtonGlow == null) {
+            setupButtonGlow = new ButtonAttentionGlow(setupButton);
         }
         installGridCellSizeSpinner();
         applyGridCellSizeToPane(shell.attendanceGridCellSizePx());
@@ -409,6 +413,17 @@ public class MemberAttendanceTabController {
         }
     }
 
+    private void applySetupButtonAttention(JsonNode node) {
+        if (setupButtonGlow == null) {
+            return;
+        }
+        if (AttendanceSyncStatusPane.needsSetupAttention(node)) {
+            setupButtonGlow.ensureActive();
+        } else {
+            setupButtonGlow.stop();
+        }
+    }
+
     private void scheduleGridReload() {
         gridReloadDebounce.playFromStart();
     }
@@ -530,6 +545,7 @@ public class MemberAttendanceTabController {
                     if (syncStatusPane != null) {
                         syncStatusPane.updateFromReadiness(node);
                     }
+                    applySetupButtonAttention(node);
                 },
                 err -> {
                     if (statusLabel != null) {

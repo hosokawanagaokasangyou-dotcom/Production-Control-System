@@ -95,6 +95,7 @@ public class CompanyCalendarTabController {
     private EditableCompanyCalendarPane calendarPane;
     private AttendanceSyncStatusPane syncStatusPane;
     private ButtonAttentionGlow saveButtonGlow;
+    private ButtonAttentionGlow setupButtonGlow;
     private final AtomicLong loadGeneration = new AtomicLong(0);
     private final PauseTransition fiscalDebounce = new PauseTransition(Duration.millis(350));
     private boolean attendanceLoadEnabled = false;
@@ -120,6 +121,9 @@ public class CompanyCalendarTabController {
         }
         if (saveButton != null && saveButtonGlow == null) {
             saveButtonGlow = new ButtonAttentionGlow(saveButton);
+        }
+        if (setupButton != null && setupButtonGlow == null) {
+            setupButtonGlow = new ButtonAttentionGlow(setupButton);
         }
         installGridCellSizeSpinner();
         applyGridCellSizeToPane(shell.attendanceGridCellSizePx());
@@ -374,6 +378,17 @@ public class CompanyCalendarTabController {
         }
     }
 
+    private void applySetupButtonAttention(JsonNode node) {
+        if (setupButtonGlow == null) {
+            return;
+        }
+        if (AttendanceSyncStatusPane.needsSetupAttention(node)) {
+            setupButtonGlow.ensureActive();
+        } else {
+            setupButtonGlow.stop();
+        }
+    }
+
     /** セッション・環境変数復元後に MainShell から呼ぶ。JSON 正本を読み込む。 */
     public void enableAttendanceLoadAndRefresh() {
         if (attendanceLoadEnabled) {
@@ -554,6 +569,7 @@ public class CompanyCalendarTabController {
                         if (ok) {
                             refreshFromPython();
                             shell.refreshAttendanceReadiness();
+                            refreshLocalReadiness();
                         }
                     });
             endSetupWizardGridOverlay();
@@ -588,6 +604,7 @@ public class CompanyCalendarTabController {
                     if (syncStatusPane != null) {
                         syncStatusPane.updateFromReadiness(node);
                     }
+                    applySetupButtonAttention(node);
                     if (calendarPane != null) {
                         calendarPane.setGridNeedsAttention(
                                 node.path("needs_setup").asBoolean(false));

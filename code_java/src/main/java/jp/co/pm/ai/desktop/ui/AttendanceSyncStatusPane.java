@@ -58,4 +58,17 @@ public final class AttendanceSyncStatusPane extends VBox {
             readinessLabel.getStyleClass().add("pm-attendance-sync-warn");
         }
     }
+
+    /**
+     * セットアップウィザードで解消できる段階2未準備（会社カレンダー・メンバー勤怠の不足等）。
+     * 機械カレンダーだけ未整備のときは false。
+     */
+    public static boolean needsSetupAttention(JsonNode node) {
+        if (node == null || node.path("stage2_ready").asBoolean(false)) {
+            return false;
+        }
+        return node.path("needs_setup").asBoolean(false)
+                || !node.path("company_calendar_ready").asBoolean(false)
+                || !node.path("member_attendance_ready").asBoolean(false);
+    }
 }
