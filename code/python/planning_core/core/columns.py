@@ -130,9 +130,6 @@ STAGE1_PLAN_OUTPUT_SHEET = "タスク一覧"
 STAGE1_TASK_INPUT_PREVIEW_FILENAME = "stage1_task_input_table.xlsx"
 STAGE1_TASK_INPUT_PREVIEW_SHEET = "タスク入力整形"
 PLAN_INPUT_SHEET_NAME = os.environ.get("TASK_PLAN_SHEET", "").strip() or STAGE1_PLAN_OUTPUT_SHEET
-PLAN_INPUT_STAGE3_SHEET_NAME = (
-    os.environ.get("PM_AI_PLAN_INPUT_STAGE3_SHEET", "").strip() or "配台計画_タスク入力3.0"
-)
 DISPATCH_TRIAL_PATTERN_LIST_SHEET_NAME = (
     os.environ.get("DISPATCH_TRIAL_PATTERN_LIST_SHEET", "").strip()
     or "配台試行順_パターン一覧"
@@ -794,18 +791,6 @@ def plan_input_sheet_column_order():
         cols.append(c)
     cols.append(PLAN_COL_LIMITED_OP)
     return cols
-def plan_input_stage3_sheet_column_order():
-    """段階3 入力3表の列順。入力1表の列順の先頭に枝番識別列（元依頼NO・配台枝番）を足したもの。
-
-    段階3.0〜3.2 では配台開始下限に ``配台可能日時`` 列のみを用いる（*_上書き 列は廃止）。
-    """
-    excluded = set(PLAN_DEPRECATED_OVERRIDE_COLUMNS) | {
-        plan_reference_column_name(c)
-        for c in PLAN_OVERRIDE_COLUMNS
-        if c not in (PLAN_COL_EXCLUDE_FROM_ASSIGNMENT, PLAN_COL_AI_PARSE)
-    }
-    base = [c for c in plan_input_sheet_column_order() if c not in excluded]
-    return [PLAN_COL_PARENT_TASK_ID, PLAN_COL_BRANCH_SEQ] + base
 def _format_paren_ref_scalar(val):
     """参照表示用: 空は（―）」日付・しの他は（値）。"""
     if val is None or (isinstance(val, float) and pd.isna(val)):

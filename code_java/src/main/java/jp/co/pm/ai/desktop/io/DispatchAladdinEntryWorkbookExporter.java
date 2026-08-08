@@ -36,7 +36,7 @@ import jp.co.pm.ai.desktop.dispatch.AladdinShapedPlanQtyLookup;
 import jp.co.pm.ai.desktop.dispatch.DispatchAladdinEntrySheetBuilder;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchInteractiveConsolidator;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchNormalizer;
-import jp.co.pm.ai.desktop.dispatch.ResultDispatchStage3Support;
+import jp.co.pm.ai.desktop.dispatch.ResultDispatchPlanningStageSupport;
 import jp.co.pm.ai.desktop.reconciliation.PostProcessingKouteiNaiyoMasterLookup;
 import jp.co.pm.ai.desktop.reconciliation.PostProcessingPlanMachineLookup;
 
@@ -137,9 +137,9 @@ public final class DispatchAladdinEntryWorkbookExporter {
             rows.add(new java.util.LinkedHashMap<>(r));
         }
         ResultDispatchInteractiveConsolidator.consolidatePlanAndTimelineRowsInPlace(columns, rows);
-        if (ResultDispatchStage3Support.hasStage3ActualColumn(columns)) {
-            ResultDispatchStage3Support.applyStage3DisplayQuantities(columns, rows);
-            ResultDispatchStage3Support.removeRedundantActualColumnFromMaps(columns, rows);
+        if (ResultDispatchPlanningStageSupport.hasActualDispatchQtyColumn(columns)) {
+            ResultDispatchPlanningStageSupport.applyActualQtyDisplayQuantities(columns, rows);
+            ResultDispatchPlanningStageSupport.removeRedundantActualColumnFromMaps(columns, rows);
         }
 
         AladdinShapedPlanQtyLookup.ShapedTable shaped =

@@ -1488,11 +1488,11 @@ def resolve_dispatchable_datetime_from_plan_row(
 ):
     """配台計画1行から配台可能日時を解決。
 
-    優先順: 列「配台可能日時」（入力3表・入力1表とも）→ 未設定時のフォールバック。
+    優先順: 列「配台可能日時」→ 未設定時のフォールバック。
     列に値があるとき原反投入日は暦日・時刻の下限に使わない。
 
-    ``regular_shift_start`` を渡したとき（段階3配台読込）は、未設定時に
-    原反投入日+12:45 ではなく ``max(run_date, 原反投入日)`` の暦日 + 定常開始時刻（A15）とする。
+    ``regular_shift_start`` を渡したときは、未設定時に
+    原反投入日+12:45 ではなく ``max(run_date, 原反投入日)`` の暦日 + 定常開始時刻とする。
     """
     col = parse_optional_datetime(
         _planning_df_cell_scalar(row, PLAN_COL_DISPATCHABLE_DATETIME)
@@ -1511,15 +1511,6 @@ def resolve_dispatchable_datetime_from_plan_row(
     raw = parse_optional_date(_planning_df_cell_scalar(row, TASK_COL_RAW_INPUT_DATE))
     stock_location = _planning_df_cell_scalar(row, TASK_COL_STOCK_LOCATION)
     return compute_dispatchable_datetime(raw, run_date=run_date, stock_location=stock_location)
-def stage3_regular_shift_start_time() -> time:
-    """段階3: master メイン A15（定常開始）。読めないときは ``DEFAULT_START_TIME``。"""
-    try:
-        st, _et = _read_master_main_regular_shift_times(_master_workbook_path_resolved())
-        if st is not None:
-            return st
-    except Exception:
-        pass
-    return DEFAULT_START_TIME
 def _planning_df_cell_scalar(row, col_name):
     """
     iterrows() 1行分から列値を得る。同一見出しの重複列はあると row.get は Series になり」

@@ -41,13 +41,12 @@ import org.controlsfx.control.spreadsheet.GridBase;
 import org.controlsfx.control.spreadsheet.SpreadsheetView;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
-import jp.co.pm.ai.desktop.config.Stage3UiVisibility;
 import jp.co.pm.ai.desktop.dispatch.DispatchAladdinEntrySheetBuilder;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchDeadlineJudgment;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchNormalizer;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchInteractiveConsolidator;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchSchema;
-import jp.co.pm.ai.desktop.dispatch.ResultDispatchStage3Support;
+import jp.co.pm.ai.desktop.dispatch.ResultDispatchPlanningStageSupport;
 import jp.co.pm.ai.desktop.io.AladdinProcessingPlanSourceFreshness;
 import jp.co.pm.ai.desktop.io.AladdinProcessingPlanSourceReloader;
 import jp.co.pm.ai.desktop.io.DesktopFileOpener;
@@ -254,14 +253,14 @@ public final class ResultDispatchTableTabController {
     void applyStage3UiVisibility(boolean visible) {
         if (shell != null) {
             Path path = AppPaths.resolveResultDispatchTableJsonPath(shell.snapshotUiEnv());
-            ResultDispatchStage3Support.applyPlanningStageBadgeFromDispatchJson(
+            ResultDispatchPlanningStageSupport.applyPlanningStageBadgeFromDispatchJson(
                     dataStageBadgeLabel, path);
         }
         if (!visible
                 && dataStageBadgeLabel != null
                 && dataStageBadgeLabel.getText() != null
                 && dataStageBadgeLabel.getText().startsWith("段階3")) {
-            Stage3UiVisibility.apply(dataStageBadgeLabel, false);
+            jp.co.pm.ai.desktop.ui.JavaFxNodeVisibility.apply(dataStageBadgeLabel, false);
         }
     }
 
@@ -606,14 +605,14 @@ public final class ResultDispatchTableTabController {
             }
             ResultDispatchInteractiveConsolidator.consolidatePlanAndTimelineRowsInPlace(
                     headerOrder, rowMaps);
-            boolean stage3 = ResultDispatchStage3Support.hasStage3ActualColumn(headerOrder);
+            boolean stage3 = ResultDispatchPlanningStageSupport.hasActualDispatchQtyColumn(headerOrder);
             if (stage3) {
-                ResultDispatchStage3Support.applyStage3DisplayQuantities(headerOrder, rowMaps);
-                ResultDispatchStage3Support.removeRedundantActualColumnFromMaps(headerOrder, rowMaps);
+                ResultDispatchPlanningStageSupport.applyActualQtyDisplayQuantities(headerOrder, rowMaps);
+                ResultDispatchPlanningStageSupport.removeRedundantActualColumnFromMaps(headerOrder, rowMaps);
             }
-            ResultDispatchStage3Support.applyPlanningStageBadgeFromDispatchJson(
+            ResultDispatchPlanningStageSupport.applyPlanningStageBadgeFromDispatchJson(
                     dataStageBadgeLabel, path);
-            Stage3UiVisibility.applyPlanningStageBadgePolicy(
+            jp.co.pm.ai.desktop.ui.JavaFxNodeVisibility.applyPlanningStageBadgePolicyNoop(
                     dataStageBadgeLabel, shell != null ? shell.snapshotUiEnv() : Map.of());
             statusLabel.setText("");
 

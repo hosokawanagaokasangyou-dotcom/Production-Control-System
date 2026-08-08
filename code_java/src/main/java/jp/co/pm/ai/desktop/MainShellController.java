@@ -120,8 +120,6 @@ import jp.co.pm.ai.desktop.config.DispatchTrialLogUiStore;
 import jp.co.pm.ai.desktop.config.JvmMemoryLogStore;
 import jp.co.pm.ai.desktop.config.MainShellTabLayoutDefaults;
 import jp.co.pm.ai.desktop.config.MainShellTabLayoutNode;
-import jp.co.pm.ai.desktop.config.Stage3MainShellLayout;
-import jp.co.pm.ai.desktop.config.Stage3UiVisibility;
 import jp.co.pm.ai.desktop.config.FactoryOperatorUserStore;
 import jp.co.pm.ai.desktop.config.FactorySite;
 import jp.co.pm.ai.desktop.config.FactorySiteOperatorAccess;
@@ -170,7 +168,6 @@ import jp.co.pm.ai.desktop.runtime.MemoryJvmRingLog;
 import jp.co.pm.ai.desktop.dispatch.RawInputMorningDispatchRateAnalyzer;
 import jp.co.pm.ai.desktop.dispatch.RawInputMorningDispatchRateWarning;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchDocument;
-import jp.co.pm.ai.desktop.dispatch.Stage3PlanningMetaStore;
 import jp.co.pm.ai.desktop.io.Stage2EquipmentGanttContractPaths;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchPythonExport;
 import jp.co.pm.ai.desktop.io.DesktopFileOpener;
@@ -195,27 +192,6 @@ public final class MainShellController
     private static final String STAGE1 = "task_extract_stage1.py";
     private static final String STAGE2 = "plan_simulation_stage2.py";
     private static final String STAGE2_1 = "plan_simulation_stage2_1.py";
-    private static final String STAGE3_0 = "plan_simulation_stage3_0.py";
-    private static final String STAGE3_1 = "plan_simulation_stage3_1.py";
-    private static final String STAGE3_2 = "plan_simulation_stage3_2.py";
-
-    private static boolean isStage3Script(String script) {
-        return STAGE3_0.equals(script) || STAGE3_1.equals(script) || STAGE3_2.equals(script);
-    }
-
-    private static jp.co.pm.ai.desktop.dispatch.Stage3PlanningMetaStore.Variant
-            stage3PlanningMetaVariantForScript(String script) {
-        if (STAGE3_0.equals(script)) {
-            return jp.co.pm.ai.desktop.dispatch.Stage3PlanningMetaStore.Variant.STAGE3_0;
-        }
-        if (STAGE3_1.equals(script)) {
-            return jp.co.pm.ai.desktop.dispatch.Stage3PlanningMetaStore.Variant.STAGE3_1;
-        }
-        if (STAGE3_2.equals(script)) {
-            return jp.co.pm.ai.desktop.dispatch.Stage3PlanningMetaStore.Variant.STAGE3_2;
-        }
-        return null;
-    }
 
     private static PipelineExecutionTimingKind pipelineTimingKindForStageScript(String script) {
         if (STAGE1.equals(script)) {
@@ -226,15 +202,6 @@ public final class MainShellController
         }
         if (STAGE2_1.equals(script)) {
             return PipelineExecutionTimingKind.STAGE2_1;
-        }
-        if (STAGE3_0.equals(script)) {
-            return PipelineExecutionTimingKind.STAGE3_0;
-        }
-        if (STAGE3_1.equals(script)) {
-            return PipelineExecutionTimingKind.STAGE3_1;
-        }
-        if (STAGE3_2.equals(script)) {
-            return PipelineExecutionTimingKind.STAGE3_2;
         }
         return null;
     }
@@ -331,8 +298,7 @@ public final class MainShellController
                     AppPaths.KEY_PM_AI_RESULT_DISPATCH_TABLE_DIR,
                     AppPaths.KEY_PM_AI_PLAN_RESULT_TASK_JSON,
                     AppPaths.KEY_PM_AI_PLAN_RESULT_TASK_JSON_PATH,
-                    AppPaths.KEY_PM_AI_PORTABLE_BUNDLE_SOURCE_DIR,
-                    AppPaths.KEY_PM_AI_STAGE3_UI_VISIBLE);
+                    AppPaths.KEY_PM_AI_PORTABLE_BUNDLE_SOURCE_DIR);
 
     /** Keys in {@link #BOOTSTRAP_ORDER} for quick membership checks. */
     private static final Set<String> BOOTSTRAP_KEY_SET = Set.copyOf(BOOTSTRAP_ORDER);
@@ -443,9 +409,6 @@ public final class MainShellController
 
     @FXML
     private PlanInputTabController planInputTabController;
-
-    @FXML
-    private PlanInputStage3TabController planInputStage3TabController;
 
     @FXML
     private RequestFormInputTabController requestFormInputTabController;
@@ -570,9 +533,6 @@ public final class MainShellController
     private Tab mainShellTabPlanInput;
 
     @FXML
-    private Tab mainShellTabPlanInputStage3;
-
-    @FXML
     private Tab mainShellTabRequestFormInput;
 
     @FXML
@@ -665,9 +625,6 @@ public final class MainShellController
     /** Non-null while a stage script is running; equals {@link #STAGE1} or {@link #STAGE2}. */
     private volatile String activeRunStageScript;
 
-    /** 配台試行（段階3／段階3.5）実行中の種別。{@link #runLock} と連動。 */
-    private volatile PipelineExecutionTimingKind activeDispatchTrialKind;
-
     /** Python child process while stage 1/2 is running; cleared on completion or interrupt. */
     private final AtomicReference<Process> activeStageChildProcess = new AtomicReference<>();
 
@@ -717,14 +674,8 @@ public final class MainShellController
      */
     private DesktopSessionState pendingMainShellTabLayoutSession;
 
-    /** OFF中も段階3タブの保存済み位置・グループを失わないための完全レイアウト。 */
+    /** OFF中も段階3タブの保存済み位置・グループを失わないための完全レイアウト（レガシー復元用）。 */
     private List<MainShellTabLayoutNode> completeMainShellTabLayout = List.of();
-
-    /**
-     * 直前の {@link #applyStage3UiVisibility()} で適用した表示状態。未適用は {@code null}。
-     * 環境変数 debounce のたびにタブを組み替えると選択が消え、操作可能なリモート等へ寄るため、変化時のみ再構築する。
-     */
-    private Boolean lastAppliedStage3UiVisible;
 
     /** 非選択タブの重い {@link Tab#setContent(Node)} を退避するときの {@link Tab#getProperties()} キー。 */
     private static final String PM_DEFERRED_TAB_CONTENT = "pmDeferredTabContent";
@@ -920,9 +871,6 @@ public final class MainShellController
                 .setPromptText("code/python (未設定時は環境変数 PM_AI_CODE_PYTHON_DIR)");
 
         planInputTabController.bindShell(this);
-        if (planInputStage3TabController != null) {
-            planInputStage3TabController.bindShell(this);
-        }
         if (requestFormInputTabController != null) {
             requestFormInputTabController.bindShell(this);
         }
@@ -1408,7 +1356,6 @@ public final class MainShellController
         }
         mainRunTabController.refreshOpenWorkbookHintLabels();
         factoryOperatorToolbar.refreshFactorySiteLogo();
-        applyStage3UiVisibility();
         Platform.runLater(() -> excludeRulesTabController.tryStartupLoadFromPathField());
     }
 
@@ -2305,9 +2252,6 @@ public final class MainShellController
         if (t == mainShellTabPlanInput) {
             return MainShellTabId.PLAN_INPUT;
         }
-        if (t == mainShellTabPlanInputStage3) {
-            return MainShellTabId.PLAN_INPUT_STAGE3;
-        }
         if (t == mainShellTabRequestFormInput) {
             return MainShellTabId.REQUEST_FORM_INPUT;
         }
@@ -2397,7 +2341,6 @@ public final class MainShellController
             case MACHINE_CALENDAR -> mainShellTabMachineCalendar;
             case MASTER_SUMMARY -> mainShellTabMasterSummary;
             case PLAN_INPUT -> mainShellTabPlanInput;
-            case PLAN_INPUT_STAGE3 -> mainShellTabPlanInputStage3;
             case REQUEST_FORM_INPUT -> mainShellTabRequestFormInput;
             case REQUEST_FORM_PIPELINE_CHECK -> mainShellTabRequestFormPipelineCheck;
             case REMOTE_DESKTOP -> mainShellTabRemoteDesktop;
@@ -2803,15 +2746,7 @@ public final class MainShellController
     }
 
     private List<MainShellTabLayoutNode> snapshotMainShellTabLayout() {
-        List<MainShellTabLayoutNode> visibleLayout = snapshotLiveMainShellTabLayout();
-        if (!Stage3UiVisibility.isVisible(collectUiEnv())
-                && !completeMainShellTabLayout.isEmpty()) {
-            completeMainShellTabLayout =
-                    Stage3MainShellLayout.mergeHiddenTab(
-                            visibleLayout, completeMainShellTabLayout);
-            return completeMainShellTabLayout;
-        }
-        return visibleLayout;
+        return snapshotLiveMainShellTabLayout();
     }
 
     private List<MainShellTabLayoutNode> snapshotLiveMainShellTabLayout() {
@@ -3701,10 +3636,7 @@ public final class MainShellController
         try {
             wiredInnerMainShellTabPanes.clear();
             tabPane.getTabs().clear();
-            List<MainShellTabLayoutNode> displayed =
-                    Stage3UiVisibility.isVisible(collectUiEnv())
-                            ? prepared
-                            : Stage3MainShellLayout.withoutStage3(prepared);
+            List<MainShellTabLayoutNode> displayed = prepared;
             for (MainShellTabLayoutNode n : displayed) {
                 Tab built = materializeLayoutNode(n);
                 if (built != null) {
@@ -3749,8 +3681,7 @@ public final class MainShellController
         if (isEnvVarsInitializationPending()) {
             ensureMainShellEnvTabSelected();
         } else if (isPipelineRunLocked()
-                || activeRunStageScript != null
-                || activeDispatchTrialKind != null) {
+                || activeRunStageScript != null) {
             ensureMainShellRunTabSelected();
         } else if (selectedLeafBefore != null) {
             selectMainShellTabRecursive(tabPane, selectedLeafBefore);
@@ -3823,12 +3754,7 @@ public final class MainShellController
      * @return メインタブの組み替えに成功したとき {@code true}
      */
     boolean applyMainShellTabLayoutFromOrganizer(List<MainShellTabLayoutNode> layout) {
-        List<MainShellTabLayoutNode> complete =
-                Stage3UiVisibility.isVisible(collectUiEnv())
-                        ? layout
-                        : Stage3MainShellLayout.mergeHiddenTab(
-                                layout, completeMainShellTabLayout);
-        if (!rebuildMainShellTabsFromLayout(complete)) {
+        if (!rebuildMainShellTabsFromLayout(layout)) {
             return false;
         }
         applyInnerTabHeaderColorsToLiveUi(innerTabHeaderColorByKey);
@@ -3839,10 +3765,7 @@ public final class MainShellController
 
     /** 現在のメインシェル構成をツリー編集用にエクスポート。 */
     List<MainShellTabLayoutNode> snapshotMainShellTabLayoutNodes() {
-        List<MainShellTabLayoutNode> layout = snapshotLiveMainShellTabLayout();
-        return Stage3UiVisibility.isVisible(collectUiEnv())
-                ? layout
-                : Stage3MainShellLayout.withoutStage3(layout);
+        return snapshotLiveMainShellTabLayout();
     }
 
     /** {@link MainShellTabLayoutDefaults#completeFlatTabKeyOrder()} と同順の {@link MainShellTabId}。 */
@@ -3850,7 +3773,7 @@ public final class MainShellController
         List<MainShellTabId> out = new ArrayList<>();
         for (String k : MainShellTabLayoutDefaults.completeFlatTabKeyOrder()) {
             MainShellTabId id = MainShellTabId.fromKey(k);
-            if (id != null && Stage3UiVisibility.isMainShellTabVisible(id, collectUiEnv())) {
+            if (id != null) {
                 out.add(id);
             }
         }
@@ -3859,10 +3782,7 @@ public final class MainShellController
 
     /** タブ整理オーガナイザ用の既定グループ構成（メインシェルが未構築のときのツリー表示）。 */
     List<MainShellTabLayoutNode> defaultMainShellTabLayoutGrouped() {
-        List<MainShellTabLayoutNode> grouped = MainShellTabLayoutDefaults.groupedLayout();
-        return Stage3UiVisibility.isVisible(collectUiEnv())
-                ? grouped
-                : Stage3MainShellLayout.withoutStage3(grouped);
+        return MainShellTabLayoutDefaults.groupedLayout();
     }
 
     private static HashSet<String> requiredShellTabKeys() {
@@ -4558,7 +4478,6 @@ public final class MainShellController
                     pipelineExecutionTimingHistory.configureFromUi(collectUiEnv());
                     FactoryOperatorUserStore.configureFromUi(
                             collectUiEnv(), GlobalInitSettingTarget.load());
-                    applyStage3UiVisibility();
                 });
         Runnable schedule = () -> uiEnvSaveDebounce.playFromStart();
         this.uiEnvPersistSchedule = schedule;
@@ -4588,56 +4507,6 @@ public final class MainShellController
         row.nameProperty().addListener((o, a, b) -> schedule.run());
         row.valueProperty().addListener((o, a, b) -> schedule.run());
         row.descriptionProperty().addListener((o, a, b) -> schedule.run());
-    }
-
-    private void applyStage3UiVisibility() {
-        boolean visible = Stage3UiVisibility.isVisible(collectUiEnv());
-        if (mainRunTabController != null) {
-            mainRunTabController.applyStage3UiVisibility(visible);
-        }
-        if (pipelineExecutionTimingTabController != null) {
-            pipelineExecutionTimingTabController.applyStage3UiVisibility(visible);
-        }
-        if (dispatchInteractiveTabController != null) {
-            dispatchInteractiveTabController.applyStage3UiVisibility(visible);
-        }
-        if (deliveryCalendarViewTabController != null) {
-            deliveryCalendarViewTabController.applyStage3UiVisibility(visible);
-        }
-        if (resultDispatchTableTabController != null) {
-            resultDispatchTableTabController.applyStage3UiVisibility(visible);
-        }
-        if (equipmentGanttGraphicTabController != null) {
-            equipmentGanttGraphicTabController.applyStage3UiVisibility(visible);
-        }
-        if (pushButtonDesignTabController != null) {
-            pushButtonDesignTabController.applyStage3UiVisibility(visible);
-        }
-        boolean visibilityChanged =
-                lastAppliedStage3UiVisible == null || lastAppliedStage3UiVisible != visible;
-        lastAppliedStage3UiVisible = visible;
-        /*
-         * 環境変数タブの debounce のたびに rebuild すると選択が先頭へ戻り、段階実行中は操作可能な
-         * リモートデスクトップ等へ JavaFX が自動遷移する。表示状態が変わったときだけ組み替える。
-         */
-        if (visibilityChanged) {
-            List<MainShellTabLayoutNode> liveLayout = snapshotLiveMainShellTabLayout();
-            List<MainShellTabLayoutNode> fullLayout =
-                    Stage3MainShellLayout.mergeHiddenTab(
-                            liveLayout, completeMainShellTabLayout);
-            if (!fullLayout.isEmpty()) {
-                rebuildMainShellTabsFromLayout(fullLayout);
-            }
-            if (mainShellTabOrganizerPaneController != null) {
-                mainShellTabOrganizerPaneController.refreshFromShell();
-            }
-            if (isPipelineRunLocked()
-                    || activeRunStageScript != null
-                    || activeDispatchTrialKind != null) {
-                ensureMainShellRunTabSelected();
-                applyRunTabGating();
-            }
-        }
     }
 
     private static boolean nonBlank(String v) {
@@ -4834,7 +4703,6 @@ public final class MainShellController
         ensureBootstrapDefaultValuesVisible(collectUiEnv());
         ensureUiRefOptionalDisplayDefaultsVisible(collectUiEnv());
         applyRepoFolderPathNormalization();
-        applyStage3UiVisibility();
         syncDesktopSessionPathFieldsFromEnvTab();
         if (persistSession) {
             DesktopSessionStateStore.save(collectDesktopSessionForGlobalPersistence());
@@ -4937,6 +4805,7 @@ public final class MainShellController
             return;
         }
         envVarsStartupCheckBusy = EnvVarsStartupCheckBusyDialog.show(primaryStage, status);
+        envVarsStartupCheckBusy.setStep(resolveStartupCheckDialogStep(status));
     }
 
     private void updateEnvVarsStartupCheckBusy(String status) {
@@ -4946,6 +4815,7 @@ public final class MainShellController
         Runnable update =
                 () -> {
                     envVarsStartupCheckBusy.setHeader(resolveStartupCheckDialogHeader(status));
+                    envVarsStartupCheckBusy.setStep(resolveStartupCheckDialogStep(status));
                     envVarsStartupCheckBusy.setStatus(status);
                 };
         if (Platform.isFxApplicationThread()) {
@@ -4964,6 +4834,26 @@ public final class MainShellController
             return EnvVarsStartupCheckBusyDialog.HEADER_BACKGROUND_LOAD;
         }
         return EnvVarsStartupCheckBusyDialog.HEADER;
+    }
+
+    private static String resolveStartupCheckDialogStep(String status) {
+        if (status == null || status.isBlank()) {
+            return "";
+        }
+        if (EnvVarsStartupCheckBusyDialog.STATUS_RESTORE_WORKSPACE.equals(status)
+                || EnvVarsStartupCheckBusyDialog.STATUS_FACTORY_SWITCH.equals(status)) {
+            return EnvVarsStartupCheckBusyDialog.STEP_RESTORE_WORKSPACE;
+        }
+        if (EnvVarsStartupCheckBusyDialog.STATUS_STABILIZE.equals(status)
+                || EnvVarsStartupCheckBusyDialog.STATUS_MATCH.equals(status)
+                || EnvVarsStartupCheckBusyDialog.STATUS_DONE.equals(status)) {
+            return EnvVarsStartupCheckBusyDialog.STEP_ENV_MATCH;
+        }
+        if (EnvVarsStartupCheckBusyDialog.STATUS_BACKGROUND_LOAD.equals(status)
+                || status.startsWith("起動後読込")) {
+            return EnvVarsStartupCheckBusyDialog.STEP_TAB_LOAD;
+        }
+        return "";
     }
 
     private void endEnvVarsStartupCheckBusy() {
@@ -5491,27 +5381,18 @@ public final class MainShellController
 
     private void runStage(String script) {
         if (STAGE1.equals(script) && blockIfPlanningStagesCalendarNotReady("段階1")) {
-            releaseStage3RunButtonLockIfNeeded(script);
             return;
         }
         if (stage2SourceGuardCoordinator.isRunning() && !stage2SourceGuardRunHandoff) {
             appendLog("[busy] 固定ソース確認中のため段階処理を開始できません。");
-            releaseStage3RunButtonLockIfNeeded(script);
             return;
         }
         if (isDeliveryCalendarReloadBlockingStageRuns()) {
             String stageJa =
                     STAGE1.equals(script)
                             ? "段階1"
-                            : (STAGE2_1.equals(script)
-                                    ? "段階2.1"
-                                    : (STAGE3_0.equals(script)
-                                            ? "段階3.0"
-                                            : (STAGE3_1.equals(script)
-                                                    ? "段階3.1"
-                                                    : (STAGE3_2.equals(script) ? "段階3.2" : "段階2"))));
+                            : (STAGE2_1.equals(script) ? "段階2.1" : "段階2");
             appendLog("[busy] 納期管理ビュー再読み込み中のため " + stageJa + " を開始できません。");
-            releaseStage3RunButtonLockIfNeeded(script);
             return;
         }
         if (STAGE2.equals(script) && blockIfMaterialLookupTablesHaveBlankValues("段階2")) {
@@ -5534,7 +5415,6 @@ public final class MainShellController
         }
         if (!runLock.compareAndSet(false, true)) {
             appendLog("[busy] already running (single flight).");
-            releaseStage3RunButtonLockIfNeeded(script);
             return;
         }
         activeRunStageScript = script;
@@ -5600,7 +5480,7 @@ public final class MainShellController
                  * ここで消すと、完了時保存前に束が消えたまま段階2へ進む事故の温床になる。
                  */
                 PipelineDownstreamResultsClearer.ClearResult downstreamClear =
-                        PipelineDownstreamResultsClearer.clearStage2ThroughStage32(
+                        PipelineDownstreamResultsClearer.clearStage2Downstream(
                                 uiRun, true /* preserveTodayDispatchSourceBundle */);
                 for (String line : downstreamClear.detailLines()) {
                     appendLog(line);
@@ -5609,7 +5489,6 @@ public final class MainShellController
                     appendLog("[stage1] 段階2〜3.2 成果物の一部を削除できませんでした。");
                 }
                 pendingStage21OvertimeJsonPath = null;
-                pendingStage31OvertimeJsonPath = null;
                 pendingStage2InProgressNextDayJsonPath = null;
                 pendingStage2AladdinTodayExcludeJsonPath = null;
                 syncUiAfterDownstreamPipelineResultsCleared();
@@ -5628,22 +5507,6 @@ public final class MainShellController
                     uiRun.put(AppPaths.KEY_PM_AI_RESULT_BOOK_FONT, resultFont.trim());
                 } else {
                     uiRun.remove(AppPaths.KEY_PM_AI_RESULT_BOOK_FONT);
-                }
-            }
-            if (isStage3Script(script)) {
-                uiRun.put(AppPaths.KEY_PM_AI_STAGE2_WRITE_EXCEL, "1");
-                uiRun.put(AppPaths.KEY_PM_AI_STAGE2_SKIP_IN_PROGRESS_DISPATCH, "0");
-            }
-            if (isStage3Script(script) && dispatchInteractiveTabController != null) {
-                dispatchInteractiveTabController.persistStage3BaselineBeforePipelineRun();
-            }
-            if (STAGE3_1.equals(script)) {
-                uiRun.put(AppPaths.KEY_PM_AI_STAGE2_1_OVERTIME, "1");
-                java.nio.file.Path ot31 = pendingStage31OvertimeJsonPath;
-                if (ot31 != null) {
-                    uiRun.put(
-                            AppPaths.KEY_PM_AI_OVERTIME_SIMULATION_JSON,
-                            ot31.toAbsolutePath().normalize().toString());
                 }
             }
             if (STAGE2_1.equals(script)) {
@@ -5826,14 +5689,10 @@ public final class MainShellController
             appendLog("[error] runStage: " + t.getMessage());
             boolean stage2 = STAGE2.equals(script);
             boolean stage1 = STAGE1.equals(script);
-            boolean stage3 = isStage3Script(script);
             Platform.runLater(
                     () -> {
                         endStageRunBusyDialog();
                         applyRunTabGating();
-                        if (stage3) {
-                            endStage3RunButtonLock();
-                        }
                         if (stage2 && dispatchInteractiveTabController != null) {
                             dispatchInteractiveTabController.reloadTableFromDiskAfterExternalUpdate();
                         }
@@ -5860,9 +5719,6 @@ public final class MainShellController
         if (stageTimingKind != null) {
             endPipelineExecutionTiming(stageTimingKind);
         }
-        if (isStage3Script(script)) {
-            endStage3RunButtonLock();
-        }
         applyRunTabGating();
         if (err != null) {
             mainRunTabController
@@ -5877,9 +5733,6 @@ public final class MainShellController
                 dispatchInteractiveTabController.reloadTableFromDiskAfterExternalUpdate();
             }
             if (STAGE2_1.equals(script) && dispatchInteractiveTabController != null) {
-                dispatchInteractiveTabController.reloadTableFromDiskAfterExternalUpdate();
-            }
-            if (isStage3Script(script) && dispatchInteractiveTabController != null) {
                 dispatchInteractiveTabController.reloadTableFromDiskAfterExternalUpdate();
             }
         } else {
@@ -6108,72 +5961,9 @@ public final class MainShellController
                     dispatchInteractiveTabController.reloadTableFromDiskAfterExternalUpdate();
                 }
             }
-            if (isStage3Script(script)) {
-                if (c == 0) {
-                    Platform.runLater(
-                            () -> {
-                                Path dispatchJson = null;
-                                try {
-                                    dispatchJson =
-                                            AppPaths.resolveResultDispatchTableJsonPath(
-                                                    collectUiEnv());
-                                    Stage3PlanningMetaStore.Variant metaVariant =
-                                            stage3PlanningMetaVariantForScript(script);
-                                    if (metaVariant != null) {
-                                        Stage3PlanningMetaStore.writeVariant(
-                                                dispatchJson, metaVariant);
-                                    }
-                                } catch (Exception ex) {
-                                    appendLog(
-                                            "[stage3] planning meta 書込失敗: "
-                                                    + (ex.getMessage() != null
-                                                            ? ex.getMessage()
-                                                            : ex));
-                                }
-                                refreshStage2OutputArtifacts();
-                                refreshEquipmentGanttGraphicAfterPipelineRun();
-                                refreshOperatorCardAfterPipelineRun();
-                                if (planInputStage3TabController != null) {
-                                    planInputStage3TabController.reloadFromDisk();
-                                }
-                                String stageLabel =
-                                        STAGE3_0.equals(script)
-                                                ? "段階3.0"
-                                                : (STAGE3_1.equals(script)
-                                                        ? "段階3.1"
-                                                        : "段階3.2");
-                                Runnable afterDispatchReload =
-                                        () -> {
-                                            MacroCompleteChime.playIfAvailable(collectUiEnv());
-                                            selectMainShellTab(MainShellTabId.DISPATCH_INTERACTIVE);
-                                            reloadDeliveryCalendarInBackgroundAfterDispatchTrialSuccess();
-                                            showStageCompletionDialog(
-                                                    stageLabel + " 完了",
-                                                    stageLabel
-                                                            + " の配台と枝番統合が正常終了しました。");
-                                        };
-                                if (dispatchInteractiveTabController != null) {
-                                    dispatchInteractiveTabController
-                                            .reloadTableFromDiskAfterStage3PipelineSuccess(
-                                                    afterDispatchReload);
-                                } else {
-                                    afterDispatchReload.run();
-                                }
-                            });
-                } else if (dispatchInteractiveTabController != null) {
-                    dispatchInteractiveTabController.reloadTableFromDiskAfterExternalUpdate();
-                }
-            }
-        }
-        if (STAGE3_1.equals(script)) {
-            deleteOvertimeSimulationJsonQuietly(pendingStage31OvertimeJsonPath);
-            pendingStage31OvertimeJsonPath = null;
         }
         boolean stage12 =
-                STAGE1.equals(script)
-                        || STAGE2.equals(script)
-                        || STAGE2_1.equals(script)
-                        || isStage3Script(script);
+                STAGE1.equals(script) || STAGE2.equals(script) || STAGE2_1.equals(script);
         boolean failed =
                 err != null
                         || (code != null && code.intValue() != 0 && code.intValue() != 9);
@@ -6283,50 +6073,23 @@ public final class MainShellController
      * @return 他処理が実行中などで開始できないとき {@code false}
      */
     boolean tryBeginDispatchTrialGating(PipelineExecutionTimingKind kind) {
-        if (kind != PipelineExecutionTimingKind.STAGE3) {
-            return true;
-        }
-        if (!runLock.compareAndSet(false, true)) {
-            appendLog("[busy] 他の処理が実行中のため " + kind.label() + " を開始できません。");
-            return false;
-        }
-        activeDispatchTrialKind = kind;
-        overlayDispatchSpecialRulesForStageTrial(kind);
-        selectMainShellTab(MainShellTabId.RUN);
-        applyRunTabGating();
-        mainRunTabController.beginLogTailFollowForRun();
         return true;
     }
 
-    /** 配台試行の操作制限を解除する（FX スレッドから呼ぶ想定）。 */
     void endDispatchTrialGating(PipelineExecutionTimingKind kind) {
-        if (activeDispatchTrialKind == kind) {
-            activeDispatchTrialKind = null;
-        }
         DispatchRuleBuilderRunContext.get().clearActiveRun();
         runLock.set(false);
         applyRunTabGating();
     }
 
-    /** 配台試行後の再読込失敗など、種別不明で gating を解除するとき。 */
     void endActiveDispatchTrialGatingIfAny() {
-        PipelineExecutionTimingKind kind = activeDispatchTrialKind;
-        if (kind != null) {
-            endDispatchTrialGating(kind);
-        }
+        runLock.set(false);
+        applyRunTabGating();
     }
 
-    /**
-     * 段階1・段階2スクリプト、または段階3 の配台試行が実行中か。
-     * 実行中は PDF 生成（依頼書プレビュー・設備ガント等）を抑制する。
-     */
     public boolean isPlanningPipelineStageRunning() {
         String script = activeRunStageScript;
-        if (STAGE1.equals(script) || STAGE2.equals(script) || STAGE2_1.equals(script)) {
-            return true;
-        }
-        PipelineExecutionTimingKind kind = activeDispatchTrialKind;
-        return kind == PipelineExecutionTimingKind.STAGE3;
+        return STAGE1.equals(script) || STAGE2.equals(script) || STAGE2_1.equals(script);
     }
 
     /**
@@ -6337,7 +6100,7 @@ public final class MainShellController
         String script = activeRunStageScript;
         boolean stage1Running = STAGE1.equals(script);
         boolean stageScriptRunning = pipelineTimingKindForStageScript(script) != null;
-        boolean dispatchTrialBusy = activeDispatchTrialKind != null;
+        boolean dispatchTrialBusy = false;
         boolean sourceGuardBusy = stage2SourceGuardCoordinator.isRunning();
         boolean pipelineBusy = stageScriptRunning || dispatchTrialBusy || sourceGuardBusy;
         if (mainRunTabController != null) {
@@ -6349,10 +6112,7 @@ public final class MainShellController
         if (planInputTabController != null) {
             planInputTabController.setStageRunProgressVisible(stage1Running, pipelineBusy);
         }
-        if (planInputStage3TabController != null) {
-            planInputStage3TabController.setStageRunProgressVisible(stage1Running, pipelineBusy);
-        }
-        updateShellStageProgressOverlay(script, activeDispatchTrialKind);
+        updateShellStageProgressOverlay(script, null);
         boolean envInitPending = isEnvVarsInitializationPending();
         boolean guestSessionOnly = FactoryOperatorUserStore.isGuestSession();
         applyEnvVarsInitToolbarGating(envInitPending);
@@ -6572,16 +6332,7 @@ public final class MainShellController
         if (STAGE2_1.equals(script)) {
             return "段階2.1 実行中…";
         }
-        if (STAGE3_0.equals(script)) {
-            return "段階3.0 実行中…";
-        }
-        if (STAGE3_1.equals(script)) {
-            return "段階3.1 実行中…";
-        }
-        if (STAGE3_2.equals(script)) {
-            return "段階3.2 実行中…";
-        }
-        if (activeDispatchTrialKind != null || stage2SourceGuardCoordinator.isRunning()) {
+        if (stage2SourceGuardCoordinator.isRunning()) {
             return "配台パイプライン実行中…";
         }
         if (lastGlobalLogLine != null && !lastGlobalLogLine.isBlank()) {
@@ -6748,16 +6499,6 @@ public final class MainShellController
                     shellStageProgressLabel.setText("段階2.0 実行中…");
                 } else if (STAGE2_1.equals(script)) {
                     shellStageProgressLabel.setText("段階2.1 実行中…");
-                } else if (STAGE3_0.equals(script)) {
-                    shellStageProgressLabel.setText("段階3.0 実行中…");
-                } else if (STAGE3_1.equals(script)) {
-                    shellStageProgressLabel.setText("段階3.1 実行中…");
-                } else if (STAGE3_2.equals(script)) {
-                    shellStageProgressLabel.setText("段階3.2 実行中…");
-                } else if (dispatchTrialKind == PipelineExecutionTimingKind.STAGE3) {
-                    shellStageProgressLabel.setText("配台試行 実行中…");
-                } else {
-                    shellStageProgressLabel.setText("配台試行 実行中…");
                 }
             }
             if (shellStageCancelButton != null) {
@@ -6884,25 +6625,25 @@ public final class MainShellController
         return text.append("\n\nExcel自動生成の原因: ").append(reason).toString();
     }
 
-    /** 配台試行（段階3）正常終了後: 完了音・配台タブへ切替・完了ダイアログ（段階2と同趣旨）。 */
-    void notifyStage3DispatchTrialSuccess() {
-        appendLog("[end] 段階3（配台試行）正常終了");
+    /** 配台試行 正常終了後: 完了音・配台タブへ切替・完了ダイアログ。 */
+    void notifyDispatchTrialSuccess() {
+        appendLog("[end] 配台試行 正常終了");
         refreshOperatorCardAfterPipelineRun();
         MacroCompleteChime.playIfAvailable(collectUiEnv());
         selectMainShellTab(MainShellTabId.DISPATCH_INTERACTIVE);
-        showStageCompletionDialog("段階3 完了", "段階3（配台試行）の処理が正常終了しました。");
+        showStageCompletionDialog("配台試行 完了", "配台試行の処理が正常終了しました。");
     }
 
-    /** 配台試行（段階3）異常終了後: 実行・ログタブへ切替・失敗ダイアログ（段階1/2と同趣旨）。 */
-    void notifyStage3DispatchTrialFailure(String detailMessage) {
+    /** 配台試行 異常終了後: 実行・ログタブへ切替・失敗ダイアログ。 */
+    void notifyDispatchTrialFailure(String detailMessage) {
         selectMainShellTab(MainShellTabId.RUN);
         Alert alert = new Alert(AlertType.ERROR);
         initDialogOwnerIfSceneReady(alert);
         applyAlertStylesheetsFromOwner(alert);
-        alert.setTitle("段階3 失敗");
+        alert.setTitle("配台試行 失敗");
         alert.setHeaderText(null);
         StringBuilder body = new StringBuilder();
-        body.append("配台試行（段階3）が異常終了しました。\n");
+        body.append("配台試行が異常終了しました。\n");
         if (detailMessage != null && !detailMessage.isBlank()) {
             body.append(detailMessage.trim()).append('\n');
         }
@@ -7923,44 +7664,6 @@ public final class MainShellController
         ui.put(
                 AppPaths.KEY_TEAM_ASSIGN_COMBO_SHEET_MAY_EXCEED_NEED,
                 planInputTabController.snapshotComboSheetMayExceedNeed() ? "1" : "0");
-    }
-
-    /**
-     * 入力3表生成: 段階2暦日別 baseline を Python へ渡す（sidecar または手動修正タブのスナップショット）。
-     */
-    private void applyStage3BaselineEntriesToPythonEnv(
-            Map<String, String> childEnv, java.nio.file.Path resultJson) {
-        Map<String, Double> baseline = java.util.Map.of();
-        if (dispatchInteractiveTabController != null) {
-            baseline =
-                    dispatchInteractiveTabController.snapshotStage3BaselineEntriesForInput3Build(
-                            resultJson);
-        }
-        if (baseline.isEmpty()) {
-            baseline = Stage3PlanningMetaStore.readBaselineEntries(resultJson);
-        }
-        if (baseline.isEmpty()) {
-            appendLog(
-                    "[入力3表] baseline 未設定（段階2直後に配台手動修正タブを開くか、段階2を再実行してください）");
-            return;
-        }
-        try {
-            childEnv.put(
-                    "PM_AI_STAGE3_BASELINE_ENTRIES_JSON",
-                    new ObjectMapper().writeValueAsString(baseline));
-            long v62 =
-                    baseline.keySet().stream().filter(k -> k != null && k.startsWith("V6-2")).count();
-            appendLog(
-                    "[入力3表] baseline 渡し: "
-                            + baseline.size()
-                            + " セル（V6-2 含む "
-                            + v62
-                            + " 件）");
-        } catch (Exception ex) {
-            appendLog(
-                    "[入力3表] baseline env 構築失敗: "
-                            + (ex.getMessage() != null ? ex.getMessage() : ex));
-        }
     }
 
     /**
@@ -9298,7 +9001,7 @@ public final class MainShellController
     private void clearStage2CachesBeforeStage2Run() {
         Map<String, String> ui = collectUiEnv();
         PipelineDownstreamResultsClearer.ClearResult cleared =
-                PipelineDownstreamResultsClearer.clearStage2ThroughStage32(
+                PipelineDownstreamResultsClearer.clearStage2Downstream(
                         ui, true /* 当日配台ソース束は段階2で再利用する */);
         for (String line : cleared.detailLines()) {
             appendLog(line);
@@ -9309,7 +9012,6 @@ public final class MainShellController
             appendLog("[stage2] 実行前に段階2〜3.2 キャッシュをクリアしました。");
         }
         pendingStage21OvertimeJsonPath = null;
-        pendingStage31OvertimeJsonPath = null;
         pendingStage2InProgressNextDayJsonPath = null;
         pendingStage2AladdinTodayExcludeJsonPath = null;
         syncUiAfterDownstreamPipelineResultsCleared();
@@ -9319,9 +9021,6 @@ public final class MainShellController
     private void syncUiAfterDownstreamPipelineResultsCleared() {
         if (dispatchInteractiveTabController != null) {
             dispatchInteractiveTabController.resetTableDisplayForStage2Run();
-        }
-        if (planInputStage3TabController != null) {
-            planInputStage3TabController.reloadFromDisk();
         }
         if (mainRunTabController != null) {
             mainRunTabController.setStage2ArtifactPaths("", "");
@@ -9990,259 +9689,6 @@ public final class MainShellController
         runStageAfterStage2SourceGuard(STAGE2_1);
     }
 
-    /** 入力3表（配台計画_タスク入力3.0）の元ブックパス（段階2.0 入力タブと同じワークブック）。 */
-    String stage3PlanInputWorkbookPath() {
-        return planInputTabController != null ? planInputTabController.snapshotPlanInputPath() : "";
-    }
-
-    private boolean blockStage3IfNoInput3Workbook(String stageJa) {
-        String p = stage3PlanInputWorkbookPath();
-        if (p == null || p.isBlank() || !java.nio.file.Files.isRegularFile(java.nio.file.Path.of(p.trim()))) {
-            appendLog(
-                    "[" + stageJa + "] 入力3表の元ブックがありません。配台計画手動修正タブで「入力3表を生成」してから実行してください。");
-            showErrorDialog(
-                    stageJa,
-                    stageJa + " を実行する前に、配台計画手動修正タブで「入力3表を生成」してください。");
-            return true;
-        }
-        return false;
-    }
-
-    private boolean blockStage3IfUnsavedInput3Table(String stageJa) {
-        if (planInputStage3TabController != null
-                && planInputStage3TabController.isTableDirtySinceSave()) {
-            appendLog(
-                    "["
-                            + stageJa
-                            + "] 入力3表に未保存の変更があります。「保存」または「再読み込み」で確定してから実行してください。");
-            showErrorDialog(
-                    stageJa,
-                    stageJa
-                            + " を実行する前に、入力3表タブの変更を「保存」または「再読み込み」で確定してください。");
-            return true;
-        }
-        return false;
-    }
-
-    /**
-     * 入力3表を生成（配台計画手動修正タブから）: 保存済み 結果_配台表.json を枝番分解し
-     * 入力3表シート（配台計画_タスク入力3.0）へ書き出して新タブを更新する。
-     */
-    void triggerBuildStage3Input() {
-        if (dispatchInteractiveTabController != null
-                && dispatchInteractiveTabController.isStage3InputBuildBusy()) {
-            return;
-        }
-        if (dispatchInteractiveTabController != null
-                && dispatchInteractiveTabController.isDispatchDocDirtySinceSave()) {
-            appendLog("[入力3表] 配台計画手動修正に未保存の変更があります。「保存」してから生成してください。");
-            showErrorDialog(
-                    "入力3表を生成",
-                    "配台計画手動修正タブの変更を「保存 (JSON+xlsx)」で確定してから「入力3表を生成」してください。");
-            return;
-        }
-        Map<String, String> ui = collectUiEnv();
-        java.nio.file.Path resultJson = AppPaths.resolveResultDispatchTableJsonPath(ui);
-        if (!java.nio.file.Files.isRegularFile(resultJson)) {
-            appendLog("[入力3表] 結果_配台表.json がありません。先に段階2.0 を実行してください。");
-            showErrorDialog("入力3表を生成", "結果_配台表.json がありません。先に段階2.0 を実行してください。");
-            return;
-        }
-        String wbStr = stage3PlanInputWorkbookPath();
-        if (wbStr == null || wbStr.isBlank()) {
-            appendLog("[入力3表] 配台計画_タスク入力タブのファイルパスが未設定です。");
-            return;
-        }
-        java.nio.file.Path workbook = java.nio.file.Path.of(wbStr.trim());
-        java.nio.file.Path pyExe = resolveStagePythonExecutablePath(ui);
-        java.nio.file.Path scriptDir = AppPaths.resolvePythonScriptDir(ui);
-        Map<String, String> childEnv = childEnvForPython(ui);
-        applyStage3BaselineEntriesToPythonEnv(childEnv, resultJson);
-        if (dispatchInteractiveTabController != null) {
-            dispatchInteractiveTabController.setStage3InputBuildProgressVisible(true);
-        }
-        appendLog("[入力3表] 生成を開始します… (" + resultJson + ")");
-        Thread t =
-                new Thread(
-                        () -> {
-                            try {
-                                String last =
-                                        jp.co.pm.ai.desktop.dispatch.Stage3InputBuilderPython
-                                                .buildInput3Sheet(
-                                                        resultJson,
-                                                        workbook,
-                                                        pyExe,
-                                                        scriptDir,
-                                                        childEnv,
-                                                        this::appendLog);
-                                Platform.runLater(
-                                        () -> {
-                                            if (dispatchInteractiveTabController != null) {
-                                                dispatchInteractiveTabController
-                                                        .setStage3InputBuildProgressVisible(false);
-                                            }
-                                            appendLog("[入力3表] 生成完了: " + last);
-                                            if (planInputStage3TabController != null) {
-                                                planInputStage3TabController.reloadFromDisk();
-                                            }
-                                            selectMainShellTab(MainShellTabId.PLAN_INPUT_STAGE3);
-                                        });
-                            } catch (Exception ex) {
-                                Platform.runLater(
-                                        () -> {
-                                            if (dispatchInteractiveTabController != null) {
-                                                dispatchInteractiveTabController
-                                                        .setStage3InputBuildProgressVisible(false);
-                                            }
-                                            appendLog(
-                                                    "[入力3表] 生成に失敗: "
-                                                            + (ex.getMessage() != null
-                                                                    ? ex.getMessage()
-                                                                    : ex));
-                                            showErrorDialog(
-                                                    "入力3表を生成",
-                                                    "入力3表の生成に失敗しました。\n\n"
-                                                            + (ex.getMessage() != null
-                                                                    ? ex.getMessage()
-                                                                    : ex.toString()));
-                                        });
-                            }
-                        },
-                        "build-stage3-input");
-        t.setDaemon(true);
-        t.start();
-    }
-
-    /** 段階3.0: 入力3表（枝番）で配台A→枝番統合。 */
-    void triggerStage30() {
-        beginStage3RunButtonLock();
-        if (blockIfPipelineRunLocked("段階3.0")
-                || blockIfMaterialLookupTablesHaveBlankValues("段階3.0")
-                || blockStage3IfNoInput3Workbook("段階3.0")
-                || blockStage3IfUnsavedInput3Table("段階3.0")) {
-            endStage3RunButtonLock();
-            return;
-        }
-        runStage(STAGE3_0);
-    }
-
-    /** 段階3.2: 数量厳守（同日完走・定常外人ブロック無視）で入力3表を配台→枝番統合。 */
-    void triggerStage32() {
-        beginStage3RunButtonLock();
-        if (blockIfPipelineRunLocked("段階3.2")
-                || blockIfMaterialLookupTablesHaveBlankValues("段階3.2")
-                || blockStage3IfNoInput3Workbook("段階3.2")
-                || blockStage3IfUnsavedInput3Table("段階3.2")) {
-            endStage3RunButtonLock();
-            return;
-        }
-        runStage(STAGE3_2);
-    }
-
-    /** 段階3.1 実行時のみ子プロセスへ渡す残業 JSON。 */
-    private java.nio.file.Path pendingStage31OvertimeJsonPath;
-
-    /**
-     * 段階3.1(時間外): 入力3表に対して段階2.1 と同じ時間外ウィザード（hybrid）を起動し、
-     * 確定した残業 JSON を適用して入力3表を配台→枝番統合する。
-     */
-    void triggerStage31() {
-        beginStage3RunButtonLock();
-        if (blockIfPipelineRunLocked("段階3.1")
-                || blockIfMaterialLookupTablesHaveBlankValues("段階3.1")
-                || blockStage3IfNoInput3Workbook("段階3.1")
-                || blockStage3IfUnsavedInput3Table("段階3.1")) {
-            endStage3RunButtonLock();
-            return;
-        }
-        final java.nio.file.Path pyExe = resolveStagePythonExecutablePath(collectUiEnv());
-        final java.nio.file.Path pyDir = AppPaths.resolvePythonScriptDir(collectUiEnv());
-        final Map<String, String> pyEnv = snapshotDispatchTrialPythonEnv();
-        final Stage owner = primaryStage;
-        Thread worker =
-                new Thread(
-                        () -> {
-                            try {
-                                AttendanceOvertimePreview.Preview preview =
-                                        AttendanceOvertimePreviewPython.load(
-                                                pyExe, pyDir, pyEnv, this::appendLog);
-                                Platform.runLater(
-                                        () ->
-                                                OvertimeSimulationWizard.show(
-                                                        owner,
-                                                        this,
-                                                        preview,
-                                                        OvertimeSimulationWizard.Target.STAGE31,
-                                                        this::triggerStage31Run,
-                                                        this::endStage3RunButtonLock));
-                            } catch (Exception ex) {
-                                Platform.runLater(
-                                        () -> {
-                                            endStage3RunButtonLock();
-                                            showErrorDialog(
-                                                    "段階3.1",
-                                                    "勤怠プレビューの取得に失敗しました。\n"
-                                                            + (ex.getMessage() != null
-                                                                    ? ex.getMessage()
-                                                                    : ex));
-                                        });
-                            }
-                        },
-                        "dispatch-stage31-preview");
-        worker.setDaemon(true);
-        worker.start();
-    }
-
-    /** 段階3.1 実行後に残業シミュレーション JSON を物理削除（「書き戻し」相当・次回実行へ漏らさない）。 */
-    private void deleteOvertimeSimulationJsonQuietly(java.nio.file.Path overtimeSimulationJson) {
-        if (overtimeSimulationJson == null) {
-            return;
-        }
-        try {
-            if (java.nio.file.Files.deleteIfExists(overtimeSimulationJson)) {
-                appendLog("[段階3.1] 残業シミュレーション JSON を削除しました: " + overtimeSimulationJson);
-            }
-        } catch (Exception ex) {
-            appendLog(
-                    "[段階3.1] 残業シミュレーション JSON の削除に失敗（無視）: "
-                            + (ex.getMessage() != null ? ex.getMessage() : ex));
-        }
-    }
-
-    /** 時間外ウィザード確定後の段階3.1 実行（残業 JSON は子プロセスへ env 経由で渡す）。 */
-    private void triggerStage31Run(java.nio.file.Path overtimeSimulationJson) {
-        if (blockIfPipelineRunLocked("段階3.1")) {
-            endStage3RunButtonLock();
-            return;
-        }
-        if (overtimeSimulationJson == null
-                || !java.nio.file.Files.isRegularFile(overtimeSimulationJson)) {
-            appendLog("[段階3.1] 残業シミュレーション JSON が無効です。");
-            endStage3RunButtonLock();
-            return;
-        }
-        pendingStage31OvertimeJsonPath = overtimeSimulationJson.toAbsolutePath().normalize();
-        runStage(STAGE3_1);
-    }
-
-    private void beginStage3RunButtonLock() {
-        if (planInputStage3TabController != null) {
-            planInputStage3TabController.setStage3RunButtonsLocked(true);
-        }
-    }
-
-    void endStage3RunButtonLock() {
-        if (planInputStage3TabController != null) {
-            planInputStage3TabController.setStage3RunButtonsLocked(false);
-        }
-    }
-
-    private void releaseStage3RunButtonLockIfNeeded(String script) {
-        if (isStage3Script(script)) {
-            endStage3RunButtonLock();
-        }
-    }
-
     /** 段階2.1 実行時のみ子プロセスへ渡す残業 JSON。 */
     private java.nio.file.Path pendingStage21OvertimeJsonPath;
 
@@ -10328,9 +9774,6 @@ public final class MainShellController
         if (planInputTabController != null) {
             planInputTabController.invalidateRollUnitHighlightCacheAndRefresh();
         }
-        if (planInputStage3TabController != null) {
-            planInputStage3TabController.invalidateRollUnitHighlightCacheAndRefresh();
-        }
     }
 
     /** 配台計画手動修正タブの配台ロール単位 (m) 解決用。未初期化時は {@code null}。 */
@@ -10344,7 +9787,7 @@ public PlanInputTabController planInputTabControllerForDispatchRollUnit() {
      */
     void reloadDeliveryCalendarInBackgroundAfterDispatchTrialSuccess() {
         if (deliveryCalendarViewTabController != null) {
-            deliveryCalendarViewTabController.reloadInBackgroundAfterStage3DispatchTrialSuccess();
+            deliveryCalendarViewTabController.reloadInBackgroundAfterDispatchTrialSuccess();
         }
     }
 
@@ -10615,12 +10058,6 @@ public PlanInputTabController planInputTabControllerForDispatchRollUnit() {
         } catch (IOException ex) {
             appendLog("[dispatch-rules] snapshot failed: " + ex.getMessage());
         }
-    }
-
-    private void overlayDispatchSpecialRulesForStageTrial(PipelineExecutionTimingKind kind) {
-        Map<String, String> uiRun = collectUiEnv();
-        String stage = "stage3";
-        overlayDispatchSpecialRulesForStageRun(uiRun, stage);
     }
 
     private void syncExcludeRulesJsonPathToEnvTab(String pathStr) {

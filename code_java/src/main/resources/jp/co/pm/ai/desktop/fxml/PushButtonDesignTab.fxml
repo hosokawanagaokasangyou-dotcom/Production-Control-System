@@ -31,8 +31,6 @@
                 <Button mnemonicParsing="false" text="通常ボタン例"/>
                 <Button mnemonicParsing="false" styleClass="pm-stage-run-button,pm-stage-run-1" text="段階1"/>
                 <Button mnemonicParsing="false" styleClass="pm-stage-run-button,pm-stage-run-2" text="段階2"/>
-                <Button fx:id="stage3PreviewButton" mnemonicParsing="false"
-                        styleClass="pm-stage-run-button,pm-stage-run-3" text="段階3"/>
                 <Button mnemonicParsing="false" styleClass="pm-align-aladdin-plan-button" text="アラジン計画に合わせる"/>
             </HBox>
         </center>
@@ -192,25 +190,6 @@
                                 <Label prefWidth="140.0" text="押下"/>
                                 <ColorPicker fx:id="stage2PressedPicker"/>
                             </HBox>
-                            <VBox fx:id="stage3DesignControls" spacing="8.0">
-                                <Label styleClass="pm-section-title" text="段階3"/>
-                                <HBox alignment="CENTER_LEFT" spacing="8.0">
-                                    <Label prefWidth="140.0" text="背景"/>
-                                    <ColorPicker fx:id="stage3BgPicker"/>
-                                </HBox>
-                                <HBox alignment="CENTER_LEFT" spacing="8.0">
-                                    <Label prefWidth="140.0" text="枠"/>
-                                    <ColorPicker fx:id="stage3BorderPicker"/>
-                                </HBox>
-                                <HBox alignment="CENTER_LEFT" spacing="8.0">
-                                    <Label prefWidth="140.0" text="ホバー"/>
-                                    <ColorPicker fx:id="stage3HoverPicker"/>
-                                </HBox>
-                                <HBox alignment="CENTER_LEFT" spacing="8.0">
-                                    <Label prefWidth="140.0" text="押下"/>
-                                    <ColorPicker fx:id="stage3PressedPicker"/>
-                                </HBox>
-                            </VBox>
                         </VBox>
                     </content>
                 </TitledPane>

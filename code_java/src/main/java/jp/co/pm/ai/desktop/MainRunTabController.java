@@ -58,7 +58,6 @@ import javafx.util.StringConverter;
 import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.config.AppVersionInfo;
 import jp.co.pm.ai.desktop.config.PersonBadgeStyle;
-import jp.co.pm.ai.desktop.config.Stage3UiVisibility;
 import jp.co.pm.ai.desktop.io.DesktopFileOpener;
 import jp.co.pm.ai.desktop.ui.PersonBadgeNodeFactory;
 
@@ -206,19 +205,7 @@ public final class MainRunTabController {
     private Label pipelineTimingStage21Label;
 
     @FXML
-    private Label pipelineTimingStage30Label;
-
-    @FXML
-    private Label pipelineTimingStage31Label;
-
-    @FXML
-    private Label pipelineTimingStage32Label;
-
-    @FXML
     private Label pipelineTimingDispatchTrialLabel;
-
-    @FXML
-    private HBox pipelineTimingStage3Rows;
 
     @FXML
     private HBox pipelineTimingDispatchTrialRow;
@@ -869,11 +856,6 @@ public final class MainRunTabController {
         refreshLogThemeCells();
     }
 
-    void applyStage3UiVisibility(boolean visible) {
-        Stage3UiVisibility.apply(pipelineTimingStage3Rows, visible);
-        Stage3UiVisibility.apply(pipelineTimingDispatchTrialRow, visible);
-    }
-
     /** {@link GlobalInitSettingTarget} の工場に合わせてロゴを更新する（ツールバー側）。 */
     void refreshFactorySiteLogo() {
         if (shell != null) {
@@ -1255,10 +1237,7 @@ public final class MainRunTabController {
                     case STAGE1 -> pipelineTimingStage1Label;
                     case STAGE2_0 -> pipelineTimingStage20Label;
                     case STAGE2_1 -> pipelineTimingStage21Label;
-                    case STAGE3_0 -> pipelineTimingStage30Label;
-                    case STAGE3_1 -> pipelineTimingStage31Label;
-                    case STAGE3_2 -> pipelineTimingStage32Label;
-                    case STAGE3 -> pipelineTimingDispatchTrialLabel;
+                    case DISPATCH_TRIAL -> pipelineTimingDispatchTrialLabel;
                     case SUMMARY_EXCEL -> pipelineTimingSummaryExcelLabel;
                     case DELIVERY_CALENDAR_VIEW -> pipelineTimingDeliveryCalendarLabel;
                 };
@@ -1530,6 +1509,9 @@ public final class MainRunTabController {
         MainRunStage2Progress.apply(stage2ProgressPane, stage2ProgressLabel, state, detail);
         if (stage2ProgressAccordion != null && stage2ProgressPane != null) {
             stage2ProgressAccordion.setExpandedPane(stage2ProgressPane);
+            if (state == MainRunStage2Progress.State.COMPLETED) {
+                stage2ProgressPane.setExpanded(true);
+            }
         }
         if (shell != null) {
             shell.syncStageRunBusyFromStage2Progress(state, detail);

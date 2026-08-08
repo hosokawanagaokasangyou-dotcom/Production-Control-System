@@ -26,8 +26,6 @@ public enum MainShellTabId {
     MACHINE_CALENDAR("machineCalendar"),
     MASTER_SUMMARY("masterSummary"),
     PLAN_INPUT("planInput"),
-    /** 段階3.0 前処理で生成する枝番タスク入力（配台計画_タスク入力3.0）。段階3.0/3.1/3.2 実行の起点。 */
-    PLAN_INPUT_STAGE3("planInputStage3"),
     /** 加工依頼書の照合・対比型入力（湖南工場・ReconciliationApp 由来）。 */
     REQUEST_FORM_INPUT("requestFormInput"),
     /** 依頼書原本の受注転記率・アラジン加工計画の確認。 */

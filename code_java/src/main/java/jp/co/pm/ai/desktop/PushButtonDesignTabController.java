@@ -16,7 +16,6 @@ import javafx.util.Duration;
 
 import jp.co.pm.ai.desktop.config.DesktopSessionState;
 import jp.co.pm.ai.desktop.config.PushButtonDesignPrefs;
-import jp.co.pm.ai.desktop.config.Stage3UiVisibility;
 import jp.co.pm.ai.desktop.ui.SliderCommittedChangeSupport;
 
 /**
@@ -29,12 +28,6 @@ public final class PushButtonDesignTabController {
 
     @FXML
     private BorderPane previewRunPane;
-
-    @FXML
-    private Button stage3PreviewButton;
-
-    @FXML
-    private VBox stage3DesignControls;
 
     @FXML
     private CheckBox customGeneralCheck;
@@ -140,18 +133,6 @@ public final class PushButtonDesignTabController {
 
     @FXML
     private ColorPicker stage2PressedPicker;
-
-    @FXML
-    private ColorPicker stage3BgPicker;
-
-    @FXML
-    private ColorPicker stage3BorderPicker;
-
-    @FXML
-    private ColorPicker stage3HoverPicker;
-
-    @FXML
-    private ColorPicker stage3PressedPicker;
 
     @FXML
     private CheckBox customAlignAladdinCheck;
@@ -319,11 +300,6 @@ public final class PushButtonDesignTabController {
         this.shell = mainShell;
     }
 
-    void applyStage3UiVisibility(boolean visible) {
-        Stage3UiVisibility.apply(stage3PreviewButton, visible);
-        Stage3UiVisibility.apply(stage3DesignControls, visible);
-    }
-
     void applyPushButtonSession(DesktopSessionState s) {
         if (s == null) {
             return;
@@ -374,10 +350,6 @@ public final class PushButtonDesignTabController {
                 colorToHex(stage2BorderPicker, d.stage2BorderHex()),
                 colorToHex(stage2HoverPicker, d.stage2HoverBgHex()),
                 colorToHex(stage2PressedPicker, d.stage2PressedBgHex()),
-                colorToHex(stage3BgPicker, d.stage3BgHex()),
-                colorToHex(stage3BorderPicker, d.stage3BorderHex()),
-                colorToHex(stage3HoverPicker, d.stage3HoverBgHex()),
-                colorToHex(stage3PressedPicker, d.stage3PressedBgHex()),
                 al,
                 alignAladdinRadiusSlider != null ? alignAladdinRadiusSlider.getValue() : d.alignAladdinBorderRadius(),
                 alignAladdinPadVSlider != null ? alignAladdinPadVSlider.getValue() : d.alignAladdinPaddingV(),
@@ -497,10 +469,6 @@ public final class PushButtonDesignTabController {
         setPicker(stage2BorderPicker, x.stage2BorderHex());
         setPicker(stage2HoverPicker, x.stage2HoverBgHex());
         setPicker(stage2PressedPicker, x.stage2PressedBgHex());
-        setPicker(stage3BgPicker, x.stage3BgHex());
-        setPicker(stage3BorderPicker, x.stage3BorderHex());
-        setPicker(stage3HoverPicker, x.stage3HoverBgHex());
-        setPicker(stage3PressedPicker, x.stage3PressedBgHex());
 
         if (alignAladdinRadiusSlider != null) {
             alignAladdinRadiusSlider.setValue(Math.clamp(x.alignAladdinBorderRadius(), 0, 24));
@@ -642,10 +610,6 @@ public final class PushButtonDesignTabController {
         addPicker(stage2BorderPicker, onStageEdit);
         addPicker(stage2HoverPicker, onStageEdit);
         addPicker(stage2PressedPicker, onStageEdit);
-        addPicker(stage3BgPicker, onStageEdit);
-        addPicker(stage3BorderPicker, onStageEdit);
-        addPicker(stage3HoverPicker, onStageEdit);
-        addPicker(stage3PressedPicker, onStageEdit);
         addPicker(alignAladdinBgPicker, onAlignAladdinEdit);
         addPicker(alignAladdinBorderPicker, onAlignAladdinEdit);
         addPicker(alignAladdinTextPicker, onAlignAladdinEdit);

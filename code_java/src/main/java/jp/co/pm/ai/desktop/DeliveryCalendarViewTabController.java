@@ -54,12 +54,10 @@ import org.controlsfx.control.spreadsheet.SpreadsheetView;
 import jp.co.pm.ai.desktop.bridge.PythonProcessRunner;
 import jp.co.pm.ai.desktop.bridge.PythonProcessRunner.RunRequest;
 import jp.co.pm.ai.desktop.config.AppPaths;
-import jp.co.pm.ai.desktop.config.Stage3UiVisibility;
 import jp.co.pm.ai.desktop.dispatch.AladdinShapedPlanQtyLookup;
 import jp.co.pm.ai.desktop.dispatch.AladdinSystemDispatchDisplayQty;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchSchema;
-import jp.co.pm.ai.desktop.dispatch.ResultDispatchStage3Support;
-import jp.co.pm.ai.desktop.dispatch.Stage3PlanningMetaStore;
+import jp.co.pm.ai.desktop.dispatch.ResultDispatchPlanningStageSupport;
 import jp.co.pm.ai.planning.stage2.core.Stage2RollUnitLengthTables;
 import jp.co.pm.ai.desktop.io.JsonTableIo;
 import jp.co.pm.ai.desktop.io.PlanInputTabularIo;
@@ -589,7 +587,7 @@ public final class DeliveryCalendarViewTabController {
                 && dataStageBadgeLabel != null
                 && dataStageBadgeLabel.getText() != null
                 && dataStageBadgeLabel.getText().startsWith("段階3")) {
-            Stage3UiVisibility.apply(dataStageBadgeLabel, false);
+            jp.co.pm.ai.desktop.ui.JavaFxNodeVisibility.apply(dataStageBadgeLabel, false);
         }
         if (deliveryCalendarResultDispatchTableTabController != null) {
             deliveryCalendarResultDispatchTableTabController.applyStage3UiVisibility(visible);
@@ -1086,6 +1084,10 @@ public final class DeliveryCalendarViewTabController {
      * 配台試行（段階3）正常終了後: Python ペイロード再取得・アラジン・加工実績の再読込は行わず、
      * {@code 結果_配台表.json} とメイン表の (段階3前)・(段階3後) 行のみ更新する。JavaFX スレッドから呼ぶこと。
      */
+    public void reloadInBackgroundAfterDispatchTrialSuccess() {
+        reloadInBackgroundAfterStage3DispatchTrialSuccess();
+    }
+
     public void reloadInBackgroundAfterStage3DispatchTrialSuccess() {
         if (Platform.isFxApplicationThread()) {
             applyStage3DispatchOnlyReload();
@@ -1144,7 +1146,7 @@ public final class DeliveryCalendarViewTabController {
                                             applyRefreshButtonEnabledState();
                                             if (err != null) {
                                                 scheduleHideDeliveryReloadProgress();
-                                                statusLabel.setText("error: " + err.getMessage());
+                                                statusLabel.setText("取得エラー: " + err.getMessage());
                                                 if (shell != null) {
                                                     shell.appendLog("[delivery-calendar] " + err.getMessage());
                                                     if (pendingUserDeliveryRefreshCompletionDialog) {
@@ -1165,7 +1167,7 @@ public final class DeliveryCalendarViewTabController {
                                             }
                                             if (cap == null) {
                                                 scheduleHideDeliveryReloadProgress();
-                                                statusLabel.setText("no result");
+                                                statusLabel.setText("結果を取得できませんでした");
                                                 if (shell != null) {
                                                     if (!pendingUserDeliveryRefreshCompletionDialog) {
                                                         shell.appendLog(
@@ -1458,7 +1460,7 @@ public final class DeliveryCalendarViewTabController {
             }
 
         } catch (Exception e) {
-            statusLabel.setText("parse: " + e.getMessage());
+            statusLabel.setText("データの解析に失敗: " + e.getMessage());
             if (shell != null) {
                 shell.appendLog("[delivery-calendar] parse " + e.getMessage());
                 if (pendingUserDeliveryRefreshCompletionDialog) {
@@ -1503,7 +1505,7 @@ public final class DeliveryCalendarViewTabController {
                                     + (t.getMessage() != null ? t.getMessage() : t.toString()));
                 }
             }
-            statusLabel.setText("error: " + t.getMessage());
+            statusLabel.setText("取得エラー: " + t.getMessage());
             scheduleHideDeliveryReloadProgress();
         }
     }
@@ -1546,7 +1548,7 @@ public final class DeliveryCalendarViewTabController {
                                     + (t.getMessage() != null ? t.getMessage() : t.toString()));
                 }
             }
-            statusLabel.setText("error: " + t.getMessage());
+            statusLabel.setText("取得エラー: " + t.getMessage());
             scheduleHideDeliveryReloadProgress();
         }
     }
@@ -1584,7 +1586,7 @@ public final class DeliveryCalendarViewTabController {
                                                     + (t.getMessage() != null ? t.getMessage() : t.toString()));
                                 }
                             }
-                            statusLabel.setText("error: " + t.getMessage());
+                            statusLabel.setText("取得エラー: " + t.getMessage());
                         } finally {
                             if (shell != null && pendingUserDeliveryRefreshCompletionDialog) {
                                 pendingUserDeliveryRefreshCompletionDialog = false;
@@ -1612,7 +1614,7 @@ public final class DeliveryCalendarViewTabController {
                                     + (t.getMessage() != null ? t.getMessage() : t.toString()));
                 }
             }
-            statusLabel.setText("error: " + t.getMessage());
+            statusLabel.setText("取得エラー: " + t.getMessage());
             scheduleHideDeliveryReloadProgress();
         }
     }
@@ -1691,7 +1693,7 @@ public final class DeliveryCalendarViewTabController {
                 shell.refreshEquipmentGanttGraphicAfterPipelineRun();
             }
         } catch (Throwable t) {
-            statusLabel.setText("error: " + t.getMessage());
+            statusLabel.setText("取得エラー: " + t.getMessage());
             if (shell != null) {
                 shell.appendLog("[delivery-calendar] 段階3配台のみ反映 " + t.getMessage());
             }
@@ -2050,39 +2052,33 @@ public final class DeliveryCalendarViewTabController {
     private void refreshCompareStageFlagsFromDispatch(DispatchTableSnapshot dispatchSnap) {
         Map<String, String> ui = shell != null ? shell.snapshotUiEnv() : Map.of();
         Path jsonPath = AppPaths.resolveResultDispatchTableJsonPath(ui);
-        ResultDispatchStage3Support.PlanningStage stage =
-                ResultDispatchStage3Support.detectPlanningStage(jsonPath);
+        ResultDispatchPlanningStageSupport.PlanningStage stage =
+                ResultDispatchPlanningStageSupport.detectPlanningStage(jsonPath);
         compareHideStage3PlanLine =
-                stage == ResultDispatchStage3Support.PlanningStage.STAGE3
-                        && dispatchSnap != null
-                        && ResultDispatchStage3Support.hasStage3ActualColumn(dispatchSnap.headers());
-        ResultDispatchStage3Support.applyPlanningStageBadgeFromDispatchJson(
+                dispatchSnap != null
+                        && ResultDispatchPlanningStageSupport.hasActualDispatchQtyColumn(
+                                dispatchSnap.headers());
+        ResultDispatchPlanningStageSupport.applyPlanningStageBadgeFromDispatchJson(
                 dataStageBadgeLabel, jsonPath);
-        Stage3UiVisibility.applyPlanningStageBadgePolicy(dataStageBadgeLabel, ui);
+        jp.co.pm.ai.desktop.ui.JavaFxNodeVisibility.applyPlanningStageBadgePolicyNoop(dataStageBadgeLabel, ui);
     }
 
     /** 配台 JSON の段階表示バッジを更新（子タブ再読込後にも呼ぶ）。 */
     void refreshPlanningStageBadgeFromDispatchJson() {
         Map<String, String> ui = shell != null ? shell.snapshotUiEnv() : Map.of();
         Path jsonPath = AppPaths.resolveResultDispatchTableJsonPath(ui);
-        ResultDispatchStage3Support.PlanningStage stage =
-                ResultDispatchStage3Support.detectPlanningStage(jsonPath);
+        ResultDispatchPlanningStageSupport.PlanningStage stage =
+                ResultDispatchPlanningStageSupport.detectPlanningStage(jsonPath);
         compareHideStage3PlanLine =
-                stage == ResultDispatchStage3Support.PlanningStage.STAGE3
-                        && ResultDispatchStage3Support.detectStage3FromDispatchJsonPath(jsonPath);
-        ResultDispatchStage3Support.applyPlanningStageBadgeFromDispatchJson(
+                ResultDispatchPlanningStageSupport.detectActualQtyColumnFromDispatchJsonPath(jsonPath);
+        ResultDispatchPlanningStageSupport.applyPlanningStageBadgeFromDispatchJson(
                 dataStageBadgeLabel, jsonPath);
-        Stage3UiVisibility.applyPlanningStageBadgePolicy(dataStageBadgeLabel, ui);
+        jp.co.pm.ai.desktop.ui.JavaFxNodeVisibility.applyPlanningStageBadgePolicyNoop(dataStageBadgeLabel, ui);
     }
 
     private static Map<String, Map<String, Map<String, Double>>> loadStage3BaselineDispatchLookup(
             Map<String, String> ui) {
-        Path jsonPath = AppPaths.resolveResultDispatchTableJsonPath(ui);
-        if (!Stage3PlanningMetaStore.hasPipelinePlanningVariant(jsonPath)) {
-            return Map.of();
-        }
-        return Stage3PlanningMetaStore.buildBaselineDispatchLookup(
-                Stage3PlanningMetaStore.readBaselineEntries(jsonPath));
+        return Map.of();
     }
 
     private static Map<String, Map<String, Map<String, Double>>> buildStage3AfterDispatchLookup(
@@ -2091,13 +2087,9 @@ public final class DeliveryCalendarViewTabController {
             return Map.of();
         }
         Path jsonPath = AppPaths.resolveResultDispatchTableJsonPath(ui);
-        if (ResultDispatchStage3Support.hasStage3ActualColumn(dispatchSnap.headers())) {
+        if (ResultDispatchPlanningStageSupport.hasActualDispatchQtyColumn(dispatchSnap.headers())) {
             return buildDispatchQtyLookup(
                     dispatchSnap.headers(), dispatchSnap.rows(), COL_DIS_QTY_STAGE3);
-        }
-        if (Stage3PlanningMetaStore.hasPipelinePlanningVariant(jsonPath)) {
-            return buildDispatchQtyLookup(
-                    dispatchSnap.headers(), dispatchSnap.rows(), COL_DIS_QTY);
         }
         return Map.of();
     }

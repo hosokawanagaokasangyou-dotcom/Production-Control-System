@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 """
-段階2／段階3（インタラクティブ配台試行）の共通オーケストレーション。
+段階2／配台試行（インタラクティブ）の共通オーケストレーション。
 
 - 段階2の正本: ``master`` の工場時間コンテキストのうえで ``_generate_plan_impl()`` を
   オーバーライド無しで実行する（従来 ``generate_plan()`` が担っていた処理）。
-  配台失敗ポリシーは段階3（段階2同一パリティ）と同一（前提未満足のみ致命・他は後ろ倒し）。
-- 段階3の正本: 結果_配台表 JSON の ``rows`` / ``columns`` を読み、タスク DataFrame に
+  配台失敗ポリシーは配台試行（段階2同一パリティ）と同一（前提未満足のみ致命・他は後ろ倒し）。
+- 配台試行の正本: 結果_配台表 JSON の ``rows`` / ``columns`` を読み、タスク DataFrame に
   マージしたうえで ``PM_AI_INTERACTIVE_TRIAL_STAGE2_PARITY=1`` を付与し、
   配台エンジン条件を段階2と同一にした ``_generate_plan_impl`` を実行する。
   不足 JSON のペイロード組み立て・検証失敗時の書き出しもここに集約する。
@@ -60,138 +60,11 @@ def run_stage2_generate_plan() -> None:
         _flush_dispatch_rule_trace_sidecar()
 
 
-def _load_stage3_input_tasks_df(pc):
-    """入力3表（第2シート ``PLAN_INPUT_STAGE3_SHEET_NAME``）を tasks_df として読み込む。
-
-    列構成は入力1表 + ``元依頼NO`` / ``配台枝番``。読込後の正規化・速度適用は
-    ``load_planning_tasks_df`` と同等を最小限で行う（特別ルール scope は build_task_queue が
-    ``元依頼NO`` から rule_task_id を解決する）。
-    """
-    import os
-
-    plan_path = (os.environ.get(pc.ENV_PLAN_INPUT_PATH) or "").strip()
-    if not plan_path or not os.path.isfile(plan_path):
-        raise FileNotFoundError(
-            f"段階3: {pc.ENV_PLAN_INPUT_PATH} が実在しません: {plan_path!r}。"
-        )
-    sheet = pc.PLAN_INPUT_STAGE3_SHEET_NAME
-    df = pc.read_tabular_dataframe(plan_path, sheet_name=sheet)
-    df.columns = df.columns.str.strip()
-    df = pc._align_dataframe_headers_to_canonical(df, pc.plan_input_stage3_sheet_column_order())
-    order = pc.plan_input_stage3_sheet_column_order()
-    for c in order:
-        if c not in df.columns:
-            df[c] = ""
-    df = df.reindex(columns=order).fillna("")
-    df = pc._coalesce_plan_plain_remark_into_special(df)
-    pc._apply_master_speed_sheet_to_plan_df(df, log_prefix="入力3表読込")
-    try:
-        from planning_core.actual_speed_apply import apply_learned_speed_to_plan_df
-
-        apply_learned_speed_to_plan_df(df, log_prefix="入力3表読込")
-    except Exception:
-        pass
-    pc._fill_plan_dispatch_remaining_qty_column(df)
-    from planning_core.stage3_input_builder import collapse_stage3_plan_df_by_parent
-
-    return collapse_stage3_plan_df_by_parent(pc, df)
-
-
-def run_stage3_generate_plan(*, qty_strict: bool = False) -> dict:
-    """段階3.0/3.2: 入力3表（枝番）で配台Aを実行し、枝番統合まで行う。
-
-    Args:
-        qty_strict: True で段階3.2（同日完走必須・定常外人ブロック無視）。
-
-    Returns:
-        枝番統合の結果 dict（``merge_branch_result_dispatch`` の戻り）または ``{}``。
-    """
-    import os
-
-    from planning_core import _core as pc
-    from planning_core.dispatch_rules import trace_recorder
-
-    trace_recorder.reset_trace()
-    os.environ["PM_AI_PLAN_INPUT_STAGE3"] = "1"
-    os.environ["PM_AI_INTERACTIVE_DISPATCH_TRIAL"] = "1"
-    os.environ[ENV_INTERACTIVE_TRIAL_STAGE2_PARITY] = "1"
-    if qty_strict:
-        os.environ["PM_AI_STAGE3_2_QTY_STRICT"] = "1"
-
-    master_abs = pc._master_workbook_path_resolved()
-    try:
-        from planning_core.stage3_input_builder import (
-            build_stage3_dispatch_targets_from_plan_df,
-        )
-
-        tasks_df = _load_stage3_input_tasks_df(pc)
-        dispatch_targets = build_stage3_dispatch_targets_from_plan_df(pc, tasks_df)
-        v62 = {
-            str(k): dispatch_targets[k]
-            for k in dispatch_targets
-            if str(k[0]).startswith("V6-2")
-        }
-        print(
-            f"[stage3] 暦日キャップ targets: {len(dispatch_targets)} 件"
-            + (f" (V6-2系: {v62})" if v62 else ""),
-            flush=True,
-        )
-        with pc._override_default_factory_hours_from_master(master_abs):
-            pc._generate_plan_impl(
-                tasks_df_override=tasks_df,
-                interactive_dispatch_targets=dispatch_targets or None,
-            )
-        return _merge_stage3_branches(pc)
-    finally:
-        if qty_strict:
-            os.environ.pop("PM_AI_STAGE3_2_QTY_STRICT", None)
-        os.environ.pop(ENV_INTERACTIVE_TRIAL_STAGE2_PARITY, None)
-        os.environ.pop("PM_AI_INTERACTIVE_DISPATCH_TRIAL", None)
-        os.environ.pop("PM_AI_PLAN_INPUT_STAGE3", None)
-        _flush_dispatch_rule_trace_sidecar()
-
-
-def _merge_stage3_branches(pc) -> dict:
-    """配台出力（結果_配台表.json）を元依頼NO単位へ統合し正本へ上書きする。"""
-    import os
-
-    try:
-        from planning_core.dispatch_workspace import resolve_result_dispatch_table_output_dir
-        from planning_core import stage3_branch_merge
-
-        plan_path = (os.environ.get(pc.ENV_PLAN_INPUT_PATH) or "").strip()
-        out_dir = resolve_result_dispatch_table_output_dir(plan_path)
-        if not out_dir:
-            return {}
-        from pathlib import Path
-
-        json_path = Path(out_dir) / pc.RESULT_DISPATCH_TABLE_JSON_FILENAME
-        if not json_path.is_file():
-            return {}
-        res = stage3_branch_merge.merge_branch_result_dispatch(json_path, plan_path)
-        print(
-            f"[stage3-merge] 枝番統合: {res.get('source_rows')} 行 → {res.get('merged_rows')} 行",
-            flush=True,
-        )
-        try:
-            from planning_core.stage3_input_builder import (
-                refresh_post_stage3_dispatch_entries_sidecar,
-            )
-
-            refresh_post_stage3_dispatch_entries_sidecar(json_path, pc=pc)
-        except Exception:
-            pass
-        return res
-    except Exception as ex:
-        print(f"[stage3-merge] 枝番統合スキップ: {ex}", flush=True)
-        return {}
-
-
 def run_interactive_dispatch_trial_from_result_dispatch_json(
     path: Path,
 ) -> tuple[int, Path | None]:
     """
-    段階3: ``結果_配台表.json`` を入力とし、段階2同一条件で配台を実行する。
+    配台試行: ``結果_配台表.json`` を入力とし、段階2同一条件で配台を実行する。
 
     Returns:
         (exit_code, shortage_json_path_or_none)
@@ -294,7 +167,7 @@ def run_interactive_dispatch_trial_from_result_dispatch_json(
             _remaining_at_end = []
         _ot_sim = (os.environ.get(pc.ENV_OVERTIME_SIMULATION_JSON) or "").strip()
         _note_base = (
-            "段階3配台試行（段階2同一条件）。"
+            "配台試行（段階2同一条件）。"
             "配台ループのブロック条件は段階2と同一。"
             "JSON 暦日×数量（interactive_dispatch_targets）がある手動修正試行ではループ内キャップも有効。"
             "致命: 機械カレンダー未作成・勤怠未作成。"
@@ -328,14 +201,6 @@ def run_interactive_dispatch_trial_from_result_dispatch_json(
             encoding="utf-8",
         )
         print("[dispatch trial] 不足情報JSONを書き出しました。", flush=True)
-        if (os.environ.get("PM_AI_PLAN_INPUT_STAGE3") or "").strip() == "1":
-            merge_res = _merge_stage3_branches(pc)
-            if merge_res:
-                print(
-                    f"[dispatch trial] 枝番統合: {merge_res.get('source_rows')} 行 → "
-                    f"{merge_res.get('merged_rows')} 行",
-                    flush=True,
-                )
         try:
             from planning_core.dispatch_workspace import resolve_result_dispatch_table_output_dir
 

@@ -9311,16 +9311,6 @@ def _write_dispatch_table_standalone_json(df_dispatch: pd.DataFrame, target_dir:
         p_out.parent.mkdir(parents=True, exist_ok=True)
         text = json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
         p_out.write_text(text, encoding="utf-8", newline="\n")
-        try:
-            from planning_core.stage3_input_builder import write_stage3_baseline_sidecar_if_absent
-
-            if write_stage3_baseline_sidecar_if_absent(p_out, rows):
-                logging.info(
-                    "段階2 baseline: %s.stage3_planning_meta.json を保存しました。",
-                    p_out.name,
-                )
-        except Exception as _bl_ex:
-            logging.debug("段階2 baseline sidecar 保存スキップ: %s", _bl_ex)
         return str(p_out)
     except Exception as e:
         logging.warning("結果_配台表.json: 出力に失敗しました: %s", e)

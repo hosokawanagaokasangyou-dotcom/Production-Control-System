@@ -88,7 +88,6 @@ import org.controlsfx.control.spreadsheet.SpreadsheetColumn;
 import org.controlsfx.control.spreadsheet.SpreadsheetView;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
-import jp.co.pm.ai.desktop.config.Stage3UiVisibility;
 import jp.co.pm.ai.desktop.dispatch.AladdinShapedPlanQtyLookup;
 import jp.co.pm.ai.desktop.dispatch.AladdinSystemDispatchDisplayQty;
 import jp.co.pm.ai.desktop.dispatch.DispatchAladdinPlanAligner;
@@ -111,11 +110,9 @@ import jp.co.pm.ai.desktop.dispatch.ResultDispatchPythonExport;
 import jp.co.pm.ai.desktop.dispatch.RawInputMorningDispatchRateWarning;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchSchema;
 import jp.co.pm.ai.desktop.dispatch.OvertimeSimulationOverridesReader;
-import jp.co.pm.ai.desktop.dispatch.ResultDispatchStage3Support;
-import jp.co.pm.ai.desktop.dispatch.Stage3PlanningMetaStore;
+import jp.co.pm.ai.desktop.dispatch.ResultDispatchPlanningStageSupport;
 import jp.co.pm.ai.desktop.dispatch.Stage21AttendanceApplyStatusPanel;
 import jp.co.pm.ai.desktop.dispatch.Stage21TrialSnapshotStore;
-import jp.co.pm.ai.desktop.dispatch.Stage3DispatchQtyBalanceCheck;
 import jp.co.pm.ai.desktop.ui.TabularCellHighlight;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchStage2ColumnSupport;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchTrialPython;
@@ -305,8 +302,6 @@ public final class DispatchInteractiveTabController {
                     "換算数量",
                     "実加工数",
                     "計画合計",
-                    COL_STAGE3_DISPATCH_QTY_TOTAL,
-                    Stage3DispatchQtyBalanceCheck.COL_TITLE,
                     COL_SPECIAL_RULES);
 
     /** 「工程+機械×日」ビューの先頭固定列（日付ブロックの直前まで）。 */
@@ -314,8 +309,7 @@ public final class DispatchInteractiveTabController {
             List.of(
                     ResultDispatchSchema.COL_PROCESS,
                     ResultDispatchSchema.COL_MACHINE,
-                    "加工内容",
-                    COL_STAGE3_DISPATCH_QTY_TOTAL);
+                    "加工内容");
 
     private record WideGridBundle(
             GridBase grid,
@@ -593,8 +587,8 @@ public final class DispatchInteractiveTabController {
             DispatchInteractiveDateQtyLineFilterPrefs.defaults();
 
     /** 結果_配台表 sidecar または旧 JSON から解決した段階3.0/3.1/3.2（未実行時 NONE）。 */
-    private ResultDispatchStage3Support.Stage3PlanningVariant stage3PlanningVariant =
-            ResultDispatchStage3Support.Stage3PlanningVariant.NONE;
+    private ResultDispatchPlanningStageSupport.Stage3PlanningVariant stage3PlanningVariant =
+            ResultDispatchPlanningStageSupport.Stage3PlanningVariant.NONE;
 
     private int dateAxisPastDays =
             TableColumnOrderPersistence.loadDispatchInteractiveDateAxisPastDaysPrefs().pastDays();
@@ -827,22 +821,22 @@ public final class DispatchInteractiveTabController {
                 dateQtyLineFilter.showStage21After());
     }
 
-    private ResultDispatchStage3Support.Stage3PlanningVariant effectiveStage3PlanningVariant() {
+    private ResultDispatchPlanningStageSupport.Stage3PlanningVariant effectiveStage3PlanningVariant() {
         if (stage3PlanningVariant != null
                 && stage3PlanningVariant
-                        != ResultDispatchStage3Support.Stage3PlanningVariant.NONE) {
+                        != ResultDispatchPlanningStageSupport.Stage3PlanningVariant.NONE) {
             return stage3PlanningVariant;
         }
         if (docHasActualDispatchQtyColumn()) {
-            return ResultDispatchStage3Support.Stage3PlanningVariant.LEGACY;
+            return ResultDispatchPlanningStageSupport.Stage3PlanningVariant.LEGACY;
         }
-        return ResultDispatchStage3Support.Stage3PlanningVariant.NONE;
+        return ResultDispatchPlanningStageSupport.Stage3PlanningVariant.NONE;
     }
 
     private boolean hasPipelineStage3PlanningApplied() {
-        return effectiveStage3PlanningVariant() != ResultDispatchStage3Support.Stage3PlanningVariant.NONE
+        return effectiveStage3PlanningVariant() != ResultDispatchPlanningStageSupport.Stage3PlanningVariant.NONE
                 && effectiveStage3PlanningVariant()
-                        != ResultDispatchStage3Support.Stage3PlanningVariant.LEGACY;
+                        != ResultDispatchPlanningStageSupport.Stage3PlanningVariant.LEGACY;
     }
 
     private boolean showsStage3QtyMultilineDisplay() {
@@ -855,14 +849,15 @@ public final class DispatchInteractiveTabController {
         shell.syncPlanInputStage2ButtonFromDispatchDirty();
         reloadSpecialRuleBadges();
         refreshDispatchPlanningStageBadge(null);
+        applyStage3UiVisibility(false);
     }
 
     void applyStage3UiVisibility(boolean visible) {
         boolean changed = stage3UiVisible != visible;
         stage3UiVisible = visible;
-        Stage3UiVisibility.apply(stage3QtyControls, visible);
-        Stage3UiVisibility.apply(stage3ActionControls, visible);
-        Stage3UiVisibility.apply(dispatchTrialButton, false);
+        jp.co.pm.ai.desktop.ui.JavaFxNodeVisibility.apply(stage3QtyControls, visible);
+        jp.co.pm.ai.desktop.ui.JavaFxNodeVisibility.apply(stage3ActionControls, visible);
+        jp.co.pm.ai.desktop.ui.JavaFxNodeVisibility.apply(dispatchTrialButton, false);
         if (changed && doc != null && !dateAxis.isEmpty()) {
             rebuildGrids();
         }
@@ -871,7 +866,7 @@ public final class DispatchInteractiveTabController {
                 && dispatchPlanningStageBadgeLabel != null
                 && dispatchPlanningStageBadgeLabel.getText() != null
                 && dispatchPlanningStageBadgeLabel.getText().startsWith("段階3")) {
-            Stage3UiVisibility.apply(dispatchPlanningStageBadgeLabel, false);
+            jp.co.pm.ai.desktop.ui.JavaFxNodeVisibility.apply(dispatchPlanningStageBadgeLabel, false);
         }
     }
 
@@ -1626,7 +1621,7 @@ public final class DispatchInteractiveTabController {
         }
         Path jsonPath = AppPaths.resolveResultDispatchTableJsonPath(shell.snapshotUiEnv());
         ResultDispatchDocument toWrite =
-                ResultDispatchStage3Support.prepareForDispatchInteractiveWideGrid(doc.copy());
+                ResultDispatchPlanningStageSupport.prepareForDispatchInteractiveWideGrid(doc.copy());
         Path pyExe = resolvePythonExe();
         Path pyDir = AppPaths.resolvePythonScriptDir(shell.snapshotUiEnv());
 
@@ -1712,208 +1707,9 @@ public final class DispatchInteractiveTabController {
      * ログは「実行・ログ」タブへ出力する。
      */
     private void startDispatchTrialInternal() {
-        if (shell == null) {
-            return;
+        if (shell != null) {
+            shell.appendLog("[配台試行] 段階3パイプラインは廃止されました。");
         }
-        String blockLabel = "配台試行（段階3）";
-        if (shell.blockIfMaterialLookupTablesHaveBlankValues(blockLabel)) {
-            return;
-        }
-        if (reloadInteractionDisabled
-                || deliveryCalendarReloadBlocking
-                || dispatchDocDirtySinceSave) {
-            return;
-        }
-        PipelineExecutionTimingKind timingKind = PipelineExecutionTimingKind.STAGE3;
-        if (!shell.tryBeginDispatchTrialGating(timingKind)) {
-            return;
-        }
-        statusLabel.setText("配台試行中...");
-        if (dispatchTrialButton != null) {
-            dispatchTrialButton.setDisable(true);
-        }
-        showReloadProgress();
-        Path jsonPath = AppPaths.resolveResultDispatchTableJsonPath(shell.snapshotUiEnv());
-        final Path trialPythonExe = resolvePythonExe();
-
-        shell.selectMainShellTab(MainShellTabId.RUN);
-        shell.appendLog("--- start: 段階3（配台試行） ---");
-        shell.appendLog("[配台試行] 処理を開始しました。");
-        shell.appendLog("[配台試行] Python 実行ファイル: " + trialPythonExe.toAbsolutePath().normalize());
-
-        final ResultDispatchDocument trialInputSnapshot = doc.copy();
-        Map<String, Double> stage3BaselineOnDisk =
-                Stage3PlanningMetaStore.readBaselineEntries(jsonPath);
-        if (!stage3BaselineOnDisk.isEmpty()) {
-            stage3TrialPlanQtySnapshot.clear();
-            stage3TrialPlanQtySnapshot.putAll(stage3BaselineOnDisk);
-        } else {
-            captureStage3TrialPlanQtySnapshotFromDocument(
-                    trialInputSnapshot,
-                    snapshotDateAxisForTrialPlanQtyCapture(trialInputSnapshot));
-            persistStage3BaselineSidecarIfAbsent(jsonPath);
-        }
-        stage3TrialInputDocumentSnapshot = trialInputSnapshot.copy();
-        Stage owner = shell.getPrimaryStage();
-
-        Task<String> task =
-                new Task<>() {
-                    @Override
-                    protected String call() throws Exception {
-                        shell.beginPipelineExecutionTiming(timingKind);
-                        try {
-                            ResultDispatchDocument writeDoc =
-                                    ResultDispatchStage3Support.prepareForDispatchInteractiveWideGrid(
-                                            doc.copy());
-                            ResultDispatchJsonIo.write(jsonPath, writeDoc);
-                            shell.appendLog(
-                                    "[dispatch-editor] trial: 試行前にメモリ上の表を JSON に同期 "
-                                            + jsonPath.toAbsolutePath().normalize());
-                            Path pyExe = trialPythonExe;
-                            Path pyDir = AppPaths.resolvePythonScriptDir(shell.snapshotUiEnv());
-                            Map<String, String> pyEnv = shell.snapshotDispatchTrialPythonEnv();
-                            return ResultDispatchTrialPython.runTrial(
-                                    jsonPath,
-                                    pyExe,
-                                    pyDir,
-                                    pyEnv,
-                                    shell::appendLog);
-                        } finally {
-                            shell.endPipelineExecutionTiming(timingKind);
-                        }
-                    }
-                };
-
-        task.setOnSucceeded(
-                e -> {
-                    try {
-                        String shortagesPath = task.getValue();
-                        statusLabel.setText("配台試行完了");
-                        shell.refreshRunTabStage2ArtifactLinks();
-                        shell.appendLog("[dispatch-editor] trial: " + shortagesPath);
-                        shell.appendLog("[配台試行] 正常終了しました。");
-                        shell.appendLog("不足情報JSON: " + shortagesPath);
-                        reloadFromDiskQuietAfterDispatchTrial(
-                                () -> {
-                                    try {
-                                        shell.reloadDeliveryCalendarInBackgroundAfterDispatchTrialSuccess();
-                                        shell.notifyStage3DispatchTrialSuccess();
-                                    } catch (Throwable upex) {
-                                        String em =
-                                                upex.getMessage() != null
-                                                        ? upex.getMessage()
-                                                        : upex.getClass().getSimpleName();
-                                        shell.appendLog("[配台試行] 試行後処理で例外: " + em);
-                                        shell.appendLog("[dispatch-editor] trial post-run: " + em);
-                                        shell.notifyStage3DispatchTrialFailure(em);
-                                        shell.endDispatchTrialGating(timingKind);
-                                        return;
-                                    }
-                                    Platform.runLater(
-                                            () -> {
-                                                try {
-                                                    showDispatchQtyShortfallDialogIfNeeded(owner);
-                                                    showDispatchShortageHintsDialogIfNeeded(owner);
-                                                    showRawInputMorningDispatchRateWarningIfNeeded(
-                                                            owner);
-                                                    DispatchTrialConsistency.CheckResult cr =
-                                                            DispatchTrialConsistency.compareDocuments(
-                                                                    trialInputSnapshot, doc);
-                                                    if (cr.consistent()) {
-                                                        shell.appendLog(
-                                                                "[整合性] 保存済み表と試行後の成果物（結果_配台表.json）は、"
-                                                                        + "依頼NO×機械名の当日配台数量合計および配台試行順番（工程別最小値）の観点で一致しました。");
-                                                        shell.appendLog(
-                                                                "[dispatch-editor] trial: 整合性OK（保存表と再読込JSONの数量・試行順）");
-                                                    } else {
-                                                        shell.appendLog(
-                                                                "[整合性] 保存済み表と試行後の成果物に差異があります（詳細は下記）:");
-                                                        for (String dl : cr.detailLines()) {
-                                                            shell.appendLog(dl);
-                                                        }
-                                                        shell.appendLog(
-                                                                "[dispatch-editor] trial: 整合性に差異あり（"
-                                                                        + cr.detailLines().size()
-                                                                        + " 件）— 実行・ログ参照");
-                                                    }
-                                                    DispatchTrialUnassignedWizard.showIfNeeded(
-                                                            owner, shell, Path.of(shortagesPath));
-                                                } catch (Throwable deferredEx) {
-                                                    String em =
-                                                            deferredEx.getMessage() != null
-                                                                    ? deferredEx.getMessage()
-                                                                    : deferredEx.getClass()
-                                                                            .getSimpleName();
-                                                    shell.appendLog(
-                                                            "[配台試行] 試行後確認ダイアログで例外: " + em);
-                                                    shell.appendLog(
-                                                            "[dispatch-editor] trial post-run deferred: "
-                                                                    + em);
-                                                } finally {
-                                                    shell.endDispatchTrialGating(timingKind);
-                                                }
-                                            });
-                                });
-                    } catch (Throwable sucEx) {
-                        String em =
-                                sucEx.getMessage() != null
-                                        ? sucEx.getMessage()
-                                        : sucEx.getClass().getSimpleName();
-                        shell.appendLog("[配台試行] 成功ハンドラ内例外: " + em);
-                        shell.appendLog("[dispatch-editor] trial onSucceeded: " + em);
-                        shell.notifyStage3DispatchTrialFailure(em);
-                        hideReloadProgress();
-                        shell.endDispatchTrialGating(timingKind);
-                    } finally {
-                        Platform.runLater(this::applyDispatchTrialButtonEnabledState);
-                    }
-                });
-        task.setOnFailed(
-                e -> {
-                    try {
-                        Throwable ex = task.getException();
-                        statusLabel.setText("配台試行エラー");
-                        String msg = ex != null ? ex.getMessage() : "(不明)";
-                        shell.appendLog("[dispatch-editor] trial failed: " + msg);
-                        shell.appendLog("[配台試行] エラーで終了しました。");
-                        shell.appendLog(msg);
-                        if (ex != null) {
-                            java.io.StringWriter sw = new java.io.StringWriter();
-                            ex.printStackTrace(new java.io.PrintWriter(sw));
-                            String stack = sw.toString();
-                            int max = 8000;
-                            if (stack.length() > max) {
-                                stack = stack.substring(0, max) + "\n... (truncated)";
-                            }
-                            for (String ln : stack.split("\n")) {
-                                if (!ln.isEmpty()) {
-                                    shell.appendLog(ln);
-                                }
-                            }
-                        }
-                        shell.notifyStage3DispatchTrialFailure(msg);
-                    } catch (Throwable handlerEx) {
-                        shell.appendLog(
-                                "[dispatch-editor] trial onFailed handler: "
-                                        + handlerEx.getMessage());
-                    } finally {
-                        hideReloadProgress();
-                        shell.endDispatchTrialGating(timingKind);
-                        Platform.runLater(this::applyDispatchTrialButtonEnabledState);
-                    }
-                });
-        task.setOnCancelled(
-                e -> {
-                    try {
-                        statusLabel.setText("配台試行キャンセル");
-                        shell.appendLog("[配台試行] キャンセルされました。");
-                    } finally {
-                        hideReloadProgress();
-                        shell.endDispatchTrialGating(timingKind);
-                        Platform.runLater(this::applyDispatchTrialButtonEnabledState);
-                    }
-                });
-        new Thread(task, "dispatch-trial").start();
     }
 
     @FXML
@@ -1923,10 +1719,7 @@ public final class DispatchInteractiveTabController {
 
     @FXML
     private void onBuildStage3InputAction() {
-        if (shell == null || stage3InputBuildBusy) {
-            return;
-        }
-        shell.triggerBuildStage3Input();
+        // 段階3パイプライン除去後は未使用（FXML 互換の空ハンドラ）
     }
 
     /** 入力3表生成の実行中フラグ（二重起動防止・UI 連動用）。 */
@@ -2087,7 +1880,7 @@ public final class DispatchInteractiveTabController {
                     protected ReloadBundle call() throws Exception {
                         ResultDispatchDocument d = ResultDispatchJsonIo.read(jsonPath);
                         int rowsBefore = d.rows().size();
-                        d = ResultDispatchStage3Support.prepareForDispatchInteractiveWideGrid(d);
+                        d = ResultDispatchPlanningStageSupport.prepareForDispatchInteractiveWideGrid(d);
                         if (shell != null && rowsBefore != d.rows().size()) {
                             shell.appendLog(
                                     "[dispatch-editor] 段階3: 孤立目標行を除去 "
@@ -2229,10 +2022,6 @@ public final class DispatchInteractiveTabController {
      * 入力3表生成用: sidecar baseline を優先し、無ければタブ上の (段階3前) スナップショットを返す。
      */
     Map<String, Double> snapshotStage3BaselineEntriesForInput3Build(Path dispatchJsonPath) {
-        Map<String, Double> fromDisk = Stage3PlanningMetaStore.readBaselineEntries(dispatchJsonPath);
-        if (!fromDisk.isEmpty()) {
-            return fromDisk;
-        }
         if (stage3TrialPlanQtySnapshot.isEmpty()) {
             return Map.of();
         }
@@ -2414,63 +2203,18 @@ public final class DispatchInteractiveTabController {
      * 実行・ログタブから起動するときも正しい baseline にするため、可能ならディスク上の JSON から読む。
      */
     void persistStage3BaselineBeforePipelineRun() {
-        if (shell == null) {
-            return;
-        }
-        Path jsonPath = AppPaths.resolveResultDispatchTableJsonPath(shell.snapshotUiEnv());
-        try {
-            Map<String, Double> existing =
-                    Stage3PlanningMetaStore.readBaselineEntries(jsonPath);
-            if (!existing.isEmpty()) {
-                stage3TrialPlanQtySnapshot.clear();
-                stage3TrialPlanQtySnapshot.putAll(existing);
-                return;
-            }
-            ResultDispatchDocument sourceDoc =
-                    Files.isRegularFile(jsonPath)
-                            ? ResultDispatchJsonIo.read(jsonPath)
-                            : doc;
-            List<LocalDate> axis = snapshotDateAxisForTrialPlanQtyCapture(sourceDoc);
-            List<Map<String, String>> profiles =
-                    ResultDispatchPivot.distinctWideTaskProfiles(
-                            sourceDoc.columns(),
-                            sourceDoc.rows(),
-                            ResultDispatchPivot.DISPATCH_INTERACTIVE_WIDE_MERGE_IDENTITY_HEADERS);
-            captureStage3TrialPlanQtySnapshotFromDocument(sourceDoc, profiles, axis);
-            Stage3PlanningMetaStore.writeBaselineEntries(jsonPath, stage3TrialPlanQtySnapshot);
-        } catch (Exception ex) {
-            shell.appendLog(
-                    "[stage3] baseline 保存失敗: "
-                            + (ex.getMessage() != null ? ex.getMessage() : ex));
-        }
+        // 段階3パイプライン廃止
     }
 
     /**
      * 段階2直後の暦日別配台を sidecar に一度だけ保存する。アラジン整列で JSON が1日化されても入力3表生成で参照できる。
      */
     private void persistStage3BaselineSidecarIfAbsent(Path dispatchJsonPath) {
-        if (dispatchJsonPath == null || stage3TrialPlanQtySnapshot.isEmpty()) {
-            return;
-        }
-        if (!Stage3PlanningMetaStore.readBaselineEntries(dispatchJsonPath).isEmpty()) {
-            return;
-        }
-        if (Stage3PlanningMetaStore.hasPipelinePlanningVariant(dispatchJsonPath)) {
-            return;
-        }
-        Stage3PlanningMetaStore.writeBaselineEntries(
-                dispatchJsonPath, stage3TrialPlanQtySnapshot);
+        // 段階3 sidecar 廃止
     }
 
     private void loadStage3BaselineFromSidecarIfNeeded(Path dispatchJsonPath) {
-        if (dispatchJsonPath == null || !stage3TrialPlanQtySnapshot.isEmpty()) {
-            return;
-        }
-        Map<String, Double> baseline = Stage3PlanningMetaStore.readBaselineEntries(dispatchJsonPath);
-        if (!baseline.isEmpty()) {
-            stage3TrialPlanQtySnapshot.clear();
-            stage3TrialPlanQtySnapshot.putAll(baseline);
-        }
+        // 段階3 sidecar 廃止
     }
 
     /**
@@ -2945,15 +2689,7 @@ public final class DispatchInteractiveTabController {
             if (shell != null) {
                 Path dispatchJson =
                         AppPaths.resolveResultDispatchTableJsonPath(shell.snapshotUiEnv());
-                if (forceStage3BaselineWriteOnNextCapture) {
-                    forceStage3BaselineWriteOnNextCapture = false;
-                    if (!stage3TrialPlanQtySnapshot.isEmpty()) {
-                        Stage3PlanningMetaStore.writeBaselineEntries(
-                                dispatchJson, stage3TrialPlanQtySnapshot);
-                    }
-                } else {
-                    persistStage3BaselineSidecarIfAbsent(dispatchJson);
-                }
+                forceStage3BaselineWriteOnNextCapture = false;
             }
         }
 
@@ -3002,12 +2738,7 @@ public final class DispatchInteractiveTabController {
                 SpreadsheetCell cell =
                         SpreadsheetCellType.STRING.createCell(gridRow, c, 1, 1, raw != null ? raw : "");
                 cell.setEditable(c > 0 && !isComputedWideStaticHeader(title));
-                if (Stage3DispatchQtyBalanceCheck.COL_TITLE.equals(title)
-                        && Stage3DispatchQtyBalanceCheck.isNgResult(raw)) {
-                    cell.setStyle(TabularCellHighlight.PLAN_INPUT_EXCLUDE_YES_STYLE);
-                } else {
-                    cell.setStyle(SpreadsheetTabularSupport.READABLE_STYLE_LEADING_COL);
-                }
+                cell.setStyle(SpreadsheetTabularSupport.READABLE_STYLE_LEADING_COL);
                 line.add(cell);
             }
             for (int di = 0; di < dayCount; di++) {
@@ -4017,21 +3748,8 @@ public final class DispatchInteractiveTabController {
         return false;
     }
 
-    /** 環境変数 {@link AppPaths#KEY_PM_AI_DEBUG_STAGE3_PLAN_ACTUAL_SINGLE_LINE}（未設定時は2行表示）。 */
-    private boolean stage3PlanActualSingleLineDisplay() {
-        if (shell == null) {
-            return false;
-        }
-        return AppPaths.isTruthyUiEnv(
-                shell.snapshotUiEnv(),
-                AppPaths.KEY_PM_AI_DEBUG_STAGE3_PLAN_ACTUAL_SINGLE_LINE,
-                false);
-    }
-
     private static boolean isComputedWideStaticHeader(String title) {
-        return COL_STAGE3_DISPATCH_QTY_TOTAL.equals(title)
-                || Stage3DispatchQtyBalanceCheck.COL_TITLE.equals(title)
-                || COL_SPECIAL_RULES.equals(title);
+        return COL_SPECIAL_RULES.equals(title);
     }
 
     private String wideStaticCellText(WideRow wr, String title) {
@@ -4041,27 +3759,9 @@ public final class DispatchInteractiveTabController {
                     wr.getStatic(ResultDispatchSchema.COL_PROCESS),
                     wr.getStatic(ResultDispatchSchema.COL_MACHINE));
         }
-        if (COL_STAGE3_DISPATCH_QTY_TOTAL.equals(title)) {
-            return formatStage3DispatchQtyTotal(stage3DispatchQtyTotalForWideRow(wr));
-        }
-        if (Stage3DispatchQtyBalanceCheck.COL_TITLE.equals(title)) {
-            return formatStage3DispatchQtyBalanceCheck(wr);
-        }
         return wr.getStatic(title);
     }
 
-    private String formatStage3DispatchQtyBalanceCheck(WideRow wr) {
-        double qtyConv = ResultDispatchNormalizer.parseDouble(wr.getStatic("換算数量"));
-        double actualDone = ResultDispatchNormalizer.parseDouble(wr.getStatic("実加工数"));
-        double rollUnitM = resolveRollUnitForWideRow(wr).unitM();
-        double actualTotal = stage3DispatchQtyTotalForWideRow(wr);
-        return Stage3DispatchQtyBalanceCheck.formatCheck(
-                qtyConv,
-                actualDone,
-                actualTotal,
-                docHasActualDispatchQtyColumn(),
-                rollUnitM);
-    }
 
     /**
      * 段階3配台数・照合の合計。段階3.0/3.1/3.2 後は {@code 結果_配台表.json} 行の実配台のみ（暦日軸の旧ガント合算を除く）。
@@ -4252,11 +3952,11 @@ public final class DispatchInteractiveTabController {
                                         aladdinFmt,
                                         targetFmt,
                                         doneFmt,
-                                        stage3PlanActualSingleLineDisplay(),
+                                        false,
                                         DispatchPlanQtyLineLabel.STAGE3),
                                 effectiveDateQtyLineFilter(),
-                                stage3PlanActualSingleLineDisplay()),
-                        stage3PlanActualSingleLineDisplay());
+                                false),
+                        false);
                 tagDispatchDateQtyShortfallCell(cell, dispatchDateQtyMultilineCell());
                 return;
             }
@@ -4273,7 +3973,7 @@ public final class DispatchInteractiveTabController {
                     planAmt,
                     true,
                     eps,
-                    stage3PlanActualSingleLineDisplay(),
+                    false,
                     stage3Revised,
                     false,
                     0.0,
@@ -4323,7 +4023,7 @@ public final class DispatchInteractiveTabController {
                     planAmt,
                     actualAmt,
                     eps,
-                    stage3PlanActualSingleLineDisplay(),
+                    false,
                     stage3Revised,
                     planSlidAway,
                     planMovedToDate,
@@ -4353,7 +4053,7 @@ public final class DispatchInteractiveTabController {
                 actualAmt,
                 docHasActualDispatchQtyColumn(),
                 eps,
-                stage3PlanActualSingleLineDisplay(),
+                false,
                 stage3Revised,
                 appendStage21,
                 stage21Amt,
@@ -4395,7 +4095,7 @@ public final class DispatchInteractiveTabController {
                 actualAmt,
                 docHasActualDispatchQtyColumn(),
                 eps,
-                stage3PlanActualSingleLineDisplay(),
+                false,
                 stage3Revised,
                 appendStage21,
                 stage21Amt,
@@ -4419,10 +4119,8 @@ public final class DispatchInteractiveTabController {
     /** 段階2再実行時: 古い段階3 sidecar と比較用スナップショットを破棄し、表示を段階2モードへ戻す。 */
     private void clearStage3PlanningMeta(Path dispatchJsonPath) {
         clearStage3TrialPlanQtySnapshot();
-        stage3PlanningVariant = ResultDispatchStage3Support.Stage3PlanningVariant.NONE;
-        if (dispatchJsonPath != null) {
-            Stage3PlanningMetaStore.deleteSidecar(dispatchJsonPath);
-        }
+        stage3PlanningVariant = ResultDispatchPlanningStageSupport.Stage3PlanningVariant.NONE;
+
         refreshDispatchPlanningStageBadge(dispatchJsonPath);
     }
 
@@ -4474,16 +4172,12 @@ public final class DispatchInteractiveTabController {
                         : (shell != null
                                 ? AppPaths.resolveResultDispatchTableJsonPath(shell.snapshotUiEnv())
                                 : null);
-        stage3PlanningVariant = Stage3PlanningMetaStore.readPlanningVariant(jsonPath);
-        ResultDispatchStage3Support.PlanningStage stage =
-                ResultDispatchStage3Support.detectPlanningStage(jsonPath);
-        ResultDispatchStage3Support.applyPlanningStageBadge(
-                dispatchPlanningStageBadgeLabel,
-                stage,
-                stage == ResultDispatchStage3Support.PlanningStage.STAGE3
-                        ? effectiveStage3PlanningVariant()
-                        : ResultDispatchStage3Support.Stage3PlanningVariant.NONE);
-        Stage3UiVisibility.applyPlanningStageBadgePolicy(
+        stage3PlanningVariant = ResultDispatchPlanningStageSupport.Stage3PlanningVariant.NONE;
+        ResultDispatchPlanningStageSupport.PlanningStage stage =
+                ResultDispatchPlanningStageSupport.detectPlanningStage(jsonPath);
+        ResultDispatchPlanningStageSupport.applyPlanningStageBadge(
+                dispatchPlanningStageBadgeLabel, stage);
+        jp.co.pm.ai.desktop.ui.JavaFxNodeVisibility.applyPlanningStageBadgePolicyNoop(
                 dispatchPlanningStageBadgeLabel,
                 shell != null ? shell.snapshotUiEnv() : Map.of());
     }
@@ -4744,7 +4438,7 @@ public final class DispatchInteractiveTabController {
     }
 
     private boolean dispatchDateQtyMultilineCell() {
-        if (stage3PlanActualSingleLineDisplay()) {
+        if (false) {
             return false;
         }
         return showsStage3QtyMultilineDisplay() || !aladdinPlanLookup.isEmpty();
@@ -4825,7 +4519,7 @@ public final class DispatchInteractiveTabController {
                 stage21CompareMode,
                 stage3BaselineActualAmt,
                 lineFilter,
-                ResultDispatchStage3Support.Stage3PlanningVariant.LEGACY);
+                ResultDispatchPlanningStageSupport.Stage3PlanningVariant.LEGACY);
     }
 
     private static void applyDispatchPlanActualQtyCellDisplay(
@@ -4840,7 +4534,7 @@ public final class DispatchInteractiveTabController {
             boolean stage21CompareMode,
             double stage3BaselineActualAmt,
             DispatchInteractiveDateQtyLineFilterPrefs lineFilter,
-            ResultDispatchStage3Support.Stage3PlanningVariant variant) {
+            ResultDispatchPlanningStageSupport.Stage3PlanningVariant variant) {
         if (hasActualColumn && !singleLineDisplay) {
             List<Stage3QtyLineSlot> slots =
                     applyDateQtyLineFilterToSlots(
@@ -4901,9 +4595,9 @@ public final class DispatchInteractiveTabController {
         boolean useStyledGraphic =
                 qtxt != null
                         && !qtxt.isBlank()
-                        && (ResultDispatchStage3Support.isStage3RevisedQtyLine(qtxt)
+                        && (ResultDispatchPlanningStageSupport.isStage3RevisedQtyLine(qtxt)
                                 || qtxt.contains(LABEL_STAGE21_ACTUAL)
-                                || ResultDispatchStage3Support.isStage3AfterQtyLine(qtxt));
+                                || ResultDispatchPlanningStageSupport.isStage3AfterQtyLine(qtxt));
         if (useStyledGraphic) {
             applyDispatchQtyGraphicCellDisplay(
                     cell,
@@ -4950,7 +4644,7 @@ public final class DispatchInteractiveTabController {
                 eps,
                 appendStage21Line,
                 stage21ActualAmt,
-                ResultDispatchStage3Support.Stage3PlanningVariant.LEGACY);
+                ResultDispatchPlanningStageSupport.Stage3PlanningVariant.LEGACY);
     }
 
     static List<Stage3QtyLineSlot> buildStage3QtyFixedLineSlots(
@@ -4961,11 +4655,11 @@ public final class DispatchInteractiveTabController {
             double eps,
             boolean appendStage21Line,
             double stage21ActualAmt,
-            ResultDispatchStage3Support.Stage3PlanningVariant variant) {
-        ResultDispatchStage3Support.Stage3PlanningVariant v =
+            ResultDispatchPlanningStageSupport.Stage3PlanningVariant variant) {
+        ResultDispatchPlanningStageSupport.Stage3PlanningVariant v =
                 variant != null
                         ? variant
-                        : ResultDispatchStage3Support.Stage3PlanningVariant.LEGACY;
+                        : ResultDispatchPlanningStageSupport.Stage3PlanningVariant.LEGACY;
         String actualLabel = v.actualQtyLabel();
         String revisedLabel = v.revisedQtyLabel();
         int lineCount =
@@ -5038,7 +4732,7 @@ public final class DispatchInteractiveTabController {
                 eps,
                 stage21CompareMode,
                 stage3BaselineActualAmt,
-                ResultDispatchStage3Support.Stage3PlanningVariant.LEGACY);
+                ResultDispatchPlanningStageSupport.Stage3PlanningVariant.LEGACY);
     }
 
     static List<Stage3QtyLineSlot> buildStage3QtyFixedLineSlotsWithPlanSlide(
@@ -5052,11 +4746,11 @@ public final class DispatchInteractiveTabController {
             double eps,
             boolean stage21CompareMode,
             double stage3BaselineActualAmt,
-            ResultDispatchStage3Support.Stage3PlanningVariant variant) {
-        ResultDispatchStage3Support.Stage3PlanningVariant v =
+            ResultDispatchPlanningStageSupport.Stage3PlanningVariant variant) {
+        ResultDispatchPlanningStageSupport.Stage3PlanningVariant v =
                 variant != null
                         ? variant
-                        : ResultDispatchStage3Support.Stage3PlanningVariant.LEGACY;
+                        : ResultDispatchPlanningStageSupport.Stage3PlanningVariant.LEGACY;
         String actualLabel = v.actualQtyLabel();
         String revisedLabel = v.revisedQtyLabel();
         int lineCount = stage21CompareMode ? STAGE21_QTY_FIXED_LINE_COUNT : STAGE3_QTY_FIXED_LINE_COUNT;
@@ -5134,7 +4828,7 @@ public final class DispatchInteractiveTabController {
                 stage21CompareMode,
                 stage3BaselineActualAmt,
                 lineFilter,
-                ResultDispatchStage3Support.Stage3PlanningVariant.LEGACY);
+                ResultDispatchPlanningStageSupport.Stage3PlanningVariant.LEGACY);
     }
 
     private static void applyDispatchPlanActualQtyCellDisplayWithPlanSlide(
@@ -5151,7 +4845,7 @@ public final class DispatchInteractiveTabController {
             boolean stage21CompareMode,
             double stage3BaselineActualAmt,
             DispatchInteractiveDateQtyLineFilterPrefs lineFilter,
-            ResultDispatchStage3Support.Stage3PlanningVariant variant) {
+            ResultDispatchPlanningStageSupport.Stage3PlanningVariant variant) {
         if (!singleLineDisplay) {
             List<Stage3QtyLineSlot> slots =
                     applyDateQtyLineFilterToSlots(
@@ -5215,8 +4909,8 @@ public final class DispatchInteractiveTabController {
                 out.add(filter.showStage3Plan() ? slot : stage3QtyEmptyLineSlot());
             } else if (line.startsWith(LABEL_STAGE21_ACTUAL)) {
                 out.add(filter.showStage21After() ? slot : stage3QtyEmptyLineSlot());
-            } else if (ResultDispatchStage3Support.isStage3AfterQtyLine(line)
-                    || ResultDispatchStage3Support.isStage3RevisedQtyLine(line)) {
+            } else if (ResultDispatchPlanningStageSupport.isStage3AfterQtyLine(line)
+                    || ResultDispatchPlanningStageSupport.isStage3RevisedQtyLine(line)) {
                 out.add(filter.showStage3After() ? slot : stage3QtyEmptyLineSlot());
             } else {
                 out.add(slot);
@@ -5295,8 +4989,8 @@ public final class DispatchInteractiveTabController {
         if (line.startsWith(LABEL_STAGE21_ACTUAL)) {
             return filter.showStage21After();
         }
-        if (ResultDispatchStage3Support.isStage3AfterQtyLine(line)
-                || ResultDispatchStage3Support.isStage3RevisedQtyLine(line)) {
+        if (ResultDispatchPlanningStageSupport.isStage3AfterQtyLine(line)
+                || ResultDispatchPlanningStageSupport.isStage3RevisedQtyLine(line)) {
             return filter.showStage3After();
         }
         return true;
@@ -5411,9 +5105,9 @@ public final class DispatchInteractiveTabController {
     private static int indexOfNextDispatchQtyStyledSegment(String text, int from) {
         int next = -1;
         next = minIfEarlier(next, text.indexOf(LABEL_STAGE21_ACTUAL, from));
-        for (ResultDispatchStage3Support.Stage3PlanningVariant v :
-                ResultDispatchStage3Support.Stage3PlanningVariant.values()) {
-            if (v == ResultDispatchStage3Support.Stage3PlanningVariant.NONE) {
+        for (ResultDispatchPlanningStageSupport.Stage3PlanningVariant v :
+                ResultDispatchPlanningStageSupport.Stage3PlanningVariant.values()) {
+            if (v == ResultDispatchPlanningStageSupport.Stage3PlanningVariant.NONE) {
                 continue;
             }
             next = minIfEarlier(next, text.indexOf(v.revisedQtyLabel(), from));
@@ -5434,10 +5128,10 @@ public final class DispatchInteractiveTabController {
             return LABEL_STAGE21_ACTUAL.length();
         }
         String rest = text.substring(index);
-        if (ResultDispatchStage3Support.isStage3RevisedQtyLine(rest)) {
-            for (ResultDispatchStage3Support.Stage3PlanningVariant v :
-                    ResultDispatchStage3Support.Stage3PlanningVariant.values()) {
-                if (v == ResultDispatchStage3Support.Stage3PlanningVariant.NONE) {
+        if (ResultDispatchPlanningStageSupport.isStage3RevisedQtyLine(rest)) {
+            for (ResultDispatchPlanningStageSupport.Stage3PlanningVariant v :
+                    ResultDispatchPlanningStageSupport.Stage3PlanningVariant.values()) {
+                if (v == ResultDispatchPlanningStageSupport.Stage3PlanningVariant.NONE) {
                     continue;
                 }
                 String label = v.revisedQtyLabel();
@@ -5446,10 +5140,10 @@ public final class DispatchInteractiveTabController {
                 }
             }
         }
-        if (ResultDispatchStage3Support.isStage3AfterQtyLine(rest)) {
-            for (ResultDispatchStage3Support.Stage3PlanningVariant v :
-                    ResultDispatchStage3Support.Stage3PlanningVariant.values()) {
-                if (v == ResultDispatchStage3Support.Stage3PlanningVariant.NONE) {
+        if (ResultDispatchPlanningStageSupport.isStage3AfterQtyLine(rest)) {
+            for (ResultDispatchPlanningStageSupport.Stage3PlanningVariant v :
+                    ResultDispatchPlanningStageSupport.Stage3PlanningVariant.values()) {
+                if (v == ResultDispatchPlanningStageSupport.Stage3PlanningVariant.NONE) {
                     continue;
                 }
                 String label = v.actualQtyLabel();
@@ -5463,13 +5157,13 @@ public final class DispatchInteractiveTabController {
 
     private static String dispatchQtyStyledSegmentInlineStyle(String text, int index) {
         String rest = text.substring(index);
-        if (ResultDispatchStage3Support.isStage3RevisedQtyLine(rest)) {
+        if (ResultDispatchPlanningStageSupport.isStage3RevisedQtyLine(rest)) {
             return "-fx-font-weight: bold; -fx-fill: #1565C0;";
         }
         if (rest.startsWith(LABEL_STAGE21_ACTUAL)) {
             return "-fx-font-weight: bold; -fx-fill: #2E7D32;";
         }
-        if (ResultDispatchStage3Support.isStage3AfterQtyLine(rest)) {
+        if (ResultDispatchPlanningStageSupport.isStage3AfterQtyLine(rest)) {
             return "-fx-font-weight: bold; -fx-fill: #111111;";
         }
         return STAGE3_QTY_DEFAULT_TEXT_INLINE_STYLE;
@@ -5538,7 +5232,7 @@ public final class DispatchInteractiveTabController {
                 stage3RevisedAfterTrial,
                 stage21CompareMode,
                 stage3BaselineActualAmt,
-                ResultDispatchStage3Support.Stage3PlanningVariant.LEGACY);
+                ResultDispatchPlanningStageSupport.Stage3PlanningVariant.LEGACY);
     }
 
     static String formatDispatchPlanActualQtyDisplay(
@@ -5551,7 +5245,7 @@ public final class DispatchInteractiveTabController {
             boolean stage3RevisedAfterTrial,
             boolean stage21CompareMode,
             double stage3BaselineActualAmt,
-            ResultDispatchStage3Support.Stage3PlanningVariant variant) {
+            ResultDispatchPlanningStageSupport.Stage3PlanningVariant variant) {
         boolean hasAladdin = aladdinPlanAmt > eps;
         boolean hasPlan = planAmt > eps;
         if (hasActualColumn) {
@@ -5632,13 +5326,13 @@ public final class DispatchInteractiveTabController {
     }
 
     private static void applyDispatchStage3QtyLineLabelStyle(Label lbl, String line) {
-        if (ResultDispatchStage3Support.isStage3RevisedQtyLine(line)) {
+        if (ResultDispatchPlanningStageSupport.isStage3RevisedQtyLine(line)) {
             lbl.getStyleClass().add(DISPATCH_STAGE3_REVISED_LINE_STYLE_CLASS);
             lbl.setStyle(STAGE3_REVISED_LINE_INLINE_STYLE);
         } else if (line.startsWith(LABEL_STAGE21_ACTUAL)) {
             lbl.getStyleClass().add(DISPATCH_STAGE21_AFTER_LINE_STYLE_CLASS);
             lbl.setStyle(STAGE21_AFTER_LINE_INLINE_STYLE);
-        } else if (ResultDispatchStage3Support.isStage3AfterQtyLine(line)) {
+        } else if (ResultDispatchPlanningStageSupport.isStage3AfterQtyLine(line)) {
             lbl.getStyleClass().add(DISPATCH_STAGE3_AFTER_LINE_STYLE_CLASS);
             lbl.setStyle(STAGE3_AFTER_LINE_INLINE_STYLE);
         } else {

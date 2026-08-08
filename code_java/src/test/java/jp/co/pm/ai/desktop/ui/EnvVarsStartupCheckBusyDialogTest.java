@@ -40,6 +40,7 @@ class EnvVarsStartupCheckBusyDialogTest {
                                     null, EnvVarsStartupCheckBusyDialog.STATUS_STABILIZE);
                     ref.set(dialog);
                     dialog.setStatus(EnvVarsStartupCheckBusyDialog.STATUS_MATCH);
+                    dialog.setStep(EnvVarsStartupCheckBusyDialog.STEP_ENV_MATCH);
                     dialog.setHeader(EnvVarsStartupCheckBusyDialog.HEADER_BACKGROUND_LOAD);
                     shown.countDown();
                 });

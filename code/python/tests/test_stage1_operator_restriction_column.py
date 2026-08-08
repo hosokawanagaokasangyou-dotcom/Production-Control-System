@@ -14,10 +14,6 @@ def test_stage1_operator_restriction_column_contract():
     stage1_order = pc.plan_input_sheet_column_order()
     assert "担当OP_指定" not in stage1_order
     assert pc.PLAN_COL_LIMITED_OP in stage1_order
-
-    stage3_order = pc.plan_input_stage3_sheet_column_order()
-    assert pc.PLAN_COL_LIMITED_OP in stage3_order
-    assert "担当OP_指定" not in stage3_order
     assert pc.PLAN_COL_LIMITED_OP not in pc.PLAN_STAGE1_MERGE_COLUMNS
 
 

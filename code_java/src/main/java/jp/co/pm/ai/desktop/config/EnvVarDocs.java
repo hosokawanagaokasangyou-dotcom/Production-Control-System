@@ -524,17 +524,6 @@ public final class EnvVarDocs {
                 "PM_AI_LEARNED_SPEED_HISTOGRAM_BIN_WIDTH",
                 "速度ヒストグラムのビン幅 m/分（既定 1.0）。");
         put(
-                "PM_AI_DEBUG_STAGE3_PLAN_ACTUAL_SINGLE_LINE",
-                "配台計画手動修正タブ: 段階3試行後の日付セル表示。"
-                        + " 1/true/yes/on で（段階3前）（段階3後）を1行（スペース区切り）。"
-                        + " 0/false/no/off/none（既定）で2行（改行）。2行は固定行高44px・wrap-text なし。"
-                        + " Spreadsheet の layout IOOBE 回避のため。");
-        put(
-                AppPaths.KEY_PM_AI_STAGE3_UI_VISIBLE,
-                "段階3.0～3.2に関するUIを表示する。"
-                        + " 1/true/yes/on で表示。0/false/no/off/none、空欄、未設定では非表示（既定）。"
-                        + " 段階3のロジック・既存成果物・実行履歴は削除しない。");
-        put(
                 "PM_AI_STAGE2_ENGINE",
                 "段階2の実行エンジン（互換用キー）。JavaFX 実行タブからの段階2は常に Python 子プロセス（plan_simulation_stage2.py）のみ。"
                         + " 未設定・空・python（大小無視）で従来どおり。java が指定されていても無視され Python が起動する（旧 JVM 段階2は撤去済み）。");

@@ -37,7 +37,7 @@
                     <TextField fx:id="pathField" prefHeight="25.0" prefWidth="273.0" GridPane.columnIndex="1" GridPane.rowIndex="0" />
                     <Button fx:id="browseButton" mnemonicParsing="false" onAction="#onBrowseButtonAction" text="参照…" GridPane.columnIndex="2" />
                     <Label text="シート名" GridPane.rowIndex="1" />
-                    <Button fx:id="loadButton" mnemonicParsing="false" onAction="#onLoadButtonAction" text="読込" GridPane.columnIndex="3" />
+                    <Button fx:id="loadButton" mnemonicParsing="false" onAction="#onLoadButtonAction" text="読み込み" GridPane.columnIndex="3" />
                     <Button fx:id="saveButton" mnemonicParsing="false" onAction="#onSaveButtonAction" prefHeight="25.0" prefWidth="52.0" text="保存" GridPane.columnIndex="4" />
                     <TextField fx:id="sheetField" prefHeight="25.0" prefWidth="127.0" GridPane.columnIndex="1" GridPane.rowIndex="1" />
                     <Button fx:id="addRowButton" mnemonicParsing="false" onAction="#onAddRowButtonAction" text="行追加" GridPane.columnIndex="2" GridPane.rowIndex="1" />
@@ -53,7 +53,7 @@
                     <HBox alignment="CENTER_LEFT" spacing="12.0">
                         <StackPane fx:id="attendanceReadinessBadgeHost" alignment="CENTER_LEFT" managed="false" styleClass="pm-attendance-readiness-badge-host" visible="false" />
                         <Button fx:id="stage2RunButton" mnemonicParsing="false" onAction="#onStage2RunButtonAction"
-                                styleClass="pm-stage-run-button,pm-stage-run-2" text="段階2.0 実行" />
+                                styleClass="pm-stage-run-button,pm-stage-run-2" text="段階2 実行" />
                         <Button fx:id="stage21RunButton" mnemonicParsing="false" onAction="#onStage21RunButtonAction"
                                 styleClass="pm-stage-run-button,pm-stage-run-2-1" text="段階2.1(時間外)" />
                         <CheckBox fx:id="stage2SkipCacheClearCheckBox" mnemonicParsing="false"

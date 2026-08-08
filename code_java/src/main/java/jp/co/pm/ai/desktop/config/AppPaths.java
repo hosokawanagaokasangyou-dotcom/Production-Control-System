@@ -63,19 +63,6 @@ public final class AppPaths {
     public static final String KEY_PM_AI_DEBUG_LOG_MIRROR = "PM_AI_DEBUG_LOG_MIRROR";
 
     /**
-     * 配台手動修正: 段階3試行後の日付セルで {@code （段階3前）（段階3後）} を改行せず1行（スペース区切り）表示する。
-     * {@code 1}/{@code true}/{@code yes}/{@code on} で有効。未設定または {@code 0}/{@code false} 等で従来の2行表示。
-     */
-    public static final String KEY_PM_AI_DEBUG_STAGE3_PLAN_ACTUAL_SINGLE_LINE =
-            "PM_AI_DEBUG_STAGE3_PLAN_ACTUAL_SINGLE_LINE";
-
-    /**
-     * 段階3.0～3.2の関連UIだけを表示する。ロジック・成果物・履歴データはこの値にかかわらず保持する。
-     * 未設定または false 値では非表示。
-     */
-    public static final String KEY_PM_AI_STAGE3_UI_VISIBLE = "PM_AI_STAGE3_UI_VISIBLE";
-
-    /**
      * Stage1/2 成果物フォルダ（従来の {@code code/output} に相当）。未設定時は {@link #resolveRepoRoot(Map)} の直下の
      * {@code output/}。Python {@code planning_core.bootstrap} の {@code output_dir} と揃える。
      */

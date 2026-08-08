@@ -10,10 +10,7 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-import jp.co.pm.ai.desktop.PlanInputStage3TabController;
 import jp.co.pm.ai.desktop.dispatch.Stage21TrialSnapshotStore;
-import jp.co.pm.ai.desktop.dispatch.Stage3PlanningMetaStore;
-import jp.co.pm.ai.desktop.io.PlanInputTabularIo;
 
 class PipelineDownstreamResultsClearerTest {
 
@@ -29,7 +26,7 @@ class PipelineDownstreamResultsClearerTest {
     }
 
     @Test
-    void clearStage2ThroughStage32_removesDispatchSidecarsAndStage3SheetRows() throws Exception {
+    void clearStage2Downstream_removesDispatchSidecarsAndStage2Artifacts() throws Exception {
         Path repo = temp.resolve("repo");
         Path python = repo.resolve("code").resolve("python");
         Files.createDirectories(python);
@@ -43,9 +40,6 @@ class PipelineDownstreamResultsClearerTest {
         Files.writeString(
                 Stage21TrialSnapshotStore.sidecarPathFor(dispatchJson),
                 "{\"stage21_applied\":true}");
-        Files.writeString(
-                Stage3PlanningMetaStore.sidecarPath(dispatchJson),
-                "{\"variant\":\"3.1\"}");
         Files.writeString(output.resolve("shaped_aladdin_plan.json"), "{}");
         Files.writeString(output.resolve("計画2606011200000001.xlsx"), "stub");
         Files.createDirectories(AppPaths.resolveStage21OutputDir(ui));
@@ -53,41 +47,22 @@ class PipelineDownstreamResultsClearerTest {
                 AppPaths.resolveStage21OutputDir(ui).resolve(AppPaths.RESULT_DISPATCH_TABLE_JSON_BASENAME),
                 "{}");
 
-        Path workbook = output.resolve(AppPaths.STAGE1_PLAN_TASKS_FILENAME);
-        PlanInputTabularIo.write(
-                workbook,
-                "配台計画_タスク入力",
-                new PlanInputTabularIo.TabularSheet(
-                        java.util.List.of("依頼NO"), java.util.List.of(java.util.List.of("Y1"))));
-        PlanInputTabularIo.writeExcelSheetPreservingOthers(
-                workbook,
-                PlanInputStage3TabController.STAGE3_SHEET_NAME,
-                new PlanInputTabularIo.TabularSheet(
-                        java.util.List.of("依頼NO", "元依頼NO"),
-                        java.util.List.of(java.util.List.of("Y1-01", "Y1"))));
-
         PipelineDownstreamResultsClearer.ClearResult result =
-                PipelineDownstreamResultsClearer.clearStage2ThroughStage32(ui);
+                PipelineDownstreamResultsClearer.clearStage2Downstream(ui);
 
         assertTrue(result.anyDeleted());
         assertFalse(Files.exists(dispatchJson));
         assertFalse(Files.isRegularFile(Stage21TrialSnapshotStore.sidecarPathFor(dispatchJson)));
-        assertFalse(Files.isRegularFile(Stage3PlanningMetaStore.sidecarPath(dispatchJson)));
         assertFalse(Files.exists(output.resolve("shaped_aladdin_plan.json")));
         assertFalse(Files.exists(output.resolve("計画2606011200000001.xlsx")));
         assertFalse(
                 Files.isRegularFile(
                         AppPaths.resolveStage21OutputDir(ui)
                                 .resolve(AppPaths.RESULT_DISPATCH_TABLE_JSON_BASENAME)));
-
-        PlanInputTabularIo.TabularSheet stage3 =
-                PlanInputTabularIo.read(workbook, PlanInputStage3TabController.STAGE3_SHEET_NAME);
-        assertTrue(stage3.rows().isEmpty());
-        assertFalse(stage3.headers().isEmpty());
     }
 
     @Test
-    void clearStage2ThroughStage32_canPreserveTodayDispatchSourceBundle() throws Exception {
+    void clearStage2Downstream_canPreserveTodayDispatchSourceBundle() throws Exception {
         Path repo = temp.resolve("repo2");
         Path python = repo.resolve("code").resolve("python");
         Files.createDirectories(python);
@@ -100,7 +75,7 @@ class PipelineDownstreamResultsClearerTest {
         Files.createDirectories(bundle.getParent());
         Files.writeString(bundle, "{\"version\":1}");
 
-        PipelineDownstreamResultsClearer.clearStage2ThroughStage32(ui, true);
+        PipelineDownstreamResultsClearer.clearStage2Downstream(ui, true);
 
         assertTrue(Files.isRegularFile(bundle));
     }

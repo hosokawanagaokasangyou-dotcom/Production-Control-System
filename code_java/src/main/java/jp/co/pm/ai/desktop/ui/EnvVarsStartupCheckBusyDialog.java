@@ -30,13 +30,20 @@ public final class EnvVarsStartupCheckBusyDialog {
     public static final String STATUS_BACKGROUND_LOAD = "タブデータを読み込んでいます…";
     public static final String STATUS_DONE = "完了しました";
 
+    public static final String STEP_RESTORE_WORKSPACE = "1/3 ワークスペース復元";
+    public static final String STEP_ENV_MATCH = "2/3 環境変数照合";
+    public static final String STEP_TAB_LOAD = "3/3 タブ読込";
+
     private final Stage stage;
     private final Label headerLabel;
+    private final Label stepLabel;
     private final Label statusLabel;
 
-    private EnvVarsStartupCheckBusyDialog(Stage stage, Label headerLabel, Label statusLabel) {
+    private EnvVarsStartupCheckBusyDialog(
+            Stage stage, Label headerLabel, Label stepLabel, Label statusLabel) {
         this.stage = stage;
         this.headerLabel = headerLabel;
+        this.stepLabel = stepLabel;
         this.statusLabel = statusLabel;
     }
 
@@ -61,6 +68,9 @@ public final class EnvVarsStartupCheckBusyDialog {
         header.getStyleClass().add("dialog-header");
         header.setStyle("-fx-font-weight: bold; -fx-font-size: 14px;");
 
+        Label step = new Label("");
+        step.setStyle("-fx-font-size: 12px; -fx-text-fill: -fx-text-inner-color;");
+
         ProgressIndicator progress = new ProgressIndicator();
         progress.setPrefSize(48, 48);
         progress.setMaxSize(48, 48);
@@ -69,7 +79,7 @@ public final class EnvVarsStartupCheckBusyDialog {
         status.setWrapText(true);
         status.setMaxWidth(340);
 
-        VBox root = new VBox(14, header, progress, status);
+        VBox root = new VBox(14, header, step, progress, status);
         root.setAlignment(Pos.CENTER);
         root.setPadding(new Insets(20, 24, 24, 24));
         root.setPrefWidth(380);
@@ -80,7 +90,18 @@ public final class EnvVarsStartupCheckBusyDialog {
         if (owner != null) {
             stage.centerOnScreen();
         }
-        return new EnvVarsStartupCheckBusyDialog(stage, header, status);
+        return new EnvVarsStartupCheckBusyDialog(stage, header, step, status);
+    }
+
+    /** 起動シーケンスの大項目（例: {@link #STEP_RESTORE_WORKSPACE}）。空文字で非表示。 */
+    public void setStep(String text) {
+        if (stepLabel == null) {
+            return;
+        }
+        boolean show = text != null && !text.isBlank();
+        stepLabel.setText(show ? text : "");
+        stepLabel.setVisible(show);
+        stepLabel.setManaged(show);
     }
 
     public void setHeader(String text) {

@@ -1510,10 +1510,6 @@ public final class DesktopSessionStateStore {
         String s2bo = nzFallback(text(n, "stage2BorderHex"), d.stage2BorderHex());
         String s2h = nzFallback(text(n, "stage2HoverBgHex"), d.stage2HoverBgHex());
         String s2p = nzFallback(text(n, "stage2PressedBgHex"), d.stage2PressedBgHex());
-        String s3b = nzFallback(text(n, "stage3BgHex"), d.stage3BgHex());
-        String s3bo = nzFallback(text(n, "stage3BorderHex"), d.stage3BorderHex());
-        String s3h = nzFallback(text(n, "stage3HoverBgHex"), d.stage3HoverBgHex());
-        String s3p = nzFallback(text(n, "stage3PressedBgHex"), d.stage3PressedBgHex());
         boolean ca = optionalBoolean(n, "customizeAlignAladdinPlanButton", false);
         double aar = optionalDouble(n, "alignAladdinBorderRadius", d.alignAladdinBorderRadius());
         double aapv = optionalDouble(n, "alignAladdinPaddingV", d.alignAladdinPaddingV());
@@ -1569,10 +1565,6 @@ public final class DesktopSessionStateStore {
                 s2bo,
                 s2h,
                 s2p,
-                s3b,
-                s3bo,
-                s3h,
-                s3p,
                 ca,
                 aar,
                 aapv,
@@ -1639,10 +1631,6 @@ public final class DesktopSessionStateStore {
         o.put("stage2BorderHex", p.stage2BorderHex());
         o.put("stage2HoverBgHex", p.stage2HoverBgHex());
         o.put("stage2PressedBgHex", p.stage2PressedBgHex());
-        o.put("stage3BgHex", p.stage3BgHex());
-        o.put("stage3BorderHex", p.stage3BorderHex());
-        o.put("stage3HoverBgHex", p.stage3HoverBgHex());
-        o.put("stage3PressedBgHex", p.stage3PressedBgHex());
         o.put("customizeAlignAladdinPlanButton", p.customizeAlignAladdinPlanButton());
         o.put("alignAladdinBorderRadius", p.alignAladdinBorderRadius());
         o.put("alignAladdinPaddingV", p.alignAladdinPaddingV());

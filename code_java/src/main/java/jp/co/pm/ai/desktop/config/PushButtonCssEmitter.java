@@ -71,7 +71,6 @@ public final class PushButtonCssEmitter {
             appendStageShared(sb, p);
             appendStageVariant(sb, 1, p.stage1BgHex(), p.stage1BorderHex(), p.stage1HoverBgHex(), p.stage1PressedBgHex());
             appendStageVariant(sb, 2, p.stage2BgHex(), p.stage2BorderHex(), p.stage2HoverBgHex(), p.stage2PressedBgHex());
-            appendStageVariant(sb, 3, p.stage3BgHex(), p.stage3BorderHex(), p.stage3HoverBgHex(), p.stage3PressedBgHex());
             sb.append(".button.pm-stage-run-button:disabled {\n");
             sb.append("    -fx-opacity: 0.5;\n");
             sb.append("}\n");

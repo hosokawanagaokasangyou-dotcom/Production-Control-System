@@ -30,7 +30,6 @@ import javafx.scene.control.ToggleButton;
 import javafx.scene.control.ToggleGroup;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
-import jp.co.pm.ai.desktop.config.Stage3UiVisibility;
 import jp.co.pm.ai.desktop.PipelineExecutionTimingHistoryStore.Stats;
 
 /**
@@ -45,7 +44,6 @@ public final class PipelineExecutionTimingTabController {
     private static final String KIND_FILTER_ALL = "すべて（重ね表示）";
 
     private MainShellController shell;
-    private boolean stage3UiVisible;
 
     private final Runnable historyChangeListener = () -> Platform.runLater(this::refreshFromStore);
 
@@ -162,25 +160,10 @@ public final class PipelineExecutionTimingTabController {
             }
         }
         applyChartViewVisibility();
-    }
-
-    void applyStage3UiVisibility(boolean visible) {
-        stage3UiVisible = visible;
         if (hintLabel != null) {
             hintLabel.setText(
-                    visible
-                            ? "段階1・2.0～3.2・配台試行・サマリ Excel・納期管理ビューの所要時間を記録・表示します。"
-                            : "段階1・2.0～2.1・サマリ Excel・納期管理ビューの所要時間を記録・表示します。");
+                    "段階1・2.0～2.1・配台試行・サマリ Excel・納期管理ビューの所要時間を記録・表示します。");
         }
-        rebuildKindChoices();
-        trendChart
-                .getData()
-                .setAll(
-                        java.util.Arrays.stream(PipelineExecutionTimingKind.values())
-                                .filter(this::isKindVisible)
-                                .map(trendSeriesByKind::get)
-                                .toList());
-        refreshFromStore();
     }
 
     private void rebuildKindChoices() {
@@ -201,9 +184,7 @@ public final class PipelineExecutionTimingTabController {
     }
 
     private boolean isKindVisible(PipelineExecutionTimingKind kind) {
-        return Stage3UiVisibility.isTimingKindVisible(
-                kind,
-                Map.of(AppPaths.KEY_PM_AI_STAGE3_UI_VISIBLE, stage3UiVisible ? "1" : "0"));
+        return kind != null;
     }
 
     private void bindStatsColumns() {

@@ -223,12 +223,6 @@
                         <fx:include fx:id="dispatchInteractiveTab" source="DispatchInteractiveTab.fxml"/>
                     </content>
                 </Tab>
-                <Tab fx:id="mainShellTabPlanInputStage3" closable="false"
-                     text="配台計画_タスク入力3.0">
-                    <content>
-                        <fx:include fx:id="planInputStage3Tab" source="PlanInputStage3Tab.fxml"/>
-                    </content>
-                </Tab>
                 <Tab fx:id="mainShellTabLearnedSpeedData" closable="false"
                      text="学習速度データ">
                     <content>

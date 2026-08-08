@@ -11,19 +11,16 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Stream;
 
-import jp.co.pm.ai.desktop.PlanInputStage3TabController;
 import jp.co.pm.ai.desktop.dispatch.Stage21TrialSnapshotStore;
-import jp.co.pm.ai.desktop.dispatch.Stage3PlanningMetaStore;
 import jp.co.pm.ai.desktop.dispatch.rules.trace.DispatchRuleTraceLoader;
-import jp.co.pm.ai.desktop.io.PlanInputTabularIo;
 import jp.co.pm.ai.desktop.io.Stage2OutputNaming;
 import jp.co.pm.ai.planning.stage2.Stage2InProgressNextDayDispatchIo;
 
 /**
- * 段階1または段階2.0 実行開始時に、段階2〜段階3.2 の成果物（配台表・段階2.1・入力3表・段階2 計画/人員ブック等）をディスクから削除する。
+ * 段階1または段階2.0 実行開始時に、段階2〜段階2.1 の成果物（配台表・段階2.1・段階2 計画/人員ブック等）をディスクから削除する。
  * 段階2.0 では「段階2実行前にキャッシュをクリアしない」が OFF のときのみ実行する。
  *
- * <p>段階1のタスク入力ブック本体（入力1表）は維持する。入力3表シートのみ行を空にする。
+ * <p>段階1のタスク入力ブック本体（入力1表）は維持する。
  */
 public final class PipelineDownstreamResultsClearer {
 
@@ -43,19 +40,19 @@ public final class PipelineDownstreamResultsClearer {
 
     private PipelineDownstreamResultsClearer() {}
 
-    /** 段階2〜3.2 のディスク成果物を削除し、入力3表シートを空にする。 */
-    public static ClearResult clearStage2ThroughStage32(Map<String, String> ui) {
-        return clearStage2ThroughStage32(ui, false);
+    /** 段階2〜段階2.1 のディスク成果物を削除する。 */
+    public static ClearResult clearStage2Downstream(Map<String, String> ui) {
+        return clearStage2Downstream(ui, false);
     }
 
     /**
-     * 段階2〜3.2 のディスク成果物を削除し、入力3表シートを空にする。
+     * 段階2〜段階2.1 のディスク成果物を削除する。
      *
      * @param preserveTodayDispatchSourceBundle true のとき当日配台ソース束
      *     ({@link jp.co.pm.ai.planning.stage2.source.Stage1SourceBundleIo}) は削除しない（段階2.0
      *     実行直前クリア向け）
      */
-    public static ClearResult clearStage2ThroughStage32(
+    public static ClearResult clearStage2Downstream(
             Map<String, String> ui, boolean preserveTodayDispatchSourceBundle) {
         Map<String, String> u = ui != null ? ui : Map.of();
         List<String> logs = new ArrayList<>();
@@ -87,14 +84,9 @@ public final class PipelineDownstreamResultsClearer {
             failed += outcome.failed();
         }
 
-        ClearResult sheetResult = clearStage3InputSheetRows(u, logs);
-        deleted += sheetResult.deletedCount();
-        missing += sheetResult.missingCount();
-        failed += sheetResult.failedCount();
-
         pruneEmptyStage21Directories(u);
 
-        logs.add("[stage1-downstream] 段階2〜3.2 の成果物クリアを完了しました。");
+        logs.add("[stage1-downstream] 段階2〜段階2.1 の成果物クリアを完了しました。");
         return new ClearResult(deleted, missing, failed, List.copyOf(logs));
     }
 
@@ -108,10 +100,6 @@ public final class PipelineDownstreamResultsClearer {
             Path stage21Sidecar = Stage21TrialSnapshotStore.sidecarPathFor(dispatchJson);
             if (stage21Sidecar != null) {
                 targets.add(stage21Sidecar);
-            }
-            Path stage3Sidecar = Stage3PlanningMetaStore.sidecarPath(dispatchJson);
-            if (stage3Sidecar != null) {
-                targets.add(stage3Sidecar);
             }
         }
         targets.add(AppPaths.resolveShapedAladdinPlanJsonPath(ui));
@@ -151,32 +139,6 @@ public final class PipelineDownstreamResultsClearer {
         try (Stream<Path> stream = Files.walk(stage21Dir)) {
             stream.filter(Files::isRegularFile).forEach(targets::add);
         } catch (IOException ignored) {
-        }
-    }
-
-    private static ClearResult clearStage3InputSheetRows(Map<String, String> ui, List<String> logs) {
-        Path workbook = AppPaths.defaultStage1PlanTasksPath(ui);
-        if (workbook == null || !Files.isRegularFile(workbook)) {
-            logs.add("[stage1-downstream] 入力3表クリア: タスク入力ブックなし（スキップ）");
-            return new ClearResult(0, 1, 0, List.of());
-        }
-        try {
-            PlanInputTabularIo.TabularSheet sheet =
-                    PlanInputTabularIo.read(workbook, PlanInputStage3TabController.STAGE3_SHEET_NAME);
-            PlanInputTabularIo.writeExcelSheetPreservingOthers(
-                    workbook,
-                    PlanInputStage3TabController.STAGE3_SHEET_NAME,
-                    new PlanInputTabularIo.TabularSheet(sheet.headers(), List.of()));
-            logs.add(
-                    "[stage1-downstream] 入力3表シートを空にしました: "
-                            + PlanInputStage3TabController.STAGE3_SHEET_NAME);
-            return new ClearResult(1, 0, 0, List.of());
-        } catch (Exception ex) {
-            logs.add(
-                    "[stage1-downstream] 入力3表クリア: シート未作成または失敗（"
-                            + (ex.getMessage() != null ? ex.getMessage() : ex)
-                            + "）");
-            return new ClearResult(0, 1, 0, List.of());
         }
     }
 

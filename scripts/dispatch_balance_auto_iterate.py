@@ -1,22 +1,25 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-段階1→段階2→アラジン整列→段階3 を実行し、指定依頼NOの段階3配台照合を判定する。
+段階1→段階2→アラジン整列→配台試行 を実行し、指定依頼NOの配台照合を判定する。
 
 用法:
   py -3 scripts/dispatch_balance_auto_iterate.py --task Y5-24
   py -3 scripts/dispatch_balance_auto_iterate.py --task Y6-4 --skip-stage1 --skip-stage2
 
-終了コード: 0=照合OK, 2=入力不足, 3=段階3致命, 4=照合NG, 5=その他失敗
+終了コード: 0=照合OK, 2=入力不足, 3=配台試行致命, 4=照合NG, 5=その他失敗
 """
 from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import sys
+from dataclasses import dataclass
 from datetime import date, timedelta
 from pathlib import Path
+from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 PY_DIR = ROOT / "code" / "python"
@@ -107,7 +110,7 @@ def run_aladdin_align(*, from_tomorrow: bool = False, align_all_days: bool = Fal
 
 
 def sync_dispatch_json_from_python_output_dir() -> bool:
-    """段階3試行の書き出し先（多くは output/）を code/output の正本へ揃える。"""
+    """配台試行の書き出し先（多くは output/）を code/output の正本へ揃える。"""
     from planning_core.dispatch_workspace import resolve_result_dispatch_table_output_dir
 
     pip = (os.environ.get("PM_AI_PLAN_INPUT_PATH") or "").strip()
@@ -133,20 +136,162 @@ def sync_dispatch_json_from_python_output_dir() -> bool:
         return False
 
 
-def run_stage3() -> int:
+def run_dispatch_trial() -> int:
     from planning_core.stage2_identical_dispatch_runner import (
         run_interactive_dispatch_trial_from_result_dispatch_json,
     )
 
-    print(f"[balance-iterate] 段階3… input={DISPATCH_JSON}", flush=True)
+    print(f"[balance-iterate] 配台試行… input={DISPATCH_JSON}", flush=True)
     code, _ = run_interactive_dispatch_trial_from_result_dispatch_json(DISPATCH_JSON)
     sync_dispatch_json_from_python_output_dir()
     return code
 
 
-def check_balance(task_id: str, process: str | None) -> dict:
-    from planning_core.dispatch_balance_check import check_task_balance
+_BALANCE_EPS = 1e-3
+_BALANCE_WIDE_IDENTITY = ("工程名", "機械名", "加工内容", "依頼NO", "換算数量", "実加工数", "計画合計")
 
+
+def _balance_nz(v: Any) -> str:
+    return "" if v is None else str(v).strip()
+
+
+def _balance_parse_float(v: Any) -> float:
+    try:
+        if v is None or (isinstance(v, str) and not v.strip()):
+            return 0.0
+        return float(v)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _balance_roll_aligned_dispatch_m(raw_remaining_m: float, roll_unit_m: float) -> float:
+    if raw_remaining_m <= _BALANCE_EPS:
+        return 0.0
+    if roll_unit_m <= _BALANCE_EPS:
+        return raw_remaining_m
+    n_rolls = int(math.ceil(raw_remaining_m / roll_unit_m - 1e-12))
+    return roll_unit_m * n_rolls
+
+
+def _balance_fmt_qty(v: float) -> str:
+    if abs(v - round(v)) <= _BALANCE_EPS:
+        return str(int(round(v)))
+    return f"{v:.4g}"
+
+
+def _balance_format_check(
+    qty_converted: float,
+    actual_processed: float,
+    actual_dispatch_total: float,
+    *,
+    roll_unit_m: float = 0.0,
+    has_actual_col: bool = True,
+) -> str:
+    if not has_actual_col or actual_dispatch_total <= _BALANCE_EPS:
+        return ""
+    raw_rem = max(0.0, qty_converted - actual_processed)
+    expected = _balance_roll_aligned_dispatch_m(raw_rem, roll_unit_m)
+    if abs(actual_dispatch_total - expected) <= _BALANCE_EPS:
+        if roll_unit_m > _BALANCE_EPS and expected > raw_rem + _BALANCE_EPS:
+            return f"{_balance_fmt_qty(raw_rem)} ({_balance_fmt_qty(expected)}m)"
+        return "OK"
+    return (
+        f"NG (期待{_balance_fmt_qty(expected)}／配台{_balance_fmt_qty(actual_dispatch_total)})"
+    )
+
+
+def _balance_profile_key(row: dict[str, Any]) -> tuple[str, ...]:
+    return tuple(_balance_nz(row.get(h)) for h in _BALANCE_WIDE_IDENTITY)
+
+
+def _balance_roll_unit_for_profile(profile: dict[str, Any]) -> float:
+    conv = _balance_parse_float(profile.get("換算数量"))
+    rolls = _balance_parse_float(profile.get("原反数"))
+    if rolls > _BALANCE_EPS and conv > _BALANCE_EPS:
+        return conv / rolls
+    pt = _balance_parse_float(profile.get("計画合計"))
+    return pt if pt > _BALANCE_EPS else (conv if conv > _BALANCE_EPS else 0.0)
+
+
+@dataclass
+class _TaskBalanceResult:
+    task_id: str
+    process: str
+    machine: str
+    qty_converted: float
+    actual_processed: float
+    plan_total: float
+    actual_dispatch_total: float
+    expected: float
+    check: str
+    rows: list[dict[str, Any]]
+
+    @property
+    def ok(self) -> bool:
+        return self.check == "OK" or (self.check and not self.check.startswith("NG"))
+
+
+def _check_task_balance(
+    rows: list[dict[str, Any]],
+    task_id: str,
+    *,
+    process: str | None = None,
+    has_actual_col: bool = True,
+) -> _TaskBalanceResult | None:
+    matched = [
+        r
+        for r in rows
+        if _balance_nz(r.get("依頼NO")) == task_id
+        and (process is None or _balance_nz(r.get("工程名")) == process)
+    ]
+    if not matched:
+        return None
+    profiles: dict[tuple[str, ...], dict[str, Any]] = {}
+    for r in matched:
+        pk = _balance_profile_key(r)
+        profiles.setdefault(pk, r)
+    profile = next(iter(profiles.values()))
+    pk = _balance_profile_key(profile)
+    task_rows = [r for r in matched if _balance_profile_key(r) == pk]
+    qty_conv = _balance_parse_float(profile.get("換算数量"))
+    actual_done = _balance_parse_float(profile.get("実加工数"))
+    plan_sum = sum(_balance_parse_float(r.get("当日配台数量")) for r in task_rows)
+    actual_sum = sum(_balance_parse_float(r.get("実配台数量")) for r in task_rows)
+    roll_u = _balance_roll_unit_for_profile(profile)
+    check = _balance_format_check(
+        qty_conv,
+        actual_done,
+        actual_sum,
+        roll_unit_m=roll_u,
+        has_actual_col=has_actual_col,
+    )
+    raw_rem = max(0.0, qty_conv - actual_done)
+    expected = _balance_roll_aligned_dispatch_m(raw_rem, roll_u)
+    detail_rows = []
+    for r in task_rows:
+        detail_rows.append(
+            {
+                "dispatch_date": _balance_nz(r.get("配台日")),
+                "plan_m": _balance_parse_float(r.get("当日配台数量")),
+                "actual_m": _balance_parse_float(r.get("実配台数量")),
+                "start_dt": _balance_nz(r.get("加工開始日時")),
+            }
+        )
+    return _TaskBalanceResult(
+        task_id=task_id,
+        process=_balance_nz(profile.get("工程名")),
+        machine=_balance_nz(profile.get("機械名")),
+        qty_converted=qty_conv,
+        actual_processed=actual_done,
+        plan_total=plan_sum,
+        actual_dispatch_total=actual_sum,
+        expected=expected,
+        check=check,
+        rows=detail_rows,
+    )
+
+
+def check_balance(task_id: str, process: str | None) -> dict:
     payload = json.loads(DISPATCH_JSON.read_text(encoding="utf-8"))
     rows = payload.get("rows") or []
     has_actual = any("実配台数量" in (payload.get("columns") or []) for _ in [0]) or bool(
@@ -154,7 +299,7 @@ def check_balance(task_id: str, process: str | None) -> dict:
     )
     if payload.get("columns") and "実配台数量" in payload["columns"]:
         has_actual = True
-    result = check_task_balance(rows, task_id, process=process, has_actual_col=has_actual)
+    result = _check_task_balance(rows, task_id, process=process, has_actual_col=has_actual)
     if result is None:
         return {"task_id": task_id, "found": False, "check": "NOT_FOUND"}
     out = {
@@ -181,7 +326,7 @@ def main() -> int:
     parser.add_argument("--skip-stage1", action="store_true")
     parser.add_argument("--skip-stage2", action="store_true")
     parser.add_argument("--skip-align", action="store_true")
-    parser.add_argument("--skip-stage3", action="store_true")
+    parser.add_argument("--skip-trial", action="store_true", help="配台試行をスキップ")
     parser.add_argument(
         "--align-from-tomorrow",
         action="store_true",
@@ -233,9 +378,9 @@ def main() -> int:
         )
         summary["steps"].append("align:ok")
 
-    if not args.skip_stage3:
-        code = run_stage3()
-        summary["steps"].append(f"stage3:exit{code}")
+    if not args.skip_trial:
+        code = run_dispatch_trial()
+        summary["steps"].append(f"trial:exit{code}")
         if code != 0:
             summary["balance"] = check_balance(args.task, args.process)
             SUMMARY_JSON.write_text(

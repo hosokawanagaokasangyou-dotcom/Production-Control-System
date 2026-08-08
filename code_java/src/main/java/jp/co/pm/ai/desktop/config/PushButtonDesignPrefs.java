@@ -32,10 +32,6 @@ public record PushButtonDesignPrefs(
         String stage2BorderHex,
         String stage2HoverBgHex,
         String stage2PressedBgHex,
-        String stage3BgHex,
-        String stage3BorderHex,
-        String stage3HoverBgHex,
-        String stage3PressedBgHex,
         boolean customizeAlignAladdinPlanButton,
         double alignAladdinBorderRadius,
         double alignAladdinPaddingV,
@@ -95,10 +91,6 @@ public record PushButtonDesignPrefs(
                 b.stage2BorderHex,
                 b.stage2HoverBgHex,
                 b.stage2PressedBgHex,
-                b.stage3BgHex,
-                b.stage3BorderHex,
-                b.stage3HoverBgHex,
-                b.stage3PressedBgHex,
                 false,
                 b.alignAladdinBorderRadius,
                 b.alignAladdinPaddingV,
@@ -159,10 +151,6 @@ public record PushButtonDesignPrefs(
                 b.stage2BorderHex,
                 b.stage2HoverBgHex,
                 b.stage2PressedBgHex,
-                b.stage3BgHex,
-                b.stage3BorderHex,
-                b.stage3HoverBgHex,
-                b.stage3PressedBgHex,
                 true,
                 b.alignAladdinBorderRadius,
                 b.alignAladdinPaddingV,
@@ -230,11 +218,6 @@ public record PushButtonDesignPrefs(
         final String stage2BorderHex = "#9a3412";
         final String stage2HoverBgHex = "#9a3412";
         final String stage2PressedBgHex = "#7c2d12";
-
-        final String stage3BgHex = "#15803d";
-        final String stage3BorderHex = "#166534";
-        final String stage3HoverBgHex = "#16a34a";
-        final String stage3PressedBgHex = "#14532d";
 
         final double alignAladdinBorderRadius = 6;
         final double alignAladdinPaddingV = 8;

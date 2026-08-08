@@ -32,7 +32,6 @@ public final class MainShellTabLayoutDefaults {
                     MainShellTabId.COMPANY_CALENDAR.key(),
                     MainShellTabId.MEMBER_ATTENDANCE.key(),
                     MainShellTabId.MACHINE_CALENDAR.key(),
-                    MainShellTabId.PLAN_INPUT_STAGE3.key(),
                     MainShellTabId.RUN.key(),
                     MainShellTabId.PLAN_INPUT.key(),
                     MainShellTabId.DISPATCH_INTERACTIVE.key(),
@@ -87,7 +86,6 @@ public final class MainShellTabLayoutDefaults {
         top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.COMPANY_CALENDAR.key(), "#800080"));
         top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.MEMBER_ATTENDANCE.key(), "#800080"));
         top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.MACHINE_CALENDAR.key(), "#800000"));
-        top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.PLAN_INPUT_STAGE3.key(), "#800080"));
         top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.RUN.key(), "#0000ff"));
         top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.PLAN_INPUT.key(), "#000080"));
         top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.DISPATCH_INTERACTIVE.key(), "#1a3399"));

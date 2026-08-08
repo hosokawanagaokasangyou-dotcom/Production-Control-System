@@ -500,37 +500,7 @@
     -fx-background-color: #7c2d12;
 }
 
-.button.pm-stage-run-button.pm-stage-run-3 {
-    -fx-background-color: #15803d;
-    -fx-border-color: #166534;
-}
-
-.button.pm-stage-run-button.pm-stage-run-3:hover {
-    -fx-background-color: #16a34a;
-}
-
-.button.pm-stage-run-button.pm-stage-run-3:pressed {
-    -fx-background-color: #14532d;
-}
-
-.button.pm-stage-run-button.pm-stage-run-3-5 {
-    -fx-background-color: #0f766e;
-    -fx-border-color: #115e59;
-    -fx-wrap-text: true;
-    -fx-text-alignment: center;
-    -fx-min-height: 56;
-    -fx-font-size: 14px;
-}
-
-.button.pm-stage-run-button.pm-stage-run-3-5:hover {
-    -fx-background-color: #14b8a6;
-}
-
-.button.pm-stage-run-button.pm-stage-run-3-5:pressed {
-    -fx-background-color: #134e4a;
-}
-
-/* ===== 段階3.1 残業シミュレーション ダイアログ（常にライト紙面・テーマ非連動） ===== */
+/* ===== 残業シミュレーション ダイアログ（常にライト紙面・テーマ非連動） ===== */
 .overtime-sim-dialog {
     -fx-background-color: #f8fafc;
     -fx-border-color: #0d9488;
@@ -2056,7 +2026,7 @@
     -fx-padding: 0 0 0 10;
 }
 
-/* 配台結果・納期管理・設備ガント: 表示データの段階（段階2 / 段階3） */
+/* 配台結果・納期管理・設備ガント: 表示データの段階バッジ */
 .label.pm-planning-stage-badge {
     -fx-padding: 2 10 2 10;
     -fx-background-radius: 4;
@@ -2067,16 +2037,6 @@
 .label.pm-planning-stage-badge-stage2 {
     -fx-background-color: #e8e8e8;
     -fx-text-fill: #333333;
-}
-
-.label.pm-planning-stage-badge-stage3 {
-    -fx-background-color: #c6efce;
-    -fx-text-fill: #1b5e20;
-}
-
-.label.pm-planning-stage-badge-stage35 {
-    -fx-background-color: #ccfbf1;
-    -fx-text-fill: #0f766e;
 }
 
 /* Equipment status dashboard */

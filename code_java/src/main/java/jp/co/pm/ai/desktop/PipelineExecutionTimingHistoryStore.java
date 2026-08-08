@@ -537,6 +537,12 @@ public final class PipelineExecutionTimingHistoryStore {
         if ("STAGE2".equals(trimmed)) {
             return PipelineExecutionTimingKind.STAGE2_0;
         }
+        if ("STAGE3".equals(trimmed)
+                || "STAGE3_0".equals(trimmed)
+                || "STAGE3_1".equals(trimmed)
+                || "STAGE3_2".equals(trimmed)) {
+            return PipelineExecutionTimingKind.DISPATCH_TRIAL;
+        }
         try {
             return PipelineExecutionTimingKind.valueOf(trimmed);
         } catch (IllegalArgumentException ex) {

@@ -80,9 +80,6 @@ def build_task_queue_from_planning_df(
     if ai_by_tid is None:
         ai_by_tid = analyze_task_special_remarks(tasks_df, reference_year=run_date.year)
     gpo = global_priority_override or {}
-    _stage3_reg_shift_start: time | None = None
-    if (os.environ.get("PM_AI_PLAN_INPUT_STAGE3") or "").strip() == "1":
-        _stage3_reg_shift_start = stage3_regular_shift_start_time()
     in_progress_next_day_m = _load_stage2_in_progress_next_day_dispatch_overrides()
     aladdin_exclude_next_day_m = _load_stage2_aladdin_today_exclude_next_day_overrides()
     task_queue = []
@@ -368,7 +365,6 @@ def build_task_queue_from_planning_df(
         dispatchable_dt = resolve_dispatchable_datetime_from_plan_row(
             row,
             run_date=run_date,
-            regular_shift_start=_stage3_reg_shift_start,
         )
         if dispatchable_dt is not None:
             disp_date = dispatchable_dt.date()

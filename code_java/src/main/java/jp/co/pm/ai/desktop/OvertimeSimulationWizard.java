@@ -37,7 +37,7 @@ import jp.co.pm.ai.desktop.dispatch.OvertimeSimulationEditState;
 import jp.co.pm.ai.desktop.dispatch.OvertimeSimulationOverridesWriter;
 
 /**
- * 段階2.1 / 段階3.1 残業シミュレーション: 勤怠（チェック）と残業時間（分）を編集し、確定後に各段階を実行するウィザード。
+ * 段階2.1 残業シミュレーション: 勤怠（チェック）と残業時間（分）を編集し、確定後に段階2.1を実行するウィザード。
  */
 public final class OvertimeSimulationWizard {
 
@@ -45,8 +45,7 @@ public final class OvertimeSimulationWizard {
 
     /** ウィザード確定後に起動するパイプライン段階。 */
     public enum Target {
-        STAGE21("段階2.1"),
-        STAGE31("段階3.1");
+        STAGE21("段階2.1");
 
         private final String label;
 
