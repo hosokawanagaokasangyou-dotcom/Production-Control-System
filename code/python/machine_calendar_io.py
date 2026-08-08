@@ -54,20 +54,19 @@ def main() -> int:
         from planning_core.core.machine_calendar_store import (
             apply_machine_calendar_patch,
             build_editor_payload,
-            import_from_master_workbook,
+            initialize_machine_calendar_defaults,
             load_machine_calendar_store,
             save_machine_calendar_store,
             store_has_machine_calendar_data,
             validate_store_for_dispatch,
         )
         from planning_core.core.master_data import (
-            load_skills_and_needs,
+            load_need_machine_columns,
             _master_workbook_path_resolved,
         )
 
         store = load_machine_calendar_store()
-        skills_pack = load_skills_and_needs()
-        equipment_list = skills_pack[0]
+        need_columns = load_need_machine_columns()
         master_path = _master_workbook_path_resolved()
 
         if action == "status":
@@ -82,18 +81,28 @@ def main() -> int:
                     "master_workbook_path": str(master_path),
                     "master_workbook_exists": Path(master_path).is_file(),
                     "meta": store.get("meta", {}),
-                    "column_count": len(store.get("columns") or []),
+                    "column_count": len(store.get("columns") or need_columns),
+                    "need_column_count": len(need_columns),
                     "occupancy_slot_count": len(store.get("occupancy") or {}),
                 }
             )
             return 0
 
-        if action == "import_from_master":
-            result = import_from_master_workbook(store, master_path, equipment_list)
+        if action == "initialize_defaults":
+            fiscal_year = int(sys.argv[2] if len(sys.argv) > 2 else date.today().year)
+            start_month = int(sys.argv[3] if len(sys.argv) > 3 else 4)
+            start_day = int(sys.argv[4] if len(sys.argv) > 4 else 1)
+            result = initialize_machine_calendar_defaults(
+                store,
+                fiscal_year,
+                need_columns,
+                start_month=start_month,
+                start_day=start_day,
+            )
             path = save_machine_calendar_store(
                 store,
-                history_kind="import_from_master",
-                history_label="master 機械カレンダー取込",
+                history_kind="initialize_defaults",
+                history_label="機械カレンダー初期値作成",
             )
             _emit({"ok": True, **result, "json_path": str(path)})
             return 0
@@ -101,7 +110,7 @@ def main() -> int:
         if action == "day_grid":
             day_s = sys.argv[2] if len(sys.argv) > 2 else date.today().isoformat()
             day = date.fromisoformat(day_s)
-            _emit(build_editor_payload(store, day, equipment_list))
+            _emit(build_editor_payload(store, day, need_columns))
             return 0
 
         if action == "merge":
@@ -113,6 +122,34 @@ def main() -> int:
                 history_label="機械カレンダー保存",
             )
             _emit({"ok": True, **result, "json_path": str(path)})
+            return 0
+
+        if action == "history_list":
+            from planning_core.core.machine_calendar_history_store import (
+                list_machine_calendar_history,
+            )
+
+            jp = machine_calendar_data_json_path()
+            data = list_machine_calendar_history(jp)
+            _emit({"ok": True, "json_path": str(jp), **data})
+            return 0
+
+        if action == "history_restore":
+            entry_id = (sys.argv[2] if len(sys.argv) > 2 else "").strip()
+            if not entry_id:
+                raise ValueError("世代 ID が必要です")
+            from planning_core.core.machine_calendar_history_store import (
+                restore_machine_calendar_snapshot,
+            )
+
+            jp = restore_machine_calendar_snapshot(entry_id)
+            _emit(
+                {
+                    "ok": True,
+                    "json_path": str(jp),
+                    "restored_id": entry_id,
+                }
+            )
             return 0
 
         if action == "save":

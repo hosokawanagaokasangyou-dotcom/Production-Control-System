@@ -188,6 +188,8 @@ public final class MainRunTabController {
     private boolean deliveryCalendarReloadBlocking;
 
     private boolean stage1BlockedByPipelineCheck;
+    private boolean stage1BlockedByCalendarNotReady;
+    private String calendarReadinessBlockTooltip = "";
 
     private String stage1PipelineCheckBlockTooltip = "";
 
@@ -1441,6 +1443,12 @@ public final class MainRunTabController {
         setStage1BlockedByPipelineCheck(blocked, tooltip, "");
     }
 
+    void setCalendarReadinessBlocked(boolean blocked, String tooltip) {
+        stage1BlockedByCalendarNotReady = blocked;
+        calendarReadinessBlockTooltip = tooltip != null ? tooltip.strip() : "";
+        applyStage1RunButtonEnabledState();
+    }
+
     private void applyStage1RunButtonEnabledState() {
         if (stage1RunButton == null) {
             return;
@@ -1448,10 +1456,21 @@ public final class MainRunTabController {
         stage1RunButton.setDisable(
                 stage1RunPipelineBusy
                         || deliveryCalendarReloadBlocking
-                        || stage1BlockedByPipelineCheck);
+                        || stage1BlockedByPipelineCheck
+                        || stage1BlockedByCalendarNotReady);
         if (deliveryCalendarReloadBlocking && !stage1RunPipelineBusy) {
             stage1RunButton.setText(STAGE1_RUN_BUTTON_TEXT_DELIVERY_CALENDAR_RELOAD);
             stage1RunButton.setTooltip(null);
+        } else if (stage1BlockedByCalendarNotReady && !stage1RunPipelineBusy) {
+            stage1RunButton.setText(STAGE1_RUN_BUTTON_TEXT_DEFAULT);
+            if (!calendarReadinessBlockTooltip.isBlank()) {
+                stage1RunButton.setTooltip(new Tooltip(calendarReadinessBlockTooltip));
+            } else {
+                stage1RunButton.setTooltip(
+                        new Tooltip(
+                                "カレンダー正本 JSON が未準備です。"
+                                        + " 会社カレンダー・メンバー勤怠・機械カレンダーをセットアップしてください。"));
+            }
         } else if (stage1BlockedByPipelineCheck && !stage1RunPipelineBusy) {
             stage1RunButton.setText(STAGE1_RUN_BUTTON_TEXT_DEFAULT);
             if (!stage1PipelineCheckBlockTooltip.isBlank()) {
@@ -1541,7 +1560,8 @@ public final class MainRunTabController {
                     String tip =
                             tooltipText != null && !tooltipText.isBlank()
                                     ? tooltipText.strip()
-                                    : "勤怠正本（attendance-data.json）が未準備です。会社カレンダー／メンバー勤怠タブでセットアップしてください。";
+                                    : "勤怠正本（attendance-data.json / machine-calendar-data.json）が未準備です。"
+                                            + " 会社カレンダー・メンバー勤怠・機械カレンダータブでセットアップしてください。";
                     Tooltip.install(graphic, new Tooltip(tip));
                     attendanceReadinessBadgeHost.getChildren().add(graphic);
                 });

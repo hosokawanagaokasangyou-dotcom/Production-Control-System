@@ -5,9 +5,7 @@ import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.format.TextStyle;
 import java.time.temporal.WeekFields;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.function.Consumer;
@@ -16,7 +14,6 @@ import javafx.application.Platform;
 import javafx.geometry.HPos;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
-import javafx.scene.Node;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
@@ -25,7 +22,6 @@ import javafx.scene.layout.ColumnConstraints;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
-import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 
@@ -54,8 +50,6 @@ public final class EditableCompanyCalendarPane extends VBox {
     private final AttendanceGridLoadingOverlay loadingOverlay =
             new AttendanceGridLoadingOverlay("pm-company-calendar-grid-loading-overlay");
     private final StackPane scrollHost = new StackPane();
-    private final GridRowHoverDimmingController rowDimming = new GridRowHoverDimmingController();
-    private int nextRowDimmingIndex = 0;
     private Consumer<Boolean> dirtyListener;
     /** 読込／保存直後の export スナップショット（JSON 正本との差分で未保存を判定）。 */
     private Map<String, Map<String, Object>> savedBaseline = Map.of();
@@ -71,7 +65,7 @@ public final class EditableCompanyCalendarPane extends VBox {
 
         Label legendHint =
                 new Label(
-                        "クリックで切替　祝日・週末の一括取得はツールバー「セットアップ」");
+                        "クリックで切替　週末・祝日の一括取得はツールバー「セットアップ」");
         legendHint.getStyleClass().add("pm-company-calendar-legend");
         legendHint.setWrapText(true);
         HBox legendChips =
@@ -79,7 +73,6 @@ public final class EditableCompanyCalendarPane extends VBox {
                         6,
                         legendChip("出勤", "pm-att-legend-work"),
                         legendChip("公休", "pm-att-legend-off"),
-                        legendChip("祝日", "pm-att-legend-national"),
                         legendChip("特別", "pm-att-legend-partial"));
         legendChips.getStyleClass().add("pm-attendance-legend-chips");
 
@@ -96,14 +89,9 @@ public final class EditableCompanyCalendarPane extends VBox {
         scrollHost.getChildren().addAll(scroll, loadingOverlay);
         scrollHost.setMaxSize(Double.MAX_VALUE, Double.MAX_VALUE);
         VBox.setVgrow(scrollHost, Priority.ALWAYS);
-        rowDimming.installScrollClearOnExit(scroll);
 
         getChildren().addAll(legendChips, legendHint, fiscalTitleLabel, scrollHost);
         rebuildYearGrid();
-    }
-
-    public void refreshRowHoverDimming() {
-        rowDimming.refresh();
     }
 
     /** Python 読込・保存などの処理中にグリッドを暗転する。 */
@@ -364,8 +352,6 @@ public final class EditableCompanyCalendarPane extends VBox {
         double scrollPos = scroll.getVvalue();
         yearGrid.getChildren().clear();
         cellButtons.clear();
-        rowDimming.clear();
-        nextRowDimmingIndex = 0;
         fiscalTitleLabel.setText(fiscalPeriod.rangeLabel(fiscalYearLabel));
 
         int col = 0;
@@ -449,32 +435,6 @@ public final class EditableCompanyCalendarPane extends VBox {
             dayGrid.add(cell, index % 7, 1 + index / 7);
         }
 
-        for (int weekRow = 0; weekRow < 6; weekRow++) {
-            int gridRow = 1 + weekRow;
-            List<Node> weekNodes = new ArrayList<>();
-            for (Node child : dayGrid.getChildren()) {
-                Integer r = GridPane.getRowIndex(child);
-                if (r != null && r == gridRow) {
-                    weekNodes.add(child);
-                }
-            }
-            if (weekNodes.isEmpty()) {
-                continue;
-            }
-            Region band = new Region();
-            band.getStyleClass().add(GridRowHoverDimmingController.STYLE_BAND);
-            band.setMouseTransparent(true);
-            band.setMaxWidth(Double.MAX_VALUE);
-            band.setMaxHeight(Double.MAX_VALUE);
-            GridPane.setColumnSpan(band, 7);
-            dayGrid.add(band, 0, gridRow);
-            int dimIdx = nextRowDimmingIndex++;
-            rowDimming.addRow(band, null, weekNodes);
-            for (Node n : weekNodes) {
-                rowDimming.installHover(n, dimIdx);
-            }
-        }
-
         VBox panel = new VBox(2, monthTitle, dayGrid);
         panel.getStyleClass().add("pm-company-calendar-month-panel");
         return panel;
@@ -549,29 +509,12 @@ public final class EditableCompanyCalendarPane extends VBox {
 
     private static String shortLabel(int day, String kind, DayEntry entry) {
         if (KIND_PUBLIC.equals(kind)) {
-            if (entry != null && SOURCE_NATIONAL.equals(entry.source)) {
-                return day + "祝";
-            }
-            if (entry != null
-                    && entry.label != null
-                    && !entry.label.isBlank()
-                    && !isGenericPublicLabel(entry.label)) {
-                return day + "祝";
-            }
             return day + "公";
         }
         if (KIND_SPECIAL.equals(kind)) {
             return day + "特";
         }
         return Integer.toString(day);
-    }
-
-    private static boolean isGenericPublicLabel(String label) {
-        String t = label.strip();
-        return t.equals("公休")
-                || t.equals("土曜")
-                || t.equals("日曜")
-                || t.equals("祝日");
     }
 
     private static void applyCellStyle(Button cell, String kind, DayEntry entry) {
@@ -582,16 +525,7 @@ public final class EditableCompanyCalendarPane extends VBox {
                         "pm-company-cal-working",
                         "pm-company-cal-national");
         switch (kind) {
-            case KIND_PUBLIC -> {
-                cell.getStyleClass().add("pm-company-cal-public");
-                if (entry != null
-                        && (SOURCE_NATIONAL.equals(entry.source)
-                                || (entry.label != null
-                                        && !entry.label.isBlank()
-                                        && !isGenericPublicLabel(entry.label)))) {
-                    cell.getStyleClass().add("pm-company-cal-national");
-                }
-            }
+            case KIND_PUBLIC -> cell.getStyleClass().add("pm-company-cal-public");
             case KIND_SPECIAL -> cell.getStyleClass().add("pm-company-cal-special");
             default -> cell.getStyleClass().add("pm-company-cal-working");
         }

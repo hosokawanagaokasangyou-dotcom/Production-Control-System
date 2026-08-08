@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Machine calendar canonical store (JSON). master.xlsm「機械カレンダー」は互換用。"""
+"""Machine calendar canonical store (JSON)."""
 
 from __future__ import annotations
 
@@ -7,20 +7,23 @@ import json
 import logging
 import os
 from collections import defaultdict
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from pathlib import Path
 from typing import Any
 
-import pandas as pd
-
-from planning_core.core.columns import SHEET_MACHINE_CALENDAR
 from planning_core.core.gemini_auth import MACHINE_CALENDAR_SLOT_MINUTES
 from planning_core.core.machine_calendar_paths import machine_calendar_data_json_path
-from planning_core.core.stage1 import DEFAULT_END_TIME, DEFAULT_START_TIME
 
 logger = logging.getLogger(__name__)
 
 FORMAT_VERSION = 1
+_WEEKDAY_JA = ("月", "火", "水", "木", "金", "土", "日")
+
+# 工場マスタ既定（機械カレンダー UI・初期値生成）
+MACHINE_CAL_FACTORY_START = time(8, 0)
+MACHINE_CAL_FACTORY_END = time(19, 0)
+MACHINE_CAL_REGULAR_START = time(8, 25)
+MACHINE_CAL_REGULAR_END = time(17, 0)
 
 
 def empty_store() -> dict:
@@ -31,12 +34,15 @@ def empty_store() -> dict:
             "updated_at": None,
             "revision": 0,
             "slot_minutes": MACHINE_CALENDAR_SLOT_MINUTES,
-            "imported_from_master_at": None,
-            "master_source_path": None,
+            "factory_start": MACHINE_CAL_FACTORY_START.strftime("%H:%M"),
+            "factory_end": MACHINE_CAL_FACTORY_END.strftime("%H:%M"),
+            "regular_start": MACHINE_CAL_REGULAR_START.strftime("%H:%M"),
+            "regular_end": MACHINE_CAL_REGULAR_END.strftime("%H:%M"),
         },
         "columns": [],
         "defined_slots": {},
         "occupancy": {},
+        "cell_comments": {},
     }
 
 
@@ -105,145 +111,193 @@ def validate_store_for_dispatch(store: dict) -> bool:
     return slot_rows > 0 and header_pairs > 0
 
 
+def require_machine_calendar_json_for_dispatch(
+    context_label: str = "配台",
+) -> Path:
+    """
+    配台用 machine-calendar-data.json 正本の存在・整備を検証する。
+    不備時は PlanningValidationError（master.xlsm フォールバックは行わない）。
+    """
+    from planning_core.bootstrap import PlanningValidationError
+
+    ctx = (context_label or "配台").strip()
+    jp = machine_calendar_data_json_path()
+    if not jp.is_file():
+        raise PlanningValidationError(
+            f"{ctx}: machine-calendar-data.json が存在しません。"
+            f" パス: {jp} 。"
+            " 機械カレンダータブで「初期値を作る」または編集後「保存」してください。"
+            " master.xlsm の機械カレンダーシートは使用しません。"
+        )
+    try:
+        store = load_machine_calendar_store(jp)
+    except Exception as e:
+        raise PlanningValidationError(
+            f"{ctx}: machine-calendar-data.json の読込に失敗しました ({e})。"
+            f" パス: {jp}"
+        ) from e
+    if not validate_store_for_dispatch(store):
+        raise PlanningValidationError(
+            f"{ctx}: machine-calendar-data.json が未整備です（列またはスロットが空）。"
+            f" パス: {jp} 。"
+            " 機械カレンダータブで初期値作成・保存してください。"
+        )
+    return jp
+
+
+def _parse_hhmm(value: str | None, default: time) -> time:
+    s = str(value or "").strip()
+    if not s:
+        return default
+    parts = s.split(":")
+    if len(parts) < 2:
+        return default
+    try:
+        return time(int(parts[0]), int(parts[1]))
+    except (TypeError, ValueError):
+        return default
+
+
+def factory_window_times(store: dict) -> tuple[time, time]:
+    meta = store.get("meta") or {}
+    start = _parse_hhmm(meta.get("factory_start"), MACHINE_CAL_FACTORY_START)
+    end = _parse_hhmm(meta.get("factory_end"), MACHINE_CAL_FACTORY_END)
+    return start, end
+
+
 def _roll_helpers():
     from planning_core.core.roll_pipeline import (
         _clip_machine_calendar_slot_to_factory_window,
-        _equipment_lookup_normalized_to_canonical,
         _equipment_line_key_to_physical_occupancy_key,
         _machine_cal_cell_is_asterisk_occupancy_only,
         _machine_cal_cell_is_occupied,
         _machine_cal_parse_slot_datetime,
-        _machine_cal_resolve_column_to_equipment_key,
         _merge_machine_calendar_intervals,
     )
 
     return {
         "clip": _clip_machine_calendar_slot_to_factory_window,
-        "eq_lookup": _equipment_lookup_normalized_to_canonical,
         "phys_key": _equipment_line_key_to_physical_occupancy_key,
         "is_asterisk": _machine_cal_cell_is_asterisk_occupancy_only,
         "is_occupied": _machine_cal_cell_is_occupied,
         "parse_slot": _machine_cal_parse_slot_datetime,
-        "resolve_col": _machine_cal_resolve_column_to_equipment_key,
         "merge": _merge_machine_calendar_intervals,
     }
 
 
-def _parse_columns_from_raw(raw: pd.DataFrame, equipment_list: list[str]) -> list[dict[str, str]]:
-    h = _roll_helpers()
-    eq_lookup = h["eq_lookup"](equipment_list)
-    elist_set = set(str(x).strip() for x in equipment_list if str(x).strip())
-    ncols = raw.shape[1]
-    non_empty_pm = 0
-    for c in range(2, ncols):
-        p = raw.iat[0, c]
-        m = raw.iat[1, c]
-        if pd.isna(p) or pd.isna(m):
-            continue
-        p_s = str(p).strip()
-        m_s = str(m).strip()
-        if p_s and m_s and p_s.lower() != "nan" and m_s.lower() != "nan":
-            non_empty_pm += 1
-    use_two_header = non_empty_pm > 0
-    columns: list[dict[str, str]] = []
-    seen: set[str] = set()
-    for c in range(2, ncols):
-        p = raw.iat[0, c]
-        m = raw.iat[1, c] if use_two_header else None
-        if use_two_header:
-            if pd.isna(p) or pd.isna(m):
-                continue
-            p_s = str(p).strip()
-            m_s = str(m).strip()
-            if not p_s or not m_s or p_s.lower() == "nan" or m_s.lower() == "nan":
-                continue
-        else:
-            if pd.isna(p):
-                continue
-            p_s = str(p).strip()
-            if not p_s or p_s.lower() == "nan":
-                continue
-            m_s = ""
-        canon = h["resolve_col"](p_s, m_s, eq_lookup, elist_set)
-        if not canon or canon in seen:
-            continue
-        seen.add(canon)
-        columns.append(
-            {"equipment_key": canon, "process": p_s, "machine": m_s}
-        )
-    return columns
+def slot_keys_for_factory_window(
+    day: date,
+    factory_start: time,
+    factory_end: time,
+) -> list[str]:
+    """工場稼働枠（例 8:00〜19:00）の 30 分スロットキー一覧。"""
+    slot_keys: list[str] = []
+    t = datetime.combine(day, factory_start)
+    end = datetime.combine(day, factory_end)
+    while t < end:
+        slot_keys.append(t.replace(microsecond=0).isoformat())
+        t += timedelta(minutes=MACHINE_CALENDAR_SLOT_MINUTES)
+    return slot_keys
 
 
-def import_from_master_workbook(
+def initialize_machine_calendar_defaults(
     store: dict,
-    master_path: str,
-    equipment_list: list[str],
+    fiscal_year: int,
+    need_columns: list[dict[str, str]],
+    *,
+    start_month: int = 4,
+    start_day: int = 1,
 ) -> dict:
-    """master.xlsm「機械カレンダー」シートを JSON 正本へ取り込む。"""
-    from planning_core.core.master_data import _cached_master_pd_excel_file
+    """
+    会計年度の各日を工場稼働枠（時刻範囲）で初期化する。
+    土日・祭日にかかわらず占有は設定しない（空＝稼働可能）。
+    配台では人の勤怠ブロックが先に効くため、機械カレンダーは会社カレンダーと連動しない。
+    """
+    from planning_core.core.attendance_store import fiscal_year_date_range
 
-    h = _roll_helpers()
-    path = str(master_path or "").strip()
-    if not path or not os.path.isfile(path):
-        raise FileNotFoundError(f"マスタブックが見つかりません: {path}")
-    xls = _cached_master_pd_excel_file(path)
-    if xls is None or SHEET_MACHINE_CALENDAR not in xls.sheet_names:
-        raise ValueError(f"シート「{SHEET_MACHINE_CALENDAR}」がありません")
-    raw = pd.read_excel(xls, sheet_name=SHEET_MACHINE_CALENDAR, header=None)
-    if raw.shape[0] < 3 or raw.shape[1] < 3:
-        raise ValueError("機械カレンダーシートが空または未構成です")
+    if not need_columns:
+        raise ValueError("need シートに機械列がありません")
+    start, end = fiscal_year_date_range(fiscal_year, start_month, start_day)
+    factory_start, factory_end = factory_window_times(store)
+    eq_keys = [
+        str(c.get("equipment_key") or "").strip()
+        for c in need_columns
+        if isinstance(c, dict) and str(c.get("equipment_key") or "").strip()
+    ]
+    if not eq_keys:
+        raise ValueError("need シートの機械列キーが空です")
 
-    columns = _parse_columns_from_raw(raw, equipment_list)
-    col_keys = [c["equipment_key"] for c in columns]
-    col_index = {c: i for i, c in enumerate(col_keys)}
-
-    occupancy: dict[str, dict[str, str]] = {}
-    defined_slots: dict[str, list[str]] = defaultdict(list)
-
-    for r in range(2, raw.shape[0]):
-        slot0 = h["parse_slot"](raw.iat[r, 0])
-        if slot0 is None:
-            continue
-        slot_key = slot0.replace(microsecond=0).isoformat()
-        day_key = slot0.date().isoformat()
-        slot_end_row = slot0 + timedelta(minutes=MACHINE_CALENDAR_SLOT_MINUTES)
-        clipped_row = h["clip"](slot0.date(), slot0, slot_end_row)
-        if clipped_row:
-            defined_slots[day_key].append(slot_key)
-        row_cells: dict[str, str] = {}
-        for c in range(2, raw.shape[1]):
-            if c >= raw.shape[1]:
-                continue
-            cell = raw.iat[r, c]
-            if not h["is_occupied"](cell):
-                continue
-            p = raw.iat[0, c]
-            m = raw.iat[1, c] if raw.shape[0] > 1 else None
-            if pd.isna(p):
-                continue
-            p_s = str(p).strip()
-            m_s = str(m).strip() if m is not None and not pd.isna(m) else ""
-            eq_lookup = h["eq_lookup"](equipment_list)
-            elist_set = set(str(x).strip() for x in equipment_list if str(x).strip())
-            canon = h["resolve_col"](p_s, m_s, eq_lookup, elist_set)
-            if not canon or canon not in col_index:
-                continue
-            row_cells[canon] = str(cell).strip() if isinstance(cell, str) else str(cell)
-        if row_cells:
-            occupancy[slot_key] = row_cells
-
-    store["columns"] = columns
-    store["occupancy"] = occupancy
-    store["defined_slots"] = {k: sorted(v) for k, v in defined_slots.items()}
+    store["columns"] = list(need_columns)
+    occupancy = store.setdefault("occupancy", {})
+    defined_slots = store.setdefault("defined_slots", {})
     meta = store.setdefault("meta", {})
-    meta["imported_from_master_at"] = datetime.now().isoformat(timespec="seconds")
-    meta["master_source_path"] = os.path.abspath(path)
+    meta.setdefault("factory_start", MACHINE_CAL_FACTORY_START.strftime("%H:%M"))
+    meta.setdefault("factory_end", MACHINE_CAL_FACTORY_END.strftime("%H:%M"))
+    meta.setdefault("regular_start", MACHINE_CAL_REGULAR_START.strftime("%H:%M"))
+    meta.setdefault("regular_end", MACHINE_CAL_REGULAR_END.strftime("%H:%M"))
+
+    initialized_days = 0
+    d = start
+    while d <= end:
+        day_key = d.isoformat()
+        slot_keys = slot_keys_for_factory_window(d, factory_start, factory_end)
+        defined_slots[day_key] = slot_keys
+        for sk in slot_keys:
+            occupancy.pop(sk, None)
+            store.setdefault("cell_comments", {}).pop(sk, None)
+        initialized_days += 1
+        d += timedelta(days=1)
+
     meta["revision"] = int(meta.get("revision") or 0) + 1
+    meta["initialized_defaults_at"] = datetime.now().isoformat(timespec="seconds")
+
+    valid_slots: set[str] = set()
+    d = start
+    while d <= end:
+        day_key = d.isoformat()
+        valid_slots.update(defined_slots.get(day_key) or [])
+        d += timedelta(days=1)
+    for sk in list(occupancy.keys()):
+        if sk not in valid_slots:
+            del occupancy[sk]
+    cell_comments = store.setdefault("cell_comments", {})
+    for sk in list(cell_comments.keys()):
+        if sk not in valid_slots:
+            del cell_comments[sk]
+    for day_key in list(defined_slots.keys()):
+        try:
+            dd = date.fromisoformat(day_key)
+            if dd < start or dd > end:
+                del defined_slots[day_key]
+        except ValueError:
+            del defined_slots[day_key]
+
     return {
-        "columns": len(columns),
-        "occupancy_slots": len(occupancy),
-        "defined_days": len(defined_slots),
+        "fiscal_start": start.isoformat(),
+        "fiscal_end": end.isoformat(),
+        "columns": len(need_columns),
+        "initialized_days": initialized_days,
     }
+
+
+def initialize_machine_calendar_from_company_calendar(
+    store: dict,
+    attendance_store: dict,
+    fiscal_year: int,
+    need_columns: list[dict[str, str]],
+    *,
+    start_month: int = 4,
+    start_day: int = 1,
+) -> dict:
+    """後方互換名。attendance_store は無視（会社カレンダー連動は廃止）。"""
+    _ = attendance_store
+    return initialize_machine_calendar_defaults(
+        store,
+        fiscal_year,
+        need_columns,
+        start_month=start_month,
+        start_day=start_day,
+    )
 
 
 def occupancy_blocks_from_store(
@@ -336,35 +390,71 @@ def occupancy_blocks_from_store(
     return out, interactive_defined
 
 
-def _factory_slot_keys_for_day(day: date) -> list[str]:
-    """工場稼働枠内の 30 分スロットキー（JSON 未作成・当日未定義時の編集グリッド用）。"""
-    h = _roll_helpers()
-    w0 = datetime.combine(day, DEFAULT_START_TIME)
-    w1 = datetime.combine(day, DEFAULT_END_TIME)
-    slot_keys: list[str] = []
-    t = w0
-    while t < w1:
-        slot_end = t + timedelta(minutes=MACHINE_CALENDAR_SLOT_MINUTES)
-        if h["clip"](day, t, slot_end):
-            slot_keys.append(t.replace(microsecond=0).isoformat())
-        t = slot_end
-    return slot_keys
+def collect_machine_calendar_export_rows(
+    store: dict,
+    start: date,
+    end: date,
+) -> tuple[list[dict[str, str]], list[dict[str, Any]]]:
+    """会計年度範囲のフラット行（Excel APP_機械カレンダー用）。"""
+    columns = list(store.get("columns") or [])
+    if not columns:
+        try:
+            from planning_core.core.master_data import load_need_machine_columns
+
+            columns = load_need_machine_columns()
+        except Exception as e:
+            logger.warning("need シートから機械カレンダー列の取得に失敗: %s", e)
+            columns = []
+    if not columns:
+        return [], []
+    eq_keys = [
+        str(c.get("equipment_key") or "").strip()
+        for c in columns
+        if isinstance(c, dict) and str(c.get("equipment_key") or "").strip()
+    ]
+    occupancy = store.get("occupancy") or {}
+    defined = store.get("defined_slots") or {}
+    factory_start, factory_end = factory_window_times(store)
+    rows: list[dict[str, Any]] = []
+    d = start
+    while d <= end:
+        day_key = d.isoformat()
+        slot_keys = list(defined.get(day_key) or [])
+        if not slot_keys:
+            slot_keys = slot_keys_for_factory_window(d, factory_start, factory_end)
+        wd = _WEEKDAY_JA[d.weekday()]
+        for sk in sorted(slot_keys):
+            cells_map = occupancy.get(sk) or {}
+            row_cells = {ek: str(cells_map.get(ek) or "").strip() for ek in eq_keys}
+            rows.append({"slot": sk, "weekday": wd, "cells": row_cells})
+        d += timedelta(days=1)
+    return columns, rows
+
+
+def _resolve_editor_columns(
+    store: dict,
+    need_columns: list[dict[str, str]],
+) -> list[dict[str, str]]:
+    """UI 列は need シートを正本とし、store 列とのドリフトを避ける。"""
+    if need_columns:
+        return list(need_columns)
+    stored = store.get("columns") or []
+    return list(stored) if isinstance(stored, list) else []
 
 
 def build_editor_payload(
     store: dict,
     day: date,
-    equipment_list: list[str],
+    need_columns: list[dict[str, str]],
 ) -> dict[str, Any]:
-    """1日分の編集用グリッド（列=設備、行=スロット）。"""
+    """1日分の編集用グリッド（列=need 機械、行=スロット）。"""
     h = _roll_helpers()
-    columns = store.get("columns") or []
-    if not columns:
-        columns = [{"equipment_key": eq, "process": "", "machine": eq} for eq in equipment_list]
+    columns = _resolve_editor_columns(store, need_columns)
     day_key = day.isoformat()
     defined = store.get("defined_slots") or {}
     slot_keys = list(defined.get(day_key) or [])
     occupancy = store.get("occupancy") or {}
+    cell_comments = store.get("cell_comments") or {}
     if not slot_keys:
         for sk in sorted(occupancy.keys()):
             slot0 = h["parse_slot"](sk)
@@ -372,14 +462,17 @@ def build_editor_payload(
                 slot_keys.append(sk)
     slot_keys = sorted(set(slot_keys))
     if not slot_keys:
-        slot_keys = _factory_slot_keys_for_day(day)
+        factory_start, factory_end = factory_window_times(store)
+        slot_keys = slot_keys_for_factory_window(day, factory_start, factory_end)
     rows: list[dict[str, Any]] = []
     for sk in slot_keys:
         slot0 = h["parse_slot"](sk)
         if slot0 is None:
             continue
         cells = occupancy.get(sk) or {}
+        comment_cells = cell_comments.get(sk) or {}
         row_cells: dict[str, str] = {}
+        row_comments: dict[str, str] = {}
         for col in columns:
             if not isinstance(col, dict):
                 continue
@@ -389,7 +482,13 @@ def build_editor_payload(
             val = cells.get(ek)
             if val is not None and str(val).strip():
                 row_cells[ek] = str(val).strip()
-        rows.append({"slot": sk, "cells": row_cells})
+            cmt = comment_cells.get(ek)
+            if cmt is not None and str(cmt).strip():
+                row_comments[ek] = str(cmt).strip()
+        row: dict[str, Any] = {"slot": sk, "cells": row_cells}
+        if row_comments:
+            row["comments"] = row_comments
+        rows.append(row)
     return {
         "format_version": 1,
         "ok": True,
@@ -404,8 +503,9 @@ def build_editor_payload(
 
 
 def apply_machine_calendar_patch(store: dict, patch: dict) -> dict:
-    """UI からのセル編集をマージ（空文字は占有削除）。"""
+    """UI からのセル編集をマージ（占有空文字は削除、コメント空文字は削除）。"""
     occupancy = store.setdefault("occupancy", {})
+    cell_comments = store.setdefault("cell_comments", {})
     defined_slots = store.setdefault("defined_slots", {})
     applied = 0
     day_key = str(patch.get("date") or "").strip()
@@ -421,24 +521,42 @@ def apply_machine_calendar_patch(store: dict, patch: dict) -> dict:
             continue
         day_slot_keys.append(sk)
         cells = row.get("cells") or {}
-        if not isinstance(cells, dict):
-            continue
-        bucket = occupancy.setdefault(sk, {})
-        for ek, val in cells.items():
-            key = str(ek).strip()
-            if not key:
-                continue
-            s = str(val or "").strip()
-            if s:
-                bucket[key] = s
-                applied += 1
-            elif key in bucket:
-                del bucket[key]
-                applied += 1
-        if not bucket:
-            occupancy.pop(sk, None)
+        if isinstance(cells, dict):
+            bucket = occupancy.setdefault(sk, {})
+            for ek, val in cells.items():
+                key = str(ek).strip()
+                if not key:
+                    continue
+                s = str(val or "").strip()
+                if s:
+                    bucket[key] = s
+                    applied += 1
+                elif key in bucket:
+                    del bucket[key]
+                    applied += 1
+            if not bucket:
+                occupancy.pop(sk, None)
+        comments = row.get("comments")
+        if isinstance(comments, dict):
+            comment_bucket = cell_comments.setdefault(sk, {})
+            for ek, val in comments.items():
+                key = str(ek).strip()
+                if not key:
+                    continue
+                s = str(val or "").strip()
+                if s:
+                    comment_bucket[key] = s
+                    applied += 1
+                elif key in comment_bucket:
+                    del comment_bucket[key]
+                    applied += 1
+            if not comment_bucket:
+                cell_comments.pop(sk, None)
     if day_key and day_slot_keys:
         defined_slots[day_key] = sorted(set(day_slot_keys))
+    patch_columns = patch.get("columns")
+    if isinstance(patch_columns, list) and patch_columns:
+        store["columns"] = list(patch_columns)
     meta = store.setdefault("meta", {})
     meta["revision"] = int(meta.get("revision") or 0) + 1
     return {"applied": applied}

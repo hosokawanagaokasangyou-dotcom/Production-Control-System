@@ -30,6 +30,19 @@ public final class ButtonAttentionGlow {
         if (target == null || timeline != null) {
             return;
         }
+        startGlowTimeline();
+    }
+
+    /** グローを確実に表示する（既に動作中なら一度止めて再開）。 */
+    public void ensureActive() {
+        if (target == null) {
+            return;
+        }
+        stop();
+        startGlowTimeline();
+    }
+
+    private void startGlowTimeline() {
         if (!target.getStyleClass().contains(STYLE_CLASS)) {
             target.getStyleClass().add(STYLE_CLASS);
         }

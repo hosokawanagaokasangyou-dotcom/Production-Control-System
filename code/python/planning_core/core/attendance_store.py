@@ -14,7 +14,9 @@ from typing import Any
 
 from planning_core.core.attendance_paths import (
     APP_MASTER_COMPANY_SHEET,
+    APP_MASTER_MACHINE_CALENDAR_SHEET,
     APP_MASTER_MEMBER_SHEET_PREFIX,
+    APP_MASTER_MENU_SHEET,
     attendance_data_json_path,
     is_app_master_export_sheet,
 )
@@ -136,7 +138,6 @@ def apply_national_holidays_to_company_calendar(
     skipped = 0
     for item in holidays:
         d_key = item.get("date")
-        name = item.get("name") or "祝日"
         if not d_key:
             continue
         try:
@@ -156,7 +157,7 @@ def apply_national_holidays_to_company_calendar(
                 continue
         days[d_key] = {
             "kind": DAY_KIND_PUBLIC,
-            "label": name,
+            "label": "公休",
             "source": "national_holiday",
         }
         applied += 1
@@ -563,8 +564,22 @@ def initialize_company_calendar(
     meta["fiscal_start_month"] = start_month
     meta["fiscal_start_day"] = start_day
     meta["company_calendar_revision"] = int(meta.get("company_calendar_revision") or 0) + 1
+    holidays_applied = 0
+    for cal_year in sorted({fiscal_year, fiscal_year + 1}):
+        result = apply_national_holidays_to_company_calendar(
+            store,
+            cal_year,
+            overwrite=True,
+            include_weekends=False,
+            force_online=False,
+            date_from=start,
+            date_to=end,
+            bump_revision=False,
+        )
+        holidays_applied += int(result.get("applied") or 0)
     return {
         "removed": removed,
+        "holidays_applied": holidays_applied,
         "fiscal_start": start.isoformat(),
         "fiscal_end": end.isoformat(),
     }
@@ -590,7 +605,6 @@ def enrich_company_calendar_days_with_national_holidays(
     for cal_year in cal_years:
         for item in fetch_national_holidays_for_year(cal_year, force_online=force_online):
             d_key = item.get("date")
-            name = item.get("name") or "祝日"
             if not d_key:
                 continue
             try:
@@ -603,7 +617,7 @@ def enrich_company_calendar_days_with_national_holidays(
             if existing is None:
                 merged[d_key] = {
                     "kind": DAY_KIND_PUBLIC,
-                    "label": name,
+                    "label": "公休",
                     "source": "national_holiday",
                 }
             elif (
@@ -612,7 +626,7 @@ def enrich_company_calendar_days_with_national_holidays(
             ):
                 merged[d_key] = {
                     "kind": DAY_KIND_PUBLIC,
-                    "label": name,
+                    "label": "公休",
                     "source": "national_holiday",
                 }
     return merged
@@ -752,7 +766,7 @@ def export_attendance_to_calendar_workbook(
     calendar_path: str | Path | None = None,
     months: list[tuple[int, int]] | None = None,
 ) -> dict:
-    """勤怠カレンダー.xlsx へ APP_* シートを出力（master.xlsm は触らない）。"""
+    """勤怠・機械カレンダー.xlsx へ APP_* シートを出力（master.xlsm は触らない）。"""
     from openpyxl import Workbook, load_workbook
 
     from planning_core.core.attendance_calendar_xlsx_history_store import (
@@ -776,6 +790,12 @@ def export_attendance_to_calendar_workbook(
 
     replaced_sheets: set[str] = {APP_MASTER_COMPANY_SHEET}
     _write_app_company_sheet(wb, store)
+    machine_sheet_written = _write_app_machine_calendar_sheet(wb, store)
+    if machine_sheet_written:
+        replaced_sheets.add(APP_MASTER_MACHINE_CALENDAR_SHEET)
+        from planning_core.core.attendance_paths import APP_MASTER_MACHINE_CALENDAR_DATE_SHEET
+
+        replaced_sheets.add(APP_MASTER_MACHINE_CALENDAR_DATE_SHEET)
     if months is None:
         months = _fiscal_months_for_export(store)
     updated: list[str] = []
@@ -787,17 +807,22 @@ def export_attendance_to_calendar_workbook(
 
     _drop_default_empty_sheet_if_present(wb)
 
+    export_at = datetime.now().isoformat(timespec="seconds")
+    menu_targets = _collect_menu_sheet_targets(wb)
+    _write_app_menu_sheet(wb, menu_targets, export_at)
+
     try:
         wb.save(path)
     except OSError as e:
         raise RuntimeError(
-            f"勤怠カレンダー.xlsx への保存に失敗（Excel で開いている可能性）: {e}"
+            f"勤怠・機械カレンダー.xlsx への保存に失敗（Excel で開いている可能性）: {e}"
         ) from e
 
-    export_at = datetime.now().isoformat(timespec="seconds")
     store["meta"]["calendar_xlsx_export_at"] = export_at
     store["meta"]["calendar_xlsx_path"] = str(path.resolve())
-    store["meta"]["calendar_xlsx_export_sheets"] = [APP_MASTER_COMPANY_SHEET] + updated
+    store["meta"]["calendar_xlsx_export_sheets"] = (
+        [APP_MASTER_MENU_SHEET] + list(replaced_sheets) + updated
+    )
     return {
         "ok": True,
         "calendar_xlsx_path": str(path.resolve()),
@@ -920,6 +945,30 @@ def _remove_app_master_export_sheet_if_present(wb, sheet_name: str) -> None:
         del wb[name]
 
 
+def _collect_menu_sheet_targets(wb) -> list[str]:
+    """メニューに載せる APP_* データシート名（メニュー自身は除く）。"""
+    names = [
+        n
+        for n in wb.sheetnames
+        if n != APP_MASTER_MENU_SHEET and is_app_master_export_sheet(n)
+    ]
+    from planning_core.core.attendance_excel_style import sort_menu_sheet_names
+
+    return sort_menu_sheet_names(names)
+
+
+def _write_app_menu_sheet(wb, sheet_names: list[str], export_at: str) -> None:
+    from planning_core.core.attendance_excel_style import write_calendar_workbook_menu_sheet
+
+    name = APP_MASTER_MENU_SHEET
+    _remove_app_master_export_sheet_if_present(wb, name)
+    ws = wb.create_sheet(name)
+    write_calendar_workbook_menu_sheet(ws, sheet_names, export_at=export_at)
+    idx = wb.index(ws)
+    if idx > 0:
+        wb.move_sheet(ws, offset=-idx)
+
+
 def _write_app_company_sheet(wb, store: dict) -> None:
     from planning_core.core.attendance_excel_style import write_company_calendar_grid
 
@@ -938,6 +987,47 @@ def _write_app_member_calendar_sheet(
     _remove_app_master_export_sheet_if_present(wb, sheet_name)
     ws = wb.create_sheet(sheet_name)
     populate_member_calendar_worksheet(ws, store, year, month)
+
+
+def _write_app_machine_calendar_sheet(wb, attendance_store: dict) -> bool:
+    """APP_機械カレンダー シートを勤怠カレンダー.xlsx へ出力。"""
+    from planning_core.core.attendance_paths import (
+        APP_MASTER_MACHINE_CALENDAR_DATE_SHEET,
+        APP_MASTER_MACHINE_CALENDAR_SHEET,
+    )
+    from planning_core.core.machine_calendar_store import (
+        collect_machine_calendar_export_rows,
+        load_machine_calendar_store,
+    )
+    from planning_core.core.machine_calendar_excel_style import (
+        write_machine_calendar_date_picker_sheet,
+        write_machine_calendar_flat_table,
+    )
+
+    mc_store = load_machine_calendar_store()
+    fy_label, _, _, start, end = _fiscal_year_label_and_bounds(attendance_store)
+    columns, rows = collect_machine_calendar_export_rows(mc_store, start, end)
+    if not columns:
+        return False
+    name = APP_MASTER_MACHINE_CALENDAR_SHEET
+    _remove_app_master_export_sheet_if_present(wb, name)
+    ws = wb.create_sheet(name)
+    day_to_row = write_machine_calendar_flat_table(ws, columns, rows, fy_label, start, end)
+    if day_to_row:
+        date_sheet = APP_MASTER_MACHINE_CALENDAR_DATE_SHEET
+        _remove_app_master_export_sheet_if_present(wb, date_sheet)
+        ws_date = wb.create_sheet(date_sheet)
+        months = _fiscal_months_for_export(attendance_store)
+        write_machine_calendar_date_picker_sheet(
+            ws_date,
+            fy_label,
+            start,
+            end,
+            months,
+            day_to_row,
+            name,
+        )
+    return True
 
 
 def populate_member_calendar_worksheet(ws, store: dict, year: int, month: int) -> None:

@@ -334,6 +334,56 @@ def load_skills_and_needs():
     except Exception as e:
         logging.error(f"マスタファイル({MASTER_FILE})のスキル/need読み込みエラー: {e}")
         raise
+
+
+def load_need_machine_columns() -> list[dict[str, str]]:
+    """need シートの工程名×機械名列（機械カレンダー UI 列の正本）。"""
+    mp = _require_master_workbook_path_exists()
+    _master_xls = _cached_master_pd_excel_file(mp)
+    if _master_xls is None:
+        raise FileNotFoundError(f"マスタブックを開けません: {mp}")
+    needs_raw = pd.read_excel(_master_xls, sheet_name="need", header=None)
+    process_header_row = None
+    machine_header_row = None
+    for r in range(needs_raw.shape[0]):
+        v0 = needs_raw.iat[r, 0]
+        if pd.isna(v0):
+            continue
+        s0 = str(v0).strip()
+        if process_header_row is None and s0 in ("工程名", "工程名"):
+            process_header_row = r
+        elif machine_header_row is None and s0 in ("機械名", "機械名"):
+            machine_header_row = r
+        if process_header_row is not None and machine_header_row is not None:
+            break
+    if process_header_row is None or machine_header_row is None:
+        raise ValueError(
+            "need シートのヘッダー行が見つかりません。"
+            " A列に工程名・機械名行が必要です。"
+        )
+    columns: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for col_idx in range(needs_raw.shape[1]):
+        if col_idx < 3:
+            continue
+        p = needs_raw.iat[process_header_row, col_idx]
+        m = needs_raw.iat[machine_header_row, col_idx]
+        if pd.isna(p) or pd.isna(m):
+            continue
+        p_s = _normalize_equipment_match_key(str(p).strip())
+        m_s = _normalize_equipment_match_key(str(m).strip())
+        if not p_s or not m_s or p_s.lower() == "nan" or m_s.lower() == "nan":
+            continue
+        combo_key = f"{p_s}+{m_s}"
+        if combo_key in seen:
+            continue
+        seen.add(combo_key)
+        columns.append(
+            {"equipment_key": combo_key, "process": p_s, "machine": m_s}
+        )
+    return columns
+
+
 def load_team_combination_presets_from_master() -> dict[
     str, list[tuple[int, int | None, tuple[str, ...], int | None]]
 ]:

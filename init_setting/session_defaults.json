@@ -1702,6 +1702,8 @@
     "requestFormPipelineCheck",
     "companyCalendar",
     "memberAttendance",
+    "machineCalendar",
+    "planInputStage3",
     "run",
     "planInput",
     "dispatchInteractive",
@@ -1764,13 +1766,18 @@
     },
     {
       "kind": "tab",
-      "color": "#0000ff",
-      "id": "run"
+      "color": "#800000",
+      "id": "machineCalendar"
     },
     {
       "kind": "tab",
       "color": "#800080",
       "id": "planInputStage3"
+    },
+    {
+      "kind": "tab",
+      "color": "#0000ff",
+      "id": "run"
     },
     {
       "kind": "tab",

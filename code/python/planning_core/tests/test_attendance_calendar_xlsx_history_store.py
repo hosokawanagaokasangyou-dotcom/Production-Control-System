@@ -20,7 +20,7 @@ def test_calendar_xlsx_history_max_is_twenty():
 
 
 def test_calendar_xlsx_history_on_export(tmp_path, monkeypatch):
-    xlsx = tmp_path / "勤怠カレンダー.xlsx"
+    xlsx = tmp_path / "勤怠・機械カレンダー.xlsx"
     hist = tmp_path / "attendance-calendar-xlsx-history"
     monkeypatch.setenv("PM_AI_ATTENDANCE_CALENDAR_XLSX", str(xlsx))
     monkeypatch.setenv(ENV_ATTENDANCE_CALENDAR_XLSX_HISTORY_DIR, str(hist))
@@ -38,7 +38,7 @@ def test_calendar_xlsx_history_on_export(tmp_path, monkeypatch):
 
 
 def test_calendar_xlsx_restore_roundtrip(tmp_path, monkeypatch):
-    xlsx = tmp_path / "勤怠カレンダー.xlsx"
+    xlsx = tmp_path / "勤怠・機械カレンダー.xlsx"
     hist = tmp_path / "attendance-calendar-xlsx-history"
     monkeypatch.setenv("PM_AI_ATTENDANCE_CALENDAR_XLSX", str(xlsx))
     monkeypatch.setenv(ENV_ATTENDANCE_CALENDAR_XLSX_HISTORY_DIR, str(hist))

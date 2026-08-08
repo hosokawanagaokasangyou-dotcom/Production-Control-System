@@ -147,19 +147,18 @@ def _generate_plan_impl(
     global _STAGE2_REGULAR_SHIFT_START
     global _STAGE2_DATA_EXTRACTION_DATETIME
     global DEFAULT_START_TIME, DEFAULT_END_TIME
-    try:
-        _trial_env = _interactive_trial_calendar_legacy_active()
-        _MACHINE_CALENDAR_BLOCKS_BY_DATE = load_machine_calendar_occupancy_blocks(
-            _master_workbook_path_resolved(),
-            equipment_list,
-            interactive_only_asterisk_occupancy=_trial_env,
-        )
-    except Exception as e:
-        logging.warning(
-            "機械カレンダー: 読込例外のため、占有なしとして続行しした (%s)", e
-        )
-        _MACHINE_CALENDAR_BLOCKS_BY_DATE = {}
-        _MACHINE_CALENDAR_INTERACTIVE_DEFINED_SLOTS_BY_DATE = {}
+    _ctx_cal = (
+        "段階3配台試行"
+        if _interactive_dispatch_trial_env_active()
+        else "段階2"
+    )
+    _trial_env = _interactive_trial_calendar_legacy_active()
+    _MACHINE_CALENDAR_BLOCKS_BY_DATE = load_machine_calendar_occupancy_blocks(
+        _master_workbook_path_resolved(),
+        equipment_list,
+        interactive_only_asterisk_occupancy=_trial_env,
+        context_label=_ctx_cal,
+    )
     _t_cal0 = _log_stage2_phase_timing("load_team_combination_presets", _t_combo0)
     try:
         (

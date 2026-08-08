@@ -642,6 +642,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
     private final AtomicBoolean suppressCompanyCalendarUnsavedTabGuard = new AtomicBoolean(false);
 
     private volatile boolean memberAttendanceDirtySinceSave = false;
+    private volatile boolean machineCalendarDirtySinceSave = false;
     private volatile boolean companyCalendarDirtySinceSave = false;
 
     /** 納期管理ビュー再読み込み中は段階1～段階3.5 の実行ボタンを無効化する。 */
@@ -1541,7 +1542,7 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
     }
 
     /**
-     * 勤怠カレンダー.xlsx を OS 既定アプリ（Excel）で読み取り専用で開く。
+     * 勤怠・機械カレンダー.xlsx を OS 既定アプリ（Excel）で読み取り専用で開く。
      *
      * @param logPrefix ログ行の接頭辞（例: {@code "[company-calendar]"}）
      * @return 開いたとき {@code true}
@@ -6503,6 +6504,13 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         }
     }
 
+    void onMachineCalendarDirtyChanged(boolean dirty) {
+        machineCalendarDirtySinceSave = dirty;
+        if (mainShellTabMachineCalendar != null) {
+            mainShellTabMachineCalendar.setText(dirty ? "機械カレンダー *" : "機械カレンダー");
+        }
+    }
+
     /** 会社カレンダータブの会計年度ラベル（メンバー勤怠セットアップ等で共有）。 */
     public int attendanceFiscalYearLabel() {
         if (companyCalendarTabController != null) {
@@ -7039,6 +7047,63 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                                         }));
     }
 
+    /**
+     * {@code machine_calendar_io.py} を非同期実行し、stdout 末尾 JSON をコールバックへ渡す。
+     */
+    public void runMachineCalendarIoAsync(
+            PythonProcessRunner.RunRequest req,
+            Consumer<JsonNode> onOk,
+            Consumer<String> onError) {
+        PythonProcessRunner.runCaptureAsync(req)
+                .whenComplete(
+                        (cap, err) ->
+                                Platform.runLater(
+                                        () -> {
+                                            if (err != null) {
+                                                if (onError != null) {
+                                                    onError.accept(err.getMessage());
+                                                }
+                                                return;
+                                            }
+                                            if (cap == null) {
+                                                if (onError != null) {
+                                                    onError.accept("プロセス結果なし");
+                                                }
+                                                return;
+                                            }
+                                            try {
+                                                JsonNode node =
+                                                        ATTENDANCE_JSON.readTree(
+                                                                AttendanceOvertimePreview
+                                                                        .MasterReadSummaryJson
+                                                                        .extractLastJsonLine(
+                                                                                cap.stdout()));
+                                                if (!node.path("ok").asBoolean(false)) {
+                                                    if (onError != null) {
+                                                        onError.accept(
+                                                                node.path("error")
+                                                                        .asText("失敗"));
+                                                    }
+                                                    return;
+                                                }
+                                                if (cap.exitCode() != 0) {
+                                                    if (onError != null) {
+                                                        onError.accept(
+                                                                "exit=" + cap.exitCode());
+                                                    }
+                                                    return;
+                                                }
+                                                if (onOk != null) {
+                                                    onOk.accept(node);
+                                                }
+                                            } catch (Exception e) {
+                                                if (onError != null) {
+                                                    onError.accept(e.getMessage());
+                                                }
+                                            }
+                                        }));
+    }
+
     public int attendanceGridCellSizePx() {
         return attendanceGridCellSizePx;
     }
@@ -7063,9 +7128,6 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
     private void refreshTableRowHoverDimmingPresentation() {
         if (memberAttendanceTabController != null) {
             memberAttendanceTabController.refreshRowHoverDimming();
-        }
-        if (companyCalendarTabController != null) {
-            companyCalendarTabController.refreshRowHoverDimming();
         }
     }
 
@@ -7118,6 +7180,9 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                 mainRunTabController.setAttendanceReadinessBadge(
                         true, badgeStyle, "勤怠未確認", blockTooltip);
             }
+            if (mainRunTabController != null) {
+                mainRunTabController.setCalendarReadinessBlocked(true, blockTooltip);
+            }
             if (planInputTabController != null) {
                 planInputTabController.setAttendanceReadinessBadge(
                         true, "勤怠未確認", blockTooltip);
@@ -7136,10 +7201,12 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
             }
         }
         attendanceReadinessTooltip = issues.toString();
-        String badgeLabel = attendanceStage2Ready ? "" : "勤怠未準備";
+        String badgeLabel = attendanceStage2Ready ? "" : "カレンダー未準備";
         String blockTooltip =
                 attendanceReadinessTooltip.isBlank()
-                        ? "勤怠正本（attendance-data.json）が未準備です。会社カレンダー／メンバー勤怠タブでセットアップしてください。"
+                        ? "カレンダー正本 JSON が未準備です。"
+                            + " attendance-data.json（会社カレンダー・メンバー勤怠）と"
+                            + " machine-calendar-data.json をセットアップしてください。"
                         : attendanceReadinessTooltip;
         PersonBadgeStyle badgeStyle = PersonBadgeStyle.networkSourceCacheBadgeDefault();
         if (mainRunTabController != null) {
@@ -7148,6 +7215,8 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
                     badgeStyle,
                     badgeLabel,
                     blockTooltip);
+            mainRunTabController.setCalendarReadinessBlocked(
+                    !attendanceStage2Ready, blockTooltip);
         }
         if (planInputTabController != null) {
             planInputTabController.setAttendanceReadinessBadge(
@@ -7157,17 +7226,24 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
         }
     }
 
-    private boolean blockIfAttendanceNotReadyForStage2() {
+    private boolean blockIfPlanningStagesCalendarNotReady(String stageLabel) {
         if (attendanceStage2Ready) {
             return false;
         }
         String msg =
                 attendanceReadinessTooltip.isBlank()
-                        ? "勤怠正本（attendance-data.json）が未準備です。会社カレンダー／メンバー勤怠タブでセットアップしてください。"
+                        ? "カレンダー正本 JSON が未準備です。"
+                            + " attendance-data.json（会社カレンダー・メンバー勤怠）と"
+                            + " machine-calendar-data.json をセットアップしてください。"
                         : attendanceReadinessTooltip;
-        appendLog("[stage2] " + msg.replace('\n', ' '));
-        showErrorDialog("段階2", msg.replace('\n', '\n'));
+        appendLog("[" + stageLabel + "] " + msg.replace('\n', ' '));
+        showErrorDialog(stageLabel, msg.replace('\n', '\n'));
         return true;
+    }
+
+    /** @deprecated 呼び出し元互換。段階2専用ブロック。 */
+    private boolean blockIfAttendanceNotReadyForStage2() {
+        return blockIfPlanningStagesCalendarNotReady("段階2");
     }
 
     /** Probe script {@code pm_ai_actuals_status.py}: same env merge as stage1/2. */
@@ -7301,6 +7377,11 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
             m.put(
                     AppPaths.KEY_PM_AI_ATTENDANCE_CALENDAR_XLSX,
                     AppPaths.attendanceCalendarXlsxPath(m).toString());
+        }
+        if (nz(m.get(AppPaths.KEY_PM_AI_MACHINE_CALENDAR_JSON)).isBlank()) {
+            m.put(
+                    AppPaths.KEY_PM_AI_MACHINE_CALENDAR_JSON,
+                    AppPaths.machineCalendarDataJsonPath(m).toString());
         }
     }
 
@@ -8487,6 +8568,9 @@ public final class MainShellController implements DesktopShellHost, EnvTabShellH
 
     void triggerStage1() {
         if (blockIfStage2SourceGuardBusy("段階1")) {
+            return;
+        }
+        if (blockIfPlanningStagesCalendarNotReady("段階1")) {
             return;
         }
         if (blockIfPipelineCheckBlocksStage1()) {

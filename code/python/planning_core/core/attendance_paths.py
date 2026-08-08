@@ -16,7 +16,9 @@ ENV_ATTENDANCE_HISTORY_MAX = "PM_AI_ATTENDANCE_JSON_HISTORY_MAX"
 ATTENDANCE_HISTORY_DIR_NAME = "attendance-json-history"
 ATTENDANCE_HISTORY_MAX_DEFAULT = 20
 
-ATTENDANCE_CALENDAR_XLSX_FILENAME = "勤怠カレンダー.xlsx"
+ATTENDANCE_CALENDAR_XLSX_FILENAME = "勤怠・機械カレンダー.xlsx"
+ATTENDANCE_CALENDAR_XLSM_FILENAME = "勤怠・機械カレンダー.xlsm"  # 読込フォールバックのみ（新規出力は xlsx）
+ATTENDANCE_CALENDAR_XLSX_LEGACY_FILENAME = "勤怠カレンダー.xlsx"
 ENV_ATTENDANCE_CALENDAR_XLSX = "PM_AI_ATTENDANCE_CALENDAR_XLSX"
 ENV_ATTENDANCE_CALENDAR_XLSX_HISTORY_DIR = "PM_AI_ATTENDANCE_CALENDAR_XLSX_HISTORY_DIR"
 ENV_ATTENDANCE_CALENDAR_XLSX_HISTORY_MAX = "PM_AI_ATTENDANCE_CALENDAR_XLSX_HISTORY_MAX"
@@ -25,6 +27,9 @@ ATTENDANCE_CALENDAR_XLSX_HISTORY_MAX_DEFAULT = 20
 
 APP_MASTER_COMPANY_SHEET = "APP_会社カレンダー"
 APP_MASTER_MEMBER_SHEET_PREFIX = "APP_勤怠カレンダー_"
+APP_MASTER_MACHINE_CALENDAR_SHEET = "APP_機械カレンダー"
+APP_MASTER_MACHINE_CALENDAR_DATE_SHEET = "APP_機械カレンダー_日付"
+APP_MASTER_MENU_SHEET = "メニュー"
 
 JAPANESE_HOLIDAYS_CACHE_DIR = ".pm-ai-cache/japanese-holidays"
 
@@ -35,6 +40,12 @@ def is_app_master_export_sheet(sheet_name: str) -> bool:
     if not name:
         return False
     if name == APP_MASTER_COMPANY_SHEET:
+        return True
+    if name == APP_MASTER_MACHINE_CALENDAR_SHEET:
+        return True
+    if name == APP_MASTER_MACHINE_CALENDAR_DATE_SHEET:
+        return True
+    if name == APP_MASTER_MENU_SHEET:
         return True
     return name.startswith(APP_MASTER_MEMBER_SHEET_PREFIX)
 
@@ -99,6 +110,19 @@ def attendance_json_history_root(json_path: Path | None = None) -> Path:
     return (jp.resolve().parent / ATTENDANCE_HISTORY_DIR_NAME).resolve()
 
 
+def _resolve_attendance_calendar_xlsx_in_dir(parent: Path) -> Path:
+    canonical = (parent / ATTENDANCE_CALENDAR_XLSX_FILENAME).resolve()
+    legacy = (parent / ATTENDANCE_CALENDAR_XLSX_LEGACY_FILENAME).resolve()
+    xlsm = (parent / ATTENDANCE_CALENDAR_XLSM_FILENAME).resolve()
+    if canonical.is_file():
+        return canonical
+    if legacy.is_file():
+        return legacy
+    if xlsm.is_file():
+        return xlsm
+    return canonical
+
+
 def attendance_calendar_xlsx_path() -> Path:
     explicit = os.environ.get(ENV_ATTENDANCE_CALENDAR_XLSX, "").strip()
     if explicit:
@@ -108,15 +132,15 @@ def attendance_calendar_xlsx_path() -> Path:
 
         master = Path(_master_workbook_path_resolved())
         if master.is_file():
-            return (master.parent / ATTENDANCE_CALENDAR_XLSX_FILENAME).resolve()
+            return _resolve_attendance_calendar_xlsx_in_dir(master.parent)
         if master.parent.is_dir():
-            return (master.parent / ATTENDANCE_CALENDAR_XLSX_FILENAME).resolve()
+            return _resolve_attendance_calendar_xlsx_in_dir(master.parent)
     except Exception:
         pass
     parent = summary_workbook_parent()
     if parent is not None and parent.is_dir():
-        return (parent / ATTENDANCE_CALENDAR_XLSX_FILENAME).resolve()
-    return (_repo_root() / "code" / ATTENDANCE_CALENDAR_XLSX_FILENAME).resolve()
+        return _resolve_attendance_calendar_xlsx_in_dir(parent)
+    return _resolve_attendance_calendar_xlsx_in_dir(_repo_root() / "code")
 
 
 def attendance_calendar_xlsx_history_root(xlsx_path: Path | None = None) -> Path:

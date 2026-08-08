@@ -29,7 +29,7 @@
                 <Button fx:id="setupButton" text="セットアップ" onAction="#onSetupWizard"/>
                 <Button fx:id="restoreButton" text="世代から復元" onAction="#onRestoreFromHistory"/>
                 <Separator/>
-                <Button fx:id="openCalendarButton" text="勤怠カレンダーを開く" onAction="#onOpenAttendanceCalendar"/>
+                <Button fx:id="openCalendarButton" text="勤怠・機械カレンダーを開く" onAction="#onOpenAttendanceCalendar"/>
                 <Button fx:id="refreshButton" text="再読込" onAction="#onRefresh"/>
             </ToolBar>
             <Label fx:id="setupHintLabel" wrapText="true"

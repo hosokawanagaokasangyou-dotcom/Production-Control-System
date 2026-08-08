@@ -24,6 +24,9 @@ def machine_calendar_data_json_path() -> Path:
     explicit = os.environ.get(ENV_MACHINE_CALENDAR_JSON, "").strip()
     if explicit:
         return Path(explicit).resolve()
+    att_explicit = os.environ.get("PM_AI_ATTENDANCE_JSON", "").strip()
+    if att_explicit:
+        return (Path(att_explicit).resolve().parent / MACHINE_CALENDAR_JSON_FILENAME).resolve()
     parent = summary_workbook_parent()
     return (parent / MACHINE_CALENDAR_JSON_FILENAME).resolve()
 

@@ -49,6 +49,9 @@ def run_stage2_generate_plan() -> None:
         print(f"[stage2-localize] スキップ: {ex}", flush=True)
 
     trace_recorder.reset_trace()
+    from planning_core.core.attendance_readiness import require_calendar_json_for_planning_stages
+
+    require_calendar_json_for_planning_stages("段階2")
     master_abs = pc._master_workbook_path_resolved()
     try:
         with pc._override_default_factory_hours_from_master(master_abs):

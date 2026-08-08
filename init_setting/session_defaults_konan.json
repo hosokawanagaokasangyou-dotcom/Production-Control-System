@@ -1,811 +1,733 @@
 {
-  "planInputPath": "C:\\システム開発\\工程管理AIプロジェクト_JAVA\\pm-ai-package-release\\PMD_initial_install\\pm-ai-data\\output\\plan_input_tasks.xlsx",
-  "planInputSheet": "タスク一覧",
-  "stage1PreviewPath": "C:\\システム開発\\工程管理AIプロジェクト_JAVA\\pm-ai-package-release\\PMD_initial_install\\pm-ai-data\\output\\stage1_task_input_table.xlsx",
-  "stage1PreviewSheet": "タスク入力整形",
-  "uiTheme": "midnight-blue",
-  "logFontSize": 16.0,
-  "mainRunLogFilter": "ALL",
-  "mainRunLogLines": [
-    "[global-settings] グローバル設定を読み込みました（init_setting）。工場: 湖南工場",
-    "[exclude-json] restored session: C:\\システム開発\\工程管理AIプロジェクト_JAVA\\output\\stage1_exclude_rules.json"
-  ],
-  "mainRunLogScroll": 0.0,
-  "mainRunStage2ProductionPlan": "C:\\システム開発\\工程管理AIプロジェクト_JAVA\\pm-ai-package-release\\PMD_initial_install\\pm-ai-data\\output\\計画2608032030366040.xlsx",
-  "mainRunStage2MemberSchedule": "C:\\システム開発\\工程管理AIプロジェクト_JAVA\\pm-ai-package-release\\PMD_initial_install\\pm-ai-data\\output\\人員2608032030366040.xlsx",
-  "mainRunStage2SkipTodayDispatch": true,
-  "planInputStage2NextDayDialogMode": "BOTH",
-  "planInputComboSheetMayExceedNeed": true,
-  "planInputStage2SkipGeminiApi": false,
-  "skipGeminiApiDefaultOffMigrated": true,
-  "planInputTodayDispatch": false,
-  "mainRunSkipGeminiApi": false,
-  "mainRunStage1MarkAllExcludeAfterRun": false,
-  "mainRunApplyLearnedSpeedFromActuals": false,
-  "mainShellTabOrder": [
-    "equipmentStatusDashboard",
-    "remoteDesktop",
-    "requestFormInput",
-    "requestFormPipelineCheck",
-    "companyCalendar",
-    "memberAttendance",
-    "run",
-    "planInput",
-    "dispatchInteractive",
-    "equipmentGanttGraphic",
-    "deliveryCalendarView",
-    "operatorCard",
-    "codeLookupTables",
-    "uiBadgeDesign",
-    "pushButtonDesign",
-    "ganttPersonBadgeDesign",
-    "requestFormPreviewBadgeDesign",
-    "planResultViewer",
-    "stage1Preview",
-    "resultDispatch",
-    "masterSummary",
-    "excludeRules",
-    "specialRules",
-    "planWorkspaceHistory",
-    "memorySettings",
-    "apiModelBenchmark",
-    "actualsStatus",
-    "pipelineExecutionTiming",
-    "cacheHistory",
-    "learnedSpeedData",
-    "env",
-    "globalSettings",
-    "userProfiles",
-    "operatorUserManagement"
-  ],
-  "mainShellTabLayout": [
-    {
-      "kind": "tab",
-      "color": "#994d66",
-      "id": "equipmentStatusDashboard"
-    },
-    {
-      "kind": "tab",
-      "color": "#0000ff",
-      "id": "remoteDesktop"
-    },
-    {
-      "kind": "tab",
-      "color": "#336633",
-      "id": "requestFormInput"
-    },
-    {
-      "kind": "tab",
-      "color": "#9980e6",
-      "id": "requestFormPipelineCheck"
-    },
-    {
-      "kind": "tab",
-      "color": "#800080",
-      "id": "companyCalendar"
-    },
-    {
-      "kind": "tab",
-      "color": "#800080",
-      "id": "memberAttendance"
-    },
-    {
-      "kind": "tab",
-      "color": "#0000ff",
-      "id": "run"
-    },
-    {
-      "kind": "tab",
-      "color": "#800080",
-      "id": "planInputStage3"
-    },
-    {
-      "kind": "tab",
-      "color": "#000080",
-      "id": "planInput"
-    },
-    {
-      "kind": "tab",
-      "color": "#1a3399",
-      "id": "dispatchInteractive"
-    },
-    {
-      "kind": "tab",
-      "color": "#1a4d1a",
-      "id": "equipmentGanttGraphic"
-    },
-    {
-      "kind": "tab",
-      "color": "#669966",
-      "id": "deliveryCalendarView"
-    },
-    {
-      "kind": "tab",
-      "color": "#336666",
-      "id": "operatorCard"
-    },
-    {
-      "kind": "tab",
-      "color": "#0000ff",
-      "id": "codeLookupTables"
-    },
-    {
-      "kind": "group",
-      "color": "#ffff00",
-      "title": "バッジ設定",
-      "children": [
-        {
-          "kind": "tab",
-          "id": "uiBadgeDesign"
-        },
-        {
-          "kind": "tab",
-          "id": "pushButtonDesign"
-        },
-        {
-          "kind": "tab",
-          "id": "ganttPersonBadgeDesign"
-        },
-        {
-          "kind": "tab",
-          "id": "requestFormPreviewBadgeDesign"
-        }
-      ]
-    },
-    {
-      "kind": "group",
-      "color": "#800080",
-      "title": "結果情報(デバッグ用)",
-      "children": [
-        {
-          "kind": "tab",
-          "id": "planResultViewer"
-        },
-        {
-          "kind": "tab",
-          "id": "stage1Preview"
-        },
-        {
-          "kind": "tab",
-          "id": "resultDispatch"
-        }
-      ]
-    },
-    {
-      "kind": "group",
-      "color": "#666666",
-      "title": "その他",
-      "children": [
-        {
-          "kind": "tab",
-          "id": "masterSummary"
-        },
-        {
-          "kind": "tab",
-          "id": "excludeRules"
-        },
-        {
-          "kind": "tab",
-          "id": "specialRules"
-        },
-        {
-          "kind": "tab",
-          "id": "planWorkspaceHistory"
-        },
-        {
-          "kind": "tab",
-          "id": "memorySettings"
-        },
-        {
-          "kind": "tab",
-          "id": "apiModelBenchmark"
-        },
-        {
-          "kind": "tab",
-          "id": "actualsStatus"
-        },
-        {
-          "kind": "tab",
-          "id": "pipelineExecutionTiming"
-        },
-        {
-          "kind": "tab",
-          "id": "cacheHistory"
-        },
-        {
-          "kind": "tab",
-          "id": "learnedSpeedData"
-        }
-      ]
-    },
-    {
-      "kind": "group",
-      "color": "#e64d4d",
-      "title": "環境設定",
-      "children": [
-        {
-          "kind": "tab",
-          "id": "env"
-        },
-        {
-          "kind": "tab",
-          "id": "globalSettings"
-        },
-        {
-          "kind": "tab",
-          "id": "userProfiles"
-        },
-        {
-          "kind": "tab",
-          "id": "operatorUserManagement"
-        }
-      ]
-    }
-  ],
-  "innerTabSelectedIndexByShellTabKey": {
-    "dispatchInteractive": 0,
-    "codeLookupTables": 0,
-    "deliveryCalendarView": 1
+  "planInputPath" : "C:\\システム開発\\工程管理AIプロジェクト_JAVA\\output\\plan_input_tasks.xlsx",
+  "planInputSheet" : "タスク一覧",
+  "stage1PreviewPath" : "C:\\システム開発\\工程管理AIプロジェクト_JAVA\\output\\stage1_task_input_table.xlsx",
+  "stage1PreviewSheet" : "タスク入力整形",
+  "uiTheme" : "midnight-blue",
+  "logFontSize" : 16.0,
+  "mainRunLogFilter" : "ALL",
+  "mainRunLogLines" : [ "[env] 環境変数の値が初期値と異なるため、環境変数タブ以外は操作できません。環境変数タブの「環境変数を初期化」を実行してください。", "[env] 環境変数の値が初期値と異なるため、環境変数タブ以外は操作できません。環境変数タブの「環境変数を初期化」を実行してください。", "[exclude-json] restored session: C:\\システム開発\\工程管理AIプロジェクト_JAVA\\output\\stage1_exclude_rules.json", "[attendance] JSON 再読込: \\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\002  加工G\\●配台AIシステム\\共有DATA\\attendance-data.json" ],
+  "mainRunLogScroll" : 0.0,
+  "mainRunStage2ProductionPlan" : "C:\\システム開発\\工程管理AIプロジェクト_JAVA\\output\\計画2608080721393005.xlsx",
+  "mainRunStage2MemberSchedule" : "C:\\システム開発\\工程管理AIプロジェクト_JAVA\\output\\人員2608080721393005.xlsx",
+  "mainRunStage2SkipTodayDispatch" : true,
+  "planInputStage2NextDayDialogMode" : "BOTH",
+  "planInputComboSheetMayExceedNeed" : true,
+  "planInputStage2SkipGeminiApi" : false,
+  "skipGeminiApiDefaultOffMigrated" : true,
+  "planInputTodayDispatch" : false,
+  "mainRunSkipGeminiApi" : false,
+  "mainRunStage1MarkAllExcludeAfterRun" : false,
+  "mainRunApplyLearnedSpeedFromActuals" : false,
+  "mainShellTabOrder" : [ "equipmentStatusDashboard", "remoteDesktop", "requestFormInput", "requestFormPipelineCheck", "companyCalendar", "memberAttendance", "machineCalendar", "planInputStage3", "run", "planInput", "dispatchInteractive", "equipmentGanttGraphic", "deliveryCalendarView", "operatorCard", "codeLookupTables", "uiBadgeDesign", "pushButtonDesign", "ganttPersonBadgeDesign", "requestFormPreviewBadgeDesign", "planResultViewer", "stage1Preview", "resultDispatch", "masterSummary", "excludeRules", "specialRules", "planWorkspaceHistory", "memorySettings", "apiModelBenchmark", "actualsStatus", "pipelineExecutionTiming", "cacheHistory", "learnedSpeedData", "env", "globalSettings", "userProfiles", "operatorUserManagement" ],
+  "mainShellTabLayout" : [ {
+    "kind" : "tab",
+    "color" : "#994d66",
+    "id" : "equipmentStatusDashboard"
+  }, {
+    "kind" : "tab",
+    "color" : "#0000ff",
+    "id" : "remoteDesktop"
+  }, {
+    "kind" : "tab",
+    "color" : "#336633",
+    "id" : "requestFormInput"
+  }, {
+    "kind" : "tab",
+    "color" : "#9980e6",
+    "id" : "requestFormPipelineCheck"
+  }, {
+    "kind" : "tab",
+    "color" : "#800080",
+    "id" : "companyCalendar"
+  }, {
+    "kind" : "tab",
+    "color" : "#800080",
+    "id" : "memberAttendance"
+  }, {
+    "kind" : "tab",
+    "color" : "#800000",
+    "id" : "machineCalendar"
+  }, {
+    "kind" : "tab",
+    "color" : "#800080",
+    "id" : "planInputStage3"
+  }, {
+    "kind" : "tab",
+    "color" : "#0000ff",
+    "id" : "run"
+  }, {
+    "kind" : "tab",
+    "color" : "#000080",
+    "id" : "planInput"
+  }, {
+    "kind" : "tab",
+    "color" : "#1a3399",
+    "id" : "dispatchInteractive"
+  }, {
+    "kind" : "tab",
+    "color" : "#1a4d1a",
+    "id" : "equipmentGanttGraphic"
+  }, {
+    "kind" : "tab",
+    "color" : "#669966",
+    "id" : "deliveryCalendarView"
+  }, {
+    "kind" : "tab",
+    "color" : "#336666",
+    "id" : "operatorCard"
+  }, {
+    "kind" : "tab",
+    "color" : "#0000ff",
+    "id" : "codeLookupTables"
+  }, {
+    "kind" : "group",
+    "color" : "#ffff00",
+    "title" : "バッジ設定",
+    "children" : [ {
+      "kind" : "tab",
+      "id" : "uiBadgeDesign"
+    }, {
+      "kind" : "tab",
+      "id" : "pushButtonDesign"
+    }, {
+      "kind" : "tab",
+      "id" : "ganttPersonBadgeDesign"
+    }, {
+      "kind" : "tab",
+      "id" : "requestFormPreviewBadgeDesign"
+    } ]
+  }, {
+    "kind" : "group",
+    "color" : "#800080",
+    "title" : "結果情報(デバッグ用)",
+    "children" : [ {
+      "kind" : "tab",
+      "id" : "planResultViewer"
+    }, {
+      "kind" : "tab",
+      "id" : "stage1Preview"
+    }, {
+      "kind" : "tab",
+      "id" : "resultDispatch"
+    } ]
+  }, {
+    "kind" : "group",
+    "color" : "#666666",
+    "title" : "その他",
+    "children" : [ {
+      "kind" : "tab",
+      "id" : "masterSummary"
+    }, {
+      "kind" : "tab",
+      "id" : "excludeRules"
+    }, {
+      "kind" : "tab",
+      "id" : "specialRules"
+    }, {
+      "kind" : "tab",
+      "id" : "planWorkspaceHistory"
+    }, {
+      "kind" : "tab",
+      "id" : "memorySettings"
+    }, {
+      "kind" : "tab",
+      "id" : "apiModelBenchmark"
+    }, {
+      "kind" : "tab",
+      "id" : "actualsStatus"
+    }, {
+      "kind" : "tab",
+      "id" : "pipelineExecutionTiming"
+    }, {
+      "kind" : "tab",
+      "id" : "cacheHistory"
+    }, {
+      "kind" : "tab",
+      "id" : "learnedSpeedData"
+    } ]
+  }, {
+    "kind" : "group",
+    "color" : "#e64d4d",
+    "title" : "環境設定",
+    "children" : [ {
+      "kind" : "tab",
+      "id" : "env"
+    }, {
+      "kind" : "tab",
+      "id" : "globalSettings"
+    }, {
+      "kind" : "tab",
+      "id" : "userProfiles"
+    }, {
+      "kind" : "tab",
+      "id" : "operatorUserManagement"
+    } ]
+  } ],
+  "innerTabSelectedIndexByShellTabKey" : {
+    "codeLookupTables" : 0,
+    "dispatchInteractive" : 0,
+    "deliveryCalendarView" : 1
   },
-  "innerTabHeaderColorByKey": {
-    "requestFormInput\u0001マスター一覧": "#008080",
-    "requestFormInput\u0001マスター一覧\u0001加工内容マスタ": "#e6e6e6",
-    "requestFormInput\u0001マスター一覧\u0001工程マスタ": "#e6e6e6",
-    "requestFormInput\u0001マスター一覧\u0001機械コード": "#cccccc"
+  "innerTabHeaderColorByKey" : {
+    "requestFormInput\u0001マスター一覧" : "#008080",
+    "requestFormInput\u0001マスター一覧\u0001機械コード" : "#cccccc",
+    "requestFormInput\u0001マスター一覧\u0001工程マスタ" : "#e6e6e6",
+    "requestFormInput\u0001マスター一覧\u0001加工内容マスタ" : "#e6e6e6"
   },
-  "equipmentGanttGraphicZoomPercent": 150.57693591484662,
-  "equipmentGanttMachineColWidth": 50.45043326712945,
-  "equipmentGanttProcessColWidth": 57.65766453098606,
-  "equipmentGanttBarFontFamily": "Meiryo UI",
-  "equipmentGanttBarFontPercent": 98.78049594600026,
-  "equipmentGanttRowHeightPercent": 50.0,
-  "equipmentGanttHeaderHeightPercent": 100.0,
-  "equipmentGanttSlotWidthPercent": 202.4390261347701,
-  "equipmentGanttShiftWheelHScrollPercent": 200.0,
-  "equipmentGanttPrepTimeLabelsEnabled": true,
-  "equipmentGanttPersonBadgeGapPx": 32.78048706054687,
-  "equipmentGanttPersonBadgeBandVerticalOffsetPx": -8.975611244759897,
-  "equipmentGanttGraphicDataFingerprint": "ea9bab266fc49993b0af6a0fef323a09bd1c7b22b4fd8e4200d57a6d08520875",
-  "equipmentGanttPersonBadgeDragAdjustEnabled": true,
-  "equipmentGanttPersonBadgeEnabled": true,
-  "equipmentGanttPersonBadgeWireEnabled": true,
-  "equipmentGanttPersonBadgeWireStrokeHex": "#ccffff",
-  "equipmentGanttPersonBadgeWireWidthPx": 1.756097979661895,
-  "equipmentGanttPersonBadgeWireDashStyleKey": "SOLID",
-  "equipmentGanttPersonBadgeWireMaxLengthPx": 39.02439489597223,
-  "equipmentGanttPersonBadgeFontPercent": 106.0,
-  "equipmentGanttPersonBadgeFillHex": "#2454ca",
-  "equipmentGanttPersonBadgeTextHex": "#f0f2f7",
-  "equipmentGanttPersonBadgeStrokeHex": "#011953",
-  "equipmentGanttPersonBadgeStrokeWidth": 1.0,
-  "equipmentGanttPersonBadgeCornerRadius": 3.0,
-  "equipmentGanttPersonBadgePill": false,
-  "equipmentGanttPersonBadgeGlowColorHex": "#6480c3",
-  "equipmentGanttPersonBadgeGlowRadius": 21.7,
-  "equipmentGanttPersonBadgeGlowSpread": 0.13440000000000005,
-  "equipmentGanttPersonBadgeOpacity": 0.84,
-  "equipmentGanttPersonBadgeStylesByMemberKey": {
-    "沈 春光": {
-      "fontFamily": "Segoe UI Emoji",
-      "fontPercent": 88.0188639658802,
-      "fillHex": "#723974",
-      "textHex": "#f0f2f7",
-      "strokeHex": "#3d183e",
-      "strokeWidth": 2.5,
-      "cornerRadius": 10.0,
-      "pill": true,
-      "glowColorHex": "#def654",
-      "glowRadius": 28.28,
-      "glowSpread": 0.1988,
-      "opacity": 0.95
+  "equipmentGanttGraphicZoomPercent" : 150.57693591484662,
+  "equipmentGanttMachineColWidth" : 50.45043326712945,
+  "equipmentGanttProcessColWidth" : 57.65766453098606,
+  "equipmentGanttBarFontFamily" : "Meiryo UI",
+  "equipmentGanttBarFontPercent" : 98.78049594600026,
+  "equipmentGanttRowHeightPercent" : 50.0,
+  "equipmentGanttHeaderHeightPercent" : 100.0,
+  "equipmentGanttSlotWidthPercent" : 202.4390261347701,
+  "equipmentGanttShiftWheelHScrollPercent" : 200.0,
+  "equipmentGanttPrepTimeLabelsEnabled" : true,
+  "equipmentGanttPersonBadgeGapPx" : 32.78048706054687,
+  "equipmentGanttPersonBadgeBandVerticalOffsetPx" : -8.975611244759897,
+  "equipmentGanttGraphicDataFingerprint" : "8f3aaf06c54dd7d9753e40851c2d256df1eb76d12a72a2defad6f98d949f23c5",
+  "equipmentGanttPersonBadgeDragAdjustEnabled" : true,
+  "equipmentGanttPersonBadgeEnabled" : true,
+  "equipmentGanttPersonBadgeWireEnabled" : true,
+  "equipmentGanttPersonBadgeWireStrokeHex" : "#ccffff",
+  "equipmentGanttPersonBadgeWireWidthPx" : 1.756097979661895,
+  "equipmentGanttPersonBadgeWireDashStyleKey" : "SOLID",
+  "equipmentGanttPersonBadgeWireMaxLengthPx" : 39.02439489597223,
+  "equipmentGanttPersonBadgeFontPercent" : 106.0,
+  "equipmentGanttPersonBadgeFillHex" : "#2454ca",
+  "equipmentGanttPersonBadgeTextHex" : "#f0f2f7",
+  "equipmentGanttPersonBadgeStrokeHex" : "#011953",
+  "equipmentGanttPersonBadgeStrokeWidth" : 1.0,
+  "equipmentGanttPersonBadgeCornerRadius" : 3.0,
+  "equipmentGanttPersonBadgePill" : false,
+  "equipmentGanttPersonBadgeGlowColorHex" : "#6480c3",
+  "equipmentGanttPersonBadgeGlowRadius" : 21.7,
+  "equipmentGanttPersonBadgeGlowSpread" : 0.13440000000000005,
+  "equipmentGanttPersonBadgeOpacity" : 0.84,
+  "equipmentGanttPersonBadgeStylesByMemberKey" : {
+    "増田 治樹" : {
+      "fontFamily" : "Brush Script MT",
+      "fontPercent" : 88.0188639658802,
+      "fillHex" : "#3d5072",
+      "textHex" : "#f0f2f7",
+      "strokeHex" : "#1b273e",
+      "strokeWidth" : 2.5,
+      "cornerRadius" : 8.0,
+      "pill" : true,
+      "glowColorHex" : "#89a6dd",
+      "glowRadius" : 9.24,
+      "glowSpread" : 0.24080000000000001,
+      "opacity" : 0.76
     },
-    "吉岡 廣海": {
-      "fontFamily": "Old English Text MT",
-      "fontPercent": 88.0188639658802,
-      "fillHex": "#af2e14",
-      "textHex": "#f0f2f7",
-      "strokeHex": "#601000",
-      "strokeWidth": 3.5,
-      "cornerRadius": 17.0,
-      "pill": false,
-      "glowColorHex": "#ca5841",
-      "glowRadius": 12.18,
-      "glowSpread": 0.15680000000000002,
-      "opacity": 0.65
+    "大谷 晴香" : {
+      "fontFamily" : "",
+      "fontPercent" : 88.0188639658802,
+      "fillHex" : "#2367b9",
+      "textHex" : "#f0f2f7",
+      "strokeHex" : "#033168",
+      "strokeWidth" : 0.5,
+      "cornerRadius" : 6.0,
+      "pill" : false,
+      "glowColorHex" : "#f08bc8",
+      "glowRadius" : 17.78,
+      "glowSpread" : 0.36680000000000007,
+      "opacity" : 0.9
     },
-    "森岡 真由美": {
-      "fontFamily": "HGSｺﾞｼｯｸE",
-      "fontPercent": 88.0188639658802,
-      "fillHex": "#a52b85",
-      "textHex": "#f0f2f7",
-      "strokeHex": "#5d0b47",
-      "strokeWidth": 2.5,
-      "cornerRadius": 2.0,
-      "pill": true,
-      "glowColorHex": "#9ceb83",
-      "glowRadius": 32.199999999999996,
-      "glowSpread": 0.5544,
-      "opacity": 0.75
+    "松本 匡矢" : {
+      "fontFamily" : "Harlow Solid Italic",
+      "fontPercent" : 88.0188639658802,
+      "fillHex" : "#3963c4",
+      "textHex" : "#cbedba",
+      "strokeHex" : "#0d2459",
+      "strokeWidth" : 1.0,
+      "cornerRadius" : 0.0,
+      "pill" : false,
+      "glowColorHex" : "#3f6bd0",
+      "glowRadius" : 13.86,
+      "glowSpread" : 0.36680000000000007,
+      "opacity" : 0.92
     },
-    "岩崎 智香": {
-      "fontFamily": "Sans Serif Collection",
-      "fontPercent": 88.0188639658802,
-      "fillHex": "#c338b9",
-      "textHex": "#f0f2f7",
-      "strokeHex": "#500b4c",
-      "strokeWidth": 0.0,
-      "cornerRadius": 7.0,
-      "pill": false,
-      "glowColorHex": "#2fde6b",
-      "glowRadius": 16.66,
-      "glowSpread": 0.11200000000000002,
-      "opacity": 0.67
+    "森下  誠" : {
+      "fontFamily" : "HG明朝E",
+      "fontPercent" : 88.0188639658802,
+      "fillHex" : "#81239f",
+      "textHex" : "#f0f2f7",
+      "strokeHex" : "#3a054a",
+      "strokeWidth" : 2.0,
+      "cornerRadius" : 1.0,
+      "pill" : false,
+      "glowColorHex" : "#77d976",
+      "glowRadius" : 6.72,
+      "glowSpread" : 0.4732,
+      "opacity" : 0.97
     },
-    "冨田 裕子": {
-      "fontFamily": "Agency FB",
-      "fontPercent": 88.0188639658802,
-      "fillHex": "#96b13a",
-      "textHex": "#14171f",
-      "strokeHex": "#455410",
-      "strokeWidth": 3.0,
-      "cornerRadius": 4.0,
-      "pill": false,
-      "glowColorHex": "#367cdc",
-      "glowRadius": 31.919999999999998,
-      "glowSpread": 0.13720000000000002,
-      "opacity": 0.9
+    "大平 有希子" : {
+      "fontFamily" : "MS Reference Sans Serif",
+      "fontPercent" : 88.0188639658802,
+      "fillHex" : "#5699be",
+      "textHex" : "#14171f",
+      "strokeHex" : "#214a60",
+      "strokeWidth" : 0.5,
+      "cornerRadius" : 15.0,
+      "pill" : false,
+      "glowColorHex" : "#c18bf7",
+      "glowRadius" : 15.959999999999999,
+      "glowSpread" : 0.3556,
+      "opacity" : 0.88
     },
-    "宮島  剛": {
-      "fontFamily": "Colonna MT",
-      "fontPercent": 88.0188639658802,
-      "fillHex": "#5c9845",
-      "textHex": "#f0f2f7",
-      "strokeHex": "#274a19",
-      "strokeWidth": 3.0,
-      "cornerRadius": 16.0,
-      "pill": true,
-      "glowColorHex": "#5bd12c",
-      "glowRadius": 19.88,
-      "glowSpread": 0.5516000000000001,
-      "opacity": 0.67
+    "図司 智子" : {
+      "fontFamily" : "Dubai Medium",
+      "fontPercent" : 88.0188639658802,
+      "fillHex" : "#c9866f",
+      "textHex" : "#14171f",
+      "strokeHex" : "#603a2c",
+      "strokeWidth" : 2.0,
+      "cornerRadius" : 15.0,
+      "pill" : true,
+      "glowColorHex" : "#d165e8",
+      "glowRadius" : 9.1,
+      "glowSpread" : 0.5068,
+      "opacity" : 0.89
     },
-    "河合 直樹": {
-      "fontFamily": "French Script MT",
-      "fontPercent": 88.0188639658802,
-      "fillHex": "#632046",
-      "textHex": "#f0f2f7",
-      "strokeHex": "#360a23",
-      "strokeWidth": 1.0,
-      "cornerRadius": 18.0,
-      "pill": false,
-      "glowColorHex": "#e632cb",
-      "glowRadius": 20.58,
-      "glowSpread": 0.2772,
-      "opacity": 0.73
+    "河合 直樹" : {
+      "fontFamily" : "French Script MT",
+      "fontPercent" : 88.0188639658802,
+      "fillHex" : "#632046",
+      "textHex" : "#f0f2f7",
+      "strokeHex" : "#360a23",
+      "strokeWidth" : 1.0,
+      "cornerRadius" : 18.0,
+      "pill" : false,
+      "glowColorHex" : "#e632cb",
+      "glowRadius" : 20.58,
+      "glowSpread" : 0.2772,
+      "opacity" : 0.73
     },
-    "大平 有希子": {
-      "fontFamily": "MS Reference Sans Serif",
-      "fontPercent": 88.0188639658802,
-      "fillHex": "#5699be",
-      "textHex": "#14171f",
-      "strokeHex": "#214a60",
-      "strokeWidth": 0.5,
-      "cornerRadius": 15.0,
-      "pill": false,
-      "glowColorHex": "#c18bf7",
-      "glowRadius": 15.959999999999999,
-      "glowSpread": 0.3556,
-      "opacity": 0.88
+    "冨田 裕子" : {
+      "fontFamily" : "Agency FB",
+      "fontPercent" : 88.0188639658802,
+      "fillHex" : "#96b13a",
+      "textHex" : "#14171f",
+      "strokeHex" : "#455410",
+      "strokeWidth" : 3.0,
+      "cornerRadius" : 4.0,
+      "pill" : false,
+      "glowColorHex" : "#367cdc",
+      "glowRadius" : 31.919999999999998,
+      "glowSpread" : 0.13720000000000002,
+      "opacity" : 0.9
     },
-    "図司 智子": {
-      "fontFamily": "Dubai Medium",
-      "fontPercent": 88.0188639658802,
-      "fillHex": "#c9866f",
-      "textHex": "#14171f",
-      "strokeHex": "#603a2c",
-      "strokeWidth": 2.0,
-      "cornerRadius": 15.0,
-      "pill": true,
-      "glowColorHex": "#d165e8",
-      "glowRadius": 9.1,
-      "glowSpread": 0.5068,
-      "opacity": 0.89
+    "宮島  剛" : {
+      "fontFamily" : "Colonna MT",
+      "fontPercent" : 88.0188639658802,
+      "fillHex" : "#5c9845",
+      "textHex" : "#f0f2f7",
+      "strokeHex" : "#274a19",
+      "strokeWidth" : 3.0,
+      "cornerRadius" : 16.0,
+      "pill" : true,
+      "glowColorHex" : "#5bd12c",
+      "glowRadius" : 19.88,
+      "glowSpread" : 0.5516000000000001,
+      "opacity" : 0.67
     },
-    "松本 匡矢": {
-      "fontFamily": "Harlow Solid Italic",
-      "fontPercent": 88.0188639658802,
-      "fillHex": "#3963c4",
-      "textHex": "#cbedba",
-      "strokeHex": "#0d2459",
-      "strokeWidth": 1.0,
-      "cornerRadius": 0.0,
-      "pill": false,
-      "glowColorHex": "#3f6bd0",
-      "glowRadius": 13.86,
-      "glowSpread": 0.36680000000000007,
-      "opacity": 0.92
+    "岩崎 智香" : {
+      "fontFamily" : "Sans Serif Collection",
+      "fontPercent" : 88.0188639658802,
+      "fillHex" : "#c338b9",
+      "textHex" : "#f0f2f7",
+      "strokeHex" : "#500b4c",
+      "strokeWidth" : 0.0,
+      "cornerRadius" : 7.0,
+      "pill" : false,
+      "glowColorHex" : "#2fde6b",
+      "glowRadius" : 16.66,
+      "glowSpread" : 0.11200000000000002,
+      "opacity" : 0.67
     },
-    "森下  誠": {
-      "fontFamily": "HG明朝E",
-      "fontPercent": 88.0188639658802,
-      "fillHex": "#81239f",
-      "textHex": "#f0f2f7",
-      "strokeHex": "#3a054a",
-      "strokeWidth": 2.0,
-      "cornerRadius": 1.0,
-      "pill": false,
-      "glowColorHex": "#77d976",
-      "glowRadius": 6.72,
-      "glowSpread": 0.4732,
-      "opacity": 0.97
+    "森岡 真由美" : {
+      "fontFamily" : "HGSｺﾞｼｯｸE",
+      "fontPercent" : 88.0188639658802,
+      "fillHex" : "#a52b85",
+      "textHex" : "#f0f2f7",
+      "strokeHex" : "#5d0b47",
+      "strokeWidth" : 2.5,
+      "cornerRadius" : 2.0,
+      "pill" : true,
+      "glowColorHex" : "#9ceb83",
+      "glowRadius" : 32.199999999999996,
+      "glowSpread" : 0.5544,
+      "opacity" : 0.75
     },
-    "増田 治樹": {
-      "fontFamily": "Brush Script MT",
-      "fontPercent": 88.0188639658802,
-      "fillHex": "#3d5072",
-      "textHex": "#f0f2f7",
-      "strokeHex": "#1b273e",
-      "strokeWidth": 2.5,
-      "cornerRadius": 8.0,
-      "pill": true,
-      "glowColorHex": "#89a6dd",
-      "glowRadius": 9.24,
-      "glowSpread": 0.24080000000000001,
-      "opacity": 0.76
+    "吉岡 廣海" : {
+      "fontFamily" : "Old English Text MT",
+      "fontPercent" : 88.0188639658802,
+      "fillHex" : "#af2e14",
+      "textHex" : "#f0f2f7",
+      "strokeHex" : "#601000",
+      "strokeWidth" : 3.5,
+      "cornerRadius" : 17.0,
+      "pill" : false,
+      "glowColorHex" : "#ca5841",
+      "glowRadius" : 12.18,
+      "glowSpread" : 0.15680000000000002,
+      "opacity" : 0.65
     },
-    "大谷 晴香": {
-      "fontFamily": "",
-      "fontPercent": 88.0188639658802,
-      "fillHex": "#2367b9",
-      "textHex": "#f0f2f7",
-      "strokeHex": "#033168",
-      "strokeWidth": 0.5,
-      "cornerRadius": 6.0,
-      "pill": false,
-      "glowColorHex": "#f08bc8",
-      "glowRadius": 17.78,
-      "glowSpread": 0.36680000000000007,
-      "opacity": 0.9
+    "沈 春光" : {
+      "fontFamily" : "Segoe UI Emoji",
+      "fontPercent" : 88.0188639658802,
+      "fillHex" : "#723974",
+      "textHex" : "#f0f2f7",
+      "strokeHex" : "#3d183e",
+      "strokeWidth" : 2.5,
+      "cornerRadius" : 10.0,
+      "pill" : true,
+      "glowColorHex" : "#def654",
+      "glowRadius" : 28.28,
+      "glowSpread" : 0.1988,
+      "opacity" : 0.95
     },
-    "角 正彦": {
-      "fontFamily": "HG教科書体",
-      "fontPercent": 88.0188639658802,
-      "fillHex": "#36702c",
-      "textHex": "#f0f2f7",
-      "strokeHex": "#173c10",
-      "strokeWidth": 2.0,
-      "cornerRadius": 6.0,
-      "pill": true,
-      "glowColorHex": "#85f772",
-      "glowRadius": 30.38,
-      "glowSpread": 0.462,
-      "opacity": 0.82
+    "竹内 正美" : {
+      "fontFamily" : "",
+      "fontPercent" : 88.0188639658802,
+      "fillHex" : "#257236",
+      "textHex" : "#e1a8c9",
+      "strokeHex" : "#0c3f17",
+      "strokeWidth" : 2.5,
+      "cornerRadius" : 17.0,
+      "pill" : false,
+      "glowColorHex" : "#50da6e",
+      "glowRadius" : 18.900000000000002,
+      "glowSpread" : 0.3892,
+      "opacity" : 0.68
     },
-    "河林 陽介": {
-      "fontFamily": "HGP明朝B",
-      "fontPercent": 88.0188639658802,
-      "fillHex": "#a9559b",
-      "textHex": "#f0f2f7",
-      "strokeHex": "#5b2452",
-      "strokeWidth": 3.0,
-      "cornerRadius": 12.0,
-      "pill": true,
-      "glowColorHex": "#c680bb",
-      "glowRadius": 26.32,
-      "glowSpread": 0.12600000000000003,
-      "opacity": 0.73
+    "大久保 俊彦" : {
+      "fontFamily" : "Agency FB",
+      "fontPercent" : 88.0188639658802,
+      "fillHex" : "#66c7ac",
+      "textHex" : "#f1b3bd",
+      "strokeHex" : "#2c6a58",
+      "strokeWidth" : 3.5,
+      "cornerRadius" : 4.0,
+      "pill" : false,
+      "glowColorHex" : "#ed3589",
+      "glowRadius" : 7.28,
+      "glowSpread" : 0.5516000000000001,
+      "opacity" : 0.87
     },
-    "坂野 香織": {
-      "fontFamily": "Informal Roman",
-      "fontPercent": 88.0188639658802,
-      "fillHex": "#426cbb",
-      "textHex": "#f0f2f7",
-      "strokeHex": "#142d5b",
-      "strokeWidth": 1.0,
-      "cornerRadius": 13.0,
-      "pill": true,
-      "glowColorHex": "#d6eb8c",
-      "glowRadius": 22.26,
-      "glowSpread": 0.4172,
-      "opacity": 0.99
+    "中川 直也" : {
+      "fontFamily" : "Eras Medium ITC",
+      "fontPercent" : 88.0188639658802,
+      "fillHex" : "#803d8a",
+      "textHex" : "#f0f2f7",
+      "strokeHex" : "#3a1540",
+      "strokeWidth" : 0.5,
+      "cornerRadius" : 11.0,
+      "pill" : false,
+      "glowColorHex" : "#c6d32f",
+      "glowRadius" : 31.080000000000002,
+      "glowSpread" : 0.47600000000000003,
+      "opacity" : 0.57
     },
-    "山本 敬": {
-      "fontFamily": "Segoe Fluent Icons",
-      "fontPercent": 88.0188639658802,
-      "fillHex": "#40c459",
-      "textHex": "#c1ecac",
-      "strokeHex": "#136423",
-      "strokeWidth": 0.0,
-      "cornerRadius": 20.0,
-      "pill": false,
-      "glowColorHex": "#45f065",
-      "glowRadius": 30.240000000000002,
-      "glowSpread": 0.1708,
-      "opacity": 0.63
+    "川島 吉伸" : {
+      "fontFamily" : "High Tower Text",
+      "fontPercent" : 88.0188639658802,
+      "fillHex" : "#6ea437",
+      "textHex" : "#bae9eb",
+      "strokeHex" : "#385d13",
+      "strokeWidth" : 1.5,
+      "cornerRadius" : 6.0,
+      "pill" : true,
+      "glowColorHex" : "#e653a5",
+      "glowRadius" : 21.7,
+      "glowSpread" : 0.32480000000000003,
+      "opacity" : 0.82
     },
-    "小野 眞太郎": {
-      "fontFamily": "Courier New",
-      "fontPercent": 88.0188639658802,
-      "fillHex": "#6dc159",
-      "textHex": "#14171f",
-      "strokeHex": "#2b5920",
-      "strokeWidth": 1.5,
-      "cornerRadius": 21.0,
-      "pill": true,
-      "glowColorHex": "#62c84a",
-      "glowRadius": 21.84,
-      "glowSpread": 0.4172,
-      "opacity": 0.57
+    "菅沼 めぐみ" : {
+      "fontFamily" : "Onyx",
+      "fontPercent" : 88.0188639658802,
+      "fillHex" : "#2c8927",
+      "textHex" : "#f0f2f7",
+      "strokeHex" : "#0e4c0b",
+      "strokeWidth" : 1.5,
+      "cornerRadius" : 9.0,
+      "pill" : true,
+      "glowColorHex" : "#4fda49",
+      "glowRadius" : 27.86,
+      "glowSpread" : 0.5124000000000001,
+      "opacity" : 0.62
     },
-    "近藤 厚生": {
-      "fontFamily": "HGｺﾞｼｯｸE",
-      "fontPercent": 88.0188639658802,
-      "fillHex": "#59c929",
-      "textHex": "#14171f",
-      "strokeHex": "#267205",
-      "strokeWidth": 1.0,
-      "cornerRadius": 0.0,
-      "pill": false,
-      "glowColorHex": "#dcf47f",
-      "glowRadius": 11.479999999999999,
-      "glowSpread": 0.5292,
-      "opacity": 0.65
+    "中村 久男" : {
+      "fontFamily" : "Lucida Sans Typewriter",
+      "fontPercent" : 88.0188639658802,
+      "fillHex" : "#1b8d15",
+      "textHex" : "#f0f2f7",
+      "strokeHex" : "#033e00",
+      "strokeWidth" : 3.5,
+      "cornerRadius" : 15.0,
+      "pill" : false,
+      "glowColorHex" : "#79d374",
+      "glowRadius" : 21.28,
+      "glowSpread" : 0.4032,
+      "opacity" : 0.69
     },
-    "京 直道": {
-      "fontFamily": "Constantia",
-      "fontPercent": 88.0188639658802,
-      "fillHex": "#361c7a",
-      "textHex": "#f0f2f7",
-      "strokeHex": "#15053f",
-      "strokeWidth": 3.0,
-      "cornerRadius": 19.0,
-      "pill": false,
-      "glowColorHex": "#7556c6",
-      "glowRadius": 18.060000000000002,
-      "glowSpread": 0.5544,
-      "opacity": 0.73
+    "東 龍平" : {
+      "fontFamily" : "Lucida Console",
+      "fontPercent" : 88.0188639658802,
+      "fillHex" : "#7a301b",
+      "textHex" : "#f0f2f7",
+      "strokeHex" : "#370f03",
+      "strokeWidth" : 1.5,
+      "cornerRadius" : 21.0,
+      "pill" : false,
+      "glowColorHex" : "#e56a47",
+      "glowRadius" : 16.099999999999998,
+      "glowSpread" : 0.2632,
+      "opacity" : 0.58
     },
-    "飯田 剛成": {
-      "fontFamily": "Century",
-      "fontPercent": 88.0188639658802,
-      "fillHex": "#c4c852",
-      "textHex": "#14171f",
-      "strokeHex": "#595b1b",
-      "strokeWidth": 1.0,
-      "cornerRadius": 3.0,
-      "pill": true,
-      "glowColorHex": "#cfd370",
-      "glowRadius": 29.259999999999998,
-      "glowSpread": 0.40880000000000005,
-      "opacity": 0.58
+    "飯田 剛成" : {
+      "fontFamily" : "Century",
+      "fontPercent" : 88.0188639658802,
+      "fillHex" : "#c4c852",
+      "textHex" : "#14171f",
+      "strokeHex" : "#595b1b",
+      "strokeWidth" : 1.0,
+      "cornerRadius" : 3.0,
+      "pill" : true,
+      "glowColorHex" : "#cfd370",
+      "glowRadius" : 29.259999999999998,
+      "glowSpread" : 0.40880000000000005,
+      "opacity" : 0.58
     },
-    "東 龍平": {
-      "fontFamily": "Lucida Console",
-      "fontPercent": 88.0188639658802,
-      "fillHex": "#7a301b",
-      "textHex": "#f0f2f7",
-      "strokeHex": "#370f03",
-      "strokeWidth": 1.5,
-      "cornerRadius": 21.0,
-      "pill": false,
-      "glowColorHex": "#e56a47",
-      "glowRadius": 16.099999999999998,
-      "glowSpread": 0.2632,
-      "opacity": 0.58
+    "京 直道" : {
+      "fontFamily" : "Constantia",
+      "fontPercent" : 88.0188639658802,
+      "fillHex" : "#361c7a",
+      "textHex" : "#f0f2f7",
+      "strokeHex" : "#15053f",
+      "strokeWidth" : 3.0,
+      "cornerRadius" : 19.0,
+      "pill" : false,
+      "glowColorHex" : "#7556c6",
+      "glowRadius" : 18.060000000000002,
+      "glowSpread" : 0.5544,
+      "opacity" : 0.73
     },
-    "川島 吉伸": {
-      "fontFamily": "High Tower Text",
-      "fontPercent": 88.0188639658802,
-      "fillHex": "#6ea437",
-      "textHex": "#bae9eb",
-      "strokeHex": "#385d13",
-      "strokeWidth": 1.5,
-      "cornerRadius": 6.0,
-      "pill": true,
-      "glowColorHex": "#e653a5",
-      "glowRadius": 21.7,
-      "glowSpread": 0.32480000000000003,
-      "opacity": 0.82
+    "近藤 厚生" : {
+      "fontFamily" : "HGｺﾞｼｯｸE",
+      "fontPercent" : 88.0188639658802,
+      "fillHex" : "#59c929",
+      "textHex" : "#14171f",
+      "strokeHex" : "#267205",
+      "strokeWidth" : 1.0,
+      "cornerRadius" : 0.0,
+      "pill" : false,
+      "glowColorHex" : "#dcf47f",
+      "glowRadius" : 11.479999999999999,
+      "glowSpread" : 0.5292,
+      "opacity" : 0.65
     },
-    "菅沼 めぐみ": {
-      "fontFamily": "Onyx",
-      "fontPercent": 88.0188639658802,
-      "fillHex": "#2c8927",
-      "textHex": "#f0f2f7",
-      "strokeHex": "#0e4c0b",
-      "strokeWidth": 1.5,
-      "cornerRadius": 9.0,
-      "pill": true,
-      "glowColorHex": "#4fda49",
-      "glowRadius": 27.86,
-      "glowSpread": 0.5124000000000001,
-      "opacity": 0.62
+    "小野 眞太郎" : {
+      "fontFamily" : "Courier New",
+      "fontPercent" : 88.0188639658802,
+      "fillHex" : "#6dc159",
+      "textHex" : "#14171f",
+      "strokeHex" : "#2b5920",
+      "strokeWidth" : 1.5,
+      "cornerRadius" : 21.0,
+      "pill" : true,
+      "glowColorHex" : "#62c84a",
+      "glowRadius" : 21.84,
+      "glowSpread" : 0.4172,
+      "opacity" : 0.57
     },
-    "中村 久男": {
-      "fontFamily": "Lucida Sans Typewriter",
-      "fontPercent": 88.0188639658802,
-      "fillHex": "#1b8d15",
-      "textHex": "#f0f2f7",
-      "strokeHex": "#033e00",
-      "strokeWidth": 3.5,
-      "cornerRadius": 15.0,
-      "pill": false,
-      "glowColorHex": "#79d374",
-      "glowRadius": 21.28,
-      "glowSpread": 0.4032,
-      "opacity": 0.69
+    "坂野 香織" : {
+      "fontFamily" : "Informal Roman",
+      "fontPercent" : 88.0188639658802,
+      "fillHex" : "#426cbb",
+      "textHex" : "#f0f2f7",
+      "strokeHex" : "#142d5b",
+      "strokeWidth" : 1.0,
+      "cornerRadius" : 13.0,
+      "pill" : true,
+      "glowColorHex" : "#d6eb8c",
+      "glowRadius" : 22.26,
+      "glowSpread" : 0.4172,
+      "opacity" : 0.99
     },
-    "中川 直也": {
-      "fontFamily": "Eras Medium ITC",
-      "fontPercent": 88.0188639658802,
-      "fillHex": "#803d8a",
-      "textHex": "#f0f2f7",
-      "strokeHex": "#3a1540",
-      "strokeWidth": 0.5,
-      "cornerRadius": 11.0,
-      "pill": false,
-      "glowColorHex": "#c6d32f",
-      "glowRadius": 31.080000000000002,
-      "glowSpread": 0.47600000000000003,
-      "opacity": 0.57
+    "山本 敬" : {
+      "fontFamily" : "Segoe Fluent Icons",
+      "fontPercent" : 88.0188639658802,
+      "fillHex" : "#40c459",
+      "textHex" : "#c1ecac",
+      "strokeHex" : "#136423",
+      "strokeWidth" : 0.0,
+      "cornerRadius" : 20.0,
+      "pill" : false,
+      "glowColorHex" : "#45f065",
+      "glowRadius" : 30.240000000000002,
+      "glowSpread" : 0.1708,
+      "opacity" : 0.63
     },
-    "大久保 俊彦": {
-      "fontFamily": "Agency FB",
-      "fontPercent": 88.0188639658802,
-      "fillHex": "#66c7ac",
-      "textHex": "#f1b3bd",
-      "strokeHex": "#2c6a58",
-      "strokeWidth": 3.5,
-      "cornerRadius": 4.0,
-      "pill": false,
-      "glowColorHex": "#ed3589",
-      "glowRadius": 7.28,
-      "glowSpread": 0.5516000000000001,
-      "opacity": 0.87
+    "河林 陽介" : {
+      "fontFamily" : "HGP明朝B",
+      "fontPercent" : 88.0188639658802,
+      "fillHex" : "#a9559b",
+      "textHex" : "#f0f2f7",
+      "strokeHex" : "#5b2452",
+      "strokeWidth" : 3.0,
+      "cornerRadius" : 12.0,
+      "pill" : true,
+      "glowColorHex" : "#c680bb",
+      "glowRadius" : 26.32,
+      "glowSpread" : 0.12600000000000003,
+      "opacity" : 0.73
     },
-    "竹内 正美": {
-      "fontFamily": "",
-      "fontPercent": 88.0188639658802,
-      "fillHex": "#257236",
-      "textHex": "#e1a8c9",
-      "strokeHex": "#0c3f17",
-      "strokeWidth": 2.5,
-      "cornerRadius": 17.0,
-      "pill": false,
-      "glowColorHex": "#50da6e",
-      "glowRadius": 18.900000000000002,
-      "glowSpread": 0.3892,
-      "opacity": 0.68
+    "角 正彦" : {
+      "fontFamily" : "HG教科書体",
+      "fontPercent" : 88.0188639658802,
+      "fillHex" : "#36702c",
+      "textHex" : "#f0f2f7",
+      "strokeHex" : "#173c10",
+      "strokeWidth" : 2.0,
+      "cornerRadius" : 6.0,
+      "pill" : true,
+      "glowColorHex" : "#85f772",
+      "glowRadius" : 30.38,
+      "glowSpread" : 0.462,
+      "opacity" : 0.82
     }
   },
-  "equipmentGanttPlanJsonPath": "C:\\システム開発\\工程管理AIプロジェクト_JAVA\\output\\計画2607121004184350.json",
-  "stage1NetworkCacheBadgeLabel": "キャッシュ",
-  "stage1NetworkCacheBadgeStyle": {
-    "fontFamily": "",
-    "fontPercent": 92.0,
-    "fillHex": "#ea580c",
-    "textHex": "#fffbeb",
-    "strokeHex": "#c2410c",
-    "strokeWidth": 1.2,
-    "cornerRadius": 8.0,
-    "pill": false,
-    "glowColorHex": "#fdba74",
-    "glowRadius": 12.0,
-    "glowSpread": 0.22000000000000003,
-    "opacity": 1.0
+  "equipmentGanttPlanJsonPath" : "C:\\システム開発\\工程管理AIプロジェクト_JAVA\\output\\計画2607121004184350.json",
+  "stage1NetworkCacheBadgeLabel" : "キャッシュ",
+  "stage1NetworkCacheBadgeStyle" : {
+    "fontFamily" : "",
+    "fontPercent" : 92.0,
+    "fillHex" : "#ea580c",
+    "textHex" : "#fffbeb",
+    "strokeHex" : "#c2410c",
+    "strokeWidth" : 1.2,
+    "cornerRadius" : 8.0,
+    "pill" : false,
+    "glowColorHex" : "#fdba74",
+    "glowRadius" : 12.0,
+    "glowSpread" : 0.22000000000000003,
+    "opacity" : 1.0
   },
-  "requestFormPreviewUpdateBadgeLabel": "更新あります！",
-  "requestFormPreviewUpdateBadgeStyle": {
-    "fontFamily": "Meiryo",
-    "fontPercent": 92.0,
-    "fillHex": "#0000ff",
-    "textHex": "#fffbeb",
-    "strokeHex": "#ffffff",
-    "strokeWidth": 1.2,
-    "cornerRadius": 8.0,
-    "pill": false,
-    "glowColorHex": "#ffffff",
-    "glowRadius": 10.0,
-    "glowSpread": 0.4437735849056605,
-    "opacity": 1.0
+  "requestFormPreviewUpdateBadgeLabel" : "更新あります！",
+  "requestFormPreviewUpdateBadgeStyle" : {
+    "fontFamily" : "Meiryo",
+    "fontPercent" : 92.0,
+    "fillHex" : "#0000ff",
+    "textHex" : "#fffbeb",
+    "strokeHex" : "#ffffff",
+    "strokeWidth" : 1.2,
+    "cornerRadius" : 8.0,
+    "pill" : false,
+    "glowColorHex" : "#ffffff",
+    "glowRadius" : 10.0,
+    "glowSpread" : 0.4437735849056605,
+    "opacity" : 1.0
   },
-  "mainShellTabOrganizerHeaderGlow": true,
-  "mainShellTabOrganizerHeaderGlowStrength": 0.1,
-  "pushButtonDesignPrefs": {
-    "customizeGeneralRunTab": true,
-    "customizeStageRunButtons": true,
-    "generalBorderRadius": 2.2739727072519798,
-    "generalPaddingV": 3.9086759384364296,
-    "generalPaddingH": 3.652967851455897,
-    "generalFontPx": 12.0,
-    "generalBgHex": "#f4f4f4",
-    "generalBorderHex": "#c8c8c8",
-    "generalTextHex": "#2b2b2b",
-    "generalHoverBgHex": "#e8e8e8",
-    "generalPressedBgHex": "#dedede",
-    "stageFontPx": 12.041095890410958,
-    "stageMinWidth": 129.68037017404217,
-    "stageMinHeight": 36.0,
-    "stagePaddingV": 5.780821604271453,
-    "stagePaddingH": 10.831049879936323,
-    "stageBorderRadius": 4.255707936744167,
-    "stage1BgHex": "#0e7490",
-    "stage1BorderHex": "#155e75",
-    "stage1HoverBgHex": "#155e75",
-    "stage1PressedBgHex": "#164e63",
-    "stage2BgHex": "#c2410c",
-    "stage2BorderHex": "#9a3412",
-    "stage2HoverBgHex": "#9a3412",
-    "stage2PressedBgHex": "#7c2d12",
-    "stage3BgHex": "#15803d",
-    "stage3BorderHex": "#166534",
-    "stage3HoverBgHex": "#16a34a",
-    "stage3PressedBgHex": "#14532d",
-    "customizeAlignAladdinPlanButton": false,
-    "alignAladdinBorderRadius": 6.0,
-    "alignAladdinPaddingV": 8.0,
-    "alignAladdinPaddingH": 14.0,
-    "alignAladdinFontPx": 12.0,
-    "alignAladdinBgHex": "#4338ca",
-    "alignAladdinBorderHex": "#3730a3",
-    "alignAladdinTextHex": "#ffffff",
-    "alignAladdinHoverBgHex": "#4f46e5",
-    "alignAladdinPressedBgHex": "#312e81",
-    "customizeDialogButtons": true,
-    "dialogPrimaryBorderRadius": 6.0,
-    "dialogPrimaryPaddingV": 8.0,
-    "dialogPrimaryPaddingH": 18.0,
-    "dialogPrimaryFontPx": 12.0,
-    "dialogPrimaryBgHex": "#2563eb",
-    "dialogPrimaryBorderHex": "#1d4ed8",
-    "dialogPrimaryTextHex": "#ffffff",
-    "dialogPrimaryHoverBgHex": "#3b82f6",
-    "dialogPrimaryPressedBgHex": "#1e40af",
-    "dialogSecondaryBorderRadius": 6.0,
-    "dialogSecondaryPaddingV": 8.0,
-    "dialogSecondaryPaddingH": 14.0,
-    "dialogSecondaryFontPx": 12.0,
-    "dialogSecondaryBgHex": "#f4f4f4",
-    "dialogSecondaryBorderHex": "#c8c8c8",
-    "dialogSecondaryTextHex": "#2b2b2b",
-    "dialogSecondaryHoverBgHex": "#e8e8e8",
-    "dialogSecondaryPressedBgHex": "#dedede"
+  "mainShellTabOrganizerHeaderGlow" : true,
+  "mainShellTabOrganizerHeaderGlowStrength" : 0.1,
+  "pushButtonDesignPrefs" : {
+    "customizeGeneralRunTab" : true,
+    "customizeStageRunButtons" : true,
+    "generalBorderRadius" : 2.2739727072519798,
+    "generalPaddingV" : 3.9086759384364296,
+    "generalPaddingH" : 3.652967851455897,
+    "generalFontPx" : 12.0,
+    "generalBgHex" : "#f4f4f4",
+    "generalBorderHex" : "#c8c8c8",
+    "generalTextHex" : "#2b2b2b",
+    "generalHoverBgHex" : "#e8e8e8",
+    "generalPressedBgHex" : "#dedede",
+    "stageFontPx" : 12.041095890410958,
+    "stageMinWidth" : 129.68037017404217,
+    "stageMinHeight" : 36.0,
+    "stagePaddingV" : 5.780821604271453,
+    "stagePaddingH" : 10.831049879936323,
+    "stageBorderRadius" : 4.255707936744167,
+    "stage1BgHex" : "#0e7490",
+    "stage1BorderHex" : "#155e75",
+    "stage1HoverBgHex" : "#155e75",
+    "stage1PressedBgHex" : "#164e63",
+    "stage2BgHex" : "#c2410c",
+    "stage2BorderHex" : "#9a3412",
+    "stage2HoverBgHex" : "#9a3412",
+    "stage2PressedBgHex" : "#7c2d12",
+    "stage3BgHex" : "#15803d",
+    "stage3BorderHex" : "#166534",
+    "stage3HoverBgHex" : "#16a34a",
+    "stage3PressedBgHex" : "#14532d",
+    "customizeAlignAladdinPlanButton" : false,
+    "alignAladdinBorderRadius" : 6.0,
+    "alignAladdinPaddingV" : 8.0,
+    "alignAladdinPaddingH" : 14.0,
+    "alignAladdinFontPx" : 12.0,
+    "alignAladdinBgHex" : "#4338ca",
+    "alignAladdinBorderHex" : "#3730a3",
+    "alignAladdinTextHex" : "#ffffff",
+    "alignAladdinHoverBgHex" : "#4f46e5",
+    "alignAladdinPressedBgHex" : "#312e81",
+    "customizeDialogButtons" : true,
+    "dialogPrimaryBorderRadius" : 6.0,
+    "dialogPrimaryPaddingV" : 8.0,
+    "dialogPrimaryPaddingH" : 18.0,
+    "dialogPrimaryFontPx" : 12.0,
+    "dialogPrimaryBgHex" : "#2563eb",
+    "dialogPrimaryBorderHex" : "#1d4ed8",
+    "dialogPrimaryTextHex" : "#ffffff",
+    "dialogPrimaryHoverBgHex" : "#3b82f6",
+    "dialogPrimaryPressedBgHex" : "#1e40af",
+    "dialogSecondaryBorderRadius" : 6.0,
+    "dialogSecondaryPaddingV" : 8.0,
+    "dialogSecondaryPaddingH" : 14.0,
+    "dialogSecondaryFontPx" : 12.0,
+    "dialogSecondaryBgHex" : "#f4f4f4",
+    "dialogSecondaryBorderHex" : "#c8c8c8",
+    "dialogSecondaryTextHex" : "#2b2b2b",
+    "dialogSecondaryHoverBgHex" : "#e8e8e8",
+    "dialogSecondaryPressedBgHex" : "#dedede"
   },
-  "memoryMonitorEnabled": true,
-  "memoryMonitorIntervalSec": 5,
-  "tableRowHoverDimmingEnabled": true,
-  "nextLaunchHeapFixed": false,
-  "nextLaunchHeapMinMiB": 5376,
-  "nextLaunchHeapMaxMiB": 6144,
-  "equipmentStatusDashboardActualDate": "2026-07-05",
-  "equipmentStatusDashboardPlanDate": "2026-07-05",
-  "equipmentStatusDashboardAutoRefreshEnabled": true,
-  "equipmentStatusDashboardAutoRefreshIntervalSec": 300,
-  "equipmentStatusDashboardShowAladdinPlans": true,
-  "equipmentStatusDashboardShowDispatchPlans": true,
-  "equipmentStatusDashboardAppearance": {
-    "columnCount": 0,
-    "cardWidth": 280.0,
-    "fullscreenCardWidthPercent": 121.0,
-    "cardPadding": 12.0,
-    "cardGapH": 12.0,
-    "cardGapV": 12.0,
-    "cardBorderRadius": 8.0,
-    "cardShadowStyle": "MEDIUM",
-    "fontFamily": "Meiryo UI",
-    "machineFontPx": 20.0,
-    "metaFontPx": 17.0,
-    "planFontPx": 18.0,
-    "pctFontPx": 28.0,
-    "chartSizePx": 194.0,
-    "chartDoneColorHex": "#0000ff",
-    "chartRemainColorHex": "#80b3b3",
-    "chartStyle": "FLAT",
-    "chartShadowEnabled": true,
-    "fullscreenTheme": "DARK"
+  "memoryMonitorEnabled" : true,
+  "memoryMonitorIntervalSec" : 5,
+  "nextLaunchHeapFixed" : false,
+  "nextLaunchHeapMinMiB" : 5376,
+  "nextLaunchHeapMaxMiB" : 6144,
+  "equipmentStatusDashboardActualDate" : "2026-07-05",
+  "equipmentStatusDashboardPlanDate" : "2026-07-05",
+  "equipmentStatusDashboardAutoRefreshEnabled" : true,
+  "equipmentStatusDashboardAutoRefreshIntervalSec" : 300,
+  "equipmentStatusDashboardShowAladdinPlans" : true,
+  "equipmentStatusDashboardShowDispatchPlans" : true,
+  "equipmentStatusDashboardAppearance" : {
+    "columnCount" : 0,
+    "cardWidth" : 280.0,
+    "fullscreenCardWidthPercent" : 121.0,
+    "cardPadding" : 12.0,
+    "cardGapH" : 12.0,
+    "cardGapV" : 12.0,
+    "cardBorderRadius" : 8.0,
+    "cardShadowStyle" : "MEDIUM",
+    "fontFamily" : "Meiryo UI",
+    "machineFontPx" : 20.0,
+    "metaFontPx" : 17.0,
+    "planFontPx" : 18.0,
+    "pctFontPx" : 28.0,
+    "chartSizePx" : 194.0,
+    "chartDoneColorHex" : "#0000ff",
+    "chartRemainColorHex" : "#80b3b3",
+    "chartStyle" : "FLAT",
+    "chartShadowEnabled" : true,
+    "fullscreenTheme" : "DARK"
   },
-  "windowWidth": 2574.666748046875,
-  "windowHeight": 1406.6666259765625,
-  "windowX": 0.0,
-  "windowY": 0.0
+  "tableRowHoverDimmingEnabled" : true,
+  "windowWidth" : 2574.666748046875,
+  "windowHeight" : 1406.6666259765625,
+  "windowX" : 0.0,
+  "windowY" : 0.0
 }

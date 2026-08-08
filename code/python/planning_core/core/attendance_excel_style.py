@@ -29,8 +29,6 @@ FONT_SPECIAL = "78350F"
 FONT_HEADER = "475569"
 FONT_BANNER = "1E293B"
 
-GENERIC_PUBLIC_LABELS = frozenset({"公休", "土曜", "日曜", "祝日"})
-
 MONTHS_PER_ROW = 4
 MONTH_BLOCK_W = 8
 MONTH_BAND_H = 9
@@ -52,20 +50,11 @@ def cached_fill(hex6: str) -> PatternFill:
     return fi
 
 
-def is_national_holiday_entry(entry: dict | None) -> bool:
-    if not entry:
-        return False
-    if entry.get("source") == "national_holiday":
-        return True
-    label = (entry.get("label") or "").strip()
-    return bool(label) and label not in GENERIC_PUBLIC_LABELS
-
-
 def company_cell_text(day: int, kind: str, entry: dict | None) -> str:
     if kind == "special_holiday":
         return f"{day}特"
     if kind == "public_holiday":
-        return f"{day}祝" if is_national_holiday_entry(entry) else f"{day}公"
+        return f"{day}公"
     return str(day)
 
 
@@ -73,8 +62,6 @@ def company_cell_style(kind: str, entry: dict | None) -> tuple[PatternFill, Font
     if kind == "special_holiday":
         return cached_fill(FILL_SPECIAL), _result_font(size=9, color=FONT_SPECIAL)
     if kind == "public_holiday":
-        if is_national_holiday_entry(entry):
-            return cached_fill(FILL_NATIONAL), _result_font(size=9, bold=True, color=FONT_PUBLIC)
         return cached_fill(FILL_PUBLIC), _result_font(size=9, color=FONT_PUBLIC)
     return cached_fill(FILL_WORKING), _result_font(size=9, color=FONT_WORKING)
 
@@ -141,8 +128,8 @@ def write_company_calendar_grid(
     c1.alignment = Alignment(horizontal="left", vertical="center")
 
     legend = (
-        "■出勤  ■公休  ■祝日  ■特別休暇"
-        "  — セルは「日」「日公」「日祝」「日特」。編集はアプリの会社カレンダーで行う。"
+        "■出勤  ■公休  ■特別休暇"
+        "  — セルは「日」「日公」「日特」。編集はアプリの会社カレンダーで行う。"
     )
     ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=MONTHS_PER_ROW * MONTH_BLOCK_W - 1)
     ws.cell(2, 1, legend).font = _result_font(size=9, color=FONT_HEADER)
@@ -212,6 +199,7 @@ def write_company_calendar_grid(
 
     ws.freeze_panes = "A5"
     ws.sheet_view.showGridLines = False
+    insert_menu_back_link_row(ws)
 
 
 def format_member_calendar_sheet(
@@ -270,6 +258,7 @@ def format_member_calendar_sheet(
 
     ws.freeze_panes = "B3"
     ws.sheet_view.showGridLines = False
+    insert_menu_back_link_row(ws)
 
 
 def write_member_attendance_flat_table(ws, records: list[dict]) -> None:
@@ -327,3 +316,183 @@ def write_member_attendance_flat_table(ws, records: list[dict]) -> None:
         ws.auto_filter.ref = f"A2:G{row - 1}"
     ws.freeze_panes = "A3"
     ws.sheet_view.showGridLines = False
+
+
+def menu_label_for_sheet(sheet_name: str) -> str:
+    from planning_core.core.attendance_paths import (
+        APP_MASTER_COMPANY_SHEET,
+        APP_MASTER_MACHINE_CALENDAR_DATE_SHEET,
+        APP_MASTER_MACHINE_CALENDAR_SHEET,
+        APP_MASTER_MEMBER_SHEET_PREFIX,
+    )
+
+    name = (sheet_name or "").strip()
+    if name == APP_MASTER_COMPANY_SHEET:
+        return "会社カレンダー"
+    if name == APP_MASTER_MACHINE_CALENDAR_SHEET:
+        return "機械カレンダー"
+    if name == APP_MASTER_MACHINE_CALENDAR_DATE_SHEET:
+        return "機械カレンダー 日付ジャンプ"
+    if name.startswith(APP_MASTER_MEMBER_SHEET_PREFIX):
+        return "メンバー勤怠 " + name[len(APP_MASTER_MEMBER_SHEET_PREFIX):]
+    return name
+
+
+def sort_menu_sheet_names(names: list[str]) -> list[str]:
+    from planning_core.core.attendance_paths import (
+        APP_MASTER_COMPANY_SHEET,
+        APP_MASTER_MACHINE_CALENDAR_DATE_SHEET,
+        APP_MASTER_MACHINE_CALENDAR_SHEET,
+        APP_MASTER_MEMBER_SHEET_PREFIX,
+    )
+
+    def member_sort_key(name: str) -> tuple[int, int, str]:
+        if not name.startswith(APP_MASTER_MEMBER_SHEET_PREFIX):
+            return (0, 0, name)
+        rest = name[len(APP_MASTER_MEMBER_SHEET_PREFIX):]
+        try:
+            year_part, month_part = rest.split("年", 1)
+            month = int(month_part.replace("月", ""))
+            return (int(year_part), month, name)
+        except ValueError:
+            return (0, 0, name)
+
+    company: list[str] = []
+    machine: list[str] = []
+    machine_date: list[str] = []
+    members: list[str] = []
+    other: list[str] = []
+    for name in names:
+        if name == APP_MASTER_COMPANY_SHEET:
+            company.append(name)
+        elif name == APP_MASTER_MACHINE_CALENDAR_SHEET:
+            machine.append(name)
+        elif name == APP_MASTER_MACHINE_CALENDAR_DATE_SHEET:
+            machine_date.append(name)
+        elif name.startswith(APP_MASTER_MEMBER_SHEET_PREFIX):
+            members.append(name)
+        else:
+            other.append(name)
+    members.sort(key=member_sort_key)
+    other.sort()
+    return company + machine + machine_date + members + other
+
+
+def _sheet_hyperlink_target(sheet_name: str) -> str:
+    """Excel 内部リンク（シート名に空白・記号がある場合は単引用符で囲む）。"""
+    safe = (sheet_name or "").replace("'", "''")
+    return f"#'{safe}'!A1"
+
+
+def sheet_hyperlink_to_cell(sheet_name: str, row: int, col: int = 1) -> str:
+    """指定セルへジャンプする内部ハイパーリンク。"""
+    safe = (sheet_name or "").replace("'", "''")
+    return f"#'{safe}'!{get_column_letter(col)}{int(row)}"
+
+
+def write_calendar_workbook_menu_sheet(
+    ws,
+    sheet_names: list[str],
+    export_at: str | None = None,
+) -> None:
+    """勤怠・機械カレンダー.xlsx の先頭メニューシート（各 APP_* シートへのリンク）。"""
+    ws.column_dimensions["A"].width = 34
+    ws.column_dimensions["B"].width = 28
+    ws.column_dimensions["C"].width = 22
+
+    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=3)
+    title = ws.cell(1, 1, "勤怠・機械カレンダー")
+    title.font = _result_font(size=16, bold=True, color=FONT_BANNER)
+    title.alignment = Alignment(horizontal="left", vertical="center")
+
+    ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=3)
+    intro = (
+        "会社カレンダー・メンバー勤怠・機械カレンダーを1ファイルにまとめた閲覧用ブックです。"
+        "下のリンクから各シートへ移動できます。編集はアプリで行い「保存」で反映してください。"
+    )
+    ws.cell(2, 1, intro).font = _result_font(size=9, color=FONT_HEADER)
+    ws.cell(2, 1).alignment = Alignment(horizontal="left", vertical="top", wrap_text=True)
+    ws.row_dimensions[2].height = 36
+
+    if export_at:
+        ws.merge_cells(start_row=3, start_column=1, end_row=3, end_column=3)
+        ws.cell(3, 1, f"最終出力: {export_at}").font = _result_font(size=8, color=FONT_HEADER)
+
+    hdr_row = 5
+    for col, text in enumerate(("移動先", "シート名", "説明"), start=1):
+        cell = ws.cell(hdr_row, col, text)
+        cell.font = _result_font(size=10, bold=True, color=FONT_BANNER)
+        cell.fill = cached_fill(FILL_MONTH_TITLE)
+        cell.alignment = _CENTER
+        cell.border = _GRID_BORDER
+
+    link_font = _result_font(size=11, color="0563C1", underline="single")
+    body_font = _result_font(size=9, color=FONT_HEADER)
+    row = hdr_row + 1
+    for sheet_name in sheet_names:
+        label = menu_label_for_sheet(sheet_name)
+        link_cell = ws.cell(row, 1, label)
+        link_cell.hyperlink = _sheet_hyperlink_target(sheet_name)
+        link_cell.font = link_font
+        link_cell.alignment = Alignment(horizontal="left", vertical="center")
+        link_cell.border = _GRID_BORDER
+
+        name_cell = ws.cell(row, 2, sheet_name)
+        name_cell.font = body_font
+        name_cell.alignment = Alignment(horizontal="left", vertical="center")
+        name_cell.border = _GRID_BORDER
+
+        hint = ""
+        from planning_core.core.attendance_paths import (
+            APP_MASTER_COMPANY_SHEET,
+            APP_MASTER_MACHINE_CALENDAR_DATE_SHEET,
+            APP_MASTER_MACHINE_CALENDAR_SHEET,
+            APP_MASTER_MEMBER_SHEET_PREFIX,
+        )
+
+        if sheet_name == APP_MASTER_COMPANY_SHEET:
+            hint = "年度の公休・出勤日"
+        elif sheet_name == APP_MASTER_MACHINE_CALENDAR_SHEET:
+            hint = "設備の稼働可否（30分刻み）"
+        elif sheet_name == APP_MASTER_MACHINE_CALENDAR_DATE_SHEET:
+            hint = "月カレンダーで日付を選び表へジャンプ"
+        elif sheet_name.startswith(APP_MASTER_MEMBER_SHEET_PREFIX):
+            hint = "メンバー別の日次勤怠"
+        desc_cell = ws.cell(row, 3, hint)
+        desc_cell.font = body_font
+        desc_cell.alignment = Alignment(horizontal="left", vertical="center")
+        desc_cell.border = _GRID_BORDER
+
+        ws.row_dimensions[row].height = 20
+        row += 1
+
+    ws.freeze_panes = f"A{hdr_row + 1}"
+    ws.sheet_view.showGridLines = False
+
+
+def shift_freeze_panes_down(ws, rows: int = 1) -> None:
+    """insert_rows 後に freeze_panes の行番号をずらす。"""
+    if rows <= 0:
+        return
+    fp = ws.freeze_panes
+    if fp is None:
+        return
+    if isinstance(fp, str):
+        from openpyxl.utils import coordinate_to_tuple, get_column_letter
+
+        col, row = coordinate_to_tuple(fp)
+        ws.freeze_panes = f"{get_column_letter(col)}{row + rows}"
+
+
+def insert_menu_back_link_row(ws, menu_sheet_name: str | None = None) -> None:
+    """各 APP_* シート先頭にメニューへ戻るハイパーリンク行を挿入する。"""
+    from planning_core.core.attendance_paths import APP_MASTER_MENU_SHEET
+
+    menu = (menu_sheet_name or APP_MASTER_MENU_SHEET).strip()
+    ws.insert_rows(1)
+    ws.row_dimensions[1].height = 18
+    cell = ws.cell(1, 1, "メニューに戻る")
+    cell.hyperlink = _sheet_hyperlink_target(menu)
+    cell.font = _result_font(size=9, color="0563C1", underline="single")
+    cell.alignment = Alignment(horizontal="left", vertical="center")
+    shift_freeze_panes_down(ws, 1)

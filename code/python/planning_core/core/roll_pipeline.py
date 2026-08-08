@@ -4302,80 +4302,70 @@ def _try_load_machine_calendar_blocks_from_json(
     equipment_list: list,
     *,
     interactive_only_asterisk_occupancy: bool = False,
-) -> dict[date, dict[str, list[tuple[datetime, datetime]]]] | None:
-    """JSON 正本があれば占有ブロックを返す。無ければ None（master フォールバック）。"""
+    context_label: str = "配台",
+) -> dict[date, dict[str, list[tuple[datetime, datetime]]]]:
+    """JSON 正本から占有ブロックを読み込む。不備時は PlanningValidationError。"""
     global _MACHINE_CALENDAR_INTERACTIVE_DEFINED_SLOTS_BY_DATE
-    try:
-        from planning_core.core.machine_calendar_paths import machine_calendar_data_json_path
-        from planning_core.core.machine_calendar_store import (
-            load_machine_calendar_store,
-            occupancy_blocks_from_store,
-            store_has_machine_calendar_data,
-        )
+    from planning_core.core.machine_calendar_store import (
+        load_machine_calendar_store,
+        occupancy_blocks_from_store,
+        require_machine_calendar_json_for_dispatch,
+    )
 
-        jp = machine_calendar_data_json_path()
-        if not jp.is_file():
-            return None
-        store = load_machine_calendar_store(jp)
-        if not store_has_machine_calendar_data(store):
-            return None
+    jp = require_machine_calendar_json_for_dispatch(context_label)
+    store = load_machine_calendar_store(jp)
+    try:
         out, interactive_defined = occupancy_blocks_from_store(
             store,
             equipment_list,
             interactive_only_asterisk_occupancy=interactive_only_asterisk_occupancy,
         )
-        if interactive_only_asterisk_occupancy:
-            _MACHINE_CALENDAR_INTERACTIVE_DEFINED_SLOTS_BY_DATE = dict(interactive_defined)
-        else:
-            _MACHINE_CALENDAR_INTERACTIVE_DEFINED_SLOTS_BY_DATE = {}
-        logging.info(
-            "機械カレンダー: JSON 正本を読み込みました（%s、%d 日分）。",
-            jp,
-            len(out),
-        )
-        return out
     except Exception as e:
-        logging.warning(
-            "機械カレンダー JSON 読込失敗のため master へフォールバックします (%s)", e
-        )
-        return None
+        raise PlanningValidationError(
+            f"{context_label}: machine-calendar-data.json から占有ブロックを構築できません ({e})。"
+            f" パス: {jp}"
+        ) from e
+    if interactive_only_asterisk_occupancy:
+        _MACHINE_CALENDAR_INTERACTIVE_DEFINED_SLOTS_BY_DATE = dict(interactive_defined)
+    else:
+        _MACHINE_CALENDAR_INTERACTIVE_DEFINED_SLOTS_BY_DATE = {}
+    logging.info(
+        "機械カレンダー: JSON 正本を読み込みました（%s、%d 日分）。",
+        jp,
+        len(out),
+    )
+    return out
+
+
 def load_machine_calendar_occupancy_blocks(
     master_path: str,
     equipment_list: list,
     *,
     interactive_only_asterisk_occupancy: bool = False,
+    context_label: str | None = None,
 ) -> dict[date, dict[str, list[tuple[datetime, datetime]]]]:
     """
-    機械カレンダー占有ブロックを読み込む。
+    機械カレンダー占有ブロックを machine-calendar-data.json 正本から読み込む。
 
-    優先順: machine-calendar-data.json（正本）→ master.xlsm「機械カレンダー」（互換）。
-    戻り: 日付 -> equipment_list のキー -> 半開区間 [start, end) のリスト（マージ済み）。
+    master.xlsm「機械カレンダー」シートへのフォールバックは行わない。
+    JSON が無い・未整備・読込失敗時は PlanningValidationError で停止する。
 
     interactive_only_asterisk_occupancy:
-        True のとき（配台試行）非空セルのうち * / ＊ / ※ のみを占有とする。数値・他文字は無視。
-        列0にスロット行が無い時刻（工場計画窓内）はブロックとみなす（`_interactive_augment_machine_calendar_day_blocks`）。
+        True のとき（配台試行）非空セルのうち * / ＊ / ※ のみを占有とする。
+        列0にスロット行が無い時刻（工場計画窓内）はブロックとみなす。
     """
     global _MACHINE_CALENDAR_INTERACTIVE_DEFINED_SLOTS_BY_DATE
-    json_blocks = _try_load_machine_calendar_blocks_from_json(
-        equipment_list,
-        interactive_only_asterisk_occupancy=interactive_only_asterisk_occupancy,
-    )
-    if json_blocks is not None:
-        return json_blocks
-
-    _MACHINE_CALENDAR_INTERACTIVE_DEFINED_SLOTS_BY_DATE = {}
-    if not master_path or not os.path.isfile(master_path):
-        return {}
-    # region stage2 cache
     global _STAGE2_MACHINE_CALENDAR_CACHE
+    from planning_core.core.machine_calendar_store import require_machine_calendar_json_for_dispatch
+
+    ctx = (context_label or "配台").strip()
+    jp = require_machine_calendar_json_for_dispatch(ctx)
+    eq_sig = ",".join(sorted(str(x).strip() for x in (equipment_list or []) if str(x).strip()))
     sig = None
     try:
-        st = os.stat(master_path)
-        eq_sig = ",".join(
-            sorted(str(x).strip() for x in (equipment_list or []) if str(x).strip())
-        )
+        st = os.stat(jp)
         sig = (
-            os.path.abspath(master_path),
+            str(jp.resolve()),
             int(st.st_mtime),
             int(st.st_size),
             hashlib.sha256(eq_sig.encode("utf-8")).hexdigest(),
@@ -4391,185 +4381,14 @@ def load_machine_calendar_occupancy_blocks(
             else:
                 _MACHINE_CALENDAR_INTERACTIVE_DEFINED_SLOTS_BY_DATE = {}
             return _STAGE2_MACHINE_CALENDAR_CACHE.get("value") or {}
-    except Exception:
+    except OSError:
         sig = None
-    # endregion stage2 cache
-    try:
-        xls = _cached_master_pd_excel_file(master_path)
-        if xls is None:
-            out0 = {}
-            # region stage2 cache
-            try:
-                if sig is not None:
-                    _STAGE2_MACHINE_CALENDAR_CACHE = {
-                        "sig": sig,
-                        "value": out0,
-                        "interactive_defined": {},
-                    }
-            except Exception:
-                pass
-            # endregion stage2 cache
-            return out0
-        if SHEET_MACHINE_CALENDAR not in xls.sheet_names:
-            out0 = {}
-            # region stage2 cache
-            try:
-                if sig is not None:
-                    _STAGE2_MACHINE_CALENDAR_CACHE = {
-                        "sig": sig,
-                        "value": out0,
-                        "interactive_defined": {},
-                    }
-            except Exception:
-                pass
-            # endregion stage2 cache
-            return out0
-        raw = pd.read_excel(xls, sheet_name=SHEET_MACHINE_CALENDAR, header=None)
-    except Exception as e:
-        logging.warning("機械カレンダー: シート読込をスキップしました (%s)", e)
-        out0 = {}
-        # region stage2 cache
-        try:
-            if sig is not None:
-                _STAGE2_MACHINE_CALENDAR_CACHE = {
-                    "sig": sig,
-                    "value": out0,
-                    "interactive_defined": {},
-                }
-        except Exception:
-            pass
-        # endregion stage2 cache
-        return out0
-    if raw.shape[0] < 3 or raw.shape[1] < 3:
-        out0 = {}
-        # region stage2 cache
-        try:
-            if sig is not None:
-                _STAGE2_MACHINE_CALENDAR_CACHE = {
-                    "sig": sig,
-                    "value": out0,
-                    "interactive_defined": {},
-                }
-        except Exception:
-            pass
-        # endregion stage2 cache
-        return out0
 
-    ncols = raw.shape[1]
-    non_empty_pm = 0
-    for c in range(2, ncols):
-        p = raw.iat[0, c]
-        m = raw.iat[1, c]
-        if pd.isna(p) or pd.isna(m):
-            continue
-        p_s = str(p).strip()
-        m_s = str(m).strip()
-        if p_s and m_s and p_s.lower() != "nan" and m_s.lower() != "nan":
-            non_empty_pm += 1
-    use_two_header = non_empty_pm > 0
-
-    eq_lookup = _equipment_lookup_normalized_to_canonical(equipment_list)
-    elist_set = set(str(x).strip() for x in equipment_list if str(x).strip())
-    col_to_eq: dict[int, str] = {}
-    for c in range(2, ncols):
-        p = raw.iat[0, c]
-        m = raw.iat[1, c] if use_two_header else None
-        if use_two_header:
-            if pd.isna(p) or pd.isna(m):
-                continue
-            p_s = str(p).strip()
-            m_s = str(m).strip()
-            if not p_s or not m_s or p_s.lower() == "nan" or m_s.lower() == "nan":
-                continue
-        else:
-            if pd.isna(p):
-                continue
-            p_s = str(p).strip()
-            if not p_s or p_s.lower() == "nan":
-                continue
-            m_s = ""
-        canon = _machine_cal_resolve_column_to_equipment_key(
-            p_s, m_s, eq_lookup, elist_set
-        )
-        if canon:
-            col_to_eq[c] = canon
-
-    if not col_to_eq:
-        out0 = {}
-        # region stage2 cache
-        try:
-            if sig is not None:
-                _STAGE2_MACHINE_CALENDAR_CACHE = {
-                    "sig": sig,
-                    "value": out0,
-                    "interactive_defined": {},
-                }
-        except Exception:
-            pass
-        # endregion stage2 cache
-        return out0
-
-    defined_slot_windows_by_day = defaultdict(list)
-    acc: dict[date, dict[str, list[tuple[datetime, datetime]]]] = defaultdict(
-        lambda: defaultdict(list)
+    out = _try_load_machine_calendar_blocks_from_json(
+        equipment_list,
+        interactive_only_asterisk_occupancy=interactive_only_asterisk_occupancy,
+        context_label=ctx,
     )
-    for r in range(2, raw.shape[0]):
-        slot0 = _machine_cal_parse_slot_datetime(raw.iat[r, 0])
-        if slot0 is None:
-            continue
-        try:
-            day_d = slot0.date()
-        except Exception:
-            continue
-        slot_end_row = slot0 + timedelta(minutes=MACHINE_CALENDAR_SLOT_MINUTES)
-        _clipped_row = _clip_machine_calendar_slot_to_factory_window(
-            day_d, slot0, slot_end_row
-        )
-        if _clipped_row:
-            defined_slot_windows_by_day[day_d].append(_clipped_row)
-        for c, eq_key in col_to_eq.items():
-            if c >= raw.shape[1]:
-                continue
-            cell = raw.iat[r, c]
-            if interactive_only_asterisk_occupancy:
-                if not _machine_cal_cell_is_asterisk_occupancy_only(cell):
-                    continue
-            elif not _machine_cal_cell_is_occupied(cell):
-                continue
-            slot_start = slot0
-            slot_end = slot_start + timedelta(minutes=MACHINE_CALENDAR_SLOT_MINUTES)
-            _clipped_mc = _clip_machine_calendar_slot_to_factory_window(
-                day_d, slot_start, slot_end
-            )
-            if _clipped_mc is None:
-                continue
-            slot_start, slot_end = _clipped_mc
-            acc[day_d][eq_key].append((slot_start, slot_end))
-
-    out: dict[date, dict[str, list[tuple[datetime, datetime]]]] = {}
-    for d, eqmap in acc.items():
-        merged_eq = {
-            eq: _merge_machine_calendar_intervals(iv)
-            for eq, iv in eqmap.items()
-            if iv
-        }
-        phys_accum: dict[str, list] = defaultdict(list)
-        for eq, iv in merged_eq.items():
-            pk = _equipment_line_key_to_physical_occupancy_key(str(eq).strip())
-            if pk:
-                phys_accum[pk].extend(iv)
-        merged_all = dict(merged_eq)
-        for pk, iv in phys_accum.items():
-            merged_all[pk] = _merge_machine_calendar_intervals(iv)
-        out[d] = merged_all
-    if interactive_only_asterisk_occupancy:
-        _MACHINE_CALENDAR_INTERACTIVE_DEFINED_SLOTS_BY_DATE = {
-            d: _merge_machine_calendar_intervals(vs)
-            for d, vs in defined_slot_windows_by_day.items()
-        }
-    else:
-        _MACHINE_CALENDAR_INTERACTIVE_DEFINED_SLOTS_BY_DATE = {}
-    # region stage2 cache
     try:
         if sig is not None:
             _STAGE2_MACHINE_CALENDAR_CACHE = {
@@ -4579,8 +4398,9 @@ def load_machine_calendar_occupancy_blocks(
             }
     except Exception:
         pass
-    # endregion stage2 cache
     return out
+
+
 def _apply_machine_calendar_floor_for_date(
     current_date: date,
     machine_avail_dt: dict,
@@ -7691,7 +7511,8 @@ def _validate_master_dispatch_prerequisites(
 ) -> None:
     """
     段階2標準・段階3（段階2同一パリティ）の master 前提。
-    配台「できない」唯一の理由は master 上で機械カレンダー・人の勤怠が未作成であることのみ。
+    機械カレンダーは machine-calendar-data.json 正本が必須（master シートは使用しない）。
+    人の勤怠は master.xlsm 上のメンバーシートが必須。
     """
     xls = _cached_master_pd_excel_file(master_path)
     if xls is None:
@@ -7730,108 +7551,22 @@ def _validate_master_dispatch_prerequisites(
             " master.xlsm で各メンバーの勤怠シートを作成し、日付行を入力してから実行してください。"
         )
 
-    if SHEET_MACHINE_CALENDAR not in xls.sheet_names:
-        from planning_core.core.machine_calendar_paths import machine_calendar_data_json_path
-        from planning_core.core.machine_calendar_store import (
-            load_machine_calendar_store,
-            validate_store_for_dispatch,
+    from planning_core.core.machine_calendar_store import require_machine_calendar_json_for_dispatch
+
+    require_machine_calendar_json_for_dispatch(context_label)
+    if equipment_list:
+        blocks = load_machine_calendar_occupancy_blocks(
+            master_path,
+            equipment_list,
+            interactive_only_asterisk_occupancy=False,
+            context_label=context_label,
         )
-
-        jp = machine_calendar_data_json_path()
-        if jp.is_file() and validate_store_for_dispatch(load_machine_calendar_store(jp)):
-            pass
-        else:
-            raise PlanningValidationError(
-                f"{context_label}: 機械カレンダーが作成されていません。"
-                " アプリの機械カレンダータブで JSON を用意するか、"
-                " master.xlsm で VBA「機械カレンダーを作成」を実行してください。"
+        if not blocks:
+            logging.info(
+                "%s: 機械カレンダー JSON は存在しますが、skills の設備列と一致する列がありません。"
+                " 占有ブロックは空として続行します。",
+                context_label,
             )
-    if SHEET_MACHINE_CALENDAR in xls.sheet_names:
-        try:
-            raw = pd.read_excel(xls, sheet_name=SHEET_MACHINE_CALENDAR, header=None)
-        except Exception as e:
-            raise PlanningValidationError(
-                f"{context_label}: 機械カレンダーが読み込めません。"
-                f" ({e})"
-            ) from e
-        if raw.shape[0] < 3 or raw.shape[1] < 3:
-            from planning_core.core.machine_calendar_paths import machine_calendar_data_json_path
-            from planning_core.core.machine_calendar_store import (
-                load_machine_calendar_store,
-                validate_store_for_dispatch,
-            )
-
-            jp = machine_calendar_data_json_path()
-            if not (
-                jp.is_file()
-                and validate_store_for_dispatch(load_machine_calendar_store(jp))
-            ):
-                raise PlanningValidationError(
-                    f"{context_label}: 機械カレンダーが作成されていません（シートが空または未構成）。"
-                    " アプリの機械カレンダータブまたは VBA「機械カレンダーを作成」で用意してください。"
-                )
-        else:
-            slot_rows = 0
-            for r in range(2, raw.shape[0]):
-                if _machine_cal_parse_slot_datetime(raw.iat[r, 0]) is not None:
-                    slot_rows += 1
-            header_pairs = 0
-            for c in range(2, raw.shape[1]):
-                p = raw.iat[0, c]
-                m = raw.iat[1, c] if raw.shape[0] > 1 else None
-                if pd.isna(p) or pd.isna(m):
-                    continue
-                p_s = str(p).strip()
-                m_s = str(m).strip()
-                if p_s and m_s and p_s.lower() != "nan" and m_s.lower() != "nan":
-                    header_pairs += 1
-            if slot_rows == 0 or header_pairs == 0:
-                raise PlanningValidationError(
-                    f"{context_label}: 機械カレンダーが作成されていません"
-                    "（日時スロット行または設備列がありません）。"
-                    " アプリの機械カレンダータブまたは VBA「機械カレンダーを作成」で用意してください。"
-                )
-            if equipment_list:
-                blocks = load_machine_calendar_occupancy_blocks(
-                    master_path,
-                    equipment_list,
-                    interactive_only_asterisk_occupancy=False,
-                )
-                if not blocks and slot_rows > 0 and header_pairs > 0:
-                    logging.info(
-                        "%s: 機械カレンダーは存在しますが、skills の設備列と一致する列がありません。"
-                        " 占有ブロックは空として続行します。",
-                        context_label,
-                    )
-        return
-
-    from planning_core.core.machine_calendar_paths import machine_calendar_data_json_path
-    from planning_core.core.machine_calendar_store import (
-        load_machine_calendar_store,
-        validate_store_for_dispatch,
-    )
-
-    jp = machine_calendar_data_json_path()
-    if jp.is_file() and validate_store_for_dispatch(load_machine_calendar_store(jp)):
-        if equipment_list:
-            blocks = load_machine_calendar_occupancy_blocks(
-                master_path,
-                equipment_list,
-                interactive_only_asterisk_occupancy=False,
-            )
-            if not blocks:
-                logging.info(
-                    "%s: 機械カレンダー JSON は存在しますが、skills の設備列と一致する列がありません。"
-                    " 占有ブロックは空として続行します。",
-                    context_label,
-                )
-        return
-
-    raise PlanningValidationError(
-        f"{context_label}: 機械カレンダーが作成されていません。"
-        " アプリの機械カレンダータブで JSON を用意するか、"
-        " master.xlsm で VBA「機械カレンダーを作成」を実行してください。"
-    )
 
 
 def _validate_stage3_master_prerequisites(

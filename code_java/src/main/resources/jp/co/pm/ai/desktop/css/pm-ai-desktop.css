@@ -348,6 +348,10 @@
     -fx-text-fill: #e0f2fe;
 }
 
+.button.pm-aladdin-entry-export-attention:disabled {
+    -fx-opacity: 1.0;
+}
+
 .button.pm-aladdin-entry-open-button {
     -fx-font-weight: bold;
 }
@@ -1313,22 +1317,67 @@
     -fx-padding: 2 4 2 4;
 }
 
+.pm-machine-calendar-grid-loading .scroll-pane {
+    -fx-opacity: 0.42;
+}
+
+.pm-machine-calendar-grid-loading-overlay {
+    -fx-background-color: rgba(0, 0, 0, 0.38);
+}
+
 .pm-machine-calendar-grid-legend {
     -fx-font-size: 11px;
 }
 
 .pm-machine-calendar-grid-header {
-    -fx-font-size: 10px;
     -fx-font-weight: bold;
+    -fx-alignment: center;
+    -fx-text-alignment: center;
+    -fx-padding: 2 4;
 }
 
 .pm-machine-calendar-grid-time {
-    -fx-font-size: 10px;
     -fx-alignment: center;
 }
 
+.pm-machine-calendar-grid-header-interactive {
+    -fx-cursor: hand;
+}
+
+.pm-machine-calendar-grid-header-interactive:hover {
+    -fx-background-color: rgba(255, 255, 255, 0.08);
+}
+
+.pm-machine-calendar-legend-available {
+    -fx-background-color: #dcfce7;
+    -fx-text-fill: #14532d;
+}
+
+.pm-machine-calendar-legend-occupied {
+    -fx-background-color: rgba(192, 132, 252, 0.55);
+    -fx-text-fill: #4c1d95;
+}
+
+.pm-machine-calendar-grid .pm-machine-calendar-cell {
+    -fx-padding: 0;
+    -fx-background-insets: 0;
+    -fx-border-insets: 0;
+    -fx-focus-color: transparent;
+    -fx-faint-focus-color: transparent;
+}
+
+.pm-machine-calendar-cell-available {
+    -fx-background-color: #dcfce7;
+    -fx-text-fill: #14532d;
+}
+
 .pm-machine-calendar-cell-occupied {
-    -fx-background-color: rgba(192, 132, 252, 0.45);
+    -fx-background-color: rgba(192, 132, 252, 0.55);
+    -fx-text-fill: #4c1d95;
+}
+
+.pm-machine-calendar-cell-comment-mark {
+    -fx-fill: #f59e0b;
 }
 
 .pm-member-attendance-grid-member {

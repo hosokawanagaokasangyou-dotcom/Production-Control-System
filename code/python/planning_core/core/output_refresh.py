@@ -264,16 +264,11 @@ def refresh_equipment_gantt_actual_detail_only() -> str:
             raise PlanningValidationError(
                 "実績明細ガントのみ更新を中断しました: メンバーが0人です（マスタ skills を確認してください）。"
             )
-        try:
-            _MACHINE_CALENDAR_BLOCKS_BY_DATE = load_machine_calendar_occupancy_blocks(
-                master_abs,
-                equipment_list,
-            )
-        except Exception as e:
-            logging.warning(
-                "機械カレンダー: 読込例外のため占有なしとして続行します (%s)", e
-            )
-            _MACHINE_CALENDAR_BLOCKS_BY_DATE = {}
+        _MACHINE_CALENDAR_BLOCKS_BY_DATE = load_machine_calendar_occupancy_blocks(
+            master_abs,
+            equipment_list,
+            context_label="実績明細ガント",
+        )
         try:
             (
                 _STAGE2_MACHINE_DAILY_STARTUP_MIN_BY_MACHINE,
@@ -1195,16 +1190,11 @@ def write_plan_actual_compare_gantt_from_snapshot_dir(snapshot_dir: str) -> str:
             raise PlanningValidationError(
                 "計画実績比較ガント: メンバーが0人です（マスタ skills を確認してください）。"
             )
-        try:
-            _MACHINE_CALENDAR_BLOCKS_BY_DATE = load_machine_calendar_occupancy_blocks(
-                master_abs,
-                equipment_list,
-            )
-        except Exception as e:
-            logging.warning(
-                "計画実績比較ガント: 機械カレンダー読込例外のため占有なし (%s)", e
-            )
-            _MACHINE_CALENDAR_BLOCKS_BY_DATE = {}
+        _MACHINE_CALENDAR_BLOCKS_BY_DATE = load_machine_calendar_occupancy_blocks(
+            master_abs,
+            equipment_list,
+            context_label="計画実績比較ガント",
+        )
         try:
             (
                 _STAGE2_MACHINE_DAILY_STARTUP_MIN_BY_MACHINE,

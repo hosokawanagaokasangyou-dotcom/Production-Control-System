@@ -33,7 +33,7 @@ public final class MemberAttendanceCellCommentDialog {
         stage.initModality(Modality.WINDOW_MODAL);
         stage.setTitle(member + " — " + dateKey + " コメント");
 
-        Label hint = new Label("セルに付けるメモ（配台・休暇区分とは別に保存されます）");
+        Label hint = new Label("セルに付けるメモ（占有・勤怠区分とは別に保存されます）");
         hint.setWrapText(true);
 
         TextArea area = new TextArea(initialComment != null ? initialComment : "");

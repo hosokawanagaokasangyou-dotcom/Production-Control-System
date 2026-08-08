@@ -229,12 +229,6 @@ public class CompanyCalendarTabController {
         }
     }
 
-    public void refreshRowHoverDimming() {
-        if (calendarPane != null) {
-            calendarPane.refreshRowHoverDimming();
-        }
-    }
-
     public void syncGridCellSizeSpinner(int px) {
         if (cellSizeSpinner == null) {
             return;
@@ -696,7 +690,7 @@ public class CompanyCalendarTabController {
         Path path = AppPaths.attendanceCalendarXlsxPath(shell.snapshotUiEnv());
         if (!Files.isRegularFile(path)) {
             shell.showWarningDialog(
-                    "勤怠カレンダーを開く",
+                    "勤怠・機械カレンダーを開く",
                     "ファイルが見つかりません。\n"
                             + path
                             + "\n「保存」で 勤怠カレンダー.xlsx を出力してから開いてください。");
@@ -704,7 +698,7 @@ public class CompanyCalendarTabController {
         }
         if (!shell.openAttendanceCalendarXlsxInDesktop("[company-calendar]")) {
             shell.showErrorDialog(
-                    "勤怠カレンダーを開く",
+                    "勤怠・機械カレンダーを開く",
                     "ファイルを開けませんでした。\n" + path);
         }
     }

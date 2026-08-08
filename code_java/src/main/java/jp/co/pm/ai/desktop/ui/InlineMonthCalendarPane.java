@@ -7,6 +7,7 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.TextStyle;
 import java.time.temporal.WeekFields;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 
 import javafx.beans.property.ObjectProperty;
@@ -34,6 +35,8 @@ public final class InlineMonthCalendarPane extends VBox {
             new SimpleObjectProperty<>(YearMonth.now());
 
     private final boolean monthOnly;
+    private boolean companyCalendarMode = false;
+    private Map<LocalDate, CompanyCalendarDayVisual.DayInfo> companyCalendarDays = Map.of();
     private final Label monthLabel = new Label();
     private final Button prevButton = new Button("◀");
     private final Button nextButton = new Button("▶");
@@ -97,6 +100,30 @@ public final class InlineMonthCalendarPane extends VBox {
                 });
 
         refreshView();
+    }
+
+    /** true のとき日セルを会社カレンダー色・表記で表示する（編集不可・選択のみ）。 */
+    public void setCompanyCalendarMode(boolean enabled) {
+        companyCalendarMode = enabled;
+        toggleStyleClass(this, "pm-company-calendar", enabled);
+        refreshView();
+    }
+
+    public void setCompanyCalendarDays(Map<LocalDate, CompanyCalendarDayVisual.DayInfo> days) {
+        companyCalendarDays = days != null ? Map.copyOf(days) : Map.of();
+        if (companyCalendarMode && !monthOnly) {
+            refreshView();
+        }
+    }
+
+    private static void toggleStyleClass(javafx.scene.Node node, String styleClass, boolean add) {
+        if (add) {
+            if (!node.getStyleClass().contains(styleClass)) {
+                node.getStyleClass().add(styleClass);
+            }
+        } else {
+            node.getStyleClass().remove(styleClass);
+        }
     }
 
     public ObjectProperty<LocalDate> selectedDateProperty() {
@@ -184,6 +211,10 @@ public final class InlineMonthCalendarPane extends VBox {
             Button cell = new Button(Integer.toString(day));
             cell.getStyleClass().add("pm-inline-month-calendar-day");
             cell.setMaxWidth(Double.MAX_VALUE);
+            if (companyCalendarMode) {
+                CompanyCalendarDayVisual.DayInfo entry = companyCalendarDays.get(date);
+                CompanyCalendarDayVisual.applyToDayButton(cell, date, entry);
+            }
             if (date.equals(today)) {
                 cell.getStyleClass().add("pm-inline-month-calendar-day-today");
             }

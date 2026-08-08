@@ -3,8 +3,13 @@
 
 from __future__ import annotations
 
+from planning_core.core.attendance_paths import ENV_ATTENDANCE_JSON
 from planning_core.core.attendance_readiness import build_attendance_readiness
 from planning_core.core.attendance_store import empty_store
+from planning_core.core.machine_calendar_paths import ENV_MACHINE_CALENDAR_JSON
+from planning_core.core.machine_calendar_store import apply_machine_calendar_patch
+
+NEED_COLS = [{"equipment_key": "EC+EC機", "process": "EC", "machine": "EC機"}]
 
 
 def test_readiness_not_ready_without_json():
@@ -14,16 +19,35 @@ def test_readiness_not_ready_without_json():
     assert result["issues"]
 
 
-def test_readiness_ready_with_members_synced():
+def test_readiness_ready_with_members_synced(tmp_path, monkeypatch):
     store = empty_store(2026)
+    store["meta"]["company_calendar_revision"] = 1
     store["company_calendar"]["days"]["2026-08-06"] = {"kind": "public", "label": "休"}
     members = ["A"]
     from planning_core.core.attendance_store import apply_company_calendar_to_members
 
     apply_company_calendar_to_members(store, members, 2026, 8)
+    att = tmp_path / "attendance-data.json"
+    monkeypatch.setenv(ENV_ATTENDANCE_JSON, str(att))
+    from planning_core.core.attendance_store import save_attendance_store
+
+    save_attendance_store(store, att)
+    mc = tmp_path / "machine-calendar-data.json"
+    from planning_core.core.machine_calendar_store import initialize_machine_calendar_defaults, save_machine_calendar_store
+    from planning_core.core.machine_calendar_store import empty_store as mc_empty
+
+    mc_store = mc_empty()
+    initialize_machine_calendar_defaults(mc_store, 2026, NEED_COLS, start_month=4, start_day=1)
+    apply_machine_calendar_patch(
+        mc_store,
+        {"date": "2026-08-01", "rows": [{"slot": "2026-08-01T09:00:00", "cells": {"EC+EC機": "*"}}]},
+    )
+    save_machine_calendar_store(mc_store, mc)
+    monkeypatch.setenv(ENV_MACHINE_CALENDAR_JSON, str(mc))
     result = build_attendance_readiness(store=store, members=members, year=2026, month=8)
     assert result["member_cells_in_month"] == 31
     assert result["member_cells_expected_in_month"] == 31
+    assert result["planning_stages_ready"]
     assert not any("未登録" in issue for issue in result["issues"])
 
 

@@ -138,6 +138,9 @@ def run_stage1_extract():
     JSON を使わない場合に限り ``PM_AI_PLAN_INPUT_PATH`` が Excel ブック実ファイルのとき、そのブックへ
     ``run_exclude_rules_sheet_maintenance``（行同期・D→E）を行う。
     """
+    from planning_core.core.attendance_readiness import require_calendar_json_for_planning_stages
+
+    require_calendar_json_for_planning_stages("段階1")
     resolve_processing_plan_path_from_env()
     _proc_plan = (os.environ.get(ENV_PROCESSING_PLAN_PATH) or "").strip()
     _has_processing_plan = bool(_proc_plan and os.path.isfile(_proc_plan))

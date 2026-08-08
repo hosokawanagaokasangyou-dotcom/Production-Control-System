@@ -2624,8 +2624,14 @@ public final class AppPaths {
     /** 勤怠 JSON 世代保持上限（固定）。 */
     public static final int ATTENDANCE_JSON_HISTORY_MAX_GENERATIONS = 20;
 
-    /** 勤怠カレンダー Excel（master.xlsm と同一フォルダ）。 */
-    public static final String ATTENDANCE_CALENDAR_XLSX_FILENAME = "勤怠カレンダー.xlsx";
+    /** 勤怠・機械カレンダー Excel（master.xlsm と同一フォルダ）。 */
+    public static final String ATTENDANCE_CALENDAR_XLSX_FILENAME = "勤怠・機械カレンダー.xlsx";
+
+    /** 旧ファイル名（読込フォールバック用・マクロ不要のため新規出力は xlsx）。 */
+    public static final String ATTENDANCE_CALENDAR_XLSM_FILENAME = "勤怠・機械カレンダー.xlsm";
+
+    /** 旧ファイル名（読込フォールバック用）。 */
+    public static final String ATTENDANCE_CALENDAR_XLSX_LEGACY_FILENAME = "勤怠カレンダー.xlsx";
 
     public static final String KEY_PM_AI_ATTENDANCE_CALENDAR_XLSX =
             "PM_AI_ATTENDANCE_CALENDAR_XLSX";
@@ -2641,6 +2647,24 @@ public final class AppPaths {
             "attendance-calendar-xlsx-history";
 
     public static final int ATTENDANCE_CALENDAR_XLSX_HISTORY_MAX_GENERATIONS = 20;
+
+  /** 機械カレンダー正本 JSON ファイル名。 */
+    public static final String MACHINE_CALENDAR_DATA_JSON_FILENAME =
+            "machine-calendar-data.json";
+
+    public static final String KEY_PM_AI_MACHINE_CALENDAR_JSON = "PM_AI_MACHINE_CALENDAR_JSON";
+
+    public static final String KEY_PM_AI_MACHINE_CALENDAR_HISTORY_DIR =
+            "PM_AI_MACHINE_CALENDAR_HISTORY_DIR";
+
+    public static final String KEY_PM_AI_MACHINE_CALENDAR_HISTORY_MAX =
+            "PM_AI_MACHINE_CALENDAR_HISTORY_MAX";
+
+    /** 機械カレンダー JSON 世代管理フォルダ名（正本 JSON と同階層）。 */
+    public static final String MACHINE_CALENDAR_JSON_HISTORY_DIR_NAME =
+            "machine-calendar-json-history";
+
+    public static final int MACHINE_CALENDAR_JSON_HISTORY_MAX_GENERATIONS = 20;
 
     /**
      * 勤怠正本 JSON の絶対パス（親は {@link #summaryAiDispatchXlsxPath(Map)} と同一フォルダ）。
@@ -2678,6 +2702,26 @@ public final class AppPaths {
     }
 
     /**
+     * 機械カレンダー正本 JSON の絶対パス（既定は {@link #attendanceDataJsonPath(Map)} と同一フォルダ）。
+     */
+    public static Path machineCalendarDataJsonPath(Map<String, String> ui) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        String explicit = u.get(KEY_PM_AI_MACHINE_CALENDAR_JSON);
+        if (explicit != null && !explicit.isBlank()) {
+            return Path.of(explicit.trim()).toAbsolutePath().normalize();
+        }
+        Path parent = attendanceDataJsonPath(u).getParent();
+        if (parent != null) {
+            return parent.resolve(MACHINE_CALENDAR_DATA_JSON_FILENAME).toAbsolutePath().normalize();
+        }
+        return resolveRepoRoot(u)
+                .resolve("code")
+                .resolve(MACHINE_CALENDAR_DATA_JSON_FILENAME)
+                .toAbsolutePath()
+                .normalize();
+    }
+
+    /**
      * 勤怠カレンダー Excel の絶対パス（既定は {@link #resolveMasterWorkbookPathForDesktopOpen} の親フォルダ）。
      */
     public static Path attendanceCalendarXlsxPath(Map<String, String> ui) {
@@ -2688,16 +2732,30 @@ public final class AppPaths {
         }
         Path master = resolveMasterWorkbookPathForDesktopOpen(u, "");
         if (master.getParent() != null) {
-            return master.getParent()
-                    .resolve(ATTENDANCE_CALENDAR_XLSX_FILENAME)
-                    .toAbsolutePath()
-                    .normalize();
+            return resolveAttendanceCalendarXlsxInDir(master.getParent());
         }
-        return attendanceDataJsonPath(u)
-                .getParent()
-                .resolve(ATTENDANCE_CALENDAR_XLSX_FILENAME)
-                .toAbsolutePath()
-                .normalize();
+        return resolveAttendanceCalendarXlsxInDir(attendanceDataJsonPath(u).getParent());
+    }
+
+    private static Path resolveAttendanceCalendarXlsxInDir(Path dir) {
+        Path canonical =
+                dir.resolve(ATTENDANCE_CALENDAR_XLSX_FILENAME).toAbsolutePath().normalize();
+        Path legacy =
+                dir.resolve(ATTENDANCE_CALENDAR_XLSX_LEGACY_FILENAME)
+                        .toAbsolutePath()
+                        .normalize();
+        Path xlsm =
+                dir.resolve(ATTENDANCE_CALENDAR_XLSM_FILENAME).toAbsolutePath().normalize();
+        if (Files.isRegularFile(canonical)) {
+            return canonical;
+        }
+        if (Files.isRegularFile(legacy)) {
+            return legacy;
+        }
+        if (Files.isRegularFile(xlsm)) {
+            return xlsm;
+        }
+        return canonical;
     }
 
     /** 勤怠カレンダー xlsx の世代管理ルート。 */

@@ -38,4 +38,4 @@ def test_enrich_national_holidays_on_weekdays():
   # 昭和の日
     assert "2026-04-29" in enriched
     assert enriched["2026-04-29"]["source"] == "national_holiday"
-    assert "昭和" in enriched["2026-04-29"]["label"]
+    assert enriched["2026-04-29"]["label"] == "公休"

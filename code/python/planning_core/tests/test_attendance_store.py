@@ -158,8 +158,13 @@ def test_initialize_company_calendar_fiscal_year_only():
     }
     result = initialize_company_calendar(store, 2026, start_month=4, start_day=1)
     assert result["removed"] == 1
+    assert result["holidays_applied"] > 0
     assert "2026-08-06" not in store["company_calendar"]["days"]
     assert "2025-12-31" in store["company_calendar"]["days"]
+    may3 = store["company_calendar"]["days"].get("2026-05-03")
+    assert may3 is not None
+    assert may3["kind"] == DAY_KIND_PUBLIC
+    assert may3["label"] == "公休"
 
 
 def test_company_public_holiday_preset():
@@ -263,7 +268,7 @@ def test_export_calendar_xlsx_creates_app_sheets(tmp_path, monkeypatch):
     )
     from planning_core.core.attendance_store import export_attendance_to_calendar_workbook
 
-    calendar = tmp_path / "勤怠カレンダー.xlsx"
+    calendar = tmp_path / "勤怠・機械カレンダー.xlsx"
     monkeypatch.setenv(ENV_ATTENDANCE_CALENDAR_XLSX, str(calendar))
 
     store = empty_store(2026)
@@ -284,8 +289,107 @@ def test_export_calendar_xlsx_creates_app_sheets(tmp_path, monkeypatch):
     assert APP_MASTER_COMPANY_SHEET in result["sheets_updated"]
 
     wb2 = load_workbook(calendar)
+    from planning_core.core.attendance_paths import APP_MASTER_MENU_SHEET
+
+    assert wb2.sheetnames[0] == APP_MASTER_MENU_SHEET
     assert APP_MASTER_COMPANY_SHEET in wb2.sheetnames
     assert any(n.startswith("APP_勤怠カレンダー_") for n in wb2.sheetnames)
+    assert APP_MASTER_MENU_SHEET in result["sheets_updated"]
+
+
+def test_export_calendar_xlsx_includes_machine_calendar_when_present(
+    tmp_path, monkeypatch
+):
+    from openpyxl import load_workbook
+
+    from planning_core.core.attendance_paths import (
+        APP_MASTER_COMPANY_SHEET,
+        ENV_ATTENDANCE_CALENDAR_XLSX,
+        ENV_ATTENDANCE_JSON,
+    )
+    from planning_core.core.machine_calendar_paths import ENV_MACHINE_CALENDAR_JSON
+    from planning_core.core.machine_calendar_store import empty_store as mc_empty
+    from planning_core.core.machine_calendar_store import save_machine_calendar_store
+    from planning_core.core.attendance_paths import APP_MASTER_MACHINE_CALENDAR_SHEET
+    from planning_core.core.attendance_paths import APP_MASTER_MACHINE_CALENDAR_DATE_SHEET
+
+    calendar = tmp_path / "勤怠・機械カレンダー.xlsx"
+    att_json = tmp_path / "attendance-data.json"
+    mc_json = tmp_path / "machine-calendar-data.json"
+    monkeypatch.setenv(ENV_ATTENDANCE_CALENDAR_XLSX, str(calendar))
+    monkeypatch.setenv(ENV_ATTENDANCE_JSON, str(att_json))
+    monkeypatch.setenv(ENV_MACHINE_CALENDAR_JSON, str(mc_json))
+
+    mc = mc_empty()
+    mc["columns"] = [{"equipment_key": "EC+EC機", "process": "EC", "machine": "EC機"}]
+    mc["defined_slots"]["2026-05-01"] = ["2026-05-01T08:00:00"]
+    mc["occupancy"]["2026-05-01T08:00:00"] = {"EC+EC機": "*"}
+    save_machine_calendar_store(mc, mc_json)
+
+    from planning_core.core.attendance_store import (
+        empty_store,
+        export_attendance_to_calendar_workbook,
+    )
+
+    store = empty_store(2026)
+    result = export_attendance_to_calendar_workbook(store, calendar)
+    assert APP_MASTER_MACHINE_CALENDAR_SHEET in result["sheets_updated"]
+
+    wb2 = load_workbook(calendar)
+    assert APP_MASTER_MACHINE_CALENDAR_SHEET in wb2.sheetnames
+    assert APP_MASTER_MACHINE_CALENDAR_DATE_SHEET in wb2.sheetnames
+
+
+def test_export_machine_calendar_without_stored_columns_uses_need(
+    tmp_path, monkeypatch
+):
+    from openpyxl import load_workbook
+
+    from planning_core.core.attendance_paths import (
+        ENV_ATTENDANCE_CALENDAR_XLSX,
+        ENV_ATTENDANCE_JSON,
+        APP_MASTER_MACHINE_CALENDAR_SHEET,
+        APP_MASTER_MACHINE_CALENDAR_DATE_SHEET,
+        APP_MASTER_MENU_SHEET,
+    )
+    from planning_core.core.machine_calendar_paths import ENV_MACHINE_CALENDAR_JSON
+    from planning_core.core.machine_calendar_store import empty_store as mc_empty
+    from planning_core.core.machine_calendar_store import save_machine_calendar_store
+
+    calendar = tmp_path / "勤怠・機械カレンダー.xlsx"
+    att_json = tmp_path / "attendance-data.json"
+    mc_json = tmp_path / "machine-calendar-data.json"
+    monkeypatch.setenv(ENV_ATTENDANCE_CALENDAR_XLSX, str(calendar))
+    monkeypatch.setenv(ENV_ATTENDANCE_JSON, str(att_json))
+    monkeypatch.setenv(ENV_MACHINE_CALENDAR_JSON, str(mc_json))
+
+    need_cols = [{"equipment_key": "EC+EC機", "process": "EC", "machine": "EC機"}]
+    import planning_core.core.master_data as master_data_mod
+
+    monkeypatch.setattr(
+        master_data_mod,
+        "load_need_machine_columns",
+        lambda: need_cols,
+    )
+
+    mc = mc_empty()
+    mc["occupancy"]["2026-05-01T08:00:00"] = {"EC+EC機": "*"}
+    save_machine_calendar_store(mc, mc_json)
+
+    from planning_core.core.attendance_store import (
+        empty_store,
+        export_attendance_to_calendar_workbook,
+    )
+
+    store = empty_store(2026)
+    export_attendance_to_calendar_workbook(store, calendar)
+
+    wb2 = load_workbook(calendar)
+    assert APP_MASTER_MACHINE_CALENDAR_SHEET in wb2.sheetnames
+    assert APP_MASTER_MACHINE_CALENDAR_DATE_SHEET in wb2.sheetnames
+    ws_menu = wb2[APP_MASTER_MENU_SHEET]
+    labels = [ws_menu.cell(r, 1).value for r in range(6, 20)]
+    assert "機械カレンダー" in labels
 
 
 def test_export_calendar_xlsx_does_not_touch_master(tmp_path, monkeypatch):
@@ -300,7 +404,7 @@ def test_export_calendar_xlsx_does_not_touch_master(tmp_path, monkeypatch):
     wb.create_sheet("会社カレンダー")
     wb.save(master)
 
-    calendar = tmp_path / "勤怠カレンダー.xlsx"
+    calendar = tmp_path / "勤怠・機械カレンダー.xlsx"
     monkeypatch.setenv(ENV_ATTENDANCE_CALENDAR_XLSX, str(calendar))
 
     store = empty_store(2026)
@@ -343,7 +447,7 @@ def test_write_app_company_sheet_grid_layout(tmp_path, monkeypatch):
     )
     from planning_core.core.attendance_store import export_attendance_to_calendar_workbook
 
-    calendar = tmp_path / "勤怠カレンダー.xlsx"
+    calendar = tmp_path / "勤怠・機械カレンダー.xlsx"
     monkeypatch.setenv(ENV_ATTENDANCE_CALENDAR_XLSX, str(calendar))
 
     store = empty_store(2026)
@@ -357,11 +461,12 @@ def test_write_app_company_sheet_grid_layout(tmp_path, monkeypatch):
 
     wb2 = load_workbook(calendar)
     ws = wb2[APP_MASTER_COMPANY_SHEET]
-    assert "2026年度" in str(ws.cell(1, 1).value)
-    # 5月グリッドに平日出勤セル（数字のみ）と祝日セル（例: 3祝）がある
+    assert ws.cell(1, 1).value == "メニューに戻る"
+    assert "2026年度" in str(ws.cell(2, 1).value)
+    # 5月グリッドに平日出勤セル（数字のみ）と公休セル（例: 3公）がある
     found_day = False
-    found_national = False
-    for row in ws.iter_rows(min_row=5, max_row=35, min_col=1, max_col=31):
+    found_public = False
+    for row in ws.iter_rows(min_row=6, max_row=36, min_col=1, max_col=31):
         for cell in row:
             v = cell.value
             if v is None:
@@ -369,7 +474,7 @@ def test_write_app_company_sheet_grid_layout(tmp_path, monkeypatch):
             s = str(v)
             if s.isdigit():
                 found_day = True
-            if s.endswith("祝"):
-                found_national = True
+            if s.endswith("公"):
+                found_public = True
     assert found_day
-    assert found_national
+    assert found_public

@@ -5,8 +5,10 @@
 <?import javafx.scene.control.Label?>
 <?import javafx.scene.control.Spinner?>
 <?import javafx.scene.control.Separator?>
+<?import javafx.scene.control.ToggleButton?>
 <?import javafx.scene.control.ToolBar?>
 <?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.Priority?>
 <?import javafx.scene.layout.VBox?>
 
 <HBox xmlns="http://javafx.com/javafx/26" xmlns:fx="http://javafx.com/fxml/1"
@@ -21,15 +23,30 @@
             <ToolBar>
                 <Label text="セル"/>
                 <Spinner fx:id="cellSizeSpinner" editable="true" prefWidth="52.0"/>
-                <Button fx:id="importMasterButton" text="master から取込" onAction="#onImportFromMaster"/>
+                <Label text="列幅"/>
+                <Spinner fx:id="columnWidthSpinner" editable="true" prefWidth="52.0"/>
+                <Label text="列間"/>
+                <Spinner fx:id="columnGapSpinner" editable="true" prefWidth="52.0"/>
+                <Separator/>
+                <ToggleButton fx:id="paintOccupiedButton" text="占有を塗る" selected="true"/>
+                <ToggleButton fx:id="paintClearButton" text="稼働可を塗る"/>
+                <Separator/>
+                <Button fx:id="fillAllButton" text="全占有" onAction="#onFillAllOccupied"/>
+                <Button fx:id="clearAllButton" text="全クリア" onAction="#onClearAll"/>
+                <Button fx:id="invertAllButton" text="反転" onAction="#onInvertAll"/>
+                <Button fx:id="undoButton" text="元に戻す" onAction="#onUndo" disable="true"/>
+                <Separator/>
                 <Button fx:id="saveButton" text="保存" onAction="#onSave"/>
                 <Separator/>
+                <Button fx:id="createInitialValuesButton" text="初期値を作る" onAction="#onCreateInitialValues"/>
+                <Button fx:id="restoreButton" text="世代から復元" onAction="#onRestoreFromHistory"/>
+                <Button fx:id="openCalendarButton" text="勤怠・機械カレンダーを開く" onAction="#onOpenAttendanceCalendar"/>
                 <Button fx:id="refreshButton" text="再読込" onAction="#onRefresh"/>
             </ToolBar>
             <Label fx:id="statusLabel" text=""/>
             <Label wrapText="true"
-                   text="正本: machine-calendar-data.json（サマリ Excel 同階層）。master.xlsm「機械カレンダー」は互換用（将来廃止）。"/>
-            <VBox fx:id="gridHost" spacing="4.0"/>
+                   text="正本: machine-calendar-data.json（サマリ Excel 同階層）。列は need シートの工程×機械。初期値は工場稼働枠 8:00〜19:00（土日祝も空＝稼働可。会社カレンダー非連動）。"/>
+            <VBox fx:id="gridHost" spacing="4.0" VBox.vgrow="ALWAYS"/>
         </VBox>
     </children>
 </HBox>
