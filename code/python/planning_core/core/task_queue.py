@@ -854,6 +854,43 @@ def _apply_auto_exclude_bunkatsu_duplicate_machine(
             n_set,
         )
     return df
+def _is_in_house_self_processing_task_id(task_id) -> bool:
+    """依頼NO先頭が「2」の自社加工品（配台対象外）。"""
+    tid = planning_task_id_str_from_scalar(task_id)
+    return bool(tid) and tid.lstrip().startswith("2")
+def _apply_auto_exclude_in_house_self_processing(
+    df: pd.DataFrame, log_prefix: str = "段階1"
+) -> pd.DataFrame:
+    """
+    依頼NOが「2」から始まる自社加工品の「配台不要」に yes を入れる（セルは空のときのみ）。
+    手入力の配台不要は上書きしない。
+    """
+    if df is None or df.empty:
+        return df
+    if TASK_COL_TASK_ID not in df.columns:
+        return df
+    if PLAN_COL_EXCLUDE_FROM_ASSIGNMENT not in df.columns:
+        df[PLAN_COL_EXCLUDE_FROM_ASSIGNMENT] = ""
+    df[PLAN_COL_EXCLUDE_FROM_ASSIGNMENT] = df[PLAN_COL_EXCLUDE_FROM_ASSIGNMENT].astype(
+        object
+    )
+    n_set = 0
+    for i in df.index:
+        if not _is_in_house_self_processing_task_id(df.at[i, TASK_COL_TASK_ID]):
+            continue
+        if not _auto_exclude_cell_empty_for_autofill(
+            df.at[i, PLAN_COL_EXCLUDE_FROM_ASSIGNMENT]
+        ):
+            continue
+        df.at[i, PLAN_COL_EXCLUDE_FROM_ASSIGNMENT] = "yes"
+        n_set += 1
+    if n_set:
+        logging.info(
+            "%s: 自社加工品（依頼NO先頭が2）%s 行の「配台不要」=yes を自動設定しました。",
+            log_prefix,
+            n_set,
+        )
+    return df
 def _normalize_process_name_for_rule_match(raw) -> str:
     """工程名のルール照合（NFKC・空白除去）。"""
     t = unicodedata.normalize("NFKC", str(raw or "").strip())

@@ -85,7 +85,8 @@ public final class RequestFormPipelineCheckTabController {
                     + "・①〜⑦ … 依頼ごとの計画日（昇順・最大7日。例: 7/3 100m）\n"
                     + "・投入日一致 … 原反投入日を4ソース照合（全一致のみ「一致」）\n"
                     + "・確認 … 要チェック行はフィルタ無視で表示（日報「完了」は不要）\n"
-                    + "・段階1 … 未確認がある間は実行不可。計画更新で確認リセット（1分監視）";
+                    + "・段階1 … 未確認がある間は実行不可。計画更新で確認リセット（1分監視）\n"
+                    + "・依頼NO先頭「2」… 自社加工品（配台対象外・段階1要確認対象外）";
 
     private record MainColDef(String title, String property, double defaultWidth) {}
 
@@ -837,6 +838,7 @@ public final class RequestFormPipelineCheckTabController {
     }
 
     private void completeRefreshPreload(boolean ok, Consumer<Boolean> onComplete) {
+        clearPipelineCheckProgress();
         Consumer<Boolean> pending = onComplete != null ? onComplete : refreshCompleteCallback;
         refreshCompleteCallback = null;
         if (pending == null) {
@@ -873,7 +875,10 @@ public final class RequestFormPipelineCheckTabController {
         refreshInProgress = true;
         setRefreshing(true);
         statusLabel.setText("アラジン加工計画読込中…");
+        reportPipelineCheckProgress(Double.NaN, "アラジン加工計画読込中…");
         JuchuHeaderAliasRegistry registry = shell.snapshotJuchuHeaderAliasRegistryForExport();
+        RequestFormPipelineStatusService.ScanProgressListener scanProgress =
+                (fraction, detail) -> reportPipelineCheckProgress(fraction, detail);
         Thread worker =
                 new Thread(
                         () -> {
@@ -910,7 +915,8 @@ public final class RequestFormPipelineCheckTabController {
                                 }
                                 Platform.runLater(() -> statusLabel.setText("走査中…"));
                                 ScanResult result =
-                                        RequestFormPipelineStatusService.scan(ui, registry);
+                                        RequestFormPipelineStatusService.scan(
+                                                ui, registry, scanProgress);
                                 if (!reloadWarnings.isEmpty()) {
                                     List<String> mergedWarnings = new ArrayList<>(reloadWarnings);
                                     mergedWarnings.addAll(result.warnings());
@@ -1000,6 +1006,20 @@ public final class RequestFormPipelineCheckTabController {
         if (refreshButton != null) {
             refreshButton.setDisable(on);
         }
+    }
+
+    private void reportPipelineCheckProgress(double fraction, String detail) {
+        if (shell == null) {
+            return;
+        }
+        Platform.runLater(() -> shell.setGlobalLongTaskProgress(fraction, detail));
+    }
+
+    private void clearPipelineCheckProgress() {
+        if (shell == null) {
+            return;
+        }
+        Platform.runLater(shell::clearGlobalLongTaskProgress);
     }
 
     private void applyScanResult(ScanResult result) {
@@ -1286,7 +1306,8 @@ public final class RequestFormPipelineCheckTabController {
                             + " 件のうち "
                             + counts.unconfirmedRequiringConfirmation()
                             + " 件が未確認です。該当行の「確認」にチェックを付けてください。"
-                            + "（原反投入日不一致の3条件、またはアラジン計画なし＋納期/調整納期当日以降）",
+                            + "（原反投入日不一致の3条件、またはアラジン計画なし＋納期/調整納期当日以降。"
+                            + " 依頼NO先頭「2」の自社加工品は対象外）",
                     "原本転記: 未確認 "
                             + counts.unconfirmedRequiringConfirmation()
                             + "/"
@@ -1418,6 +1439,9 @@ public final class RequestFormPipelineCheckTabController {
      */
     static boolean requiresStage1Confirmation(MainRow row) {
         if (row == null || isDailyReportOrderStatusComplete(row)) {
+            return false;
+        }
+        if (RequestFormPipelineStatusService.isInHouseSelfProcessingIraiNo(row.getIraiNo())) {
             return false;
         }
         return requiresStage1ConfirmationForRawInputMismatchTriplet(row)

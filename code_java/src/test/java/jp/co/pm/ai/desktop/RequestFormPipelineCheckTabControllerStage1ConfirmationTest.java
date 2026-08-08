@@ -114,6 +114,24 @@ class RequestFormPipelineCheckTabControllerStage1ConfirmationTest {
     }
 
     @Test
+    void requiresStage1Confirmation_falseForInHouseSelfProcessingIraiNo() {
+        LocalDate future = LocalDate.now().plusDays(3);
+        MainRow row =
+                sampleRow(
+                        future,
+                        "2026/8/17",
+                        "―",
+                        RawInputDateCrossSourceCheck.STATUS_MISMATCH,
+                        true,
+                        true,
+                        "",
+                        false,
+                        "なし");
+        row.setIraiNo("2125-02-16");
+        assertFalse(RequestFormPipelineCheckTabController.requiresStage1Confirmation(row));
+    }
+
+    @Test
     void requiresStage1Confirmation_trueWhenAladdinMissingAndJuchuAdjustDeliveryOnOrAfterToday() {
         LocalDate future = LocalDate.now().plusDays(5);
         MainRow row =

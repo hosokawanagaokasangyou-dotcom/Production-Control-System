@@ -1109,7 +1109,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         prefixTitle.getStyleClass().add("paper-main-title");
         Label prefixSubtitle =
                 new Label(
-                        "品番横のマスタ候補コンボに表示する商品コードの先頭文字列を指定します。"
+                        "品番横のマスタ候補コンボに表示する商品コードの先頭文字列を指定します（対象は商品コードであり、依頼NOではありません）。"
                                 + " 複数指定可（いずれかに一致するもののみ表示）。空ならフィルタなし。"
                                 + " 製品側と原反側で別々に設定できます。"
                                 + " 後加工商品マスタタブの参照検索には製品側・原反側をそれぞれ適用します"
@@ -1120,6 +1120,13 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         prefixSubtitle.getStyleClass().add("paper-main-subtitle");
         prefixSubtitle.setWrapText(true);
         prefixSubtitle.setMaxWidth(SETTINGS_CARD_WIDTH * 2 + 12);
+        Label dispatchRuleNote =
+                new Label(
+                        "配台計画（固定ルール）: 依頼NOが「2」から始まる依頼書は自社加工品のため、段階1で「配台不要」=yes を自動設定し配台対象外とします。"
+                                + " 原本転記・計画確認の段階1要確認・実行ゲートの対象にも含めません（上記の商品コード先頭フィルタとは無関係です）。");
+        dispatchRuleNote.getStyleClass().add("paper-main-subtitle");
+        dispatchRuleNote.setWrapText(true);
+        dispatchRuleNote.setMaxWidth(SETTINGS_CARD_WIDTH * 2 + 12);
         GridPane prefixEditorsGrid = new GridPane();
         prefixEditorsGrid.setHgap(12);
         prefixEditorsGrid.setVgap(12);
@@ -1138,7 +1145,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                         this::refreshAllMasterCandidateCombos),
                 1,
                 0);
-        root.getChildren().addAll(prefixTitle, prefixSubtitle, prefixEditorsGrid);
+        root.getChildren().addAll(prefixTitle, prefixSubtitle, dispatchRuleNote, prefixEditorsGrid);
 
         GridPane editorsGrid = new GridPane();
         editorsGrid.setHgap(12);
@@ -3528,6 +3535,9 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
             List<Map<String, String>> rawRequests,
             Set<String> excelRawKeys,
             File parseCacheRoot) {
+        if (!AppPaths.isRequestFormTpiPdfEnabled(uiEnvSnapshot)) {
+            return;
+        }
         if (tpiPdfFolder == null || tpiPdfFolder.isBlank()) {
             return;
         }
@@ -3676,6 +3686,9 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
     }
 
     private Optional<File> resolveLinkedTpiPdf(String reqNo, File parseCacheRoot) {
+        if (!AppPaths.isRequestFormTpiPdfEnabled(uiEnvSnapshot)) {
+            return Optional.empty();
+        }
         Optional<File> linked =
                 RequestFormTpiPdfCatalog.findForIraiNo(reqNo, tpiPdfFolder);
         if (linked.isPresent()) {

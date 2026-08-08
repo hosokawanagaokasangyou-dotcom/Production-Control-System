@@ -330,6 +330,10 @@ def run_stage1_extract():
         _apply_auto_exclude_bunkatsu_duplicate_machine(out_df, log_prefix="段階1")
     except Exception as ex:
         logging.exception("段階1: 分割行の配台不要自動設定で例外（出力は続行）: %s", ex)
+    try:
+        _apply_auto_exclude_in_house_self_processing(out_df, log_prefix="段階1")
+    except Exception as ex:
+        logging.exception("段階1: 自社加工品の配台不要自動設定で例外（出力は続行）: %s", ex)
     _ensure_dispatch_lookup_tables_at_work_path()
     _ensure_stage1_exclude_rules_json_env_from_repo_default()
     # 計画行確定後・試行順より前: JSON 正本なら JSON への行同期、それ以外は計画ブックの「設定_配台不要工程」（D→E 含む）。

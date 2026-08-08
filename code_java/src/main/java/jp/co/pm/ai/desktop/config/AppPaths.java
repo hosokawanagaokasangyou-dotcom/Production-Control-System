@@ -98,6 +98,14 @@ public final class AppPaths {
     /** Folder for machining actual-detail Excel exports (PQ plan/02 {@code Folder.Files}). */
     public static final String KEY_PM_AI_ACTUAL_DETAIL_SOURCE_DIR = "PM_AI_ACTUAL_DETAIL_SOURCE_DIR";
 
+    /** 加工日報発行問合せ CSV の取得元フォルダ（RPA／原本転記・計画確認タブ）。 */
+    public static final String KEY_PM_AI_DAILY_REPORT_SOURCE_DIR = "PM_AI_DAILY_REPORT_SOURCE_DIR";
+
+    /**
+     * 受注明細表 RPA 出力フォルダ（将来ロジック用）。未設定時は最新ファイル解決を行わない。
+     */
+    public static final String KEY_PM_AI_ORDER_DETAIL_SOURCE_DIR = "PM_AI_ORDER_DETAIL_SOURCE_DIR";
+
     /**
      * 依頼書入力（アラジンマスタ）フォルダ。後加工商品／加工内容／工程マスタおよび
      * {@code マスタリレーション統合結果.xlsx} を置くディレクトリ（フルパス）。
@@ -606,6 +614,31 @@ public final class AppPaths {
                     + "●検査表作成\\"
                     + "加工実績明細DATA";
 
+    /**
+     * {@link #KEY_PM_AI_DAILY_REPORT_SOURCE_DIR} が空のときの既定（湖南工場・加工日報フォルダ）。
+     */
+    public static final String DEFAULT_PM_AI_DAILY_REPORT_SOURCE_DIR =
+            "\\\\192.168.0.101\\"
+                    + "共有フォルダ\\"
+                    + "湖南工場\\"
+                    + "湖南共有\\"
+                    + "生産管理システム\\"
+                    + "管理システム\\"
+                    + "●DATA\\"
+                    + "加工日報";
+
+    /**
+     * {@link #KEY_PM_AI_DAILY_REPORT_SOURCE_DIR} が空のときの既定（国分工場・加工日報フォルダ）。
+     */
+    public static final String DEFAULT_PM_AI_DAILY_REPORT_SOURCE_DIR_KOKUBU =
+            "\\\\192.168.0.101\\"
+                    + "共有フォルダ\\"
+                    + "国分工場\\"
+                    + "国分共有\\"
+                    + "●配台AIシステム\\"
+                    + "DATA\\"
+                    + "加工日報";
+
     /** リポジトリ直下および {@code pm-ai-data} 直下で共用する版ファイル名。 */
     public static final String VERSION_TXT_FILE_NAME = "version.txt";
 
@@ -628,6 +661,8 @@ public final class AppPaths {
             KEY_PM_AI_WORKSPACE,
             KEY_PM_AI_TASK_INPUT_SOURCE_DIR,
             KEY_PM_AI_ACTUAL_DETAIL_SOURCE_DIR,
+            KEY_PM_AI_DAILY_REPORT_SOURCE_DIR,
+            KEY_PM_AI_ORDER_DETAIL_SOURCE_DIR,
             KEY_PM_AI_ALADDIN_MASTER_DIR,
             KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR,
             KEY_PM_AI_REQUEST_FORM_TPI_PDF_DIR,
@@ -988,6 +1023,51 @@ public final class AppPaths {
     }
 
     /**
+     * 加工日報 CSV 取得元フォルダ。{@link #KEY_PM_AI_DAILY_REPORT_SOURCE_DIR} が空のときは
+     * {@link #KEY_PM_AI_FACTORY_SITE} または {@link GlobalInitSettingTarget#load()} の工場別 UNC。
+     */
+    public static Path resolveDailyReportSourceDir(Map<String, String> ui) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        String override = trim(u.get(KEY_PM_AI_DAILY_REPORT_SOURCE_DIR));
+        if (!override.isEmpty()) {
+            return Path.of(override).toAbsolutePath().normalize();
+        }
+        return Path.of(defaultDailyReportSourceDirForFactory(resolveFactorySiteFromUi(u)));
+    }
+
+    /**
+     * 受注明細表 RPA 出力フォルダ。未設定時は空（将来ロジック用・最新ファイル解決は行わない）。
+     */
+    public static Optional<Path> resolveOrderDetailSourceDir(Map<String, String> ui) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        String override = trim(u.get(KEY_PM_AI_ORDER_DETAIL_SOURCE_DIR));
+        if (override.isEmpty()) {
+            return Optional.empty();
+        }
+        return Optional.of(Path.of(override).toAbsolutePath().normalize());
+    }
+
+    /** {@link FactorySite} 別の {@link #KEY_PM_AI_DAILY_REPORT_SOURCE_DIR} 既定 UNC。 */
+    public static String defaultDailyReportSourceDirForFactory(FactorySite site) {
+        if (site == FactorySite.KOKUBU) {
+            return DEFAULT_PM_AI_DAILY_REPORT_SOURCE_DIR_KOKUBU;
+        }
+        return DEFAULT_PM_AI_DAILY_REPORT_SOURCE_DIR;
+    }
+
+    private static FactorySite resolveFactorySiteFromUi(Map<String, String> ui) {
+        String raw = trim(ui.get(KEY_PM_AI_FACTORY_SITE));
+        if (!raw.isEmpty()) {
+            for (FactorySite site : FactorySite.values()) {
+                if (site.name().equalsIgnoreCase(raw)) {
+                    return site;
+                }
+            }
+        }
+        return GlobalInitSettingTarget.load();
+    }
+
+    /**
      * 依頼書入力向けアラジンマスタフォルダ。{@link #KEY_PM_AI_ALADDIN_MASTER_DIR} が空のときは
      * {@link GlobalInitSettingTarget#load()} の工場に応じた UNC（湖南／国分）。
      */
@@ -1050,10 +1130,10 @@ public final class AppPaths {
      */
     public static Optional<Path> resolveRequestFormTpiPdfDir(Map<String, String> ui) {
         Map<String, String> u = ui != null ? ui : Map.of();
-        FactorySite effective = GlobalInitSettingTarget.loadEffective(u);
-        if (!isRequestFormTpiPdfEnabledForFactory(effective)) {
+        if (!isRequestFormTpiPdfEnabled(u)) {
             return Optional.empty();
         }
+        FactorySite effective = resolveFactorySiteFromUi(u);
         String override = trim(u.get(KEY_PM_AI_REQUEST_FORM_TPI_PDF_DIR));
         if (!override.isEmpty()) {
             return Optional.of(Path.of(override).toAbsolutePath().normalize());
@@ -1063,6 +1143,11 @@ public final class AppPaths {
             return Optional.empty();
         }
         return Optional.of(Path.of(factoryDefault));
+    }
+
+    /** TPI 依頼書 PDF は湖南工場のみ（国分は常に無効）。環境変数の手動指定も無視する。 */
+    public static boolean isRequestFormTpiPdfEnabled(Map<String, String> ui) {
+        return isRequestFormTpiPdfEnabledForFactory(resolveFactorySiteFromUi(ui != null ? ui : Map.of()));
     }
 
     /** TPI 依頼書 PDF は湖南工場のみ（国分は常に無効）。 */
@@ -1934,6 +2019,35 @@ public final class AppPaths {
     public static final String DEFAULT_PM_AI_ALADDIN_MASTER_DIR_KOKUBU =
             DEFAULT_KOKUBU_DATA_DIR + "\\" + ALADDIN_MASTER_DIR_LEAF_NAME;
 
+    /** {@link FactorySite#KOKUBU} の {@link #KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR} 既定（UNC）。 */
+    public static String defaultRdpLauncherDeployDirForFactory(FactorySite site) {
+        if (site == FactorySite.KOKUBU) {
+            return DEFAULT_KOKUBU_DATA_DIR;
+        }
+        return DEFAULT_PM_AI_RDP_LAUNCHER_DEPLOY_DIR;
+    }
+
+    /** {@link FactorySite} 別の {@link #KEY_PM_AI_RDP_OPERATOR_USERS_STORE_DIR} 既定。 */
+    public static String defaultRdpOperatorUsersStoreDirForFactory(FactorySite site) {
+        return defaultRdpLauncherDeployDirForFactory(site);
+    }
+
+    /** {@link FactorySite} 別の {@link #KEY_PM_AI_RPA_LAUNCHER_DEPLOY_DIR} 既定。 */
+    public static String defaultRpaLauncherDeployDirForFactory(FactorySite site) {
+        if (site == FactorySite.KOKUBU) {
+            return DEFAULT_KOKUBU_DATA_DIR;
+        }
+        return DEFAULT_PM_AI_RPA_LAUNCHER_DEPLOY_DIR;
+    }
+
+    /** {@link FactorySite} 別の {@link #KEY_PM_AI_RPA_LAUNCHER_OPERATOR_USERS_STORE_DIR} 既定。 */
+    public static String defaultRpaLauncherOperatorUsersStoreDirForFactory(FactorySite site) {
+        if (site == FactorySite.KOKUBU) {
+            return DEFAULT_KOKUBU_DATA_DIR;
+        }
+        return DEFAULT_PM_AI_RPA_LAUNCHER_OPERATOR_USERS_STORE_DIR;
+    }
+
     /** {@link FactorySite#KONAN} の {@link #KEY_PM_AI_REQUEST_FORM_JUCHU_FILE} 既定（UNC）。 */
     public static final String DEFAULT_PM_AI_REQUEST_FORM_JUCHU_FILE_KONAN =
             "\\\\192.168.0.101\\"
@@ -2050,13 +2164,17 @@ public final class AppPaths {
             if (!override.isEmpty()) {
                 return Path.of(override).toAbsolutePath().normalize();
             }
-            return Path.of(DEFAULT_PM_AI_RPA_LAUNCHER_DEPLOY_DIR).toAbsolutePath().normalize();
+            return Path.of(defaultRpaLauncherDeployDirForFactory(resolveFactorySiteFromUi(u)))
+                    .toAbsolutePath()
+                    .normalize();
         }
         String deployOverride = trim(u.get(KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR));
         if (!deployOverride.isEmpty()) {
             return Path.of(deployOverride).toAbsolutePath().normalize();
         }
-        return Path.of(DEFAULT_PM_AI_RDP_LAUNCHER_DEPLOY_DIR).toAbsolutePath().normalize();
+        return Path.of(defaultRdpLauncherDeployDirForFactory(resolveFactorySiteFromUi(u)))
+                .toAbsolutePath()
+                .normalize();
     }
 
     /** 起動中アプリ向けのランチャー配備先 env キー。 */
@@ -2158,12 +2276,15 @@ public final class AppPaths {
                             trim(u.get(KEY_PM_AI_RPA_LAUNCHER_OPERATOR_USERS_STORE_DIR)),
                             trim(u.get(KEY_PM_AI_RDP_OPERATOR_USERS_STORE_DIR)));
             if (override.isEmpty()) {
-                return rdpLauncherOperatorUsersStorePath();
+                return Path.of(defaultRpaLauncherOperatorUsersStoreDirForFactory(resolveFactorySiteFromUi(u)))
+                        .resolve(RDP_LAUNCHER_OPERATOR_USERS_BIN)
+                        .toAbsolutePath()
+                        .normalize();
             }
         } else {
             override = trim(u.get(KEY_PM_AI_RDP_OPERATOR_USERS_STORE_DIR));
             if (override.isEmpty()) {
-                return Path.of(DEFAULT_PM_AI_RDP_OPERATOR_USERS_STORE_DIR)
+                return Path.of(defaultRdpOperatorUsersStoreDirForFactory(resolveFactorySiteFromUi(u)))
                         .resolve(RDP_LAUNCHER_OPERATOR_USERS_BIN)
                         .toAbsolutePath()
                         .normalize();
@@ -2685,6 +2806,47 @@ public final class AppPaths {
             "machine-calendar-json-history";
 
     public static final int MACHINE_CALENDAR_JSON_HISTORY_MAX_GENERATIONS = 20;
+
+    /**
+     * 工場切替時に勤怠 JSON / 勤怠カレンダー xlsx / 機械カレンダー JSON の env 行を、
+     * 当該工場のマスタ・サマリ既定から再解決する（ワークスペースに残った旧工場パスを上書き）。
+     */
+    public static void overlayFactorySiteAttendancePaths(
+            Map<String, String> map, FactorySite site) {
+        if (map == null || site == null) {
+            return;
+        }
+        LinkedHashMap<String, String> scratch = new LinkedHashMap<>(map);
+        scratch.put(KEY_PM_AI_FACTORY_SITE, site.name());
+        scratch.remove(KEY_PM_AI_ATTENDANCE_JSON);
+        scratch.remove(KEY_PM_AI_ATTENDANCE_CALENDAR_XLSX);
+        scratch.remove(KEY_PM_AI_MACHINE_CALENDAR_JSON);
+        scratch.remove(KEY_PM_AI_ATTENDANCE_JSON_HISTORY_DIR);
+        scratch.remove(KEY_PM_AI_ATTENDANCE_CALENDAR_XLSX_HISTORY_DIR);
+        putFactoryManagedEnv(
+                map, KEY_PM_AI_ATTENDANCE_JSON, attendanceDataJsonPath(scratch).toString());
+        scratch.put(
+                KEY_PM_AI_ATTENDANCE_JSON, map.getOrDefault(KEY_PM_AI_ATTENDANCE_JSON, ""));
+        putFactoryManagedEnv(
+                map,
+                KEY_PM_AI_ATTENDANCE_CALENDAR_XLSX,
+                attendanceCalendarXlsxPath(scratch).toString());
+        scratch.put(
+                KEY_PM_AI_ATTENDANCE_CALENDAR_XLSX,
+                map.getOrDefault(KEY_PM_AI_ATTENDANCE_CALENDAR_XLSX, ""));
+        putFactoryManagedEnv(
+                map,
+                KEY_PM_AI_MACHINE_CALENDAR_JSON,
+                machineCalendarDataJsonPath(scratch).toString());
+        putFactoryManagedEnv(map, KEY_PM_AI_ATTENDANCE_JSON_HISTORY_DIR, "");
+        putFactoryManagedEnv(map, KEY_PM_AI_ATTENDANCE_CALENDAR_XLSX_HISTORY_DIR, "");
+    }
+
+    private static void putFactoryManagedEnv(Map<String, String> map, String key, String value) {
+        if (map.containsKey(key)) {
+            map.put(key, value != null ? value : "");
+        }
+    }
 
     /**
      * 勤怠正本 JSON の絶対パス（親は {@link #summaryAiDispatchXlsxPath(Map)} と同一フォルダ）。
@@ -3584,7 +3746,14 @@ public final class AppPaths {
         if (!isFolderPathEnvKey(k)) {
             return Optional.empty();
         }
-        if (KEY_PM_AI_TASK_INPUT_SOURCE_DIR.equals(k) || KEY_PM_AI_ACTUAL_DETAIL_SOURCE_DIR.equals(k)) {
+        if (KEY_PM_AI_TASK_INPUT_SOURCE_DIR.equals(k)
+                || KEY_PM_AI_ACTUAL_DETAIL_SOURCE_DIR.equals(k)
+                || KEY_PM_AI_DAILY_REPORT_SOURCE_DIR.equals(k)
+                || KEY_PM_AI_ORDER_DETAIL_SOURCE_DIR.equals(k)
+                || KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR.equals(k)
+                || KEY_PM_AI_RDP_OPERATOR_USERS_STORE_DIR.equals(k)
+                || KEY_PM_AI_RPA_LAUNCHER_DEPLOY_DIR.equals(k)
+                || KEY_PM_AI_RPA_LAUNCHER_OPERATOR_USERS_STORE_DIR.equals(k)) {
             return Optional.empty();
         }
         String v = trim(rawValue);

@@ -103,6 +103,51 @@ public enum FactorySite {
         return actualDetailSourceDir;
     }
 
+    /** {@link AppPaths#KEY_PM_AI_DAILY_REPORT_SOURCE_DIR}。 */
+    public String dailyReportSourceDir() {
+        if (this == KOKUBU) {
+            return AppPaths.DEFAULT_PM_AI_DAILY_REPORT_SOURCE_DIR_KOKUBU;
+        }
+        if (this == KONAN) {
+            return AppPaths.DEFAULT_PM_AI_DAILY_REPORT_SOURCE_DIR;
+        }
+        return "";
+    }
+
+    /**
+     * {@link AppPaths#KEY_PM_AI_ORDER_DETAIL_SOURCE_DIR}（将来ロジック用・現状は未設定）。
+     */
+    public String orderDetailSourceDir() {
+        return "";
+    }
+
+    /** {@link AppPaths#KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR}（配台 PMD・RPA設定.ini 配備先）。 */
+    public String rdpLauncherDeployDir() {
+        return AppPaths.defaultRdpLauncherDeployDirForFactory(dispatchFactoryOrKonan());
+    }
+
+    /** {@link AppPaths#KEY_PM_AI_RDP_OPERATOR_USERS_STORE_DIR}。 */
+    public String rdpOperatorUsersStoreDir() {
+        return AppPaths.defaultRdpOperatorUsersStoreDirForFactory(dispatchFactoryOrKonan());
+    }
+
+    /** {@link AppPaths#KEY_PM_AI_RPA_LAUNCHER_DEPLOY_DIR}（専用ランチャー）。 */
+    public String rpaLauncherDeployDir() {
+        return AppPaths.defaultRpaLauncherDeployDirForFactory(dispatchFactoryOrKonan());
+    }
+
+    /** {@link AppPaths#KEY_PM_AI_RPA_LAUNCHER_OPERATOR_USERS_STORE_DIR}（専用ランチャー）。 */
+    public String rpaLauncherOperatorUsersStoreDir() {
+        return AppPaths.defaultRpaLauncherOperatorUsersStoreDirForFactory(dispatchFactoryOrKonan());
+    }
+
+    private FactorySite dispatchFactoryOrKonan() {
+        if (this == KOKUBU) {
+            return KOKUBU;
+        }
+        return KONAN;
+    }
+
     /** 工場別マスタ basename（{@link #pmAiMasterWorkbookEnvValue} の UNC ファイル名と対応）。 */
     public String masterWorkbookFileBasename() {
         return masterWorkbookFileBasename;
@@ -239,6 +284,14 @@ public enum FactorySite {
         if (ui == null || ui.isEmpty()) {
             return Optional.empty();
         }
+        String factorySite = ui.getOrDefault(AppPaths.KEY_PM_AI_FACTORY_SITE, "").trim();
+        if (!factorySite.isEmpty()) {
+            for (FactorySite site : values()) {
+                if (site.name().equalsIgnoreCase(factorySite)) {
+                    return Optional.of(site);
+                }
+            }
+        }
         int[] scores = new int[2];
         List<String> keys =
                 List.of(
@@ -248,7 +301,8 @@ public enum FactorySite {
                         AppPaths.KEY_PM_AI_MASTER_WORKBOOK,
                         AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK,
                         AppPaths.KEY_PM_AI_ALADDIN_MASTER_DIR,
-                        AppPaths.KEY_PM_AI_REQUEST_FORM_JUCHU_FILE);
+                        AppPaths.KEY_PM_AI_REQUEST_FORM_JUCHU_FILE,
+                        AppPaths.KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR);
         for (String key : keys) {
             int weight =
                     AppPaths.KEY_PM_AI_TASK_INPUT_SOURCE_DIR.equals(key)

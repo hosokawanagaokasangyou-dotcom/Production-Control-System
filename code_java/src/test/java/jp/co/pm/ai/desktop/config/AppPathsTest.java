@@ -11,6 +11,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 
@@ -108,6 +109,18 @@ class AppPathsTest {
 
             GlobalInitSettingTarget.save(FactorySite.KOKUBU);
             assertTrue(AppPaths.resolveRequestFormTpiPdfDir(Map.of()).isEmpty());
+
+            Path konanTpi = Path.of(AppPaths.DEFAULT_PM_AI_REQUEST_FORM_TPI_PDF_DIR_KONAN);
+            Map<String, String> kokubuWithTpiOverride =
+                    Map.of(
+                            AppPaths.KEY_PM_AI_FACTORY_SITE,
+                            FactorySite.KOKUBU.name(),
+                            AppPaths.KEY_PM_AI_REQUEST_FORM_TPI_PDF_DIR,
+                            konanTpi.toString());
+            assertTrue(
+                    AppPaths.resolveRequestFormTpiPdfDir(kokubuWithTpiOverride).isEmpty(),
+                    "国分工場では TPI フォルダ手動指定も無視する");
+            assertFalse(AppPaths.isRequestFormTpiPdfEnabled(kokubuWithTpiOverride));
         } finally {
             AppPaths.setDesktopAppHomeDirName(priorAppHome);
             System.setProperty("user.home", priorUserHome);
@@ -1287,5 +1300,68 @@ class AppPathsTest {
         assertTrue(AppPaths.REPO_TESSERACT_TESSDATA_REL.contains("tesseract-tessdata"));
         assertTrue(Files.isRegularFile(tessData.resolve("jpn.traineddata")));
         assertTrue(Files.isRegularFile(tessData.resolve("eng.traineddata")));
+    }
+
+    @Test
+    void resolveDailyReportSourceDir_usesFactorySiteWhenEnvEmpty() {
+        assertTrue(
+                AppPaths.resolveDailyReportSourceDir(Map.of(AppPaths.KEY_PM_AI_FACTORY_SITE, "KOKUBU"))
+                        .toString()
+                        .contains("国分"));
+        assertTrue(
+                AppPaths.resolveDailyReportSourceDir(Map.of(AppPaths.KEY_PM_AI_FACTORY_SITE, "KONAN"))
+                        .toString()
+                        .contains("湖南"));
+    }
+
+    @Test
+    void resolveDailyReportSourceDir_prefersExplicitOverride() {
+        Path custom = Path.of("C:\\custom-daily");
+        assertEquals(
+                custom.toAbsolutePath().normalize(),
+                AppPaths.resolveDailyReportSourceDir(
+                        Map.of(
+                                AppPaths.KEY_PM_AI_DAILY_REPORT_SOURCE_DIR,
+                                custom.toString(),
+                                AppPaths.KEY_PM_AI_FACTORY_SITE,
+                                "KOKUBU")));
+    }
+
+    @Test
+    void resolveOrderDetailSourceDir_emptyWhenUnset() {
+        assertTrue(AppPaths.resolveOrderDetailSourceDir(Map.of()).isEmpty());
+    }
+
+    @Test
+    void resolveRdpLauncherDeployDir_usesFactorySiteWhenEnvEmpty() {
+        assertTrue(
+                AppPaths.resolveRdpLauncherDeployDir(Map.of(AppPaths.KEY_PM_AI_FACTORY_SITE, "KOKUBU"))
+                        .toString()
+                        .contains("国分"));
+        assertTrue(
+                AppPaths.resolveRdpLauncherDeployDir(Map.of(AppPaths.KEY_PM_AI_FACTORY_SITE, "KONAN"))
+                        .toString()
+                        .contains("湖南"));
+    }
+
+    @Test
+    void overlayFactorySiteAttendancePaths_replacesStaleKonanPathsWhenSwitchingToKokubu() {
+        LinkedHashMap<String, String> map = new LinkedHashMap<>();
+        map.put(AppPaths.KEY_PM_AI_FACTORY_SITE, "KONAN");
+        map.put(
+                AppPaths.KEY_PM_AI_ATTENDANCE_JSON,
+                "\\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\002 加工G\\●配台AIシステム\\共有DATA\\attendance-data.json");
+        map.put(
+                AppPaths.KEY_PM_AI_ATTENDANCE_CALENDAR_XLSX,
+                "\\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\002 加工G\\●配台AIシステム\\共有DATA\\勤怠カレンダー.xlsx");
+        map.put(AppPaths.KEY_PM_AI_MASTER_WORKBOOK, "");
+        map.put(AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK, "");
+
+        AppPaths.overlayFactorySiteAttendancePaths(map, FactorySite.KOKUBU);
+
+        assertTrue(map.get(AppPaths.KEY_PM_AI_ATTENDANCE_JSON).contains("国分"));
+        assertFalse(map.get(AppPaths.KEY_PM_AI_ATTENDANCE_JSON).contains("湖南"));
+        assertTrue(map.get(AppPaths.KEY_PM_AI_ATTENDANCE_CALENDAR_XLSX).contains("国分"));
+        assertFalse(map.get(AppPaths.KEY_PM_AI_ATTENDANCE_CALENDAR_XLSX).contains("湖南"));
     }
 }

@@ -180,6 +180,18 @@ public final class EnvVarDocs {
                         + "未設定時は 002  加工G\\●検査表作成\\加工実績明細DATA系 UNC。"
                         + "PM_AI_ACTUAL_DETAIL_WORKBOOK で単一ファイルを優先。");
         put(
+                "PM_AI_DAILY_REPORT_SOURCE_DIR",
+                "加工日報発行問合せ CSV の取得元フォルダ（UNC 可）。"
+                        + "原本転記・計画確認タブ・取得データ最新ファイル画面が参照。"
+                        + "未設定時は PM_AI_FACTORY_SITE（またはグローバル設定の工場）に応じた UNC。"
+                        + "湖南: ●DATA\\加工日報。国分: ●配台AIシステム\\DATA\\加工日報。"
+                        + "環境変数を初期化（工場選択）でも上書きされる。フォルダ選択可。");
+        put(
+                "PM_AI_ORDER_DETAIL_SOURCE_DIR",
+                "受注明細表 RPA 出力フォルダ（UNC 可）。将来の取得ロジック用。"
+                        + "現状未設定のままでよい（未設定時は最新ファイル解決を行わない）。"
+                        + "フォルダ選択可。");
+        put(
                 "PM_AI_ALADDIN_MASTER_DIR",
                 "依頼書入力タブが参照するアラジンマスタフォルダ（フルパス）。"
                         + "後加工商品／加工内容／工程マスタ xlsx と"
@@ -217,7 +229,7 @@ public final class EnvVarDocs {
                 "PM_AI_REQUEST_FORM_TPI_PDF_DIR",
                 "TPI（東レペフ加工品）依頼書 PDF のスキャン先フォルダ（フルパス）。"
                         + "ECOWD/JR 系・後加工/PN 系の *.pdf を半自動取込する。"
-                        + "空のとき湖南工場既定 UNC（共有DATA/TPI依頼書）。国分は空（手動指定）。"
+                        + "空のとき湖南工場既定 UNC（共有DATA/TPI依頼書）。国分工場では無効（フォルダ指定があっても使用しない）。"
                         + "依頼書入力タブの照合・PDF プレビュー・parse キャッシュに使用。"
                         + "フォルダ配下は読取専用（書込・削除禁止）。"
                         + "環境変数タブのフォルダ選択可。");
@@ -280,33 +292,35 @@ public final class EnvVarDocs {
                 "PM_AI_RDP_LAUNCHER_DEPLOY_DIR",
                 "配台 PMD のリモートデスクトップタブ向け: 接続先 RDP ランチャー exe（PmAiRdpRemoteLauncher.exe）と"
                         + " RDP起動プロファイル.json、RPA設定.ini の配備先共有フォルダ（UNC 可）。"
-                        + " 空のときは "
-                        + AppPaths.DEFAULT_PM_AI_RDP_LAUNCHER_DEPLOY_DIR
-                        + "。"
+                        + " 空のときは PM_AI_FACTORY_SITE（またはグローバル設定の工場）に応じた UNC。"
+                        + " 湖南: 共有DATA。国分: ●配台AIシステム\\DATA。"
+                        + " 環境変数を初期化（工場選択）でも上書きされる。"
                         + " リモートデスクトップ専用ランチャー（PmAiRpaLuncher.exe）では PM_AI_RPA_LAUNCHER_DEPLOY_DIR を使用。");
         put(
                 "PM_AI_RPA_LAUNCHER_DEPLOY_DIR",
                 "リモートデスクトップ専用ランチャー（PmAiRpaLuncher.exe）向け: 接続先 RDP ランチャー exe と"
                         + " RDP起動プロファイル.json、RPA設定.ini の配備先共有フォルダ（UNC 可）。"
-                        + " 空のときは "
-                        + AppPaths.DEFAULT_PM_AI_RPA_LAUNCHER_DEPLOY_DIR
-                        + "。"
+                        + " 空のときは工場別 UNC（湖南: "
+                        + AppPaths.DEFAULT_KONAN_SHARED_DATA_DIR_M
+                        + "、国分: "
+                        + AppPaths.DEFAULT_KOKUBU_DATA_DIR
+                        + "）。"
                         + " 配台 PMD とは別キー（PM_AI_RDP_LAUNCHER_DEPLOY_DIR）。");
         put(
                 "PM_AI_RDP_OPERATOR_USERS_STORE_DIR",
                 "配台 PMD のリモートデスクトップタブ向け: 操作者 bin 保存フォルダ（UNC 可）。"
-                        + " 空のときは "
-                        + AppPaths.DEFAULT_PM_AI_RDP_OPERATOR_USERS_STORE_DIR
-                        + "（"
+                        + " 空のときは PM_AI_RDP_LAUNCHER_DEPLOY_DIR と同じ工場別 UNC（"
                         + AppPaths.RDP_LAUNCHER_OPERATOR_USERS_BIN
                         + " とバックアップ）。"
                         + " 専用ランチャーでは PM_AI_RPA_LAUNCHER_OPERATOR_USERS_STORE_DIR を使用。");
         put(
                 "PM_AI_RPA_LAUNCHER_OPERATOR_USERS_STORE_DIR",
                 "リモートデスクトップ専用ランチャー向けの操作者 bin 保存フォルダ（UNC 可）。"
-                        + " 空のときは掲示板共有 "
-                        + AppPaths.DEFAULT_PM_AI_RPA_LAUNCHER_OPERATOR_USERS_STORE_DIR
-                        + "（"
+                        + " 空のときは工場別 UNC（湖南: "
+                        + AppPaths.DEFAULT_KONAN_SHARED_DATA_DIR_M
+                        + "、国分: "
+                        + AppPaths.DEFAULT_KOKUBU_DATA_DIR
+                        + "）（"
                         + AppPaths.RDP_LAUNCHER_OPERATOR_USERS_BIN
                         + " とバックアップ）。"
                         + " 前回選択した操作者名は PC ローカルの last-rdp-launcher-operator.txt に保存。"

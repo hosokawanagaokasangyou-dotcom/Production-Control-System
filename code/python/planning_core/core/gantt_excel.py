@@ -2692,6 +2692,14 @@ def _apply_planning_sheet_post_load_mutations(
             log_prefix,
             ex,
         )
+    try:
+        _apply_auto_exclude_in_house_self_processing(df, log_prefix=log_prefix)
+    except Exception as ex:
+        logging.warning(
+            "%s: 自社加工品の配台不要自動設定で例外（続行）: %s",
+            log_prefix,
+            ex,
+        )
     if apply_exclude_rules_from_config:
         try:
             apply_exclude_rules_config_to_plan_df(df, wb_path, log_prefix)

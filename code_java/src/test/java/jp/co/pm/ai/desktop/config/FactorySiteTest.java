@@ -66,6 +66,21 @@ class FactorySiteTest {
     }
 
     @Test
+    void kokubuRdpLauncherDeployUsesKokubuDataDir() {
+        assertTrue(FactorySite.KOKUBU.rdpLauncherDeployDir().contains("国分"));
+        assertTrue(FactorySite.KOKUBU.rdpLauncherDeployDir().endsWith("DATA"));
+        assertEquals(
+                FactorySite.KOKUBU.rdpLauncherDeployDir(),
+                FactorySite.KOKUBU.rdpOperatorUsersStoreDir());
+    }
+
+    @Test
+    void konanRdpLauncherDeployUsesKonanSharedData() {
+        assertEquals(
+                AppPaths.DEFAULT_KONAN_SHARED_DATA_DIR, FactorySite.KONAN.rdpLauncherDeployDir());
+    }
+
+    @Test
     void inferFromPortableBundleSourceValue_detectsKokubuAndKonan() {
         assertEquals(
                 FactorySite.KOKUBU,
@@ -102,6 +117,19 @@ class FactorySiteTest {
                 """;
         Files.writeString(initDir.resolve(InitSettingPaths.SESSION_DEFAULTS_FILE), json);
         assertEquals(FactorySite.KOKUBU, FactorySite.inferFromPortableBundleInitSetting(installRoot).orElseThrow());
+    }
+
+    @Test
+    void inferFromUiEnv_prefersExplicitFactorySiteKey() {
+        assertEquals(
+                FactorySite.KOKUBU,
+                FactorySite.inferFromUiEnv(
+                                Map.of(
+                                        AppPaths.KEY_PM_AI_FACTORY_SITE,
+                                        "KOKUBU",
+                                        AppPaths.KEY_PM_AI_TASK_INPUT_SOURCE_DIR,
+                                        FactorySite.KONAN.taskInputSourceDir()))
+                        .orElseThrow());
     }
 
     @Test

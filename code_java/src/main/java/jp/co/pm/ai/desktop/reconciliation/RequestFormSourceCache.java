@@ -471,15 +471,42 @@ final class RequestFormSourceCache {
                 invalidateParseCacheForSource(cacheRoot, sourceFile);
                 return Optional.empty();
             }
-            List<Map<String, String>> copy = new ArrayList<>(payload.entries().size());
-            for (Map<String, String> entry : payload.entries()) {
-                copy.add(entry != null ? new LinkedHashMap<>(entry) : new LinkedHashMap<>());
-            }
-            return Optional.of(copy);
+            return Optional.of(copyParseEntries(payload.entries()));
         } catch (IOException ex) {
             invalidateParseCacheForSource(cacheRoot, sourceFile);
             return Optional.empty();
         }
+    }
+
+    /**
+     * 依頼書原本 xlsm の parse キャッシュ JSON を、ソースファイルの到達性を問わず読む。
+     * ネットワーク原本フォルダに届かないときのフォールバック用（schema・有効期限のみ検証）。
+     */
+    static Optional<List<Map<String, String>>> loadExcelParseEntriesFromCacheFile(File cacheJson) {
+        if (cacheJson == null || !cacheJson.isFile()) {
+            return Optional.empty();
+        }
+        try {
+            ParseCachePayload payload = JSON.readValue(cacheJson, ParseCachePayload.class);
+            if (payload == null
+                    || payload.entries() == null
+                    || !PARSE_SCHEMA_VERSION.equals(payload.schemaVersion())
+                    || isCacheExpired(payload.cachedAtMillis())) {
+                return Optional.empty();
+            }
+            return Optional.of(copyParseEntries(payload.entries()));
+        } catch (IOException ex) {
+            return Optional.empty();
+        }
+    }
+
+    private static List<Map<String, String>> copyParseEntries(
+            List<Map<String, String>> entries) {
+        List<Map<String, String>> copy = new ArrayList<>(entries.size());
+        for (Map<String, String> entry : entries) {
+            copy.add(entry != null ? new LinkedHashMap<>(entry) : new LinkedHashMap<>());
+        }
+        return copy;
     }
 
     static void saveParseEntries(
