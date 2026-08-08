@@ -2041,34 +2041,123 @@
 
 /* Equipment status dashboard */
 
+/*
+ * 配色トークン。タブと全画面の各テーマでは以下の変数だけを差し替える。
+ * 個別セレクタをテーマごとに列挙すると、クラス追加時に上書き漏れが起きる。
+ */
+.pm-equipment-status-tab-root,
+.pm-equipment-status-fullscreen-root {
+    -pm-eq-fg: -fx-text-inner-color;
+    -pm-eq-fg-muted: -fx-mid-text-color;
+    -pm-eq-rule: rgba(15, 23, 42, 0.12);
+    -pm-eq-card-bg: derive(-fx-base, 12%);
+    -pm-eq-card-border: derive(-fx-base, -18%);
+    -pm-eq-error-fg: #b91c1c;
+    -pm-eq-chip-stopped-bg: #fee2e2;
+    -pm-eq-chip-stopped-fg: #991b1b;
+    -pm-eq-chip-running-bg: #dbeafe;
+    -pm-eq-chip-running-fg: #1e3a8a;
+    -pm-eq-chip-completed-bg: #16a34a;
+    -pm-eq-chip-completed-fg: #ffffff;
+    -pm-eq-accent-stopped: #dc2626;
+    -pm-eq-accent-running: #2563eb;
+    -pm-eq-accent-completed: #16a34a;
+}
+
 .label.pm-equipment-status-loading-status {
     -fx-font-size: 12px;
     -fx-text-fill: -fx-accent;
     -fx-font-weight: bold;
 }
 
-.pm-equipment-status-loading-overlay {
-    -fx-background-color: rgba(0, 0, 0, 0.06);
+.label.pm-equipment-status-next-refresh {
+    -fx-font-size: 11px;
+    -fx-text-fill: -pm-eq-fg-muted;
 }
 
-.pm-equipment-status-loading-box {
-    -fx-alignment: center;
-    -fx-padding: 28 36 28 36;
-    -fx-background-color: derive(-fx-base, 10%);
-    -fx-background-radius: 12;
-    -fx-border-color: derive(-fx-base, -20%);
-    -fx-border-radius: 12;
-    -fx-border-width: 1;
-    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.12), 8, 0, 0, 2);
-}
-
-.pm-equipment-status-loading-box .label {
-    -fx-font-size: 14px;
+.label.pm-equipment-status-error {
+    -fx-text-fill: -pm-eq-error-fg;
     -fx-font-weight: bold;
 }
 
 .pm-equipment-status-tab-root {
-    -fx-background-color: derive(-fx-base, 4%);
+    -fx-background-color: derive(-fx-base, -3%);
+}
+
+.pm-equipment-status-scroll,
+.pm-equipment-status-scroll > .viewport,
+.pm-equipment-status-card-flow {
+    -fx-background-color: transparent;
+}
+
+/* 更新に失敗して古いデータを表示しているカード群 */
+.pm-equipment-status-cards-stale {
+    -fx-opacity: 0.55;
+}
+
+.pm-equipment-status-banner {
+    -fx-background-radius: 6;
+    -fx-border-radius: 6;
+    -fx-border-width: 1;
+}
+
+.pm-equipment-status-banner .label {
+    -fx-font-size: 12px;
+    -fx-font-weight: bold;
+}
+
+.pm-equipment-status-banner-warn {
+    -fx-background-color: #fef3c7;
+    -fx-border-color: #f59e0b;
+}
+
+.pm-equipment-status-banner-warn .label {
+    -fx-text-fill: #92400e;
+}
+
+.pm-equipment-status-banner-error {
+    -fx-background-color: #fee2e2;
+    -fx-border-color: #dc2626;
+}
+
+.pm-equipment-status-banner-error .label {
+    -fx-text-fill: #991b1b;
+}
+
+/* 状態別の件数バッジ兼フィルタ */
+.pm-equipment-status-kpi {
+    -fx-font-size: 11px;
+    -fx-font-weight: bold;
+    -fx-padding: 3 10 3 10;
+    -fx-background-radius: 12;
+    -fx-border-radius: 12;
+    -fx-border-width: 1;
+    -fx-cursor: hand;
+}
+
+.pm-equipment-status-kpi:selected {
+    -fx-border-width: 2;
+}
+
+.pm-equipment-status-kpi-stopped,
+.pm-equipment-status-kpi-stopped:selected {
+    -fx-background-color: -pm-eq-chip-stopped-bg;
+    -fx-text-fill: -pm-eq-chip-stopped-fg;
+    -fx-border-color: -pm-eq-accent-stopped;
+}
+
+.pm-equipment-status-kpi-running,
+.pm-equipment-status-kpi-running:selected {
+    -fx-background-color: -pm-eq-chip-running-bg;
+    -fx-text-fill: -pm-eq-chip-running-fg;
+    -fx-border-color: -pm-eq-accent-running;
+}
+
+.pm-equipment-status-kpi-completed,
+.pm-equipment-status-kpi-completed:selected {
+    -fx-background-color: -pm-eq-chip-completed-bg;
+    -fx-text-fill: -pm-eq-chip-completed-fg;
+    -fx-border-color: -pm-eq-accent-completed;
 }
 
 .pm-equipment-status-subbar {
@@ -2092,7 +2181,7 @@
 
 .label.pm-equipment-status-source {
     -fx-font-size: 11px;
-    -fx-text-fill: -fx-mid-text-color;
+    -fx-text-fill: -pm-eq-fg-muted;
     -fx-wrap-text: true;
 }
 
@@ -2102,10 +2191,32 @@
     -fx-text-fill: derive(-fx-text-base-color, -20%);
 }
 
+.label.pm-equipment-status-load-stats.pm-equipment-status-error {
+    -fx-text-fill: -pm-eq-error-fg;
+}
+
+/* 左端 4px を状態アクセントバーにするため、border は 4 辺別指定 */
 .pm-equipment-status-card {
-    -fx-background-color: derive(-fx-base, 8%);
-    -fx-border-color: derive(-fx-base, -18%);
-    -fx-border-width: 1;
+    -fx-background-color: -pm-eq-card-bg;
+    -fx-border-width: 1 1 1 4;
+    -fx-border-color: -pm-eq-card-border -pm-eq-card-border -pm-eq-card-border -pm-eq-card-border;
+}
+
+.pm-equipment-status-card-stopped {
+    -fx-border-color: -pm-eq-card-border -pm-eq-card-border -pm-eq-card-border -pm-eq-accent-stopped;
+}
+
+.pm-equipment-status-card-running {
+    -fx-border-color: -pm-eq-card-border -pm-eq-card-border -pm-eq-card-border -pm-eq-accent-running;
+}
+
+.pm-equipment-status-card-completed {
+    -fx-border-color: -pm-eq-card-border -pm-eq-card-border -pm-eq-card-border -pm-eq-accent-completed;
+}
+
+.pm-equipment-status-card:focused {
+    -fx-border-color: #38bdf8;
+    -fx-border-width: 2;
 }
 
 .label.pm-equipment-status-appearance-hint {
@@ -2128,102 +2239,87 @@
     -fx-pref-width: 96;
 }
 
+/*
+ * カード内のフォントサイズ・太さは「見た目設定」タブの値を Java 側がインラインで当てる。
+ * ここで -fx-font-size を書くと設定値と二重管理になるため、色だけを指定する。
+ */
 .label.pm-equipment-status-machine {
-    -fx-font-size: 15px;
-    -fx-font-weight: bold;
+    -fx-text-fill: -pm-eq-fg;
 }
 
 .label.pm-equipment-status-chip {
-    -fx-padding: 2 8 2 8;
+    -fx-padding: 3 10 3 10;
     -fx-background-radius: 10;
-    -fx-font-size: 11px;
-    -fx-font-weight: bold;
 }
 
 .label.pm-equipment-status-chip-running {
-    -fx-background-color: #0d9488;
-    -fx-text-fill: white;
+    -fx-background-color: -pm-eq-chip-running-bg;
+    -fx-text-fill: -pm-eq-chip-running-fg;
 }
 
 .label.pm-equipment-status-chip-completed {
-    -fx-background-color: #94a3b8;
-    -fx-text-fill: white;
+    -fx-background-color: -pm-eq-chip-completed-bg;
+    -fx-text-fill: -pm-eq-chip-completed-fg;
 }
 
 .label.pm-equipment-status-chip-stopped {
-    -fx-background-color: #fecaca;
-    -fx-text-fill: #7f1d1d;
+    -fx-background-color: -pm-eq-chip-stopped-bg;
+    -fx-text-fill: -pm-eq-chip-stopped-fg;
 }
 
 .label.pm-equipment-status-meta {
-    -fx-font-size: 12px;
-    -fx-text-fill: -fx-text-inner-color;
+    -fx-text-fill: -pm-eq-fg;
 }
 
 .label.pm-equipment-status-pct-label {
-    -fx-font-size: 16px;
-    -fx-font-weight: bold;
+    -fx-text-fill: -pm-eq-fg;
 }
 
 .pm-equipment-status-stopped-pane {
-    -fx-min-height: 120;
     -fx-alignment: center;
 }
 
 .label.pm-equipment-status-stopped-label {
-    -fx-font-size: 28px;
-    -fx-font-weight: bold;
-    -fx-text-fill: #94a3b8;
+    -fx-text-fill: -pm-eq-fg-muted;
 }
 
 .label.pm-equipment-status-plan-head {
-    -fx-font-size: 11px;
-    -fx-font-weight: bold;
-    -fx-text-fill: -fx-mid-text-color;
+    -fx-text-fill: -pm-eq-fg-muted;
 }
 
 .label.pm-equipment-status-plan-line {
-    -fx-font-size: 11px;
-    -fx-text-fill: -fx-text-inner-color;
+    -fx-text-fill: -pm-eq-fg;
 }
 
-.label.pm-equipment-status-achievement-foot {
-    -fx-font-size: 10px;
-    -fx-text-fill: -fx-mid-text-color;
+.label.pm-equipment-status-plan-more {
+    -fx-text-fill: -pm-eq-fg-muted;
 }
 
 .pm-equipment-status-section-rule {
-    -fx-background-color: -fx-text-inner-color;
+    -fx-background-color: -pm-eq-rule;
     -fx-min-height: 1;
     -fx-pref-height: 1;
     -fx-max-height: 1;
-}
-
-.label.pm-equipment-status-date-foot {
-    -fx-font-size: 10px;
-    -fx-text-fill: -fx-mid-text-color;
 }
 
 .pm-equipment-status-fullscreen-root {
     /* 背景・文字色はテーマ別クラスで指定 */
 }
 
-.pm-equipment-status-fullscreen-theme-dark {
-    -fx-background-color: #0f172a;
-}
-
 .label.pm-equipment-status-fullscreen-title {
     -fx-font-size: 18px;
     -fx-font-weight: bold;
+    -fx-text-fill: -pm-eq-fg;
 }
 
 .label.pm-equipment-status-fullscreen-meta {
-    -fx-text-fill: -fx-mid-text-color;
+    -fx-text-fill: -pm-eq-fg-muted;
 }
 
 .label.pm-equipment-status-fullscreen-date {
     -fx-font-size: 15px;
     -fx-font-weight: bold;
+    -fx-text-fill: -pm-eq-fg;
 }
 
 .pm-equipment-status-fullscreen-top {
@@ -2344,147 +2440,61 @@
     -fx-text-fill: #f1f5f9;
 }
 
-.pm-equipment-status-fullscreen-theme-dark .label.pm-equipment-status-fullscreen-date {
-    -fx-text-fill: #f1f5f9;
-}
-
-.pm-equipment-status-fullscreen-theme-dark .label.pm-equipment-status-fullscreen-title {
-    -fx-text-fill: #e2e8f0;
-}
-
-.pm-equipment-status-fullscreen-theme-dark .label.pm-equipment-status-fullscreen-meta {
-    -fx-text-fill: #cbd5e1;
-}
-
-.pm-equipment-status-fullscreen-theme-dark .pm-equipment-status-card {
-    -fx-background-color: #1e293b;
-    -fx-border-color: #334155;
-}
-
-.pm-equipment-status-fullscreen-theme-dark .label.pm-equipment-status-machine,
-.pm-equipment-status-fullscreen-theme-dark .label.pm-equipment-status-meta,
-.pm-equipment-status-fullscreen-theme-dark .label.pm-equipment-status-plan-line,
-.pm-equipment-status-fullscreen-theme-dark .label.pm-equipment-status-plan-head,
-.pm-equipment-status-fullscreen-theme-dark .label.pm-equipment-status-date-foot {
-    -fx-text-fill: #e2e8f0;
-}
-
-.pm-equipment-status-fullscreen-theme-dark .label.pm-equipment-status-empty-title {
-    -fx-text-fill: #e2e8f0;
-}
-
-.pm-equipment-status-fullscreen-theme-dark .label.pm-equipment-status-empty-detail {
-    -fx-text-fill: #cbd5e1;
-}
-
-.pm-equipment-status-fullscreen-theme-dark .label.pm-equipment-status-empty-hint {
-    -fx-text-fill: #94a3b8;
-}
-
-.pm-equipment-status-fullscreen-theme-dark .label.pm-equipment-status-stopped-label {
-    -fx-text-fill: #64748b;
-}
-
-.pm-equipment-status-fullscreen-theme-dark .pm-equipment-status-section-rule {
-    -fx-background-color: #e2e8f0;
-}
-
-.pm-equipment-status-fullscreen-theme-dark .label.pm-equipment-status-chip-running {
-    -fx-text-fill: #86efac;
-}
-
-.pm-equipment-status-fullscreen-theme-dark .label.pm-equipment-status-chip-completed {
-    -fx-text-fill: #cbd5e1;
-}
-
-.pm-equipment-status-fullscreen-theme-dark .label.pm-equipment-status-chip-stopped {
-    -fx-text-fill: #94a3b8;
-}
-
-.pm-equipment-status-fullscreen-theme-dark .pm-equipment-status-loading-overlay {
-    -fx-background-color: rgba(0, 0, 0, 0.35);
+/* ダーク */
+.pm-equipment-status-fullscreen-theme-dark {
+    -fx-background-color: #0f172a;
+    -pm-eq-fg: #e2e8f0;
+    -pm-eq-fg-muted: #cbd5e1;
+    -pm-eq-rule: rgba(255, 255, 255, 0.16);
+    -pm-eq-card-bg: #1e293b;
+    -pm-eq-card-border: #334155;
+    -pm-eq-error-fg: #fca5a5;
+    -pm-eq-chip-stopped-bg: #7f1d1d;
+    -pm-eq-chip-stopped-fg: #fee2e2;
+    -pm-eq-chip-running-bg: #1e40af;
+    -pm-eq-chip-running-fg: #dbeafe;
+    -pm-eq-chip-completed-bg: #15803d;
+    -pm-eq-chip-completed-fg: #f0fdf4;
+    -pm-eq-accent-stopped: #f87171;
+    -pm-eq-accent-running: #60a5fa;
+    -pm-eq-accent-completed: #4ade80;
 }
 
 /* ライト: メインタブに近い明るい全画面 */
 .pm-equipment-status-fullscreen-theme-light {
-    -fx-background-color: derive(-fx-base, 4%);
-}
-
-.pm-equipment-status-fullscreen-theme-light .label.pm-equipment-status-fullscreen-title,
-.pm-equipment-status-fullscreen-theme-light .label.pm-equipment-status-fullscreen-meta,
-.pm-equipment-status-fullscreen-theme-light .label.pm-equipment-status-fullscreen-date {
-    -fx-text-fill: -fx-text-inner-color;
-}
-
-.pm-equipment-status-fullscreen-theme-light .pm-equipment-status-card {
-    -fx-background-color: derive(-fx-base, 8%);
-    -fx-border-color: derive(-fx-base, -18%);
-}
-
-.pm-equipment-status-fullscreen-theme-light .pm-equipment-status-loading-overlay {
-    -fx-background-color: rgba(255, 255, 255, 0.45);
-}
-
-.pm-equipment-status-fullscreen-theme-light .pm-equipment-status-section-rule {
-    -fx-background-color: -fx-text-inner-color;
+    -fx-background-color: derive(-fx-base, -3%);
 }
 
 /* 壁面: 高コントラストの暗色（プロジェクター・工場ディスプレイ向け） */
 .pm-equipment-status-fullscreen-theme-wall {
     -fx-background-color: #000000;
+    -pm-eq-fg: #f8fafc;
+    -pm-eq-fg-muted: #cbd5e1;
+    -pm-eq-rule: rgba(255, 255, 255, 0.24);
+    -pm-eq-card-bg: #111827;
+    -pm-eq-card-border: #64748b;
+    -pm-eq-error-fg: #fca5a5;
+    -pm-eq-chip-stopped-bg: #991b1b;
+    -pm-eq-chip-stopped-fg: #ffffff;
+    -pm-eq-chip-running-bg: #1d4ed8;
+    -pm-eq-chip-running-fg: #ffffff;
+    -pm-eq-chip-completed-bg: #15803d;
+    -pm-eq-chip-completed-fg: #ffffff;
+    -pm-eq-accent-stopped: #f87171;
+    -pm-eq-accent-running: #93c5fd;
+    -pm-eq-accent-completed: #86efac;
 }
 
 .pm-equipment-status-fullscreen-theme-wall .label.pm-equipment-status-fullscreen-title {
-    -fx-text-fill: #ffffff;
     -fx-font-size: 20px;
 }
 
-.pm-equipment-status-fullscreen-theme-wall .label.pm-equipment-status-fullscreen-meta {
-    -fx-text-fill: #e2e8f0;
-}
-
 .pm-equipment-status-fullscreen-theme-wall .label.pm-equipment-status-fullscreen-date {
-    -fx-text-fill: #ffffff;
     -fx-font-size: 16px;
 }
 
 .pm-equipment-status-fullscreen-theme-wall .pm-equipment-status-card {
-    -fx-background-color: #111827;
-    -fx-border-color: #64748b;
-    -fx-border-width: 2;
-}
-
-.pm-equipment-status-fullscreen-theme-wall .pm-equipment-status-section-rule {
-    -fx-background-color: #f8fafc;
-}
-
-.pm-equipment-status-fullscreen-theme-wall .label.pm-equipment-status-machine,
-.pm-equipment-status-fullscreen-theme-wall .label.pm-equipment-status-meta,
-.pm-equipment-status-fullscreen-theme-wall .label.pm-equipment-status-plan-line,
-.pm-equipment-status-fullscreen-theme-wall .label.pm-equipment-status-plan-head,
-.pm-equipment-status-fullscreen-theme-wall .label.pm-equipment-status-date-foot,
-.pm-equipment-status-fullscreen-theme-wall .label.pm-equipment-status-pct-label {
-    -fx-text-fill: #f8fafc;
-}
-
-.pm-equipment-status-fullscreen-theme-wall .label.pm-equipment-status-empty-title {
-    -fx-text-fill: #ffffff;
-}
-
-.pm-equipment-status-fullscreen-theme-wall .label.pm-equipment-status-empty-detail {
-    -fx-text-fill: #e2e8f0;
-}
-
-.pm-equipment-status-fullscreen-theme-wall .label.pm-equipment-status-empty-hint {
-    -fx-text-fill: #94a3b8;
-}
-
-.pm-equipment-status-fullscreen-theme-wall .label.pm-equipment-status-stopped-label {
-    -fx-text-fill: #cbd5e1;
-}
-
-.pm-equipment-status-fullscreen-theme-wall .pm-equipment-status-loading-overlay {
-    -fx-background-color: rgba(0, 0, 0, 0.55);
+    -fx-border-width: 2 2 2 6;
 }
 
 .pm-equipment-status-empty-host {
@@ -2498,17 +2508,21 @@
 .label.pm-equipment-status-empty-title {
     -fx-font-size: 20px;
     -fx-font-weight: bold;
-    -fx-text-fill: -fx-text-inner-color;
+    -fx-text-fill: -pm-eq-fg;
 }
 
 .label.pm-equipment-status-empty-detail {
     -fx-font-size: 14px;
-    -fx-text-fill: -fx-text-inner-color;
+    -fx-text-fill: -pm-eq-fg;
 }
 
 .label.pm-equipment-status-empty-hint {
     -fx-font-size: 12px;
-    -fx-text-fill: -fx-mid-text-color;
+    -fx-text-fill: -pm-eq-fg-muted;
+}
+
+.pm-equipment-status-empty-error .label.pm-equipment-status-empty-title {
+    -fx-text-fill: -pm-eq-error-fg;
 }
 
 .pm-remote-desktop-tab.form-tab-container,

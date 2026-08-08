@@ -42,6 +42,10 @@ public record EquipmentStatusDashboardAppearancePrefs(
     public static final String FULLSCREEN_THEME_LIGHT = "LIGHT";
     public static final String FULLSCREEN_THEME_WALL = "WALL";
 
+    /** {@code #rrggbb} または {@code #rrggbbaa}。不正な文字列を CSS へ流さないための検証。 */
+    private static final java.util.regex.Pattern HEX_COLOR =
+            java.util.regex.Pattern.compile("#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?");
+
     public EquipmentStatusDashboardAppearancePrefs {
         columnCount = clampInt(columnCount, 0, 12);
         cardWidth = clamp(cardWidth, 160, 520, 280);
@@ -52,9 +56,9 @@ public record EquipmentStatusDashboardAppearancePrefs(
         cardBorderRadius = clamp(cardBorderRadius, 0, 32, 8);
         cardShadowStyle = normalizeShadow(cardShadowStyle);
         fontFamily = fontFamily != null ? fontFamily.strip() : "";
-        machineFontPx = clamp(machineFontPx, 9, 28, 15);
-        metaFontPx = clamp(metaFontPx, 8, 20, 12);
-        planFontPx = clamp(planFontPx, 8, 18, 11);
+        machineFontPx = clamp(machineFontPx, 10, 28, 15);
+        metaFontPx = clamp(metaFontPx, 10, 20, 12);
+        planFontPx = clamp(planFontPx, 10, 18, 11);
         pctFontPx = clamp(pctFontPx, 10, 32, 16);
         chartSizePx = clamp(chartSizePx, 40, 240, 96);
         chartDoneColorHex = normalizeHex(chartDoneColorHex, "#0d9488");
@@ -148,9 +152,9 @@ public record EquipmentStatusDashboardAppearancePrefs(
         if (!s.startsWith("#")) {
             s = "#" + s;
         }
-        if (s.length() == 7 || s.length() == 9) {
-            return s;
+        if (!HEX_COLOR.matcher(s).matches()) {
+            return fallback;
         }
-        return fallback;
+        return s.toLowerCase(java.util.Locale.ROOT);
     }
 }

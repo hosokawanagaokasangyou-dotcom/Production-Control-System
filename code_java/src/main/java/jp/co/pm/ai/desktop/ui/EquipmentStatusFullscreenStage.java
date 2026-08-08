@@ -50,11 +50,12 @@ public final class EquipmentStatusFullscreenStage {
     private final FlowPane cardPane = new FlowPane();
     private final ScrollPane scrollPane = new ScrollPane();
     private final VBox emptyStateHost = new VBox();
-    private final VBox loadingHost = new VBox(12.0);
+    private final HBox busyBox = new HBox(6.0);
     private final Label actualDateLabel = new Label();
     private final Label planDateLabel = new Label();
     private final Label metaLabel = new Label();
     private Runnable onClose;
+    private Runnable onReloadRequest;
     private IntConsumer onAdjustActualDateDays;
     private IntConsumer onAdjustPlanDateDays;
     private boolean ownerInitialized;
@@ -79,7 +80,7 @@ public final class EquipmentStatusFullscreenStage {
         Button close = new Button("閉じる");
         close.setOnAction(e -> hide());
         top.getChildren()
-                .addAll(title, actualDateLabel, planDateLabel, spacer, metaLabel, close);
+                .addAll(title, actualDateLabel, planDateLabel, spacer, buildBusyBox(), metaLabel, close);
 
         cardPane.getStyleClass().add("pm-equipment-status-card-flow");
         cardHost.getChildren().add(cardPane);
@@ -95,17 +96,7 @@ public final class EquipmentStatusFullscreenStage {
         emptyStateHost.setVisible(false);
         emptyStateHost.setManaged(false);
 
-        loadingHost.setAlignment(Pos.CENTER);
-        loadingHost.getStyleClass().add("pm-equipment-status-loading-overlay");
-        loadingHost.setVisible(false);
-        loadingHost.setManaged(false);
-        ProgressIndicator busy = new ProgressIndicator();
-        busy.setPrefSize(56, 56);
-        Label loadingLbl = new Label("データ読込中…");
-        loadingLbl.getStyleClass().add("pm-equipment-status-fullscreen-meta");
-        loadingHost.getChildren().addAll(busy, loadingLbl);
-
-        StackPane center = new StackPane(scrollPane, emptyStateHost, loadingHost);
+        StackPane center = new StackPane(scrollPane, emptyStateHost);
 
         root.setFocusTraversable(true);
         root.setTop(top);
@@ -157,8 +148,31 @@ public final class EquipmentStatusFullscreenStage {
         }
     }
 
+    /**
+     * ヘッダ右の「更新中」表示。全面オーバーレイで暗転させると、壁掛け運用で自動更新のたびに
+     * 画面が読めなくなるため、小さなインジケータに留める。
+     */
+    private HBox buildBusyBox() {
+        busyBox.setAlignment(Pos.CENTER_LEFT);
+        busyBox.setVisible(false);
+        busyBox.setManaged(false);
+        ProgressIndicator busy = new ProgressIndicator();
+        busy.setPrefSize(16, 16);
+        busy.setMinSize(16, 16);
+        busy.setMaxSize(16, 16);
+        Label loadingLbl = new Label("更新中");
+        loadingLbl.getStyleClass().add("pm-equipment-status-fullscreen-meta");
+        busyBox.getChildren().addAll(busy, loadingLbl);
+        return busyBox;
+    }
+
     public void setOnClose(Runnable onClose) {
         this.onClose = onClose;
+    }
+
+    /** 空状態・エラーパネルの「再読込」ボタンから呼ぶ処理。 */
+    public void setOnReloadRequest(Runnable onReloadRequest) {
+        this.onReloadRequest = onReloadRequest;
     }
 
     /** 全画面表示中に ← / → で実績日を前後させる（日数: 負=前日、正=翌日）。 */
@@ -184,7 +198,8 @@ public final class EquipmentStatusFullscreenStage {
             String metaText,
             String actualDateLabelText,
             String planDateLabelText,
-            boolean sourcesLoaded) {
+            boolean sourcesLoaded,
+            String loadErrorDetail) {
         if (!ownerInitialized && owner != null) {
             stage.initOwner(owner);
             ownerInitialized = true;
@@ -199,7 +214,8 @@ public final class EquipmentStatusFullscreenStage {
                 badgeStyleResolver,
                 actualDateLabelText,
                 planDateLabelText,
-                sourcesLoaded);
+                sourcesLoaded,
+                loadErrorDetail);
         stage.setFullScreen(true);
         if (!stage.isFullScreen()) {
             stage.setMaximized(true);
@@ -228,7 +244,8 @@ public final class EquipmentStatusFullscreenStage {
             Function<String, PersonBadgeStyle> badgeStyleResolver,
             String actualDateLabelText,
             String planDateLabelText,
-            boolean sourcesLoaded) {
+            boolean sourcesLoaded,
+            String loadErrorDetail) {
         applyAppearance(appearancePrefs);
         applyFlowLayout(scrollPane.getViewportBounds().getWidth());
         cardPane.getChildren().clear();
@@ -241,7 +258,12 @@ public final class EquipmentStatusFullscreenStage {
                     .getChildren()
                     .add(
                             EquipmentStatusCardFactory.createEmptyState(
-                                    actualDateLabelText, planDateLabelText, sourcesLoaded, true));
+                                    actualDateLabelText,
+                                    planDateLabelText,
+                                    sourcesLoaded,
+                                    true,
+                                    loadErrorDetail,
+                                    onReloadRequest));
             return;
         }
         for (EquipmentMachineStatus s : statuses) {
@@ -262,11 +284,8 @@ public final class EquipmentStatusFullscreenStage {
     }
 
     public void setLoadingVisible(boolean on) {
-        loadingHost.setVisible(on);
-        loadingHost.setManaged(on);
-        if (on) {
-            metaLabel.setText("データ読込中…");
-        }
+        busyBox.setVisible(on);
+        busyBox.setManaged(on);
     }
 
     private void applyFlowLayout(double viewportWidth) {
@@ -360,7 +379,6 @@ public final class EquipmentStatusFullscreenStage {
     private Button guideButton(String text, String tooltipText, Runnable action) {
         Button button = new Button(text);
         button.getStyleClass().add("pm-equipment-status-fullscreen-guide-btn");
-        button.setFocusTraversable(false);
         if (tooltipText != null && !tooltipText.isBlank()) {
             Tooltip.install(button, new Tooltip(tooltipText));
         }

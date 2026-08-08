@@ -14,6 +14,7 @@ import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.Spinner;
 import javafx.scene.control.SpinnerValueFactory;
+import javafx.scene.control.Tooltip;
 import javafx.scene.layout.ColumnConstraints;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
@@ -129,13 +130,13 @@ public final class EquipmentStatusDashboardAppearancePanel {
         fontCombo.setMaxWidth(200);
         addRow(grid, row++, "種類", fontCombo, null);
 
-        machineFontSpinner = intSpinner(9, 28, (int) prefs.machineFontPx(), 1);
+        machineFontSpinner = intSpinner(10, 28, (int) prefs.machineFontPx(), 1);
         addRow(grid, row++, "機械名 (px)", machineFontSpinner, null);
 
-        metaFontSpinner = intSpinner(8, 20, (int) prefs.metaFontPx(), 1);
+        metaFontSpinner = intSpinner(10, 20, (int) prefs.metaFontPx(), 1);
         addRow(grid, row++, "依頼・工程 (px)", metaFontSpinner, null);
 
-        planFontSpinner = intSpinner(8, 18, (int) prefs.planFontPx(), 1);
+        planFontSpinner = intSpinner(10, 18, (int) prefs.planFontPx(), 1);
         addRow(grid, row++, "予定行 (px)", planFontSpinner, null);
 
         pctFontSpinner = intSpinner(10, 32, (int) prefs.pctFontPx(), 1);
@@ -166,7 +167,11 @@ public final class EquipmentStatusDashboardAppearancePanel {
         addRow(grid, row++, "", chartShadowCheckBox, null);
 
         Button reset = new Button("既定に戻す");
-        reset.setOnAction(e -> applyToControls(EquipmentStatusDashboardAppearancePrefs.defaults()));
+        reset.setOnAction(
+                e -> {
+                    applyToControls(EquipmentStatusDashboardAppearancePrefs.defaults());
+                    onChange.accept(prefs);
+                });
 
         VBox root = new VBox(8, grid, reset);
         wireListeners();
@@ -272,8 +277,32 @@ public final class EquipmentStatusDashboardAppearancePanel {
                 new Spinner<>(new SpinnerValueFactory.IntegerSpinnerValueFactory(min, max, value, step));
         s.setEditable(true);
         s.setPrefWidth(96);
+        s.setTooltip(new Tooltip(min + "〜" + max));
+        commitEditorTextOnFocusLost(s);
         numericSpinners.add(s);
         return s;
+    }
+
+    /**
+     * 編集可能 Spinner はフォーカスアウトでは値が確定しないため、入力が黙って捨てられる。
+     * 範囲外・非数値のときは直前の有効値へ戻す。
+     */
+    public static void commitEditorTextOnFocusLost(Spinner<Integer> spinner) {
+        spinner.focusedProperty()
+                .addListener(
+                        (obs, was, focused) -> {
+                            if (focused) {
+                                return;
+                            }
+                            try {
+                                spinner.commitValue();
+                            } catch (RuntimeException ex) {
+                                spinner.cancelEdit();
+                            }
+                            Integer current = spinner.getValue();
+                            spinner.getEditor()
+                                    .setText(current != null ? String.valueOf(current) : "");
+                        });
     }
 
     private static double spinnerInt(Spinner<Integer> s) {

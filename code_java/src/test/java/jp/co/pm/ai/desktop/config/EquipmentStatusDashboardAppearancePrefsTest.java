@@ -78,6 +78,66 @@ class EquipmentStatusDashboardAppearancePrefsTest {
     }
 
     @Test
+    void normalizeHex_rejectsNonHexAndNormalizesCase() {
+        Assertions.assertEquals("#0d9488", prefsWithColors("#zzzzzz", "#e2e8f0").chartDoneColorHex());
+        Assertions.assertEquals("#0d9488", prefsWithColors("0D9488", "#e2e8f0").chartDoneColorHex());
+        Assertions.assertEquals("#ff000080", prefsWithColors("#FF000080", "#e2e8f0").chartDoneColorHex());
+        Assertions.assertEquals("#e2e8f0", prefsWithColors("#0d9488", "#12345").chartRemainColorHex());
+    }
+
+    @Test
+    void fontSizes_haveReadableLowerBounds() {
+        EquipmentStatusDashboardAppearancePrefs tiny =
+                new EquipmentStatusDashboardAppearancePrefs(
+                        0,
+                        280,
+                        121,
+                        12,
+                        12,
+                        12,
+                        8,
+                        EquipmentStatusDashboardAppearancePrefs.SHADOW_SUBTLE,
+                        "",
+                        1,
+                        1,
+                        1,
+                        1,
+                        96,
+                        "#0d9488",
+                        "#e2e8f0",
+                        EquipmentStatusDashboardAppearancePrefs.CHART_FLAT,
+                        false,
+                        EquipmentStatusDashboardAppearancePrefs.FULLSCREEN_THEME_DARK);
+        Assertions.assertEquals(10, tiny.machineFontPx(), 0.01);
+        Assertions.assertEquals(10, tiny.metaFontPx(), 0.01);
+        Assertions.assertEquals(10, tiny.planFontPx(), 0.01);
+        Assertions.assertEquals(10, tiny.pctFontPx(), 0.01);
+    }
+
+    private static EquipmentStatusDashboardAppearancePrefs prefsWithColors(String done, String remain) {
+        return new EquipmentStatusDashboardAppearancePrefs(
+                0,
+                280,
+                121,
+                12,
+                12,
+                12,
+                8,
+                EquipmentStatusDashboardAppearancePrefs.SHADOW_SUBTLE,
+                "",
+                15,
+                12,
+                11,
+                16,
+                96,
+                done,
+                remain,
+                EquipmentStatusDashboardAppearancePrefs.CHART_FLAT,
+                false,
+                EquipmentStatusDashboardAppearancePrefs.FULLSCREEN_THEME_DARK);
+    }
+
+    @Test
     void fullscreenThemeStyleClass_mapsKeyToCss() {
         EquipmentStatusDashboardAppearancePrefs wall =
                 new EquipmentStatusDashboardAppearancePrefs(

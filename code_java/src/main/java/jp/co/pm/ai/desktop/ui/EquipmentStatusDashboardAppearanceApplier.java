@@ -1,27 +1,62 @@
 package jp.co.pm.ai.desktop.ui;
 
+import java.util.HashMap;
 import java.util.Locale;
+import java.util.Map;
 
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
-import javafx.scene.chart.PieChart;
 import javafx.scene.control.Label;
 import javafx.scene.effect.DropShadow;
 import javafx.scene.layout.FlowPane;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
-import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
-import javafx.scene.text.Font;
-import javafx.scene.text.FontPosture;
-import javafx.scene.text.FontWeight;
 
 import jp.co.pm.ai.desktop.config.EquipmentStatusDashboardAppearancePrefs;
 
 /** {@link EquipmentStatusDashboardAppearancePrefs} を FlowPane / カード Node へ反映する。 */
 public final class EquipmentStatusDashboardAppearanceApplier {
 
+    /** カード1枚ごとに生成しないよう、影の強さごとに使い回す（FX スレッドからのみ触る）。 */
+    private static final Map<String, DropShadow> CARD_SHADOWS = new HashMap<>(4);
+
     private EquipmentStatusDashboardAppearanceApplier() {}
+
+    /**
+     * FlowPane の折返し・幅制約の算出結果。
+     *
+     * @param fillViewport {@code true} ならビューポート幅いっぱいに伸ばす（自動列）
+     * @param wrapLength FlowPane の {@code prefWrapLength}（padding を含まない内側幅）
+     * @param totalWidth 固定列時に FlowPane 自身へ与える幅。自動列では {@code -1}
+     */
+    public record FlowLayoutSpec(boolean fillViewport, double wrapLength, double totalWidth) {}
+
+    /**
+     * FlowPane の折返し幅を求める。JavaFX Node に触らないためテストできる。
+     *
+     * @param viewportWidth ScrollPane のビューポート幅（スクロールバー分は既に除かれている）。
+     *     未レイアウト時は 0 以下を渡す
+     */
+    public static FlowLayoutSpec computeFlowSpec(
+            EquipmentStatusDashboardAppearancePrefs prefs,
+            boolean fullscreen,
+            double viewportWidth,
+            double padLeft,
+            double padRight) {
+        double cardW = snappedCardWidth(prefs, fullscreen);
+        if (usesAutoColumnLayout(prefs)) {
+            double inner =
+                    viewportWidth > 1
+                            ? Math.max(cardW, viewportWidth - padLeft - padRight)
+                            : cardW;
+            return new FlowLayoutSpec(true, inner, -1);
+        }
+        double wrap = fixedColumnWrapInnerWidth(prefs, fullscreen);
+        return new FlowLayoutSpec(false, wrap, wrap + padLeft + padRight);
+    }
 
     /**
      * FlowPane の折返し・幅制約を更新する。
@@ -38,29 +73,20 @@ public final class EquipmentStatusDashboardAppearanceApplier {
         }
         pane.setHgap(prefs.cardGapH());
         pane.setVgap(prefs.cardGapV());
-        if (usesAutoColumnLayout(prefs)) {
-            clearFixedColumnWidthConstraints(pane);
-            double cardW = prefs.effectiveCardWidth(fullscreen);
-            if (viewportWidth > 1) {
-                Insets pad = pane.getPadding();
-                double inner =
-                        Math.max(
-                                cardW,
-                                viewportWidth - pad.getLeft() - pad.getRight() - 24);
-                pane.setPrefWrapLength(inner);
-            } else {
-                pane.setPrefWrapLength(RegionFallback.COMPUTED);
-            }
-            return true;
-        }
-        double wrap = fixedColumnWrapInnerWidth(prefs, fullscreen);
         Insets pad = pane.getPadding();
-        double totalW = wrap + pad.getLeft() + pad.getRight();
-        pane.setPrefWrapLength(wrap);
-        pane.setPrefWidth(totalW);
-        pane.setMinWidth(totalW);
-        pane.setMaxWidth(totalW);
-        return false;
+        FlowLayoutSpec spec =
+                computeFlowSpec(prefs, fullscreen, viewportWidth, pad.getLeft(), pad.getRight());
+        pane.setPrefWrapLength(spec.wrapLength());
+        if (spec.fillViewport()) {
+            pane.setMinWidth(Region.USE_COMPUTED_SIZE);
+            pane.setPrefWidth(Region.USE_COMPUTED_SIZE);
+            pane.setMaxWidth(Double.MAX_VALUE);
+        } else {
+            pane.setPrefWidth(spec.totalWidth());
+            pane.setMinWidth(spec.totalWidth());
+            pane.setMaxWidth(spec.totalWidth());
+        }
+        return spec.fillViewport();
     }
 
     /** 固定列数時は ScrollPane の fitToWidth を無効にし、列幅がビューポートに潰されないようにする。 */
@@ -93,24 +119,17 @@ public final class EquipmentStatusDashboardAppearanceApplier {
         return prefs == null || prefs.columnCount() <= 0;
     }
 
-    public static void applyFlowHostLayout(
-            javafx.scene.layout.HBox host, FlowPane pane, boolean fillViewportWidth) {
+    public static void applyFlowHostLayout(HBox host, FlowPane pane, boolean fillViewportWidth) {
         if (host == null || pane == null) {
             return;
         }
         if (fillViewportWidth) {
             host.setAlignment(Pos.TOP_LEFT);
-            javafx.scene.layout.HBox.setHgrow(pane, javafx.scene.layout.Priority.ALWAYS);
+            HBox.setHgrow(pane, Priority.ALWAYS);
         } else {
             host.setAlignment(Pos.TOP_CENTER);
-            javafx.scene.layout.HBox.setHgrow(pane, javafx.scene.layout.Priority.NEVER);
+            HBox.setHgrow(pane, Priority.NEVER);
         }
-    }
-
-    private static void clearFixedColumnWidthConstraints(FlowPane pane) {
-        pane.setMinWidth(Region.USE_COMPUTED_SIZE);
-        pane.setPrefWidth(Region.USE_COMPUTED_SIZE);
-        pane.setMaxWidth(Double.MAX_VALUE);
     }
 
     public static void applyCardShell(
@@ -134,134 +153,56 @@ public final class EquipmentStatusDashboardAppearanceApplier {
         card.setEffect(cardShadow(prefs.cardShadowStyle()));
     }
 
-    public static void applyLabelFont(Label label, EquipmentStatusDashboardAppearancePrefs prefs, double sizePx) {
+    public static void applyLabelFont(
+            Label label, EquipmentStatusDashboardAppearancePrefs prefs, double sizePx) {
+        applyLabelFont(label, prefs, sizePx, false);
+    }
+
+    /**
+     * ラベルのフォントを設定する。フォント種別の指定有無で経路を分けると CSS の {@code -fx-font-size} に
+     * 負けてサイズ指定が無効化されるため、常にインラインスタイルへまとめる。
+     */
+    public static void applyLabelFont(
+            Label label,
+            EquipmentStatusDashboardAppearancePrefs prefs,
+            double sizePx,
+            boolean bold) {
         if (label == null || prefs == null) {
             return;
         }
-        if (prefs.fontFamily().isBlank()) {
-            label.setStyle(String.format(Locale.ROOT, "-fx-font-size: %spx;", sizePx));
-        } else {
-            label.setFont(Font.font(prefs.fontFamily(), FontWeight.NORMAL, sizePx));
+        StringBuilder sb = new StringBuilder(72);
+        sb.append(String.format(Locale.ROOT, "-fx-font-size: %spx;", sizePx));
+        if (bold) {
+            sb.append("-fx-font-weight: bold;");
         }
+        if (!prefs.fontFamily().isBlank()) {
+            sb.append("-fx-font-family: \"")
+                    .append(prefs.fontFamily().replace("\"", ""))
+                    .append("\";");
+        }
+        label.setStyle(sb.toString());
     }
 
     public static void applyMachineLabel(Label label, EquipmentStatusDashboardAppearancePrefs prefs) {
-        if (label == null || prefs == null) {
+        if (prefs == null) {
             return;
         }
-        if (prefs.fontFamily().isBlank()) {
-            label.setStyle(
-                    String.format(
-                            Locale.ROOT,
-                            "-fx-font-size: %spx; -fx-font-weight: bold;",
-                            prefs.machineFontPx()));
-        } else {
-            label.setFont(
-                    Font.font(
-                            prefs.fontFamily(),
-                            FontWeight.BOLD,
-                            FontPosture.REGULAR,
-                            prefs.machineFontPx()));
-        }
-    }
-
-    public static StackPane buildPieChart(
-            double completionPct, EquipmentStatusDashboardAppearancePrefs prefs) {
-        double done = Math.max(0.0, Math.min(100.0, completionPct));
-        double remain = 100.0 - done;
-        PieChart chart =
-                new PieChart(
-                        javafx.collections.FXCollections.observableArrayList(
-                                new PieChart.Data("完了", done),
-                                new PieChart.Data("残り", remain > 0 ? remain : 0.01)));
-        chart.setAnimated(false);
-        chart.setLegendVisible(false);
-        chart.setLabelsVisible(false);
-        double sz = prefs != null ? prefs.chartSizePx() : 96;
-        chart.setPrefSize(sz, sz);
-        chart.setMinSize(sz, sz);
-        chart.setMaxSize(sz, sz);
-        chart.getStyleClass().add("pm-equipment-status-pie");
-
-        Label pct = new Label(String.format(Locale.ROOT, "%.0f%%", done));
-        pct.getStyleClass().add("pm-equipment-status-pct-label");
-        if (prefs != null) {
-            applyLabelFont(pct, prefs, prefs.pctFontPx());
-        }
-
-        StackPane pane = new StackPane(chart, pct);
-        pane.setAlignment(javafx.geometry.Pos.CENTER);
-        if (prefs != null) {
-            stylePieChart(chart, prefs);
-            if (prefs.chartShadowEnabled()) {
-                DropShadow ds = new DropShadow(8, 0, 2, Color.color(0, 0, 0, 0.25));
-                chart.setEffect(ds);
-            }
-        }
-        return pane;
-    }
-
-    private static void stylePieChart(PieChart chart, EquipmentStatusDashboardAppearancePrefs prefs) {
-        Runnable apply =
-                () -> {
-                    for (PieChart.Data d : chart.getData()) {
-                        if (d.getNode() == null) {
-                            continue;
-                        }
-                        String color =
-                                "完了".equals(d.getName())
-                                        ? prefs.chartDoneColorHex()
-                                        : prefs.chartRemainColorHex();
-                        if (EquipmentStatusDashboardAppearancePrefs.CHART_DEPTH.equals(prefs.chartStyle())) {
-                            String lighter = lightenHex(color, 0.18);
-                            d.getNode()
-                                    .setStyle(
-                                            String.format(
-                                                    Locale.ROOT,
-                                                    "-fx-pie-color: linear-gradient(to bottom, %s, %s);",
-                                                    lighter,
-                                                    color));
-                        } else {
-                            d.getNode()
-                                    .setStyle(
-                                            String.format(
-                                                    Locale.ROOT, "-fx-pie-color: %s;", color));
-                        }
-                    }
-                };
-        chart.getData().forEach(d -> d.nodeProperty().addListener((o, a, n) -> apply.run()));
-        javafx.application.Platform.runLater(apply);
+        applyLabelFont(label, prefs, prefs.machineFontPx(), true);
     }
 
     private static DropShadow cardShadow(String style) {
-        return switch (style != null ? style : EquipmentStatusDashboardAppearancePrefs.SHADOW_SUBTLE) {
-            case EquipmentStatusDashboardAppearancePrefs.SHADOW_NONE -> null;
-            case EquipmentStatusDashboardAppearancePrefs.SHADOW_MEDIUM ->
-                    new DropShadow(10, 0, 3, Color.color(0, 0, 0, 0.22));
-            case EquipmentStatusDashboardAppearancePrefs.SHADOW_STRONG ->
-                    new DropShadow(16, 0, 5, Color.color(0, 0, 0, 0.32));
-            default -> new DropShadow(6, 0, 2, Color.color(0, 0, 0, 0.12));
-        };
-    }
-
-    private static String lightenHex(String hex, double amount) {
-        try {
-            Color c = Color.web(hex);
-            return String.format(
-                    Locale.ROOT,
-                    "#%02x%02x%02x",
-                    (int) Math.min(255, c.getRed() * 255 + 255 * amount),
-                    (int) Math.min(255, c.getGreen() * 255 + 255 * amount),
-                    (int) Math.min(255, c.getBlue() * 255 + 255 * amount));
-        } catch (Exception ex) {
-            return hex;
+        if (style == null || EquipmentStatusDashboardAppearancePrefs.SHADOW_NONE.equals(style)) {
+            return null;
         }
-    }
-
-    /** {@code FlowPane#setPrefWrapLength} 用（自動列）。 */
-    private static final class RegionFallback {
-        static final double COMPUTED = Region.USE_COMPUTED_SIZE;
-
-        private RegionFallback() {}
+        return CARD_SHADOWS.computeIfAbsent(
+                style,
+                key ->
+                        switch (key) {
+                            case EquipmentStatusDashboardAppearancePrefs.SHADOW_MEDIUM ->
+                                    new DropShadow(10, 0, 3, Color.color(0, 0, 0, 0.22));
+                            case EquipmentStatusDashboardAppearancePrefs.SHADOW_STRONG ->
+                                    new DropShadow(16, 0, 5, Color.color(0, 0, 0, 0.32));
+                            default -> new DropShadow(6, 0, 2, Color.color(0, 0, 0, 0.12));
+                        });
     }
 }

@@ -3,18 +3,20 @@
 <?import javafx.geometry.Insets?>
 <?import javafx.scene.control.Button?>
 <?import javafx.scene.control.CheckBox?>
+<?import javafx.scene.control.ComboBox?>
 <?import javafx.scene.control.DatePicker?>
 <?import javafx.scene.control.Label?>
 <?import javafx.scene.control.ProgressIndicator?>
 <?import javafx.scene.control.ScrollPane?>
 <?import javafx.scene.control.Separator?>
+<?import javafx.scene.control.Spinner?>
+<?import javafx.scene.control.TextField?>
 <?import javafx.scene.control.TitledPane?>
 <?import javafx.scene.control.ToggleButton?>
 <?import javafx.scene.control.ToolBar?>
 <?import javafx.scene.layout.BorderPane?>
 <?import javafx.scene.layout.FlowPane?>
 <?import javafx.scene.layout.HBox?>
-<?import javafx.scene.control.Spinner?>
 <?import javafx.scene.layout.StackPane?>
 <?import javafx.scene.layout.VBox?>
 
@@ -26,38 +28,70 @@
             <ToolBar>
                 <Button fx:id="reloadButton" mnemonicParsing="false" onAction="#onReloadAction" text="再読込"/>
                 <ToggleButton fx:id="fullscreenToggle" mnemonicParsing="false" onAction="#onFullscreenToggleAction" text="全画面"/>
+                <Separator orientation="VERTICAL"/>
                 <CheckBox fx:id="autoRefreshCheckBox" selected="true" text="自動更新"/>
                 <Label text="間隔(秒)"/>
                 <Spinner fx:id="autoRefreshIntervalSpinner" editable="true" prefWidth="72.0"/>
+                <Label fx:id="nextRefreshLabel" styleClass="pm-equipment-status-next-refresh" text=""/>
                 <Separator orientation="VERTICAL"/>
                 <Label text="実績日"/>
-                <Button mnemonicParsing="false" onAction="#onActualTodayAction" text="当日"/>
-                <DatePicker fx:id="actualDatePicker" prefWidth="148.0"/>
+                <Button fx:id="actualTodayButton" mnemonicParsing="false" onAction="#onActualTodayAction" text="当日"/>
+                <DatePicker fx:id="actualDatePicker" prefWidth="144.0"/>
                 <Separator orientation="VERTICAL"/>
                 <Label text="予定日"/>
-                <Button mnemonicParsing="false" onAction="#onPlanTodayAction" text="当日"/>
-                <DatePicker fx:id="planDatePicker" prefWidth="148.0"/>
+                <Button fx:id="planTodayButton" mnemonicParsing="false" onAction="#onPlanTodayAction" text="当日"/>
+                <DatePicker fx:id="planDatePicker" prefWidth="144.0"/>
             </ToolBar>
             <VBox spacing="4.0" styleClass="pm-equipment-status-subbar">
                 <padding>
                     <Insets bottom="4.0" left="8.0" right="8.0" top="2.0"/>
                 </padding>
-                <HBox spacing="12.0" alignment="CENTER_LEFT" styleClass="pm-equipment-status-subbar-controls">
-                    <Label fx:id="lastUpdatedLabel" text="最終更新: —"/>
-                    <ProgressIndicator fx:id="loadingIndicator" managed="false" prefHeight="20.0" prefWidth="20.0"
-                                       visible="false"/>
-                    <Label fx:id="loadingStatusLabel" managed="false" styleClass="pm-equipment-status-loading-status"
-                           text="データ読込中…" visible="false"/>
-                    <CheckBox fx:id="showAladdinCheckBox" selected="true" text="アラジン予定"/>
-                    <CheckBox fx:id="showDispatchCheckBox" selected="true" text="配台予定"/>
-                    <Label fx:id="planDateSummaryLabel" text="予定日: —"/>
-                    <Label fx:id="actualDateSummaryLabel" text="実績日: —"/>
-                    <Label fx:id="machineCountLabel" text="—"/>
-                </HBox>
+                <FlowPane hgap="14.0" vgap="4.0" styleClass="pm-equipment-status-subbar-controls">
+                    <HBox spacing="6.0" alignment="CENTER_LEFT">
+                        <ToggleButton fx:id="filterStoppedToggle" mnemonicParsing="false"
+                                      styleClass="pm-equipment-status-kpi, pm-equipment-status-kpi-stopped" text="停機 0"/>
+                        <ToggleButton fx:id="filterRunningToggle" mnemonicParsing="false"
+                                      styleClass="pm-equipment-status-kpi, pm-equipment-status-kpi-running" text="稼働中 0"/>
+                        <ToggleButton fx:id="filterCompletedToggle" mnemonicParsing="false"
+                                      styleClass="pm-equipment-status-kpi, pm-equipment-status-kpi-completed" text="予定達成 0"/>
+                    </HBox>
+                    <HBox spacing="6.0" alignment="CENTER_LEFT">
+                        <TextField fx:id="machineFilterField" prefWidth="148.0" promptText="機械名で絞込"/>
+                        <ComboBox fx:id="sortOrderCombo" prefWidth="148.0"/>
+                    </HBox>
+                    <HBox spacing="10.0" alignment="CENTER_LEFT">
+                        <CheckBox fx:id="showAladdinCheckBox" selected="true" text="アラジン予定"/>
+                        <CheckBox fx:id="showDispatchCheckBox" selected="true" text="配台予定"/>
+                    </HBox>
+                    <HBox spacing="8.0" alignment="CENTER_LEFT">
+                        <ProgressIndicator fx:id="loadingIndicator" managed="false" prefHeight="16.0" prefWidth="16.0"
+                                           visible="false"/>
+                        <Label fx:id="loadingStatusLabel" managed="false" styleClass="pm-equipment-status-loading-status"
+                               text="読込中…" visible="false"/>
+                        <Label fx:id="machineCountLabel" text="—"/>
+                        <Label fx:id="lastUpdatedLabel" text="最終更新: —"/>
+                    </HBox>
+                </FlowPane>
                 <Label fx:id="loadStatsLabel" styleClass="pm-equipment-status-load-stats" text=""/>
                 <Label fx:id="sourceSummaryLabel" maxWidth="1.7976931348623157E308" styleClass="pm-equipment-status-source"
                        text="" wrapText="true"/>
             </VBox>
+            <HBox fx:id="pastDateBanner" alignment="CENTER_LEFT" managed="false" spacing="10.0" visible="false"
+                  styleClass="pm-equipment-status-banner, pm-equipment-status-banner-warn">
+                <padding>
+                    <Insets bottom="5.0" left="10.0" right="10.0" top="5.0"/>
+                </padding>
+                <Label fx:id="pastDateBannerLabel" text=""/>
+                <Button mnemonicParsing="false" onAction="#onActualTodayAction" text="当日に戻す"/>
+            </HBox>
+            <HBox fx:id="staleBanner" alignment="CENTER_LEFT" managed="false" spacing="10.0" visible="false"
+                  styleClass="pm-equipment-status-banner, pm-equipment-status-banner-error">
+                <padding>
+                    <Insets bottom="5.0" left="10.0" right="10.0" top="5.0"/>
+                </padding>
+                <Label fx:id="staleBannerLabel" maxWidth="1.7976931348623157E308" text="" wrapText="true"/>
+                <Button mnemonicParsing="false" onAction="#onReloadAction" text="再読込"/>
+            </HBox>
             <TitledPane fx:id="appearancePane" animated="true" collapsible="true" expanded="false"
                         maxHeight="420.0" text="見た目設定">
                 <ScrollPane fitToWidth="true" maxHeight="400.0" styleClass="pm-equipment-status-appearance-scroll">
