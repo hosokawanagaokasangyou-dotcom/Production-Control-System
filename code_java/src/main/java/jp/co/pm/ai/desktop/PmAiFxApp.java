@@ -20,6 +20,7 @@ import javafx.util.Duration;
 import jp.co.pm.ai.desktop.audio.UiClickSound;
 import jp.co.pm.ai.desktop.config.StartupCrashLog;
 import jp.co.pm.ai.desktop.runtime.JvmMemoryMonitor;
+import jp.co.pm.ai.desktop.runtime.SingleInstanceGuard;
 import jp.co.pm.ai.desktop.runtime.WindowsLauncherUserDir;
 import jp.co.pm.ai.desktop.ui.AppWindowIconSupport;
 import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
@@ -32,6 +33,9 @@ import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
  * を有効にする。強制や省略は {@code pm.ai.javafx.prism.*} を参照。
  */
 public class PmAiFxApp extends Application {
+
+    private static final SingleInstanceGuard SINGLE_INSTANCE = new SingleInstanceGuard();
+    private static volatile Stage primaryStageRef;
 
     static {
         System.setProperty("file.encoding", "UTF-8");
@@ -158,6 +162,8 @@ public class PmAiFxApp extends Application {
 
     @Override
     public void start(Stage primaryStage) {
+        primaryStageRef = primaryStage;
+        primaryStage.setOnHidden(e -> SINGLE_INSTANCE.close());
         primaryStage.setTitle("工程管理 AI 配台");
         AppWindowIconSupport.applyTo(primaryStage, AppWindowIconSupport.Variant.DESKTOP);
 
@@ -287,6 +293,21 @@ public class PmAiFxApp extends Application {
         return shell;
     }
 
+    private static void bringPrimaryStageToFront() {
+        Platform.runLater(
+                () -> {
+                    Stage stage = primaryStageRef;
+                    if (stage == null) {
+                        return;
+                    }
+                    if (stage.isIconified()) {
+                        stage.setIconified(false);
+                    }
+                    stage.toFront();
+                    stage.requestFocus();
+                });
+    }
+
     public static void main(String[] args) {
         WindowsLauncherUserDir.alignWithPackagedLauncherIfWindows();
         StartupCrashLog.installUncaughtExceptionLogging();
@@ -300,6 +321,19 @@ public class PmAiFxApp extends Application {
             System.err.println(msg);
             System.exit(2);
         }
+        SINGLE_INSTANCE.setOnActivateRequest(PmAiFxApp::bringPrimaryStageToFront);
+        SingleInstanceGuard.Role role = SINGLE_INSTANCE.tryAcquire();
+        if (role == SingleInstanceGuard.Role.SECONDARY) {
+            StartupCrashLog.append("main: secondary instance — activate requested, exit");
+            System.exit(0);
+            return;
+        }
+        if (role == SingleInstanceGuard.Role.UNAVAILABLE) {
+            StartupCrashLog.append(
+                    "main: single-instance guard unavailable (port busy?) — continuing");
+        }
+        Runtime.getRuntime()
+                .addShutdownHook(new Thread(SINGLE_INSTANCE::close, "pm-ai-single-instance-shutdown"));
         try {
             configurePrismAfterProbe();
             StartupCrashLog.append(
