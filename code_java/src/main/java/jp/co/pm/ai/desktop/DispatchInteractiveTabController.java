@@ -91,6 +91,7 @@ import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.dispatch.AladdinShapedPlanQtyLookup;
 import jp.co.pm.ai.desktop.dispatch.AladdinSystemDispatchDisplayQty;
 import jp.co.pm.ai.desktop.dispatch.DispatchAladdinPlanAligner;
+import jp.co.pm.ai.desktop.dispatch.DispatchQtyCellLineLabels;
 import jp.co.pm.ai.desktop.dispatch.rules.ui.trace.DispatchRuleApplicationBadgeSupport;
 import jp.co.pm.ai.desktop.dispatch.DispatchInteractiveDateAxis;
 import jp.co.pm.ai.desktop.dispatch.DispatchInteractiveRollUnitSupport;
@@ -204,10 +205,10 @@ public final class DispatchInteractiveTabController {
     private static final String DISPATCH_DATE_QTY_MULTILINE_CELL_STYLE_CLASS =
             "dispatch-date-qty-multiline";
 
-    /** 日付セル内の (段階3後) 行（{@link #LABEL_STAGE3_ACTUAL} で始まる行）用。 */
+    /** 日付セル内の (手動改定) 行用。 */
     private static final String DISPATCH_STAGE3_AFTER_LINE_STYLE_CLASS = "dispatch-stage3-after-line";
 
-    /** 段階3試行後に当日配台数量を手動変更したセルの (段階3改) 行用。 */
+    /** 配台試行後に当日配台数量を手動変更したセルの (配台計画改) 行用。 */
     private static final String DISPATCH_STAGE3_REVISED_LINE_STYLE_CLASS = "dispatch-stage3-revised-line";
 
     /**
@@ -223,18 +224,15 @@ public final class DispatchInteractiveTabController {
     private static final String STAGE3_AFTER_LINE_INLINE_STYLE =
             "-fx-font-weight: bold; -fx-text-fill: #111111;";
 
-    /** (アラ計画)/(段階3前) 等の通常行。行選択時の白字化を防ぐ。 */
+    /** (アラ計画)/(配台計画) 等の通常行。行選択時の白字化を防ぐ。 */
     private static final String STAGE3_QTY_DEFAULT_LINE_INLINE_STYLE = "-fx-text-fill: #111111;";
 
     private static final String STAGE3_QTY_DEFAULT_TEXT_INLINE_STYLE = "-fx-fill: #111111;";
 
-    /** 日付セル表示: 段階3試行後の手動改定（当日配台数量）。 */
-    static final String LABEL_STAGE3_REVISED = "(\u6bb5\u968e3\u6539)";
-
     /** 2行ラベル付き数量セルの行高（px）。 */
     private static final double DISPATCH_STAGE3_MULTILINE_ROW_HEIGHT_PX = 44.0;
 
-    /** (アラ計画)＋(段階3前)＋(段階3後/改) の3行固定表示用行高（px）。 */
+    /** (アラ計画)＋(配台計画)＋(手動改定/配台計画改) の3行固定表示用行高（px）。 */
     private static final double DISPATCH_ALADDIN_STAGE3_MULTILINE_ROW_HEIGHT_PX = 66.0;
 
     /** 段階2.1 比較表示: 上記3行＋(段階2.1後) の4行固定表示用行高（px）。 */
@@ -271,11 +269,23 @@ public final class DispatchInteractiveTabController {
     /** 日付セル表示: 段階2成果の配台数量（段階3試行前・当日配台数量）。 */
     static final String LABEL_STAGE2_PLAN = "(\u6bb5\u968e2\u5f8c)";
 
-    /** 日付セル表示: 段階3試行前の編集対象（当日配台数量）。 */
-    static final String LABEL_STAGE3_PLAN = "(\u6bb5\u968e3\u524d)";
+    /** 日付セル表示: 配台計画（当日配台数量・編集対象）。 */
+    static final String LABEL_DISPATCH_PLAN = DispatchQtyCellLineLabels.DISPATCH_PLAN;
 
-    /** 日付セル表示: 段階3試行後の実績（実配台数量・DnD/編集では変更しない）。 */
-    static final String LABEL_STAGE3_ACTUAL = "(\u6bb5\u968e3\u5f8c)";
+    /** 日付セル表示: 配台試行後の実績（実配台数量・読取専用）。 */
+    static final String LABEL_MANUAL_RESULT = DispatchQtyCellLineLabels.MANUAL_RESULT;
+
+    /** @deprecated {@link #LABEL_DISPATCH_PLAN} */
+    @Deprecated
+    static final String LABEL_STAGE3_PLAN = LABEL_DISPATCH_PLAN;
+
+    /** @deprecated {@link #LABEL_MANUAL_RESULT} */
+    @Deprecated
+    static final String LABEL_STAGE3_ACTUAL = LABEL_MANUAL_RESULT;
+
+    /** @deprecated {@link DispatchQtyCellLineLabels#DISPATCH_PLAN_REVISED} */
+    @Deprecated
+    static final String LABEL_STAGE3_REVISED = DispatchQtyCellLineLabels.DISPATCH_PLAN_REVISED;
 
     /** 日付セル表示: 段階2.1試行後の配台（stage21 タイムライン暦日m）。 */
     static final String LABEL_STAGE21_ACTUAL = "(\u6bb5\u968e2.1\u5f8c)";
@@ -2383,11 +2393,11 @@ public final class DispatchInteractiveTabController {
             alignToAladdinPlanButton.setText(ALIGN_TO_ALADDIN_PLAN_BUTTON_TEXT_DEFAULT);
             if (docHasActualDispatchQtyColumn()) {
                 alignToAladdinPlanButton.setTooltip(
-                        new Tooltip("段階3試行後は (段階3前) 数量の自動整列はできません"));
+                        new Tooltip("配台試行後は (配台計画) 数量の自動整列はできません"));
             } else {
                 alignToAladdinPlanButton.setTooltip(
                         new Tooltip(
-                                "段階3前: タスク×日付の (段階3前) 数量を (アラ計画) に沿うようロール単位で再配分する"));
+                                "(配台計画): タスク×日付の (配台計画) 数量を (アラ計画) に沿うようロール単位で再配分する"));
             }
         }
     }
@@ -4905,7 +4915,7 @@ public final class DispatchInteractiveTabController {
                 out.add(filter.showAladdinPlan() ? slot : stage3QtyEmptyLineSlot());
             } else if (line.startsWith(LABEL_STAGE2_PLAN)) {
                 out.add(filter.showStage2Plan() ? slot : stage3QtyEmptyLineSlot());
-            } else if (line.startsWith(LABEL_STAGE3_PLAN)) {
+            } else if (DispatchQtyCellLineLabels.isDispatchPlanLine(line)) {
                 out.add(filter.showStage3Plan() ? slot : stage3QtyEmptyLineSlot());
             } else if (line.startsWith(LABEL_STAGE21_ACTUAL)) {
                 out.add(filter.showStage21After() ? slot : stage3QtyEmptyLineSlot());
@@ -4983,7 +4993,7 @@ public final class DispatchInteractiveTabController {
         if (line.startsWith(LABEL_STAGE2_PLAN)) {
             return filter.showStage2Plan();
         }
-        if (line.startsWith(LABEL_STAGE3_PLAN)) {
+        if (DispatchQtyCellLineLabels.isDispatchPlanLine(line)) {
             return filter.showStage3Plan();
         }
         if (line.startsWith(LABEL_STAGE21_ACTUAL)) {
@@ -5309,7 +5319,7 @@ public final class DispatchInteractiveTabController {
             if (!sb.isEmpty()) {
                 sb.append(singleLineDisplay ? ' ' : '\n');
             }
-            sb.append(LABEL_STAGE3_ACTUAL).append(actualFmt);
+            sb.append(LABEL_MANUAL_RESULT).append(actualFmt);
         }
         return sb.toString();
     }
@@ -5320,7 +5330,7 @@ public final class DispatchInteractiveTabController {
         }
         return switch (planLabel) {
             case STAGE2 -> LABEL_STAGE2_PLAN;
-            case STAGE3 -> LABEL_STAGE3_PLAN;
+            case STAGE3 -> LABEL_DISPATCH_PLAN;
             case PLAIN -> "";
         };
     }
@@ -5711,7 +5721,7 @@ public final class DispatchInteractiveTabController {
         if (shell != null) {
             dialog.initOwner(shell.primaryStageForDialogs());
         }
-        dialog.setTitle(hasActual ? "当日配台数量（段階2後）" : "当日配台数量（段階3前）");
+        dialog.setTitle(hasActual ? "当日配台数量（段階2後）" : "当日配台数量（配台計画）");
         String profileHint = rollUnitProfileHint(wr, dateAxis.get(dateIdx));
         Stage2PlanRowDispatchQtyMetrics.DispatchSimulatorUnitM unitInfo =
                 resolveRollUnitForWideRow(wr);

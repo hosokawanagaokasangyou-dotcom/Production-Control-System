@@ -114,9 +114,11 @@ public final class SpreadsheetTabularSupport {
     private static final String DC_TRIPLE_PREFIX_ACTUAL = "(\u5b9f\u7e3e)";
 
     /** 結果_配台表の {@code 当日配台数量}（段階3手動修正の編集目標 m）。 */
-    private static final String DC_TRIPLE_PREFIX_DISPATCH = "(\u6bb5\u968e3\u524d)";
+    private static final String DC_TRIPLE_PREFIX_DISPATCH =
+            jp.co.pm.ai.desktop.dispatch.DispatchQtyCellLineLabels.DISPATCH_PLAN;
 
-    private static final String DC_TRIPLE_PREFIX_STAGE3_AFTER = "(\u6bb5\u968e3\u5f8c)";
+    private static final String DC_TRIPLE_PREFIX_STAGE3_AFTER =
+            jp.co.pm.ai.desktop.dispatch.DispatchQtyCellLineLabels.MANUAL_RESULT;
 
     /** Grid row index reserved for ControlsFX column filters ({@link SpreadsheetView#setFilteredRow}). */
     public static final int SPREADSHEET_FILTER_ROW = 0;

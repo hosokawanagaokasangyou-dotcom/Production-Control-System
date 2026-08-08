@@ -178,18 +178,15 @@ public final class ResultDispatchPlanningStageSupport {
 
         public String actualQtyLabel() {
             return switch (this) {
-                case STAGE3_0 -> "(段階3.0後)";
-                case STAGE3_1 -> "(段階3.1後)";
-                case STAGE3_2 -> "(段階3.2後)";
-                case LEGACY -> "(段階3後)";
+                case STAGE3_0, STAGE3_1, STAGE3_2, LEGACY -> DispatchQtyCellLineLabels.MANUAL_RESULT;
                 case NONE -> "";
             };
         }
 
         public String revisedQtyLabel() {
             return switch (this) {
-                case STAGE3_0, STAGE3_1, STAGE3_2 -> actualQtyLabel();
-                case LEGACY -> "(段階3改)";
+                case STAGE3_0, STAGE3_1, STAGE3_2 -> DispatchQtyCellLineLabels.MANUAL_RESULT;
+                case LEGACY -> DispatchQtyCellLineLabels.DISPATCH_PLAN_REVISED;
                 case NONE -> "";
             };
         }
@@ -206,23 +203,11 @@ public final class ResultDispatchPlanningStageSupport {
     }
 
     public static boolean isStage3AfterQtyLine(String line) {
-        if (line == null || line.isBlank()) {
-            return false;
-        }
-        return line.startsWith("(段階3後)")
-                || line.startsWith("(段階3.0後)")
-                || line.startsWith("(段階3.1後)")
-                || line.startsWith("(段階3.2後)");
+        return DispatchQtyCellLineLabels.isManualResultLine(line);
     }
 
     public static boolean isStage3RevisedQtyLine(String line) {
-        if (line == null || line.isBlank()) {
-            return false;
-        }
-        return line.startsWith("(段階3改)")
-                || line.startsWith("(段階3.0改)")
-                || line.startsWith("(段階3.1改)")
-                || line.startsWith("(段階3.2改)");
+        return DispatchQtyCellLineLabels.isDispatchPlanRevisedLine(line);
     }
 
     public static void applyPlanningStageBadge(

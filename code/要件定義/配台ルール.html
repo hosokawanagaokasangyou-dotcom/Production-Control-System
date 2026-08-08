@@ -48,6 +48,19 @@
       padding: 0.1rem 0.35rem;
       border-radius: 4px;
     }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.92rem;
+      margin: 0.75rem 0;
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 0.45rem 0.6rem;
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: #eef5f2; }
     ul { padding-left: 1.2rem; }
     nav.toc {
       background: #e8f0ec;
@@ -57,6 +70,14 @@
       margin-bottom: 1.5rem;
     }
     nav.toc a { color: var(--accent2); text-decoration: none; }
+    .warn {
+      background: #fff8e6;
+      border: 1px solid #e6c200;
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+      margin: 1rem 0;
+      font-size: 0.95rem;
+    }
   </style>
 </head>
 <body>
@@ -66,11 +87,15 @@
     <span class="file">code/python/planning_core/_core_FILE_MAP.txt</span> を先に参照する。
   </p>
 
+  <div class="warn">
+    <strong>段階3パイプライン廃止</strong> — 段階3.0 / 3.1 / 3.2、入力3表、<span class="file">stage3_*</span> モジュールは除去済み。再配台は <strong>配台試行</strong> のみ。
+  </div>
+
   <nav class="toc">
     <strong>目次</strong>
     <ol>
       <li><a href="#scope">適用範囲と優先順位</a></li>
-      <li><a href="#pipeline">パイプライン（段階1〜3.2）</a></li>
+      <li><a href="#pipeline">パイプライン（段階1〜2.5・配台試行）</a></li>
       <li><a href="#due-start">納期基準・開始日</a></li>
       <li><a href="#break-eod">休憩・終業直前</a></li>
       <li><a href="#queue">キュー順序</a></li>
@@ -79,7 +104,6 @@
       <li><a href="#need">need / surplus</a></li>
       <li><a href="#unprocessed">未加工・残量算定</a></li>
       <li><a href="#env">環境変数</a></li>
-      <li><a href="#stage3">段階3・枝番と特別ルール</a></li>
       <li><a href="#sync">同期規約</a></li>
     </ol>
   </nav>
@@ -87,14 +111,15 @@
   <section id="scope" class="card">
     <h2>0. 適用範囲と優先順位</h2>
     <ul>
-      <li>本書は段階1〜段階3.2、および配台A（<code>generate_plan</code> / <code>_generate_plan_impl</code>）を対象とする。</li>
+      <li>本書は段階1〜段階2.1、段階2.5、<strong>配台試行</strong>、および配台A（<code>generate_plan</code> / <code>_generate_plan_impl</code>）を対象とする。</li>
+      <li>段階3.0〜3.2・入力3表パイプラインは<strong>廃止</strong>（2026 以降）。</li>
       <li>仕様の優先順位は <code>§B</code> → <code>§A</code> → 本文一般ルール。</li>
       <li>競合時は実装コードを正とし、本書と <span class="file">配台ルール.md</span> を同期する。</li>
     </ul>
   </section>
 
   <section id="pipeline" class="card">
-    <h2>1. パイプライン（段階1 / 2.0 / 2.1 / 2.5 / 3.0 / 3.1 / 3.2）</h2>
+    <h2>1. パイプライン（段階1 / 2.0 / 2.1 / 2.5 / 配台試行）</h2>
 
     <h3>1.1 段階1</h3>
     <ul>
@@ -107,7 +132,7 @@
     <ul>
       <li>開始下限は <code>配台可能日時_上書き → 配台可能日時 → 原反投入日由来</code> の順で解決する。</li>
       <li>同日下限は <code>DISPATCHABLE_FROM_TIME = 12:45</code> を適用（13:00は使用しない）。</li>
-      <li><strong>例外</strong>: 選択中の工場が湖南工場（<code>PM_AI_FACTORY_SITE=KONAN</code>）かつ受注ファイル「在庫場所」列に「湖南」を含むタスクは、同日下限を <code>DISPATCHABLE_FROM_TIME_KONAN_STOCK</code>（既定 9:30）とする。</li>
+      <li><strong>例外</strong>: 湖南工場（<code>PM_AI_FACTORY_SITE=KONAN</code>）かつ在庫場所「湖南」は <code>DISPATCHABLE_FROM_TIME_KONAN_STOCK</code>（既定 9:30）。</li>
     </ul>
 
     <h3>1.3 段階2.1（時間外）</h3>
@@ -117,45 +142,29 @@
 
     <h3>1.4 段階2.5（AI 整列・任意）</h3>
     <ul>
-      <li>段階2 成果の配台表を AI/ルールで整列し、別 JSON（<code>結果_配台表_stage25.json</code> 等）へ出力する。</li>
-      <li>入力1表ベース。段階3 入力3表の生成とは<strong>別処理</strong>。</li>
+      <li>段階2 成果の配台表を AI/ルールで整列し、<code>結果_配台表.after_stage2_5.json</code> 等へ出力する。</li>
+      <li>配台A は実行しない。UI 手動ボタンは停止設定のことがある。</li>
     </ul>
 
-    <h3>1.5 入力3表生成（段階3.0 の前処理）</h3>
-    <ul>
-      <li>配台計画手動修正タブの <strong>「入力3表を生成」</strong>（段階2.0 成功後）。</li>
-      <li><code>planning_core/stage3_input_builder.py</code> が <code>(段階3前)</code> 数量から枝番行を生成し、<code>配台計画_タスク入力3.0</code> へ書き出す。</li>
-    </ul>
+    <h3>1.5 配台計画手動修正タブ（数量表示）</h3>
+    <table>
+      <thead><tr><th>ラベル</th><th>旧称（互換）</th><th>意味</th></tr></thead>
+      <tbody>
+        <tr><td><code>(アラ計画)</code></td><td>—</td><td>アラジン加工計画</td></tr>
+        <tr><td><code>(段階2後)</code></td><td>—</td><td>段階2.1 比較 baseline 等</td></tr>
+        <tr><td><code>(配台計画)</code></td><td><code>(段階3前)</code></td><td>編集目標（当日配台数量）</td></tr>
+        <tr><td><code>(手動改定)</code></td><td><code>(段階3後)</code> 等</td><td>配台試行後の実績行</td></tr>
+        <tr><td><code>(配台計画改)</code></td><td><code>(段階3改)</code> 等</td><td>試行後に当日配台数量を手動変更</td></tr>
+        <tr><td><code>(段階2.1後)</code></td><td>—</td><td>段階2.1 試行後の比較行</td></tr>
+      </tbody>
+    </table>
+    <p>定数: <span class="file">DispatchQtyCellLineLabels.java</span></p>
 
-    <h3>1.6 段階3.0（配台A + 枝番統合）</h3>
+    <h3 id="trial">1.6 配台試行（インタラクティブ）</h3>
     <ul>
-      <li><code>plan_simulation_stage3_0.py</code> → 配台A → <code>stage3_branch_merge.py</code> → 正本反映。</li>
-      <li>ラベル: <code>(段階3.0後)</code> / <code>(段階3.0改)</code>（sidecar あり）。旧試行のみは <code>(段階3後)</code>。</li>
-    </ul>
-
-    <h3>1.7 段階3.1（時間外）</h3>
-    <ul>
-      <li><code>plan_simulation_stage3_1.py</code>。時間外 JSON → 配台A → 枝番統合。ラベル <code>(段階3.1後)</code> 等。</li>
-    </ul>
-
-    <h3>1.8 段階3.2（数量厳守）</h3>
-    <ul>
-      <li><code>plan_simulation_stage3_2.py</code>。<code>PM_AI_STAGE3_2_QTY_STRICT=1</code>。ラベル <code>(段階3.2後)</code> 等。</li>
-    </ul>
-
-    <h3>1.9 sidecar meta</h3>
-    <ul>
-      <li><code>結果_配台表.json.stage3_planning_meta.json</code> に variant（3.0/3.1/3.2）を記録（Java <code>Stage3PlanningMetaStore</code>）。</li>
-    </ul>
-
-    <h3>1.10 配台計画手動修正タブ（数量表示）</h3>
-    <ul>
-      <li><code>(アラ計画)</code> / <code>(段階2後)</code> / <code>(段階3前)</code> / <code>(段階3.x後)</code> / <code>(段階2.1後)</code> — チェックボックスで表示切替。</li>
-    </ul>
-
-    <h3>1.11 旧インタラクティブ JSON 試行</h3>
-    <ul>
-      <li><code>dispatch_interactive_trial.py</code> は段階3.0〜3.2 パイプラインとは別経路。</li>
+      <li><code>dispatch_interactive_trial.py</code> — 入力1表 + 手動修正 JSON をマージし、段階2同一条件で配台A。</li>
+      <li>段階3.0〜3.2 廃止後、手動修正表からの<strong>唯一の再配台経路</strong>。</li>
+      <li>二相・数量検証等は <code>_core.py</code> のインタラクティブ分岐を参照。</li>
     </ul>
   </section>
 
@@ -168,7 +177,7 @@
       <li>原反: <code>原反投入日_上書き</code> 優先。</li>
       <li>配台可能日時: 上書き列 → 算出列 → 原反日＋<strong>12:45</strong>（<code>DISPATCHABLE_FROM_TIME</code>）。</li>
       <li>同日加工下限も 12:45（旧 13:00 は使用しない）。</li>
-      <li><strong>湖南工場・在庫場所「湖南」の例外</strong>: 選択中の工場が湖南工場（<code>PM_AI_FACTORY_SITE=KONAN</code>、未設定時も KONAN 扱い）かつ受注ファイル「在庫場所」列に「湖南」を含むタスクは、時刻定数に <code>DISPATCHABLE_FROM_TIME_KONAN_STOCK</code>（既定 <strong>9:30</strong>）を使う。他は従来通り 12:45。</li>
+      <li><strong>湖南工場・在庫場所「湖南」の例外</strong>: <code>DISPATCHABLE_FROM_TIME_KONAN_STOCK</code>（既定 <strong>9:30</strong>）。</li>
     </ul>
   </section>
 
@@ -266,22 +275,13 @@
       <li>フロー: <code>STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST</code> / <code>STAGE2_SERIAL_DISPATCH_BY_TASK_ID</code> / <code>STAGE2_RETRY_SHIFT_DUE_ON_PARTIAL_REMAINING</code></li>
       <li>B系: <code>PLANNING_B1_INSPECTION_EXCLUSIVE_MACHINE</code> / <code>PLANNING_B2_EC_FOLLOWER_DISJOINT_TEAMS</code></li>
       <li>WIP: <code>WIP_LIMIT_EC_BEFORE_INSP_ROLLS</code> / <code>WIP_LIMIT_SLIT_BEFORE_SEC_ROLLS</code> / <code>WIP_LIMIT_CONNECTION_BEFORE_SEC_ROLLS</code></li>
-      <li>段階3.2: <code>PM_AI_STAGE3_2_QTY_STRICT</code></li>
-      <li>工場別例外（同日開始下限）: <code>PM_AI_FACTORY_SITE</code>（KONAN / KOKUBU。未設定時 KONAN。工場切替コンボに追従） / <code>DISPATCHABLE_FROM_TIME_KONAN_STOCK</code>（既定 9:30。湖南工場・在庫場所「湖南」限定）</li>
-    </ul>
-  </section>
-
-  <section id="stage3" class="card">
-    <h2>10. 段階3・枝番と特別ルール</h2>
-    <ul>
-      <li>枝番依頼NO（配台キー）と <code>元依頼NO</code>（ルールキー）を分離する。</li>
-      <li><code>rule_task_id</code> は原則 <code>元依頼NO</code>。§A / §B / WIP は親単位で集計。</li>
-      <li>枝番統合は成果物表示の集約であり、配台中の制約判定を上書きしない。</li>
+      <li>配台試行: <code>PM_AI_INTERACTIVE_TRIAL_STAGE2_PARITY</code></li>
+      <li>工場別例外: <code>PM_AI_FACTORY_SITE</code> / <code>DISPATCHABLE_FROM_TIME_KONAN_STOCK</code>（既定 9:30）</li>
     </ul>
   </section>
 
   <section id="sync" class="card">
-    <h2>11. 同期規約</h2>
+    <h2>10. 同期規約</h2>
     <ul>
       <li><span class="file">配台ルール.md</span> を正本とする。</li>
       <li><span class="file">配台ルール.html</span> は本書と同期する。</li>
