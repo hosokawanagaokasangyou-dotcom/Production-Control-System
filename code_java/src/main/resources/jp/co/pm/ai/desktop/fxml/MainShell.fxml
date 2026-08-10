@@ -223,12 +223,6 @@
                         <fx:include fx:id="dispatchInteractiveTab" source="DispatchInteractiveTab.fxml"/>
                     </content>
                 </Tab>
-                <Tab fx:id="mainShellTabLearnedSpeedData" closable="false"
-                     text="学習速度データ">
-                    <content>
-                        <fx:include fx:id="learnedSpeedDataTab" source="LearnedSpeedDataTab.fxml"/>
-                    </content>
-                </Tab>
                 <Tab fx:id="mainShellTabPlanResultViewer" closable="false"
                      text="計画結果ビューア (JSON)">
                     <content>

@@ -326,7 +326,6 @@ public final class DesktopSessionStateStore {
         put(root, "mainRunStage2ResultBookFont", state.mainRunStage2ResultBookFont());
         root.put("mainRunSkipGeminiApi", state.mainRunSkipGeminiApi());
         root.put("mainRunStage1MarkAllExcludeAfterRun", state.mainRunStage1MarkAllExcludeAfterRun());
-        root.put("mainRunApplyLearnedSpeedFromActuals", state.mainRunApplyLearnedSpeedFromActuals());
         putUiEnvRows(root, state.uiEnvRows());
         putMainShellTabOrder(root, state.mainShellTabOrder());
         putMainShellTabLayout(root, state.mainShellTabLayout());
@@ -487,7 +486,6 @@ public final class DesktopSessionStateStore {
                 text(root, "mainRunStage2ResultBookFont"),
                 loadSkipGeminiApi(root, "mainRunSkipGeminiApi"),
                 optionalBoolean(root, "mainRunStage1MarkAllExcludeAfterRun", false),
-                optionalBoolean(root, "mainRunApplyLearnedSpeedFromActuals", false),
                 loadUiEnvRows(root),
                 loadStringList(root, "mainShellTabOrder"),
                 loadMainShellTabLayout(root),

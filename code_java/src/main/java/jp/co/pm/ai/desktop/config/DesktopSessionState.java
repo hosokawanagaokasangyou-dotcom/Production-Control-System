@@ -38,7 +38,6 @@ import java.util.Map;
  *     built-in default
  * @param mainRunSkipGeminiApi when true, skip Gemini generateContent calls (run tab checkbox; default off)
  * @param mainRunStage1MarkAllExcludeAfterRun when true, after successful stage 1 mark all plan-input rows 配台不要=yes (development)
- * @param mainRunApplyLearnedSpeedFromActuals when true, apply learned speeds from actuals archive to 加工速度 on plan load (run tab checkbox; default off)
  * @param uiEnvRows persisted 環境変数 tab rows (empty uses bootstrap defaults only)
  * @param mainShellTabOrder ordered {@link jp.co.pm.ai.desktop.MainShellTabId#key()} values for the main window
  *     tab strip; empty restores default FXML order（{@link #mainShellTabLayout()} が空のときのみ有効）
@@ -136,7 +135,6 @@ public record DesktopSessionState(
         String mainRunStage2ResultBookFont,
         boolean mainRunSkipGeminiApi,
         boolean mainRunStage1MarkAllExcludeAfterRun,
-        boolean mainRunApplyLearnedSpeedFromActuals,
         List<UiEnvRowSnapshot> uiEnvRows,
         List<String> mainShellTabOrder,
         List<MainShellTabLayoutNode> mainShellTabLayout,
@@ -453,7 +451,6 @@ public record DesktopSessionState(
                 "",
                 false,
                 false,
-                false,
                 List.of(),
                 List.of(),
                 List.of(),
@@ -555,7 +552,6 @@ public record DesktopSessionState(
                 bootstrap.mainRunStage2ResultBookFont(),
                 bootstrap.mainRunSkipGeminiApi(),
                 bootstrap.mainRunStage1MarkAllExcludeAfterRun(),
-                bootstrap.mainRunApplyLearnedSpeedFromActuals(),
                 bootstrap.uiEnvRows(),
                 mainShellTabOrder(),
                 mainShellTabLayout(),
@@ -654,7 +650,6 @@ public record DesktopSessionState(
                 mainRunStage2ResultBookFont(),
                 mainRunSkipGeminiApi(),
                 mainRunStage1MarkAllExcludeAfterRun(),
-                mainRunApplyLearnedSpeedFromActuals(),
                 uiEnvRows(),
                 List.of(),
                 List.of(),
@@ -755,7 +750,6 @@ public record DesktopSessionState(
                 mainRunStage2ResultBookFont(),
                 mainRunSkipGeminiApi(),
                 mainRunStage1MarkAllExcludeAfterRun(),
-                mainRunApplyLearnedSpeedFromActuals(),
                 List.of(),
                 mainShellTabOrder(),
                 mainShellTabLayout(),
@@ -857,7 +851,6 @@ public record DesktopSessionState(
                 factory.mainRunStage2ResultBookFont(),
                 factory.mainRunSkipGeminiApi(),
                 factory.mainRunStage1MarkAllExcludeAfterRun(),
-                factory.mainRunApplyLearnedSpeedFromActuals(),
                 factory.uiEnvRows(),
                 mainShellTabOrder(),
                 mainShellTabLayout(),
@@ -963,7 +956,6 @@ public record DesktopSessionState(
                 factory.mainRunStage2ResultBookFont(),
                 factory.mainRunSkipGeminiApi(),
                 factory.mainRunStage1MarkAllExcludeAfterRun(),
-                factory.mainRunApplyLearnedSpeedFromActuals(),
                 coalesceUiEnvRows(factory.uiEnvRows(), uiEnvRows()),
                 mainShellTabOrder(),
                 mainShellTabLayout(),
@@ -1078,7 +1070,6 @@ public record DesktopSessionState(
                 e.mainRunStage2ResultBookFont(),
                 e.mainRunSkipGeminiApi(),
                 e.mainRunStage1MarkAllExcludeAfterRun(),
-                e.mainRunApplyLearnedSpeedFromActuals(),
                 List.of(),
                 mainShellTabOrder(),
                 mainShellTabLayout(),
@@ -1180,7 +1171,6 @@ public record DesktopSessionState(
                 mainRunStage2ResultBookFont(),
                 mainRunSkipGeminiApi(),
                 mainRunStage1MarkAllExcludeAfterRun(),
-                mainRunApplyLearnedSpeedFromActuals(),
                 uiEnvRows(),
                 shell.mainShellTabOrder(),
                 shell.mainShellTabLayout(),

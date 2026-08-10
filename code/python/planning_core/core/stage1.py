@@ -317,12 +317,6 @@ def run_stage1_extract():
         raise
     out_df = _merge_plan_sheet_user_overrides(out_df)
     _apply_master_speed_sheet_to_plan_df(out_df, log_prefix="段階1")
-    try:
-        from .actual_speed_apply import apply_learned_speed_to_plan_df
-
-        apply_learned_speed_to_plan_df(out_df, log_prefix="段階1")
-    except Exception as ex:
-        logging.warning("段階1: 学習速度適用をスキップ（%s）", ex)
     _heal_stage1_roll_unit_no_dim_when_roll_matches_qty_mistake(out_df)
     _heal_stage1_roll_unit_if_width_ceiling_merge_spurious(out_df)
     _refresh_plan_reference_columns(out_df, req_map, need_rules)

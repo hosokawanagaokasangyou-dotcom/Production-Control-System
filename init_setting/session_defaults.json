@@ -1737,7 +1737,6 @@
     "actualsStatus",
     "pipelineExecutionTiming",
     "cacheHistory",
-    "learnedSpeedData",
     "env",
     "globalSettings",
     "userProfiles",
@@ -1901,10 +1900,6 @@
         {
           "kind": "tab",
           "id": "cacheHistory"
-        },
-        {
-          "kind": "tab",
-          "id": "learnedSpeedData"
         }
       ]
     },

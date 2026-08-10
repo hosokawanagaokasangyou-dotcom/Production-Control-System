@@ -54,12 +54,6 @@ def load_planning_tasks_df():
         compile_exclude_rules_d_to_e_with_ai=False,
     )
     _apply_master_speed_sheet_to_plan_df(df, log_prefix="配台シート読込")
-    try:
-        from .actual_speed_apply import apply_learned_speed_to_plan_df
-
-        apply_learned_speed_to_plan_df(df, log_prefix="配台シート読込")
-    except Exception as ex:
-        logging.warning("配台シート読込: 学習速度適用をスキップ（%s）", ex)
     _fill_plan_dispatch_remaining_qty_column(df)
     logging.info("計画タスク入力: PM_AI_PLAN_INPUT_PATH='%s' を読み込みました。", _plan_alt)
     return df

@@ -2727,45 +2727,6 @@ public final class AppPaths {
         return 1;
     }
 
-    /** 学習アーカイブのサブフォルダ名（親は {@link #summaryAiDispatchXlsxPath} と同一）。 */
-    public static final String KEY_PM_AI_DISPATCH_LEARNING_ARCHIVE_SUBDIR =
-            "PM_AI_DISPATCH_LEARNING_ARCHIVE_SUBDIR";
-
-    public static final String DEFAULT_PM_AI_DISPATCH_LEARNING_ARCHIVE_SUBDIR =
-            "dispatch-learning-archive";
-
-    /** 学習アーカイブの背景実行を有効化（将来の学習パイプライン用。現状は手動/archive 更新経路）。 */
-    public static final String KEY_PM_AI_LEARNING_ARCHIVE_ENABLED =
-            "PM_AI_LEARNING_ARCHIVE_ENABLED";
-
-    /** 実績由来学習速度を配台計画に適用。 */
-    public static final String KEY_PM_AI_LEARNED_SPEED_ENABLED = "PM_AI_LEARNED_SPEED_ENABLED";
-
-    /** 学習速度適用に必要な (工程,機械) 別最小観測数。 */
-    public static final String KEY_PM_AI_LEARNED_SPEED_MIN_SAMPLES =
-            "PM_AI_LEARNED_SPEED_MIN_SAMPLES";
-
-    /** 学習速度のパーセンタイル（既定 50）。 */
-    public static final String KEY_PM_AI_LEARNED_SPEED_PERCENTILE = "PM_AI_LEARNED_SPEED_PERCENTILE";
-
-    /** 速度ヒストグラムのビン幅（m/分）。 */
-    public static final String KEY_PM_AI_LEARNED_SPEED_HISTOGRAM_BIN_WIDTH =
-            "PM_AI_LEARNED_SPEED_HISTOGRAM_BIN_WIDTH";
-
-    /**
-     * 学習データ蓄積ルート: {@link #summaryAiDispatchXlsxPath(Map)} の親 +
-     * {@link #DEFAULT_PM_AI_DISPATCH_LEARNING_ARCHIVE_SUBDIR}（サブフォルダ名は環境変数で上書き可）。
-     */
-    public static Path resolveDispatchLearningArchiveRoot(Map<String, String> ui) {
-        Map<String, String> u = ui != null ? ui : Map.of();
-        Path parent = summarySharedDataDir(u);
-        String sub = trim(u.get(KEY_PM_AI_DISPATCH_LEARNING_ARCHIVE_SUBDIR));
-        if (sub.isEmpty()) {
-            sub = DEFAULT_PM_AI_DISPATCH_LEARNING_ARCHIVE_SUBDIR;
-        }
-        return parent.resolve(sub).toAbsolutePath().normalize();
-    }
-
     /** 設備ガント PDF（{@link #summaryAiDispatchXlsxPath} と同一フォルダ）。VBA スナップショット名に合わせる。 */
     public static final String EQUIPMENT_GANTT_PDF = "結果_設備ガント.pdf";
 

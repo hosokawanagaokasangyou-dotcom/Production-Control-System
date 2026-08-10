@@ -1947,7 +1947,6 @@ public final class DispatchInteractiveTabController {
                     }
                     loadStage3BaselineFromSidecarIfNeeded(jsonPath);
                     refreshDispatchPlanningStageBadge(jsonPath);
-                    shell.refreshLearnedSpeedDataQuietly();
                     clearDispatchDocDirty();
                     if (shell != null) {
                         shell.ensureDispatchInteractiveOnSceneForGridRebuild(userCompletionDialog);

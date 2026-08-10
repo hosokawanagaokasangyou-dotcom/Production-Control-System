@@ -37,8 +37,6 @@ ENV_RESULT_DISPATCH_TABLE_DIR = "PM_AI_RESULT_DISPATCH_TABLE_DIR"
 ENV_PM_AI_REPO_ROOT = "PM_AI_REPO_ROOT"
 ENV_TASK_INPUT_SOURCE_DIR = "PM_AI_TASK_INPUT_SOURCE_DIR"
 ENV_SUMMARY_AI_DISPATCH_WORKBOOK = "PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK"
-ENV_DISPATCH_LEARNING_ARCHIVE_SUBDIR = "PM_AI_DISPATCH_LEARNING_ARCHIVE_SUBDIR"
-DEFAULT_DISPATCH_LEARNING_ARCHIVE_SUBDIR = "dispatch-learning-archive"
 SUMMARY_AI_DISPATCH_XLSX = "サマリ_AI配台.xlsx"
 
 _LOG = logging.getLogger(__name__)
@@ -233,19 +231,6 @@ def _resolve_summary_ai_dispatch_workbook_path() -> str:
     )
 
     return resolve_summary_ai_dispatch_workbook_path()
-
-
-def resolve_dispatch_learning_archive_root() -> str:
-    """共有 DATA フォルダ + dispatch-learning-archive（サブフォルダ名は環境変数で上書き可）。"""
-    from planning_core.core.summary_shared_data_paths import resolve_summary_shared_data_dir
-
-    parent = resolve_summary_shared_data_dir()
-    sub = (os.environ.get(ENV_DISPATCH_LEARNING_ARCHIVE_SUBDIR) or "").strip()
-    if not sub:
-        sub = DEFAULT_DISPATCH_LEARNING_ARCHIVE_SUBDIR
-    root = os.path.normpath(os.path.join(parent, sub))
-    os.makedirs(root, exist_ok=True)
-    return root
 
 
 def _is_shared_or_unc_path(path: str) -> bool:

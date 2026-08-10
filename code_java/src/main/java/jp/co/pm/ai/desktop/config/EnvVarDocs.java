@@ -505,25 +505,6 @@ public final class EnvVarDocs {
                 "PM_AI_STAGE2_1_OVERTIME",
                 "1/true/yes/on のとき段階2.1（残業/休出シミュ）のフル再配台。output/stage21/ へ成果物を分離出力する。");
         put(
-                "PM_AI_LEARNING_ARCHIVE_ENABLED",
-                "1/true/yes/on（既定）のとき学習アーカイブの背景実行を有効化（将来の学習パイプライン用）。");
-        put(
-                "PM_AI_DISPATCH_LEARNING_ARCHIVE_SUBDIR",
-                "サマリ Excel 同フォルダ内の学習アーカイブサブフォルダ名（既定 dispatch-learning-archive）。");
-        put(
-                "PM_AI_LEARNED_SPEED_ENABLED",
-                "1/true/yes/on のとき実績由来学習速度を段階1/配台計画読込時に適用。"
-                        + " 既定は off。JavaFX 実行・ログタブのチェックが子プロセス起動時に上書きする。");
-        put(
-                "PM_AI_LEARNED_SPEED_MIN_SAMPLES",
-                "学習速度適用に必要な (工程名,機械名) 別最小観測数（既定 5）。");
-        put(
-                "PM_AI_LEARNED_SPEED_PERCENTILE",
-                "学習速度のパーセンタイル（既定 50 = p50）。");
-        put(
-                "PM_AI_LEARNED_SPEED_HISTOGRAM_BIN_WIDTH",
-                "速度ヒストグラムのビン幅 m/分（既定 1.0）。");
-        put(
                 "PM_AI_STAGE2_ENGINE",
                 "段階2の実行エンジン（互換用キー）。JavaFX 実行タブからの段階2は常に Python 子プロセス（plan_simulation_stage2.py）のみ。"
                         + " 未設定・空・python（大小無視）で従来どおり。java が指定されていても無視され Python が起動する（旧 JVM 段階2は撤去済み）。");

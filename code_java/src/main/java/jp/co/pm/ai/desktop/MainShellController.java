@@ -447,9 +447,6 @@ public final class MainShellController
     private DispatchInteractiveTabController dispatchInteractiveTabController;
 
     @FXML
-    private LearnedSpeedDataTabController learnedSpeedDataTabController;
-
-    @FXML
     private PlanResultViewerTabController planResultViewerTabController;
 
     @FXML
@@ -564,9 +561,6 @@ public final class MainShellController
 
     @FXML
     private Tab mainShellTabDispatchInteractive;
-
-    @FXML
-    private Tab mainShellTabLearnedSpeedData;
 
     @FXML
     private Tab mainShellTabPlanResultViewer;
@@ -899,9 +893,6 @@ public final class MainShellController
         deliveryCalendarViewTabController.bindShell(this);
         resultDispatchTableTabController.bindShell(this);
         dispatchInteractiveTabController.bindShell(this);
-        if (learnedSpeedDataTabController != null) {
-            learnedSpeedDataTabController.bindShell(this);
-        }
         if (planWorkspaceHistoryTabController != null) {
             planWorkspaceHistoryTabController.bindShell(this);
         }
@@ -1134,10 +1125,6 @@ public final class MainShellController
                                     && dispatchInteractiveTabController != null) {
                                 dispatchInteractiveTabController.onMainShellDispatchTabSelected();
                             }
-                            if (newTab == mainShellTabLearnedSpeedData
-                                    && learnedSpeedDataTabController != null) {
-                                learnedSpeedDataTabController.onMainShellTabSelected();
-                            }
                             if (newTab == mainShellTabOrganizer
                                     && mainShellTabOrganizerPaneController != null) {
                                 mainShellTabOrganizerPaneController.refreshFromShell();
@@ -1318,8 +1305,6 @@ public final class MainShellController
             planInputTabController.applyComboSheetMayExceedNeedFromSession(
                     s.planInputComboSheetMayExceedNeed());
             mainRunTabController.applyStage2ResultBookFontFromSession(s.mainRunStage2ResultBookFont());
-            mainRunTabController.applyApplyLearnedSpeedFromActualsFromSession(
-                    s.mainRunApplyLearnedSpeedFromActuals());
             mainRunTabController.applySkipGeminiApiFromSession(s.mainRunSkipGeminiApi());
         }
         /*
@@ -1441,7 +1426,6 @@ public final class MainShellController
                 mainRunTabController.snapshotStage2ResultBookFont(),
                 mainRunTabController.snapshotSkipGeminiApi(),
                 false,
-                mainRunTabController.snapshotApplyLearnedSpeedFromActuals(),
                 snapshotUiEnvRows(),
                 snapshotMainShellTabOrder(),
                 snapshotMainShellTabLayout(),
@@ -2309,9 +2293,6 @@ public final class MainShellController
         if (t == mainShellTabDispatchInteractive) {
             return MainShellTabId.DISPATCH_INTERACTIVE;
         }
-        if (t == mainShellTabLearnedSpeedData) {
-            return MainShellTabId.LEARNED_SPEED_DATA;
-        }
         if (t == mainShellTabPlanWorkspaceHistory) {
             return MainShellTabId.PLAN_WORKSPACE_HISTORY;
         }
@@ -2374,7 +2355,6 @@ public final class MainShellController
             case DELIVERY_CALENDAR_VIEW -> mainShellTabDeliveryCalendar;
             case RESULT_DISPATCH -> mainShellTabResultDispatch;
             case DISPATCH_INTERACTIVE -> mainShellTabDispatchInteractive;
-            case LEARNED_SPEED_DATA -> mainShellTabLearnedSpeedData;
             case PLAN_WORKSPACE_HISTORY -> mainShellTabPlanWorkspaceHistory;
             case CACHE_HISTORY -> mainShellTabCacheHistory;
             case API_MODEL_BENCHMARK -> mainShellTabApiModelBenchmark;
@@ -5561,10 +5541,6 @@ public final class MainShellController
                 appendLog(
                         "[run] PM_AI_SKIP_GEMINI_API=1 — Gemini API 呼び出しをスキップします（段階2）。");
             }
-            if (mainRunTabController.snapshotApplyLearnedSpeedFromActuals()) {
-                appendLog(
-                        "[run] PM_AI_LEARNED_SPEED_ENABLED=1 — 加工実績から収集した速度を配台計画読込時に適用します。");
-            }
             if (STAGE1.equals(script)
                     && mainRunTabController.snapshotStage1MarkAllExcludeAfterRun()) {
                 appendLog(
@@ -7690,9 +7666,6 @@ public final class MainShellController
         ui.put(
                 AppPaths.KEY_PM_AI_SKIP_GEMINI_API,
                 mainRunTabController.snapshotSkipGeminiApi() ? "1" : "0");
-        ui.put(
-                AppPaths.KEY_PM_AI_LEARNED_SPEED_ENABLED,
-                mainRunTabController.snapshotApplyLearnedSpeedFromActuals() ? "1" : "0");
     }
 
     /** 配台計画_タスク入力タブの組み合わせ表 need 超過チェックを子プロセス環境へ反映する。 */
@@ -10376,12 +10349,6 @@ public PlanInputTabController planInputTabControllerForDispatchRollUnit() {
     /** {@link #resolveStagePythonExecutablePath(Map)} を現在の環境変数タブの値で解決する。 */
     public Path resolveStagePythonExecutablePath() {
         return resolveStagePythonExecutablePath(collectUiEnv());
-    }
-
-    void refreshLearnedSpeedDataQuietly() {
-        if (learnedSpeedDataTabController != null) {
-            learnedSpeedDataTabController.refreshFromArchive();
-        }
     }
 
     /**

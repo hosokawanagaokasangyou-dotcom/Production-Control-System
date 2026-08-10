@@ -157,9 +157,6 @@ public final class MainRunTabController {
     private CheckBox skipGeminiApiCheckBox;
 
     @FXML
-    private CheckBox applyLearnedSpeedFromActualsCheckBox;
-
-    @FXML
     private CheckBox stage1MarkAllExcludeAfterRunCheckBox;
 
     @FXML
@@ -229,7 +226,6 @@ public final class MainRunTabController {
     private final AtomicBoolean suppressStage2ResultFontEvents = new AtomicBoolean(false);
 
     private final AtomicBoolean suppressSkipGeminiApiEvents = new AtomicBoolean(false);
-    private final AtomicBoolean suppressApplyLearnedSpeedFromActualsEvents = new AtomicBoolean(false);
 
     private final AtomicBoolean suppressStage1MarkAllExcludeAfterRunEvents = new AtomicBoolean(false);
 
@@ -387,17 +383,6 @@ public final class MainRunTabController {
                     .addListener(
                             (o, a, b) -> {
                                 if (!suppressSkipGeminiApiEvents.get() && shell != null) {
-                                    shell.scheduleDesktopSessionSave();
-                                }
-                            });
-        }
-        if (applyLearnedSpeedFromActualsCheckBox != null) {
-            applyLearnedSpeedFromActualsCheckBox
-                    .selectedProperty()
-                    .addListener(
-                            (o, a, b) -> {
-                                if (!suppressApplyLearnedSpeedFromActualsEvents.get()
-                                        && shell != null) {
                                     shell.scheduleDesktopSessionSave();
                                 }
                             });
@@ -1593,24 +1578,6 @@ public final class MainRunTabController {
             skipGeminiApiCheckBox.setSelected(skip);
         } finally {
             suppressSkipGeminiApiEvents.set(false);
-        }
-    }
-
-    /** 子プロセスへ渡す {@code PM_AI_LEARNED_SPEED_ENABLED}（実行・ログタブ「その他」内チェック）。 */
-    boolean snapshotApplyLearnedSpeedFromActuals() {
-        return applyLearnedSpeedFromActualsCheckBox != null
-                && applyLearnedSpeedFromActualsCheckBox.isSelected();
-    }
-
-    void applyApplyLearnedSpeedFromActualsFromSession(boolean enabled) {
-        if (applyLearnedSpeedFromActualsCheckBox == null) {
-            return;
-        }
-        suppressApplyLearnedSpeedFromActualsEvents.set(true);
-        try {
-            applyLearnedSpeedFromActualsCheckBox.setSelected(enabled);
-        } finally {
-            suppressApplyLearnedSpeedFromActualsEvents.set(false);
         }
     }
 

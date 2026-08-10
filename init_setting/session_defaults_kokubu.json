@@ -33,7 +33,6 @@
   "mainRunStage2ResultBookFont": "Meiryo UI",
   "mainRunSkipGeminiApi": false,
   "mainRunStage1MarkAllExcludeAfterRun": false,
-  "mainRunApplyLearnedSpeedFromActuals": false,
   "uiEnvRows": [
     {
       "name": "PM_AI_PYTHON",
@@ -668,7 +667,6 @@
     "actualsStatus",
     "pipelineExecutionTiming",
     "cacheHistory",
-    "learnedSpeedData",
     "env",
     "globalSettings",
     "userProfiles",
@@ -832,10 +830,6 @@
         {
           "kind": "tab",
           "id": "cacheHistory"
-        },
-        {
-          "kind": "tab",
-          "id": "learnedSpeedData"
         }
       ]
     },
