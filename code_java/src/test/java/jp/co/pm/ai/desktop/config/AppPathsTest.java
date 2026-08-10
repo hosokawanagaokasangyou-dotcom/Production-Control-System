@@ -15,10 +15,16 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 class AppPathsTest {
+
+    @AfterEach
+    void resetGlobalFactoryTarget() {
+        GlobalInitSettingTarget.save(FactorySite.KONAN);
+    }
 
     @Test
     void outputDir_isFolderPathKey() {
@@ -266,6 +272,7 @@ class AppPathsTest {
 
     @Test
     void resolveRdpLauncherDeployDir_usesPmdDefaultWhenKeyEmpty() {
+        GlobalInitSettingTarget.save(FactorySite.KONAN);
         Path deployDir = AppPaths.resolveRdpLauncherDeployDir(Map.of()).normalize();
         assertTrue(
                 deployDir.toString().contains(AppPaths.DEFAULT_KONAN_SHARED_DATA_DIR),
@@ -401,6 +408,7 @@ class AppPathsTest {
 
     @Test
     void resolveRdpLauncherPaths_usesDefaultDeployDirWhenKeyEmpty() {
+        GlobalInitSettingTarget.save(FactorySite.KONAN);
         Path deployDir = AppPaths.resolveRdpLauncherDeployDir(Map.of()).normalize();
         assertTrue(
                 deployDir.toString().contains(AppPaths.DEFAULT_KONAN_SHARED_DATA_DIR),
@@ -763,6 +771,17 @@ class AppPathsTest {
         assertEquals(
                 legacyJson.toAbsolutePath().normalize(),
                 AppPaths.resolveResultDispatchTableJsonPath(ui));
+    }
+
+    @Test
+    void isPipelineRuntimeSyncedEnvKey_coversStageRunPaths() {
+        assertTrue(AppPaths.isPipelineRuntimeSyncedEnvKey(AppPaths.KEY_PM_AI_EXCLUDE_RULES_JSON));
+        assertTrue(
+                AppPaths.isPipelineRuntimeSyncedEnvKey(
+                        AppPaths.KEY_PM_AI_DISPATCH_SPECIAL_RULES_JSON));
+        assertTrue(AppPaths.isPipelineRuntimeSyncedEnvKey("RAW_FABRIC_WIDTH_TABLE_PATH"));
+        assertTrue(AppPaths.isPipelineRuntimeSyncedEnvKey("ROLL_UNIT_LENGTH_TABLE_PATH"));
+        assertFalse(AppPaths.isPipelineRuntimeSyncedEnvKey(AppPaths.KEY_PM_AI_REPO_ROOT));
     }
 
     @Test
@@ -1354,6 +1373,9 @@ class AppPathsTest {
         map.put(
                 AppPaths.KEY_PM_AI_ATTENDANCE_CALENDAR_XLSX,
                 "\\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\002 加工G\\●配台AIシステム\\共有DATA\\勤怠カレンダー.xlsx");
+        map.put(
+                AppPaths.KEY_PM_AI_MACHINE_CALENDAR_HISTORY_DIR,
+                "\\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\002 加工G\\●配台AIシステム\\共有DATA\\machine-calendar-json-history");
         map.put(AppPaths.KEY_PM_AI_MASTER_WORKBOOK, "");
         map.put(AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK, "");
 
@@ -1363,6 +1385,7 @@ class AppPathsTest {
         assertFalse(map.get(AppPaths.KEY_PM_AI_ATTENDANCE_JSON).contains("湖南"));
         assertTrue(map.get(AppPaths.KEY_PM_AI_ATTENDANCE_CALENDAR_XLSX).contains("国分"));
         assertFalse(map.get(AppPaths.KEY_PM_AI_ATTENDANCE_CALENDAR_XLSX).contains("湖南"));
+        assertEquals("", map.get(AppPaths.KEY_PM_AI_MACHINE_CALENDAR_HISTORY_DIR));
     }
 
     @Test

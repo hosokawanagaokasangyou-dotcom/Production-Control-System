@@ -995,6 +995,9 @@ public class MemberAttendanceTabController {
                                                     if (gridLoadGen != null
                                                             && gridLoadGen
                                                                     != loadGeneration.get()) {
+                                                        if (onFinished != null) {
+                                                            onFinished.accept(false);
+                                                        }
                                                         return;
                                                     }
                                                     onOk.accept(node);

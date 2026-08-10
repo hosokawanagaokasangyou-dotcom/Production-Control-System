@@ -35,6 +35,21 @@ class GlobalInitSettingTargetTest {
     }
 
     @Test
+    void peekEffective_doesNotPersistInferredFactory() throws Exception {
+        Files.createDirectories(tmpHome.resolve(".pm-ai-desktop"));
+        Files.writeString(
+                tmpHome.resolve(".pm-ai-desktop/global-init-setting-target-factory.txt"),
+                "KONAN",
+                StandardCharsets.UTF_8);
+        Map<String, String> ui =
+                Map.of(
+                        AppPaths.KEY_PM_AI_TASK_INPUT_SOURCE_DIR,
+                        FactorySite.KOKUBU.taskInputSourceDir());
+        assertEquals(FactorySite.KOKUBU, GlobalInitSettingTarget.peekEffective(ui));
+        assertEquals(FactorySite.KONAN, GlobalInitSettingTarget.load());
+    }
+
+    @Test
     void loadEffective_syncsStoreFromUiEnv() throws Exception {
         Files.createDirectories(tmpHome.resolve(".pm-ai-desktop"));
         Files.writeString(

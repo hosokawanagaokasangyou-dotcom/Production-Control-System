@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.lang.reflect.Field;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
@@ -22,6 +23,7 @@ import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.io.JsonTableIo;
 import jp.co.pm.ai.desktop.ui.Stage2AladdinTodayExcludeNextDayDispatchDialog;
 import jp.co.pm.ai.desktop.ui.Stage2InProgressNextDayDispatchDialog;
+import jp.co.pm.ai.planning.stage2.Stage2PlanRunDateResolver;
 
 class PlanInputNextDayDialogRowsTest {
 
@@ -49,15 +51,7 @@ class PlanInputNextDayDialogRowsTest {
     @Test
     void inProgressAndAladdinExcludeRowSetsDoNotOverlap(@TempDir Path temp) throws Exception {
         Path outputDir = temp.resolve("output");
-        Path shapedJson = outputDir.resolve(AppPaths.SHAPED_ALADDIN_PLAN_JSON_BASENAME);
-        JsonTableIo.saveArrayTable(
-                shapedJson,
-                List.of("機械名", "依頼NO", "工程名", "2026/06/09"),
-                List.of(
-                        List.of(MACHINE, "T-IN", "スリット", "0"),
-                        List.of(MACHINE, "T-AL", "スリット", "6090"),
-                        List.of(MACHINE, "T-NONE", "スリット", "0")));
-
+        Files.createDirectories(outputDir);
         Path extractionWorkbook = temp.resolve("data.xlsx");
         try (var wb = new org.apache.poi.xssf.usermodel.XSSFWorkbook()) {
             var sheet = wb.createSheet("加工計画DATA");
@@ -73,7 +67,21 @@ class PlanInputNextDayDialogRowsTest {
                         AppPaths.KEY_PM_AI_DATA_EXTRACTION_SOURCE_WORKBOOK,
                         extractionWorkbook.toString(),
                         AppPaths.KEY_PM_AI_RESULT_DISPATCH_TABLE_DIR,
+                        outputDir.toString(),
+                        AppPaths.KEY_PM_AI_OUTPUT_DIR,
                         outputDir.toString());
+        String planDateKey = Stage2PlanRunDateResolver.planDateColumnKey(ui);
+
+        Path shapedJson = outputDir.resolve(AppPaths.SHAPED_ALADDIN_PLAN_JSON_BASENAME);
+        JsonTableIo.saveArrayTable(
+                shapedJson,
+                List.of("機械名", "依頼NO", "工程名", planDateKey),
+                List.of(
+                        List.of(MACHINE, "T-IN", "スリット", "0"),
+                        List.of(MACHINE, "T-AL", "スリット", "6090"),
+                        List.of(MACHINE, "T-NONE", "スリット", "0")));
+        Files.writeString(
+                outputDir.resolve(AppPaths.RESULT_DISPATCH_TABLE_JSON_BASENAME), "{\"rows\":[]}\n");
 
         PlanInputTabController ctrl = new PlanInputTabController();
         injectGrid(

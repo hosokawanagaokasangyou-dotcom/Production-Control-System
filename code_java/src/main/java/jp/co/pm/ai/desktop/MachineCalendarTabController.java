@@ -130,6 +130,15 @@ public class MachineCalendarTabController {
         loadGridFromPython();
     }
 
+    /** タブ表示済みのときだけ JSON を再読込する（工場切替後の即時更新用）。 */
+    void reloadMachineCalendarDataIfEnabled() {
+        if (!machineCalendarLoadEnabled) {
+            return;
+        }
+        loadGridFromPython();
+        refreshCompanyCalendarMiniCalendar();
+    }
+
     /** 起動後バックグラウンド読込（MainShell コーディネータから呼ぶ）。 */
     void preloadInBackground(Consumer<Boolean> onComplete) {
         if (!machineCalendarLoadEnabled) {
@@ -614,9 +623,6 @@ public class MachineCalendarTabController {
         runAsync(
                 shell.buildMachineCalendarIoRequest("day_grid", d.toString()),
                 node -> {
-                    if (gen != loadGeneration.get()) {
-                        return;
-                    }
                     gridPane.loadFromDayGridJson(node);
                     if (gridPane.isGridLoading()) {
                         endGridLoading();
@@ -632,7 +638,8 @@ public class MachineCalendarTabController {
                     }
                 },
                 null,
-                onComplete);
+                onComplete,
+                gen);
     }
 
     /** 保存・初期値作成など、既にグリッド暗転中の処理のあとに日次グリッドを再読込する。 */
@@ -647,9 +654,6 @@ public class MachineCalendarTabController {
         runAsync(
                 shell.buildMachineCalendarIoRequest("day_grid", d.toString()),
                 node -> {
-                    if (gen != loadGeneration.get()) {
-                        return;
-                    }
                     gridPane.loadFromDayGridJson(node);
                     endGridLoading();
                     if (statusLabel != null) {
@@ -662,7 +666,9 @@ public class MachineCalendarTabController {
                                         + node.path("rows").size());
                     }
                 },
-                null);
+                null,
+                null,
+                gen);
     }
 
     private void applyGridDirtyState(boolean dirty) {
@@ -771,6 +777,15 @@ public class MachineCalendarTabController {
             Consumer<JsonNode> onOk,
             Path tempPatchFile,
             Consumer<Boolean> onFinished) {
+        runAsync(req, onOk, tempPatchFile, onFinished, -1L);
+    }
+
+    private void runAsync(
+            PythonProcessRunner.RunRequest req,
+            Consumer<JsonNode> onOk,
+            Path tempPatchFile,
+            Consumer<Boolean> onFinished,
+            long generationGate) {
         PythonProcessRunner.runCaptureAsync(req)
                 .whenComplete(
                         (cap, err) ->
@@ -819,6 +834,14 @@ public class MachineCalendarTabController {
                                                                         + node.path("error")
                                                                                 .asText("失敗"));
                                                     }
+                                                    if (onFinished != null) {
+                                                        onFinished.accept(false);
+                                                    }
+                                                    return;
+                                                }
+                                                if (generationGate >= 0
+                                                        && generationGate
+                                                                != loadGeneration.get()) {
                                                     if (onFinished != null) {
                                                         onFinished.accept(false);
                                                     }

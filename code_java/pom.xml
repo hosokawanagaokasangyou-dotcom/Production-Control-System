@@ -334,6 +334,9 @@
         <version>3.5.4</version>
         <configuration>
           <useModulePath>false</useModulePath>
+          <reuseForks>false</reuseForks>
+          <forkCount>1</forkCount>
+          <argLine>-Dprism.order=${javafx.prism.order} -Djava.awt.headless=false</argLine>
         </configuration>
       </plugin>
       <!-- jpackage（Windows package_app.ps1）が classpath 入力を組むため package 時に依存 JAR を target/dependency に複製 -->

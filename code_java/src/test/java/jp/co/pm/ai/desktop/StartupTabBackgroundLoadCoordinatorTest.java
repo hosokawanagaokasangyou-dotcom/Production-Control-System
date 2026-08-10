@@ -5,17 +5,30 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import javafx.application.Platform;
+
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 class StartupTabBackgroundLoadCoordinatorTest {
 
+    @BeforeAll
+    static void initFx() {
+        try {
+            Platform.startup(() -> {});
+        } catch (IllegalStateException ignored) {
+            // already started
+        }
+    }
+
     @Test
     void scheduleIfIdle_skipsWhenEnvNotReady() {
-        AtomicBoolean canSchedule = new AtomicBoolean(false);
+        AtomicBoolean canStartup = new AtomicBoolean(false);
+        AtomicBoolean canFactorySwitch = new AtomicBoolean(false);
         AtomicBoolean active = new AtomicBoolean(false);
         StartupTabBackgroundLoadCoordinator coordinator =
                 new StartupTabBackgroundLoadCoordinator(
-                        new StubHost(canSchedule, active));
+                        new StubHost(canStartup, canFactorySwitch, active));
 
         coordinator.scheduleIfIdle();
         coordinator.resetAndSchedule();
@@ -24,12 +37,29 @@ class StartupTabBackgroundLoadCoordinatorTest {
     }
 
     @Test
-    void cancelForFactorySwitch_clearsActiveAndAllowsReschedule() {
-        AtomicBoolean canSchedule = new AtomicBoolean(true);
+    void resetAndScheduleAfterFactorySwitch_allowsWhenStartupGateBlocked() {
+        AtomicBoolean canStartup = new AtomicBoolean(false);
+        AtomicBoolean canFactorySwitch = new AtomicBoolean(true);
         AtomicBoolean active = new AtomicBoolean(false);
         StartupTabBackgroundLoadCoordinator coordinator =
                 new StartupTabBackgroundLoadCoordinator(
-                        new StubHost(canSchedule, active));
+                        new StubHost(canStartup, canFactorySwitch, active));
+
+        coordinator.resetAndSchedule();
+        assertFalse(active.get(), "起動時ゲートが閉じているときは通常の再スケジュールは開始しない");
+
+        coordinator.resetAndScheduleAfterFactorySwitch();
+        assertTrue(active.get(), "工場切替後は専用ゲートで再スケジュールできる");
+    }
+
+    @Test
+    void cancelForFactorySwitch_clearsActiveAndAllowsReschedule() {
+        AtomicBoolean canStartup = new AtomicBoolean(true);
+        AtomicBoolean canFactorySwitch = new AtomicBoolean(true);
+        AtomicBoolean active = new AtomicBoolean(false);
+        StartupTabBackgroundLoadCoordinator coordinator =
+                new StartupTabBackgroundLoadCoordinator(
+                        new StubHost(canStartup, canFactorySwitch, active));
 
         coordinator.scheduleIfIdle();
         assertTrue(active.get(), "読込チェーン開始で active になる");
@@ -42,11 +72,16 @@ class StartupTabBackgroundLoadCoordinatorTest {
     }
 
     private static final class StubHost implements StartupTabBackgroundLoadCoordinator.Host {
-        private final AtomicBoolean canSchedule;
+        private final AtomicBoolean canStartup;
+        private final AtomicBoolean canFactorySwitch;
         private final AtomicBoolean active;
 
-        StubHost(AtomicBoolean canSchedule, AtomicBoolean active) {
-            this.canSchedule = canSchedule;
+        StubHost(
+                AtomicBoolean canStartup,
+                AtomicBoolean canFactorySwitch,
+                AtomicBoolean active) {
+            this.canStartup = canStartup;
+            this.canFactorySwitch = canFactorySwitch;
             this.active = active;
         }
 
@@ -101,7 +136,12 @@ class StartupTabBackgroundLoadCoordinatorTest {
 
         @Override
         public boolean canScheduleStartupBackgroundLoad() {
-            return canSchedule.get();
+            return canStartup.get();
+        }
+
+        @Override
+        public boolean canScheduleFactorySwitchBackgroundLoad() {
+            return canFactorySwitch.get();
         }
     }
 }

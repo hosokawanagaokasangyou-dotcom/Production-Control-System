@@ -719,6 +719,9 @@ public final class MainShellController
 
     /** 起動時の環境変数テンプレート照合が完了したら {@code true}（完了前は初期化済みでも保守的にブロック）。 */
     private final AtomicBoolean envVarsStartupCheckCompleted = new AtomicBoolean(false);
+
+    /** 環境変数未初期化によるタブブロックログをセッション中 1 回に抑える。 */
+    private final AtomicBoolean envInitTabBlockLogEmitted = new AtomicBoolean(false);
     private GlobalAppStatusBar globalAppStatusBar;
     private ShellFactoryOperatorToolbar factoryOperatorToolbar;
     private StartupTabBackgroundLoadCoordinator startupTabBackgroundLoad;
@@ -733,6 +736,7 @@ public final class MainShellController
 
     /** 起動シーケンス（ワークスペース復元〜環境照合〜BG 読込）の進行中。 */
     private volatile boolean startupSequenceActive;
+    private volatile boolean startupRestoredFactorySite;
 
     /** 起動 BG 読込完了後に進捗モーダルを閉じる。 */
     private volatile boolean startupAwaitingBackgroundLoadBeforeModalClose;
@@ -1639,7 +1643,7 @@ public final class MainShellController
         }
     }
 
-    /** 環境変数・工場ワークスペース確定後に勤怠 readiness を更新し、表示済みタブのみ再読込する。 */
+    /** 環境変数・工場ワークスペース確定後に勤怠 readiness を更新し、表示済みタブ（会社・メンバー・機械）のみ再読込する。 */
     private void reloadAttendanceTabsFromJson() {
         reloadAttendanceTabsFromJson(false);
     }
@@ -1652,6 +1656,9 @@ public final class MainShellController
         }
         if (memberAttendanceTabController != null) {
             memberAttendanceTabController.reloadAttendanceDataFromJsonIfEnabled();
+        }
+        if (machineCalendarTabController != null) {
+            machineCalendarTabController.reloadMachineCalendarDataIfEnabled();
         }
         refreshAttendanceReadiness(force);
     }
@@ -1668,6 +1675,20 @@ public final class MainShellController
             return false;
         }
         return !envVarsDifferFromInitialAtStartup.get();
+    }
+
+    /**
+     * 工場切替完了後のバックグラウンド読込を許可するか。
+     * 起動時とは異なり env 差分ブロック中でもリモート・原本等を再読込する。
+     */
+    private boolean isFactorySwitchBackgroundLoadAllowed() {
+        if (!envVarsStartupCheckCompleted.get()) {
+            return false;
+        }
+        if (FactoryOperatorUserStore.isGuestSession()) {
+            return true;
+        }
+        return EnvVarsInitializedAtStore.isRecorded();
     }
 
     /**
@@ -3988,10 +4009,11 @@ public final class MainShellController
                 || DROPPED_ENV_TAB_ROW_KEYS.contains(k);
     }
 
-    /** 環境変数初期化フィンガープリント照合に含めるキー（RDP タブが更新する実行時設定は除外）。 */
+    /** 環境変数初期化フィンガープリント照合に含めるキー（RDP・パイプライン実行時同期は除外）。 */
     private static boolean includeInEnvInitFingerprint(String name) {
         return !omitEnvRowKey(name)
-                && !RemoteDesktopEnvRows.excludedFromMainShellEnvInitFingerprint(name);
+                && !RemoteDesktopEnvRows.excludedFromMainShellEnvInitFingerprint(name)
+                && !AppPaths.isPipelineRuntimeSyncedEnvKey(name);
     }
 
     private List<UiEnvRowSnapshot> snapshotUiEnvRows() {
@@ -4416,7 +4438,7 @@ public final class MainShellController
         if (operator.isBlank() || FactoryOperatorUserStore.isGuestOperator(operator)) {
             return false;
         }
-        FactorySite current = GlobalInitSettingTarget.load();
+        FactorySite current = GlobalInitSettingTarget.loadEffective(collectUiEnv());
         FactorySiteWorkspaceMigrator.migrateIfNeeded(
                 operator,
                 current,
@@ -4436,6 +4458,7 @@ public final class MainShellController
                 }
                 FactoryOperatorUserStore.configureForCurrentApp(ui, current);
             } else {
+                startupRestoredFactorySite = true;
                 switchActiveFactorySite(target, true);
                 return true;
             }
@@ -4712,6 +4735,7 @@ public final class MainShellController
         uiEnvSaveDebounce.stop();
         EnvVarsInitializedAtStore.recordNow();
         envVarsDifferFromInitialAtStartup.set(false);
+        envInitTabBlockLogEmitted.set(false);
         envVarsStartupCheckCompleted.set(true);
         refreshEnvVarsInitializedAtToolbarLabel();
         applyRunTabGating();
@@ -5022,7 +5046,10 @@ public final class MainShellController
         if (!isEnvVarsInitializationPending()) {
             ensureMainShellRunTabSelected();
         }
-        if (!isStartupBackgroundLoadAllowed()) {
+        boolean allowBackgroundLoad =
+                isStartupBackgroundLoadAllowed()
+                        || (startupRestoredFactorySite && isFactorySwitchBackgroundLoadAllowed());
+        if (!allowBackgroundLoad) {
             runAfterUiPulse(this::finishStartupSequenceProgressAndPrompt);
             return;
         }
@@ -5032,7 +5059,11 @@ public final class MainShellController
         runAfterUiPulse(
                 () -> {
                     if (startupTabBackgroundLoad != null) {
-                        startupTabBackgroundLoad.resetAndSchedule();
+                        if (startupRestoredFactorySite) {
+                            startupTabBackgroundLoad.resetAndScheduleAfterFactorySwitch();
+                        } else {
+                            startupTabBackgroundLoad.resetAndSchedule();
+                        }
                     } else {
                         finishStartupSequenceProgressAndPrompt();
                     }
@@ -5041,6 +5072,7 @@ public final class MainShellController
 
     private void finishStartupSequenceProgressAndPrompt() {
         startupSequenceActive = false;
+        startupRestoredFactorySite = false;
         startupAwaitingBackgroundLoadBeforeModalClose = false;
         if (factorySiteSwitchBusy != null) {
             factorySiteSwitchBusy.close();
@@ -5142,15 +5174,17 @@ public final class MainShellController
         suppressEnvVarsInitTabGuard.set(true);
         try {
             ensureMainShellEnvTabSelected();
-            String reason =
-                    EnvVarsInitializedAtStore.isRecorded()
-                            ? "環境変数の値が初期値と異なるため"
-                            : "環境変数の初期化が未完了のため";
-            appendLog(
-                    "[env] "
-                            + reason
-                            + "、環境変数タブ以外は操作できません。"
-                            + "環境変数タブの「環境変数を初期化」を実行してください。");
+            if (envInitTabBlockLogEmitted.compareAndSet(false, true)) {
+                String reason =
+                        EnvVarsInitializedAtStore.isRecorded()
+                                ? "環境変数の値が初期値と異なるため"
+                                : "環境変数の初期化が未完了のため";
+                appendLog(
+                        "[env] "
+                                + reason
+                                + "、環境変数タブ以外は操作できません。"
+                                + "環境変数タブの「環境変数を初期化」を実行してください。");
+            }
         } finally {
             suppressEnvVarsInitTabGuard.set(false);
         }
@@ -5486,7 +5520,7 @@ public final class MainShellController
                     appendLog(line);
                 }
                 if (downstreamClear.anyFailed()) {
-                    appendLog("[stage1] 段階2〜3.2 成果物の一部を削除できませんでした。");
+                    appendLog("[stage1] 段階2〜段階2.1 成果物の一部を削除できませんでした。");
                 }
                 pendingStage21OvertimeJsonPath = null;
                 pendingStage2InProgressNextDayJsonPath = null;
@@ -6301,6 +6335,11 @@ public final class MainShellController
     @Override
     public boolean canScheduleStartupBackgroundLoad() {
         return isStartupBackgroundLoadAllowed();
+    }
+
+    @Override
+    public boolean canScheduleFactorySwitchBackgroundLoad() {
+        return isFactorySwitchBackgroundLoadAllowed();
     }
 
     private String resolveGlobalStatusMessage() {
@@ -8347,17 +8386,14 @@ public final class MainShellController
         if (!FactoryOperatorUserStore.isGuestSession() && !(startup && startupSequenceActive)) {
             requireOperatorSelectionForFactory(site, startup);
         }
-        if (!startupSequenceActive) {
-            reloadAttendanceTabsFromJson(true);
-        }
+        reloadAttendanceTabsFromJson(true);
         runAfterUiPulse(
                 () -> {
                     notifyActiveMainShellTabAfterWorkspaceChange();
                     if (startupSequenceActive) {
                         finishStartupSequenceAfterEnvCheck();
-                    } else if (startupTabBackgroundLoad != null
-                            && isStartupBackgroundLoadAllowed()) {
-                        startupTabBackgroundLoad.resetAndSchedule();
+                    } else if (startupTabBackgroundLoad != null) {
+                        startupTabBackgroundLoad.resetAndScheduleAfterFactorySwitch();
                     }
                 });
     }
@@ -8997,7 +9033,7 @@ public final class MainShellController
         }
     }
 
-    /** 段階2.0 実行直前: 段階2〜3.2 の成果物を削除し関連タブを初期化する（確認ダイアログなし）。 */
+    /** 段階2.0 実行直前: 段階2〜段階2.1 の成果物を削除し関連タブを初期化する（確認ダイアログなし）。 */
     private void clearStage2CachesBeforeStage2Run() {
         Map<String, String> ui = collectUiEnv();
         PipelineDownstreamResultsClearer.ClearResult cleared =
@@ -9007,9 +9043,9 @@ public final class MainShellController
             appendLog(line);
         }
         if (cleared.anyFailed()) {
-            appendLog("[stage2] 実行前: 段階2〜3.2 成果物の一部を削除できませんでした。");
+            appendLog("[stage2] 実行前: 段階2〜段階2.1 成果物の一部を削除できませんでした。");
         } else {
-            appendLog("[stage2] 実行前に段階2〜3.2 キャッシュをクリアしました。");
+            appendLog("[stage2] 実行前に段階2〜段階2.1 キャッシュをクリアしました。");
         }
         pendingStage21OvertimeJsonPath = null;
         pendingStage2InProgressNextDayJsonPath = null;
@@ -9017,7 +9053,7 @@ public final class MainShellController
         syncUiAfterDownstreamPipelineResultsCleared();
     }
 
-    /** 段階1開始時: 段階2〜3.2 成果物削除後に関連タブの表示を初期化する。 */
+    /** 段階1開始時: 段階2〜段階2.1 成果物削除後に関連タブの表示を初期化する。 */
     private void syncUiAfterDownstreamPipelineResultsCleared() {
         if (dispatchInteractiveTabController != null) {
             dispatchInteractiveTabController.resetTableDisplayForStage2Run();
@@ -10027,7 +10063,7 @@ public PlanInputTabController planInputTabControllerForDispatchRollUnit() {
                         });
     }
 
-    /** 段階1～3.5 実行前: 特別ルール JSON を run_snapshots へ凍結し env を上書き。 */
+    /** 段階1／2 実行前: 特別ルール JSON を run_snapshots へ凍結し env を上書き。 */
     private void overlayDispatchSpecialRulesForStageRun(Map<String, String> uiRun, String script) {
         if (uiRun == null) {
             return;

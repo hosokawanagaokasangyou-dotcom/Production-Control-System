@@ -42,8 +42,16 @@ final class MachineCalendarColumnHeaderFormat {
             }
         }
         Map<String, Integer> counts = new HashMap<>();
-        for (String label : rawLabels) {
-            counts.merge(label, 1, Integer::sum);
+        Map<String, Integer> machineShortCounts = new HashMap<>();
+        for (int i = 0; i < columns.size(); i++) {
+            EditableMachineCalendarGridPane.ColumnDef col = columns.get(i);
+            String machine = normalize(col.machine());
+            String machineShort = stripSuffix(machine, commonSuffix);
+            if (machineShort.isBlank() && !machine.isBlank()) {
+                machineShort = machine;
+            }
+            machineShortCounts.merge(machineShort, 1, Integer::sum);
+            counts.merge(rawLabels.get(i), 1, Integer::sum);
         }
         List<Display> out = new ArrayList<>();
         for (int i = 0; i < columns.size(); i++) {
@@ -55,7 +63,8 @@ final class MachineCalendarColumnHeaderFormat {
                 machineShort = machine;
             }
             String label = rawLabels.get(i);
-            if (counts.getOrDefault(label, 0) > 1) {
+            if (counts.getOrDefault(label, 0) > 1
+                    || machineShortCounts.getOrDefault(machineShort, 0) > 1) {
                 label = disambiguateLabel(process, machineShort, col.equipmentKey());
             }
             out.add(new Display(label, tooltips.get(i)));

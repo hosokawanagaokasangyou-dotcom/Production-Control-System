@@ -27,6 +27,7 @@ import javafx.scene.control.MenuItem;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.SeparatorMenuItem;
 import javafx.scene.control.Tooltip;
+import javafx.scene.input.MouseButton;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.ColumnConstraints;
 import javafx.scene.layout.GridPane;
@@ -74,6 +75,8 @@ public final class EditableMachineCalendarGridPane extends VBox {
     private final Deque<GridSnapshot> undoStack = new ArrayDeque<>();
     private boolean dragGestureActive = false;
     private boolean dragMoved = false;
+    private MachineCalendarCellValues.OccupancyMode dragPaintMode =
+            MachineCalendarCellValues.OccupancyMode.OCCUPIED;
     private final Set<CellCoord> dragVisited = new HashSet<>();
     private double dragAnchorX;
     private double dragAnchorY;
@@ -108,7 +111,8 @@ public final class EditableMachineCalendarGridPane extends VBox {
         Label legend =
                 new Label(
                         "クリック: 反転　｜ドラッグ: 塗り（ツールバーのモード）　｜見出しクリック: 列/行一括　｜"
-                                + "右クリック: コメント（▲=あり）　｜保存で JSON 正本へ反映");
+                                + "右クリック: 非稼働→稼働可（ドラッグで複数）／稼働可セルはコメント（▲=あり）　｜"
+                                + "保存で JSON 正本へ反映");
         legend.getStyleClass().add("pm-machine-calendar-grid-legend");
         legend.setWrapText(true);
 
@@ -429,7 +433,8 @@ public final class EditableMachineCalendarGridPane extends VBox {
     }
 
     private void onGridMouseDragged(MouseEvent e) {
-        if (!dragGestureActive || !e.isPrimaryButtonDown()) {
+        if (!dragGestureActive
+                || (!e.isPrimaryButtonDown() && !e.isSecondaryButtonDown())) {
             return;
         }
         if (!dragMoved) {
@@ -449,9 +454,11 @@ public final class EditableMachineCalendarGridPane extends VBox {
         }
     }
 
-    private void beginDragGesture(MouseEvent e) {
+    private void beginDragGesture(
+            MouseEvent e, MachineCalendarCellValues.OccupancyMode mode) {
         dragGestureActive = true;
         dragMoved = false;
+        dragPaintMode = mode;
         dragVisited.clear();
         dragAnchorX = e.getSceneX();
         dragAnchorY = e.getSceneY();
@@ -491,7 +498,15 @@ public final class EditableMachineCalendarGridPane extends VBox {
         if (!dragVisited.add(coord)) {
             return;
         }
-        writeCellValue(coord, paintMode);
+        writeCellValue(coord, dragPaintMode);
+        updateCellUi(coord);
+    }
+
+    private void setCellAvailable(CellCoord coord) {
+        if (!MachineCalendarCellValues.isOccupied(readCellValue(coord))) {
+            return;
+        }
+        writeCellValue(coord, MachineCalendarCellValues.OccupancyMode.AVAILABLE);
         updateCellUi(coord);
     }
 
@@ -693,22 +708,40 @@ public final class EditableMachineCalendarGridPane extends VBox {
         cell.setOnMousePressed(
                 e -> {
                     if (e.isPrimaryButtonDown()) {
-                        beginDragGesture(e);
+                        beginDragGesture(e, paintMode);
+                    } else if (e.isSecondaryButtonDown()
+                            && MachineCalendarCellValues.isOccupied(readCellValue(coord))) {
+                        beginDragGesture(
+                                e, MachineCalendarCellValues.OccupancyMode.AVAILABLE);
                     }
                 });
         cell.setOnMouseEntered(
                 e -> {
-                    if (dragGestureActive && dragMoved && e.isPrimaryButtonDown()) {
+                    if (!dragGestureActive || !dragMoved) {
+                        return;
+                    }
+                    if (e.isPrimaryButtonDown() || e.isSecondaryButtonDown()) {
                         applyPaintToCell(coord);
                     }
                 });
-        cell.setOnMouseClicked(e -> onCellClicked(coord));
+        cell.setOnMouseClicked(
+                e -> {
+                    if (e.getButton() == MouseButton.PRIMARY) {
+                        onCellClicked(coord);
+                    }
+                });
         cell.setOnContextMenuRequested(
                 e -> {
                     if (dragMoved) {
+                        e.consume();
                         return;
                     }
                     e.consume();
+                    if (MachineCalendarCellValues.isOccupied(readCellValue(coord))) {
+                        setCellAvailable(coord);
+                        notifyDirty();
+                        return;
+                    }
                     showCellContextMenu(cell, coord, e.getScreenX(), e.getScreenY());
                 });
         cellUiMap.put(cellKey(coord), cell);

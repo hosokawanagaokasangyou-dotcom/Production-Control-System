@@ -134,13 +134,13 @@ public final class EditableMemberAttendanceGridPane extends VBox {
                         legendChip("休", "pm-att-legend-off"),
                         legendChip("年休", "pm-att-legend-paid-leave"),
                         legendChip("欠勤", "pm-att-legend-absent"),
-                        legendChip("前/後", "pm-att-legend-partial"),
+                        legendChip("前休/後休", "pm-att-legend-partial"),
                         legendChip("休出", "pm-att-legend-holiday-work"),
                         legendChip("前出/後出", "pm-att-legend-holiday-work-partial"));
         legendChips.getStyleClass().add("pm-attendance-legend-chips");
         Label legend =
                 new Label(
-                        "クリック: ·→休→年休→欠→前→後→休出→前出→後出　｜ダブルクリック: 時間別（青枠=時間別あり）　｜右クリック: コメント（▲=あり）");
+                        "クリック: ·→休→年休→欠→前休→後休→休出→前出→後出　｜ダブルクリック: 時間別（青枠=時間別あり）　｜右クリック: コメント（▲=あり）");
         legend.getStyleClass().add("pm-member-attendance-grid-legend");
         legend.setWrapText(true);
 
@@ -1082,10 +1082,10 @@ public final class EditableMemberAttendanceGridPane extends VBox {
             return "欠";
         }
         if (PRESET_OFF_AM.equals(st.dayPreset)) {
-            return "前";
+            return "前休";
         }
         if (PRESET_OFF_PM.equals(st.dayPreset)) {
-            return "後";
+            return "後休";
         }
         if (PRESET_NO_DISPATCH.equals(st.dayPreset)) {
             return "-";

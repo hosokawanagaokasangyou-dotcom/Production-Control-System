@@ -49,6 +49,29 @@ public final class FactorySiteOperatorAccess {
         return isSessionOperatorInFactoryUserManagement(site);
     }
 
+    /**
+     * 指定操作者が当該工場を利用可能か（起動スプラッシュ予測・セッション未確立時用）。
+     */
+    public static boolean isOperatorAllowedForFactory(
+            Map<String, String> ui, FactorySite site, String operator) {
+        if (site == null || site == FactorySite.RDP_LAUNCHER) {
+            return false;
+        }
+        if (!isFactorySummaryFolderReachable(ui, site)) {
+            return false;
+        }
+        String name = operator != null ? operator.strip() : "";
+        if (name.isBlank() || FactoryOperatorUserStore.isGuestOperator(name)) {
+            return true;
+        }
+        try {
+            FactoryOperatorUserStore.configureForCurrentApp(ui != null ? ui : Map.of(), site);
+            return FactoryOperatorUserStore.loginChoicesForFactory(site).contains(name);
+        } catch (IOException ex) {
+            return false;
+        }
+    }
+
     /** コンボ不可理由（ログ・Tooltip 用）。到達可なら empty。 */
     public static String comboBlockReasonJa(Map<String, String> ui, FactorySite site) {
         if (site == null || site == FactorySite.RDP_LAUNCHER) {

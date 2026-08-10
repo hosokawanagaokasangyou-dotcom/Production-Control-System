@@ -98,6 +98,27 @@ class EnvVarsInitializedAtStoreTest {
     }
 
     @Test
+    void envFingerprint_ignoresPipelineRuntimeSyncedKeys() {
+        Map<String, String> baseline =
+                Map.of(
+                        AppPaths.KEY_PM_AI_REPO_ROOT,
+                        "C:\\repo",
+                        AppPaths.KEY_PM_AI_EXCLUDE_RULES_JSON,
+                        "");
+        EnvVarsInitializedAtStore.recordEnvFingerprint(
+                baseline, k -> !AppPaths.isPipelineRuntimeSyncedEnvKey(k));
+        Map<String, String> afterStageRun =
+                Map.of(
+                        AppPaths.KEY_PM_AI_REPO_ROOT,
+                        "C:\\repo",
+                        AppPaths.KEY_PM_AI_EXCLUDE_RULES_JSON,
+                        "C:\\output\\stage1_exclude_rules.json");
+        assertTrue(
+                EnvVarsInitializedAtStore.envFingerprintMatches(
+                        afterStageRun, k -> !AppPaths.isPipelineRuntimeSyncedEnvKey(k)));
+    }
+
+    @Test
     void envFingerprint_ignoresRdpTabKeys() {
         Map<String, String> baseline =
                 Map.of(
@@ -105,7 +126,9 @@ class EnvVarsInitializedAtStoreTest {
                         "C:\\repo",
                         AppPaths.KEY_PM_AI_REQUEST_FORM_RDP_PROFILE,
                         "");
-        EnvVarsInitializedAtStore.recordEnvFingerprint(baseline, k -> true);
+        EnvVarsInitializedAtStore.recordEnvFingerprint(
+                baseline,
+                k -> !RemoteDesktopEnvRows.excludedFromMainShellEnvInitFingerprint(k));
         Map<String, String> afterRdpVisit =
                 Map.of(
                         AppPaths.KEY_PM_AI_REPO_ROOT,

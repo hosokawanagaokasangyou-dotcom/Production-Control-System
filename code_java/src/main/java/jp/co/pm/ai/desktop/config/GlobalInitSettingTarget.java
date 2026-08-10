@@ -63,6 +63,16 @@ public final class GlobalInitSettingTarget {
         return load();
     }
 
+    /**
+     * 推定のみ行い永続ファイルへ {@link #save} しない（起動スプラッシュ等の表示専用）。
+     */
+    public static FactorySite peekEffective(Map<String, String> ui) {
+        if (suppressUiEnvInferencePersist.get()) {
+            return load();
+        }
+        return FactorySite.inferFromUiEnv(ui).orElseGet(GlobalInitSettingTarget::load);
+    }
+
     /** 工場切替中に {@link #loadEffective} が旧工場 UNC から永続工場を巻き戻さないようにする。 */
     public static void setSuppressUiEnvInferencePersist(boolean suppress) {
         suppressUiEnvInferencePersist.set(suppress);

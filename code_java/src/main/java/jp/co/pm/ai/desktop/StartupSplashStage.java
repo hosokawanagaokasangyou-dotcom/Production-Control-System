@@ -36,8 +36,8 @@ import javafx.util.Duration;
 
 import jp.co.pm.ai.desktop.config.AppVersionInfo;
 import jp.co.pm.ai.desktop.config.FactorySite;
+import jp.co.pm.ai.desktop.config.StartupFactorySiteResolver;
 import jp.co.pm.ai.desktop.ui.AppWindowIconSupport;
-import jp.co.pm.ai.desktop.config.GlobalInitSettingTarget;
 
 /**
  * Premium startup splash until main window FXML is loaded and initialized.
@@ -164,7 +164,7 @@ final class StartupSplashStage {
         StartupSplashBranding b = branding != null ? branding : StartupSplashBranding.PMD;
         boolean rdpLauncher = isRemoteDesktopLauncher(b);
         FactorySite factorySite =
-                b.showFactorySite() ? GlobalInitSettingTarget.load() : null;
+                b.showFactorySite() ? StartupFactorySiteResolver.resolveForSplash() : null;
 
         Stage stage = new Stage();
         stage.initStyle(StageStyle.TRANSPARENT);

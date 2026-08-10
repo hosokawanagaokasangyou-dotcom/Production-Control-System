@@ -3,9 +3,11 @@ package jp.co.pm.ai.desktop.config;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -79,6 +81,34 @@ public final class DesktopUiEnvMapLoader {
             // PM_AI_RDP_LAUNCHER_INI は空のまま（操作者別 {操作者名}_RPA設定.ini を resolveRdpLauncherIni が解決）
         }
         return Map.copyOf(map);
+    }
+
+    /**
+     * 起動スプラッシュの工場推定用。セッション未保存の ui_ref 既定 {@code PM_AI_FACTORY_SITE} は使わず、
+     * MainShell 起動後と同様のブートストラップ補完を行う。
+     */
+    public static Map<String, String> loadForStartupFactoryInference() {
+        LinkedHashMap<String, String> map = new LinkedHashMap<>(loadInitialMap());
+        Set<String> sessionKeys = sessionUiEnvKeys();
+        if (!sessionKeys.contains(AppPaths.KEY_PM_AI_FACTORY_SITE)) {
+            map.remove(AppPaths.KEY_PM_AI_FACTORY_SITE);
+        }
+        DesktopUiEnvBootstrap.fillEmptyBootstrapDefaults(map);
+        return Map.copyOf(map);
+    }
+
+    private static Set<String> sessionUiEnvKeys() {
+        Set<String> keys = new HashSet<>();
+        DesktopSessionState session = DesktopSessionStateStore.load();
+        if (session.uiEnvRows() != null) {
+            for (UiEnvRowSnapshot row : session.uiEnvRows()) {
+                String name = row.name() != null ? row.name().trim() : "";
+                if (!name.isEmpty()) {
+                    keys.add(name);
+                }
+            }
+        }
+        return keys;
     }
 
     public static void persistEnvMapAndTheme(Map<String, String> envMap, String uiThemeId) {

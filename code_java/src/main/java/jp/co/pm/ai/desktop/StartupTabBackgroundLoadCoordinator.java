@@ -2,6 +2,7 @@ package jp.co.pm.ai.desktop;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.BooleanSupplier;
 
 import javafx.application.Platform;
 
@@ -37,6 +38,9 @@ final class StartupTabBackgroundLoadCoordinator {
 
         /** 環境変数の起動チェック完了かつ初期化済みのときのみ true。 */
         boolean canScheduleStartupBackgroundLoad();
+
+        /** 工場切替完了後。env 差分ブロック中でも true になりうる。 */
+        boolean canScheduleFactorySwitchBackgroundLoad();
     }
 
     private static final int STEP_REMOTE = 1;
@@ -77,7 +81,11 @@ final class StartupTabBackgroundLoadCoordinator {
 
     /** 未実行なら読込チェーンを開始する。環境変数初期化未完了時は何もしない。 */
     void scheduleIfIdle() {
-        if (!host.canScheduleStartupBackgroundLoad()) {
+        scheduleIfIdle(host::canScheduleStartupBackgroundLoad);
+    }
+
+    private void scheduleIfIdle(BooleanSupplier gate) {
+        if (!gate.getAsBoolean()) {
             return;
         }
         if (!runScheduled.compareAndSet(false, true)) {
@@ -92,6 +100,12 @@ final class StartupTabBackgroundLoadCoordinator {
     void resetAndSchedule() {
         runScheduled.set(false);
         scheduleIfIdle();
+    }
+
+    /** 工場切替完了後に再読込する（env 差分ブロック中でも実行）。 */
+    void resetAndScheduleAfterFactorySwitch() {
+        runScheduled.set(false);
+        scheduleIfIdle(host::canScheduleFactorySwitchBackgroundLoad);
     }
 
     private void beginRemoteDesktop() {

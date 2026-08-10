@@ -776,6 +776,21 @@ public final class AppPaths {
         return key != null && TABULAR_DATA_TABLE_PATH_KEYS.contains(key.trim());
     }
 
+    /**
+     * 段階1／2 実行前に {@link jp.co.pm.ai.desktop.MainShellController} が自動同期するキー。
+     * 環境変数初期化フィンガープリント照合からは除外する（スナップショットパス・ルックアップ表の作業コピー等）。
+     */
+    public static boolean isPipelineRuntimeSyncedEnvKey(String key) {
+        if (key == null || key.isBlank()) {
+            return false;
+        }
+        String k = key.strip();
+        return KEY_PM_AI_EXCLUDE_RULES_JSON.equals(k)
+                || KEY_PM_AI_DISPATCH_SPECIAL_RULES_JSON.equals(k)
+                || isTabularDataTablePathEnvKey(k)
+                || "ROLL_UNIT_LENGTH_TABLE_PATH".equals(k);
+    }
+
     /** Result-task column config CSV. */
     public static boolean isCsvFilePathEnvKey(String key) {
         return key != null && KEY_PM_AI_RESULT_TASK_COLUMN_CONFIG_CSV.equals(key.trim());
@@ -1798,16 +1813,28 @@ public final class AppPaths {
 
     /** Path of {@link #SHAPED_ALADDIN_PLAN_JSON_BASENAME} next to the dispatch table JSON. */
     public static Path resolveShapedAladdinPlanJsonPath(Map<String, String> ui) {
-        return resolveResultDispatchTableDir(ui != null ? ui : Map.of())
-                .resolve(SHAPED_ALADDIN_PLAN_JSON_BASENAME)
-                .toAbsolutePath()
-                .normalize();
+        return resolveDispatchColocatedArtifactPath(ui, SHAPED_ALADDIN_PLAN_JSON_BASENAME);
     }
 
     /** Path of {@link #SHAPED_PROCESSING_ACTUALS_JSON_BASENAME} next to the dispatch table JSON. */
     public static Path resolveShapedProcessingActualsJsonPath(Map<String, String> ui) {
-        return resolveResultDispatchTableDir(ui != null ? ui : Map.of())
-                .resolve(SHAPED_PROCESSING_ACTUALS_JSON_BASENAME)
+        return resolveDispatchColocatedArtifactPath(ui, SHAPED_PROCESSING_ACTUALS_JSON_BASENAME);
+    }
+
+    /**
+     * 配台表 JSON と同じフォルダの派生ファイル（shaped キャッシュ等）。
+     * {@link #resolveResultDispatchTableStage2JsonPath} のレガシー {@code code/output} フォールバックに追従する。
+     */
+    private static Path resolveDispatchColocatedArtifactPath(
+            Map<String, String> ui, String basename) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        Path dispatchJson = resolveResultDispatchTableStage2JsonPath(u);
+        Path parent = dispatchJson.getParent();
+        if (parent != null) {
+            return parent.resolve(basename).toAbsolutePath().normalize();
+        }
+        return resolveResultDispatchTableDir(u)
+                .resolve(basename)
                 .toAbsolutePath()
                 .normalize();
     }
@@ -2819,16 +2846,18 @@ public final class AppPaths {
         scratch.remove(KEY_PM_AI_ATTENDANCE_JSON);
         scratch.remove(KEY_PM_AI_ATTENDANCE_CALENDAR_XLSX);
         scratch.remove(KEY_PM_AI_MACHINE_CALENDAR_JSON);
+        scratch.remove(KEY_PM_AI_MACHINE_CALENDAR_HISTORY_DIR);
         scratch.remove(KEY_PM_AI_ATTENDANCE_JSON_HISTORY_DIR);
         scratch.remove(KEY_PM_AI_ATTENDANCE_CALENDAR_XLSX_HISTORY_DIR);
         putFactoryManagedEnv(
                 map, KEY_PM_AI_ATTENDANCE_JSON, attendanceDataJsonPath(scratch).toString());
         scratch.put(
                 KEY_PM_AI_ATTENDANCE_JSON, map.getOrDefault(KEY_PM_AI_ATTENDANCE_JSON, ""));
+        Path attendanceJsonDir = attendanceDataJsonPath(scratch).getParent();
         putFactoryManagedEnv(
                 map,
                 KEY_PM_AI_ATTENDANCE_CALENDAR_XLSX,
-                attendanceCalendarXlsxPath(scratch).toString());
+                resolveAttendanceCalendarXlsxInDir(attendanceJsonDir).toString());
         scratch.put(
                 KEY_PM_AI_ATTENDANCE_CALENDAR_XLSX,
                 map.getOrDefault(KEY_PM_AI_ATTENDANCE_CALENDAR_XLSX, ""));
@@ -2838,6 +2867,7 @@ public final class AppPaths {
                 machineCalendarDataJsonPath(scratch).toString());
         putFactoryManagedEnv(map, KEY_PM_AI_ATTENDANCE_JSON_HISTORY_DIR, "");
         putFactoryManagedEnv(map, KEY_PM_AI_ATTENDANCE_CALENDAR_XLSX_HISTORY_DIR, "");
+        putFactoryManagedEnv(map, KEY_PM_AI_MACHINE_CALENDAR_HISTORY_DIR, "");
     }
 
     /**
