@@ -183,6 +183,8 @@ public record PlanWorkspaceSessionFragment(
                 base.windowHeight(),
                 base.windowX(),
                 base.windowY(),
+                base.windowScreenVisualMinX(),
+                base.windowScreenVisualMinY(),
                 base.uiTheme(),
                 base.logFontFamily(),
                 base.logFontSize(),

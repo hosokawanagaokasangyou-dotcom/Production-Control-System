@@ -18,6 +18,8 @@ import java.util.Map;
  * @param windowHeight last main window height ({@code 0} if unknown)
  * @param windowX last window X ({@link Double#NaN} if unknown / keep toolkit placement)
  * @param windowY last window Y ({@link Double#NaN} if unknown)
+ * @param windowScreenVisualMinX 前回表示モニターの visual bounds 最小 X（{@link Double#NaN} で未保存）
+ * @param windowScreenVisualMinY 前回表示モニターの visual bounds 最小 Y（{@link Double#NaN} で未保存）
  * @param uiTheme persisted UI theme id ({@link DesktopTheme#storedId()}, empty defaults to light)
  * @param logFontFamily run-tab log font family name; empty means default family
  * @param logFontSize run-tab log size in points; {@code 0} means default size
@@ -119,6 +121,8 @@ public record DesktopSessionState(
         double windowHeight,
         double windowX,
         double windowY,
+        double windowScreenVisualMinX,
+        double windowScreenVisualMinY,
         String uiTheme,
         String logFontFamily,
         double logFontSize,
@@ -435,6 +439,8 @@ public record DesktopSessionState(
                 0d,
                 Double.NaN,
                 Double.NaN,
+                Double.NaN,
+                Double.NaN,
                 "",
                 "",
                 0d,
@@ -536,6 +542,8 @@ public record DesktopSessionState(
                 windowHeight(),
                 windowX(),
                 windowY(),
+                windowScreenVisualMinX(),
+                windowScreenVisualMinY(),
                 uiTheme(),
                 logFontFamily(),
                 logFontSize(),
@@ -632,6 +640,8 @@ public record DesktopSessionState(
                 mainRunScriptDir(),
                 0d,
                 0d,
+                Double.NaN,
+                Double.NaN,
                 Double.NaN,
                 Double.NaN,
                 "",
@@ -734,6 +744,8 @@ public record DesktopSessionState(
                 windowHeight(),
                 windowX(),
                 windowY(),
+                windowScreenVisualMinX(),
+                windowScreenVisualMinY(),
                 uiTheme(),
                 logFontFamily(),
                 logFontSize(),
@@ -835,6 +847,8 @@ public record DesktopSessionState(
                 windowHeight(),
                 windowX(),
                 windowY(),
+                windowScreenVisualMinX(),
+                windowScreenVisualMinY(),
                 uiTheme(),
                 logFontFamily(),
                 logFontSize(),
@@ -940,6 +954,8 @@ public record DesktopSessionState(
                 windowHeight(),
                 windowX(),
                 windowY(),
+                windowScreenVisualMinX(),
+                windowScreenVisualMinY(),
                 uiTheme(),
                 logFontFamily(),
                 logFontSize(),
@@ -1054,6 +1070,8 @@ public record DesktopSessionState(
                 windowHeight(),
                 windowX(),
                 windowY(),
+                windowScreenVisualMinX(),
+                windowScreenVisualMinY(),
                 uiTheme(),
                 logFontFamily(),
                 logFontSize(),
@@ -1155,6 +1173,8 @@ public record DesktopSessionState(
                 shell.windowHeight(),
                 shell.windowX(),
                 shell.windowY(),
+                shell.windowScreenVisualMinX(),
+                shell.windowScreenVisualMinY(),
                 shell.uiTheme(),
                 shell.logFontFamily(),
                 shell.logFontSize(),

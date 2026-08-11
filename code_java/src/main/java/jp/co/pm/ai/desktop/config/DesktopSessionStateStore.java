@@ -470,6 +470,8 @@ public final class DesktopSessionStateStore {
                 optionalDouble(root, "windowHeight", 0d),
                 optionalDouble(root, "windowX", Double.NaN),
                 optionalDouble(root, "windowY", Double.NaN),
+                optionalDouble(root, "windowScreenVisualMinX", Double.NaN),
+                optionalDouble(root, "windowScreenVisualMinY", Double.NaN),
                 text(root, "uiTheme"),
                 text(root, "logFontFamily"),
                 optionalDouble(root, "logFontSize", 0d),
@@ -1676,6 +1678,14 @@ public final class DesktopSessionStateStore {
         }
         if (Double.isFinite(y)) {
             root.put("windowY", y);
+        }
+        double screenMinX = state.windowScreenVisualMinX();
+        double screenMinY = state.windowScreenVisualMinY();
+        if (Double.isFinite(screenMinX)) {
+            root.put("windowScreenVisualMinX", screenMinX);
+        }
+        if (Double.isFinite(screenMinY)) {
+            root.put("windowScreenVisualMinY", screenMinY);
         }
     }
 }

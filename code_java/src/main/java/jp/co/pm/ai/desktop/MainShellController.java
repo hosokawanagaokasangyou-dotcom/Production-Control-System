@@ -163,6 +163,7 @@ import jp.co.pm.ai.desktop.ui.MissingSkillsSheetColumnDialog;
 import jp.co.pm.ai.desktop.ui.Stage2UnknownMasterCombinationDialog;
 import jp.co.pm.ai.desktop.ui.Stage2UnknownMasterCombinationDialogResult;
 import jp.co.pm.ai.desktop.ui.ButtonPressFeedback;
+import jp.co.pm.ai.desktop.ui.MainStageScreenGeometry;
 import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
 import jp.co.pm.ai.desktop.runtime.MemoryJvmRingLog;
 import jp.co.pm.ai.desktop.dispatch.RawInputMorningDispatchRateAnalyzer;
@@ -951,6 +952,7 @@ public final class MainShellController
         refreshGlobalStatusBar();
 
         installUiEnvAutoSave();
+        installMainStageGeometryAutoSave();
 
         geminiFreeTierModelsRefreshService =
                 new GeminiFreeTierModelsRefreshService(
@@ -1352,28 +1354,16 @@ public final class MainShellController
         if (s == null) {
             return;
         }
-        double w = s.windowWidth();
-        double h = s.windowHeight();
-        double minW = primaryStage.getMinWidth();
-        double minH = primaryStage.getMinHeight();
-        if (Double.isFinite(w)
-                && Double.isFinite(h)
-                && w >= minW
-                && h >= minH) {
-            primaryStage.setWidth(w);
-            primaryStage.setHeight(h);
-        }
-        double x = s.windowX();
-        double y = s.windowY();
-        if (Double.isFinite(x) && Double.isFinite(y)) {
-            Rectangle2D screen = Screen.getPrimary().getVisualBounds();
-            double ww = primaryStage.getWidth();
-            double hh = primaryStage.getHeight();
-            double maxX = Math.max(screen.getMinX(), screen.getMaxX() - ww);
-            double maxY = Math.max(screen.getMinY(), screen.getMaxY() - hh);
-            primaryStage.setX(clamp(x, screen.getMinX(), maxX));
-            primaryStage.setY(clamp(y, screen.getMinY(), maxY));
-        }
+        MainStageScreenGeometry.applyToStage(
+                primaryStage, MainStageScreenGeometry.fromSessionState(s));
+    }
+
+    private void installMainStageGeometryAutoSave() {
+        Runnable schedule = () -> schedulePersistSessionDebounced();
+        primaryStage.xProperty().addListener((obs, oldV, newV) -> schedule.run());
+        primaryStage.yProperty().addListener((obs, oldV, newV) -> schedule.run());
+        primaryStage.widthProperty().addListener((obs, oldV, newV) -> schedule.run());
+        primaryStage.heightProperty().addListener((obs, oldV, newV) -> schedule.run());
     }
 
     private static double clamp(double v, double lo, double hi) {
@@ -1396,6 +1386,8 @@ public final class MainShellController
         if (pushButtonDesignTabController != null) {
             pushButtonDesignTabController.flushEditsBeforeSnapshot();
         }
+        MainStageScreenGeometry.Snapshot windowGeometry =
+                MainStageScreenGeometry.snapshotFromStage(primaryStage);
         return new DesktopSessionState(
                 planInputTabController.snapshotPlanInputPath(),
                 planInputTabController.snapshotPlanInputSheet(),
@@ -1404,10 +1396,12 @@ public final class MainShellController
                 excludeRulesTabController.snapshotExcludeRulesPath(),
                 nz(mainRunTabController.getWorkbookField().getText()),
                 nz(mainRunTabController.getScriptDirField().getText()),
-                primaryStage.getWidth(),
-                primaryStage.getHeight(),
-                primaryStage.getX(),
-                primaryStage.getY(),
+                windowGeometry.width(),
+                windowGeometry.height(),
+                windowGeometry.x(),
+                windowGeometry.y(),
+                windowGeometry.screenVisualMinX(),
+                windowGeometry.screenVisualMinY(),
                 themeCombo != null && themeCombo.getValue() != null
                         ? themeCombo.getValue().storedId()
                         : DesktopTheme.LIGHT.storedId(),
