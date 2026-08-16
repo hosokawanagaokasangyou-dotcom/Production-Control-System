@@ -49,11 +49,33 @@ public final class JuchuTransferValueNormalizer {
 
     private JuchuTransferValueNormalizer() {}
 
+    /**
+     * 全角英数字・全角記号（U+FF01–U+FF5E）と全角スペースを半角へ寄せる。
+     * 半角カタカナ（U+FF65–U+FF9F）は触らない（フォーム候補の {@code ｽﾗｲｽ} 等を壊さないため）。
+     */
+    public static String toHalfWidthAscii(String val) {
+        if (val == null || val.isEmpty()) {
+            return val == null ? "" : val;
+        }
+        StringBuilder out = new StringBuilder(val.length());
+        for (int i = 0; i < val.length(); i++) {
+            char c = val.charAt(i);
+            if (c >= 0xFF01 && c <= 0xFF5E) {
+                out.append((char) (c - 0xFEE0));
+            } else if (c == '\u3000') {
+                out.append(' ');
+            } else {
+                out.append(c);
+            }
+        }
+        return out.toString();
+    }
+
     public static String normalizeKey(String val) {
         if (val == null) {
             return "";
         }
-        String text = val.strip().toUpperCase(Locale.ROOT);
+        String text = toHalfWidthAscii(val.strip()).toUpperCase(Locale.ROOT);
         text = java.text.Normalizer.normalize(text, java.text.Normalizer.Form.NFKC);
         text = text.replaceAll("\\s+", "");
         text = normalizeDashVariants(text);
@@ -64,7 +86,7 @@ public final class JuchuTransferValueNormalizer {
         if (val == null) {
             return "";
         }
-        String text = val.strip();
+        String text = toHalfWidthAscii(val.strip());
         text = java.text.Normalizer.normalize(text, java.text.Normalizer.Form.NFKC);
         text = text.replaceAll("\\s+", "");
         text = normalizeDashVariants(text);
@@ -76,7 +98,7 @@ public final class JuchuTransferValueNormalizer {
             return 0.0;
         }
         String cleaned =
-                java.text.Normalizer.normalize(val.strip(), java.text.Normalizer.Form.NFKC)
+                toHalfWidthAscii(val.strip())
                         .replace(",", "")
                         .replace("，", "");
         var m = NUMERIC_PATTERN.matcher(cleaned);

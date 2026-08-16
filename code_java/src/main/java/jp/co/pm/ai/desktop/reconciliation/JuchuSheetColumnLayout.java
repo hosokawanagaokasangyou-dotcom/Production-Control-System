@@ -633,24 +633,27 @@ public final class JuchuSheetColumnLayout {
 
     /** 品番-タイプ-幅X長 形式の製品名/原反名を生成。 */
     public static String buildSpecName(String part, String type, String width, String length) {
-        return part.trim()
-                + "-"
-                + type.trim()
-                + "-"
-                + width.trim()
-                + "X"
-                + length.trim();
+        String p = part != null ? JuchuTransferValueNormalizer.toHalfWidthAscii(part.trim()) : "";
+        String t = type != null ? JuchuTransferValueNormalizer.toHalfWidthAscii(type.trim()) : "";
+        String w = width != null ? JuchuTransferValueNormalizer.toHalfWidthAscii(width.trim()) : "";
+        String l = length != null ? JuchuTransferValueNormalizer.toHalfWidthAscii(length.trim()) : "";
+        return p + "-" + t + "-" + w + "X" + l;
     }
 
     /**
      * 製品/原反 spec 文字列を品番・タイプ・幅・長さに分解。
      * {@code 20010-H600-1180X250} または {@code 20010-H600-1180-250} に対応。
+     * 全角英数字・{@code ×} も半角 {@code X} 区切りとして扱う。
      */
     public static String[] parseSpecName(String spec) {
         if (spec == null || spec.isBlank()) {
             return new String[] {"", "", "", ""};
         }
-        String text = spec.trim();
+        String text =
+                JuchuTransferValueNormalizer.toHalfWidthAscii(spec.trim())
+                        .replace('×', 'X')
+                        .replace('ｘ', 'X')
+                        .replace('Ｘ', 'X');
         String[] parts = text.split("-");
         if (parts.length >= 3) {
             String part = parts[0];
@@ -659,7 +662,7 @@ public final class JuchuSheetColumnLayout {
             for (int i = 3; i < parts.length; i++) {
                 dims = dims + "-" + parts[i];
             }
-            String[] wL = dims.split("X", 2);
+            String[] wL = dims.split("(?i)X", 2);
             if (wL.length >= 2) {
                 return new String[] {part, type, wL[0], wL[1]};
             }
@@ -691,13 +694,6 @@ public final class JuchuSheetColumnLayout {
         if (text == null || text.isBlank()) {
             return 0.0;
         }
-        String trimmed = text.strip();
-        String withoutGrouping = trimmed.replace(",", "").replace("，", "");
-        java.util.regex.Matcher m =
-                java.util.regex.Pattern.compile("[-+]?\\d*\\.\\d+|\\d+").matcher(withoutGrouping);
-        if (m.find()) {
-            return Double.parseDouble(m.group());
-        }
-        return 0.0;
+        return JuchuTransferValueNormalizer.normalizeNumeric(text);
     }
 }

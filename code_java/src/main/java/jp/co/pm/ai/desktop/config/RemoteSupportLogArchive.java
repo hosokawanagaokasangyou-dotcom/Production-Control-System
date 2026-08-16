@@ -245,7 +245,10 @@ public final class RemoteSupportLogArchive {
                 JSON.writerWithDefaultPrettyPrinter().writeValueAsString(meta) + "\n",
                 StandardCharsets.UTF_8);
 
-        pruneExpiredGenerations(userDir, LocalDate.now(ZoneId.systemDefault()), RETENTION_DAYS);
+        pruneExpiredGenerations(
+                userDir,
+                (when != null ? when : LocalDateTime.now()).toLocalDate(),
+                RETENTION_DAYS);
         return genDir.toAbsolutePath().normalize();
     }
 

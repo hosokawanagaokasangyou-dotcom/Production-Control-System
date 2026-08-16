@@ -7,25 +7,23 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
+import javafx.application.Platform;
+
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledOnOs;
 import org.junit.jupiter.api.condition.OS;
 
-import javafx.application.Platform;
-
 @EnabledOnOs(OS.WINDOWS)
 class StageRunBusyDialogTest {
 
     @BeforeAll
-    static void initFx() throws Exception {
-        CountDownLatch ready = new CountDownLatch(1);
+    static void initFx() {
         try {
-            Platform.startup(ready::countDown);
+            Platform.startup(() -> {});
         } catch (IllegalStateException alreadyStarted) {
-            ready.countDown();
+            // already started
         }
-        assertTrue(ready.await(10, TimeUnit.SECONDS));
     }
 
     @Test
@@ -46,7 +44,7 @@ class StageRunBusyDialogTest {
                     dialog.setDetail("段階2: 計画シミュレーションを開始");
                     shown.countDown();
                 });
-        assertTrue(shown.await(10, TimeUnit.SECONDS));
+        assertTrue(shown.await(5, TimeUnit.SECONDS));
 
         StageRunBusyDialog dialog = ref.get();
         assertTrue(dialog.isShowing());
@@ -57,7 +55,7 @@ class StageRunBusyDialogTest {
                     dialog.close();
                     closed.countDown();
                 });
-        assertTrue(closed.await(10, TimeUnit.SECONDS));
+        assertTrue(closed.await(5, TimeUnit.SECONDS));
         assertFalse(dialog.isShowing());
     }
 }

@@ -507,11 +507,19 @@ final class RequestFormOriginalExtractor {
             String formatted =
                     RequestFormCellTextUtil.formatCellDisplayText(
                             cell, CELL_FORMATTER, evaluator);
-            return formatted != null ? formatted.trim() : "";
+            return normalizeExtractedCellText(formatted);
         } catch (RuntimeException ex) {
             String formatted = RequestFormCellTextUtil.formatCellDisplayText(cell, CELL_FORMATTER);
-            return formatted != null ? formatted.trim() : "";
+            return normalizeExtractedCellText(formatted);
         }
+    }
+
+    /** 原本セル値をフォーム転記向けに整形（全角英数字→半角。半角カナは維持）。 */
+    private static String normalizeExtractedCellText(String formatted) {
+        if (formatted == null) {
+            return "";
+        }
+        return JuchuTransferValueNormalizer.toHalfWidthAscii(formatted.trim());
     }
 
     private static void putIfPresent(Map<String, String> db, String key, String value) {

@@ -29,7 +29,7 @@ import jp.co.pm.ai.desktop.io.PipelineExecutionTimingHistoryLock.AcquiredLock;
 import jp.co.pm.ai.desktop.io.PipelineExecutionTimingHistoryLock.LockInfo;
 
 /**
- * 段階1／2.0～3.2・配台試行・サマリ Excel・納期管理ビューの実行時間履歴。永続化先は
+ * 段階1／2.0〜2.1・配台試行・サマリ Excel・納期管理ビューの実行時間履歴。永続化先は
  * {@link AppPaths#pipelineExecutionTimingHistoryPath}（サマリ Excel と同一フォルダ）。
  * 保存前に {@link PipelineExecutionTimingHistoryLock} を取得し、他 PC 更新時はマージして排他保存する。
  */
@@ -44,8 +44,8 @@ public final class PipelineExecutionTimingHistoryStore {
                     AppPaths.PIPELINE_EXECUTION_TIMING_HISTORY_JSON);
 
     private static final int DEFAULT_MAX_SAMPLES_PER_KIND = 300;
-    private static final int PERSIST_MAX_ATTEMPTS = 12;
-    private static final long PERSIST_RETRY_MS = 300L;
+    private static final int PERSIST_MAX_ATTEMPTS = 24;
+    private static final long PERSIST_RETRY_MS = 500L;
 
     public record Stats(
             long count,

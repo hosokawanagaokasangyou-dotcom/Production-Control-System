@@ -1129,9 +1129,9 @@ def _cell_symbol(entry: dict) -> str:
     ):
         return "休"
     if preset == PRESET_OFF_AM or lt == "前休":
-        return "前"
+        return "前休"
     if preset == PRESET_OFF_PM or lt == "後休":
-        return "後"
+        return "後休"
     if preset == PRESET_NO_DISPATCH or lt == "-":
         return "-"
     if preset == PRESET_HOLIDAY_WORK or lt == "休日出勤":

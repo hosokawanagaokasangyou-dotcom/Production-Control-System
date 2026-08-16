@@ -6,11 +6,22 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import java.util.List;
 
-import org.junit.jupiter.api.Test;
-
+import javafx.application.Platform;
 import javafx.scene.image.Image;
 
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+
 class AppWindowIconSupportTest {
+
+    @BeforeAll
+    static void initFx() {
+        try {
+            Platform.startup(() -> {});
+        } catch (IllegalStateException ignored) {
+            // already started
+        }
+    }
 
     @Test
     void desktopIconsAreBundled() {

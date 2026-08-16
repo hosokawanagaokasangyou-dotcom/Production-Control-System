@@ -6,6 +6,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -20,6 +21,9 @@ import jp.co.pm.ai.desktop.config.AppPaths;
 public final class PipelineExecutionTimingHistoryLock {
 
     public static final String LOCK_SUFFIX = ".save.lock";
+
+    /** 他端末クラッシュ等で残ったロックを回収する上限（通常の保存は数秒以内）。 */
+    private static final Duration STALE_LOCK_MAX_AGE = Duration.ofMinutes(3);
 
     private static final String KEY_VERSION = "version";
     private static final String KEY_HISTORY = "history";
@@ -114,6 +118,9 @@ public final class PipelineExecutionTimingHistoryLock {
             Files.createDirectories(parent);
         }
         String payload = formatLockPayload(historyJsonPath);
+        if (Files.isRegularFile(lock) && breakStaleLockIfNeeded(lock)) {
+            // 古いロックを回収した直後に再取得を試みる
+        }
         try {
             Files.writeString(
                     lock,
@@ -123,7 +130,92 @@ public final class PipelineExecutionTimingHistoryLock {
                     StandardOpenOption.WRITE);
             return Optional.of(new AcquiredLock(lock));
         } catch (java.nio.file.FileAlreadyExistsException ex) {
+            if (breakStaleLockIfNeeded(lock)) {
+                try {
+                    Files.writeString(
+                            lock,
+                            payload,
+                            StandardCharsets.UTF_8,
+                            StandardOpenOption.CREATE_NEW,
+                            StandardOpenOption.WRITE);
+                    return Optional.of(new AcquiredLock(lock));
+                } catch (java.nio.file.FileAlreadyExistsException ignored) {
+                    return Optional.empty();
+                }
+            }
             return Optional.empty();
+        }
+    }
+
+    /**
+     * 同一 PC でプロセス終了済み、または {@link #STALE_LOCK_MAX_AGE} 超過のロックを削除する。
+     *
+     * @return 削除したら {@code true}
+     */
+    static boolean breakStaleLockIfNeeded(Path lockPath) {
+        if (!Files.isRegularFile(lockPath)) {
+            return false;
+        }
+        Optional<LockInfo> info = readLockInfoFromLockFile(lockPath);
+        if (info.isPresent()) {
+            LockInfo li = info.get();
+            if (isSameHost(li.hostIp()) && li.pid() > 0L && !isProcessAlive(li.pid())) {
+                return deleteLockQuietly(lockPath);
+            }
+            if (isLockExpired(li.startedAt())) {
+                return deleteLockQuietly(lockPath);
+            }
+            return false;
+        }
+        try {
+            long ageMs =
+                    System.currentTimeMillis()
+                            - Files.getLastModifiedTime(lockPath).toMillis();
+            if (ageMs > STALE_LOCK_MAX_AGE.toMillis()) {
+                return deleteLockQuietly(lockPath);
+            }
+        } catch (IOException ignored) {
+            // ignore
+        }
+        return false;
+    }
+
+    private static Optional<LockInfo> readLockInfoFromLockFile(Path lockPath) {
+        if (!Files.isRegularFile(lockPath)) {
+            return Optional.empty();
+        }
+        try {
+            String text = Files.readString(lockPath, StandardCharsets.UTF_8);
+            return Optional.of(parseLockPayload(text, lockPath));
+        } catch (Exception ignored) {
+            return Optional.empty();
+        }
+    }
+
+    private static boolean isLockExpired(Instant startedAt) {
+        if (startedAt == null || Instant.EPOCH.equals(startedAt)) {
+            return false;
+        }
+        return Duration.between(startedAt, Instant.now()).compareTo(STALE_LOCK_MAX_AGE) > 0;
+    }
+
+    private static boolean isSameHost(String lockHostIp) {
+        if (lockHostIp == null || lockHostIp.isBlank()) {
+            return false;
+        }
+        String local = localHostIp();
+        return !local.isBlank() && local.equals(lockHostIp.strip());
+    }
+
+    private static boolean isProcessAlive(long pid) {
+        return ProcessHandle.of(pid).map(ProcessHandle::isAlive).orElse(false);
+    }
+
+    private static boolean deleteLockQuietly(Path lockPath) {
+        try {
+            return Files.deleteIfExists(lockPath);
+        } catch (IOException ignored) {
+            return false;
         }
     }
 

@@ -28,7 +28,10 @@ public final class RequestFormOriginalWorkbookParser {
                     readIndexMap(wb);
             for (int s = 0; s < wb.getNumberOfSheets(); s++) {
                 String sheetName = wb.getSheetName(s);
-                if (!ORIGINAL_SHEET_NAME.matcher(sheetName).matches()) {
+                String sheetNameForMatch =
+                        JuchuTransferValueNormalizer.toHalfWidthAscii(sheetName)
+                                .toUpperCase(java.util.Locale.ROOT);
+                if (!ORIGINAL_SHEET_NAME.matcher(sheetNameForMatch).matches()) {
                     continue;
                 }
                 Sheet rawSheet = wb.getSheetAt(s);

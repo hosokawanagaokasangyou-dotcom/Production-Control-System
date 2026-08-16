@@ -43,7 +43,7 @@ class SkipGeminiApiDefaultsTest {
         String fxml = fxml("PlanInputTab.fxml");
         String checkBox = elementOf(fxml, "stage2SkipGeminiApiCheckBox");
         assertTrue(checkBox.contains("selected=\"false\""), checkBox);
-        assertTrue(checkBox.contains("text=\"AI API 呼び出しをスキップ\""), checkBox);
+        assertTrue(checkBox.contains("text=\"AI API スキップ\""), checkBox);
     }
 
     @Test

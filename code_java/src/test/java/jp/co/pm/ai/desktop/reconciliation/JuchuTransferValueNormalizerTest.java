@@ -66,4 +66,27 @@ class JuchuTransferValueNormalizerTest {
     void parseMonthDayValue_blankReturnsNull() {
         assertNull(JuchuTransferValueNormalizer.parseMonthDayValue("", LocalDate.now()));
     }
+
+    @Test
+    void toHalfWidthAscii_convertsFullwidthLettersAndDigits() {
+        assertEquals(
+                "A123-1",
+                JuchuTransferValueNormalizer.toHalfWidthAscii("Ａ１２３－１"));
+        assertEquals(
+                "20010-H600-1180X250",
+                JuchuTransferValueNormalizer.toHalfWidthAscii("２００１０－Ｈ６００－１１８０Ｘ２５０"));
+    }
+
+    @Test
+    void toHalfWidthAscii_preservesHalfwidthKatakana() {
+        assertEquals(
+                "ｽﾗｲｽ面",
+                JuchuTransferValueNormalizer.toHalfWidthAscii("ｽﾗｲｽ面"));
+    }
+
+    @Test
+    void normalizeNumeric_acceptsFullwidthDigits() {
+        assertEquals(1230.0, JuchuTransferValueNormalizer.normalizeNumeric("１,２３０"));
+        assertEquals(250.0, JuchuTransferValueNormalizer.normalizeNumeric("２５０"));
+    }
 }

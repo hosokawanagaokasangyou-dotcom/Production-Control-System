@@ -986,8 +986,8 @@
 }
 
 .pm-company-calendar .pm-inline-month-calendar-day-selected.pm-company-cal-working {
-    -fx-background-color: #bbf7d0;
-    -fx-text-fill: #14532d;
+    -fx-background-color: #ffffff;
+    -fx-text-fill: #334155;
     -fx-border-color: -fx-accent;
     -fx-border-width: 2;
 }
@@ -1028,8 +1028,10 @@
 }
 
 .pm-att-legend-work {
-    -fx-background-color: #dcfce7;
-    -fx-text-fill: #14532d;
+    -fx-background-color: #ffffff;
+    -fx-text-fill: #334155;
+    -fx-border-color: #d1d5db;
+    -fx-border-width: 1;
 }
 
 .pm-att-legend-off {
@@ -1268,8 +1270,8 @@
 }
 
 .pm-member-att-cell-work {
-    -fx-background-color: #dcfce7;
-    -fx-text-fill: #14532d;
+    -fx-background-color: #ffffff;
+    -fx-text-fill: #334155;
 }
 
 .pm-member-att-cell-off {
@@ -1328,8 +1330,8 @@
 }
 
 .pm-company-calendar .pm-company-cal-working {
-    -fx-background-color: #bbf7d0;
-    -fx-text-fill: #14532d;
+    -fx-background-color: #ffffff;
+    -fx-text-fill: #334155;
 }
 
 .pm-member-attendance-grid-header {

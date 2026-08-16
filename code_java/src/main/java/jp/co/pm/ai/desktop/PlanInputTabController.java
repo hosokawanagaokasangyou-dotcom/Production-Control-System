@@ -169,9 +169,6 @@ public final class PlanInputTabController {
     private TextField colWidthField;
 
     @FXML
-    private Label hintLabel;
-
-    @FXML
     private Label planInputValidationWarningLabel;
 
     @FXML
@@ -232,7 +229,7 @@ public final class PlanInputTabController {
         sheetField.setText(DEFAULT_PLAN_INPUT_SHEET_NAME);
         sheetField.setPromptText("Excel sheet name (TASK_PLAN_SHEET / TASK_PLAN_SHEET)");
         colWidthField.setText("112");
-        hintLabel.setText(HINT_TEXT);
+        pathField.setTooltip(new Tooltip(HINT_TEXT));
 
         installStageRunButtonDepth(stage2RunButton, Color.rgb(194, 65, 12, 0.35));
         installStageRunButtonDepth(stage21RunButton, Color.rgb(194, 65, 12, 0.35));
@@ -560,7 +557,7 @@ public final class PlanInputTabController {
         }
     }
 
-    /** 段階2.0 実行前に段階2〜3.2 キャッシュをクリアしない（チェックは本タブ）。 */
+    /** 段階2.0 実行前に段階2〜段階2.1 キャッシュをクリアしない（チェックは本タブ）。 */
     boolean snapshotStage2SkipCacheClearBeforeRun() {
         return stage2SkipCacheClearCheckBox != null && stage2SkipCacheClearCheckBox.isSelected();
     }

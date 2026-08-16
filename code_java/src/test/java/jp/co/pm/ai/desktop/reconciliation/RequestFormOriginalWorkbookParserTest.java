@@ -96,6 +96,31 @@ class RequestFormOriginalWorkbookParserTest {
     }
 
     @Test
+    void parse_acceptsFullwidthSheetNameAndCellAscii() throws Exception {
+        File file = tempDir.resolve("fullwidth.xlsm").toFile();
+        String sheetNameFw = "Ｅ５－４";
+        try (XSSFWorkbook wb = new XSSFWorkbook()) {
+            XSSFSheet sheet = wb.createSheet(sheetNameFw);
+            sheet.createRow(4).createCell(17).setCellValue("Ｅ５－４");
+            fillProductRow(sheet, 9, "6783", "１５０２５", "ＪＰ１７", "１３６０", "２５０");
+            sheet.createRow(19).createCell(8).setCellValue("2026-05-20");
+            sheet.createRow(20).createCell(4).setCellValue("Ａ１８３７８４Ｇ");
+
+            try (FileOutputStream out = new FileOutputStream(file)) {
+                wb.write(out);
+            }
+        }
+
+        List<Map<String, String>> parsed = RequestFormOriginalWorkbookParser.parse(file);
+        assertEquals(1, parsed.size());
+        Map<String, String> raw = parsed.get(0);
+        assertEquals(sheetNameFw, raw.get("原本シート名"));
+        assertEquals("E5-4", raw.get("依頼Ｎｏ"));
+        assertEquals("15025-JP17-1360X250", raw.get("製品"));
+        assertEquals("A183784G", raw.get("契約Ｎｏ"));
+    }
+
+    @Test
     void parse_indexMatchesSheetValues_noConflictMeta() throws Exception {
         File file = tempDir.resolve("match.xlsm").toFile();
         try (XSSFWorkbook wb = new XSSFWorkbook()) {

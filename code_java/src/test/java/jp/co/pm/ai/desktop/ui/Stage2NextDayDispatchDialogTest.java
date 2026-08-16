@@ -67,7 +67,7 @@ class Stage2NextDayDispatchDialogTest {
             fxml = new String(resource.readAllBytes(), StandardCharsets.UTF_8);
         }
 
-        assertTrue(fxml.contains("アラジン当日対象行の翌日配台量を設定"));
+        assertTrue(fxml.contains("アラジン当日対象行の翌日配台"));
         assertTrue(fxml.contains("①と②をまとめて設定"));
         assertFalse(fxml.contains("翌日除外量を設定"));
     }

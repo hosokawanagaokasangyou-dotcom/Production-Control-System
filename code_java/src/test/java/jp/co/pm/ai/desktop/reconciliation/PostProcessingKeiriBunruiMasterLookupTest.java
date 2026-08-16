@@ -3,6 +3,7 @@ package jp.co.pm.ai.desktop.reconciliation;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
@@ -45,6 +46,14 @@ class PostProcessingKeiriBunruiMasterLookupTest {
     static boolean aladdinKeiriMasterPresent() {
         Path base = Path.of(System.getProperty("user.dir"));
         Path repo = base.getParent() != null ? base.getParent() : base;
-        return Files.isRegularFile(repo.resolve("アラジンマスタ/後加工経理分類マスタ.xlsx"));
+        Path master = repo.resolve("アラジンマスタ/後加工経理分類マスタ.xlsx");
+        if (!Files.isRegularFile(master)) {
+            return false;
+        }
+        try (var in = Files.newInputStream(master)) {
+            return in.read() >= 0;
+        } catch (IOException ex) {
+            return false;
+        }
     }
 }

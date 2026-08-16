@@ -13,6 +13,7 @@ from planning_core.core.attendance_store import (
     PRESET_HOLIDAY_WORK_AM,
     PRESET_HOLIDAY_WORK_PM,
     PRESET_OFF_AM,
+    PRESET_OFF_PM,
     PRESET_OFF_FULL,
     PRESET_PAID_LEAVE,
     PRESET_ABSENT,
@@ -95,6 +96,16 @@ def test_preset_absent():
     assert row["remark"] == "欠勤"
     assert row["eligible_for_assignment"] is False
     assert _cell_symbol(row) == "欠"
+
+
+def test_preset_off_am_pm_symbol():
+    am = preset_to_leave_and_times(PRESET_OFF_AM, date(2026, 8, 6))
+    assert am["leave_type"] == "前休"
+    assert _cell_symbol(am) == "前休"
+
+    pm = preset_to_leave_and_times(PRESET_OFF_PM, date(2026, 8, 6))
+    assert pm["leave_type"] == "後休"
+    assert _cell_symbol(pm) == "後休"
 
 
 def test_preset_holiday_work_on_public_holiday():

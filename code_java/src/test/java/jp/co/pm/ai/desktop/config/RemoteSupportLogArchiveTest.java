@@ -82,6 +82,7 @@ class RemoteSupportLogArchiveTest {
         ui.put(AppPaths.KEY_PM_AI_REPO_ROOT, temp.toString());
         ui.put(AppPaths.KEY_PM_AI_CODE_DIR, temp.resolve("code").toString());
         ui.put(AppPaths.KEY_PM_AI_OUTPUT_DIR, out.toString());
+        ui.put(AppPaths.KEY_PM_AI_REMOTE_LOG, "1");
 
         Path keep =
                 RemoteSupportLogArchive.archiveAfterStage(

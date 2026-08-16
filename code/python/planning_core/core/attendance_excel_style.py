@@ -14,7 +14,7 @@ from openpyxl.utils import get_column_letter
 from planning_core.core.columns import _result_font
 
 # JavaFX pm-company-calendar / pm-member-attendance colors (RRGGBB)
-FILL_WORKING = "BBF7D0"
+FILL_WORKING = "FFFFFF"
 FILL_PUBLIC = "FECACA"
 FILL_NATIONAL = "FCA5A5"
 FILL_SPECIAL = "FDE68A"
@@ -24,7 +24,7 @@ FILL_MEMBER_HDR = "E2EFDA"
 FILL_MEMBER_OFF_COL = "FDECEC"
 FILL_WEEKEND_COL = "F5F5F5"
 
-FONT_WORKING = "14532D"
+FONT_WORKING = "334155"
 FONT_PUBLIC = "7F1D1D"
 FONT_SPECIAL = "78350F"
 FONT_HEADER = "475569"
@@ -85,7 +85,7 @@ def member_symbol_style(symbol: str, company_kind: str) -> tuple[PatternFill | N
         return cached_fill("FEF9C3"), _result_font(size=9, color="854D0E")
     if symbol == "欠":
         return cached_fill("FCE7F3"), _result_font(size=9, bold=True, color="9D174D")
-    if symbol in ("前", "後"):
+    if symbol in ("前", "後", "前休", "後休"):
         return cached_fill(FILL_SPECIAL), _result_font(size=9, color=FONT_SPECIAL)
     if symbol == "-":
         return cached_fill("E2E8F0"), _result_font(size=9, color="334155")
@@ -96,14 +96,14 @@ def member_symbol_style(symbol: str, company_kind: str) -> tuple[PatternFill | N
             return cached_fill(FILL_MEMBER_OFF_COL), _result_font(size=9, color=FONT_PUBLIC)
         if company_kind == "special_holiday":
             return cached_fill(FILL_SPECIAL), _result_font(size=9, color=FONT_SPECIAL)
-        return cached_fill("DCFCE7"), _result_font(size=9, color=FONT_WORKING)
+        return cached_fill("FFFFFF"), _result_font(size=9, color=FONT_WORKING)
     if company_kind == "public_holiday":
         return cached_fill(FILL_MEMBER_OFF_COL), _result_font(size=9, color=FONT_PUBLIC)
     if company_kind == "special_holiday":
         return cached_fill(FILL_SPECIAL), _result_font(size=9, color=FONT_SPECIAL)
     if symbol:
         return None, _result_font(size=9, color=FONT_BANNER)
-    return cached_fill("DCFCE7"), _result_font(size=9, color=FONT_WORKING)
+    return cached_fill("FFFFFF"), _result_font(size=9, color=FONT_WORKING)
 
 
 def _month_origin(month_index: int) -> tuple[int, int]:
@@ -240,7 +240,7 @@ def format_member_calendar_sheet(
     legend_cell = ws.cell(
         MEMBER_CALENDAR_LEGEND_ROW,
         1,
-        "凡例: ·=通常  休=全休  年休=有給休暇  欠=欠勤  前/後=前休/後休  休出/前出/後出=休出系  時=時間別",
+        "凡例: ·=通常  休=全休  年休=有給休暇  欠=欠勤  前休/後休=半休  休出/前出/後出=休出系  時=時間別",
     )
     legend_cell.font = _result_font(size=8, color=FONT_HEADER)
     legend_cell.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)

@@ -147,10 +147,10 @@ class OperatorUserSelectionSupportTest {
     }
 
     @Test
-    void mainRunTabFxml_hasChangeSessionOperatorButton() throws Exception {
-        Path fxml = Path.of("src/main/resources/jp/co/pm/ai/desktop/fxml/MainRunTab.fxml");
+    void mainShellFxml_hasChangeSessionOperatorButton() throws Exception {
+        Path fxml = Path.of("src/main/resources/jp/co/pm/ai/desktop/fxml/MainShell.fxml");
         String text = Files.readString(fxml, StandardCharsets.UTF_8);
-        assertTrue(text.contains("changeSessionOperatorButton"));
+        assertTrue(text.contains("onShellChangeSessionOperatorAction"));
         assertTrue(text.contains("操作者変更"));
     }
 

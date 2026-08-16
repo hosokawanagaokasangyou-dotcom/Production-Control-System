@@ -344,6 +344,29 @@ class JuchuSheetColumnLayoutTest {
     }
 
     @Test
+    void parseSpecName_fullwidthAsciiAndMultiplySign() {
+        String[] parts =
+                JuchuSheetColumnLayout.parseSpecName("２００１０－Ｈ６００－１１８０Ｘ２５０");
+        assertEquals("20010", parts[0]);
+        assertEquals("H600", parts[1]);
+        assertEquals("1180", parts[2]);
+        assertEquals("250", parts[3]);
+
+        String[] multiply =
+                JuchuSheetColumnLayout.parseSpecName("20010-H600-1180×250");
+        assertEquals("1180", multiply[2]);
+        assertEquals("250", multiply[3]);
+    }
+
+    @Test
+    void computeRawRollCount_acceptsFullwidthDigits() {
+        assertEquals(
+                1,
+                JuchuSheetColumnLayout.computeRawRollCountFromQtyAndLength("２５０", "２５０")
+                        .orElse(-1));
+    }
+
+    @Test
     void computeRawRollCountFromQtyAndLength_floorsInteger() {
         assertEquals(1, JuchuSheetColumnLayout.computeRawRollCountFromQtyAndLength("250", "250").orElse(-1));
         assertEquals(0, JuchuSheetColumnLayout.computeRawRollCountFromQtyAndLength("249", "250").orElse(-1));

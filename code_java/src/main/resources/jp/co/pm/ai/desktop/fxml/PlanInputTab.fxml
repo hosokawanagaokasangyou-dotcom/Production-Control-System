@@ -3,115 +3,120 @@
 <?import javafx.geometry.Insets?>
 <?import javafx.scene.control.Button?>
 <?import javafx.scene.control.CheckBox?>
-<?import javafx.scene.control.RadioButton?>
 <?import javafx.scene.control.Label?>
+<?import javafx.scene.control.RadioButton?>
 <?import javafx.scene.control.TitledPane?>
 <?import javafx.scene.control.Tooltip?>
 <?import javafx.scene.control.TextField?>
 <?import javafx.scene.layout.ColumnConstraints?>
 <?import javafx.scene.layout.GridPane?>
 <?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.Priority?>
 <?import javafx.scene.layout.RowConstraints?>
 <?import javafx.scene.layout.StackPane?>
 <?import javafx.scene.layout.VBox?>
 
 <!-- Dynamic table columns remain in {@link PlanInputTabController}. -->
 
-<VBox fillWidth="true" spacing="8.0" xmlns="http://javafx.com/javafx/25" xmlns:fx="http://javafx.com/fxml/1" fx:controller="jp.co.pm.ai.desktop.PlanInputTabController">
+<VBox fillWidth="true" spacing="6.0" xmlns="http://javafx.com/javafx/25" xmlns:fx="http://javafx.com/fxml/1" fx:controller="jp.co.pm.ai.desktop.PlanInputTabController">
     <padding>
-        <Insets bottom="8.0" left="8.0" right="8.0" top="8.0" />
+        <Insets bottom="6.0" left="6.0" right="6.0" top="6.0" />
     </padding>
-    <TitledPane animated="true" expanded="true" text="操作・ソース">
+    <!-- 常用: 段階2 実行・読込保存・行検索（常時表示・1〜2行） -->
+    <HBox alignment="CENTER_LEFT" spacing="8.0">
+        <StackPane fx:id="attendanceReadinessBadgeHost" alignment="CENTER_LEFT" managed="false" styleClass="pm-attendance-readiness-badge-host" visible="false" />
+        <Button fx:id="stage2RunButton" mnemonicParsing="false" onAction="#onStage2RunButtonAction"
+                styleClass="pm-stage-run-button,pm-stage-run-2" text="段階2 実行" />
+        <Button fx:id="stage21RunButton" mnemonicParsing="false" onAction="#onStage21RunButtonAction"
+                styleClass="pm-stage-run-button,pm-stage-run-2-1" text="段階2.1(時間外)" />
+        <Button fx:id="loadButton" mnemonicParsing="false" onAction="#onLoadButtonAction" text="読み込み" />
+        <Button fx:id="saveButton" mnemonicParsing="false" onAction="#onSaveButtonAction" text="保存" />
+        <HBox alignment="CENTER_LEFT" spacing="6.0" HBox.hgrow="ALWAYS">
+            <Label text="行検索" />
+            <TextField fx:id="rowSearchField" maxWidth="Infinity" promptText="列の部分一致（空欄で解除）" HBox.hgrow="ALWAYS" />
+        </HBox>
+    </HBox>
+    <TitledPane animated="true" expanded="false" text="ファイル・詳細オプション" VBox.vgrow="NEVER">
         <content>
-            <VBox fillWidth="true" spacing="8.0">
-                <GridPane hgap="8.0" prefHeight="61.0" prefWidth="561.0" vgap="8.0">
-                    <columnConstraints>
-                        <ColumnConstraints hgrow="NEVER" minWidth="-Infinity" />
-                        <ColumnConstraints hgrow="ALWAYS" maxWidth="415.0" minWidth="100.0" prefWidth="242.33333333333337" />
-                        <ColumnConstraints hgrow="NEVER" maxWidth="319.33334859212243" minWidth="-Infinity" prefWidth="54.0" />
-                        <ColumnConstraints hgrow="NEVER" maxWidth="311.33330281575525" minWidth="10.0" prefWidth="55.333333333333314" />
-                        <ColumnConstraints hgrow="NEVER" maxWidth="427.66667683919275" minWidth="10.0" prefWidth="69.66669718424481" />
-                        <ColumnConstraints hgrow="NEVER" maxWidth="427.66667683919275" minWidth="10.0" prefWidth="60.999969482421875" />
-                    </columnConstraints>
-                    <Label text="ファイル" GridPane.columnIndex="0" GridPane.rowIndex="0" />
-                    <TextField fx:id="pathField" prefHeight="25.0" prefWidth="273.0" GridPane.columnIndex="1" GridPane.rowIndex="0" />
-                    <Button fx:id="browseButton" mnemonicParsing="false" onAction="#onBrowseButtonAction" text="参照…" GridPane.columnIndex="2" />
-                    <Label text="シート名" GridPane.rowIndex="1" />
-                    <Button fx:id="loadButton" mnemonicParsing="false" onAction="#onLoadButtonAction" text="読み込み" GridPane.columnIndex="3" />
-                    <Button fx:id="saveButton" mnemonicParsing="false" onAction="#onSaveButtonAction" prefHeight="25.0" prefWidth="52.0" text="保存" GridPane.columnIndex="4" />
-                    <TextField fx:id="sheetField" prefHeight="25.0" prefWidth="127.0" GridPane.columnIndex="1" GridPane.rowIndex="1" />
-                    <Button fx:id="addRowButton" mnemonicParsing="false" onAction="#onAddRowButtonAction" text="行追加" GridPane.columnIndex="2" GridPane.rowIndex="1" />
-                    <Button fx:id="removeRowsButton" mnemonicParsing="false" onAction="#onRemoveRowsButtonAction" text="行削除" GridPane.columnIndex="3" GridPane.rowIndex="1" />
-                    <Label text="既定列幅(px)" GridPane.columnIndex="4" GridPane.rowIndex="1" />
-                    <TextField fx:id="colWidthField" maxWidth="72.0" prefWidth="72.0" promptText="112" GridPane.columnIndex="5" GridPane.rowIndex="1" />
-                    <rowConstraints>
-                        <RowConstraints maxHeight="25.333333333333332" minHeight="25.333333333333332" prefHeight="25.333333333333332" />
-                        <RowConstraints maxHeight="25.33333333333333" minHeight="25.33333333333333" prefHeight="25.33333333333333" />
-                    </rowConstraints>
-                </GridPane>
-                <VBox spacing="6.0">
-                    <HBox alignment="CENTER_LEFT" spacing="12.0">
-                        <StackPane fx:id="attendanceReadinessBadgeHost" alignment="CENTER_LEFT" managed="false" styleClass="pm-attendance-readiness-badge-host" visible="false" />
-                        <Button fx:id="stage2RunButton" mnemonicParsing="false" onAction="#onStage2RunButtonAction"
-                                styleClass="pm-stage-run-button,pm-stage-run-2" text="段階2 実行" />
-                        <Button fx:id="stage21RunButton" mnemonicParsing="false" onAction="#onStage21RunButtonAction"
-                                styleClass="pm-stage-run-button,pm-stage-run-2-1" text="段階2.1(時間外)" />
-                        <CheckBox fx:id="stage2SkipCacheClearCheckBox" mnemonicParsing="false"
-                                text="段階2実行前にキャッシュをクリアしない">
-                            <tooltip>
-                                <Tooltip text="ON のとき段階2.0 実行前に結果_配台表・段階2/2.1 計画・人員ブック・翌日配台キャッシュ等を残したまま実行します。既定は OFF（毎回クリア）。" />
-                            </tooltip>
-                        </CheckBox>
-                        <CheckBox fx:id="stage2SkipGeminiApiCheckBox" mnemonicParsing="false" selected="false"
-                                text="AI API 呼び出しをスキップ">
-                            <tooltip>
-                                <Tooltip text="ON のとき段階2/2.1 で Gemini への HTTP 呼び出しを行いません。既定は OFF で、段階2/2.1 は AI API を呼び出します。" />
-                            </tooltip>
-                        </CheckBox>
-                    </HBox>
-                    <VBox spacing="4.0">
-                        <RadioButton fx:id="stage2NextDayDialogInProgressRadio" mnemonicParsing="false"
-                                text="加工途中タスクの翌日配台量を設定" />
-                        <RadioButton fx:id="stage2NextDayDialogAladdinExcludeRadio" mnemonicParsing="false"
-                                text="アラジン当日対象行の翌日配台量を設定" />
-                        <RadioButton fx:id="stage2NextDayDialogBothRadio" mnemonicParsing="false" selected="true"
-                                text="①と②をまとめて設定" />
-                        <RadioButton fx:id="stage2NextDayDialogNoneRadio" mnemonicParsing="false"
-                                text="ダイアログを表示しない" />
-                    </VBox>
-                    <CheckBox fx:id="comboSheetMayExceedNeedCheckBox" mnemonicParsing="false" selected="true"
-                            text="組み合わせ表の人数が need より多い場合も有効にする" />
-                </VBox>
-                <HBox alignment="CENTER_LEFT" spacing="8.0">
-                    <Button mnemonicParsing="false" onAction="#onRowUpAction" prefWidth="40.0" text="↑" />
-                    <Button mnemonicParsing="false" onAction="#onRowDownAction" prefWidth="40.0" text="↓" />
-                    <Button fx:id="shiftRawInputDateMinusOneButton" mnemonicParsing="false"
-                            onAction="#onShiftRawInputDateMinusOneAction"
-                            text="原反投入日を1日前倒し"/>
-                    <Button mnemonicParsing="false" text="列フィルタ・並べ替え解除"
-                            onAction="#onClearColumnFiltersAction"/>
+            <VBox fillWidth="true" spacing="6.0">
+                <HBox alignment="CENTER_LEFT" spacing="6.0">
+                    <Label minWidth="48.0" text="ファイル" />
+                    <TextField fx:id="pathField" HBox.hgrow="ALWAYS" />
+                    <Button fx:id="browseButton" mnemonicParsing="false" onAction="#onBrowseButtonAction" text="参照…" />
                 </HBox>
-                <HBox fx:id="columnStripHostRow" alignment="CENTER_LEFT" spacing="8.0" style="-fx-alignment: CENTER_LEFT;">
+                <HBox alignment="CENTER_LEFT" spacing="6.0">
+                    <Label minWidth="48.0" text="シート" />
+                    <TextField fx:id="sheetField" prefWidth="200.0" />
+                    <Button fx:id="addRowButton" mnemonicParsing="false" onAction="#onAddRowButtonAction" text="行追加" />
+                    <Button fx:id="removeRowsButton" mnemonicParsing="false" onAction="#onRemoveRowsButtonAction" text="行削除" />
+                    <Label text="列幅" />
+                    <TextField fx:id="colWidthField" maxWidth="64.0" prefWidth="64.0" promptText="112" />
+                </HBox>
+                <TitledPane animated="true" expanded="false" text="段階2 実行オプション">
+                    <content>
+                        <VBox spacing="6.0">
+                            <HBox alignment="CENTER_LEFT" spacing="12.0">
+                                <CheckBox fx:id="stage2SkipCacheClearCheckBox" mnemonicParsing="false"
+                                        text="キャッシュをクリアしない">
+                                    <tooltip>
+                                        <Tooltip text="ON のとき段階2.0 実行前に結果_配台表・段階2/2.1 計画・人員ブック・翌日配台キャッシュ等を残したまま実行します。既定は OFF（毎回クリア）。" />
+                                    </tooltip>
+                                </CheckBox>
+                                <CheckBox fx:id="stage2SkipGeminiApiCheckBox" mnemonicParsing="false" selected="false"
+                                        text="AI API スキップ">
+                                    <tooltip>
+                                        <Tooltip text="ON のとき段階2/2.1 で Gemini への HTTP 呼び出しを行いません。" />
+                                    </tooltip>
+                                </CheckBox>
+                                <CheckBox fx:id="comboSheetMayExceedNeedCheckBox" mnemonicParsing="false" selected="true"
+                                        text="組み合わせ表 need 超過を許可">
+                                    <tooltip>
+                                        <Tooltip text="組み合わせ表の人数が need より多い場合も有効にする" />
+                                    </tooltip>
+                                </CheckBox>
+                            </HBox>
+                            <GridPane hgap="12.0" vgap="4.0">
+                                <columnConstraints>
+                                    <ColumnConstraints hgrow="ALWAYS" />
+                                    <ColumnConstraints hgrow="ALWAYS" />
+                                </columnConstraints>
+                                <RadioButton fx:id="stage2NextDayDialogInProgressRadio" mnemonicParsing="false"
+                                        text="加工途中タスクの翌日配台" GridPane.columnIndex="0" GridPane.rowIndex="0" />
+                                <RadioButton fx:id="stage2NextDayDialogAladdinExcludeRadio" mnemonicParsing="false"
+                                        text="アラジン当日対象行の翌日配台" GridPane.columnIndex="1" GridPane.rowIndex="0" />
+                                <RadioButton fx:id="stage2NextDayDialogBothRadio" mnemonicParsing="false" selected="true"
+                                        text="①と②をまとめて設定" GridPane.columnIndex="0" GridPane.rowIndex="1" />
+                                <RadioButton fx:id="stage2NextDayDialogNoneRadio" mnemonicParsing="false"
+                                        text="ダイアログを表示しない" GridPane.columnIndex="1" GridPane.rowIndex="1" />
+                            </GridPane>
+                        </VBox>
+                    </content>
+                </TitledPane>
+                <HBox alignment="CENTER_LEFT" spacing="6.0">
+                    <Button mnemonicParsing="false" onAction="#onRowUpAction" prefWidth="36.0" text="↑">
+                        <tooltip><Tooltip text="選択行を上へ" /></tooltip>
+                    </Button>
+                    <Button mnemonicParsing="false" onAction="#onRowDownAction" prefWidth="36.0" text="↓">
+                        <tooltip><Tooltip text="選択行を下へ" /></tooltip>
+                    </Button>
+                    <Button fx:id="shiftRawInputDateMinusOneButton" mnemonicParsing="false"
+                            onAction="#onShiftRawInputDateMinusOneAction" text="原反投入日−1日">
+                        <tooltip><Tooltip text="全行の原反投入日を1暦日戻す" /></tooltip>
+                    </Button>
+                    <Button mnemonicParsing="false" text="列フィルタ解除" onAction="#onClearColumnFiltersAction" />
+                </HBox>
+                <HBox fx:id="columnStripHostRow" alignment="CENTER_LEFT" spacing="6.0">
                     <HBox fx:id="columnStripHost" spacing="0.0" />
                 </HBox>
             </VBox>
         </content>
     </TitledPane>
-    <TitledPane animated="true" expanded="true" maxHeight="Infinity" text="データ表" VBox.vgrow="ALWAYS">
+    <TitledPane animated="true" expanded="true" maxHeight="1.7976931348623157E308" text="データ表" VBox.vgrow="ALWAYS">
         <content>
-            <VBox fillWidth="true">
-                <Label fx:id="hintLabel" wrapText="true" />
+            <VBox fillWidth="true" spacing="4.0">
                 <Label fx:id="planInputValidationWarningLabel" managed="false" visible="false" wrapText="true"
                        style="-fx-text-fill: #b71c1c; -fx-font-weight: bold;" />
-                <HBox alignment="CENTER_LEFT" spacing="8.0">
-                    <Label text="行検索" />
-                    <TextField fx:id="rowSearchField" maxWidth="Infinity" prefWidth="320.0" promptText="いずれかの列に含まれる文字列（部分一致）。空欄で列フィルタのみに戻る" HBox.hgrow="ALWAYS" />
-                </HBox>
-                <StackPane fx:id="spreadsheetHost" minHeight="240.0" VBox.vgrow="ALWAYS">
-                    <VBox.margin>
-                        <Insets bottom="8.0" left="8.0" right="8.0" />
-                    </VBox.margin>
-                </StackPane>
+                <StackPane fx:id="spreadsheetHost" minHeight="200.0" VBox.vgrow="ALWAYS" />
             </VBox>
         </content>
     </TitledPane>

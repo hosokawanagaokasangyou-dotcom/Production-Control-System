@@ -6132,7 +6132,8 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
             if (cell == null) {
                 return;
             }
-            cell.setCellValue(Double.parseDouble(text.trim()));
+            cell.setCellValue(
+                    Double.parseDouble(JuchuTransferValueNormalizer.toHalfWidthAscii(text.trim())));
         } catch (Exception e) {
             setJuchuSheetString(row, colMap, header, text);
         }
@@ -6280,7 +6281,8 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
             if (cell == null) {
                 return;
             }
-            cell.setCellValue(Double.parseDouble(text.trim()));
+            cell.setCellValue(
+                    Double.parseDouble(JuchuTransferValueNormalizer.toHalfWidthAscii(text.trim())));
         } catch (Exception e) {
             setJuchuCellByLayout(row, col, text);
         }
@@ -6937,14 +6939,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
     }
 
     private double normalize_numeric(String val) {
-        if (val == null || val.isEmpty()) return 0.0;
-        String text = val.strip();
-        Pattern p = Pattern.compile("[-+]?\\d*\\.\\d+|\\d+");
-        var m = p.matcher(text);
-        if (m.find()) {
-            return Double.parseDouble(m.group());
-        }
-        return 0.0;
+        return JuchuTransferValueNormalizer.normalizeNumeric(val);
     }
 
     private String normalize_date_val(String val) {
