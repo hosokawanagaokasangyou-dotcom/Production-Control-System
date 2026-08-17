@@ -183,6 +183,10 @@ public final class ResultDispatchTableTabController {
 
     private ButtonAttentionGlow aladdinEntryIdentityCheckGlow;
 
+    private boolean identityCheckLastResultIdentical;
+
+    private boolean generationsHighlightActive;
+
     private final AtomicBoolean aladdinEntryExportBusy = new AtomicBoolean(false);
 
     private final AtomicInteger aladdinIdentityCheckGeneration = new AtomicInteger();
@@ -934,6 +938,9 @@ public final class ResultDispatchTableTabController {
             shell.showInformationDialog(dialogTitle, sb.toString());
         }
         startAladdinOpenAttentionGlow();
+        if (reloadedAladdinPlan) {
+            promptIdentityCheckAttention();
+        }
         if (completion != null) {
             completion.accept(new AladdinEntryExportOutcome(result, List.copyOf(warnings), null));
         }
@@ -965,7 +972,12 @@ public final class ResultDispatchTableTabController {
         if (state.highlightGenerationsButton()) {
             dismissAladdinOpenAttentionGlow();
             startAladdinOpenGenerationsAttentionGlow();
+            if (!generationsHighlightActive && !identityCheckLastResultIdentical) {
+                promptIdentityCheckAttention();
+            }
+            generationsHighlightActive = true;
         } else {
+            generationsHighlightActive = false;
             dismissAladdinOpenGenerationsAttentionGlow();
             if (disable) {
                 dismissAladdinOpenAttentionGlow();
@@ -996,6 +1008,7 @@ public final class ResultDispatchTableTabController {
         }
         try {
             DesktopFileOpener.openFileReadOnly(latest);
+            promptIdentityCheckAttention();
         } catch (Exception ex) {
             shell.showErrorDialog(
                     "最新を開く", "ファイルを開けませんでした。\n" + latest + "\n" + ex.getMessage());
@@ -1105,6 +1118,7 @@ public final class ResultDispatchTableTabController {
             return;
         }
         AladdinEntryIdentityCheckResultDialog.show(ownerStage, result);
+        promptIdentityCheckAttention();
     }
 
     private void applyAladdinEntryIdentityCheckBadge(
@@ -1113,6 +1127,7 @@ public final class ResultDispatchTableTabController {
             return;
         }
         boolean show = result != null && !result.error() && result.badgeText() != null;
+        identityCheckLastResultIdentical = result != null && !result.error() && result.identical();
         aladdinEntryIdentityCheckBadge.setText(show ? result.badgeText() : "");
         aladdinEntryIdentityCheckBadge.getStyleClass().remove("pm-aladdin-entry-identity-mismatch-badge");
         if (show && !result.identical()) {
@@ -1131,6 +1146,7 @@ public final class ResultDispatchTableTabController {
         Map<String, String> ui = shell.snapshotUiEnv();
         DispatchAladdinEntryGenerationDialog.show(
                 ownerStage, ui, DispatchAladdinEntryWorkbookExporter.currentOperatorDirName(ui));
+        promptIdentityCheckAttention();
     }
 
     void clearColumnFiltersAndSort() {
