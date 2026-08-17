@@ -68,6 +68,26 @@ class Stage2IdentityCloseGateTest {
     }
 
     @Test
+    void decide_requiresChallengeWhenExcelExportFailedEvenIfOldLocalMatches(
+            @TempDir Path tempDir) throws Exception {
+        Map<String, String> ui = testUi(tempDir);
+        Path sourceDir = AppPaths.resolveTaskInputSourceDir(ui);
+        Files.createDirectories(sourceDir);
+        Files.writeString(sourceDir.resolve("aladdin-plan.csv"), PLAN_CSV);
+        Files.createDirectories(Path.of(ui.get(AppPaths.KEY_PM_AI_REPO_ROOT)).resolve("code"));
+        LocalDate d = LocalDate.of(2026, 7, 7);
+        DispatchAladdinEntryWorkbookExporter.write(ui, matchingWorkbook(d, 10));
+
+        Stage2IdentityCloseGate gate = new Stage2IdentityCloseGate();
+        gate.markStage2Completed(false);
+
+        Stage2IdentityCloseGate.Decision decision = gate.decide(ui);
+
+        assertTrue(decision.required(), "古い一致xlsxがあっても出力失敗ならゲート必須");
+        assertEquals("Excel出力失敗", decision.detail());
+    }
+
+    @Test
     void decide_requiresChallengeWhenQtyMismatches(@TempDir Path tempDir) throws Exception {
         Map<String, String> ui = testUi(tempDir);
         Path sourceDir = AppPaths.resolveTaskInputSourceDir(ui);

@@ -26,6 +26,8 @@ public final class OperatorActionLogStore {
 
     public static final int RETENTION_DAYS = 90;
 
+    public static final int DETAIL_MAX_LEN = 80;
+
     private static final ObjectMapper JSON = new ObjectMapper();
 
     private static final DateTimeFormatter DAY = DateTimeFormatter.ISO_LOCAL_DATE;
@@ -39,7 +41,15 @@ public final class OperatorActionLogStore {
     }
 
     public static Path resolveOperatorDir(Map<String, String> ui, String operator) {
-        return resolveRoot(ui).resolve(OperatorUserPaths.sanitizeOperatorDirName(operator));
+        Path root = resolveRoot(ui).toAbsolutePath().normalize();
+        Path dir =
+                root.resolve(OperatorUserPaths.sanitizeOperatorDirName(operator))
+                        .toAbsolutePath()
+                        .normalize();
+        if (!dir.startsWith(root)) {
+            return root.resolve(OperatorUserPaths.UNKNOWN_OPERATOR_DIR).normalize();
+        }
+        return dir;
     }
 
     public static Path resolveDailyFile(Map<String, String> ui, String operator, LocalDate day) {
@@ -60,7 +70,7 @@ public final class OperatorActionLogStore {
                         name,
                         action != null ? action : "",
                         result != null ? result : "",
-                        detail != null ? detail : "");
+                        sanitizeDetail(detail));
         try {
             Files.createDirectories(file.getParent());
             String line = JSON.writeValueAsString(entry) + "\n";
@@ -149,6 +159,19 @@ public final class OperatorActionLogStore {
             return removed;
         }
         return removed;
+    }
+
+    static String sanitizeDetail(String detail) {
+        if (detail == null || detail.isBlank()) {
+            return "";
+        }
+        String t = detail.replace('\\', '/');
+        t = t.replaceAll("[A-Za-z]:/[^\\s]+", "(path)");
+        t = t.replaceAll("//[^\\s]+", "(path)");
+        if (t.length() > DETAIL_MAX_LEN) {
+            t = t.substring(0, DETAIL_MAX_LEN);
+        }
+        return t;
     }
 
     private static List<Entry> readFileNewestFirst(Path file) {

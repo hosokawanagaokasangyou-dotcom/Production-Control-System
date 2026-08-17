@@ -896,10 +896,7 @@ public final class ResultDispatchTableTabController {
         }
         if (error != null) {
             shell.appendLog("[aladdin-entry-export] error: " + error.getMessage());
-            shell.recordOperatorAction(
-                    "excel_export",
-                    "error",
-                    error.getMessage() != null ? error.getMessage() : error.toString());
+            shell.recordOperatorAction("excel_export", "error", "出力失敗");
             if (showCompletionDialog) {
                 shell.showErrorDialog(
                         dialogTitle,

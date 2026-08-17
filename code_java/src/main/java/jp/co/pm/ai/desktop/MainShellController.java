@@ -2151,9 +2151,12 @@ public final class MainShellController
         }
     }
 
-    public void markStage2CompletedThisLaunch() {
-        stage2IdentityCloseGate.markStage2Completed();
-        recordOperatorAction("stage2_complete", "ok", "段階2完了");
+    public void markStage2CompletedThisLaunch(boolean excelExportSucceeded) {
+        stage2IdentityCloseGate.markStage2Completed(excelExportSucceeded);
+        recordOperatorAction(
+                "stage2_complete",
+                "ok",
+                excelExportSucceeded ? "段階2完了" : "段階2完了（Excel出力失敗）");
     }
 
     /** 終了確認後、または内部終了時のクリーンアップ（セッション保存・ロック解放）。 */
@@ -5902,7 +5905,10 @@ public final class MainShellController
                                                                     updateStage2ExcelProgress(
                                                                             outcome);
                                                                     endStageRunBusyDialog();
-                                                                    markStage2CompletedThisLaunch();
+                                                                    markStage2CompletedThisLaunch(
+                                                                            outcome != null
+                                                                                    && outcome
+                                                                                            .succeeded());
                                                                     MacroCompleteChime
                                                                             .playIfAvailable(
                                                                                     collectUiEnv());

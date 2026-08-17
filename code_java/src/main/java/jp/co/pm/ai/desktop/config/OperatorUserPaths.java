@@ -28,6 +28,9 @@ public final class OperatorUserPaths {
             return UNKNOWN_OPERATOR_DIR;
         }
         String t = operatorUser.strip().replaceAll("[\\\\/:*?\"<>|]", "_");
+        if (t.equals(".") || t.equals("..") || t.contains("..")) {
+            return UNKNOWN_OPERATOR_DIR;
+        }
         if (t.length() > 40) {
             t = t.substring(0, 40);
         }

@@ -15,8 +15,17 @@ public final class Stage2IdentityCloseGate {
 
     private boolean stage2CompletedThisLaunch;
 
+    private boolean excelExportFailedAfterStage2;
+
     public void markStage2Completed() {
+        markStage2Completed(true);
+    }
+
+    public void markStage2Completed(boolean excelExportSucceeded) {
         stage2CompletedThisLaunch = true;
+        if (!excelExportSucceeded) {
+            excelExportFailedAfterStage2 = true;
+        }
     }
 
     public boolean stage2CompletedThisLaunch() {
@@ -27,6 +36,9 @@ public final class Stage2IdentityCloseGate {
         if (!stage2CompletedThisLaunch) {
             return new Decision(false, "");
         }
+        if (excelExportFailedAfterStage2) {
+            return new Decision(true, "Excel出力失敗");
+        }
         Path excel = AppPaths.aladdinEntryDispatchPlanLocalXlsxPath(ui);
         AladdinEntryDispatchPlanIdentityCheck.Result result =
                 AladdinEntryDispatchPlanIdentityCheck.evaluate(ui, excel);
@@ -35,7 +47,7 @@ public final class Stage2IdentityCloseGate {
         }
         String detail =
                 result.error()
-                        ? (result.message() != null ? result.message() : "比較に失敗しました")
+                        ? "比較失敗"
                         : (result.badgeText() != null ? result.badgeText() : "差異あり");
         return new Decision(true, detail);
     }

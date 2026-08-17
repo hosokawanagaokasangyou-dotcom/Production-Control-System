@@ -81,6 +81,38 @@ class OperatorActionLogStoreTest {
     }
 
     @Test
+    void resolveOperatorDir_staysInsideLogRoot(@TempDir Path tempDir) {
+        Map<String, String> ui = testUi(tempDir);
+        Path root = OperatorActionLogStore.resolveRoot(ui).toAbsolutePath().normalize();
+
+        Path escaped = OperatorActionLogStore.resolveOperatorDir(ui, "..");
+
+        assertTrue(escaped.toAbsolutePath().normalize().startsWith(root));
+        assertEquals(
+                root.resolve(OperatorUserPaths.UNKNOWN_OPERATOR_DIR).normalize(),
+                escaped.toAbsolutePath().normalize());
+    }
+
+    @Test
+    void append_sanitizesDetailPathsAndLength(@TempDir Path tempDir) {
+        Map<String, String> ui = testUi(tempDir);
+
+        assertTrue(
+                OperatorActionLogStore.append(
+                        ui,
+                        "tester",
+                        "excel_export",
+                        "error",
+                        "失敗: C:\\共有\\秘密\\配台.xlsx " + "x".repeat(200)));
+
+        List<OperatorActionLogStore.Entry> entries =
+                OperatorActionLogStore.readOperator(ui, "tester", Instant.now());
+        assertEquals(1, entries.size());
+        assertFalse(entries.get(0).detail().contains("C:"));
+        assertTrue(entries.get(0).detail().length() <= OperatorActionLogStore.DETAIL_MAX_LEN);
+    }
+
+    @Test
     void listOperators_returnsDirectoryNames(@TempDir Path tempDir) throws Exception {
         Map<String, String> ui = testUi(tempDir);
         Files.createDirectories(OperatorActionLogStore.resolveOperatorDir(ui, "alpha"));
