@@ -17,6 +17,7 @@ import javafx.stage.WindowEvent;
  * 段階1／2 実行中に表示する進捗モーダル。
  *
  * <p>フェーズ（大項目）と詳細（直近ログ要約）を表示し、中断ボタンで子プロセスを終了できる。
+ * システムタイトルバーの閉じるボタンは出さない（中断または処理完了でのみ閉じる）。
  */
 public final class StageRunBusyDialog {
 
@@ -45,14 +46,21 @@ public final class StageRunBusyDialog {
             String header,
             String initialPhase,
             Runnable onCancel) {
-        Stage stage = new Stage(StageStyle.UTILITY);
+        Stage stage = new Stage(StageStyle.UNDECORATED);
         if (owner != null) {
             stage.initOwner(owner);
         }
         stage.initModality(Modality.WINDOW_MODAL);
-        stage.setTitle(title != null ? title : "実行中");
+        String windowTitle = title != null ? title : "実行中";
+        stage.setTitle(windowTitle);
         stage.setResizable(false);
         stage.setOnCloseRequest(WindowEvent::consume);
+
+        Label titleBar = new Label(windowTitle);
+        titleBar.setMaxWidth(Double.MAX_VALUE);
+        titleBar.setPadding(new Insets(6, 12, 6, 12));
+        titleBar.setStyle(
+                "-fx-background-color: #3d3d3d; -fx-text-fill: #f2f2f2; -fx-font-size: 12px;");
 
         Label headerLabel = new Label(header != null ? header : "処理を実行しています");
         headerLabel.setStyle("-fx-font-weight: bold; -fx-font-size: 14px;");
@@ -91,7 +99,9 @@ public final class StageRunBusyDialog {
             root.setPadding(new Insets(0, 0, 12, 0));
         }
 
-        stage.setScene(new Scene(root));
+        VBox windowRoot = new VBox(titleBar, root);
+        windowRoot.setStyle("-fx-background-color: #f0f0f0; -fx-border-color: #6b6b6b; -fx-border-width: 1;");
+        stage.setScene(new Scene(windowRoot));
         stage.sizeToScene();
         stage.show();
         if (owner != null) {
@@ -120,6 +130,11 @@ public final class StageRunBusyDialog {
 
     public boolean isShowing() {
         return stage.isShowing();
+    }
+
+    /** テスト用。タイトルバーの閉じるボタンを出さないため {@link StageStyle#UNDECORATED}。 */
+    StageStyle stageStyle() {
+        return stage.getStyle();
     }
 
     public void close() {

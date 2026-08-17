@@ -1,5 +1,6 @@
 package jp.co.pm.ai.desktop.ui;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -8,6 +9,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 import javafx.application.Platform;
+import javafx.stage.StageStyle;
 
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -48,6 +50,7 @@ class StageRunBusyDialogTest {
 
         StageRunBusyDialog dialog = ref.get();
         assertTrue(dialog.isShowing());
+        assertEquals(StageStyle.UNDECORATED, dialog.stageStyle());
 
         CountDownLatch closed = new CountDownLatch(1);
         Platform.runLater(
