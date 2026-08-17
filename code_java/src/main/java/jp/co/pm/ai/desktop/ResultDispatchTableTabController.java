@@ -1078,7 +1078,7 @@ public final class ResultDispatchTableTabController {
             AladdinEntryDispatchPlanIdentityCheck.Result result) {
         applyAladdinEntryIdentityCheckBadge(result);
         if (statusLabel != null) {
-            statusLabel.setText(result.badgeText() != null ? result.badgeText() : "");
+            statusLabel.setText(result.error() ? "同一化チェック失敗" : "");
         }
         if (result.excelPath().isPresent()) {
             shell.appendLog("[aladdin-identity-check] excel=" + result.excelPath().get());

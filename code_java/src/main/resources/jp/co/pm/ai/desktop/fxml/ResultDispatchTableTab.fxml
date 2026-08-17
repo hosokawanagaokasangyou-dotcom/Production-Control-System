@@ -7,6 +7,7 @@
 <?import javafx.scene.control.ProgressBar?>
 <?import javafx.scene.control.Slider?>
 <?import javafx.scene.control.TitledPane?>
+<?import javafx.scene.layout.FlowPane?>
 <?import javafx.scene.layout.HBox?>
 <?import javafx.scene.layout.StackPane?>
 <?import javafx.scene.layout.VBox?>
@@ -23,12 +24,12 @@
                 text="&#x64cd;&#x4f5c;&#x30fb;&#x30bd;&#x30fc;&#x30b9;">
         <content>
             <VBox fillWidth="true" spacing="8.0">
-                <HBox alignment="CENTER_LEFT" spacing="8.0">
+                <FlowPane alignment="CENTER_LEFT" hgap="10.0" vgap="8.0" maxWidth="Infinity">
                     <padding>
                         <Insets bottom="4.0"/>
                     </padding>
                     <Label fx:id="dataStageBadgeLabel" styleClass="pm-planning-stage-badge"
-                           text="&#x6bb5;&#x968e;2" visible="false" managed="false"/>
+                           text="段階2" visible="false" managed="false"/>
                     <Button fx:id="refreshButton" mnemonicParsing="false" text="再読み"
                             onAction="#onRefreshButtonAction"/>
                     <Button mnemonicParsing="false" text="列フィルタ・並べ替え解除"
@@ -37,32 +38,33 @@
                             styleClass="pm-aladdin-entry-export-button"
                             text="アラジン加工計画読込→Excel出力"
                             onAction="#onReloadAladdinPlanAndExportEntryWorkbookAction"/>
-                    <VBox alignment="TOP_CENTER" spacing="2.0"
-                          styleClass="pm-aladdin-entry-reload-export-cell">
+                    <HBox alignment="CENTER_LEFT" spacing="6.0"
+                          styleClass="pm-aladdin-entry-toolbar-group">
                         <Button fx:id="aladdinEntryOpenLatestButton" mnemonicParsing="false"
                                 styleClass="pm-aladdin-entry-open-button"
                                 text="最新を開く"
                                 onAction="#onOpenLatestAladdinEntryWorkbookAction"/>
                         <Label fx:id="aladdinEntryOpenLatestDisabledBadge"
                                styleClass="pm-aladdin-entry-reload-export-disabled-badge"
+                               wrapText="true"
                                text="あと 900秒"
                                visible="false" managed="false"/>
-                    </VBox>
+                    </HBox>
                     <Button fx:id="aladdinEntryOpenGenerationsButton" mnemonicParsing="false"
                             styleClass="pm-aladdin-entry-open-button"
                             text="世代を開く…"
                             onAction="#onOpenAladdinEntryGenerationsAction"/>
-                    <VBox alignment="TOP_CENTER" spacing="2.0"
-                          styleClass="pm-aladdin-entry-reload-export-cell">
+                    <HBox alignment="CENTER_LEFT" spacing="6.0"
+                          styleClass="pm-aladdin-entry-toolbar-group">
                         <Button fx:id="aladdinEntryIdentityCheckButton" mnemonicParsing="false"
                                 styleClass="pm-aladdin-entry-open-button"
                                 text="同一化チェック（ローカル最新）"
                                 onAction="#onAladdinEntryIdentityCheckLocalAction"/>
                         <Label fx:id="aladdinEntryIdentityCheckBadge"
-                               styleClass="pm-aladdin-entry-reload-export-disabled-badge"
+                               styleClass="pm-aladdin-entry-identity-badge"
                                text="配台計画と加工計画は同一"
                                visible="false" managed="false"/>
-                    </VBox>
+                    </HBox>
                     <Button fx:id="aladdinEntryIdentityCheckOtherButton" mnemonicParsing="false"
                             styleClass="pm-aladdin-entry-open-button"
                             text="別ファイルでチェック…"
@@ -72,7 +74,7 @@
                     <Label fx:id="aladdinEntryExportProgressLabel"
                            visible="false" managed="false"/>
                     <Label fx:id="statusLabel"/>
-                </HBox>
+                </FlowPane>
                 <Label fx:id="pathLabel" wrapText="true"/>
                 <Label fx:id="hintLabel" wrapText="true"/>
                 <HBox alignment="CENTER_LEFT" spacing="10.0">
