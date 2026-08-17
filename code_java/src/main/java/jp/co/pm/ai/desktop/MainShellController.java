@@ -80,6 +80,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 
+import jp.co.pm.ai.desktop.ui.ThemedAlertContentSupport;
 import jp.co.pm.ai.desktop.ui.TodayDispatchSourceSelectionDialog;
 import jp.co.pm.ai.planning.stage2.source.Stage1SourceBundle;
 import jp.co.pm.ai.planning.stage2.source.Stage1SourceBundleCompletionGate;
@@ -2135,7 +2136,7 @@ public final class MainShellController
         Alert alert = new Alert(type);
         alert.setTitle(title);
         alert.setHeaderText(headerText);
-        alert.setContentText(message);
+        ThemedAlertContentSupport.applyContent(alert, message);
         prepareDialogForMainTheme(alert);
         alert.showAndWait();
     }
