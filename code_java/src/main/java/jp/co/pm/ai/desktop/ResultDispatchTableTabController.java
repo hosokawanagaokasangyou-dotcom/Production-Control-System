@@ -767,9 +767,19 @@ public final class ResultDispatchTableTabController {
             }
             return;
         }
+        if (!aladdinEntryExportBusy.compareAndSet(false, true)) {
+            if (completion != null) {
+                completion.accept(
+                        new AladdinEntryExportOutcome(
+                                null,
+                                List.of(),
+                                new IllegalStateException("アラジン入力用Excelの出力が実行中です。")));
+            }
+            return;
+        }
         dismissAladdinOpenAttentionGlow();
         Map<String, String> ui = shell.snapshotUiEnv();
-        setAladdinEntryExportBusy(true);
+        applyAladdinEntryReloadExportButtonDisabledState();
         showAladdinEntryExportProgress(
                 ProgressBar.INDETERMINATE_PROGRESS,
                 reloadAladdinPlanFromSource
@@ -885,14 +895,11 @@ public final class ResultDispatchTableTabController {
     }
 
     private void applyAladdinEntryReloadExportButtonDisabledState() {
-        if (aladdinEntryReloadExportButton == null) {
-            return;
+        if (aladdinEntryReloadExportButton != null) {
+            aladdinEntryReloadExportButton.setDisable(false);
         }
-        boolean disable =
-                aladdinEntryExportBusy.get() || aladdinReloadExportUpToDate.get();
-        aladdinEntryReloadExportButton.setDisable(disable);
         boolean showUpToDateBadge =
-                disable && aladdinReloadExportUpToDate.get() && !aladdinEntryExportBusy.get();
+                aladdinReloadExportUpToDate.get() && !aladdinEntryExportBusy.get();
         if (aladdinEntryReloadExportDisabledBadge != null) {
             aladdinEntryReloadExportDisabledBadge.setText(ALADDIN_RELOAD_EXPORT_UP_TO_DATE_BADGE);
             aladdinEntryReloadExportDisabledBadge.setVisible(showUpToDateBadge);
