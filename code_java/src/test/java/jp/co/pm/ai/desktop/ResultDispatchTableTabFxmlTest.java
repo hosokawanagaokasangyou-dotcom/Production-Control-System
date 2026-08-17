@@ -20,7 +20,7 @@ class ResultDispatchTableTabFxmlTest {
                         "/jp/co/pm/ai/desktop/fxml/ResultDispatchTableTab.fxml");
         var document = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(resource);
         var buttons = document.getElementsByTagName("Button");
-        Map<String, String> buttonStyleById =
+        Map<String, Element> buttonsById =
                 IntStream.range(0, buttons.getLength())
                         .mapToObj(buttons::item)
                         .filter(Element.class::isInstance)
@@ -29,7 +29,13 @@ class ResultDispatchTableTabFxmlTest {
                         .collect(
                                 java.util.stream.Collectors.toMap(
                                         button -> button.getAttribute("fx:id"),
-                                        button -> button.getAttribute("styleClass")));
+                                        button -> button));
+        Map<String, String> buttonStyleById =
+                buttonsById.entrySet().stream()
+                        .collect(
+                                java.util.stream.Collectors.toMap(
+                                        Map.Entry::getKey,
+                                        e -> e.getValue().getAttribute("styleClass")));
 
         var labels = document.getElementsByTagName("Label");
         java.util.Set<String> labelIds =
@@ -51,5 +57,8 @@ class ResultDispatchTableTabFxmlTest {
         assertTrue(labelIds.contains("aladdinEntryOpenLatestDisabledBadge"));
         assertTrue(buttonStyleById.containsKey("aladdinEntryIdentityCheckButton"));
         assertTrue(labelIds.contains("aladdinEntryIdentityCheckBadge"));
+        assertFalse(
+                "true".equalsIgnoreCase(
+                        buttonsById.get("aladdinEntryIdentityCheckButton").getAttribute("disable")));
     }
 }

@@ -184,9 +184,9 @@ public final class ResultDispatchTableTabController {
 
     private final AtomicBoolean aladdinEntryExportBusy = new AtomicBoolean(false);
 
-    private final AtomicBoolean aladdinIdentityCheckBusy = new AtomicBoolean(false);
-
     private final AtomicBoolean aladdinReloadExportUpToDate = new AtomicBoolean(false);
+
+    private final AtomicInteger aladdinIdentityCheckGeneration = new AtomicInteger();
 
     private final AtomicInteger aladdinReloadExportStateGeneration = new AtomicInteger();
 
@@ -885,21 +885,18 @@ public final class ResultDispatchTableTabController {
     }
 
     private void applyAladdinEntryReloadExportButtonDisabledState() {
-        if (aladdinEntryReloadExportButton != null) {
-            boolean disable =
-                    aladdinEntryExportBusy.get() || aladdinReloadExportUpToDate.get();
-            aladdinEntryReloadExportButton.setDisable(disable);
-            boolean showUpToDateBadge =
-                    disable && aladdinReloadExportUpToDate.get() && !aladdinEntryExportBusy.get();
-            if (aladdinEntryReloadExportDisabledBadge != null) {
-                aladdinEntryReloadExportDisabledBadge.setText(ALADDIN_RELOAD_EXPORT_UP_TO_DATE_BADGE);
-                aladdinEntryReloadExportDisabledBadge.setVisible(showUpToDateBadge);
-                aladdinEntryReloadExportDisabledBadge.setManaged(showUpToDateBadge);
-            }
+        if (aladdinEntryReloadExportButton == null) {
+            return;
         }
-        if (aladdinEntryIdentityCheckButton != null) {
-            aladdinEntryIdentityCheckButton.setDisable(
-                    aladdinEntryExportBusy.get() || aladdinIdentityCheckBusy.get());
+        boolean disable =
+                aladdinEntryExportBusy.get() || aladdinReloadExportUpToDate.get();
+        aladdinEntryReloadExportButton.setDisable(disable);
+        boolean showUpToDateBadge =
+                disable && aladdinReloadExportUpToDate.get() && !aladdinEntryExportBusy.get();
+        if (aladdinEntryReloadExportDisabledBadge != null) {
+            aladdinEntryReloadExportDisabledBadge.setText(ALADDIN_RELOAD_EXPORT_UP_TO_DATE_BADGE);
+            aladdinEntryReloadExportDisabledBadge.setVisible(showUpToDateBadge);
+            aladdinEntryReloadExportDisabledBadge.setManaged(showUpToDateBadge);
         }
     }
 
@@ -1043,12 +1040,11 @@ public final class ResultDispatchTableTabController {
 
     @FXML
     private void onAladdinEntryIdentityCheckAction() {
-        if (shell == null || aladdinIdentityCheckBusy.get()) {
+        if (shell == null) {
             return;
         }
         Map<String, String> ui = shell.snapshotUiEnv();
-        aladdinIdentityCheckBusy.set(true);
-        applyAladdinEntryReloadExportButtonDisabledState();
+        int generation = aladdinIdentityCheckGeneration.incrementAndGet();
         if (statusLabel != null) {
             statusLabel.setText("同一化チェック中…");
         }
@@ -1057,7 +1053,13 @@ public final class ResultDispatchTableTabController {
                         () -> {
                             AladdinEntryDispatchPlanIdentityCheck.Result result =
                                     AladdinEntryDispatchPlanIdentityCheck.evaluate(ui);
-                            Platform.runLater(() -> finishAladdinEntryIdentityCheck(result));
+                            Platform.runLater(
+                                    () -> {
+                                        if (generation != aladdinIdentityCheckGeneration.get()) {
+                                            return;
+                                        }
+                                        finishAladdinEntryIdentityCheck(result);
+                                    });
                         },
                         "aladdin-entry-identity-check");
         worker.setDaemon(true);
@@ -1066,8 +1068,6 @@ public final class ResultDispatchTableTabController {
 
     private void finishAladdinEntryIdentityCheck(
             AladdinEntryDispatchPlanIdentityCheck.Result result) {
-        aladdinIdentityCheckBusy.set(false);
-        applyAladdinEntryReloadExportButtonDisabledState();
         applyAladdinEntryIdentityCheckBadge(result);
         if (statusLabel != null) {
             statusLabel.setText(result.badgeText() != null ? result.badgeText() : "");
