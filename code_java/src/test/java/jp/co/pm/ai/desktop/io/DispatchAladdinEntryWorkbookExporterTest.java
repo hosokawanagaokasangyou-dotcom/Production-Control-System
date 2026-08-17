@@ -11,6 +11,7 @@ import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -21,7 +22,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import jp.co.pm.ai.desktop.dispatch.DispatchAladdinEntrySheetBuilder;
+import jp.co.pm.ai.desktop.reconciliation.EcSideClassification;
 import jp.co.pm.ai.desktop.reconciliation.PostProcessingPlanMachineLookup;
+import jp.co.pm.ai.desktop.reconciliation.RequestFormOriginalIndexLookup;
 
 class DispatchAladdinEntryWorkbookExporterTest {
 
@@ -335,6 +338,81 @@ class DispatchAladdinEntryWorkbookExporterTest {
                 "2011",
                 PostProcessingPlanMachineLookup.resolveMachineCodeFromName(
                         snap, "スライス機1　湖南"));
+    }
+
+    @Test
+    void write_highlightsDoubleSidedEcProcessName() throws IOException {
+        Path repo = tempDir.resolve("repo");
+        Files.createDirectories(repo.resolve("code"));
+        Map<String, String> ui =
+                Map.of(jp.co.pm.ai.desktop.config.AppPaths.KEY_PM_AI_REPO_ROOT, repo.toString());
+
+        LocalDate d = LocalDate.of(2026, 7, 14);
+        DispatchAladdinEntrySheetBuilder.EntryRow doubleEc =
+                new DispatchAladdinEntrySheetBuilder.EntryRow(
+                        "W-EC-1",
+                        "",
+                        "EC",
+                        "",
+                        "",
+                        "",
+                        0,
+                        0,
+                        0,
+                        Map.of(d, new DispatchAladdinEntrySheetBuilder.EntryCell(10, 10)),
+                        d,
+                        2026);
+        DispatchAladdinEntrySheetBuilder.EntryRow singleEc =
+                new DispatchAladdinEntrySheetBuilder.EntryRow(
+                        "W-EC-2",
+                        "",
+                        "EC",
+                        "",
+                        "",
+                        "",
+                        0,
+                        0,
+                        0,
+                        Map.of(d, new DispatchAladdinEntrySheetBuilder.EntryCell(5, 5)),
+                        d,
+                        2026);
+        DispatchAladdinEntrySheetBuilder.EntryWorkbook model =
+                new DispatchAladdinEntrySheetBuilder.EntryWorkbook(
+                        List.of(d),
+                        List.of(
+                                new DispatchAladdinEntrySheetBuilder.MachineSheet(
+                                        "EC機　湖南", List.of(doubleEc, singleEc))));
+
+        Map<String, String> ecSideByTid =
+                Map.of(
+                        RequestFormOriginalIndexLookup.normalizeIraiNoKey("W-EC-1"),
+                                EcSideClassification.DOUBLE_SIDED,
+                        RequestFormOriginalIndexLookup.normalizeIraiNoKey("W-EC-2"),
+                                EcSideClassification.SINGLE_SIDED);
+
+        DispatchAladdinEntryWorkbookExporter.ExportResult result =
+                DispatchAladdinEntryWorkbookExporter.write(ui, model, ecSideByTid);
+
+        try (XSSFWorkbook wb =
+                new XSSFWorkbook(Files.newInputStream(result.latestPath()))) {
+            org.apache.poi.ss.usermodel.Sheet sh = wb.getSheetAt(0);
+            org.apache.poi.xssf.usermodel.XSSFCellStyle doubleStyle =
+                    (org.apache.poi.xssf.usermodel.XSSFCellStyle)
+                            sh.getRow(2).getCell(2).getCellStyle();
+            org.apache.poi.xssf.usermodel.XSSFCellStyle singleStyle =
+                    (org.apache.poi.xssf.usermodel.XSSFCellStyle)
+                            sh.getRow(3).getCell(2).getCellStyle();
+            org.apache.poi.xssf.usermodel.XSSFColor doubleFill =
+                    doubleStyle.getFillForegroundXSSFColor();
+            org.apache.poi.xssf.usermodel.XSSFColor singleFill =
+                    singleStyle.getFillForegroundXSSFColor();
+            assertNotNull(doubleFill);
+            assertTrue(
+                    Arrays.equals(
+                            DispatchAladdinEntryWorkbookExporter.EC_DOUBLE_SIDED_FILL_RGB,
+                            doubleFill.getRGB()));
+            assertTrue(singleFill == null || singleFill.getRGB() == null);
+        }
     }
 
     @Test

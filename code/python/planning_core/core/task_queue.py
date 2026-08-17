@@ -383,6 +383,27 @@ def build_task_queue_from_planning_df(
             except Exception:
                 ai_note = str(ai_used)[:500]
 
+        from planning_core.core.ec_side_classification import ec_dispatch_pass_count
+
+        _ec_side_class = str(
+            _planning_df_cell_scalar(row, PLAN_COL_EC_SIDE_CLASS) or ""
+        ).strip()
+        _ec_dispatch_passes = ec_dispatch_pass_count(_ec_side_class, machine)
+        _base_time_per_unit = (
+            (qty / speed) / (qty / unit) if unit and speed and qty else 0
+        )
+        if _ec_dispatch_passes > 1:
+            _btpu_before = _base_time_per_unit
+            _base_time_per_unit *= float(_ec_dispatch_passes)
+            logging.info(
+                "両面EC: EC加工%s回分として配台時間を倍化 依頼NO=%s 工程=%s base_time_per_unit %s → %s",
+                _ec_dispatch_passes,
+                task_id,
+                machine,
+                _btpu_before,
+                _base_time_per_unit,
+            )
+
         _order_list = seq_by_tid.get(task_id) or []
         _p_rank = _process_sequence_rank_for_machine(machine, _order_list)
         _process_content_mismatch = bool(_order_list) and not _process_name_matches_kakou_content_tokens(
@@ -433,10 +454,10 @@ def build_task_queue_from_planning_df(
                 "total_qty_m": int(qty_total),
                 "unit_m": float(unit),
                 "remaining_units": _init_rem,
-                "base_time_per_unit": (qty / speed) / (qty / unit)
-                if unit and speed and qty
-                else 0,
+                "base_time_per_unit": _base_time_per_unit,
                 "assigned_history": [],
+                PLAN_COL_EC_SIDE_CLASS: _ec_side_class,
+                "ec_dispatch_pass_count": _ec_dispatch_passes,
                 "calc_time_value": calc_time_val,
                 # 列「加工速度_上書き」「加工速度」・global_speed_rules・特別ルール列挙.md（L4/L5/L6/L8）適用後の m/分
                 TASK_COL_SPEED: float(speed),

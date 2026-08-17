@@ -344,6 +344,7 @@ PLAN_COL_SPECIAL_REMARK_ALIASES = (
     PLAN_COL_SPECIAL_REMARK,
     "納期回答_備考",
 )
+PLAN_COL_EC_SIDE_CLASS = "EC面区分"
 PLAN_COL_PROCESS_FACTOR = "加工工程の決定プロセスの因子"
 PLAN_COL_ROLL_UNIT_LENGTH = "(製品)ロール単位長さ"
 PLAN_COL_ROLL_UNIT_LENGTH_LEGACY = "ロール単位長さ"
@@ -780,6 +781,8 @@ def plan_input_sheet_column_order():
         if c == TASK_COL_USED_RAW:
             cols.append(PLAN_COL_RAW_ROLL_UNIT_LENGTH)
             cols.append(PLAN_COL_RAW_FABRIC_WIDTH)
+        if c == TASK_COL_PROCESS_CONTENT:
+            cols.append(PLAN_COL_EC_SIDE_CLASS)
     cols.append(PLAN_COL_PROCESS_FACTOR)
     # 段階1算出の「配台可能日時」（表示列）。上書き列は下の PLAN_OVERRIDE_COLUMNS ループで「（元）…」参照付きで出力。
     cols.append(PLAN_COL_DISPATCHABLE_DATETIME)

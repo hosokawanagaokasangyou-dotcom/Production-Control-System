@@ -37,8 +37,11 @@ import jp.co.pm.ai.desktop.dispatch.DispatchAladdinEntrySheetBuilder;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchInteractiveConsolidator;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchNormalizer;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchPlanningStageSupport;
+import jp.co.pm.ai.desktop.reconciliation.EcSideClassification;
+import jp.co.pm.ai.desktop.reconciliation.EcSideClassificationLookup;
 import jp.co.pm.ai.desktop.reconciliation.PostProcessingKouteiNaiyoMasterLookup;
 import jp.co.pm.ai.desktop.reconciliation.PostProcessingPlanMachineLookup;
+import jp.co.pm.ai.desktop.reconciliation.RequestFormOriginalIndexLookup;
 
 /**
  * アラジン入力用配台計画 Excel（機械名ごとのシート、日別2段セル）を
@@ -151,7 +154,8 @@ public final class DispatchAladdinEntryWorkbookExporter {
         DispatchAladdinEntrySheetBuilder.EntryWorkbook model =
                 DispatchAladdinEntrySheetBuilder.build(
                         columns, rows, aladdinLookup, indexByTid, LocalDate.now());
-        return write(u, model);
+        Map<String, String> ecSideByTid = EcSideClassificationLookup.loadByIraiNoKey(u, null);
+        return write(u, model, ecSideByTid);
     }
 
     /** モデルをローカルの最新固定パスへ上書きし、共有側の操作者別世代フォルダへコピー・剪定する。 */
@@ -159,6 +163,17 @@ public final class DispatchAladdinEntryWorkbookExporter {
             Map<String, String> ui, DispatchAladdinEntrySheetBuilder.EntryWorkbook model)
             throws IOException {
         Map<String, String> u = ui != null ? ui : Map.of();
+        return write(u, model, EcSideClassificationLookup.loadByIraiNoKey(u, null));
+    }
+
+    /** {@link #write(Map, DispatchAladdinEntrySheetBuilder.EntryWorkbook)} の EC面区分 lookup 指定版。 */
+    public static ExportResult write(
+            Map<String, String> ui,
+            DispatchAladdinEntrySheetBuilder.EntryWorkbook model,
+            Map<String, String> ecSideByTid)
+            throws IOException {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        Map<String, String> ecLookup = ecSideByTid != null ? ecSideByTid : Map.of();
         Path latest = AppPaths.aladdinEntryDispatchPlanLocalXlsxPath(u);
         Path repoRoot = AppPaths.resolveRepoRoot(u);
         Path stagingTmp =
@@ -172,7 +187,7 @@ public final class DispatchAladdinEntryWorkbookExporter {
                 writeEmptySheet(wb, styles);
             } else {
                 for (DispatchAladdinEntrySheetBuilder.MachineSheet ms : model.sheets()) {
-                    writeMachineSheet(wb, ms, model.dates(), styles, machineSnap);
+                    writeMachineSheet(wb, ms, model.dates(), styles, machineSnap, ecLookup);
                 }
             }
             try (var out = Files.newOutputStream(stagingTmp)) {
@@ -303,7 +318,8 @@ public final class DispatchAladdinEntryWorkbookExporter {
             DispatchAladdinEntrySheetBuilder.MachineSheet machineSheet,
             List<LocalDate> dates,
             Styles styles,
-            PostProcessingPlanMachineLookup.Snapshot machineSnap) {
+            PostProcessingPlanMachineLookup.Snapshot machineSnap,
+            Map<String, String> ecSideByTid) {
         String name = sheetNameForMachine(machineSheet, machineSnap);
         if (wb.getSheet(name) != null) {
             name = WorkbookUtil.createSafeSheetName(name + " (" + (wb.getNumberOfSheets() + 1) + ")");
@@ -356,7 +372,11 @@ public final class DispatchAladdinEntryWorkbookExporter {
             row.setHeightInPoints(33f);
             writeFixedCell(row, 0, entry.taskId(), styles.data());
             writeFixedCell(row, 1, entry.contractNo(), styles.data());
-            writeFixedCell(row, 2, entry.processName(), styles.data());
+            writeFixedCell(
+                    row,
+                    2,
+                    entry.processName(),
+                    processNameCellStyle(entry, ecSideByTid, styles));
             writeFixedCell(row, 3, entry.inputDate(), styles.data());
             writeFixedCell(row, 4, entry.kaitoNoki(), styles.data());
             String completionCheck = entry.completionDateCheckText();
@@ -417,6 +437,20 @@ public final class DispatchAladdinEntryWorkbookExporter {
         applyPrintSetup(sh);
     }
 
+    private static CellStyle processNameCellStyle(
+            DispatchAladdinEntrySheetBuilder.EntryRow entry,
+            Map<String, String> ecSideByTid,
+            Styles styles) {
+        if (!"EC".equals(entry.processName()) || ecSideByTid == null || ecSideByTid.isEmpty()) {
+            return styles.data();
+        }
+        if (EcSideClassification.DOUBLE_SIDED.equals(
+                EcSideClassification.resolveEcSideClass(ecSideByTid, entry.taskId()))) {
+            return styles.ecDoubleSided();
+        }
+        return styles.data();
+    }
+
     private static void writeFixedCell(Row row, int col, String value, CellStyle style) {
         Cell cell = row.createCell(col);
         cell.setCellValue(value != null ? value : "");
@@ -455,6 +489,10 @@ public final class DispatchAladdinEntryWorkbookExporter {
         return rich;
     }
 
+    /** 両面EC の工程名列背景（薄青 #DDEBF7）。 */
+    static final byte[] EC_DOUBLE_SIDED_FILL_RGB =
+            new byte[] {(byte) 0xDD, (byte) 0xEB, (byte) 0xF7};
+
     /** 日加工合計数行の背景（濃い青緑）。 */
     private static final byte[] DAILY_TOTAL_FILL_RGB =
             new byte[] {(byte) 0x00, (byte) 0x6B, (byte) 0x6B};
@@ -467,6 +505,7 @@ public final class DispatchAladdinEntryWorkbookExporter {
             CellStyle dateHeaderSunday,
             CellStyle dateHeaderToday,
             CellStyle data,
+            CellStyle ecDoubleSided,
             CellStyle qty,
             CellStyle checkOk,
             CellStyle checkNg,
@@ -564,6 +603,9 @@ public final class DispatchAladdinEntryWorkbookExporter {
             fill(dateHeaderToday, new byte[] {(byte) 0xC6, (byte) 0xEF, (byte) 0xCE}); // 緑系（当日）
 
             CellStyle data = borderedStyle(wb, dataFont, HorizontalAlignment.LEFT, false);
+            CellStyle ecDoubleSided =
+                    borderedStyle(wb, dataFont, HorizontalAlignment.LEFT, false);
+            fill(ecDoubleSided, EC_DOUBLE_SIDED_FILL_RGB);
             CellStyle qty = borderedStyle(wb, dataFont, HorizontalAlignment.RIGHT, false);
             CellStyle checkOk = borderedStyle(wb, dataFont, HorizontalAlignment.CENTER, false);
             CellStyle checkNg = borderedStyle(wb, ngFont, HorizontalAlignment.CENTER, false);
@@ -589,6 +631,7 @@ public final class DispatchAladdinEntryWorkbookExporter {
                     dateHeaderSunday,
                     dateHeaderToday,
                     data,
+                    ecDoubleSided,
                     qty,
                     checkOk,
                     checkNg,

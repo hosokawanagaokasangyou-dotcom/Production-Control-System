@@ -7,6 +7,7 @@ import java.util.BitSet;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -417,33 +418,21 @@ public final class SpreadsheetTabularSupport {
             return;
         }
         view.getProperties().put(SPREADSHEET_CLICK_SELECTION_ALIGN, Boolean.TRUE);
-        view.addEventFilter(
-                MouseEvent.MOUSE_CLICKED,
-                e -> {
-                    if (e.getButton() != MouseButton.PRIMARY) {
-                        return;
-                    }
-                    TableCell<?, ?> tc =
-                            findTableCellUnderNode(
-                                    e.getPickResult() != null
-                                            ? e.getPickResult().getIntersectedNode()
-                                            : null);
-                    if (tc == null || !isNodeUnderSpreadsheetView(view, tc)) {
-                        return;
-                    }
-                    alignSpreadsheetSelectionToClickedCell(view, tc);
-                    Object item = tc.getItem();
-                    if (item instanceof SpreadsheetCell cell) {
-                        int viewRowHint = tc.getIndex();
-                        Platform.runLater(
-                                () -> {
-                                    alignSpreadsheetSelectionToGridCell(view, cell, viewRowHint);
-                                    expandSpreadsheetToFullVisibleRows(view);
-                                });
-                    } else {
-                        Platform.runLater(() -> expandSpreadsheetToFullVisibleRows(view));
-                    }
-                });
+        // MOUSE_PRESSED: ControlsFX span 選択より先に正しいセルへ合わせる（列フィルタ時の最上段誤選択対策）
+        view.addEventFilter(MouseEvent.MOUSE_PRESSED, e -> alignSpreadsheetSelectionFromMouseEvent(view, e));
+    }
+
+    private static void alignSpreadsheetSelectionFromMouseEvent(SpreadsheetView view, MouseEvent e) {
+        if (e.getButton() != MouseButton.PRIMARY) {
+            return;
+        }
+        TableCell<?, ?> tc =
+                findTableCellUnderNode(
+                        e.getPickResult() != null ? e.getPickResult().getIntersectedNode() : null);
+        if (tc == null || !isNodeUnderSpreadsheetView(view, tc)) {
+            return;
+        }
+        alignSpreadsheetSelectionToClickedCell(view, tc);
     }
 
     /**
@@ -483,8 +472,8 @@ public final class SpreadsheetTabularSupport {
         SpreadsheetColumn scol = cols.get(modelCol);
         safeClearSpreadsheetSelection(view);
         try {
-            view.getSelectionModel().clearAndSelect(cell);
             view.getSelectionModel().focus(viewRow, scol);
+            view.getSelectionModel().clearAndSelect(cell);
         } catch (RuntimeException ignored) {
             safeClearSpreadsheetSelection(view);
         }
@@ -1286,6 +1275,8 @@ public final class SpreadsheetTabularSupport {
 
     /** {@link #installFullRowDataSelection(SpreadsheetView, BooleanSupplier)} の skip 述語を {@link SpreadsheetView#getProperties()} に格納するキー。 */
     private static final String PROP_FULL_ROW_EXPANSION_SKIP = "pmAiSpreadsheetFullRowExpansionSkip";
+    private static final String PROP_ROW_EXPAND_ACTIVE = "pmAiSpreadsheetRowExpandActive";
+    private static final String PROP_ROW_EXPAND_SCHEDULED = "pmAiSpreadsheetRowExpandScheduled";
 
     private static boolean isSpreadsheetColumnHidden(SpreadsheetView view, int columnIndex) {
         if (view == null || columnIndex < 0) {
@@ -1332,6 +1323,9 @@ public final class SpreadsheetTabularSupport {
         if (view == null) {
             return;
         }
+        if (Boolean.TRUE.equals(view.getProperties().get(PROP_ROW_EXPAND_ACTIVE))) {
+            return;
+        }
         Object skip = view.getProperties().get(PROP_FULL_ROW_EXPANSION_SKIP);
         if (skip instanceof BooleanSupplier bs && bs.getAsBoolean()) {
             return;
@@ -1349,23 +1343,34 @@ public final class SpreadsheetTabularSupport {
         if (visibleCols.isEmpty()) {
             return;
         }
+        Grid grid = view.getGrid();
+        if (grid == null || grid.getRows() == null) {
+            return;
+        }
         int firstData = spreadsheetFirstDataRowIndex();
-        Set<Integer> rows = new HashSet<>();
+        Set<Integer> modelRows = new LinkedHashSet<>();
         for (TablePosition p : selected) {
-            int r = p.getRow();
-            if (r >= firstData) {
-                rows.add(r);
+            int viewRow = p.getRow();
+            if (viewRow < 0) {
+                continue;
+            }
+            int modelRow = view.getModelRow(viewRow);
+            if (modelRow >= firstData) {
+                modelRows.add(modelRow);
             }
         }
-        if (rows.isEmpty()) {
+        if (modelRows.isEmpty()) {
             return;
         }
         Set<Integer> visibleSet = new HashSet<>(visibleCols);
         boolean allFull = true;
-        for (int r : rows) {
+        for (int modelRow : modelRows) {
             int cnt = 0;
             for (TablePosition p : selected) {
-                if (p.getRow() == r && p.getColumn() >= 0 && visibleSet.contains(p.getColumn())) {
+                if (p.getRow() < 0 || p.getColumn() < 0 || !visibleSet.contains(p.getColumn())) {
+                    continue;
+                }
+                if (view.getModelRow(p.getRow()) == modelRow) {
                     cnt++;
                 }
             }
@@ -1378,10 +1383,19 @@ public final class SpreadsheetTabularSupport {
             return;
         }
         TablePosition focus = sm.getFocusedCell();
-        int focusRow =
-                focus != null && focus.getRow() >= firstData
-                        ? focus.getRow()
-                        : Collections.min(rows);
+        Integer focusModelRow = null;
+        if (focus != null && focus.getRow() >= 0) {
+            int mr = view.getModelRow(focus.getRow());
+            if (mr >= firstData) {
+                focusModelRow = mr;
+            }
+        }
+        int focusModelRowResolved =
+                resolveExpansionFocusModelRow(firstData, modelRows, focusModelRow);
+        int focusViewRowResolved = view.getViewRow(focusModelRowResolved);
+        if (focusViewRowResolved < 0) {
+            return;
+        }
         int focusCol =
                 focus != null && focus.getColumn() >= 0 ? focus.getColumn() : visibleCols.get(0);
         if (!visibleSet.contains(focusCol)) {
@@ -1391,27 +1405,59 @@ public final class SpreadsheetTabularSupport {
         if (reentrancyGuard != null && reentrancyGuard[0]) {
             return;
         }
+        view.getProperties().put(PROP_ROW_EXPAND_ACTIVE, Boolean.TRUE);
         if (reentrancyGuard != null) {
             reentrancyGuard[0] = true;
         }
         try {
             safeClearSpreadsheetSelection(view);
             int fixedCount = view.getFixedColumns().size();
-            ArrayList<Integer> sorted = new ArrayList<>(rows);
-            Collections.sort(sorted);
-            for (int r : sorted) {
+            for (int modelRow : modelRows) {
+                int viewRow = view.getViewRow(modelRow);
+                if (viewRow < 0) {
+                    continue;
+                }
                 selectFullVisibleRowForFixedAndScrollPanes(
-                        view, cols, visibleCols, fixedCount, r);
+                        view, cols, visibleCols, fixedCount, viewRow);
             }
             int fc = Math.min(Math.max(focusCol, 0), cols.size() - 1);
-            sm.focus(focusRow, cols.get(fc));
+            sm.focus(focusViewRowResolved, cols.get(fc));
         } catch (RuntimeException ex) {
             safeClearSpreadsheetSelection(view);
         } finally {
+            view.getProperties().remove(PROP_ROW_EXPAND_ACTIVE);
             if (reentrancyGuard != null) {
                 reentrancyGuard[0] = false;
             }
         }
+    }
+
+    /** @see #resolveExpansionFocusViewRow(int, Set, Integer) */
+    static int resolveExpansionFocusModelRow(
+            int firstDataRow, Set<Integer> selectedModelRows, Integer focusModelRow) {
+        if (selectedModelRows == null || selectedModelRows.isEmpty()) {
+            return -1;
+        }
+        if (focusModelRow != null
+                && focusModelRow >= firstDataRow
+                && selectedModelRows.contains(focusModelRow)) {
+            return focusModelRow;
+        }
+        return Collections.max(selectedModelRows);
+    }
+
+    /** 行全体選択へ拡張するときのフォーカス行（view 行）。 */
+    static int resolveExpansionFocusViewRow(
+            int firstDataRow, Set<Integer> selectedViewRows, Integer focusViewRow) {
+        if (selectedViewRows == null || selectedViewRows.isEmpty()) {
+            return -1;
+        }
+        if (focusViewRow != null
+                && focusViewRow >= firstDataRow
+                && selectedViewRows.contains(focusViewRow)) {
+            return focusViewRow;
+        }
+        return Collections.max(selectedViewRows);
     }
 
     /** 固定列ペインとスクロールペインへ分けて {@code selectRange}（ControlsFX の行全体黒枠）。 */
@@ -1466,7 +1512,26 @@ public final class SpreadsheetTabularSupport {
         sm.getSelectedCells()
                 .addListener(
                         (ListChangeListener<? super TablePosition>)
-                                change -> expandSpreadsheetToFullVisibleRows(view, guard));
+                                change -> scheduleExpandSpreadsheetToFullVisibleRows(view, guard));
+    }
+
+    private static void scheduleExpandSpreadsheetToFullVisibleRows(
+            SpreadsheetView view, boolean[] guard) {
+        if (Boolean.TRUE.equals(view.getProperties().get(PROP_ROW_EXPAND_ACTIVE))) {
+            return;
+        }
+        if (Boolean.TRUE.equals(view.getProperties().get(PROP_ROW_EXPAND_SCHEDULED))) {
+            return;
+        }
+        view.getProperties().put(PROP_ROW_EXPAND_SCHEDULED, Boolean.TRUE);
+        Platform.runLater(
+                () -> {
+                    view.getProperties().remove(PROP_ROW_EXPAND_SCHEDULED);
+                    if (Boolean.TRUE.equals(view.getProperties().get(PROP_ROW_EXPAND_ACTIVE))) {
+                        return;
+                    }
+                    expandSpreadsheetToFullVisibleRows(view, guard);
+                });
     }
 
     /** @see #installFullRowDataSelection(SpreadsheetView, BooleanSupplier) */

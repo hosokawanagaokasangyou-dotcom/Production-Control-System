@@ -198,6 +198,18 @@ def run_stage1_extract():
         _load_used_raw_roll_length_table_stage1()
     )
     ur_roll_appended_keys: set[str] = set()
+    from planning_core.core.ec_side_classification import classify_ec_side
+    from planning_core.core.request_form_juchu_lookup import (
+        load_juchu_ec_lookup_by_irai_no,
+        lookup_juchu_ec_row,
+        has_original_ec_reference,
+    )
+    from planning_core.core.request_form_original_ec_lookup import (
+        load_request_form_original_ec_lookup,
+    )
+
+    _juchu_ec_lookup = load_juchu_ec_lookup_by_irai_no()
+    _original_ec_lookup = load_request_form_original_ec_lookup()
     records = []
     for _, row in df_src.iterrows():
         if row_has_completion_keyword(row):
@@ -283,6 +295,28 @@ def run_stage1_extract():
             )
         )
         _initialize_stage1_manual_input_columns(rec)
+        rec[PLAN_COL_EC_SIDE_CLASS] = ""
+        if machine in ("EC", "SEC"):
+            _juchu_row = lookup_juchu_ec_row(
+                _juchu_ec_lookup, task_id, _original_ec_lookup
+            )
+            _juchu_found = bool(_juchu_row)
+            _kako_for_ec = _juchu_row.get("加工内容") or rec.get(TASK_COL_PROCESS_CONTENT, "")
+            from planning_core.core.request_form_juchu_lookup import (
+                resolve_ec_men_for_side_classification,
+            )
+
+            _ec_men = resolve_ec_men_for_side_classification(
+                task_id, _juchu_row, _original_ec_lookup
+            )
+            _original_ref = has_original_ec_reference(_original_ec_lookup, task_id)
+            _ec_class = classify_ec_side(
+                _kako_for_ec,
+                _ec_men,
+                juchu_row_found=_juchu_found,
+                original_ref_found=_original_ref,
+            )
+            rec[PLAN_COL_EC_SIDE_CLASS] = _ec_class
         records.append(rec)
     if not records:
         logging.warning("段階1: 抽出対象タスクはありません。")

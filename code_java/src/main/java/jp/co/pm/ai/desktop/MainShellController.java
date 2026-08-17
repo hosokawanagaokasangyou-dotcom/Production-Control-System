@@ -159,6 +159,8 @@ import jp.co.pm.ai.desktop.ui.ShellFactoryOperatorToolbar;
 import jp.co.pm.ai.desktop.ui.StageRunBusyDialog;
 import jp.co.pm.ai.desktop.ui.StageRunLogProgressParser;
 import jp.co.pm.ai.desktop.ui.Stage1NewMaterialLookupDialog;
+import jp.co.pm.ai.desktop.ui.Stage1EcSideUnknownDialog;
+import jp.co.pm.ai.desktop.ui.Stage1EcSideUnknownDialogResult;
 import jp.co.pm.ai.desktop.ui.MissingSkillsSheetColumnDialog;
 import jp.co.pm.ai.desktop.ui.Stage2UnknownMasterCombinationDialog;
 import jp.co.pm.ai.desktop.ui.Stage2UnknownMasterCombinationDialogResult;
@@ -5782,9 +5784,20 @@ public final class MainShellController
                     reloadAfterStage1Preview.run();
                 }
                 applyStage1DevMarkAllExcludeAfterRunIfEnabled();
+                Path stage1PlanPath =
+                        AppPaths.defaultStage1PlanTasksPath(collectUiEnv())
+                                .toAbsolutePath()
+                                .normalize();
+                updateEnvTabValue(
+                        AppPaths.KEY_PM_AI_PLAN_INPUT_PATH, stage1PlanPath.toString());
+                if (planInputTabController != null) {
+                    planInputTabController.restoreDesktopSessionPaths(
+                            stage1PlanPath.toString(), AppPaths.STAGE1_PLAN_OUTPUT_SHEET);
+                }
                 if (reloadAfterStage1PlanInput != null) {
                     reloadAfterStage1PlanInput.run();
                 }
+                promptStage1EcSideUnknownAfterSuccess();
                 syncRequestFormFeedLocFromStage1Plan();
                 invalidateDeliveryCalendarAfterPipelineRun();
                 refreshEquipmentGanttGraphicAfterPipelineRun();
@@ -10118,6 +10131,45 @@ public PlanInputTabController planInputTabControllerForDispatchRollUnit() {
                 }
                 body.append(ln).append('\n');
             }
+        }
+    }
+
+    /** 段階1完了後: EC面区分が「不明」の依頼NOがあれば選択ダイアログを表示し plan_input を更新する。 */
+    private void promptStage1EcSideUnknownAfterSuccess() {
+        try {
+            Stage1EcSideUnknownPrompt.PromptBundle bundle =
+                    Stage1EcSideUnknownPrompt.collectUnknownIraiNos(collectUiEnv());
+            if (bundle.empty()) {
+                return;
+            }
+            appendLog(
+                    "[stage1] EC面区分が不明の依頼 "
+                            + bundle.items().size()
+                            + " 件 — 選択ダイアログを表示します。");
+            Optional<Stage1EcSideUnknownDialogResult> entered =
+                    Stage1EcSideUnknownDialog.prompt(primaryStageForDialogs(), bundle);
+            if (entered.isEmpty()) {
+                appendLog(
+                        "[stage1] EC面区分の選択ダイアログをキャンセルしました（不明のまま）。"
+                                + " 配台計画タスク入力タブで手動修正できます。");
+                return;
+            }
+            Stage1EcSideUnknownPrompt.ApplySummary applied =
+                    Stage1EcSideUnknownPrompt.applySelections(
+                            collectUiEnv(), entered.get().selections());
+            appendLog("[stage1] EC面区分を " + applied.rowsUpdated() + " 行更新しました。");
+            if (reloadAfterStage1PlanInput != null) {
+                reloadAfterStage1PlanInput.run();
+            }
+        } catch (IOException ex) {
+            appendLog(
+                    "[stage1] EC面区分選択ダイアログ失敗: "
+                            + (ex.getMessage() != null ? ex.getMessage() : ex.toString()));
+            showWarningDialog(
+                    "EC面区分",
+                    "EC面区分の選択ダイアログを表示できませんでした。\n"
+                            + (ex.getMessage() != null ? ex.getMessage() : ex.toString())
+                            + "\n\n配台計画タスク入力タブで手動修正してください。");
         }
     }
 
