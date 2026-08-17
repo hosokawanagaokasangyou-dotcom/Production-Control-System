@@ -22,7 +22,7 @@ import javafx.stage.Window;
 import javafx.stage.WindowEvent;
 
 /**
- * 終了ゲート用。7桁一致で終了確認へ進む。アプリ終了のキャンセルはできないが、確認へ戻れる。
+ * 終了ゲート用。12桁一致で終了確認へ進む。アプリ終了のキャンセルはできないが、確認へ戻れる。
  */
 public final class SevenDigitChallengeDialog {
 
@@ -69,15 +69,16 @@ public final class SevenDigitChallengeDialog {
         hint.setWrapText(true);
 
         Label digits = new Label(expected);
-        digits.setStyle("-fx-font-size: 36px; -fx-font-weight: bold;");
+        digits.setStyle("-fx-font-size: 28px; -fx-font-weight: bold;");
 
         TextField input = new TextField();
-        input.setPromptText("7桁を入力");
-        input.setPrefColumnCount(10);
+        input.setPromptText("12桁を入力");
+        input.setPrefColumnCount(14);
         UnaryOperator<TextFormatter.Change> digitsOnly =
                 change -> {
                     String next = change.getControlNewText();
-                    if (next == null || next.matches("[0-9]{0,7}")) {
+                    if (next == null
+                            || next.matches("[0-9]{0," + SevenDigitChallenge.DIGIT_COUNT + "}")) {
                         return change;
                     }
                     return null;
@@ -87,7 +88,7 @@ public final class SevenDigitChallengeDialog {
         Label mismatch = new Label("");
         mismatch.setStyle("-fx-text-fill: #b00020;");
 
-        Button ok = new Button("7桁を入力して終了確認へ");
+        Button ok = new Button("12桁を入力して終了確認へ");
         ok.setDefaultButton(true);
         ok.setOnAction(
                 e -> {
@@ -117,7 +118,7 @@ public final class SevenDigitChallengeDialog {
         box.setPadding(new Insets(16));
         box.setAlignment(Pos.CENTER);
         VBox.setVgrow(body, Priority.ALWAYS);
-        Scene scene = new Scene(box, 640, 520);
+        Scene scene = new Scene(box, 720, 520);
         if (owner != null && owner.getScene() != null) {
             scene.getStylesheets().setAll(owner.getScene().getStylesheets());
         }

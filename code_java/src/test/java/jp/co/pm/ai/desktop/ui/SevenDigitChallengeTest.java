@@ -9,21 +9,21 @@ import org.junit.jupiter.api.Test;
 class SevenDigitChallengeTest {
 
     @Test
-    void generate_returnsSevenDigitsWithoutLeadingZero() {
-        String code = SevenDigitChallenge.generate(bound -> 0);
-        assertEquals("1000000", code);
-        assertEquals(7, code.length());
+    void generate_returnsTwelveDigitsWithoutLeadingZero() {
+        String code = SevenDigitChallenge.generate(bound -> 0L);
+        assertEquals("100000000000", code);
+        assertEquals(12, code.length());
 
         String max = SevenDigitChallenge.generate(bound -> bound - 1);
-        assertEquals("9999999", max);
+        assertEquals("999999999999", max);
     }
 
     @Test
     void matches_acceptsOnlyExactDigits() {
-        assertTrue(SevenDigitChallenge.matches("1234567", "1234567"));
-        assertFalse(SevenDigitChallenge.matches("1234567", "1234568"));
-        assertFalse(SevenDigitChallenge.matches("1234567", "123456"));
-        assertTrue(SevenDigitChallenge.matches("1234567", " 1234567 "));
-        assertFalse(SevenDigitChallenge.matches("1234567", null));
+        assertTrue(SevenDigitChallenge.matches("123456789012", "123456789012"));
+        assertFalse(SevenDigitChallenge.matches("123456789012", "123456789013"));
+        assertFalse(SevenDigitChallenge.matches("123456789012", "12345678901"));
+        assertTrue(SevenDigitChallenge.matches("123456789012", " 123456789012 "));
+        assertFalse(SevenDigitChallenge.matches("123456789012", null));
     }
 }
