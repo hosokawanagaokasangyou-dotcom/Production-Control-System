@@ -48,6 +48,25 @@ public final class EnvVarsInitializedAtStore {
         return fingerprintPath();
     }
 
+    /**
+     * 初期化日時・フィンガープリント・ベースラインを削除する。
+     * ポータルバージョンアップの再起動待ちなど、次回起動で環境変数初期化を強制するときに使う。
+     */
+    public static void clear() {
+        try {
+            Files.deleteIfExists(storePath());
+        } catch (Exception ignored) {
+        }
+        try {
+            Files.deleteIfExists(fingerprintPath());
+        } catch (Exception ignored) {
+        }
+        try {
+            Files.deleteIfExists(baselineCanonicalPath());
+        } catch (Exception ignored) {
+        }
+    }
+
     /** 現在時刻を記録する（ISO-8601 instant 文字列）。 */
     public static void recordNow() {
         try {

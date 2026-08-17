@@ -119,6 +119,21 @@ class EnvVarsInitializedAtStoreTest {
     }
 
     @Test
+    void clear_removesTimestampFingerprintAndBaseline() {
+        EnvVarsInitializedAtStore.recordNow();
+        EnvVarsInitializedAtStore.recordEnvFingerprint(
+                Map.of("PM_AI_REPO_ROOT", "C:\\repo"), k -> true);
+        assertTrue(EnvVarsInitializedAtStore.isRecorded());
+        assertTrue(EnvVarsInitializedAtStore.loadEnvFingerprint().isPresent());
+
+        EnvVarsInitializedAtStore.clear();
+
+        assertFalse(EnvVarsInitializedAtStore.isRecorded());
+        assertFalse(EnvVarsInitializedAtStore.loadEnvFingerprint().isPresent());
+        assertEquals("—", EnvVarsInitializedAtStore.formatForToolbar());
+    }
+
+    @Test
     void envFingerprint_ignoresRdpTabKeys() {
         Map<String, String> baseline =
                 Map.of(

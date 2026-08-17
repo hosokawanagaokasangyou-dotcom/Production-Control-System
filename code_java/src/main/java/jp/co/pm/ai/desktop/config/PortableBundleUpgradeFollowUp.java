@@ -11,7 +11,8 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
- * デスクトップ本体の終了後更新（{@link PortableBundleUpdateLauncher}）のあと、次回起動で工場既定選択などを続行するためのマーカー。
+ * デスクトップ本体の終了後更新（{@link PortableBundleUpdateLauncher}）のあと、次回起動で
+ * 環境変数初期化の強制実行と工場既定反映を続行するためのマーカー。
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record PortableBundleUpgradeFollowUp(
@@ -35,6 +36,8 @@ public record PortableBundleUpgradeFollowUp(
                         Instant.now().toString(),
                         site != null ? site.name() : null);
         MAPPER.writerWithDefaultPrettyPrinter().writeValue(manifestPath().toFile(), state);
+        /* 再起動後は新 JAR の ui_ref で環境変数初期化を強制するため、旧版での初期化記録を捨てる */
+        EnvVarsInitializedAtStore.clear();
     }
 
     /** 後方互換: {@code factorySite} 未記録の旧マニフェスト向け。 */

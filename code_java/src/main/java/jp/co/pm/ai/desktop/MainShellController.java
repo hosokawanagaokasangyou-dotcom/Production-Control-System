@@ -984,6 +984,7 @@ public final class MainShellController
 
         applyRepoFolderPathNormalization();
         maybePortableFirstLaunchEnvInit();
+        maybeForceEnvInitAfterPortableUpgradeRestart();
         applyRunTabGating();
 
         probeNetworkSourceDirsAtStartup();
@@ -10592,6 +10593,28 @@ public PlanInputTabController planInputTabControllerForDispatchRollUnit() {
     }
 
     /**
+     * バージョンアップ後の再起動（{@link PortableBundleUpgradeFollowUp} 待ち）では、セッション復元直後に
+     * 新 JAR の ui_ref 既定へ環境変数初期化を強制する。スプラッシュ後の {@link
+     * #finishPortableUpgradeWithFactorySitePrompt} でも再度実行する。
+     */
+    private void maybeForceEnvInitAfterPortableUpgradeRestart() {
+        Path cwd = Path.of(System.getProperty("user.dir", ".")).toAbsolutePath().normalize();
+        if (!PortableBundleSelfUpdater.isPortableBundleLayout(cwd)) {
+            return;
+        }
+        if (!PortableBundleUpgradeFollowUp.isPendingFor(cwd)) {
+            return;
+        }
+        FactorySite site = resolveFactorySiteForPortableUpgrade(Optional.empty());
+        appendLog(
+                "[startup] バージョンアップ後の再起動: 環境変数初期化を強制実行します。工場="
+                        + site.displayLabelJa());
+        applyFactoryScopedGlobalAndEnvReset(site, true);
+        persistOperatorWorkspaceForEnvInitBaseline(site);
+        recordEnvInitializationBaseline();
+    }
+
+    /**
      * ポータブル配布: 正本が {@link AppPaths#KEY_PM_AI_PORTABLE_BUNDLE_SOURCE_DIR} に設定され、{@code version.txt} がローカルより新しいときに
      * {@code pm-ai-data} を同期する。正本はディレクトリ（リポジトリルート）または {@code .zip}（ZIP 隣に外付け {@code version.txt}）。
      */
@@ -10611,7 +10634,7 @@ public PlanInputTabController planInputTabControllerForDispatchRollUnit() {
         Path localData = cwd.resolve("pm-ai-data").normalize();
         if (PortableBundleUpgradeFollowUp.isPendingFor(cwd)) {
             appendLog(
-                    "[startup] バージョンアップ後の再起動を検出: 工場既定の維持と環境反映を続行します。");
+                    "[startup] バージョンアップ後の再起動を検出: 環境変数初期化を強制実行します。");
             deferOperatorPromptForPortableUpgrade.set(true);
             finishPortableUpgradeWithFactorySitePrompt(
                     cwd,
@@ -10946,15 +10969,11 @@ public PlanInputTabController planInputTabControllerForDispatchRollUnit() {
                     wait.close();
                     if (deferredDesktopRelaunch.get()) {
                         try {
-                            finishPortableUpgradeWithFactorySitePrompt(
-                                    cwd,
-                                    localData,
-                                    filesSynced.get(),
-                                    fileLog,
-                                    "（デスクトップ本体再起動前に環境を反映）",
-                                    Optional.of(canonical));
+                            /* 環境変数初期化は再起動後（新 JAR の ui_ref）で強制実行する */
                             PortableBundleUpgradeFollowUp.writePending(
                                     cwd, canonVerStr, upgradeFactorySite);
+                            appendLog(
+                                    "[startup] バージョンアップ後の再起動待ち: 環境変数初期化記録を無効化しました。再起動後に強制初期化します。");
                             showPortableUpgradeDeferredRestartDialog(canonVerStr);
                             long pid = ProcessHandle.current().pid();
                             Path staging = PortableBundlePendingUpdate.defaultStagingDirectory();
@@ -11076,12 +11095,12 @@ public PlanInputTabController planInputTabControllerForDispatchRollUnit() {
     }
 
     /**
-     * ポータル同期後の工場既定反映と環境タブのネットワーク／マスタ既定反映。デスクトップ本体再起動後は {@link
+     * ポータル同期後の工場既定反映と環境変数初期化の強制実行。デスクトップ本体再起動後は {@link
      * PortableBundleUpgradeFollowUp} 経由でここだけ再実行する。
      *
      * <p>工場選択ダイアログは出さず、アップデート前の利用工場（または正本 UNC からの推定）を維持する。操作者選択もスキップし、
      * 前回選択の復元のみ試みる。{@code init_setting} のグローバル設定を適用したうえで、環境変数タブを
-     * {@link #applyEnvRowsFullBundledResetAndPersist} で ui_ref 既定へ初期化する（工場ワークスペースに保存されていた環境変数行は復元しない）。
+     * {@link #applyEnvRowsFullBundledResetAndPersist} で ui_ref 既定へ強制初期化する（工場ワークスペースに保存されていた環境変数行は復元しない）。
      */
     private void finishPortableUpgradeWithFactorySitePrompt(
             Path cwd,
@@ -11127,7 +11146,7 @@ public PlanInputTabController planInputTabControllerForDispatchRollUnit() {
         applyRunTabGating();
         String completion =
                 "[startup] ポータル同期が完了しました（version.txt・pm-ai-data／init_setting をリポジトリへ反映）。"
-                        + "タブ配置を維持して反映しました。"
+                        + "環境変数を強制初期化し、タブ配置を維持して反映しました。"
                         + " 工場既定: "
                         + siteAfterUpgrade.displayLabelJa()
                         + "（アップデート前の利用工場を維持）。"
