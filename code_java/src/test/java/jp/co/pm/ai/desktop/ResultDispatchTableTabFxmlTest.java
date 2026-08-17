@@ -52,7 +52,7 @@ class ResultDispatchTableTabFxmlTest {
         assertFalse(buttonStyleById.containsKey("aladdinEntryOpenLocalGenerationsButton"));
         assertFalse(buttonStyleById.containsKey("aladdinEntryExportButton"));
         assertTrue(buttonStyleById.containsKey("aladdinEntryReloadExportButton"));
-        assertTrue(labelIds.contains("aladdinEntryReloadExportDisabledBadge"));
+        assertFalse(labelIds.contains("aladdinEntryReloadExportDisabledBadge"));
         assertFalse(
                 "true".equalsIgnoreCase(
                         buttonsById.get("aladdinEntryReloadExportButton").getAttribute("disable")));

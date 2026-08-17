@@ -48,7 +48,6 @@ import jp.co.pm.ai.desktop.dispatch.ResultDispatchInteractiveConsolidator;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchSchema;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchPlanningStageSupport;
 import jp.co.pm.ai.desktop.io.AladdinEntryDispatchPlanIdentityCheck;
-import jp.co.pm.ai.desktop.io.AladdinProcessingPlanSourceFreshness;
 import jp.co.pm.ai.desktop.io.AladdinProcessingPlanSourceReloader;
 import jp.co.pm.ai.desktop.io.DesktopFileOpener;
 import jp.co.pm.ai.desktop.io.DispatchAladdinEntryWorkbookExporter;
@@ -89,15 +88,10 @@ public final class ResultDispatchTableTabController {
                     + " ControlsFX SpreadsheetView （段階1成形結果と同じ"
                     + "列フィルタ）。";
 
-    private static final String ALADDIN_RELOAD_EXPORT_UP_TO_DATE_BADGE =
-            "加工計画は最新と同一（再読込不要）";
-
     @FXML
     private Button refreshButton;
 
     @FXML private Button aladdinEntryReloadExportButton;
-
-    @FXML private Label aladdinEntryReloadExportDisabledBadge;
 
     @FXML
     private Button aladdinEntryOpenLatestButton;
@@ -184,11 +178,7 @@ public final class ResultDispatchTableTabController {
 
     private final AtomicBoolean aladdinEntryExportBusy = new AtomicBoolean(false);
 
-    private final AtomicBoolean aladdinReloadExportUpToDate = new AtomicBoolean(false);
-
     private final AtomicInteger aladdinIdentityCheckGeneration = new AtomicInteger();
-
-    private final AtomicInteger aladdinReloadExportStateGeneration = new AtomicInteger();
 
     private Timeline aladdinEntryOpenLatestStateTimeline;
 
@@ -240,7 +230,6 @@ public final class ResultDispatchTableTabController {
         Platform.runLater(
                 () -> {
                     reloadFromDisk(false);
-                    refreshAladdinEntryReloadExportButtonState();
                     refreshAladdinEntryOpenLatestButtonState();
                     startAladdinEntryOpenLatestStateTimeline();
                 });
@@ -292,7 +281,6 @@ public final class ResultDispatchTableTabController {
     /** 親（納期管理ビュー）の再読込成功後に呼ぶ。 */
     public void reloadResultDispatchTableFromDisk() {
         reloadFromDisk(false);
-        refreshAladdinEntryReloadExportButtonState();
         refreshAladdinEntryOpenLatestButtonState();
     }
 
@@ -306,7 +294,6 @@ public final class ResultDispatchTableTabController {
             return;
         }
         expandOperationsSourcePane();
-        refreshAladdinEntryReloadExportButtonState();
         refreshAladdinEntryOpenLatestButtonState();
         if (promptExcelExportAttention) {
             startAladdinOpenAttentionGlow();
@@ -779,7 +766,6 @@ public final class ResultDispatchTableTabController {
         }
         dismissAladdinOpenAttentionGlow();
         Map<String, String> ui = shell.snapshotUiEnv();
-        applyAladdinEntryReloadExportButtonDisabledState();
         showAladdinEntryExportProgress(
                 ProgressBar.INDETERMINATE_PROGRESS,
                 reloadAladdinPlanFromSource
@@ -864,47 +850,6 @@ public final class ResultDispatchTableTabController {
 
     private void setAladdinEntryExportBusy(boolean busy) {
         aladdinEntryExportBusy.set(busy);
-        applyAladdinEntryReloadExportButtonDisabledState();
-    }
-
-    private void refreshAladdinEntryReloadExportButtonState() {
-        if (shell == null) {
-            return;
-        }
-        int generation = aladdinReloadExportStateGeneration.incrementAndGet();
-        Map<String, String> ui = shell.snapshotUiEnv();
-        Thread worker =
-                new Thread(
-                        () -> {
-                            boolean upToDate =
-                                    AladdinProcessingPlanSourceFreshness
-                                            .isSavedShapedPlanIdenticalToNewestSource(ui);
-                            Platform.runLater(
-                                    () -> {
-                                        if (generation
-                                                != aladdinReloadExportStateGeneration.get()) {
-                                            return;
-                                        }
-                                        aladdinReloadExportUpToDate.set(upToDate);
-                                        applyAladdinEntryReloadExportButtonDisabledState();
-                                    });
-                        },
-                        "aladdin-reload-export-state");
-        worker.setDaemon(true);
-        worker.start();
-    }
-
-    private void applyAladdinEntryReloadExportButtonDisabledState() {
-        if (aladdinEntryReloadExportButton != null) {
-            aladdinEntryReloadExportButton.setDisable(false);
-        }
-        boolean showUpToDateBadge =
-                aladdinReloadExportUpToDate.get() && !aladdinEntryExportBusy.get();
-        if (aladdinEntryReloadExportDisabledBadge != null) {
-            aladdinEntryReloadExportDisabledBadge.setText(ALADDIN_RELOAD_EXPORT_UP_TO_DATE_BADGE);
-            aladdinEntryReloadExportDisabledBadge.setVisible(showUpToDateBadge);
-            aladdinEntryReloadExportDisabledBadge.setManaged(showUpToDateBadge);
-        }
     }
 
     private void showAladdinEntryExportProgress(double progress, String text) {
@@ -939,7 +884,6 @@ public final class ResultDispatchTableTabController {
             boolean showCompletionDialog,
             Consumer<AladdinEntryExportOutcome> completion) {
         setAladdinEntryExportBusy(false);
-        refreshAladdinEntryReloadExportButtonState();
         refreshAladdinEntryOpenLatestButtonState();
         hideAladdinEntryExportProgress();
         String dialogTitle =
