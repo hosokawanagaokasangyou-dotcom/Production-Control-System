@@ -53,6 +53,7 @@ import jp.co.pm.ai.desktop.io.AladdinProcessingPlanSourceReloader;
 import jp.co.pm.ai.desktop.io.DesktopFileOpener;
 import jp.co.pm.ai.desktop.io.DispatchAladdinEntryWorkbookExporter;
 import jp.co.pm.ai.desktop.reconciliation.RequestFormOriginalIndexLookup;
+import jp.co.pm.ai.desktop.ui.AladdinEntryIdentityCheckResultDialog;
 import jp.co.pm.ai.desktop.ui.DispatchAladdinEntryGenerationDialog;
 import jp.co.pm.ai.desktop.ui.ButtonAttentionGlow;
 import jp.co.pm.ai.desktop.ui.ColumnVisibilitySupport;
@@ -1103,7 +1104,7 @@ public final class ResultDispatchTableTabController {
             shell.showInformationDialog("同一化チェック", result.message());
             return;
         }
-        shell.showWarningDialog("同一化チェック", result.dialogBody());
+        AladdinEntryIdentityCheckResultDialog.show(ownerStage, result);
     }
 
     private void applyAladdinEntryIdentityCheckBadge(
