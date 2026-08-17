@@ -80,6 +80,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 
+import jp.co.pm.ai.desktop.ui.SevenDigitChallenge;
+import jp.co.pm.ai.desktop.ui.SevenDigitChallengeDialog;
 import jp.co.pm.ai.desktop.ui.ThemedAlertContentSupport;
 import jp.co.pm.ai.desktop.ui.TodayDispatchSourceSelectionDialog;
 import jp.co.pm.ai.planning.stage2.source.Stage1SourceBundle;
@@ -122,6 +124,8 @@ import jp.co.pm.ai.desktop.config.JvmMemoryLogStore;
 import jp.co.pm.ai.desktop.config.MainShellTabLayoutDefaults;
 import jp.co.pm.ai.desktop.config.MainShellTabLayoutNode;
 import jp.co.pm.ai.desktop.config.FactoryOperatorUserStore;
+import jp.co.pm.ai.desktop.config.OperatorActionLogStore;
+import jp.co.pm.ai.desktop.config.OperatorUserPaths;
 import jp.co.pm.ai.desktop.config.FactorySite;
 import jp.co.pm.ai.desktop.config.FactorySiteOperatorAccess;
 import jp.co.pm.ai.desktop.config.FactorySiteWorkspaceMigrator;
@@ -477,6 +481,9 @@ public final class MainShellController
     private WorkspaceCacheHistoryTabController workspaceCacheHistoryTabController;
 
     @FXML
+    private OperatorActionLogTabController operatorActionLogTabController;
+
+    @FXML
     private ApiModelBenchmarkTabController apiModelBenchmarkTabController;
 
     @FXML
@@ -588,6 +595,9 @@ public final class MainShellController
     private Tab mainShellTabCacheHistory;
 
     @FXML
+    private Tab mainShellTabOperatorActionLog;
+
+    @FXML
     private Tab mainShellTabApiModelBenchmark;
 
     @FXML
@@ -616,6 +626,8 @@ public final class MainShellController
 
     /** {@link Platform#exit()} 等、確認なしで閉じる内部終了用。 */
     private volatile boolean suppressCloseConfirmation;
+
+    private final Stage2IdentityCloseGate stage2IdentityCloseGate = new Stage2IdentityCloseGate();
 
     private final PipelineExecutionTimingHistoryStore pipelineExecutionTimingHistory =
             new PipelineExecutionTimingHistoryStore();
@@ -902,6 +914,9 @@ public final class MainShellController
         }
         if (workspaceCacheHistoryTabController != null) {
             workspaceCacheHistoryTabController.bindShell(this);
+        }
+        if (operatorActionLogTabController != null) {
+            operatorActionLogTabController.bindShell(this);
         }
         if (apiModelBenchmarkTabController != null) {
             apiModelBenchmarkTabController.bindShell(this);
@@ -2092,6 +2107,9 @@ public final class MainShellController
         if (suppressCloseConfirmation) {
             return true;
         }
+        if (!confirmStage2IdentityCloseGate()) {
+            return false;
+        }
         Alert alert = new Alert(AlertType.CONFIRMATION);
         initDialogOwnerIfSceneReady(alert);
         applyAlertStylesheetsFromOwner(alert);
@@ -2105,6 +2123,37 @@ public final class MainShellController
         alert.setContentText(msg.toString());
         Optional<ButtonType> ans = alert.showAndWait();
         return ans.isPresent() && ans.get() == ButtonType.OK;
+    }
+
+    /**
+     * この起動で段階2完了後、ローカル最新配台計画と加工計画が不一致なら7桁入力を要求する。
+     * 入力画面を出した時点で操作ログへ記録する。
+     */
+    private boolean confirmStage2IdentityCloseGate() {
+        Stage2IdentityCloseGate.Decision decision = stage2IdentityCloseGate.decide(snapshotUiEnv());
+        if (!decision.required()) {
+            return true;
+        }
+        recordOperatorAction("close_warning", "shown", decision.detail());
+        return SevenDigitChallengeDialog.showAndConfirm(primaryStage, SevenDigitChallenge.generate());
+    }
+
+    /** 配台重要操作を共有フォルダの操作ログへ追記する。失敗時は実行・ログに1行。 */
+    public void recordOperatorAction(String action, String result, String detail) {
+        Map<String, String> ui = snapshotUiEnv();
+        String operator = FactoryOperatorUserStore.sessionOperatorName();
+        if (operator.isBlank()) {
+            operator = OperatorUserPaths.resolveOperatorUser(ui);
+        }
+        boolean ok = OperatorActionLogStore.append(ui, operator, action, result, detail);
+        if (!ok) {
+            appendLog("[operator-action-log] 書き込みに失敗しました");
+        }
+    }
+
+    public void markStage2CompletedThisLaunch() {
+        stage2IdentityCloseGate.markStage2Completed();
+        recordOperatorAction("stage2_complete", "ok", "段階2完了");
     }
 
     /** 終了確認後、または内部終了時のクリーンアップ（セッション保存・ロック解放）。 */
@@ -2296,6 +2345,9 @@ public final class MainShellController
         if (t == mainShellTabCacheHistory) {
             return MainShellTabId.CACHE_HISTORY;
         }
+        if (t == mainShellTabOperatorActionLog) {
+            return MainShellTabId.OPERATOR_ACTION_LOG;
+        }
         if (t == mainShellTabApiModelBenchmark) {
             return MainShellTabId.API_MODEL_BENCHMARK;
         }
@@ -2354,6 +2406,7 @@ public final class MainShellController
             case DISPATCH_INTERACTIVE -> mainShellTabDispatchInteractive;
             case PLAN_WORKSPACE_HISTORY -> mainShellTabPlanWorkspaceHistory;
             case CACHE_HISTORY -> mainShellTabCacheHistory;
+            case OPERATOR_ACTION_LOG -> mainShellTabOperatorActionLog;
             case API_MODEL_BENCHMARK -> mainShellTabApiModelBenchmark;
             case PLAN_RESULT_VIEWER -> mainShellTabPlanResultViewer;
             case EQUIPMENT_GANTT_GRAPHIC -> mainShellTabEquipmentGanttGraphic;
@@ -5849,6 +5902,7 @@ public final class MainShellController
                                                                     updateStage2ExcelProgress(
                                                                             outcome);
                                                                     endStageRunBusyDialog();
+                                                                    markStage2CompletedThisLaunch();
                                                                     MacroCompleteChime
                                                                             .playIfAvailable(
                                                                                     collectUiEnv());

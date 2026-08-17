@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.ComboBox?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.Separator?>
+<?import javafx.scene.control.TableColumn?>
+<?import javafx.scene.control.TableView?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.VBox?>
+
+<VBox xmlns="http://javafx.com/javafx/26" xmlns:fx="http://javafx.com/fxml/1"
+      spacing="10.0"
+      fx:controller="jp.co.pm.ai.desktop.OperatorActionLogTabController">
+    <padding>
+        <Insets bottom="12.0" left="12.0" right="12.0" top="12.0"/>
+    </padding>
+    <Label styleClass="pm-section-title" text="操作ログ" wrapText="true"/>
+    <Label text="配台まわりの重要操作（段階2完了、同一化チェック、Excel出力、終了警告）を操作者別に表示します。共有フォルダに90日保存します。"
+           wrapText="true"/>
+    <Separator/>
+    <HBox spacing="8.0" alignment="CENTER_LEFT">
+        <Label text="操作者"/>
+        <ComboBox fx:id="operatorCombo" prefWidth="220.0"/>
+        <Button fx:id="refreshButton" mnemonicParsing="false" onAction="#onRefreshAction" text="再読み"/>
+    </HBox>
+    <Label fx:id="pathLabel" styleClass="pm-muted-label" wrapText="true"/>
+    <Label fx:id="statusLabel" wrapText="true"/>
+    <TableView fx:id="logTable" prefHeight="420.0" VBox.vgrow="ALWAYS">
+        <columns>
+            <TableColumn fx:id="tsColumn" text="日時" prefWidth="200.0"/>
+            <TableColumn fx:id="actionColumn" text="操作" prefWidth="140.0"/>
+            <TableColumn fx:id="resultColumn" text="結果" prefWidth="90.0"/>
+            <TableColumn fx:id="detailColumn" text="詳細" prefWidth="420.0"/>
+        </columns>
+    </TableView>
+</VBox>

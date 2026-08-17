@@ -2991,6 +2991,9 @@ public final class AppPaths {
      */
     public static final String REMOTE_LOG_DIR_NAME = "remote_log";
 
+    /** 操作者別操作ログのルートフォルダ名（親は {@link #summaryAiDispatchXlsxPath} と同一）。 */
+    public static final String OPERATOR_ACTION_LOG_DIR_NAME = "操作ログ";
+
     /** Python planning_core が書く実行ログファイル名（{@code code/log/} 配下）。 */
     public static final String EXECUTION_LOG_TXT = "execution_log.txt";
 
@@ -3013,6 +3016,14 @@ public final class AppPaths {
      */
     public static Path resolveRemoteLogRoot(Map<String, String> ui) {
         return siblingOfSummaryAiDispatchWorkbook(ui, REMOTE_LOG_DIR_NAME);
+    }
+
+    /**
+     * 操作ログのルート（{@link #summaryAiDispatchXlsxPath(Map)} の親 +
+     * {@link #OPERATOR_ACTION_LOG_DIR_NAME}）。
+     */
+    public static Path resolveOperatorActionLogRoot(Map<String, String> ui) {
+        return siblingOfSummaryAiDispatchWorkbook(ui, OPERATOR_ACTION_LOG_DIR_NAME);
     }
 
     /**

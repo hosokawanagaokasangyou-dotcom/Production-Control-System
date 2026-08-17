@@ -265,6 +265,11 @@
                         <fx:include fx:id="workspaceCacheHistoryTab" source="WorkspaceCacheHistoryTab.fxml"/>
                     </content>
                 </Tab>
+                <Tab fx:id="mainShellTabOperatorActionLog" closable="false" text="操作ログ">
+                    <content>
+                        <fx:include fx:id="operatorActionLogTab" source="OperatorActionLogTab.fxml"/>
+                    </content>
+                </Tab>
                 <Tab fx:id="mainShellTabApiModelBenchmark" closable="false" text="APIモデルベンチマーク">
                     <content>
                         <fx:include fx:id="apiModelBenchmarkTab" source="ApiModelBenchmarkTab.fxml"/>

@@ -896,6 +896,10 @@ public final class ResultDispatchTableTabController {
         }
         if (error != null) {
             shell.appendLog("[aladdin-entry-export] error: " + error.getMessage());
+            shell.recordOperatorAction(
+                    "excel_export",
+                    "error",
+                    error.getMessage() != null ? error.getMessage() : error.toString());
             if (showCompletionDialog) {
                 shell.showErrorDialog(
                         dialogTitle,
@@ -907,6 +911,11 @@ public final class ResultDispatchTableTabController {
             return;
         }
         shell.appendLog("[aladdin-entry-export] " + result.latestPath());
+        Path latest = result.latestPath();
+        shell.recordOperatorAction(
+                "excel_export",
+                "ok",
+                latest != null ? latest.getFileName().toString() : "");
         StringBuilder sb =
                 new StringBuilder(
                                 reloadedAladdinPlan
@@ -1040,6 +1049,14 @@ public final class ResultDispatchTableTabController {
             shell.appendLog("[aladdin-identity-check] plan=" + result.planSourcePath().get());
         }
         shell.appendLog("[aladdin-identity-check] " + result.message());
+        String identityResult = result.error() ? "error" : (result.identical() ? "ok" : "mismatch");
+        String identityDetail =
+                result.error()
+                        ? (result.message() != null ? result.message() : "比較失敗")
+                        : (result.identical()
+                                ? "同一"
+                                : (result.badgeText() != null ? result.badgeText() : "差異"));
+        shell.recordOperatorAction("identity_check", identityResult, identityDetail);
         if (result.error()) {
             shell.showWarningDialog("同一化チェック", result.message());
             return;

@@ -54,6 +54,8 @@ public enum MainShellTabId {
     PLAN_WORKSPACE_HISTORY("planWorkspaceHistory"),
     /** 段階1キャッシュ等の退避履歴（クリア前退避・復元）。 */
     CACHE_HISTORY("cacheHistory"),
+    /** 配台重要操作の操作者別ログ（共有フォルダ、90日）。 */
+    OPERATOR_ACTION_LOG("operatorActionLog"),
     /** Gemini generateContent の往復レイテンシ計測。 */
     API_MODEL_BENCHMARK("apiModelBenchmark"),
     /** 段階1～3・サマリ Excel・納期管理ビューの実行時間トレンド。 */
