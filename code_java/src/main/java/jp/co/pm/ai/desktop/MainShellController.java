@@ -2252,25 +2252,6 @@ public final class MainShellController
         recordOperatorAction("stage2_complete", "ok", "段階2完了");
     }
 
-    private record Stage2IdentityAppendix(String text, boolean needsAttention) {}
-
-    private Stage2IdentityAppendix evaluateStage2IdentityAppendix() {
-        try {
-            Stage2IdentityCloseGate.Decision d = stage2IdentityCloseGate.decide(snapshotUiEnv());
-            if (!d.required()) {
-                return new Stage2IdentityAppendix("\n\n配台計画と加工計画は同一です。", false);
-            }
-            String body =
-                    d.dialogBody() != null && !d.dialogBody().isBlank() ? d.dialogBody() : d.detail();
-            return new Stage2IdentityAppendix(
-                    "\n\n【同一化チェック】" + d.detail() + "\n" + body, true);
-        } catch (RuntimeException ex) {
-            return new Stage2IdentityAppendix(
-                    "\n\n【同一化チェック】比較に失敗しました。配台結果で確認してください。",
-                    true);
-        }
-    }
-
     /** 終了確認後、または内部終了時のクリーンアップ（セッション保存・ロック解放）。 */
     private void performApplicationShutdownOnClose() {
         try {
@@ -6027,17 +6008,12 @@ public final class MainShellController
                                                                     MacroCompleteChime
                                                                             .playIfAvailable(
                                                                                     collectUiEnv());
-                                                                    Stage2IdentityAppendix
-                                                                            identityAppendix =
-                                                                                    evaluateStage2IdentityAppendix();
                                                                     showStageCompletionDialogAndWait(
                                                                             "段階2 完了",
                                                                             stage2CompletionHeader(
                                                                                     outcome),
                                                                             stage2CompletionContent(
-                                                                                            outcome)
-                                                                                    + identityAppendix
-                                                                                            .text(),
+                                                                                    outcome),
                                                                             () -> {
                                                                                 selectMainShellTab(
                                                                                         MainShellTabId
@@ -6047,13 +6023,6 @@ public final class MainShellController
                                                                                     deliveryCalendarViewTabController
                                                                                             .selectDispatchResultInnerTab(
                                                                                                     false);
-                                                                                }
-                                                                                if (identityAppendix
-                                                                                                .needsAttention()
-                                                                                        && resultDispatchTableTabController
-                                                                                                != null) {
-                                                                                    resultDispatchTableTabController
-                                                                                            .promptIdentityCheckAttention();
                                                                                 }
                                                                             });
                                                                     showRawInputMorningDispatchRateWarningAfterStage2();
