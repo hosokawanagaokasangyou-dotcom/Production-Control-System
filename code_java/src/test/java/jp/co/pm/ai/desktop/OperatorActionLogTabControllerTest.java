@@ -17,4 +17,13 @@ class OperatorActionLogTabControllerTest {
         assertEquals("失敗", OperatorActionLogTabController.resultLabel("error"));
         assertEquals("表示", OperatorActionLogTabController.resultLabel("shown"));
     }
+
+    @Test
+    void formatTs_usesJapaneseLocalDateTime() {
+        assertEquals(
+                "2026-08-17 20:45",
+                OperatorActionLogTabController.formatTs("2026-08-17T20:45:12+09:00"));
+        assertEquals("", OperatorActionLogTabController.formatTs(""));
+        assertEquals("not-a-date", OperatorActionLogTabController.formatTs("not-a-date"));
+    }
 }

@@ -35,6 +35,7 @@ import javafx.collections.ListChangeListener;
 import javafx.collections.ObservableList;
 import javafx.concurrent.Task;
 import javafx.fxml.FXML;
+import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.geometry.Rectangle2D;
 import javafx.scene.Node;
@@ -73,6 +74,7 @@ import javafx.stage.DirectoryChooser;
 import javafx.stage.Modality;
 import javafx.stage.Screen;
 import javafx.stage.Stage;
+import javafx.stage.WindowEvent;
 import javafx.util.Duration;
 import javafx.util.StringConverter;
 
@@ -629,6 +631,9 @@ public final class MainShellController
 
     private final Stage2IdentityCloseGate stage2IdentityCloseGate = new Stage2IdentityCloseGate();
 
+    /** 終了確認済み。2回目の WINDOW_CLOSE_REQUEST はゲートせず閉じる。 */
+    private volatile boolean applicationCloseProceeding;
+
     private final PipelineExecutionTimingHistoryStore pipelineExecutionTimingHistory =
             new PipelineExecutionTimingHistoryStore();
 
@@ -985,15 +990,14 @@ public final class MainShellController
 
         primaryStage.setOnCloseRequest(
                 e -> {
+                    if (applicationCloseProceeding) {
+                        return;
+                    }
+                    e.consume();
                     if (!confirmAttendanceTabsUnsavedBeforeLeave("終了")) {
-                        e.consume();
                         return;
                     }
-                    if (!confirmApplicationClose()) {
-                        e.consume();
-                        return;
-                    }
-                    performApplicationShutdownOnClose();
+                    beginApplicationCloseSequence();
                 });
 
         primaryStage.setOnShown(
@@ -2102,14 +2106,7 @@ public final class MainShellController
         showThemedAlert(AlertType.ERROR, title, null, message);
     }
 
-    /** メインウィンドウの ✕ 閉じる前に確認する。キャンセル時は {@code false}。 */
-    private boolean confirmApplicationClose() {
-        if (suppressCloseConfirmation) {
-            return true;
-        }
-        if (!confirmStage2IdentityCloseGate()) {
-            return false;
-        }
+    private boolean showNormalApplicationCloseConfirm() {
         Alert alert = new Alert(AlertType.CONFIRMATION);
         initDialogOwnerIfSceneReady(alert);
         applyAlertStylesheetsFromOwner(alert);
@@ -2125,17 +2122,105 @@ public final class MainShellController
         return ans.isPresent() && ans.get() == ButtonType.OK;
     }
 
-    /**
-     * この起動で段階2完了後、ローカル最新配台計画と加工計画が不一致なら7桁入力を要求する。
-     * 入力画面を出した時点で操作ログへ記録する。
-     */
-    private boolean confirmStage2IdentityCloseGate() {
-        Stage2IdentityCloseGate.Decision decision = stage2IdentityCloseGate.decide(snapshotUiEnv());
-        if (!decision.required()) {
-            return true;
+    private void beginApplicationCloseSequence() {
+        if (suppressCloseConfirmation) {
+            finishApplicationCloseAfterConfirm();
+            return;
         }
-        recordOperatorAction("close_warning", "shown", decision.detail());
-        return SevenDigitChallengeDialog.showAndConfirm(primaryStage, SevenDigitChallenge.generate());
+        if (!stage2IdentityCloseGate.stage2CompletedThisLaunch()) {
+            if (showNormalApplicationCloseConfirm()) {
+                finishApplicationCloseAfterConfirm();
+            }
+            return;
+        }
+        Stage wait = showIdentityCompareWaitDialog();
+        Map<String, String> ui = snapshotUiEnv();
+        Thread worker =
+                new Thread(
+                        () -> {
+                            Stage2IdentityCloseGate.Decision decision;
+                            try {
+                                decision = stage2IdentityCloseGate.decide(ui);
+                            } catch (RuntimeException ex) {
+                                decision =
+                                        new Stage2IdentityCloseGate.Decision(
+                                                true,
+                                                "比較失敗",
+                                                "比較中にエラーが発生しました。同一化チェックで内容を確認してください。");
+                            }
+                            Stage2IdentityCloseGate.Decision decided = decision;
+                            Platform.runLater(
+                                    () -> {
+                                        wait.close();
+                                        if (!decided.required()) {
+                                            if (showNormalApplicationCloseConfirm()) {
+                                                finishApplicationCloseAfterConfirm();
+                                            }
+                                            return;
+                                        }
+                                        recordOperatorAction(
+                                                "close_warning", "shown", decided.detail());
+                                        SevenDigitChallengeDialog.Outcome outcome =
+                                                SevenDigitChallengeDialog.showAndConfirm(
+                                                        primaryStage,
+                                                        SevenDigitChallenge.generate(),
+                                                        decided.detail(),
+                                                        decided.dialogBody());
+                                        if (outcome
+                                                == SevenDigitChallengeDialog.Outcome
+                                                        .RETURN_TO_CHECK) {
+                                            navigateToIdentityCheckAfterCloseGate();
+                                            return;
+                                        }
+                                        if (outcome
+                                                        == SevenDigitChallengeDialog.Outcome
+                                                                .CONFIRMED
+                                                && showNormalApplicationCloseConfirm()) {
+                                            finishApplicationCloseAfterConfirm();
+                                        }
+                                    });
+                        },
+                        "stage2-identity-close-gate");
+        worker.setDaemon(true);
+        worker.start();
+    }
+
+    private Stage showIdentityCompareWaitDialog() {
+        Stage wait = new Stage();
+        wait.initModality(Modality.APPLICATION_MODAL);
+        if (primaryStage != null) {
+            wait.initOwner(primaryStage);
+        }
+        wait.setTitle("同一化チェック");
+        wait.setOnCloseRequest(WindowEvent::consume);
+        Label label = new Label("配台計画と加工計画を比較しています…");
+        label.setPadding(new Insets(20));
+        Scene scene = new Scene(label, 360, 80);
+        if (primaryStage != null && primaryStage.getScene() != null) {
+            scene.getStylesheets().setAll(primaryStage.getScene().getStylesheets());
+        }
+        wait.setScene(scene);
+        wait.setResizable(false);
+        wait.show();
+        return wait;
+    }
+
+    private void finishApplicationCloseAfterConfirm() {
+        applicationCloseProceeding = true;
+        performApplicationShutdownOnClose();
+        if (primaryStage != null) {
+            primaryStage.close();
+        }
+    }
+
+    private void navigateToIdentityCheckAfterCloseGate() {
+        selectMainShellTab(MainShellTabId.DELIVERY_CALENDAR_VIEW);
+        if (deliveryCalendarViewTabController != null) {
+            deliveryCalendarViewTabController.selectDispatchResultInnerTab(false);
+        }
+        if (resultDispatchTableTabController != null) {
+            resultDispatchTableTabController.promptIdentityCheckAttention();
+        }
     }
 
     /** 配台重要操作を共有フォルダの操作ログへ追記する。失敗時は実行・ログに1行。 */
@@ -2157,6 +2242,33 @@ public final class MainShellController
                 "stage2_complete",
                 "ok",
                 excelExportSucceeded ? "段階2完了" : "段階2完了（Excel出力失敗）");
+    }
+
+    private void markStage2PipelineAwaitingExcelThisLaunch() {
+        if (stage2IdentityCloseGate.stage2CompletedThisLaunch()) {
+            return;
+        }
+        stage2IdentityCloseGate.markStage2PipelineAwaitingExcel();
+        recordOperatorAction("stage2_complete", "ok", "段階2完了");
+    }
+
+    private record Stage2IdentityAppendix(String text, boolean needsAttention) {}
+
+    private Stage2IdentityAppendix evaluateStage2IdentityAppendix() {
+        try {
+            Stage2IdentityCloseGate.Decision d = stage2IdentityCloseGate.decide(snapshotUiEnv());
+            if (!d.required()) {
+                return new Stage2IdentityAppendix("\n\n配台計画と加工計画は同一です。", false);
+            }
+            String body =
+                    d.dialogBody() != null && !d.dialogBody().isBlank() ? d.dialogBody() : d.detail();
+            return new Stage2IdentityAppendix(
+                    "\n\n【同一化チェック】" + d.detail() + "\n" + body, true);
+        } catch (RuntimeException ex) {
+            return new Stage2IdentityAppendix(
+                    "\n\n【同一化チェック】比較に失敗しました。配台結果で確認してください。",
+                    true);
+        }
     }
 
     /** 終了確認後、または内部終了時のクリーンアップ（セッション保存・ロック解放）。 */
@@ -5866,6 +5978,7 @@ public final class MainShellController
             }
             if (STAGE2.equals(script)) {
                 if (c == 0) {
+                    markStage2PipelineAwaitingExcelThisLaunch();
                     mainRunTabController.updateStage2Progress(
                             MainRunStage2Progress.State.DISPATCH_RELOADING, "");
                     refreshStage2OutputArtifacts();
@@ -5905,19 +6018,26 @@ public final class MainShellController
                                                                     updateStage2ExcelProgress(
                                                                             outcome);
                                                                     endStageRunBusyDialog();
-                                                                    markStage2CompletedThisLaunch(
-                                                                            outcome != null
-                                                                                    && outcome
-                                                                                            .succeeded());
+                                                                    if (outcome != null
+                                                                            && outcome
+                                                                                    .succeeded()) {
+                                                                        stage2IdentityCloseGate
+                                                                                .markExcelExportSucceeded();
+                                                                    }
                                                                     MacroCompleteChime
                                                                             .playIfAvailable(
                                                                                     collectUiEnv());
+                                                                    Stage2IdentityAppendix
+                                                                            identityAppendix =
+                                                                                    evaluateStage2IdentityAppendix();
                                                                     showStageCompletionDialogAndWait(
                                                                             "段階2 完了",
                                                                             stage2CompletionHeader(
                                                                                     outcome),
                                                                             stage2CompletionContent(
-                                                                                    outcome),
+                                                                                            outcome)
+                                                                                    + identityAppendix
+                                                                                            .text(),
                                                                             () -> {
                                                                                 selectMainShellTab(
                                                                                         MainShellTabId
@@ -5927,6 +6047,13 @@ public final class MainShellController
                                                                                     deliveryCalendarViewTabController
                                                                                             .selectDispatchResultInnerTab(
                                                                                                     false);
+                                                                                }
+                                                                                if (identityAppendix
+                                                                                                .needsAttention()
+                                                                                        && resultDispatchTableTabController
+                                                                                                != null) {
+                                                                                    resultDispatchTableTabController
+                                                                                            .promptIdentityCheckAttention();
                                                                                 }
                                                                             });
                                                                     showRawInputMorningDispatchRateWarningAfterStage2();
@@ -6986,11 +7113,8 @@ public final class MainShellController
                                     if (!confirmCompanyCalendarUnsavedBeforeLeave("終了")) {
                                         return;
                                     }
-                                    if (confirmApplicationClose()) {
-                                        performApplicationShutdownOnClose();
-                                        if (primaryStage != null) {
-                                            primaryStage.close();
-                                        }
+                                    if (primaryStage != null) {
+                                        primaryStage.close();
                                     }
                                 } else if (pendingMemberAttendanceTabAfterSave != null) {
                                     MainShellTabId target = pendingMemberAttendanceTabAfterSave;
@@ -7038,11 +7162,8 @@ public final class MainShellController
                                     if (!confirmMemberAttendanceUnsavedBeforeLeave("終了")) {
                                         return;
                                     }
-                                    if (confirmApplicationClose()) {
-                                        performApplicationShutdownOnClose();
-                                        if (primaryStage != null) {
-                                            primaryStage.close();
-                                        }
+                                    if (primaryStage != null) {
+                                        primaryStage.close();
                                     }
                                 } else if (pendingCompanyCalendarTabAfterSave != null) {
                                     MainShellTabId target = pendingCompanyCalendarTabAfterSave;

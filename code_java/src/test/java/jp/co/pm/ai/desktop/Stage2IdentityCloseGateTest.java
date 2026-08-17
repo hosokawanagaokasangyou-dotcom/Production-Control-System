@@ -104,6 +104,42 @@ class Stage2IdentityCloseGateTest {
 
         assertTrue(decision.required());
         assertEquals("差異 1件", decision.detail());
+        assertTrue(decision.dialogBody().contains("T001"), decision.dialogBody());
+    }
+
+    @Test
+    void decide_requiresChallengeWhenLocalFileIsNotExcel(@TempDir Path tempDir) throws Exception {
+        Map<String, String> ui = testUi(tempDir);
+        Path local = AppPaths.aladdinEntryDispatchPlanLocalXlsxPath(ui);
+        Files.createDirectories(local.getParent());
+        Files.writeString(local, "not-an-excel");
+
+        Stage2IdentityCloseGate gate = new Stage2IdentityCloseGate();
+        gate.markStage2Completed();
+
+        Stage2IdentityCloseGate.Decision decision = gate.decide(ui);
+
+        assertTrue(decision.required());
+        assertFalse(decision.detail().isBlank());
+    }
+
+    @Test
+    void decide_requiresChallengeWhileAwaitingExcelEvenIfOldLocalMatches(@TempDir Path tempDir)
+            throws Exception {
+        Map<String, String> ui = testUi(tempDir);
+        Path sourceDir = AppPaths.resolveTaskInputSourceDir(ui);
+        Files.createDirectories(sourceDir);
+        Files.writeString(sourceDir.resolve("aladdin-plan.csv"), PLAN_CSV);
+        Files.createDirectories(Path.of(ui.get(AppPaths.KEY_PM_AI_REPO_ROOT)).resolve("code"));
+        LocalDate d = LocalDate.of(2026, 7, 7);
+        DispatchAladdinEntryWorkbookExporter.write(ui, matchingWorkbook(d, 10));
+
+        Stage2IdentityCloseGate gate = new Stage2IdentityCloseGate();
+        gate.markStage2PipelineAwaitingExcel();
+
+        assertTrue(gate.decide(ui).required());
+        gate.markExcelExportSucceeded();
+        assertFalse(gate.decide(ui).required(), gate.decide(ui).detail());
     }
 
     private static DispatchAladdinEntrySheetBuilder.EntryWorkbook matchingWorkbook(

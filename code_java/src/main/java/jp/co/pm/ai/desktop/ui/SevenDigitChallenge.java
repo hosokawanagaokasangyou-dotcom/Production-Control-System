@@ -21,6 +21,6 @@ public final class SevenDigitChallenge {
     }
 
     public static boolean matches(String expected, String input) {
-        return expected != null && expected.equals(input);
+        return expected != null && input != null && expected.equals(input.strip());
     }
 }

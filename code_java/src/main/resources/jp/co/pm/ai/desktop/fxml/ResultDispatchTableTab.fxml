@@ -56,13 +56,17 @@
                           styleClass="pm-aladdin-entry-reload-export-cell">
                         <Button fx:id="aladdinEntryIdentityCheckButton" mnemonicParsing="false"
                                 styleClass="pm-aladdin-entry-open-button"
-                                text="同一化チェック"
-                                onAction="#onAladdinEntryIdentityCheckAction"/>
+                                text="同一化チェック（ローカル最新）"
+                                onAction="#onAladdinEntryIdentityCheckLocalAction"/>
                         <Label fx:id="aladdinEntryIdentityCheckBadge"
                                styleClass="pm-aladdin-entry-reload-export-disabled-badge"
                                text="配台計画と加工計画は同一"
                                visible="false" managed="false"/>
                     </VBox>
+                    <Button fx:id="aladdinEntryIdentityCheckOtherButton" mnemonicParsing="false"
+                            styleClass="pm-aladdin-entry-open-button"
+                            text="別ファイルでチェック…"
+                            onAction="#onAladdinEntryIdentityCheckAction"/>
                     <ProgressBar fx:id="aladdinEntryExportProgress" prefWidth="140.0"
                                  visible="false" managed="false"/>
                     <Label fx:id="aladdinEntryExportProgressLabel"

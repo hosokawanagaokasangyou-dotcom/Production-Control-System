@@ -107,6 +107,9 @@ public final class ResultDispatchTableTabController {
     private Button aladdinEntryIdentityCheckButton;
 
     @FXML
+    private Button aladdinEntryIdentityCheckOtherButton;
+
+    @FXML
     private Label aladdinEntryIdentityCheckBadge;
 
     @FXML
@@ -176,6 +179,8 @@ public final class ResultDispatchTableTabController {
     private ButtonAttentionGlow aladdinEntryOpenLatestGlow;
 
     private ButtonAttentionGlow aladdinEntryOpenGenerationsGlow;
+
+    private ButtonAttentionGlow aladdinEntryIdentityCheckGlow;
 
     private final AtomicBoolean aladdinEntryExportBusy = new AtomicBoolean(false);
 
@@ -996,6 +1001,34 @@ public final class ResultDispatchTableTabController {
         }
     }
 
+    public void promptIdentityCheckAttention() {
+        expandOperationsSourcePane();
+        if (aladdinEntryIdentityCheckButton == null) {
+            return;
+        }
+        if (aladdinEntryIdentityCheckGlow == null) {
+            aladdinEntryIdentityCheckGlow = new ButtonAttentionGlow(aladdinEntryIdentityCheckButton);
+        }
+        aladdinEntryIdentityCheckGlow.startIfIdle();
+    }
+
+    private void dismissIdentityCheckAttentionGlow() {
+        ButtonAttentionGlow.stopAll(aladdinEntryIdentityCheckGlow);
+    }
+
+    @FXML
+    private void onAladdinEntryIdentityCheckLocalAction() {
+        if (shell == null) {
+            return;
+        }
+        Path local = AppPaths.aladdinEntryDispatchPlanLocalXlsxPath(shell.snapshotUiEnv());
+        if (!Files.isRegularFile(local)) {
+            shell.showWarningDialog("同一化チェック", "ローカル最新の配台計画 Excel がありません。");
+            return;
+        }
+        runIdentityCheck(local);
+    }
+
     @FXML
     private void onAladdinEntryIdentityCheckAction() {
         if (shell == null) {
@@ -1010,7 +1043,15 @@ public final class ResultDispatchTableTabController {
         if (chosen.isEmpty()) {
             return;
         }
-        Path excelPath = chosen.get();
+        runIdentityCheck(chosen.get());
+    }
+
+    private void runIdentityCheck(Path excelPath) {
+        if (shell == null || excelPath == null) {
+            return;
+        }
+        dismissIdentityCheckAttentionGlow();
+        Map<String, String> ui = shell.snapshotUiEnv();
         int generation = aladdinIdentityCheckGeneration.incrementAndGet();
         if (statusLabel != null) {
             statusLabel.setText("同一化チェック中…");

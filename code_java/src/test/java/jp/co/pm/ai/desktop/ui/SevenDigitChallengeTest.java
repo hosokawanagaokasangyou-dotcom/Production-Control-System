@@ -23,7 +23,7 @@ class SevenDigitChallengeTest {
         assertTrue(SevenDigitChallenge.matches("1234567", "1234567"));
         assertFalse(SevenDigitChallenge.matches("1234567", "1234568"));
         assertFalse(SevenDigitChallenge.matches("1234567", "123456"));
-        assertFalse(SevenDigitChallenge.matches("1234567", " 1234567 "));
+        assertTrue(SevenDigitChallenge.matches("1234567", " 1234567 "));
         assertFalse(SevenDigitChallenge.matches("1234567", null));
     }
 }

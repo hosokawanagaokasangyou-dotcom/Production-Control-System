@@ -1,6 +1,10 @@
 package jp.co.pm.ai.desktop;
 
+import java.nio.file.Files;
 import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -55,7 +59,7 @@ public final class OperatorActionLogTabController {
 
     @FXML
     private void initialize() {
-        tsColumn.setCellValueFactory(c -> new ReadOnlyStringWrapper(c.getValue().ts()));
+        tsColumn.setCellValueFactory(c -> new ReadOnlyStringWrapper(formatTs(c.getValue().ts())));
         actionColumn.setCellValueFactory(
                 c -> new ReadOnlyStringWrapper(actionLabel(c.getValue().action())));
         resultColumn.setCellValueFactory(
@@ -93,7 +97,13 @@ public final class OperatorActionLogTabController {
                         ? selected
                         : (names.contains(self) ? self : (names.isEmpty() ? null : names.get(0)));
         operatorCombo.setValue(next);
-        pathLabel.setText("保存先: " + OperatorActionLogStore.resolveRoot(ui));
+        var root = OperatorActionLogStore.resolveRoot(ui);
+        pathLabel.setText("保存先: " + root);
+        if (!Files.isDirectory(root)) {
+            logTable.setItems(FXCollections.observableArrayList());
+            statusLabel.setText("共有の操作ログフォルダがありません（未作成または到達不能）。");
+            return;
+        }
         if (next != null) {
             loadRows(next);
         } else {
@@ -122,6 +132,18 @@ public final class OperatorActionLogTabController {
             return OperatorUserPaths.sanitizeOperatorDirName(session);
         }
         return OperatorUserPaths.sanitizeOperatorDirName(OperatorUserPaths.resolveOperatorUser(ui));
+    }
+
+    static String formatTs(String ts) {
+        if (ts == null || ts.isBlank()) {
+            return "";
+        }
+        try {
+            return OffsetDateTime.parse(ts)
+                    .format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
+        } catch (DateTimeParseException ex) {
+            return ts;
+        }
     }
 
     static String actionLabel(String action) {
