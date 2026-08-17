@@ -159,6 +159,44 @@ class AladdinEntryDispatchPlanIdentityCheckTest {
     }
 
     @Test
+    void evaluate_usesSpecifiedExcelNotNewestGeneration(@TempDir Path tempDir) throws Exception {
+        Map<String, String> ui = testUi(tempDir);
+        Path sourceDir = AppPaths.resolveTaskInputSourceDir(ui);
+        Files.createDirectories(sourceDir);
+        Files.writeString(sourceDir.resolve("aladdin-plan.csv"), PLAN_CSV);
+        Files.createDirectories(Path.of(ui.get(AppPaths.KEY_PM_AI_REPO_ROOT)).resolve("code"));
+
+        LocalDate d = LocalDate.of(2026, 7, 7);
+        DispatchAladdinEntryWorkbookExporter.ExportResult first =
+                DispatchAladdinEntryWorkbookExporter.write(ui, matchingWorkbook(d, 10));
+        Path older = first.generationPath().resolveSibling("older-matching.xlsx");
+        Files.copy(first.generationPath(), older);
+        DispatchAladdinEntryWorkbookExporter.write(ui, matchingWorkbook(d, 99));
+
+        AladdinEntryDispatchPlanIdentityCheck.Result newest =
+                AladdinEntryDispatchPlanIdentityCheck.evaluate(ui);
+        AladdinEntryDispatchPlanIdentityCheck.Result specified =
+                AladdinEntryDispatchPlanIdentityCheck.evaluate(ui, older);
+
+        assertFalse(newest.identical(), newest.dialogBody());
+        assertFalse(specified.error(), specified.message());
+        assertTrue(specified.identical(), specified.dialogBody());
+        assertEquals(older.toAbsolutePath().normalize(), specified.excelPath().orElseThrow());
+    }
+
+    @Test
+    void evaluate_errorWhenSpecifiedExcelMissing(@TempDir Path tempDir) {
+        Map<String, String> ui = testUi(tempDir);
+        Path missing = tempDir.resolve("no-such.xlsx");
+
+        AladdinEntryDispatchPlanIdentityCheck.Result result =
+                AladdinEntryDispatchPlanIdentityCheck.evaluate(ui, missing);
+
+        assertTrue(result.error());
+        assertEquals(AladdinEntryDispatchPlanIdentityCheck.ERROR_NO_EXCEL, result.message());
+    }
+
+    @Test
     void readSystemQtys_readsSystemLineFromExportedWorkbook(@TempDir Path tempDir) throws Exception {
         Map<String, String> ui = testUi(tempDir);
         Files.createDirectories(Path.of(ui.get(AppPaths.KEY_PM_AI_REPO_ROOT)).resolve("code"));
@@ -226,6 +264,32 @@ class AladdinEntryDispatchPlanIdentityCheckTest {
                 AladdinEntryDispatchPlanWorkbookReader.parseSystemQty("（現アラ計）110\n（シス計）200"),
                 1e-9);
         assertEquals(0d, AladdinEntryDispatchPlanWorkbookReader.parseSystemQty(""), 1e-9);
+    }
+
+    private static DispatchAladdinEntrySheetBuilder.EntryWorkbook matchingWorkbook(
+            LocalDate d, double systemQty) {
+        return new DispatchAladdinEntrySheetBuilder.EntryWorkbook(
+                List.of(d),
+                List.of(
+                        new DispatchAladdinEntrySheetBuilder.MachineSheet(
+                                "M1",
+                                List.of(
+                                        new DispatchAladdinEntrySheetBuilder.EntryRow(
+                                                "T001",
+                                                "",
+                                                "工程A",
+                                                "",
+                                                "",
+                                                "",
+                                                systemQty,
+                                                0,
+                                                systemQty,
+                                                Map.of(
+                                                        d,
+                                                        new DispatchAladdinEntrySheetBuilder.EntryCell(
+                                                                0, systemQty)),
+                                                d,
+                                                2026)))));
     }
 
     private static Map<String, String> testUi(Path tempDir) {

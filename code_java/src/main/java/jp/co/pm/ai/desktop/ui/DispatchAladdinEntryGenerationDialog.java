@@ -1,5 +1,6 @@
 package jp.co.pm.ai.desktop.ui;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -10,6 +11,8 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 
 import javafx.collections.FXCollections;
 import javafx.geometry.Insets;
@@ -24,6 +27,7 @@ import javafx.scene.control.ListView;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
+import javafx.stage.FileChooser;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
 import javafx.stage.Window;
@@ -32,9 +36,10 @@ import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.io.DesktopFileOpener;
 
 /**
- * アラジン入力用配台計画の世代ファイル（操作者別フォルダ配下の xlsx）を選んで開く専用ダイアログ。
+ * アラジン入力用配台計画の世代ファイル（操作者別フォルダ配下の xlsx）を選ぶダイアログ。
  *
- * <p>index ファイルは持たず、共有の配台計画フォルダ配下のディレクトリ走査のみで一覧化する。
+ * <p>「世代を開く」は Excel を開く。「同一化チェック」は比較対象 xlsx を返す（任意パスの参照可）。
+ * index ファイルは持たず、共有の配台計画フォルダ配下のディレクトリ走査のみで一覧化する。
  */
 public final class DispatchAladdinEntryGenerationDialog {
 
@@ -67,14 +72,40 @@ public final class DispatchAladdinEntryGenerationDialog {
      * @param defaultOperator 既定選択の操作者名（自分）。一覧に無いときは「すべて」
      */
     public static void show(Window owner, Map<String, String> ui, String defaultOperator) {
+        showInternal(owner, ui, defaultOperator, false);
+    }
+
+    /**
+     * 同一化チェック用に世代 xlsx（または参照した任意 xlsx）を選ぶ。
+     * キャンセル時は empty。
+     */
+    public static Optional<Path> chooseGenerationFile(
+            Window owner, Map<String, String> ui, String defaultOperator) {
+        return showInternal(owner, ui, defaultOperator, true);
+    }
+
+    private static Optional<Path> showInternal(
+            Window owner, Map<String, String> ui, String defaultOperator, boolean chooseForCheck) {
         Path root = generationRoot(ui);
+        AtomicReference<Path> chosen = new AtomicReference<>();
 
         Stage stage = new Stage();
         stage.initModality(Modality.WINDOW_MODAL);
         if (owner != null) {
             stage.initOwner(owner);
         }
-        stage.setTitle("アラジン入力用配台計画 — 世代を開く");
+        stage.setTitle(
+                chooseForCheck
+                        ? "同一化チェック — 比較するExcelを選択"
+                        : "アラジン入力用配台計画 — 世代を開く");
+
+        Label hintLabel =
+                new Label(
+                        "比較する配台計画 Excel を選び、「このファイルでチェック」を押してください。"
+                                + " 一覧に無いファイルは「参照…」から指定できます。");
+        hintLabel.setWrapText(true);
+        hintLabel.setVisible(chooseForCheck);
+        hintLabel.setManaged(chooseForCheck);
 
         Label rootLabel = new Label("世代フォルダ: " + root);
         rootLabel.setWrapText(true);
@@ -91,6 +122,20 @@ public final class DispatchAladdinEntryGenerationDialog {
                             }
                         });
 
+        Runnable applyList =
+                () -> {
+                    String selected = operatorCombo.getValue();
+                    String operatorFilter =
+                            selected == null || ALL_OPERATORS.equals(selected) ? null : selected;
+                    listView.setItems(
+                            FXCollections.observableArrayList(
+                                    listCandidates(root, operatorFilter, ui, chooseForCheck)));
+                    if (!listView.getItems().isEmpty()
+                            && listView.getSelectionModel().getSelectedItem() == null) {
+                        listView.getSelectionModel().selectFirst();
+                    }
+                };
+
         Runnable refresh =
                 () -> {
                     String selected = operatorCombo.getValue();
@@ -106,9 +151,7 @@ public final class DispatchAladdinEntryGenerationDialog {
                                             ? defaultOperator
                                             : ALL_OPERATORS);
                     operatorCombo.setValue(next);
-                    listView.setItems(
-                            FXCollections.observableArrayList(
-                                    listGenerations(root, ALL_OPERATORS.equals(next) ? null : next)));
+                    applyList.run();
                 };
 
         operatorCombo.valueProperty()
@@ -117,21 +160,34 @@ public final class DispatchAladdinEntryGenerationDialog {
                             if (b == null) {
                                 return;
                             }
-                            listView.setItems(
-                                    FXCollections.observableArrayList(
-                                            listGenerations(
-                                                    root, ALL_OPERATORS.equals(b) ? null : b)));
+                            applyList.run();
                         });
 
-        Button openButton = new Button("開く");
-        openButton.setDefaultButton(true);
-        openButton.setOnAction(e -> openSelected(listView, stage));
-        listView.setOnMouseClicked(
+        Button primaryButton = new Button(chooseForCheck ? "このファイルでチェック" : "開く");
+        primaryButton.setDefaultButton(true);
+        primaryButton.setOnAction(
                 e -> {
-                    if (e.getClickCount() >= 2) {
+                    if (chooseForCheck) {
+                        acceptSelected(listView, stage, chosen);
+                    } else {
                         openSelected(listView, stage);
                     }
                 });
+        listView.setOnMouseClicked(
+                e -> {
+                    if (e.getClickCount() >= 2) {
+                        if (chooseForCheck) {
+                            acceptSelected(listView, stage, chosen);
+                        } else {
+                            openSelected(listView, stage);
+                        }
+                    }
+                });
+
+        Button browseButton = new Button("参照…");
+        browseButton.setVisible(chooseForCheck);
+        browseButton.setManaged(chooseForCheck);
+        browseButton.setOnAction(e -> browseAndChoose(stage, ui, chosen));
 
         Button openFolderButton = new Button("フォルダを開く");
         openFolderButton.setOnAction(
@@ -147,22 +203,64 @@ public final class DispatchAladdinEntryGenerationDialog {
         Button refreshButton = new Button("再読み");
         refreshButton.setOnAction(e -> refresh.run());
 
-        Button closeButton = new Button("閉じる");
+        Button closeButton = new Button(chooseForCheck ? "キャンセル" : "閉じる");
         closeButton.setCancelButton(true);
         closeButton.setOnAction(e -> stage.close());
 
         HBox topRow = new HBox(8, new Label("操作者"), operatorCombo, refreshButton);
         topRow.setAlignment(Pos.CENTER_LEFT);
-        HBox buttonRow = new HBox(8, openButton, openFolderButton, closeButton);
+        HBox buttonRow =
+                chooseForCheck
+                        ? new HBox(8, primaryButton, browseButton, openFolderButton, closeButton)
+                        : new HBox(8, primaryButton, openFolderButton, closeButton);
         buttonRow.setAlignment(Pos.CENTER_RIGHT);
 
-        VBox rootBox = new VBox(8, rootLabel, topRow, listView, buttonRow);
+        VBox rootBox = new VBox(8, hintLabel, rootLabel, topRow, listView, buttonRow);
         rootBox.setPadding(new Insets(12));
         VBox.setVgrow(listView, Priority.ALWAYS);
 
         stage.setScene(new Scene(rootBox, 640, 480));
         refresh.run();
+        if (chooseForCheck) {
+            stage.showAndWait();
+            return Optional.ofNullable(chosen.get());
+        }
         stage.show();
+        return Optional.empty();
+    }
+
+    private static void acceptSelected(
+            ListView<GenerationFile> listView, Stage stage, AtomicReference<Path> chosen) {
+        GenerationFile selected = listView.getSelectionModel().getSelectedItem();
+        if (selected == null) {
+            showError(stage, "比較する配台計画 Excel を選択してください。");
+            return;
+        }
+        chosen.set(selected.path().toAbsolutePath().normalize());
+        stage.close();
+    }
+
+    private static void browseAndChoose(
+            Stage stage, Map<String, String> ui, AtomicReference<Path> chosen) {
+        FileChooser chooser = new FileChooser();
+        chooser.setTitle("比較する配台計画 Excel");
+        chooser.getExtensionFilters()
+                .add(new FileChooser.ExtensionFilter("Excel", "*.xlsx"));
+        Path localDir = AppPaths.aladdinEntryDispatchPlanLocalDir(ui);
+        Path genRoot = generationRoot(ui);
+        Path initial =
+                Files.isDirectory(localDir)
+                        ? localDir
+                        : (Files.isDirectory(genRoot) ? genRoot : null);
+        if (initial != null) {
+            chooser.setInitialDirectory(initial.toFile());
+        }
+        File file = chooser.showOpenDialog(stage);
+        if (file == null) {
+            return;
+        }
+        chosen.set(file.toPath().toAbsolutePath().normalize());
+        stage.close();
     }
 
     private static void openSelected(ListView<GenerationFile> listView, Stage stage) {
@@ -192,6 +290,28 @@ public final class DispatchAladdinEntryGenerationDialog {
         } catch (IOException ignored) {
             return List.of();
         }
+        return out;
+    }
+
+    /** 同一化チェック候補（ローカル最新＋世代）。テスト用。 */
+    static List<Path> listCandidatePaths(
+            Map<String, String> ui, String operator, boolean includeLocalLatest) {
+        return listCandidates(generationRoot(ui), operator, ui, includeLocalLatest).stream()
+                .map(GenerationFile::path)
+                .toList();
+    }
+
+    /** 同一化チェック時はローカル最新を先頭に足す。 */
+    private static List<GenerationFile> listCandidates(
+            Path root, String operator, Map<String, String> ui, boolean includeLocalLatest) {
+        List<GenerationFile> out = new ArrayList<>();
+        if (includeLocalLatest) {
+            Path local = AppPaths.aladdinEntryDispatchPlanLocalXlsxPath(ui);
+            if (Files.isRegularFile(local)) {
+                out.add(new GenerationFile(local, "ローカル最新", lastModifiedMillis(local)));
+            }
+        }
+        out.addAll(listGenerations(root, operator));
         return out;
     }
 

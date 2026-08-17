@@ -31,7 +31,7 @@ import jp.co.pm.ai.desktop.reconciliation.PostProcessingKouteiNaiyoMasterLookup;
 import jp.co.pm.ai.desktop.reconciliation.PostProcessingPlanMachineLookup;
 
 /**
- * ログイン中操作者が生成したアラジン入力用配台計画（シス計）と、
+ * 指定した（または操作者世代の最新）アラジン入力用配台計画（シス計）と、
  * ソース最新のアラジン加工計画が同一かを判定する。
  *
  * <p>Excel の再出力と shaped JSON の上書きは行わない。
@@ -41,6 +41,8 @@ public final class AladdinEntryDispatchPlanIdentityCheck {
     public static final String BADGE_IDENTICAL = "配台計画と加工計画は同一";
 
     public static final String ERROR_NO_GENERATION = "ログイン中の操作者が生成した配台計画がありません";
+
+    public static final String ERROR_NO_EXCEL = "比較する配台計画 Excel がありません";
 
     public static final String ERROR_NO_PLAN_SOURCE = "アラジン加工計画の最新ソースがありません";
 
@@ -119,6 +121,22 @@ public final class AladdinEntryDispatchPlanIdentityCheck {
         if (excel.isEmpty()) {
             return errorResult(ERROR_NO_GENERATION, Optional.empty(), Optional.empty());
         }
+        return evaluate(u, excel.get());
+    }
+
+    /**
+     * 指定した配台計画 Excel のシス計と、ソース最新の加工計画を突合する。
+     * Excel の再出力と shaped JSON の上書きは行わない。
+     */
+    public static Result evaluate(Map<String, String> ui, Path excelPath) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        if (excelPath == null || !Files.isRegularFile(excelPath)) {
+            return errorResult(
+                    ERROR_NO_EXCEL,
+                    excelPath != null ? Optional.of(excelPath) : Optional.empty(),
+                    Optional.empty());
+        }
+        Optional<Path> excel = Optional.of(excelPath.toAbsolutePath().normalize());
         Optional<Path> planSource;
         try {
             planSource = newestPlanSourceFile(u);

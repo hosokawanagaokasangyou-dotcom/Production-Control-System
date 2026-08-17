@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -995,6 +996,15 @@ public final class ResultDispatchTableTabController {
             return;
         }
         Map<String, String> ui = shell.snapshotUiEnv();
+        Optional<Path> chosen =
+                DispatchAladdinEntryGenerationDialog.chooseGenerationFile(
+                        ownerStage,
+                        ui,
+                        DispatchAladdinEntryWorkbookExporter.currentOperatorDirName(ui));
+        if (chosen.isEmpty()) {
+            return;
+        }
+        Path excelPath = chosen.get();
         int generation = aladdinIdentityCheckGeneration.incrementAndGet();
         if (statusLabel != null) {
             statusLabel.setText("同一化チェック中…");
@@ -1003,7 +1013,7 @@ public final class ResultDispatchTableTabController {
                 new Thread(
                         () -> {
                             AladdinEntryDispatchPlanIdentityCheck.Result result =
-                                    AladdinEntryDispatchPlanIdentityCheck.evaluate(ui);
+                                    AladdinEntryDispatchPlanIdentityCheck.evaluate(ui, excelPath);
                             Platform.runLater(
                                     () -> {
                                         if (generation != aladdinIdentityCheckGeneration.get()) {
