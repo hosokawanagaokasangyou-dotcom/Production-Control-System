@@ -59,6 +59,17 @@
                             styleClass="pm-aladdin-entry-open-button"
                             text="世代を開く…"
                             onAction="#onOpenAladdinEntryGenerationsAction"/>
+                    <VBox alignment="TOP_CENTER" spacing="2.0"
+                          styleClass="pm-aladdin-entry-reload-export-cell">
+                        <Button fx:id="aladdinEntryIdentityCheckButton" mnemonicParsing="false"
+                                styleClass="pm-aladdin-entry-open-button"
+                                text="同一化チェック"
+                                onAction="#onAladdinEntryIdentityCheckAction"/>
+                        <Label fx:id="aladdinEntryIdentityCheckBadge"
+                               styleClass="pm-aladdin-entry-reload-export-disabled-badge"
+                               text="配台計画と加工計画は同一"
+                               visible="false" managed="false"/>
+                    </VBox>
                     <ProgressBar fx:id="aladdinEntryExportProgress" prefWidth="140.0"
                                  visible="false" managed="false"/>
                     <Label fx:id="aladdinEntryExportProgressLabel"

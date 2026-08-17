@@ -49,5 +49,7 @@ class ResultDispatchTableTabFxmlTest {
         assertTrue(labelIds.contains("aladdinEntryReloadExportDisabledBadge"));
         assertTrue(buttonStyleById.containsKey("aladdinEntryOpenLatestButton"));
         assertTrue(labelIds.contains("aladdinEntryOpenLatestDisabledBadge"));
+        assertTrue(buttonStyleById.containsKey("aladdinEntryIdentityCheckButton"));
+        assertTrue(labelIds.contains("aladdinEntryIdentityCheckBadge"));
     }
 }

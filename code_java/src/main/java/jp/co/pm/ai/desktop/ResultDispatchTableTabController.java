@@ -47,6 +47,7 @@ import jp.co.pm.ai.desktop.dispatch.ResultDispatchNormalizer;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchInteractiveConsolidator;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchSchema;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchPlanningStageSupport;
+import jp.co.pm.ai.desktop.io.AladdinEntryDispatchPlanIdentityCheck;
 import jp.co.pm.ai.desktop.io.AladdinProcessingPlanSourceFreshness;
 import jp.co.pm.ai.desktop.io.AladdinProcessingPlanSourceReloader;
 import jp.co.pm.ai.desktop.io.DesktopFileOpener;
@@ -106,6 +107,12 @@ public final class ResultDispatchTableTabController {
 
     @FXML
     private Button aladdinEntryOpenGenerationsButton;
+
+    @FXML
+    private Button aladdinEntryIdentityCheckButton;
+
+    @FXML
+    private Label aladdinEntryIdentityCheckBadge;
 
     @FXML
     private TitledPane operationsSourceTitledPane;
@@ -176,6 +183,8 @@ public final class ResultDispatchTableTabController {
     private ButtonAttentionGlow aladdinEntryOpenGenerationsGlow;
 
     private final AtomicBoolean aladdinEntryExportBusy = new AtomicBoolean(false);
+
+    private final AtomicBoolean aladdinIdentityCheckBusy = new AtomicBoolean(false);
 
     private final AtomicBoolean aladdinReloadExportUpToDate = new AtomicBoolean(false);
 
@@ -876,18 +885,21 @@ public final class ResultDispatchTableTabController {
     }
 
     private void applyAladdinEntryReloadExportButtonDisabledState() {
-        if (aladdinEntryReloadExportButton == null) {
-            return;
+        if (aladdinEntryReloadExportButton != null) {
+            boolean disable =
+                    aladdinEntryExportBusy.get() || aladdinReloadExportUpToDate.get();
+            aladdinEntryReloadExportButton.setDisable(disable);
+            boolean showUpToDateBadge =
+                    disable && aladdinReloadExportUpToDate.get() && !aladdinEntryExportBusy.get();
+            if (aladdinEntryReloadExportDisabledBadge != null) {
+                aladdinEntryReloadExportDisabledBadge.setText(ALADDIN_RELOAD_EXPORT_UP_TO_DATE_BADGE);
+                aladdinEntryReloadExportDisabledBadge.setVisible(showUpToDateBadge);
+                aladdinEntryReloadExportDisabledBadge.setManaged(showUpToDateBadge);
+            }
         }
-        boolean disable =
-                aladdinEntryExportBusy.get() || aladdinReloadExportUpToDate.get();
-        aladdinEntryReloadExportButton.setDisable(disable);
-        boolean showUpToDateBadge =
-                disable && aladdinReloadExportUpToDate.get() && !aladdinEntryExportBusy.get();
-        if (aladdinEntryReloadExportDisabledBadge != null) {
-            aladdinEntryReloadExportDisabledBadge.setText(ALADDIN_RELOAD_EXPORT_UP_TO_DATE_BADGE);
-            aladdinEntryReloadExportDisabledBadge.setVisible(showUpToDateBadge);
-            aladdinEntryReloadExportDisabledBadge.setManaged(showUpToDateBadge);
+        if (aladdinEntryIdentityCheckButton != null) {
+            aladdinEntryIdentityCheckButton.setDisable(
+                    aladdinEntryExportBusy.get() || aladdinIdentityCheckBusy.get());
         }
     }
 
@@ -1027,6 +1039,70 @@ public final class ResultDispatchTableTabController {
             shell.showErrorDialog(
                     "最新を開く", "ファイルを開けませんでした。\n" + latest + "\n" + ex.getMessage());
         }
+    }
+
+    @FXML
+    private void onAladdinEntryIdentityCheckAction() {
+        if (shell == null || aladdinIdentityCheckBusy.get()) {
+            return;
+        }
+        Map<String, String> ui = shell.snapshotUiEnv();
+        aladdinIdentityCheckBusy.set(true);
+        applyAladdinEntryReloadExportButtonDisabledState();
+        if (statusLabel != null) {
+            statusLabel.setText("同一化チェック中…");
+        }
+        Thread worker =
+                new Thread(
+                        () -> {
+                            AladdinEntryDispatchPlanIdentityCheck.Result result =
+                                    AladdinEntryDispatchPlanIdentityCheck.evaluate(ui);
+                            Platform.runLater(() -> finishAladdinEntryIdentityCheck(result));
+                        },
+                        "aladdin-entry-identity-check");
+        worker.setDaemon(true);
+        worker.start();
+    }
+
+    private void finishAladdinEntryIdentityCheck(
+            AladdinEntryDispatchPlanIdentityCheck.Result result) {
+        aladdinIdentityCheckBusy.set(false);
+        applyAladdinEntryReloadExportButtonDisabledState();
+        applyAladdinEntryIdentityCheckBadge(result);
+        if (statusLabel != null) {
+            statusLabel.setText(result.badgeText() != null ? result.badgeText() : "");
+        }
+        if (result.excelPath().isPresent()) {
+            shell.appendLog("[aladdin-identity-check] excel=" + result.excelPath().get());
+        }
+        if (result.planSourcePath().isPresent()) {
+            shell.appendLog("[aladdin-identity-check] plan=" + result.planSourcePath().get());
+        }
+        shell.appendLog("[aladdin-identity-check] " + result.message());
+        if (result.error()) {
+            shell.showWarningDialog("同一化チェック", result.message());
+            return;
+        }
+        if (result.identical()) {
+            shell.showInformationDialog("同一化チェック", result.message());
+            return;
+        }
+        shell.showWarningDialog("同一化チェック", result.dialogBody());
+    }
+
+    private void applyAladdinEntryIdentityCheckBadge(
+            AladdinEntryDispatchPlanIdentityCheck.Result result) {
+        if (aladdinEntryIdentityCheckBadge == null) {
+            return;
+        }
+        boolean show = result != null && !result.error() && result.badgeText() != null;
+        aladdinEntryIdentityCheckBadge.setText(show ? result.badgeText() : "");
+        aladdinEntryIdentityCheckBadge.getStyleClass().remove("pm-aladdin-entry-identity-mismatch-badge");
+        if (show && !result.identical()) {
+            aladdinEntryIdentityCheckBadge.getStyleClass().add("pm-aladdin-entry-identity-mismatch-badge");
+        }
+        aladdinEntryIdentityCheckBadge.setVisible(show);
+        aladdinEntryIdentityCheckBadge.setManaged(show);
     }
 
     @FXML

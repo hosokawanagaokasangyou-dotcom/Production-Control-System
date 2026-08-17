@@ -353,6 +353,12 @@
     -fx-max-height: 16;
 }
 
+.label.pm-aladdin-entry-identity-mismatch-badge {
+    -fx-background-color: rgba(248, 113, 113, 0.22);
+    -fx-border-color: rgba(248, 113, 113, 0.8);
+    -fx-text-fill: #fecaca;
+}
+
 /* ローカルディスク出力ボタンは廃止（最新固定パスは aladdinEntryDispatchPlanLocalXlsxPath のまま） */
 
 .button.pm-aladdin-entry-export-attention {
