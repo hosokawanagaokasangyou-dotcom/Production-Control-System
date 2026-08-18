@@ -15,11 +15,16 @@ class ReconciliationAppJuchuFormulaTest {
     void buildJuchuAoTextsSplitSumFormula_embedsRowNumber() {
         String formula = ReconciliationApp.buildJuchuAoTextsSplitSumFormula(390);
 
-        assertTrue(formula.contains("$AH390"));
-        assertTrue(formula.contains("$AM390"));
+        assertEquals(
+                "SUM(IFERROR(VALUE(TEXTSPLIT(受注ﾌｧｲﾙ!$AH390,CHAR(10))),0)"
+                        + "*IFERROR(VALUE(TEXTSPLIT(受注ﾌｧｲﾙ!$AM390,CHAR(10))),0))",
+                formula);
+        assertTrue(formula.contains("受注ﾌｧｲﾙ!$AH390"));
+        assertTrue(formula.contains("受注ﾌｧｲﾙ!$AM390"));
         assertTrue(formula.contains("TEXTSPLIT"));
         assertTrue(formula.contains("CHAR(10)"));
         assertTrue(formula.startsWith("SUM("));
+        assertTrue(!formula.contains("@TEXTSPLIT"));
     }
 
     @Test

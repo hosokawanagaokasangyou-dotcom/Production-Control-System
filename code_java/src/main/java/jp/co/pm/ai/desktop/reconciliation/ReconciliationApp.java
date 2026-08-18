@@ -66,6 +66,8 @@ public class ReconciliationApp {
     private static final String COL_MASTER_BASE_SHOHIN_RAW = "masterBase商品(原反)";
     /** 受注ﾌｧｲﾙ: POI lastRowNum が書式だけで膨らんだときの最大走査行数。 */
     private static final int JUCHU_SHEET_MAX_SCAN_ROWS = 20_000;
+    /** 受注ファイル本体シート名（AO 列既定数式のシート修飾に使用）。 */
+    private static final String JUCHU_SHEET_NAME = "受注ﾌｧｲﾙ";
     /** 受注ﾌｧｲﾙ AO 列（0-based）。AH×AM の改行分割積を合計する既定数式の出力先。 */
     private static final int JUCHU_AO_COLUMN_INDEX =
             JuchuSheetColumnLayout.columnLetterToIndex("AO");
@@ -6166,12 +6168,19 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
     /**
      * AO 列向け: AH 列と AM 列の改行区切り値を対応ペアで掛け合わせて合計する数式。
      *
-     * <p>例: {@code =SUM(IFERROR(VALUE(TEXTSPLIT($AH373,CHAR(10))),0)*IFERROR(VALUE(TEXTSPLIT($AM373,CHAR(10))),0))}
+     * <p>シート修飾なしの {@code $AH} / {@code $AM} だと Excel が {@code @TEXTSPLIT}（暗黙の交差）に
+     * 書き換え、結果が 0 になるため {@code 受注ﾌｧｲﾙ!$AH} / {@code 受注ﾌｧｲﾙ!$AM} を使う。
+     *
+     * <p>例: {@code =SUM(IFERROR(VALUE(TEXTSPLIT(受注ﾌｧｲﾙ!$AH373,CHAR(10))),0)*IFERROR(VALUE(TEXTSPLIT(受注ﾌｧｲﾙ!$AM373,CHAR(10))),0))}
      */
     static String buildJuchuAoTextsSplitSumFormula(int excelRow1Based) {
-        return "SUM(IFERROR(VALUE(TEXTSPLIT($AH"
+        return "SUM(IFERROR(VALUE(TEXTSPLIT("
+                + JUCHU_SHEET_NAME
+                + "!$AH"
                 + excelRow1Based
-                + ",CHAR(10))),0)*IFERROR(VALUE(TEXTSPLIT($AM"
+                + ",CHAR(10))),0)*IFERROR(VALUE(TEXTSPLIT("
+                + JUCHU_SHEET_NAME
+                + "!$AM"
                 + excelRow1Based
                 + ",CHAR(10))),0))";
     }
