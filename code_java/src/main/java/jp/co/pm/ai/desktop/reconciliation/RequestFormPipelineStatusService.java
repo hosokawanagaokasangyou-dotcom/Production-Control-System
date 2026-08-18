@@ -559,19 +559,7 @@ public final class RequestFormPipelineStatusService {
     }
 
     private static String resolveJuchuFilePath(Map<String, String> ui) {
-        Map<String, String> env = ui != null ? ui : Map.of();
-        FactorySite site = GlobalInitSettingTarget.loadEffective(env);
-        Optional<RequestFormInputSettingsStore.Settings> settings =
-                RequestFormInputSettingsStore.load(env);
-        if (settings.isPresent()) {
-            String saved = settings.get().paths().juchuFilePath();
-            if (saved != null
-                    && !saved.isBlank()
-                    && !AppPaths.factoryPathHintConflictsWithSite(saved, site)) {
-                return saved.strip();
-            }
-        }
-        return AppPaths.resolveRequestFormJuchuFile(env).map(Path::toString).orElse("");
+        return RequestFormInputSettingsStore.resolveEffectiveJuchuFilePath(ui);
     }
 
     private static Map<String, Map<String, String>> loadJuchuRows(

@@ -123,4 +123,65 @@ class RequestFormInputSettingsStoreTest {
                 List.of("RAW"),
                 loaded.optionsFor(RequestFormComboChoices.KEY_MASTER_CANDIDATE_PREFIX_RAW));
     }
+
+    @Test
+    void resolveEffectiveJuchuFilePath_envWinsOverSettingsJsonOtherFactory() throws Exception {
+        FactorySite prior = GlobalInitSettingTarget.load();
+        Path summaryXlsx = tempDir.resolve(AppPaths.SUMMARY_AI_DISPATCH_XLSX);
+        Files.createFile(summaryXlsx);
+        Map<String, String> ui =
+                Map.of(
+                        AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK,
+                        summaryXlsx.toString(),
+                        AppPaths.KEY_PM_AI_REQUEST_FORM_JUCHU_FILE,
+                        AppPaths.DEFAULT_PM_AI_REQUEST_FORM_JUCHU_FILE_KOKUBU);
+        try {
+            RequestFormInputSettingsStore.save(
+                    ui,
+                    RequestFormComboChoices.empty(),
+                    "",
+                    AppPaths.DEFAULT_PM_AI_REQUEST_FORM_JUCHU_FILE_KONAN);
+
+            String resolved = RequestFormInputSettingsStore.resolveEffectiveJuchuFilePath(ui);
+            assertEquals(
+                    Path.of(AppPaths.DEFAULT_PM_AI_REQUEST_FORM_JUCHU_FILE_KOKUBU)
+                            .toAbsolutePath()
+                            .normalize()
+                            .toString(),
+                    resolved);
+        } finally {
+            GlobalInitSettingTarget.save(prior);
+        }
+    }
+
+    @Test
+    void resolveEffectiveJuchuFilePath_skipsSettingsJsonWhenItConflictsWithFactory()
+            throws Exception {
+        FactorySite prior = GlobalInitSettingTarget.load();
+        Path summaryXlsx = tempDir.resolve(AppPaths.SUMMARY_AI_DISPATCH_XLSX);
+        Files.createFile(summaryXlsx);
+        Map<String, String> ui =
+                Map.of(
+                        AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK,
+                        summaryXlsx.toString(),
+                        AppPaths.KEY_PM_AI_FACTORY_SITE,
+                        FactorySite.KOKUBU.name());
+        try {
+            RequestFormInputSettingsStore.save(
+                    ui,
+                    RequestFormComboChoices.empty(),
+                    "",
+                    AppPaths.DEFAULT_PM_AI_REQUEST_FORM_JUCHU_FILE_KONAN);
+
+            String resolved = RequestFormInputSettingsStore.resolveEffectiveJuchuFilePath(ui);
+            assertEquals(
+                    Path.of(AppPaths.DEFAULT_PM_AI_REQUEST_FORM_JUCHU_FILE_KOKUBU)
+                            .toAbsolutePath()
+                            .normalize()
+                            .toString(),
+                    resolved);
+        } finally {
+            GlobalInitSettingTarget.save(prior);
+        }
+    }
 }

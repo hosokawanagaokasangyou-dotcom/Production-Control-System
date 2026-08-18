@@ -1239,7 +1239,10 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         Label lblJuchuCardTitle = new Label("受注ファイル（加工計画等）設定");
         lblJuchuCardTitle.getStyleClass().add("settings-card-title");
         
-        Label lblJuchuDesc = new Label("自動転記先となる受注ファイル（例：加工計画.xlsm、加工依頼書入力.xlsmなど）を指定し、直接Excelで開くことができます。");
+        Label lblJuchuDesc =
+                new Label(
+                        "自動転記先となる受注ファイル（例：加工計画.xlsm、加工依頼書入力.xlsmなど）を指定し、直接Excelで開くことができます。"
+                                + "パスの正本は環境変数 PM_AI_REQUEST_FORM_JUCHU_FILE（環境変数タブと同一）です。");
         lblJuchuDesc.setStyle("-fx-font-size: 11px; -fx-text-fill: inherit;");
         lblJuchuDesc.setWrapText(true);
         
@@ -2385,8 +2388,10 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
     }
 
     private void applyJuchuFilePathFromUiEnv() {
-        AppPaths.resolveRequestFormJuchuFile(uiEnvSnapshot)
-                .ifPresent(p -> juchuFilePath = p.toString());
+        String resolved = RequestFormInputSettingsStore.resolveEffectiveJuchuFilePath(uiEnvSnapshot);
+        if (resolved != null && !resolved.isBlank()) {
+            juchuFilePath = resolved;
+        }
     }
 
     private void refreshJuchuPathDisplay() {
@@ -7045,12 +7050,10 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
             if (folder != null && !folder.isBlank() && new File(folder).isDirectory()) {
                 targetFolder = folder;
             }
-            String juchuPath = paths.juchuFilePath();
-            if (juchuPath != null && !juchuPath.isBlank() && new File(juchuPath).isFile()) {
-                juchuFilePath = juchuPath;
-                refreshJuchuPathDisplay();
-            }
         }
+        applyJuchuFilePathFromUiEnv();
+        refreshJuchuPathDisplay();
+        refreshJuchuBackupList();
     }
 
     private void saveSettings() {

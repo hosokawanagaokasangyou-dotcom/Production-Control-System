@@ -35,7 +35,37 @@ public final class RequestFormInputSettingsStore {
 
     private RequestFormInputSettingsStore() {}
 
-    /** 原本フォルダと受注ファイルパス（保存値があれば UI 環境より優先して復元）。 */
+    /**
+     * 受注ファイルの実効パス。環境変数 {@link AppPaths#KEY_PM_AI_REQUEST_FORM_JUCHU_FILE} が非空ならそれを正とし、
+     * 空のときだけ設定 JSON を使う（利用工場と矛盾するパスは捨てて工場既定へ）。
+     */
+    public static String resolveEffectiveJuchuFilePath(Map<String, String> ui) {
+        Map<String, String> env = ui != null ? ui : Map.of();
+        FactorySite site = GlobalInitSettingTarget.loadEffective(env);
+        String fromEnv = textOrEmpty(env.get(AppPaths.KEY_PM_AI_REQUEST_FORM_JUCHU_FILE));
+        if (!fromEnv.isEmpty()) {
+            return Path.of(fromEnv).toAbsolutePath().normalize().toString();
+        }
+        Optional<Settings> settings = load(env);
+        if (settings.isPresent()) {
+            String saved = settings.get().paths().juchuFilePath();
+            if (saved != null
+                    && !saved.isBlank()
+                    && !AppPaths.factoryPathHintConflictsWithSite(saved, site)) {
+                return Path.of(saved.strip()).toAbsolutePath().normalize().toString();
+            }
+        }
+        return Path.of(AppPaths.defaultRequestFormJuchuFileForFactory(site))
+                .toAbsolutePath()
+                .normalize()
+                .toString();
+    }
+
+    private static String textOrEmpty(String value) {
+        return value != null ? value.strip() : "";
+    }
+
+    /** 原本フォルダ（保存値があれば UI 環境より優先して復元）。受注ファイルパスは {@link #resolveEffectiveJuchuFilePath}。 */
     public record ReconciliationPaths(String targetFolder, String juchuFilePath) {}
 
     public record Settings(RequestFormComboChoices comboChoices, ReconciliationPaths paths) {
