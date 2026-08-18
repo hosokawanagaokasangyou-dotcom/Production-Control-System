@@ -217,6 +217,11 @@ public final class AppPaths {
     public static final String RDP_LAUNCHER_INI_BASENAME_LEGACY = "RAP設定.ini";
     /** 起動プロファイル（名称・説明等）の JSON。{@link #RDP_LAUNCHER_INI_BASENAME} と同階層。 */
     public static final String RDP_LAUNCH_PROFILES_BASENAME = "RDP起動プロファイル.json";
+    /**
+     * 接続先ランチャー日次ログ（{@code launcher-yyyyMMdd.log}）の共有ミラー用サブフォルダ。
+     * exe / ini 配備先の直下に置く（直下へのログ直置きはしない）。
+     */
+    public static final String RDP_LAUNCHER_SHARED_LOG_DIR_NAME = "launcher-logs";
     /** リモートデスクトップタブで最後に選んだ起動プロファイル番号（1～9）。 */
     public static final String KEY_PM_AI_RDP_LAUNCH_PROFILE_NUMBER = "PM_AI_RDP_LAUNCH_PROFILE_NUMBER";
 
@@ -2743,15 +2748,20 @@ public final class AppPaths {
         return resolveRdpLauncherExe(ui).resolveSibling(RDP_LAUNCHER_VERSION_BASENAME);
     }
 
-    /** 接続先共有フォルダ上の当日ランチャーログ（{@code launcher-yyyyMMdd.log}）。 */
+    /**
+     * 接続先共有フォルダ上の当日ランチャーログ（{@code launcher-logs/launcher-yyyyMMdd.log}）。
+     * C# {@code LauncherLog} の共有ミラー先と一致させる。
+     */
     public static Path resolveRdpLauncherSharedLogPath(Map<String, String> ui) {
         Path launcherExe = resolveRdpLauncherExe(ui);
         String date = LocalDate.now().format(DateTimeFormatter.BASIC_ISO_DATE);
         Path logDir = launcherExe.getParent();
         if (logDir == null) {
-            return launcherExe.resolveSibling("launcher-" + date + ".log");
+            return launcherExe
+                    .resolveSibling(RDP_LAUNCHER_SHARED_LOG_DIR_NAME)
+                    .resolve("launcher-" + date + ".log");
         }
-        return logDir.resolve("launcher-" + date + ".log");
+        return logDir.resolve(RDP_LAUNCHER_SHARED_LOG_DIR_NAME).resolve("launcher-" + date + ".log");
     }
 
     /** 起動プロファイル JSON（名称・説明・区分等）。 */

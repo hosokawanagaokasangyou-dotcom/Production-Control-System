@@ -2316,7 +2316,8 @@ public final class RequestFormRemoteDesktopPane {
         TextArea launcherLogArea = new TextArea();
         launcherLogArea.setEditable(false);
         launcherLogArea.setWrapText(false);
-        launcherLogArea.setPromptText("共有フォルダ上の launcher-yyyyMMdd.log がここに表示されます。");
+        launcherLogArea.setPromptText(
+                "共有フォルダ上の launcher-logs\\launcher-yyyyMMdd.log がここに表示されます。");
         launcherLogArea.getStyleClass().add("pm-remote-desktop-launcher-log");
         VBox.setVgrow(launcherLogArea, Priority.ALWAYS);
 

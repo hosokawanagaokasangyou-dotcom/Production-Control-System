@@ -287,7 +287,8 @@ JSON 構造:
 ├── 細川_RPA設定.ini                   … 操作者別（例）
 ├── RDP起動プロファイル.json           … プロファイル名称・説明（Java UI 用）
 ├── operator-aladdin-credentials.launcher.json … C# 向け資格情報キャッシュ
-├── launcher-yyyyMMdd.log              … 接続先ランチャー日次ログ（共有ミラー）
+├── launcher-logs\                     … 接続先ランチャー日次ログ（共有ミラー）
+│   └── launcher-yyyyMMdd.log
 │
 ├── DATA\
 │   ├── rdp-launcher-operator-users.bin
@@ -330,7 +331,7 @@ JSON 構造:
 |----------------|------|
 | **PmAiRpaLuncher（Java）** | `%USERPROFILE%\.pm-ai-desktop-rdp\`（起動失敗時 bat が案内） |
 | **PmAiRdpRemoteLauncher（C#）** | 接続先 `%TEMP%\PM-AI-RDP-Launcher\launcher-yyyyMMdd.log` |
-| **C# 共有ミラー** | ini 配備先フォルダの `launcher-yyyyMMdd.log`（`rpa_luncher\` 直下） |
+| **C# 共有ミラー** | ini 配備先の `launcher-logs\launcher-yyyyMMdd.log`（無ければ自動作成） |
 | **Java UI プレビュー** | リモートデスクトップタブから共有ログを参照可能 |
 
 ### ビルド・起動その他

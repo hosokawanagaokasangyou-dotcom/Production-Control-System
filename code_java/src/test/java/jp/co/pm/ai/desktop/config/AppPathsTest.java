@@ -463,15 +463,12 @@ class AppPathsTest {
         assertEquals(
                 deployDir.resolve(AppPaths.RDP_LAUNCHER_EXE_BASENAME).normalize(),
                 AppPaths.resolveRdpLauncherExe(Map.of()).normalize());
-        assertTrue(
-                AppPaths.resolveRdpLauncherSharedLogPath(Map.of())
-                        .getFileName()
-                        .toString()
-                        .startsWith("launcher-"));
-        assertTrue(
-                AppPaths.resolveRdpLauncherSharedLogPath(Map.of())
-                        .normalize()
-                        .startsWith(deployDir.normalize()));
+        Path sharedLog = AppPaths.resolveRdpLauncherSharedLogPath(Map.of()).normalize();
+        assertTrue(sharedLog.getFileName().toString().startsWith("launcher-"));
+        assertEquals(
+                AppPaths.RDP_LAUNCHER_SHARED_LOG_DIR_NAME,
+                sharedLog.getParent() != null ? sharedLog.getParent().getFileName().toString() : null);
+        assertTrue(sharedLog.startsWith(deployDir.resolve(AppPaths.RDP_LAUNCHER_SHARED_LOG_DIR_NAME).normalize()));
     }
 
     @Test

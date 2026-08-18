@@ -11,7 +11,11 @@ internal static class Program
     private static int Main(string[] args)
     {
         var exeDir = LauncherPaths.ResolveExecutableDirectory();
-        LauncherLog.SetMirrorDirectory(exeDir);
+        // 共有ミラーは exe 直下ではなく launcher-logs\（Java AppPaths.RDP_LAUNCHER_SHARED_LOG_DIR_NAME と一致）
+        if (!string.IsNullOrWhiteSpace(exeDir))
+        {
+            LauncherLog.SetMirrorDirectory(Path.Combine(exeDir, "launcher-logs"));
+        }
         LauncherLog.Info(
             "PmAiRdpRemoteLauncher 開始"
                 + " version="
