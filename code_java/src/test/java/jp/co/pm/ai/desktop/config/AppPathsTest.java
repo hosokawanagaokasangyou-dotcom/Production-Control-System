@@ -1447,6 +1447,22 @@ class AppPathsTest {
     }
 
     @Test
+    void isRequestFormPipelineRescanTriggerEnvKey_includesOriginalDirAndJuchuFile() {
+        assertTrue(
+                AppPaths.isRequestFormPipelineRescanTriggerEnvKey(
+                        AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR));
+        assertTrue(
+                AppPaths.isRequestFormPipelineRescanTriggerEnvKey(
+                        AppPaths.KEY_PM_AI_REQUEST_FORM_JUCHU_FILE));
+        assertFalse(
+                AppPaths.isRequestFormPipelineRescanTriggerEnvKey(
+                        AppPaths.KEY_PM_AI_REQUEST_FORM_TPI_PDF_DIR));
+        assertFalse(AppPaths.isRequestFormPipelineRescanTriggerEnvKey(null));
+        assertFalse(AppPaths.isRequestFormPipelineRescanTriggerEnvKey(""));
+        assertFalse(AppPaths.isRequestFormPipelineRescanTriggerEnvKey("  "));
+    }
+
+    @Test
     void overlayFactorySiteRequestFormPaths_leavesEmptyOriginalDirUntouched() {
         LinkedHashMap<String, String> map = new LinkedHashMap<>();
         map.put(AppPaths.KEY_PM_AI_FACTORY_SITE, "KONAN");

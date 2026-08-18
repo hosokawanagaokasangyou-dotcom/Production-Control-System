@@ -845,6 +845,12 @@ public final class RequestFormPipelineCheckTabController {
         scheduleRefreshIfNeededOnTabSelected();
     }
 
+    /** 受注ファイルパスが再設定されたあと、転記率照合などを再スキャンする。 */
+    void onRequestFormJuchuFileChanged() {
+        scanApplied = false;
+        scheduleRefreshIfNeededOnTabSelected();
+    }
+
     private boolean isRequestFormOriginalDirEnvConfigured() {
         return shell != null
                 && AppPaths.isRequestFormOriginalDirEnvConfigured(shell.snapshotUiEnv());

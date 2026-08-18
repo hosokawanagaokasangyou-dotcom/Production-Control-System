@@ -1280,6 +1280,13 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                 saveSettings();
                 statusLabel.setText("受注ファイルを更新しました: " + juchuFilePath);
                 updateTransferButtonState();
+                if (shouldReloadRelatedDataAfterJuchuFileReselect()) {
+                    requestReloadData(
+                            reloadReasonAfterJuchuFileReselect(),
+                            shouldReloadMasterProductListAfterJuchuFileReselect()
+                                    ? this::loadMasterProductList
+                                    : null);
+                }
             }
         });
         
@@ -2365,6 +2372,20 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
             originalDirChangeHandler.accept(absolutePath);
         }
         ensureJuchuPathDefault();
+    }
+
+    /** 受注ファイル再設定後に照合・原本走査などの関連データを再読込するか。 */
+    static boolean shouldReloadRelatedDataAfterJuchuFileReselect() {
+        return true;
+    }
+
+    /** 受注ファイル再設定では統合マスタ商品リストは対象外（原本フォルダ変更時と異なる）。 */
+    static boolean shouldReloadMasterProductListAfterJuchuFileReselect() {
+        return false;
+    }
+
+    static String reloadReasonAfterJuchuFileReselect() {
+        return "受注ファイル変更後、関連データを再読込します。";
     }
 
     private void applySelectedJuchuFile(String absolutePath) {

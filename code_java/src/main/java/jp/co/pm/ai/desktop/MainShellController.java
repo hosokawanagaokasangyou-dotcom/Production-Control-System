@@ -10221,10 +10221,17 @@ public PlanInputTabController planInputTabControllerForDispatchRollUnit() {
     @Override
     public void updateEnvTabValue(String envKey, String value) {
         syncEnvTabValue(envKey, value);
+        if (!AppPaths.isRequestFormPipelineRescanTriggerEnvKey(envKey)
+                || requestFormPipelineCheckTabController == null) {
+            return;
+        }
         if (AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR.equals(envKey)
-                && AppPaths.isRequestFormOriginalDirEnvConfigured(collectUiEnv())
-                && requestFormPipelineCheckTabController != null) {
+                && AppPaths.isRequestFormOriginalDirEnvConfigured(collectUiEnv())) {
             requestFormPipelineCheckTabController.onRequestFormOriginalDirEnvConfigured();
+            return;
+        }
+        if (AppPaths.KEY_PM_AI_REQUEST_FORM_JUCHU_FILE.equals(envKey)) {
+            requestFormPipelineCheckTabController.onRequestFormJuchuFileChanged();
         }
     }
 

@@ -1179,6 +1179,19 @@ public final class AppPaths {
     }
 
     /**
+     * 依頼書パイプラインチェックの再スキャン対象になる環境変数か。
+     * 原本フォルダまたは受注ファイルの再設定時に true。
+     */
+    public static boolean isRequestFormPipelineRescanTriggerEnvKey(String envKey) {
+        if (envKey == null || envKey.isBlank()) {
+            return false;
+        }
+        String k = envKey.trim();
+        return KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR.equals(k)
+                || KEY_PM_AI_REQUEST_FORM_JUCHU_FILE.equals(k);
+    }
+
+    /**
      * TPI 依頼書 PDF フォルダ。{@link #KEY_PM_AI_REQUEST_FORM_TPI_PDF_DIR} が空のときは工場既定（湖南のみ UNC）。
      * 国分など未設定工場では empty。
      */
