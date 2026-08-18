@@ -30,7 +30,6 @@ import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
 import javafx.scene.control.MenuItem;
 import javafx.scene.control.MultipleSelectionModel;
-import javafx.scene.control.OverrunStyle;
 import javafx.scene.control.RadioButton;
 import javafx.scene.control.ScrollBar;
 import javafx.scene.control.SelectionMode;
@@ -52,8 +51,6 @@ import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
-import javafx.scene.text.Text;
-import javafx.scene.text.TextFlow;
 import javafx.util.StringConverter;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
@@ -425,6 +422,10 @@ public final class MainRunTabController {
         logListView.setCellFactory(
                 lv ->
                         new ListCell<>() {
+                            {
+                                RunLogListViewSupport.installOverflowClip(this);
+                            }
+
                             @Override
                             protected void updateItem(String item, boolean empty) {
                                 super.updateItem(item, empty);
@@ -440,20 +441,19 @@ public final class MainRunTabController {
                                     return;
                                 }
                                 setText(null);
-                                double w = Math.max(0, logListView.getWidth() - 28);
-                                TextFlow flow = buildLogLineGraphic(item, w);
-                                setGraphic(flow);
                                 setWrapText(false);
-                                setTextOverrun(OverrunStyle.CLIP);
-                                if (w > 0) {
-                                    setMaxWidth(w);
-                                    flow.setMaxWidth(w);
-                                }
+                                LogLineKind kind = LogLineKind.classify(item);
+                                setGraphic(
+                                        RunLogListViewSupport.buildLineGraphic(
+                                                item,
+                                                appliedLogFont,
+                                                resolveLogTextFill(kind),
+                                                snapshotLogSearchText()));
                                 getStyleClass().add("log-cell");
                                 if (shell != null && shell.currentDesktopTheme().isDarkUi()) {
                                     getStyleClass().add("log-dark");
                                 }
-                                switch (LogLineKind.classify(item)) {
+                                switch (kind) {
                                     case ERROR -> getStyleClass().add("log-kind-error");
                                     case WARN -> getStyleClass().add("log-kind-warn");
                                     case NORMAL -> {
@@ -508,16 +508,14 @@ public final class MainRunTabController {
 
     /**
      * 可変行高（{@code setFixedCellSize(-1)}）と折り返しの組み合わせは VirtualFlow が極端なセル数を見積もり、
-     * {@code index exceeds maxCellCount} やヒープ枯渇を招くことがある。フォントに応じた正の固定高で抑える。
-     * ログは折り返さず右端でクリップするため、セル高は1行分に近い値とする。
+     * {@code index exceeds maxCellCount} やヒープ枯渇を招くことがある。実測行高に応じた正の固定高で抑える。
+     * ログは折り返さず右端でクリップする（{@link RunLogListViewSupport}）。
      */
     private void applyLogListFixedCellHeight() {
         if (logListView == null) {
             return;
         }
-        double lineHeight = appliedLogFont.getSize() * 1.35;
-        double cell = Math.clamp(Math.ceil(lineHeight) + 6, 24.0, 60.0);
-        logListView.setFixedCellSize(cell);
+        logListView.setFixedCellSize(RunLogListViewSupport.fixedCellSizePx(appliedLogFont));
     }
 
     private void scheduleDebouncedLogListRefresh() {
@@ -586,10 +584,6 @@ public final class MainRunTabController {
                     suppressLogTailFollowListener.set(true);
                     try {
                         logListView.scrollTo(n - 1);
-                        ScrollBar sb = (ScrollBar) logListView.lookup(".scroll-bar:vertical");
-                        if (sb != null && sb.getMax() > sb.getMin()) {
-                            sb.setValue(sb.getMax());
-                        }
                     } finally {
                         suppressLogTailFollowListener.set(false);
                     }
@@ -775,51 +769,6 @@ public final class MainRunTabController {
             return "";
         }
         return logSearchField.getText().trim();
-    }
-
-    private TextFlow buildLogLineGraphic(String item, double maxWidth) {
-        TextFlow flow = new TextFlow();
-        if (maxWidth > 0) {
-            flow.setMaxWidth(maxWidth);
-        }
-        double lineCap = appliedLogFont.getSize() * 1.45;
-        flow.setMaxHeight(lineCap);
-        LogLineKind kind = LogLineKind.classify(item);
-        Color baseFill = resolveLogTextFill(kind);
-        String search = snapshotLogSearchText();
-        if (search.isEmpty()) {
-            Text text = new Text(item);
-            text.setFont(appliedLogFont);
-            text.setFill(baseFill);
-            flow.getChildren().add(text);
-            return flow;
-        }
-        String lowerItem = item.toLowerCase(Locale.ROOT);
-        String searchLower = search.toLowerCase(Locale.ROOT);
-        int from = 0;
-        while (from < item.length()) {
-            int idx = lowerItem.indexOf(searchLower, from);
-            if (idx < 0) {
-                Text tail = new Text(item.substring(from));
-                tail.setFont(appliedLogFont);
-                tail.setFill(baseFill);
-                flow.getChildren().add(tail);
-                break;
-            }
-            if (idx > from) {
-                Text prefix = new Text(item.substring(from, idx));
-                prefix.setFont(appliedLogFont);
-                prefix.setFill(baseFill);
-                flow.getChildren().add(prefix);
-            }
-            Text hit = new Text(item.substring(idx, idx + search.length()));
-            hit.setFont(appliedLogFont);
-            hit.setFill(baseFill);
-            hit.getStyleClass().add("pm-log-search-hit");
-            flow.getChildren().add(hit);
-            from = idx + search.length();
-        }
-        return flow;
     }
 
     private Color resolveLogTextFill(LogLineKind kind) {

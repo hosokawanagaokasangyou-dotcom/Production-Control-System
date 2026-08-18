@@ -57,8 +57,10 @@
     -fx-alignment: top-left;
 }
 
-.list-view.pm-log-view .list-cell.log-cell .text-flow {
+.list-view.pm-log-view .list-cell.log-cell .text-flow,
+.list-view.pm-log-view .list-cell.log-cell .pm-log-line {
     -fx-background-color: transparent;
+    -fx-padding: 0;
 }
 
 .list-view.pm-log-view .list-cell.log-cell .text {
@@ -431,7 +433,7 @@
     -fx-border-color: derive(-fx-text-box-border, 12%);
     -fx-border-radius: 8;
     -fx-border-width: 1;
-    -fx-padding: 4;
+    -fx-padding: 0;
 }
 
 .list-view.pm-log-view.log-dark-surface {
