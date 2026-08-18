@@ -97,6 +97,7 @@ public class ReconciliationApp {
     private Path aladdinMasterDir;
     private Map<String, String> uiEnvSnapshot = Map.of();
     private Label embeddedTitleLabel;
+    private Label settingsComboSubtitleLabel;
     private Consumer<String> originalDirChangeHandler;
     private Consumer<String> juchuFileChangeHandler;
     private TextField txtJuchuPathDisplay;
@@ -1132,26 +1133,19 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         root.setFillWidth(false);
         root.setAlignment(Pos.TOP_LEFT);
 
-        Label title = new Label("\u30b3\u30f3\u30dc\u30dc\u30c3\u30af\u30b9\u9805\u76ee\u7de8\u96c6 / Settings - ComboBox \u5019\u88dc\u5024\u7ba1\u7406");
+        Label title = new Label("コンボボックス項目編集 / Settings - ComboBox 候補値管理");
         title.getStyleClass().add("paper-main-title");
-        Label subtitle =
-                new Label(
-                        "各コンボボックスの選択肢を自由に追加・削除・編集できます。"
-                                + " 運用の正本はサマリ Excel と同じフォルダの "
-                                + AppPaths.REQUEST_FORM_INPUT_SETTINGS_JSON_FILENAME
-                                + "（追加・削除のたびに自動保存）。"
-                                + " 工場出荷の既定値はリポジトリの init_setting（またはソース同梱）にあり、"
-                                + "「工場出荷状態に戻す」で正本 JSON へ書き戻します。");
-        subtitle.getStyleClass().add("paper-main-subtitle");
-        subtitle.setWrapText(true);
-        subtitle.setMaxWidth(SETTINGS_CARD_WIDTH * 2 + 12);
+        settingsComboSubtitleLabel = new Label();
+        settingsComboSubtitleLabel.getStyleClass().add("paper-main-subtitle");
+        settingsComboSubtitleLabel.setWrapText(true);
+        settingsComboSubtitleLabel.setMaxWidth(SETTINGS_CARD_WIDTH * 2 + 12);
+        refreshSettingsComboSubtitle();
 
         Button btnResetComboToFactory = new Button("工場出荷状態に戻す");
         btnResetComboToFactory.getStyleClass().add("btn-reload");
         btnResetComboToFactory.setTooltip(
                 new Tooltip(
-                        "ComboBox 候補と入力区分・加工区分の既定を、init_setting の工場出荷既定"
-                                + "（無ければソース同梱）に戻し、"
+                        "ComboBox 候補と入力区分・加工区分の既定をアプリ同梱の工場出荷値に戻し、"
                                 + AppPaths.REQUEST_FORM_INPUT_SETTINGS_JSON_FILENAME
                                 + " を上書きします。"));
         registerGuestMutableControl(btnResetComboToFactory);
@@ -1160,7 +1154,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         HBox resetRow = new HBox(8, btnResetComboToFactory);
         resetRow.setAlignment(Pos.CENTER_LEFT);
 
-        root.getChildren().addAll(title, subtitle, resetRow);
+        root.getChildren().addAll(title, settingsComboSubtitleLabel, resetRow);
 
         Label prefixTitle = new Label("マスタ候補コンボ 先頭文字フィルタ");
         prefixTitle.getStyleClass().add("paper-main-title");
@@ -2340,6 +2334,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         applyRequestFormTpiPdfDirFromUiEnv();
         applyJuchuFilePathFromUiEnv();
         refreshJuchuPathDisplay();
+        refreshSettingsComboSubtitle();
         applyGuestSessionRestrictions();
     }
 
@@ -2398,6 +2393,23 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         if (txtJuchuPathDisplay != null) {
             txtJuchuPathDisplay.setText(juchuFilePath != null ? juchuFilePath : "");
         }
+    }
+
+    private void refreshSettingsComboSubtitle() {
+        if (settingsComboSubtitleLabel == null) {
+            return;
+        }
+        Path storePath = RequestFormInputSettingsStore.resolveStorePath(uiEnvSnapshot);
+        settingsComboSubtitleLabel.setText(
+                "各コンボボックスの選択肢を自由に追加・削除・編集できます。"
+                        + " 運用の正本はサマリ Excel（サマリ_AI配台.xlsx）と同じフォルダの "
+                        + AppPaths.REQUEST_FORM_INPUT_SETTINGS_JSON_FILENAME
+                        + " です（追加・削除のたびに自動保存）。"
+                        + " 保存先: "
+                        + storePath
+                        + "。"
+                        + " 工場出荷の既定値はアプリ同梱です。"
+                        + "「工場出荷状態に戻す」で正本 JSON へ書き戻します。");
     }
 
     // --- CACHE LOADER FROM THE ALADDIN INTEGRATED MASTER ---
