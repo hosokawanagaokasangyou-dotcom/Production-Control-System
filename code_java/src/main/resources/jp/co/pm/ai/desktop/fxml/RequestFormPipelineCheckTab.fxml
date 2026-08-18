@@ -21,12 +21,14 @@
     </padding>
     <HBox alignment="CENTER_LEFT" spacing="8.0" maxWidth="Infinity">
         <Button fx:id="refreshButton" mnemonicParsing="false" text="更新"
-                onAction="#onRefreshButtonAction"/>
+                minWidth="-Infinity" onAction="#onRefreshButtonAction"/>
         <ProgressIndicator fx:id="refreshProgressIndicator" managed="false" prefHeight="22.0"
                            prefWidth="22.0" visible="false"/>
-        <Label text="検索文字列"/>
-        <TextField fx:id="filterField" promptText="依頼No / ユーザー" prefWidth="220.0"/>
-        <Label fx:id="statusLabel" wrapText="true" HBox.hgrow="ALWAYS" maxWidth="Infinity"/>
+        <Label text="検索文字列" minWidth="-Infinity"/>
+        <TextField fx:id="filterField" promptText="依頼No / ユーザー"
+                   prefWidth="220.0" minWidth="120.0"/>
+        <Label fx:id="statusLabel" wrapText="true" HBox.hgrow="ALWAYS"
+               minWidth="0.0" maxWidth="Infinity"/>
     </HBox>
     <FlowPane fx:id="filterOptionsPane" hgap="16.0" vgap="6.0" maxWidth="Infinity">
         <CheckBox fx:id="hideNoOriginalCheck" mnemonicParsing="false"
