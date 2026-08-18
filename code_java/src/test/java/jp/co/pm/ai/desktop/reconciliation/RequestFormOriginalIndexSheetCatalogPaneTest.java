@@ -54,6 +54,36 @@ class RequestFormOriginalIndexSheetCatalogPaneTest {
         assertFalse(RequestFormOriginalIndexSheetCatalogPane.matchesFilter(row, "8/1"));
     }
 
+    @Test
+    void matchesFilter_hitsRemarks_andIgnoresSourcePathOnly() {
+        RequestFormOriginalIndexSheetCatalogPane.DisplayRow withRemarks =
+                RequestFormOriginalIndexSheetCatalogPane.DisplayRow.from(
+                        new RequestFormOriginalIndexSheetCatalog.Row(
+                                "book.xlsm",
+                                "C:\\unique-path-token\\book.xlsm",
+                                "C7-1",
+                                "",
+                                "",
+                                "",
+                                "",
+                                "数量変更",
+                                "",
+                                "",
+                                "契約メモ"));
+        assertTrue(RequestFormOriginalIndexSheetCatalogPane.matchesFilter(withRemarks, "数量変更"));
+        assertTrue(RequestFormOriginalIndexSheetCatalogPane.matchesFilter(withRemarks, "契約メモ"));
+        assertFalse(
+                RequestFormOriginalIndexSheetCatalogPane.matchesFilter(
+                        withRemarks, "unique-path-token"));
+    }
+
+    @Test
+    void openSourceFile_nullRowIsNoOp() {
+        List<String> statuses = new ArrayList<>();
+        RequestFormOriginalIndexSheetCatalogPane.openSourceFile(null, statuses::add, null);
+        assertTrue(statuses.isEmpty());
+    }
+
     private static RequestFormOriginalIndexSheetCatalogPane.DisplayRow row(
             String fileName, String iraiNo, String deliveryDate, String inputDate, String contractNo) {
         return RequestFormOriginalIndexSheetCatalogPane.DisplayRow.from(

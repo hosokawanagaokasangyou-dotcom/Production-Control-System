@@ -3,6 +3,7 @@ package jp.co.pm.ai.desktop.reconciliation;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -423,7 +424,7 @@ public final class RequestFormOriginalIndexSheetCatalogPane {
         if (row == null) {
             return false;
         }
-        String q = text.strip().toLowerCase();
+        String q = text.strip().toLowerCase(Locale.ROOT);
         return containsIgnoreCase(row.getIraiNo(), q)
                 || containsIgnoreCase(row.getSourceFileName(), q)
                 || containsIgnoreCase(row.getContractNo(), q)
@@ -437,7 +438,7 @@ public final class RequestFormOriginalIndexSheetCatalogPane {
     }
 
     private static boolean containsIgnoreCase(String value, String q) {
-        return value != null && value.toLowerCase().contains(q);
+        return value != null && value.toLowerCase(Locale.ROOT).contains(q);
     }
 
     static void openSourceFile(DisplayRow row, Consumer<String> statusUpdater, Consumer<String> log) {
