@@ -35,7 +35,7 @@ internal static class OperatorAladdinCredentialsStore
             var root = doc.RootElement;
             var factory = ResolveFactorySite();
             if (!TryReadOperatorEntry(root, factory, operatorName, out var loginId, out var passwordPayload)
-                && !TryRdpLauncherFactoryFallback(
+                && !TryAnyOtherFactoryOperatorEntry(
                     root,
                     factory,
                     operatorName,
@@ -46,7 +46,8 @@ internal static class OperatorAladdinCredentialsStore
                     "操作者のアラジン資格情報が未設定です: operator="
                         + operatorName
                         + " factory="
-                        + factory);
+                        + factory
+                        + "（同フォルダ JSON の他工場ブロックにも無し）");
                 return null;
             }
 
@@ -89,7 +90,11 @@ internal static class OperatorAladdinCredentialsStore
         return "KONAN";
     }
 
-    private static bool TryRdpLauncherFactoryFallback(
+    /// <summary>
+    /// 配備先フォルダの JSON は工場ごとに分かれるため、主キーに無いときは
+    /// <c>factories</c> 内の他ブロック（KOKUBU / RDP_LAUNCHER 等）から操作者を探す。
+    /// </summary>
+    private static bool TryAnyOtherFactoryOperatorEntry(
         JsonElement root,
         string primaryFactory,
         string operatorName,
@@ -98,24 +103,41 @@ internal static class OperatorAladdinCredentialsStore
     {
         loginId = "";
         passwordPayload = default;
-        if (string.Equals(primaryFactory, RdpLauncherFactoryKey, StringComparison.OrdinalIgnoreCase))
+        if (root.ValueKind != JsonValueKind.Object
+            || !root.TryGetProperty("factories", out var factories)
+            || factories.ValueKind != JsonValueKind.Object)
         {
             return false;
         }
 
-        if (!TryReadOperatorEntry(root, RdpLauncherFactoryKey, operatorName, out loginId, out passwordPayload))
+        foreach (var factoryProp in factories.EnumerateObject())
         {
-            return false;
+            if (string.Equals(factoryProp.Name, primaryFactory, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (factoryProp.Value.ValueKind != JsonValueKind.Object)
+            {
+                continue;
+            }
+
+            if (!TryReadOperatorObject(factoryProp.Value, operatorName, out loginId, out passwordPayload))
+            {
+                continue;
+            }
+
+            LauncherLog.Info(
+                "アラジン資格情報を "
+                    + factoryProp.Name
+                    + " ブロックから解決しました（"
+                    + primaryFactory
+                    + " に未設定）: operator="
+                    + operatorName);
+            return true;
         }
 
-        LauncherLog.Info(
-            "アラジン資格情報を "
-                + RdpLauncherFactoryKey
-                + " ブロックから解決しました（"
-                + primaryFactory
-                + " に未設定）: operator="
-                + operatorName);
-        return true;
+        return false;
     }
 
     private static string ResolveJsonPath(string iniPath)
