@@ -255,6 +255,67 @@ def _image_to_pixels(image: Image.Image, size: int) -> list[list[tuple[int, int,
     return pixels
 
 
+def _rgb_dist(a: tuple[int, int, int], b: tuple[int, int, int]) -> float:
+    return ((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2) ** 0.5
+
+
+def _knockout_flat_background(image: Image.Image) -> Image.Image:
+    """Remove a uniform corner-connected background, keeping the subject with alpha."""
+    rgba = image.convert("RGBA")
+    width, height = rgba.size
+    pix = rgba.load()
+    sample = pix[0, 0]
+    if sample[3] < 8:
+        return rgba
+
+    bg = sample[:3]
+    opaque_limit = 32.0
+    fringe_limit = 72.0
+    seen = [[False] * width for _ in range(height)]
+    queue: list[tuple[int, int]] = []
+
+    def enqueue(x: int, y: int) -> None:
+        if x < 0 or y < 0 or x >= width or y >= height or seen[y][x]:
+            return
+        r, g, b, a = pix[x, y]
+        if a < 8:
+            seen[y][x] = True
+            return
+        if _rgb_dist((r, g, b), bg) > fringe_limit:
+            return
+        seen[y][x] = True
+        queue.append((x, y))
+
+    for x in range(width):
+        enqueue(x, 0)
+        enqueue(x, height - 1)
+    for y in range(height):
+        enqueue(0, y)
+        enqueue(width - 1, y)
+
+    idx = 0
+    while idx < len(queue):
+        x, y = queue[idx]
+        idx += 1
+        r, g, b, a = pix[x, y]
+        dist = _rgb_dist((r, g, b), bg)
+        if dist <= opaque_limit:
+            pix[x, y] = (r, g, b, 0)
+        else:
+            t = (dist - opaque_limit) / (fringe_limit - opaque_limit)
+            pix[x, y] = (
+                _clamp(int((r - bg[0] * (1 - t)) / max(t, 0.001))),
+                _clamp(int((g - bg[1] * (1 - t)) / max(t, 0.001))),
+                _clamp(int((b - bg[2] * (1 - t)) / max(t, 0.001))),
+                _clamp(int(a * t)),
+            )
+        enqueue(x - 1, y)
+        enqueue(x + 1, y)
+        enqueue(x, y - 1)
+        enqueue(x, y + 1)
+    return rgba
+
+
 def _apply_rounded_alpha(
     pixels: list[list[tuple[int, int, int, int]]],
     size: int,
@@ -273,17 +334,8 @@ def _draw_desktop_icon(size: int) -> list[list[tuple[int, int, int, int]]]:
     if not DESKTOP_ICON_SOURCE.is_file():
         raise FileNotFoundError(f"desktop icon source missing: {DESKTOP_ICON_SOURCE}")
     with Image.open(DESKTOP_ICON_SOURCE) as src:
-        pixels = _image_to_pixels(src, size)
-    radius = size * 0.18
-    _apply_rounded_alpha(pixels, size, radius)
-    _stroke_rounded_rect(
-        pixels,
-        size,
-        (*_hex_rgb("#ffffff"), 220),
-        0.0,
-        radius,
-        max(size * 0.03, 1.0),
-    )
+        punched = _knockout_flat_background(src)
+        pixels = _image_to_pixels(punched, size)
     return pixels
 
 
@@ -404,6 +456,10 @@ def _render_set(draw_fn, base_name: str) -> None:
 
 
 def main() -> None:
+    if Image is not None and DESKTOP_ICON_SOURCE.is_file():
+        with Image.open(DESKTOP_ICON_SOURCE) as src:
+            punched = _knockout_flat_background(src)
+        punched.save(DESKTOP_ICON_SOURCE, format="PNG", optimize=True, compress_level=9)
     _render_set(_draw_desktop_icon, "app-icon")
     _render_set(_draw_rdp_icon, "rdp-launcher-icon")
     print(f"Wrote icons under {IMG_DIR} and {BRAND_DIR}")
