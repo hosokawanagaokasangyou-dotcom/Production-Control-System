@@ -410,7 +410,6 @@ public final class OperatorCardTabController {
         try {
             Map<String, SheetTable> loaded = JsonTableIo.loadSheetsWorkbook(p);
             cachedMemberSheets = loaded;
-            applyInferredStartDateIfNeeded();
             List<String> ops = JsonTableIo.memberOperatorNames(cachedMemberSheets);
             if (operatorCombo != null) {
                 String prev = operatorCombo.getValue();
@@ -428,45 +427,6 @@ public final class OperatorCardTabController {
         }
     }
 
-    private SheetTable sampleMemberSheetForDateColumns() {
-        if (cachedMemberSheets.isEmpty()) {
-            return null;
-        }
-        String op = operatorCombo != null ? operatorCombo.getValue() : null;
-        if (op != null && cachedMemberSheets.containsKey(op)) {
-            return cachedMemberSheets.get(op);
-        }
-        for (SheetTable st : cachedMemberSheets.values()) {
-            if (st.columns().contains("時間帯")) {
-                return st;
-            }
-        }
-        return cachedMemberSheets.values().iterator().next();
-    }
-
-    private void applyInferredStartDateIfNeeded() {
-        if (startDateCalendar == null || cachedMemberSheets.isEmpty()) {
-            return;
-        }
-        SheetTable sample = sampleMemberSheetForDateColumns();
-        if (sample == null) {
-            return;
-        }
-        LocalDate current =
-                startDateCalendar.getSelectedDate() != null
-                        ? startDateCalendar.getSelectedDate()
-                        : LocalDate.now();
-        int days = selectedDayCount();
-        if (OperatorCardDocumentBuilder.canResolveDayColumns(sample.columns(), current, days)) {
-            return;
-        }
-        LocalDate inferred =
-                OperatorCardDocumentBuilder.inferScheduleStartDate(cachedMemberSheets, current);
-        if (!Objects.equals(inferred, current)) {
-            startDateCalendar.setSelectedDate(inferred);
-        }
-    }
-
     private void ensureMemberCacheLoaded() {
         String mp = memberJsonField != null ? memberJsonField.getText().strip() : "";
         if (cachedMemberSheets.isEmpty() && !mp.isEmpty()) {
@@ -479,7 +439,6 @@ public final class OperatorCardTabController {
             return;
         }
         ensureMemberCacheLoaded();
-        applyInferredStartDateIfNeeded();
         try {
             OperatorCardPage page = buildSelectedPage();
             String font = fontCombo != null ? fontCombo.getValue() : "SansSerif";
@@ -499,7 +458,6 @@ public final class OperatorCardTabController {
 
     private OperatorCardPage buildSelectedPage() throws IOException, OperatorCardBuildException {
         ensureMemberCacheLoaded();
-        applyInferredStartDateIfNeeded();
         List<Map<String, String>> dispatchRows = loadDispatchRows();
         LocalDate start =
                 startDateCalendar != null ? startDateCalendar.getSelectedDate() : LocalDate.now();

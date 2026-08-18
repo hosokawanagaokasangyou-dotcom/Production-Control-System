@@ -205,7 +205,6 @@ C:\システム開発\工程管理AIプロジェクト_JAVA\tools\pm-ai-rdp-remo
 C:\システム開発\工程管理AIプロジェクト_JAVA\tools\pm-ai-rdp-remote-launcher\bin\Debug\net8.0-windows\win-x64\hostfxr.dll
 C:\システム開発\工程管理AIプロジェクト_JAVA\tools\pm-ai-rdp-remote-launcher\bin\Debug\net8.0-windows\win-x64\hostpolicy.dll
 C:\システム開発\工程管理AIプロジェクト_JAVA\tools\pm-ai-rdp-remote-launcher\bin\Debug\net8.0-windows\win-x64\mscordaccore.dll
-C:\システム開発\工程管理AIプロジェクト_JAVA\tools\pm-ai-rdp-remote-launcher\bin\Debug\net8.0-windows\win-x64\mscordaccore_amd64_amd64_8.0.2826.26413.dll
 C:\システム開発\工程管理AIプロジェクト_JAVA\tools\pm-ai-rdp-remote-launcher\bin\Debug\net8.0-windows\win-x64\mscordbi.dll
 C:\システム開発\工程管理AIプロジェクト_JAVA\tools\pm-ai-rdp-remote-launcher\bin\Debug\net8.0-windows\win-x64\mscorrc.dll
 C:\システム開発\工程管理AIプロジェクト_JAVA\tools\pm-ai-rdp-remote-launcher\bin\Debug\net8.0-windows\win-x64\msquic.dll
@@ -218,3 +217,4 @@ C:\システム開発\工程管理AIプロジェクト_JAVA\tools\pm-ai-rdp-remo
 C:\システム開発\工程管理AIプロジェクト_JAVA\tools\pm-ai-rdp-remote-launcher\obj\Debug\net8.0-windows\win-x64\PmAiRdpRemoteLauncher.pdb
 C:\システム開発\工程管理AIプロジェクト_JAVA\tools\pm-ai-rdp-remote-launcher\obj\Debug\net8.0-windows\win-x64\PmAiRdpRemoteLauncher.genruntimeconfig.cache
 C:\システム開発\工程管理AIプロジェクト_JAVA\tools\pm-ai-rdp-remote-launcher\obj\Debug\net8.0-windows\win-x64\ref\PmAiRdpRemoteLauncher.dll
+C:\システム開発\工程管理AIプロジェクト_JAVA\tools\pm-ai-rdp-remote-launcher\bin\Debug\net8.0-windows\win-x64\mscordaccore_amd64_amd64_8.0.3026.36720.dll

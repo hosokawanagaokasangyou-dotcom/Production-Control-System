@@ -988,7 +988,7 @@
     ]
   },
   "packageFolders": {
-    "C:\\Users\\0585\\AppData\\Local\\Temp\\cursor-sandbox-cache\\e73489f803c21e2a0125e62dcfee0a75\\nuget": {}
+    "C:\\Users\\0585\\.nuget\\packages\\": {}
   },
   "project": {
     "version": "1.0.0",
@@ -996,7 +996,7 @@
       "projectUniqueName": "C:\\システム開発\\工程管理AIプロジェクト_JAVA\\tools\\pm-ai-rdp-remote-launcher.Tests\\PmAiRdpRemoteLauncher.Tests.csproj",
       "projectName": "PmAiRdpRemoteLauncher.Tests",
       "projectPath": "C:\\システム開発\\工程管理AIプロジェクト_JAVA\\tools\\pm-ai-rdp-remote-launcher.Tests\\PmAiRdpRemoteLauncher.Tests.csproj",
-      "packagesPath": "C:\\Users\\0585\\AppData\\Local\\Temp\\cursor-sandbox-cache\\e73489f803c21e2a0125e62dcfee0a75\\nuget",
+      "packagesPath": "C:\\Users\\0585\\.nuget\\packages\\",
       "outputPath": "C:\\システム開発\\工程管理AIプロジェクト_JAVA\\tools\\pm-ai-rdp-remote-launcher.Tests\\obj\\",
       "projectStyle": "PackageReference",
       "configFilePaths": [
@@ -1062,7 +1062,7 @@
             "privateAssets": "all"
           }
         },
-        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\8.0.422/PortableRuntimeIdentifierGraph.json"
+        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\8.0.424/PortableRuntimeIdentifierGraph.json"
       }
     }
   }

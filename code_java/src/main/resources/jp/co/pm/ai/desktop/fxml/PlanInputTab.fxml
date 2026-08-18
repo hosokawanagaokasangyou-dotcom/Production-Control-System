@@ -8,11 +8,7 @@
 <?import javafx.scene.control.TitledPane?>
 <?import javafx.scene.control.Tooltip?>
 <?import javafx.scene.control.TextField?>
-<?import javafx.scene.layout.ColumnConstraints?>
-<?import javafx.scene.layout.GridPane?>
 <?import javafx.scene.layout.HBox?>
-<?import javafx.scene.layout.Priority?>
-<?import javafx.scene.layout.RowConstraints?>
 <?import javafx.scene.layout.StackPane?>
 <?import javafx.scene.layout.VBox?>
 
@@ -75,20 +71,23 @@
                                     </tooltip>
                                 </CheckBox>
                             </HBox>
-                            <GridPane hgap="12.0" vgap="4.0">
-                                <columnConstraints>
-                                    <ColumnConstraints hgrow="ALWAYS" />
-                                    <ColumnConstraints hgrow="ALWAYS" />
-                                </columnConstraints>
-                                <RadioButton fx:id="stage2NextDayDialogInProgressRadio" mnemonicParsing="false"
-                                        text="加工途中タスクの翌日配台" GridPane.columnIndex="0" GridPane.rowIndex="0" />
-                                <RadioButton fx:id="stage2NextDayDialogAladdinExcludeRadio" mnemonicParsing="false"
-                                        text="アラジン当日対象行の翌日配台" GridPane.columnIndex="1" GridPane.rowIndex="0" />
-                                <RadioButton fx:id="stage2NextDayDialogBothRadio" mnemonicParsing="false" selected="true"
-                                        text="①と②をまとめて設定" GridPane.columnIndex="0" GridPane.rowIndex="1" />
-                                <RadioButton fx:id="stage2NextDayDialogNoneRadio" mnemonicParsing="false"
-                                        text="ダイアログを表示しない" GridPane.columnIndex="1" GridPane.rowIndex="1" />
-                            </GridPane>
+                            <VBox alignment="TOP_LEFT" maxWidth="-1.0" spacing="6.0" styleClass="pm-option-group-panel">
+                                <Label styleClass="pm-option-group-title" text="翌日配台ダイアログ" />
+                                <HBox alignment="TOP_LEFT" spacing="20.0">
+                                    <VBox spacing="4.0">
+                                        <RadioButton fx:id="stage2NextDayDialogInProgressRadio" mnemonicParsing="false"
+                                                text="加工途中タスクの翌日配台" />
+                                        <RadioButton fx:id="stage2NextDayDialogBothRadio" mnemonicParsing="false" selected="true"
+                                                text="①と②をまとめて設定" />
+                                    </VBox>
+                                    <VBox spacing="4.0">
+                                        <RadioButton fx:id="stage2NextDayDialogAladdinExcludeRadio" mnemonicParsing="false"
+                                                text="アラジン当日対象行の翌日配台" />
+                                        <RadioButton fx:id="stage2NextDayDialogNoneRadio" mnemonicParsing="false"
+                                                text="ダイアログを表示しない" />
+                                    </VBox>
+                                </HBox>
+                            </VBox>
                         </VBox>
                     </content>
                 </TitledPane>
