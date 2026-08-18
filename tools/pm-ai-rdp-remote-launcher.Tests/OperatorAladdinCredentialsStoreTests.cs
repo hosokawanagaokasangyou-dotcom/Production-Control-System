@@ -197,4 +197,52 @@ public sealed class OperatorAladdinCredentialsStoreTests : IDisposable
         Assert.NotNull(credentials);
         Assert.Equal("000585", credentials!.LoginId);
     }
+
+    [Fact]
+    public void Resolve_prefersUniqueOperatorsOverFactoryBlocks()
+    {
+        var iniPath = Path.Combine(_tempDir, "細川_RPA設定.ini");
+        File.WriteAllText(iniPath, "[RPA]\n操作者=細川\n");
+        var jsonPath = Path.Combine(_tempDir, OperatorAladdinCredentialsStore.FileName);
+        File.WriteAllText(
+            jsonPath,
+            """
+            {
+              "schemaVersion": 2,
+              "operators": {
+                "細川": {
+                  "loginId": "00585",
+                  "password": {
+                    "v": 1,
+                    "kdf": "pbkdf2_sha256",
+                    "iterations": 480000,
+                    "salt_b64": "MPcAl3n25c7Y8/Emh5LDjg==",
+                    "iv_b64": "JFzysmQq0ZpyVlQ3KtS/cA==",
+                    "ciphertext_b64": "Wc8dqMsVZrNykYMOnm4PDg=="
+                  }
+                }
+              },
+              "factories": {
+                "KONAN": {
+                  "細川": {
+                    "loginId": "000585",
+                    "password": {
+                      "v": 1,
+                      "kdf": "pbkdf2_sha256",
+                      "iterations": 480000,
+                      "salt_b64": "MPcAl3n25c7Y8/Emh5LDjg==",
+                      "iv_b64": "JFzysmQq0ZpyVlQ3KtS/cA==",
+                      "ciphertext_b64": "Wc8dqMsVZrNykYMOnm4PDg=="
+                    }
+                  }
+                }
+              }
+            }
+            """);
+
+        var credentials = OperatorAladdinCredentialsStore.Resolve(iniPath, "細川");
+
+        Assert.NotNull(credentials);
+        Assert.Equal("00585", credentials!.LoginId);
+    }
 }

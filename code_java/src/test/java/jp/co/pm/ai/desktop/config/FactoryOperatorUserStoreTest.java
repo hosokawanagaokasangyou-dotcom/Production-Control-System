@@ -574,11 +574,17 @@ class FactoryOperatorUserStoreTest {
 
         Path jsonPath = deploy.resolve(OperatorAladdinCredentialsLauncherJson.FILE_NAME);
         assertTrue(Files.isRegularFile(jsonPath));
-        var kokubu =
+        String text = Files.readString(jsonPath, StandardCharsets.UTF_8);
+        assertTrue(text.contains("\"operators\""));
+        assertFalse(text.contains("\"factories\""));
+        var operators =
                 OperatorAladdinCredentialsLauncherJson.readOperators(jsonPath, FactorySite.KOKUBU);
-        var konan = OperatorAladdinCredentialsLauncherJson.readOperators(jsonPath, FactorySite.KONAN);
-        assertEquals("00585", kokubu.get("細川").loginId());
-        assertEquals("00585", konan.get("細川").loginId());
+        assertEquals("00585", operators.get("細川").loginId());
+        assertEquals(
+                "00585",
+                OperatorAladdinCredentialsLauncherJson.readOperators(jsonPath, FactorySite.KONAN)
+                        .get("細川")
+                        .loginId());
     }
 
     @Test

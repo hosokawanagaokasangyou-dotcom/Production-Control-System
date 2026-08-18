@@ -34,7 +34,8 @@ internal static class OperatorAladdinCredentialsStore
             using var doc = JsonDocument.Parse(stream);
             var root = doc.RootElement;
             var factory = ResolveFactorySite();
-            if (!TryReadOperatorEntry(root, factory, operatorName, out var loginId, out var passwordPayload)
+            if (!TryReadUniqueOperatorEntry(root, operatorName, out var loginId, out var passwordPayload)
+                && !TryReadOperatorEntry(root, factory, operatorName, out loginId, out passwordPayload)
                 && !TryAnyOtherFactoryOperatorEntry(
                     root,
                     factory,
@@ -42,12 +43,7 @@ internal static class OperatorAladdinCredentialsStore
                     out loginId,
                     out passwordPayload))
             {
-                LauncherLog.Error(
-                    "操作者のアラジン資格情報が未設定です: operator="
-                        + operatorName
-                        + " factory="
-                        + factory
-                        + "（同フォルダ JSON の他工場ブロックにも無し）");
+                LauncherLog.Error("操作者のアラジン資格情報が未設定です: operator=" + operatorName);
                 return null;
             }
 
@@ -91,8 +87,35 @@ internal static class OperatorAladdinCredentialsStore
     }
 
     /// <summary>
-    /// 配備先フォルダの JSON は工場ごとに分かれるため、主キーに無いときは
-    /// <c>factories</c> 内の他ブロック（KOKUBU / RDP_LAUNCHER 等）から操作者を探す。
+    /// ログイン情報は操作者ごとに一意。同フォルダ JSON の <c>operators</c> を工場キーより優先する。
+    /// </summary>
+    private static bool TryReadUniqueOperatorEntry(
+        JsonElement root,
+        string operatorName,
+        out string loginId,
+        out JsonElement passwordPayload)
+    {
+        loginId = "";
+        passwordPayload = default;
+        if (root.ValueKind != JsonValueKind.Object
+            || !root.TryGetProperty("operators", out var operators)
+            || operators.ValueKind != JsonValueKind.Object)
+        {
+            return false;
+        }
+
+        if (!TryReadOperatorObject(operators, operatorName, out loginId, out passwordPayload))
+        {
+            return false;
+        }
+
+        LauncherLog.Info("アラジン資格情報を operators から解決しました: operator=" + operatorName);
+        return true;
+    }
+
+    /// <summary>
+    /// 配備先フォルダの旧 JSON は工場ごとに分かれるため、主キーに無いときは
+    /// <c>factories</c> 内の他ブロックから操作者を探す。
     /// </summary>
     private static bool TryAnyOtherFactoryOperatorEntry(
         JsonElement root,
@@ -181,11 +204,6 @@ internal static class OperatorAladdinCredentialsStore
             && !string.Equals(legacyFactory.GetString(), factory, StringComparison.OrdinalIgnoreCase))
         {
             return false;
-        }
-
-        if (root.TryGetProperty("operators", out var legacyOps))
-        {
-            return TryReadOperatorObject(legacyOps, operatorName, out loginId, out passwordPayload);
         }
 
         return false;

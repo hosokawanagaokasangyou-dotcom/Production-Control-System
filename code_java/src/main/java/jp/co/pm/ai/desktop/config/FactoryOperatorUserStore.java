@@ -1118,7 +1118,7 @@ public final class FactoryOperatorUserStore {
             throw new IOException("RPA設定.ini の親ディレクトリが解決できません: " + iniPath);
         }
         writeLauncherCredentialsJson(
-                parent.resolve(OperatorAladdinCredentialsLauncherJson.FILE_NAME), doc);
+                parent.resolve(OperatorAladdinCredentialsLauncherJson.FILE_NAME), doc, scope);
     }
 
     /** 起動時ログイン・PIN 認証・操作者変更ダイアログ向け（RDP はセッション部署のみ）。 */
@@ -1778,14 +1778,16 @@ public final class FactoryOperatorUserStore {
         }
         try {
             writeLauncherCredentialsJson(
-                    parent.resolve(OperatorAladdinCredentialsLauncherJson.FILE_NAME), doc);
+                    parent.resolve(OperatorAladdinCredentialsLauncherJson.FILE_NAME),
+                    doc,
+                    factorySiteForConfiguredStore());
         } catch (Exception ignored) {
             // 副産物 JSON の失敗は bin 保存を妨げない
         }
     }
 
-    private static void writeLauncherCredentialsJson(Path jsonPath, Document doc)
-            throws IOException {
+    private static void writeLauncherCredentialsJson(
+            Path jsonPath, Document doc, FactorySite preferredFactory) throws IOException {
         Objects.requireNonNull(jsonPath, "jsonPath");
         if (doc == null) {
             return;
@@ -1812,37 +1814,8 @@ public final class FactoryOperatorUserStore {
                 }
             }
         }
-        mirrorOperatorsIntoKonanForFolderScopedDeploy(byFactory);
-        OperatorAladdinCredentialsLauncherJson.writeAllFactories(jsonPath, byFactory);
-    }
-
-    /**
-     * 配備先フォルダは工場ごとに分かれる。C# 既定キー KONAN が空のとき、他工場ブロックの操作者を KONAN にも載せる。
-     */
-    private static void mirrorOperatorsIntoKonanForFolderScopedDeploy(
-            Map<FactorySite, Map<String, OperatorAladdinCredentialsLauncherJson.OperatorEntry>>
-                    byFactory) {
-        if (byFactory == null || byFactory.isEmpty()) {
-            return;
-        }
-        Map<String, OperatorAladdinCredentialsLauncherJson.OperatorEntry> konan =
-                byFactory.computeIfAbsent(FactorySite.KONAN, k -> new LinkedHashMap<>());
-        for (Map.Entry<FactorySite, Map<String, OperatorAladdinCredentialsLauncherJson.OperatorEntry>>
-                e : byFactory.entrySet()) {
-            if (e.getKey() == FactorySite.KONAN || e.getValue() == null) {
-                continue;
-            }
-            for (Map.Entry<String, OperatorAladdinCredentialsLauncherJson.OperatorEntry> op :
-                    e.getValue().entrySet()) {
-                if (op.getKey() == null || op.getValue() == null) {
-                    continue;
-                }
-                konan.putIfAbsent(op.getKey(), op.getValue());
-            }
-        }
-        if (konan.isEmpty()) {
-            byFactory.remove(FactorySite.KONAN);
-        }
+        OperatorAladdinCredentialsLauncherJson.writeAllFactories(
+                jsonPath, byFactory, preferredFactory != null ? preferredFactory : FactorySite.KONAN);
     }
 
     private static Map<String, OperatorAladdinCredentialsLauncherJson.OperatorEntry>

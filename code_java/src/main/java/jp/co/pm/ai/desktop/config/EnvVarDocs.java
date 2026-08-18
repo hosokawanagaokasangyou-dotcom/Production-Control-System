@@ -344,7 +344,7 @@ public final class EnvVarDocs {
                 "PM_AI_FACTORY_SITE",
                 "利用工場（KONAN / KOKUBU）。工場切替コンボ（実行タブ）に追従して自動更新。"
                         + " C# ランチャーは同フォルダの operator-aladdin-credentials.launcher.json"
-                        + " で、この値が示す工場ブロックを優先し、無ければ他工場ブロック（KOKUBU 等）も探す。"
+                        + " の operators（操作者ごとに一意）を参照する。旧 factories 形式も読取可。"
                         + " 段階1の湖南工場限定ロジック（DISPATCHABLE_FROM_TIME_KONAN_STOCK 等）の判定にも使用（未設定時は KONAN）。");
         put(
                 "DISPATCHABLE_FROM_TIME_KONAN_STOCK",

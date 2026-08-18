@@ -465,7 +465,7 @@
   }, {
     "key" : "PM_AI_FACTORY_SITE",
     "value" : "KONAN",
-    "description" : "現在選択中の利用工場（KONAN / KOKUBU）。工場切替コンボ（実行タブ）に追従して自動更新。C# ランチャーは同フォルダ JSON の当該工場ブロックを優先し、無ければ他工場ブロックも探す。段階1の湖南工場限定ロジック（DISPATCHABLE_FROM_TIME_KONAN_STOCK 等）の判定にも使用。未設定時は KONAN。"
+    "description" : "現在選択中の利用工場（KONAN / KOKUBU）。工場切替コンボ（実行タブ）に追従して自動更新。C# ランチャーは同フォルダ JSON の operators（操作者ごとに一意）を参照する。旧 factories 形式も読取可。段階1の湖南工場限定ロジック（DISPATCHABLE_FROM_TIME_KONAN_STOCK 等）の判定にも使用。未設定時は KONAN。"
   }, {
     "key" : "DISPATCHABLE_FROM_TIME_KONAN_STOCK",
     "value" : "09:30",
