@@ -9508,14 +9508,9 @@ public final class MainShellController
                         },
                         failure -> {
                             pendingTodayDispatchStageBundle = null;
-                            appendLog(
-                                    "["
-                                            + stageLabel
-                                            + "] 固定ソース確認に失敗: "
-                                            + (failure.getMessage() != null
-                                                    ? failure.getMessage()
-                                                    : failure.getClass().getSimpleName()));
-                            showErrorDialog(stageLabel, "固定ソース確認に失敗しました。段階処理を再実行してください。");
+                            String detail = formatStageSourceGuardFailure(failure);
+                            appendLog("[" + stageLabel + "] 固定ソース確認に失敗: " + detail);
+                            showErrorDialog(stageLabel, stageSourceGuardFailureDialogMessage(failure));
                             Platform.runLater(this::applyRunTabGating);
                         });
         if (!submitted) {
@@ -9578,6 +9573,37 @@ public final class MainShellController
 
     private record StageSourceGuardOutcome(
             Stage2SourceConsistencyGuard.Result guard, Stage1SourceBundle bundle) {}
+
+    private static String formatStageSourceGuardFailure(Throwable failure) {
+        if (failure == null) {
+            return "(不明)";
+        }
+        StringBuilder sb = new StringBuilder(failure.getClass().getSimpleName());
+        String msg = failure.getMessage();
+        if (msg != null && !msg.isBlank()) {
+            sb.append(": ").append(msg.replace('\n', ' '));
+        }
+        Throwable cause = failure.getCause();
+        if (cause != null && cause != failure) {
+            sb.append(" / cause=")
+                    .append(cause.getClass().getSimpleName());
+            if (cause.getMessage() != null && !cause.getMessage().isBlank()) {
+                sb.append(": ").append(cause.getMessage().replace('\n', ' '));
+            }
+        }
+        return sb.toString();
+    }
+
+    private static String stageSourceGuardFailureDialogMessage(Throwable failure) {
+        if (failure instanceof NoClassDefFoundError || failure instanceof ClassNotFoundException) {
+            return "固定ソース確認に必要なクラスが読み込めませんでした。\n"
+                    + "アプリ起動中にビルド（clean compile 等）した場合に起きます。\n"
+                    + "デスクトップを一度終了し、再起動してから段階処理を実行してください。\n\n"
+                    + formatStageSourceGuardFailure(failure);
+        }
+        return "固定ソース確認に失敗しました。段階処理を再実行してください。\n\n"
+                + formatStageSourceGuardFailure(failure);
+    }
 
     private void runStageAfterStage2SourceGuard(String script) {
         stage2SourceGuardRunHandoff = true;
