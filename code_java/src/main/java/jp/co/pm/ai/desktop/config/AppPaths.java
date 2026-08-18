@@ -2305,6 +2305,11 @@ public final class AppPaths {
         return resolveDesktopAppHomeDir().resolve("admin-tab-unlock.json");
     }
 
+    /** 前回起動時の利用工場（スプラッシュ判定用 {@code last-launched-factory-site.json}）。 */
+    public static Path resolveLastLaunchedFactorySiteStorePath() {
+        return resolveDesktopAppHomeDir().resolve("last-launched-factory-site.json");
+    }
+
     /**
      * 配布用リモートデスクトップアプリ向けに {@code user.home} 配下の設定ルートを切り替える。
      * PMD 本体は呼ばない。

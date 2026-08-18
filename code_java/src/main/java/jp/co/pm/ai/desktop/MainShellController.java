@@ -138,6 +138,7 @@ import jp.co.pm.ai.desktop.config.GeminiDispatchModelTryOrderDefaults;
 import jp.co.pm.ai.desktop.config.EnvVarsInitializedAtStore;
 import jp.co.pm.ai.desktop.config.EnvVarsInitialTemplate;
 import jp.co.pm.ai.desktop.config.GlobalInitSettingTarget;
+import jp.co.pm.ai.desktop.config.LastLaunchedFactorySiteStore;
 import jp.co.pm.ai.desktop.config.DesktopTheme;
 import jp.co.pm.ai.desktop.config.PushButtonCssEmitter;
 import jp.co.pm.ai.desktop.config.PushButtonDesignPrefs;
@@ -2283,6 +2284,7 @@ public final class MainShellController
             FactorySiteWorkspaceStore.saveLastFactorySite(operator, current);
             FactorySiteWorkspaceStore.flushMemoryCacheToDisk(operator);
         }
+        LastLaunchedFactorySiteStore.save(current);
         DesktopSessionStateStore.save(collectDesktopSessionForGlobalPersistence());
     }
 
@@ -4571,6 +4573,7 @@ public final class MainShellController
     private boolean finalizeOperatorLocalWorkspaceAfterSessionEstablished() {
         String operator = FactoryOperatorUserStore.sessionOperatorName();
         if (operator.isBlank() || FactoryOperatorUserStore.isGuestOperator(operator)) {
+            LastLaunchedFactorySiteStore.save(GlobalInitSettingTarget.loadEffective(collectUiEnv()));
             return false;
         }
         FactorySite current = GlobalInitSettingTarget.loadEffective(collectUiEnv());
@@ -4598,6 +4601,7 @@ public final class MainShellController
                 return true;
             }
         }
+        LastLaunchedFactorySiteStore.save(current);
         Optional<FactorySiteWorkspaceSnapshot> ws =
                 FactorySiteWorkspaceStore.load(operator, current);
         if (ws.isPresent()) {
@@ -8487,6 +8491,7 @@ public final class MainShellController
                         FactorySiteWorkspaceStore.flushMemoryCacheToDisk(operator);
                     }
                     GlobalInitSettingTarget.save(ctx.newSite());
+                    LastLaunchedFactorySiteStore.save(ctx.newSite());
                     if (!operator.isBlank()) {
                         FactorySiteWorkspaceStore.saveLastFactorySite(operator, ctx.newSite());
                     }
