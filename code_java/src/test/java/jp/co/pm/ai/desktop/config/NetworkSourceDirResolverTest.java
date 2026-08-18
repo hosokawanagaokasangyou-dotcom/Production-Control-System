@@ -44,7 +44,7 @@ class NetworkSourceDirResolverTest {
     void resolve_taskInputFromCache_falseWhenLiveNetworkFileFound(@TempDir Path fakeRepo) throws Exception {
         Path src = fakeRepo.resolve("in").resolve("src");
         Files.createDirectories(src);
-        Path live = src.resolve("plan.csv");
+        Path live = src.resolve("plan.xlsx");
         Files.writeString(live, "x");
         Map<String, String> ui =
                 Map.of(
@@ -63,7 +63,7 @@ class NetworkSourceDirResolverTest {
     void taskInputSourceDir_reachable_whenUnderRepo(@TempDir Path fakeRepo) throws Exception {
         Path src = fakeRepo.resolve("in").resolve("src");
         Files.createDirectories(src);
-        Files.writeString(src.resolve("a.csv"), "x");
+        Files.writeString(src.resolve("a.xlsx"), "x");
         Map<String, String> ui =
                 Map.of(
                         AppPaths.KEY_PM_AI_REPO_ROOT,

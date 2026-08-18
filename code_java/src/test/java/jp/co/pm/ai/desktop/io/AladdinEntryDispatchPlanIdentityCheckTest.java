@@ -134,7 +134,7 @@ class AladdinEntryDispatchPlanIdentityCheckTest {
         Map<String, String> ui = testUi(tempDir);
         Path sourceDir = AppPaths.resolveTaskInputSourceDir(ui);
         Files.createDirectories(sourceDir);
-        Files.writeString(sourceDir.resolve("aladdin-plan.csv"), PLAN_CSV);
+        TestAladdinPlanXlsx.writeMinimal(sourceDir, "aladdin-plan.xlsx");
         Files.createDirectories(Path.of(ui.get(AppPaths.KEY_PM_AI_REPO_ROOT)).resolve("code"));
 
         LocalDate d = LocalDate.of(2026, 7, 7);
@@ -190,16 +190,19 @@ class AladdinEntryDispatchPlanIdentityCheckTest {
         Map<String, String> ui = testUi(tempDir);
         Path sourceDir = AppPaths.resolveTaskInputSourceDir(ui);
         Files.createDirectories(sourceDir);
-        String csv =
-                "列1,列2,列3,列4,列5,列6,列7\n"
-                        + "上段1,,,,,,\n"
-                        + "上段2,,,,,,\n"
-                        + "上段3,,,,,,\n"
-                        + "機械名,依頼NO,工程名,換算数量,実加工数,未加工,2026/07/07\n"
-                        + ",,,,,,\n"
-                        + "M1,DONE1,工程A,600,600,0,0\n"
-                        + "M1,T001,工程A,10,0,10,10\n";
-        Files.writeString(sourceDir.resolve("aladdin-plan.csv"), csv);
+        TestAladdinPlanXlsx.writeGrid(
+                sourceDir,
+                "aladdin-plan.xlsx",
+                new String[][] {
+                    {"列1", "列2", "列3", "列4", "列5", "列6", "列7"},
+                    {"上段1", "", "", "", "", "", ""},
+                    {"上段2", "", "", "", "", "", ""},
+                    {"上段3", "", "", "", "", "", ""},
+                    {"機械名", "依頼NO", "工程名", "換算数量", "実加工数", "未加工", "2026/07/07"},
+                    {"", "", "", "", "", "", ""},
+                    {"M1", "DONE1", "工程A", "600", "600", "0", "0"},
+                    {"M1", "T001", "工程A", "10", "0", "10", "10"}
+                });
         Files.createDirectories(Path.of(ui.get(AppPaths.KEY_PM_AI_REPO_ROOT)).resolve("code"));
 
         LocalDate d = LocalDate.of(2026, 7, 7);
@@ -227,7 +230,7 @@ class AladdinEntryDispatchPlanIdentityCheckTest {
         Map<String, String> ui = testUi(tempDir);
         Path sourceDir = AppPaths.resolveTaskInputSourceDir(ui);
         Files.createDirectories(sourceDir);
-        Files.writeString(sourceDir.resolve("aladdin-plan.csv"), PLAN_CSV);
+        TestAladdinPlanXlsx.writeMinimal(sourceDir, "aladdin-plan.xlsx");
         Files.createDirectories(Path.of(ui.get(AppPaths.KEY_PM_AI_REPO_ROOT)).resolve("code"));
         LocalDate d = LocalDate.of(2026, 7, 7);
         DispatchAladdinEntryWorkbookExporter.ExportResult exported =
@@ -248,7 +251,7 @@ class AladdinEntryDispatchPlanIdentityCheckTest {
         Map<String, String> ui = testUi(tempDir);
         Path sourceDir = AppPaths.resolveTaskInputSourceDir(ui);
         Files.createDirectories(sourceDir);
-        Files.writeString(sourceDir.resolve("aladdin-plan.csv"), PLAN_CSV);
+        TestAladdinPlanXlsx.writeMinimal(sourceDir, "aladdin-plan.xlsx");
         Files.createDirectories(Path.of(ui.get(AppPaths.KEY_PM_AI_REPO_ROOT)).resolve("code"));
 
         LocalDate d = LocalDate.of(2026, 7, 7);

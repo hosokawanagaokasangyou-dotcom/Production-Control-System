@@ -7,10 +7,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Optional;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
-import jp.co.pm.ai.desktop.config.NetworkSourceDirResolver;
+import jp.co.pm.ai.desktop.config.SourceFileExtensionPolicy;
 
 /**
  * PM_AI_TASK_INPUT_SOURCE_DIR から最新のアラジン加工計画をディスクから再読込し、
@@ -39,15 +38,15 @@ public final class AladdinProcessingPlanSourceReloader {
         if (dir == null || !Files.isDirectory(dir)) {
             throw new IOException("タスク入力ソースフォルダがありません: " + dir);
         }
-        Optional<Path> newest = NetworkSourceDirResolver.newestTaskInputFileInDirectory(dir);
-        if (newest.isEmpty()) {
-            throw new IOException("読込対象ファイルがありません: " + dir);
+        SourceFileExtensionPolicy.Result ext =
+                SourceFileExtensionPolicy.checkProcessingPlanDirectory(dir);
+        if (!ext.ok()) {
+            throw new IOException(
+                    ext.errorMessage().isBlank()
+                            ? "読込対象ファイルがありません: " + dir
+                            : ext.errorMessage());
         }
-        Path file = newest.get().toAbsolutePath().normalize();
-        String low = file.getFileName().toString().toLowerCase(Locale.ROOT);
-        if (low.endsWith(".pq") || low.endsWith(".parquet")) {
-            throw new IOException("Parquet は未対応です: " + file);
-        }
+        Path file = ext.loadablePath().orElseThrow().toAbsolutePath().normalize();
 
         PlanInputTabularIo.TabularSheet tab = readNewestAladdinTabularFromDisk(file);
         Path shapedJson = AppPaths.resolveShapedAladdinPlanJsonPath(u);

@@ -15,23 +15,13 @@ import jp.co.pm.ai.desktop.config.AppPaths;
 
 class AladdinProcessingPlanSourceFreshnessTest {
 
-    private static final String PLAN_CSV =
-            "列1,列2,列3,列4\n"
-                    + "上段1,,,\n"
-                    + "上段2,,,\n"
-                    + "上段3,,,\n"
-                    + "機械名,依頼NO,工程名,2026/07/07\n"
-                    + ",,,\n"
-                    + "M1,T001,工程A,10\n";
-
     @Test
     void isSavedShapedPlanIdenticalToNewestSource_trueWhenShapedMatchesSource(@TempDir Path tempDir)
             throws Exception {
         Path sourceDir = tempDir.resolve("task-input");
         Path outputDir = tempDir.resolve("output");
-        Files.createDirectories(sourceDir);
         Files.createDirectories(outputDir);
-        Files.writeString(sourceDir.resolve("aladdin-plan.csv"), PLAN_CSV);
+        TestAladdinPlanXlsx.writeMinimal(sourceDir, "aladdin-plan.xlsx");
 
         Map<String, String> ui =
                 Map.of(
@@ -50,10 +40,8 @@ class AladdinProcessingPlanSourceFreshnessTest {
             throws Exception {
         Path sourceDir = tempDir.resolve("task-input");
         Path outputDir = tempDir.resolve("output");
-        Files.createDirectories(sourceDir);
         Files.createDirectories(outputDir);
-        Path csv = sourceDir.resolve("aladdin-plan.csv");
-        Files.writeString(csv, PLAN_CSV);
+        TestAladdinPlanXlsx.writeMinimal(sourceDir, "aladdin-plan.xlsx");
 
         Map<String, String> ui =
                 Map.of(
@@ -64,8 +52,7 @@ class AladdinProcessingPlanSourceFreshnessTest {
 
         AladdinProcessingPlanSourceReloader.reloadNewestFromDiskAndSaveShapedJson(ui);
 
-        Files.writeString(
-                csv, PLAN_CSV.replace("M1,T001,工程A,10", "M1,T001,工程A,99"));
+        TestAladdinPlanXlsx.writeWithQty(sourceDir, "aladdin-plan.xlsx", "99");
 
         assertFalse(
                 AladdinProcessingPlanSourceFreshness.isSavedShapedPlanIdenticalToNewestSource(ui));

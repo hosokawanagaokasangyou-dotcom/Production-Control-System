@@ -29,6 +29,7 @@ import org.controlsfx.control.table.TableFilter;
 import jp.co.pm.ai.desktop.reconciliation.KonanDailyReportLookup;
 import jp.co.pm.ai.desktop.reconciliation.KonanDailyReportLookup.DailyReportCsvTable;
 import jp.co.pm.ai.desktop.ui.ColumnVisibilitySupport;
+import jp.co.pm.ai.desktop.ui.SourceExtensionErrorOverlay;
 import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
 import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence.ColumnSpec;
 import jp.co.pm.ai.desktop.ui.TableViewColumnSettingsStrip;
@@ -40,6 +41,7 @@ public final class DailyReportCsvTabController {
             "PM_AI_DAILY_REPORT_CSV_PATH で単一ファイルを指定するか、"
                     + " PM_AI_DAILY_REPORT_SOURCE_DIR 配下の最新 "
                     + "加工日報発行問合せ_*.csv を表示します。"
+                    + " 最新ファイルの拡張子が .csv 以外のときはエラーとし表を暗転します。"
                     + " 先頭3行はメタ情報、4行目が見出しです。"
                     + " 列ヘッダをクリックで並べ替え、ヘッダ右のフィルタアイコンで列単位の絞り込みができます。";
 
@@ -193,6 +195,11 @@ public final class DailyReportCsvTabController {
                                             sourceLabel.setText("");
                                             metaLabel.setText("");
                                             refreshButton.setDisable(false);
+                                            if (msg.contains("拡張子が不正")) {
+                                                SourceExtensionErrorOverlay.show(tableHost, msg);
+                                            } else {
+                                                SourceExtensionErrorOverlay.clear(tableHost);
+                                            }
                                         });
                             }
                         },
@@ -225,6 +232,7 @@ public final class DailyReportCsvTabController {
         sourceLabel.setText("参照ファイル: " + loaded.sourcePath());
         metaLabel.setText(formatMetaLines(loaded.metaLines()));
         refreshButton.setDisable(false);
+        SourceExtensionErrorOverlay.clear(tableHost);
         updateStatusLabel();
     }
 

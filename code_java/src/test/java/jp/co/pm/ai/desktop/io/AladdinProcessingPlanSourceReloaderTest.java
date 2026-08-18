@@ -4,9 +4,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.List;
 import java.util.Map;
 
 import org.junit.jupiter.api.Test;
@@ -20,20 +20,9 @@ class AladdinProcessingPlanSourceReloaderTest {
     void reloadNewestFromDiskAndSaveShapedJson_writesShapedJson(@TempDir Path tempDir) throws Exception {
         Path sourceDir = tempDir.resolve("task-input");
         Path outputDir = tempDir.resolve("output");
-        Files.createDirectories(sourceDir);
         Files.createDirectories(outputDir);
 
-        Path csv =
-                sourceDir.resolve("aladdin-plan.csv");
-        Files.writeString(
-                csv,
-                "列1,列2,列3,列4\n"
-                        + "上段1,,,\n"
-                        + "上段2,,,\n"
-                        + "上段3,,,\n"
-                        + "機械名,依頼NO,工程名,2026/07/07\n"
-                        + ",,,\n"
-                        + "M1,T001,工程A,10\n");
+        Path xlsx = TestAladdinPlanXlsx.writeMinimal(sourceDir, "aladdin-plan.xlsx");
 
         Map<String, String> ui =
                 Map.of(
@@ -45,7 +34,7 @@ class AladdinProcessingPlanSourceReloaderTest {
         AladdinProcessingPlanSourceReloader.ReloadResult result =
                 AladdinProcessingPlanSourceReloader.reloadNewestFromDiskAndSaveShapedJson(ui);
 
-        assertEquals(csv, result.sourceFile());
+        assertEquals(xlsx, result.sourceFile());
         assertTrue(Files.isRegularFile(result.shapedJsonPath()));
         assertEquals(1, result.rowCount());
         assertTrue(result.columnCount() >= 4);
@@ -53,6 +42,37 @@ class AladdinProcessingPlanSourceReloaderTest {
         JsonTableIo.ArrayTable saved = JsonTableIo.loadArrayTable(result.shapedJsonPath());
         assertTrue(saved.columns().contains("機械名"));
         assertEquals("T001", saved.rows().getFirst().get(saved.columns().indexOf("依頼NO")));
+    }
+
+    @Test
+    void reloadNewestFromDiskAndSaveShapedJson_rejectsNewerCsv(@TempDir Path tempDir) throws Exception {
+        Path sourceDir = tempDir.resolve("task-input");
+        Path outputDir = tempDir.resolve("output");
+        Files.createDirectories(sourceDir);
+        Files.createDirectories(outputDir);
+        TestAladdinPlanXlsx.writeMinimal(sourceDir, "aladdin-plan.xlsx");
+        Path csv = sourceDir.resolve("newer.csv");
+        Files.writeString(csv, "a,b\n1,2");
+        Files.setLastModifiedTime(
+                csv,
+                java.nio.file.attribute.FileTime.fromMillis(
+                        Files.getLastModifiedTime(sourceDir.resolve("aladdin-plan.xlsx")).toMillis()
+                                + 60_000L));
+
+        Map<String, String> ui =
+                Map.of(
+                        AppPaths.KEY_PM_AI_TASK_INPUT_SOURCE_DIR,
+                        sourceDir.toString(),
+                        AppPaths.KEY_PM_AI_OUTPUT_DIR,
+                        outputDir.toString());
+
+        IOException ex =
+                assertThrows(
+                        IOException.class,
+                        () ->
+                                AladdinProcessingPlanSourceReloader
+                                        .reloadNewestFromDiskAndSaveShapedJson(ui));
+        assertTrue(ex.getMessage().contains("拡張子が不正"));
     }
 
     @Test

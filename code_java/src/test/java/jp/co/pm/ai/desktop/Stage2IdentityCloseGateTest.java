@@ -54,7 +54,7 @@ class Stage2IdentityCloseGateTest {
         Map<String, String> ui = testUi(tempDir);
         Path sourceDir = AppPaths.resolveTaskInputSourceDir(ui);
         Files.createDirectories(sourceDir);
-        Files.writeString(sourceDir.resolve("aladdin-plan.csv"), PLAN_CSV);
+        jp.co.pm.ai.desktop.io.TestAladdinPlanXlsx.writeMinimal(sourceDir, "aladdin-plan.xlsx");
         Files.createDirectories(Path.of(ui.get(AppPaths.KEY_PM_AI_REPO_ROOT)).resolve("code"));
         LocalDate d = LocalDate.of(2026, 7, 7);
         DispatchAladdinEntryWorkbookExporter.write(ui, matchingWorkbook(d, 10));
@@ -73,7 +73,7 @@ class Stage2IdentityCloseGateTest {
         Map<String, String> ui = testUi(tempDir);
         Path sourceDir = AppPaths.resolveTaskInputSourceDir(ui);
         Files.createDirectories(sourceDir);
-        Files.writeString(sourceDir.resolve("aladdin-plan.csv"), PLAN_CSV);
+        jp.co.pm.ai.desktop.io.TestAladdinPlanXlsx.writeMinimal(sourceDir, "aladdin-plan.xlsx");
         Files.createDirectories(Path.of(ui.get(AppPaths.KEY_PM_AI_REPO_ROOT)).resolve("code"));
         LocalDate d = LocalDate.of(2026, 7, 7);
         DispatchAladdinEntryWorkbookExporter.write(ui, matchingWorkbook(d, 10));
@@ -92,7 +92,7 @@ class Stage2IdentityCloseGateTest {
         Map<String, String> ui = testUi(tempDir);
         Path sourceDir = AppPaths.resolveTaskInputSourceDir(ui);
         Files.createDirectories(sourceDir);
-        Files.writeString(sourceDir.resolve("aladdin-plan.csv"), PLAN_CSV);
+        jp.co.pm.ai.desktop.io.TestAladdinPlanXlsx.writeMinimal(sourceDir, "aladdin-plan.xlsx");
         Files.createDirectories(Path.of(ui.get(AppPaths.KEY_PM_AI_REPO_ROOT)).resolve("code"));
         LocalDate d = LocalDate.of(2026, 7, 7);
         DispatchAladdinEntryWorkbookExporter.write(ui, matchingWorkbook(d, 99));
@@ -129,7 +129,7 @@ class Stage2IdentityCloseGateTest {
         Map<String, String> ui = testUi(tempDir);
         Path sourceDir = AppPaths.resolveTaskInputSourceDir(ui);
         Files.createDirectories(sourceDir);
-        Files.writeString(sourceDir.resolve("aladdin-plan.csv"), PLAN_CSV);
+        jp.co.pm.ai.desktop.io.TestAladdinPlanXlsx.writeMinimal(sourceDir, "aladdin-plan.xlsx");
         Files.createDirectories(Path.of(ui.get(AppPaths.KEY_PM_AI_REPO_ROOT)).resolve("code"));
         LocalDate d = LocalDate.of(2026, 7, 7);
         DispatchAladdinEntryWorkbookExporter.write(ui, matchingWorkbook(d, 10));

@@ -2980,6 +2980,19 @@
     -fx-border-color: rgba(34, 197, 94, 0.75);
 }
 
+.source-extension-error-overlay {
+    -fx-background-color: rgba(15, 23, 42, 0.72);
+    -fx-padding: 24;
+}
+
+.source-extension-error-overlay-label {
+    -fx-text-fill: #fecaca;
+    -fx-font-size: 13px;
+    -fx-font-weight: bold;
+    -fx-alignment: center;
+    -fx-text-alignment: center;
+}
+
 .table-view.pipeline-check-main-table .table-row-cell.pipeline-check-row-unconfirmed {
     -fx-background-color: rgba(255, 196, 64, 0.18);
 }

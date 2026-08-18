@@ -32,13 +32,14 @@ import org.controlsfx.control.spreadsheet.GridBase;
 import org.controlsfx.control.spreadsheet.SpreadsheetView;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
-import jp.co.pm.ai.desktop.config.NetworkSourceDirResolver;
+import jp.co.pm.ai.desktop.config.SourceFileExtensionPolicy;
 import jp.co.pm.ai.desktop.io.JsonTableIo;
 import jp.co.pm.ai.desktop.io.NetworkSourceFileReloadCache;
 import jp.co.pm.ai.desktop.io.PlanInputTabularIo;
 import jp.co.pm.ai.desktop.io.TaskInputSourceRawGridIo;
 import jp.co.pm.ai.desktop.ui.ColumnVisibilitySupport;
 import jp.co.pm.ai.desktop.ui.SliderCommittedChangeSupport;
+import jp.co.pm.ai.desktop.ui.SourceExtensionErrorOverlay;
 import jp.co.pm.ai.desktop.ui.SpreadsheetColumnDragReorderSupport;
 import jp.co.pm.ai.desktop.ui.SpreadsheetColumnReorderDialog;
 import jp.co.pm.ai.desktop.ui.SpreadsheetColumnSettingsStrip;
@@ -54,9 +55,9 @@ import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
 public final class AladdinProcessingPlanDataTabController {
 
     private static final String HINT_TEXT =
-            "PM_AI_TASK_INPUT_SOURCE_DIR で解決したフォルダ内の最新ファイル（csv / xlsx）から加工計画DATAを読み込みます。"
-                    + " 複数ある場合は更新日時が最も新しいものを使います。"
-                    + " Excel は「Excel シート」でシートを選べます。Parquet は未対応です。";
+            "PM_AI_TASK_INPUT_SOURCE_DIR で解決したフォルダ内の最新 .xlsx から加工計画DATAを読み込みます。"
+                    + " 最新ファイルの拡張子が .xlsx 以外のときはエラーとし表を暗転します。"
+                    + " Excel は「Excel シート」でシートを選べます。";
 
 
     @FXML
@@ -378,6 +379,7 @@ public final class AladdinProcessingPlanDataTabController {
         Map<String, String> ui = shell.snapshotUiEnv();
         Path dir = AppPaths.resolveTaskInputSourceDir(ui);
         dirLabel.setText(dir != null ? dir.toString() : "(未設定)");
+        SourceExtensionErrorOverlay.clear(spreadsheetHost);
         if (dir == null || !Files.isDirectory(dir)) {
             statusLabel.setText("ソースフォルダがありません");
             pathLabel.setText("");
@@ -387,17 +389,22 @@ public final class AladdinProcessingPlanDataTabController {
             applyEmpty();
             return;
         }
-        Optional<Path> newest = NetworkSourceDirResolver.newestTaskInputFileInDirectory(dir);
-        if (newest.isEmpty()) {
-            statusLabel.setText("読込対象ファイルがありません");
-            pathLabel.setText("");
+        SourceFileExtensionPolicy.Result ext =
+                SourceFileExtensionPolicy.checkProcessingPlanDirectory(dir);
+        if (!ext.ok()) {
+            statusLabel.setText(ext.errorMessage());
+            pathLabel.setText(
+                    ext.newestCandidatePath().map(Path::toString).orElse(""));
             sheetCombo.setDisable(true);
             sheetCombo.getItems().clear();
             loadedPath = null;
             applyEmpty();
+            if (ext.newestCandidatePath().isPresent()) {
+                SourceExtensionErrorOverlay.show(spreadsheetHost, ext.errorMessage());
+            }
             return;
         }
-        Path file = newest.get().toAbsolutePath().normalize();
+        Path file = ext.loadablePath().orElseThrow().toAbsolutePath().normalize();
         loadedPath = file;
         pathLabel.setText(file.toString());
 
@@ -408,44 +415,29 @@ public final class AladdinProcessingPlanDataTabController {
             return;
         }
 
-        String low = file.getFileName().toString().toLowerCase(Locale.ROOT);
-        if (low.endsWith(".pq") || low.endsWith(".parquet")) {
-            statusLabel.setText("Parquet は未対応です");
+        suppressSheetUi.set(true);
+        try {
+            List<String> names = TaskInputSourceRawGridIo.listExcelSheetNames(file);
+            sheetCombo.getItems().setAll(names);
+            sheetCombo.setDisable(names.isEmpty());
+            if (!names.isEmpty()) {
+                sheetCombo.getSelectionModel().select(0);
+            }
+        } catch (IOException ex) {
+            statusLabel.setText("Excel シート一覧の取得に失敗しました");
+            if (shell != null) {
+                shell.appendLog(
+                        "[aladdin-plan-data] "
+                                + (ex.getMessage() != null ? ex.getMessage() : ex.toString()));
+            }
             sheetCombo.setDisable(true);
             sheetCombo.getItems().clear();
             applyEmpty();
             return;
+        } finally {
+            suppressSheetUi.set(false);
         }
-
-        if (isExcelPath(file)) {
-            suppressSheetUi.set(true);
-            try {
-                List<String> names = TaskInputSourceRawGridIo.listExcelSheetNames(file);
-                sheetCombo.getItems().setAll(names);
-                sheetCombo.setDisable(names.isEmpty());
-                if (!names.isEmpty()) {
-                    sheetCombo.getSelectionModel().select(0);
-                }
-            } catch (IOException ex) {
-                statusLabel.setText("Excel シート一覧の取得に失敗しました");
-                if (shell != null) {
-                    shell.appendLog(
-                            "[aladdin-plan-data] "
-                                    + (ex.getMessage() != null ? ex.getMessage() : ex.toString()));
-                }
-                sheetCombo.setDisable(true);
-                sheetCombo.getItems().clear();
-                applyEmpty();
-                return;
-            } finally {
-                suppressSheetUi.set(false);
-            }
-            applyLoadedFile(file, sheetCombo.getSelectionModel().getSelectedIndex(), true);
-        } else {
-            sheetCombo.setDisable(true);
-            sheetCombo.getItems().clear();
-            applyLoadedFile(file, 0, true);
-        }
+        applyLoadedFile(file, sheetCombo.getSelectionModel().getSelectedIndex(), true);
     }
 
     private void applyAladdinFromReloadCache(Path file, NetworkSourceFileReloadCache.Snapshot snap) {

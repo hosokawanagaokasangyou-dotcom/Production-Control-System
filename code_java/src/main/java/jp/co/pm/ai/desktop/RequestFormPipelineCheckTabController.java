@@ -56,6 +56,7 @@ import jp.co.pm.ai.desktop.dispatch.AladdinShapedPlanQtyLookup.PlanEntry;
 import jp.co.pm.ai.desktop.ui.ButtonAttentionGlow;
 import jp.co.pm.ai.desktop.ui.ClipboardTableSupport;
 import jp.co.pm.ai.desktop.ui.ColumnVisibilitySupport;
+import jp.co.pm.ai.desktop.ui.SourceExtensionErrorOverlay;
 import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
 import jp.co.pm.ai.desktop.ui.TableViewColumnSettingsStrip;
 import jp.co.pm.ai.desktop.reconciliation.JuchuTransferCoverageCheck.ColumnCheck;
@@ -1269,7 +1270,27 @@ public final class RequestFormPipelineCheckTabController {
         refreshAladdinPlanWatchState();
         flushPipelineCheckProgressUi();
         clearPipelineCheckProgress();
+        applySourceExtensionOverlayFromWarnings(result.warnings());
         completeRefreshPreload(true, null);
+    }
+
+    private void applySourceExtensionOverlayFromWarnings(List<String> warnings) {
+        List<String> extErrs = new ArrayList<>();
+        if (warnings != null) {
+            for (String w : warnings) {
+                if (w != null && w.contains("拡張子が不正")) {
+                    extErrs.add(w);
+                }
+            }
+        }
+        if (extErrs.isEmpty()) {
+            SourceExtensionErrorOverlay.clear(mainTableHost);
+            return;
+        }
+        allRows.clear();
+        applyFilter();
+        updateStatusLabel();
+        SourceExtensionErrorOverlay.show(mainTableHost, String.join("\n", extErrs));
     }
 
     /**

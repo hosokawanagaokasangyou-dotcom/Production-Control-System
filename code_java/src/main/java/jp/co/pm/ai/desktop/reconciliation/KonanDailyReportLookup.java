@@ -13,9 +13,9 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
-import java.util.stream.Stream;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
+import jp.co.pm.ai.desktop.config.SourceFileExtensionPolicy;
 
 /**
  * 湖南工場「加工日報発行問合せ」CSV から (依頼NO, 工程名, 機械名) ごとの {@code 完了区分} を引く。
@@ -29,7 +29,6 @@ public final class KonanDailyReportLookup {
     public static final String KEY_DAILY_REPORT_LOOKUP = "PM_AI_DAILY_REPORT_LOOKUP";
 
     private static final int META_SKIP_LINES = 3;
-    private static final String FILENAME_PREFIX = "加工日報発行問合せ_";
 
     private static final String COL_TASK_ID = "依頼NO";
     private static final String COL_PROCESS = "工程名";
@@ -329,10 +328,15 @@ public final class KonanDailyReportLookup {
                 ui != null ? ui.getOrDefault(KEY_DAILY_REPORT_CSV_PATH, "").strip() : "";
         if (!explicit.isEmpty()) {
             Path p = Path.of(explicit);
-            if (Files.isRegularFile(p)) {
-                return p.toAbsolutePath().normalize();
+            if (!Files.isRegularFile(p)) {
+                return null;
             }
-            return null;
+            SourceFileExtensionPolicy.Result ext =
+                    SourceFileExtensionPolicy.checkDailyReportFile(p.toAbsolutePath().normalize());
+            if (!ext.ok()) {
+                throw new IOException(ext.errorMessage());
+            }
+            return ext.loadablePath().orElse(null);
         }
         String dir = ui != null ? ui.getOrDefault(KEY_DAILY_REPORT_SOURCE_DIR, "").strip() : "";
         if (dir.isEmpty()) {
@@ -342,25 +346,15 @@ public final class KonanDailyReportLookup {
         if (!Files.isDirectory(dirPath)) {
             return null;
         }
-        Path best = null;
-        long bestKey = Long.MIN_VALUE;
-        try (Stream<Path> stream = Files.list(dirPath)) {
-            for (Path p : stream.toList()) {
-                if (!Files.isRegularFile(p)) {
-                    continue;
-                }
-                String name = p.getFileName().toString();
-                if (!name.startsWith(FILENAME_PREFIX) || !name.toLowerCase(Locale.ROOT).endsWith(".csv")) {
-                    continue;
-                }
-                long t = Files.getLastModifiedTime(p).toMillis();
-                if (t > bestKey) {
-                    bestKey = t;
-                    best = p;
-                }
+        SourceFileExtensionPolicy.Result ext =
+                SourceFileExtensionPolicy.checkDailyReportDirectory(dirPath);
+        if (!ext.ok()) {
+            if (ext.newestCandidatePath().isPresent()) {
+                throw new IOException(ext.errorMessage());
             }
+            return null;
         }
-        return best != null ? best.toAbsolutePath().normalize() : null;
+        return ext.loadablePath().orElse(null);
     }
 
     private static List<String> readAllLines(Path path) throws IOException {

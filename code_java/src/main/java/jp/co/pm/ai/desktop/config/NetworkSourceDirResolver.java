@@ -31,8 +31,11 @@ public final class NetworkSourceDirResolver {
 
     private static final String META_JSON = "network-source-cache-meta.json";
 
-    private static final List<String> TASK_INPUT_SUFFIXES =
-            List.of(".csv", ".parquet", ".pq", ".xlsx", ".xlsm", ".xltx", ".xltm");
+    /**
+     * 加工計画の読込対象は {@link SourceFileExtensionPolicy#PROCESSING_PLAN_REQUIRED_SUFFIX}（.xlsx）のみ。
+     * 最新判定の候補拡張子は {@link SourceFileExtensionPolicy} 側。
+     */
+    private static final List<String> TASK_INPUT_SUFFIXES = List.of(".xlsx");
 
     /** Office Open XML（ZIP）系。中央ディレクトリ不整合を避けるためキャッシュ時に正規化する。 */
     private static final Set<String> OFFICE_ZIP_EXTENSIONS =
@@ -156,6 +159,12 @@ public final class NetworkSourceDirResolver {
         if (!explicit.isEmpty()) {
             Path p = Path.of(explicit).toAbsolutePath().normalize();
             if (isReadableFile(p)) {
+                SourceFileExtensionPolicy.Result ext =
+                        SourceFileExtensionPolicy.checkProcessingPlanFile(p);
+                if (!ext.ok()) {
+                    logs.add("[network-source] " + ext.errorMessage());
+                    return new ResolvedNetworkSource(Optional.empty(), false);
+                }
                 Optional<Path> cached = refreshCacheFromLive(p, cacheFileStemTaskInput(), u, logs);
                 if (cached.isPresent()) {
                     logs.add(
@@ -181,7 +190,16 @@ public final class NetworkSourceDirResolver {
             return cacheFallbackResult(loadTaskInputFromCache(u, logs));
         }
         Path dir = AppPaths.resolveTaskInputSourceDir(u);
-        Optional<Path> live = pickNewestTaskInputInDir(dir);
+        SourceFileExtensionPolicy.Result planExt =
+                SourceFileExtensionPolicy.checkProcessingPlanDirectory(dir);
+        if (!planExt.ok()) {
+            logs.add("[network-source] " + planExt.errorMessage());
+            if (planExt.newestCandidatePath().isPresent()) {
+                return new ResolvedNetworkSource(Optional.empty(), false);
+            }
+            return cacheFallbackResult(loadTaskInputFromCache(u, logs));
+        }
+        Optional<Path> live = planExt.loadablePath();
         if (live.isPresent() && isReadableFile(live.get())) {
             Optional<Path> cached =
                     refreshCacheFromLive(live.get(), cacheFileStemTaskInput(), u, logs);
@@ -463,13 +481,14 @@ public final class NetworkSourceDirResolver {
     }
 
     /**
-     * {@link AppPaths#resolveTaskInputSourceDir(Map)} で得られるディレクトリ直下から、タスク入力候補拡張子のうち
-     * 更新時刻が最新のファイルを選ぶ。{@link #resolve(Map)} 内の {@code pickNewestTaskInputInDir} と同一ロジック。
+     * {@link AppPaths#resolveTaskInputSourceDir(Map)} 直下から加工計画（.xlsx）の最新を返す。
+     * 最新候補の拡張子が .xlsx 以外のときは empty（{@link SourceFileExtensionPolicy}）。
      *
      * <p>{@code PM_AI_PROCESSING_PLAN_PATH} で単一ファイルが指定されている場合の優先は行わない（フォルダ内の最新のみ）。
      */
     public static Optional<Path> newestTaskInputFileInDirectory(Path taskInputSourceDir) {
-        return pickNewestTaskInputInDir(taskInputSourceDir);
+        return SourceFileExtensionPolicy.checkProcessingPlanDirectory(taskInputSourceDir)
+                .loadablePath();
     }
 
     /** {@link AppPaths#resolveActualDetailSourceDir(Map)} 直下の最新 Excel（xlsx/xlsm）。 */
