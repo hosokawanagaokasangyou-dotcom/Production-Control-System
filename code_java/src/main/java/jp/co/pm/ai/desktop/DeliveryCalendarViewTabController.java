@@ -54,6 +54,7 @@ import org.controlsfx.control.spreadsheet.SpreadsheetView;
 import jp.co.pm.ai.desktop.bridge.PythonProcessRunner;
 import jp.co.pm.ai.desktop.bridge.PythonProcessRunner.RunRequest;
 import jp.co.pm.ai.desktop.config.AppPaths;
+import jp.co.pm.ai.desktop.config.SourceFileExtensionPolicy;
 import jp.co.pm.ai.desktop.dispatch.AladdinShapedPlanQtyLookup;
 import jp.co.pm.ai.desktop.dispatch.AladdinSystemDispatchDisplayQty;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchSchema;
@@ -66,6 +67,7 @@ import jp.co.pm.ai.desktop.ui.DeliveryCalendarMainCell;
 import jp.co.pm.ai.desktop.ui.DeliveryCalendarMainCellPlainText;
 import jp.co.pm.ai.desktop.ui.DeliveryCalendarMainCellTripleQty;
 import jp.co.pm.ai.desktop.ui.SliderCommittedChangeSupport;
+import jp.co.pm.ai.desktop.ui.SourceExtensionErrorOverlay;
 import jp.co.pm.ai.desktop.ui.SpreadsheetColumnDragReorderSupport;
 import jp.co.pm.ai.desktop.ui.SpreadsheetThemeBridge;
 import jp.co.pm.ai.desktop.ui.SpreadsheetColumnReorderDialog;
@@ -197,6 +199,9 @@ public final class DeliveryCalendarViewTabController {
     private TabPane innerTabPane;
 
     @FXML
+    private StackPane deliveryCalendarBodyHost;
+
+    @FXML
     private VBox pipelineStaleOverlay;
 
     @FXML
@@ -246,6 +251,11 @@ public final class DeliveryCalendarViewTabController {
     private MainShellController shell;
 
     private Stage ownerStage;
+
+    /** 加工計画／加工日報の最新拡張子不正で再読込・表示を抑止する。 */
+    private boolean blockedBySourceExtension;
+
+    private String sourceExtensionBlockMessage = "";
 
     private final SpreadsheetView mainSpreadsheet = new SpreadsheetView();
 
@@ -578,6 +588,42 @@ public final class DeliveryCalendarViewTabController {
         }
         ensureInnerTabPersistenceWired();
         applyRefreshButtonEnabledState();
+        refreshSourceExtensionGate();
+    }
+
+    /**
+     * 加工計画（.xlsx）／加工日報（.csv）の最新拡張子を再評価し、不正なら子タブ含む全体を暗転する。
+     */
+    void refreshSourceExtensionGate() {
+        Map<String, String> ui = shell != null ? shell.snapshotUiEnv() : Map.of();
+        List<String> extErrs = SourceFileExtensionPolicy.blockingMismatchMessages(ui);
+        if (extErrs.isEmpty()) {
+            blockedBySourceExtension = false;
+            sourceExtensionBlockMessage = "";
+            SourceExtensionErrorOverlay.clear(deliveryCalendarBodyHost);
+        } else {
+            blockedBySourceExtension = true;
+            sourceExtensionBlockMessage = String.join("\n", extErrs);
+            SourceExtensionErrorOverlay.show(deliveryCalendarBodyHost, sourceExtensionBlockMessage);
+            if (statusLabel != null) {
+                statusLabel.setText("ソース拡張子不正");
+            }
+        }
+        applyRefreshButtonEnabledState();
+    }
+
+    private boolean blockReloadIfSourceExtensionMismatch(boolean showDialog) {
+        refreshSourceExtensionGate();
+        if (!blockedBySourceExtension) {
+            return false;
+        }
+        if (shell != null) {
+            shell.appendLog("[delivery-calendar] " + sourceExtensionBlockMessage);
+            if (showDialog) {
+                shell.showWarningDialog("納期管理ビュー", sourceExtensionBlockMessage);
+            }
+        }
+        return true;
     }
 
     void applyStage3UiVisibility(boolean visible) {
@@ -1101,8 +1147,16 @@ public final class DeliveryCalendarViewTabController {
             return;
         }
         boolean reloadInProgress = deliveryCalendarDataReloadInProgress.get();
-        refreshButton.setDisable(reloadInProgress);
-        refreshButton.setTooltip(null);
+        refreshButton.setDisable(reloadInProgress || blockedBySourceExtension);
+        if (blockedBySourceExtension && !reloadInProgress) {
+            refreshButton.setTooltip(
+                    new Tooltip(
+                            sourceExtensionBlockMessage.isBlank()
+                                    ? "加工計画は .xlsx、加工日報は .csv の最新ファイルが必要です。"
+                                    : sourceExtensionBlockMessage));
+        } else {
+            refreshButton.setTooltip(null);
+        }
     }
 
     private void runDeliveryCalendarDataReload(
@@ -1110,6 +1164,13 @@ public final class DeliveryCalendarViewTabController {
         if (requestFactory == null) {
             statusLabel.setText("初期化待ち");
             failPendingPipelineReload("納期管理ビューの初期化が完了していません。");
+            return;
+        }
+        if (blockReloadIfSourceExtensionMismatch(completionInfoDialog || !pipelineTriggered)) {
+            failPendingPipelineReload(
+                    sourceExtensionBlockMessage.isBlank()
+                            ? "ソースファイルの拡張子が不正です。"
+                            : sourceExtensionBlockMessage);
             return;
         }
         if (!pipelineTriggered && refreshButton != null && refreshButton.isDisabled()) {

@@ -79,7 +79,7 @@
             </TitledPane>
         </panes>
     </Accordion>
-    <StackPane VBox.vgrow="ALWAYS">
+    <StackPane fx:id="deliveryCalendarBodyHost" VBox.vgrow="ALWAYS">
         <TabPane fx:id="innerTabPane" tabClosingPolicy="UNAVAILABLE" maxHeight="Infinity" maxWidth="Infinity">
         <tabs>
             <Tab closable="false" text="&#x30a2;&#x30e9;&#x30fb;&#x5b9f;&#x7e3e;&#x30fb;&#x30b7;&#x30b9;&#x6bd4;&#x8f03;">

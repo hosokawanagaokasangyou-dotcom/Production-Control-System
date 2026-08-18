@@ -1166,6 +1166,7 @@ public final class MainShellController
                             }
                             if (newTab == mainShellTabDeliveryCalendar
                                     && deliveryCalendarViewTabController != null) {
+                                deliveryCalendarViewTabController.refreshSourceExtensionGate();
                                 deliveryCalendarViewTabController.collapseInnerSectionPanesOnShellSelect();
                             }
                             if (newTab == mainShellTabApiModelBenchmark
@@ -6685,18 +6686,20 @@ public final class MainShellController
         refreshStage2SourceExtensionGate();
     }
 
-    /** 段階2／2.1: 加工計画・加工日報の最新拡張子不正なら実行ボタンを抑止する。 */
+    /** 段階2／2.1・納期管理ビュー: 加工計画・加工日報の最新拡張子不正を反映する。 */
     void refreshStage2SourceExtensionGate() {
-        if (planInputTabController == null) {
-            return;
-        }
         List<String> extErrs =
                 SourceFileExtensionPolicy.blockingMismatchMessages(collectUiEnv());
-        if (extErrs.isEmpty()) {
-            planInputTabController.setStage2BlockedBySourceExtension(false, "");
-        } else {
-            planInputTabController.setStage2BlockedBySourceExtension(
-                    true, String.join("\n", extErrs));
+        if (planInputTabController != null) {
+            if (extErrs.isEmpty()) {
+                planInputTabController.setStage2BlockedBySourceExtension(false, "");
+            } else {
+                planInputTabController.setStage2BlockedBySourceExtension(
+                        true, String.join("\n", extErrs));
+            }
+        }
+        if (deliveryCalendarViewTabController != null) {
+            deliveryCalendarViewTabController.refreshSourceExtensionGate();
         }
     }
 
