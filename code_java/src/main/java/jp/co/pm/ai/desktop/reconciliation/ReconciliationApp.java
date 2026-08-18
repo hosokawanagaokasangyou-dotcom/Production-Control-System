@@ -1474,17 +1474,9 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         return createLazyCatalogTab(
                 "目次シート",
                 "このタブを開くと依頼書原本の目次シートを読み込みます",
-                () -> {
-                    ScrollPane sp = new ScrollPane();
-                    sp.setFitToWidth(true);
-                    sp.getStyleClass().add("form-scroll-pane");
-                    VBox content =
-                            RequestFormOriginalIndexSheetCatalogPane.build(
-                                    () -> uiEnvSnapshot, msg -> System.out.println(msg));
-                    sp.setContent(content);
-                    VBox.setVgrow(content, javafx.scene.layout.Priority.ALWAYS);
-                    return sp;
-                });
+                () ->
+                        RequestFormOriginalIndexSheetCatalogPane.build(
+                                () -> uiEnvSnapshot, msg -> System.out.println(msg)));
     }
 
     private Tab createMasterListTab() {

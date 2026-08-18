@@ -313,6 +313,81 @@
     -fx-padding: 20px;
 }
 
+.pm-request-form-reconciliation-root .form-tab-container.index-sheet-catalog {
+    -fx-padding: 10px 12px 12px 12px;
+}
+
+.pm-request-form-reconciliation-root .index-sheet-catalog-toolbar {
+    -fx-padding: 2px 0 4px 0;
+    -fx-alignment: center-left;
+}
+
+.pm-request-form-reconciliation-root .index-sheet-catalog-count {
+    -fx-font-size: 12px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -fx-text-background-color;
+}
+
+.pm-request-form-reconciliation-root .index-sheet-catalog-path {
+    -fx-text-overrun: ellipsis;
+}
+
+.pm-request-form-reconciliation-root .index-sheet-catalog-table {
+    -fx-fixed-cell-size: 28px;
+}
+
+.pm-request-form-reconciliation-root .index-sheet-catalog-table .table-cell {
+    -fx-font-size: 12px;
+    -fx-padding: 4px 8px;
+}
+
+.pm-request-form-reconciliation-root .index-sheet-catalog-table .table-row-cell:odd {
+    -fx-background-color: derive(-fx-control-inner-background, 10%);
+}
+
+.pm-request-form-reconciliation-root .index-sheet-catalog-table .table-row-cell:even {
+    -fx-background-color: -fx-control-inner-background;
+}
+
+.pm-request-form-reconciliation-root .index-sheet-catalog-table .table-row-cell:filled:hover {
+    -fx-background-color: derive(-fx-accent, 72%);
+}
+
+.pm-request-form-reconciliation-root .index-sheet-catalog-table .table-row-cell:filled:selected {
+    -fx-background-color: -fx-selection-bar;
+}
+
+.pm-request-form-reconciliation-root .index-sheet-catalog-table .table-row-cell:filled:selected .table-cell {
+    -fx-text-fill: -fx-selection-bar-text;
+}
+
+.pm-request-form-reconciliation-root .index-sheet-catalog-table .table-cell.index-sheet-col-key {
+    -fx-font-weight: bold;
+    -fx-text-fill: -fx-accent;
+}
+
+.pm-request-form-reconciliation-root .index-sheet-catalog-table .table-cell.index-sheet-col-delivery {
+    -fx-font-weight: bold;
+    -fx-alignment: CENTER;
+}
+
+.pm-request-form-reconciliation-root .index-sheet-catalog-table .table-cell.index-sheet-col-date {
+    -fx-alignment: CENTER;
+    -fx-text-fill: -fx-mid-text-color;
+}
+
+.pm-request-form-reconciliation-root .index-sheet-catalog-table .table-cell.index-sheet-col-file,
+.pm-request-form-reconciliation-root .index-sheet-catalog-table .table-cell.index-sheet-col-remarks {
+    -fx-text-fill: -fx-mid-text-color;
+}
+
+.pm-request-form-reconciliation-root .index-sheet-catalog-table .table-row-cell:filled:selected .table-cell.index-sheet-col-key,
+.pm-request-form-reconciliation-root .index-sheet-catalog-table .table-row-cell:filled:selected .table-cell.index-sheet-col-date,
+.pm-request-form-reconciliation-root .index-sheet-catalog-table .table-row-cell:filled:selected .table-cell.index-sheet-col-file,
+.pm-request-form-reconciliation-root .index-sheet-catalog-table .table-row-cell:filled:selected .table-cell.index-sheet-col-remarks {
+    -fx-text-fill: -fx-selection-bar-text;
+}
+
 .pm-request-form-reconciliation-root .paper-main-title {
     -fx-text-fill: -fx-text-background-color;
     -fx-font-size: 16px;
