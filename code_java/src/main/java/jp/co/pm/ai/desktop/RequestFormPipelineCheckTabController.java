@@ -1,5 +1,6 @@
 package jp.co.pm.ai.desktop;
 
+import java.awt.Desktop;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -595,7 +596,13 @@ public final class RequestFormPipelineCheckTabController {
     private Label aladdinPlanSourceLabel;
 
     @FXML
+    private Button openAladdinPlanSourceFolderButton;
+
+    @FXML
     private Label dailyReportSourceLabel;
+
+    @FXML
+    private Button openDailyReportSourceFolderButton;
 
     @FXML
     private TableView<MainRow> mainTable;
@@ -2511,13 +2518,17 @@ public final class RequestFormPipelineCheckTabController {
         if (aladdinPlanSourceLabel == null) {
             return;
         }
-        if (aladdinPlanSourcePath == null || aladdinPlanSourcePath.isBlank()) {
+        boolean hasPath = aladdinPlanSourcePath != null && !aladdinPlanSourcePath.isBlank();
+        if (!hasPath) {
             aladdinPlanSourceLabel.setText("加工計画: （未読込）");
         } else {
             aladdinPlanSourceLabel.setText("加工計画: " + aladdinPlanSourcePath);
         }
         aladdinPlanSourceLabel.setManaged(true);
         aladdinPlanSourceLabel.setVisible(true);
+        if (openAladdinPlanSourceFolderButton != null) {
+            openAladdinPlanSourceFolderButton.setDisable(!hasPath);
+        }
     }
 
     private void updateDailyReportSourceLabel() {
@@ -2525,15 +2536,115 @@ public final class RequestFormPipelineCheckTabController {
             return;
         }
         String path = dailyReportLookup != null ? dailyReportLookup.sourcePath() : "";
-        if (path.isBlank()) {
+        boolean hasPath = !path.isBlank();
+        if (!hasPath) {
             dailyReportSourceLabel.setText("加工日報: （未読込）");
             dailyReportSourceLabel.setManaged(true);
             dailyReportSourceLabel.setVisible(true);
+            if (openDailyReportSourceFolderButton != null) {
+                openDailyReportSourceFolderButton.setDisable(true);
+            }
             return;
         }
         dailyReportSourceLabel.setText("加工日報: " + path);
         dailyReportSourceLabel.setManaged(true);
         dailyReportSourceLabel.setVisible(true);
+        if (openDailyReportSourceFolderButton != null) {
+            openDailyReportSourceFolderButton.setDisable(false);
+        }
+    }
+
+    @FXML
+    private void onOpenAladdinPlanSourceFolderAction() {
+        openSourceFileParentFolder(aladdinPlanSourcePath, "加工計画");
+    }
+
+    @FXML
+    private void onOpenDailyReportSourceFolderAction() {
+        String path = dailyReportLookup != null ? dailyReportLookup.sourcePath() : "";
+        openSourceFileParentFolder(path, "加工日報");
+    }
+
+    /** 表示中ソース CSV の親フォルダをエクスプローラー等で開く。 */
+    private void openSourceFileParentFolder(String rawPath, String label) {
+        if (rawPath == null || rawPath.isBlank()) {
+            warnOpenSourceFolder(label + "のパスが未設定です。");
+            return;
+        }
+        Path filePath;
+        try {
+            filePath = Path.of(rawPath.trim());
+        } catch (Exception ex) {
+            warnOpenSourceFolder(label + "のパスが無効です: " + rawPath);
+            return;
+        }
+        Path dir = resolveOpenableDirectory(filePath);
+        if (dir == null) {
+            warnOpenSourceFolder(label + "のフォルダを開けません: " + rawPath);
+            return;
+        }
+        try {
+            openDirectoryInOs(dir);
+            if (shell != null) {
+                shell.appendLog("[pipeline-check] " + label + "フォルダを開きました: " + dir);
+            }
+        } catch (IOException ex) {
+            String msg =
+                    ex.getMessage() != null && !ex.getMessage().isBlank()
+                            ? ex.getMessage()
+                            : ex.toString();
+            warnOpenSourceFolder(label + "のフォルダを開けませんでした: " + msg);
+        }
+    }
+
+    private static Path resolveOpenableDirectory(Path path) {
+        if (path == null) {
+            return null;
+        }
+        try {
+            if (Files.isDirectory(path)) {
+                return path.toAbsolutePath().normalize();
+            }
+            Path parent = path.getParent();
+            if (parent != null && Files.isDirectory(parent)) {
+                return parent.toAbsolutePath().normalize();
+            }
+            if (Files.isRegularFile(path)) {
+                Path p = path.getParent();
+                return p != null ? p.toAbsolutePath().normalize() : null;
+            }
+        } catch (Exception ignored) {
+            // UNC 等で存在確認が失敗しても親を試す
+        }
+        Path parent = path.getParent();
+        return parent;
+    }
+
+    private static void openDirectoryInOs(Path dir) throws IOException {
+        if (dir == null) {
+            throw new IOException("directory is null");
+        }
+        String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
+        if (os.contains("windows")) {
+            new ProcessBuilder("explorer.exe", dir.toString()).start();
+            return;
+        }
+        if (!Desktop.isDesktopSupported()
+                || !Desktop.getDesktop().isSupported(Desktop.Action.OPEN)) {
+            throw new IOException("Desktop OPEN is not supported");
+        }
+        Desktop.getDesktop().open(dir.toFile());
+    }
+
+    private void warnOpenSourceFolder(String message) {
+        Alert alert = new Alert(Alert.AlertType.WARNING, message);
+        alert.setTitle("フォルダを開く");
+        alert.setHeaderText(null);
+        Window owner = shell != null ? shell.getPrimaryStage() : null;
+        if (owner != null) {
+            alert.initOwner(owner);
+        }
+        alert.showAndWait();
     }
 
     private List<String> mainTableVisibleColumnTitles() {
