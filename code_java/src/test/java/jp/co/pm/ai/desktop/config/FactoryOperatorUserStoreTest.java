@@ -128,17 +128,6 @@ class FactoryOperatorUserStoreTest {
     }
 
     @Test
-    void verifyAdminTabAccess_requiresAdministratorUsernameAndPassword() {
-        assertTrue(
-                FactoryOperatorUserStore.verifyAdminTabAccess(
-                        FactoryOperatorUserStore.ADMIN_TAB_USERNAME,
-                        FactoryOperatorUserStore.ADMIN_TAB_PASSWORD));
-        assertTrue(!FactoryOperatorUserStore.verifyAdminTabAccess("admin", FactoryOperatorUserStore.ADMIN_TAB_PASSWORD));
-        assertTrue(!FactoryOperatorUserStore.verifyAdminTabAccess(FactoryOperatorUserStore.ADMIN_TAB_USERNAME, "wrong"));
-        assertTrue(!FactoryOperatorUserStore.verifyAdminTabAccess("", FactoryOperatorUserStore.ADMIN_TAB_PASSWORD));
-    }
-
-    @Test
     void adminViewablePin_storedOnIssueAndUpdatedOnChange() throws Exception {
         String pin = FactoryOperatorUserStore.issuePin(FactorySite.KONAN, "砂田");
         assertEquals(pin, FactoryOperatorUserStore.adminViewablePin(FactorySite.KONAN, "砂田").orElse(""));

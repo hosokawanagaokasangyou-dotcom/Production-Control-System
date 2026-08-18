@@ -44,7 +44,7 @@ import jp.co.pm.ai.desktop.io.FactoryOperatorUserBackupStore;
 import jp.co.pm.ai.desktop.print.FactoryOperatorUserPdfExporter;
 import jp.co.pm.ai.desktop.io.FactoryOperatorUserBackupStore.FactoryOperatorUserBackupEntry;
 
-/** 工場別の配台システム操作者名と PIN（4～10 桁）の管理タブ（管理者パスワードで開く）。 */
+/** 工場別の配台システム操作者名と PIN（4～10 桁）の管理タブ（ロックNOで開く）。 */
 public final class OperatorUserManagementTabController {
 
     private static final DateTimeFormatter BACKUP_TS =
