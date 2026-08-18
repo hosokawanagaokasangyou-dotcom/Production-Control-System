@@ -2993,6 +2993,10 @@
     -fx-text-alignment: center;
 }
 
+.source-extension-error-overlay-delete {
+    -fx-font-size: 12px;
+}
+
 .table-view.pipeline-check-main-table .table-row-cell.pipeline-check-row-unconfirmed {
     -fx-background-color: rgba(255, 196, 64, 0.18);
 }

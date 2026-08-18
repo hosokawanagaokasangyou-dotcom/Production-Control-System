@@ -27,6 +27,7 @@ import javafx.scene.layout.Priority;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
+import javafx.stage.Window;
 
 import org.controlsfx.control.spreadsheet.GridBase;
 import org.controlsfx.control.spreadsheet.SpreadsheetView;
@@ -390,7 +391,22 @@ public final class AladdinProcessingPlanDataTabController {
             loadedPath = null;
             applyEmpty();
             if (ext.newestCandidatePath().isPresent()) {
-                SourceExtensionErrorOverlay.show(spreadsheetHost, ext.errorMessage());
+                Window owner = shell != null ? shell.getPrimaryStage() : null;
+                SourceExtensionErrorOverlay.show(
+                        spreadsheetHost,
+                        ext.errorMessage(),
+                        List.of(ext.newestCandidatePath().orElseThrow()),
+                        owner,
+                        deleted -> {
+                            if (shell != null) {
+                                for (Path p : deleted) {
+                                    shell.appendLog(
+                                            "[aladdin-plan-data] 不正拡張子ファイルを削除しました: " + p);
+                                }
+                                shell.refreshStage1PipelineCheckGate();
+                            }
+                            reloadFromSourceDir();
+                        });
             }
             return;
         }

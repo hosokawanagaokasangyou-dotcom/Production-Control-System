@@ -1,5 +1,6 @@
 package jp.co.pm.ai.desktop;
 
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -23,9 +24,11 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
+import javafx.stage.Window;
 
 import org.controlsfx.control.table.TableFilter;
 
+import jp.co.pm.ai.desktop.config.SourceFileExtensionPolicy;
 import jp.co.pm.ai.desktop.reconciliation.KonanDailyReportLookup;
 import jp.co.pm.ai.desktop.reconciliation.KonanDailyReportLookup.DailyReportCsvTable;
 import jp.co.pm.ai.desktop.ui.ColumnVisibilitySupport;
@@ -195,8 +198,36 @@ public final class DailyReportCsvTabController {
                                             sourceLabel.setText("");
                                             metaLabel.setText("");
                                             refreshButton.setDisable(false);
-                                            if (msg.contains("拡張子が不正")) {
-                                                SourceExtensionErrorOverlay.show(tableHost, msg);
+                                            Map<String, String> uiEnv =
+                                                    shell != null ? shell.snapshotUiEnv() : Map.of();
+                                            List<Path> mismatchPaths =
+                                                    SourceFileExtensionPolicy.blockingMismatchPaths(
+                                                            uiEnv);
+                                            boolean extensionProblem =
+                                                    !mismatchPaths.isEmpty()
+                                                            || msg.contains("拡張子が不正")
+                                                            || msg.contains("ファイル名が不正");
+                                            if (extensionProblem) {
+                                                Window owner =
+                                                        shell != null
+                                                                ? shell.getPrimaryStage()
+                                                                : null;
+                                                SourceExtensionErrorOverlay.show(
+                                                        tableHost,
+                                                        msg,
+                                                        mismatchPaths,
+                                                        owner,
+                                                        deleted -> {
+                                                            if (shell != null) {
+                                                                for (Path p : deleted) {
+                                                                    shell.appendLog(
+                                                                            "[daily-report-csv] 不正拡張子ファイルを削除しました: "
+                                                                                    + p);
+                                                                }
+                                                                shell.refreshStage1PipelineCheckGate();
+                                                            }
+                                                            reloadAsync();
+                                                        });
                                             } else {
                                                 SourceExtensionErrorOverlay.clear(tableHost);
                                             }

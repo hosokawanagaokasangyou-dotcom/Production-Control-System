@@ -1277,10 +1277,13 @@ public final class RequestFormPipelineCheckTabController {
     }
 
     private void applySourceExtensionOverlayFromWarnings(List<String> warnings) {
-        List<String> extErrs = new ArrayList<>();
-        if (warnings != null) {
+        Map<String, String> ui = shell != null ? shell.snapshotUiEnv() : Map.of();
+        List<String> extErrs =
+                new ArrayList<>(SourceFileExtensionPolicy.blockingMismatchMessages(ui));
+        if (extErrs.isEmpty() && warnings != null) {
             for (String w : warnings) {
-                if (w != null && w.contains("拡張子が不正")) {
+                if (w != null
+                        && (w.contains("拡張子が不正") || w.contains("ファイル名が不正"))) {
                     extErrs.add(w);
                 }
             }
@@ -1292,7 +1295,27 @@ public final class RequestFormPipelineCheckTabController {
         allRows.clear();
         applyFilter();
         updateStatusLabel();
-        SourceExtensionErrorOverlay.show(mainTableHost, String.join("\n", extErrs));
+        showSourceExtensionOverlay(extErrs, ui);
+    }
+
+    private void showSourceExtensionOverlay(List<String> extErrs, Map<String, String> ui) {
+        List<Path> mismatchPaths = SourceFileExtensionPolicy.blockingMismatchPaths(ui);
+        Window owner = shell != null ? shell.getPrimaryStage() : null;
+        SourceExtensionErrorOverlay.show(
+                mainTableHost,
+                String.join("\n", extErrs),
+                mismatchPaths,
+                owner,
+                deleted -> {
+                    if (shell != null) {
+                        for (Path p : deleted) {
+                            shell.appendLog(
+                                    "[pipeline-check] 不正拡張子ファイルを削除しました: " + p);
+                        }
+                        shell.refreshStage1PipelineCheckGate();
+                    }
+                    updateStage1GateLabel();
+                });
     }
 
     /**
@@ -1699,6 +1722,7 @@ public final class RequestFormPipelineCheckTabController {
     private void updateStage1GateLabel() {
         if (stage1GateLabel != null) {
             if (!isRequestFormOriginalDirEnvConfigured()) {
+                SourceExtensionErrorOverlay.clear(mainTableHost);
                 stage1GateLabel.setText(
                         "段階1: 依頼書原本フォルダ未設定 — 環境変数タブで設定してください。");
                 stage1GateLabel.getStyleClass().setAll("pipeline-check-stage1-gate-label", "warn");
@@ -1712,11 +1736,14 @@ public final class RequestFormPipelineCheckTabController {
                     stage1GateLabel.setText(
                             "段階1: ソース拡張子不正 — " + String.join(" / ", extErrs));
                     stage1GateLabel.getStyleClass().setAll("pipeline-check-stage1-gate-label", "warn");
+                    showSourceExtensionOverlay(extErrs, shell.snapshotUiEnv());
                 } else if (!scanApplied) {
+                    SourceExtensionErrorOverlay.clear(mainTableHost);
                     stage1GateLabel.setText(
                             "段階1: 未走査 — 「更新」で照合してから実行してください。");
                     stage1GateLabel.getStyleClass().setAll("pipeline-check-stage1-gate-label", "warn");
                 } else {
+                    SourceExtensionErrorOverlay.clear(mainTableHost);
                     applyStage1GateLabelFromConfirmationCounts();
                 }
             }

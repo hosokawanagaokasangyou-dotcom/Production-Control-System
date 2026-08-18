@@ -170,17 +170,47 @@ public final class SourceFileExtensionPolicy {
     public static List<String> blockingMismatchMessages(Map<String, String> ui) {
         Map<String, String> u = ui != null ? ui : Map.of();
         List<String> messages = new ArrayList<>();
-        appendMismatchIfPresent(messages, checkProcessingPlanForUi(u));
-        appendMismatchIfPresent(messages, checkDailyReportForUi(u));
-        return List.copyOf(messages);
-    }
-
-    private static void appendMismatchIfPresent(List<String> messages, Result result) {
-        if (result != null && !result.ok() && result.newestCandidatePath().isPresent()) {
+        for (Result result : blockingMismatchResults(u)) {
             String msg = result.errorMessage();
             if (msg != null && !msg.isBlank()) {
                 messages.add(msg);
             }
+        }
+        return List.copyOf(messages);
+    }
+
+    /**
+     * ゲート対象の拡張子／ファイル名不一致結果（最新候補パス付き）。空フォルダは含めない。
+     */
+    public static List<Result> blockingMismatchResults(Map<String, String> ui) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        List<Result> out = new ArrayList<>();
+        appendMismatchResultIfPresent(out, checkProcessingPlanForUi(u));
+        appendMismatchResultIfPresent(out, checkDailyReportForUi(u));
+        return List.copyOf(out);
+    }
+
+    /**
+     * ゲート対象の不正ファイルパス（削除候補）。重複は除く。
+     */
+    public static List<Path> blockingMismatchPaths(Map<String, String> ui) {
+        List<Path> paths = new ArrayList<>();
+        for (Result result : blockingMismatchResults(ui)) {
+            result.newestCandidatePath()
+                    .ifPresent(
+                            p -> {
+                                Path abs = p.toAbsolutePath().normalize();
+                                if (!paths.contains(abs)) {
+                                    paths.add(abs);
+                                }
+                            });
+        }
+        return List.copyOf(paths);
+    }
+
+    private static void appendMismatchResultIfPresent(List<Result> out, Result result) {
+        if (result != null && !result.ok() && result.newestCandidatePath().isPresent()) {
+            out.add(result);
         }
     }
 

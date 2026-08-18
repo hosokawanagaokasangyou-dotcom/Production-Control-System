@@ -156,6 +156,30 @@ class SourceFileExtensionPolicyTest {
     }
 
     @Test
+    void blockingMismatchPaths_returnsNewestBadPlan() throws Exception {
+        Path planDir = temp.resolve("plan");
+        Path dailyDir = temp.resolve("daily");
+        Files.createDirectories(planDir);
+        Files.createDirectories(dailyDir);
+        Files.writeString(planDir.resolve("old.xlsx"), "x");
+        Path newerCsv = planDir.resolve("new.csv");
+        Files.writeString(newerCsv, "c");
+        bumpNewer(newerCsv, planDir.resolve("old.xlsx"));
+        Files.writeString(dailyDir.resolve("加工日報発行問合せ_1.csv"), "d");
+
+        List<Path> paths =
+                SourceFileExtensionPolicy.blockingMismatchPaths(
+                        Map.of(
+                                AppPaths.KEY_PM_AI_TASK_INPUT_SOURCE_DIR,
+                                planDir.toString(),
+                                AppPaths.KEY_PM_AI_DAILY_REPORT_SOURCE_DIR,
+                                dailyDir.toString()));
+
+        assertEquals(1, paths.size());
+        assertEquals(newerCsv.toAbsolutePath().normalize(), paths.getFirst());
+    }
+
+    @Test
     void dailyReport_fileRequiresFilenamePrefix() throws Exception {
         Path badName = temp.resolve("任意名.csv");
         Files.writeString(badName, "x");

@@ -47,6 +47,7 @@ import javafx.scene.layout.Priority;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
+import javafx.stage.Window;
 
 import org.controlsfx.control.spreadsheet.GridBase;
 import org.controlsfx.control.spreadsheet.SpreadsheetView;
@@ -604,7 +605,26 @@ public final class DeliveryCalendarViewTabController {
         } else {
             blockedBySourceExtension = true;
             sourceExtensionBlockMessage = String.join("\n", extErrs);
-            SourceExtensionErrorOverlay.show(deliveryCalendarBodyHost, sourceExtensionBlockMessage);
+            List<Path> mismatchPaths = SourceFileExtensionPolicy.blockingMismatchPaths(ui);
+            Window owner = shell != null ? shell.getPrimaryStage() : null;
+            SourceExtensionErrorOverlay.show(
+                    deliveryCalendarBodyHost,
+                    sourceExtensionBlockMessage,
+                    mismatchPaths,
+                    owner,
+                    deleted -> {
+                        if (shell != null) {
+                            for (Path p : deleted) {
+                                shell.appendLog(
+                                        "[delivery-calendar] 不正拡張子ファイルを削除しました: " + p);
+                            }
+                            shell.refreshStage1PipelineCheckGate();
+                        }
+                        refreshSourceExtensionGate();
+                        if (!blockedBySourceExtension) {
+                            runDeliveryCalendarDataReload(true, false, false);
+                        }
+                    });
             if (statusLabel != null) {
                 statusLabel.setText("ソース拡張子不正");
             }
