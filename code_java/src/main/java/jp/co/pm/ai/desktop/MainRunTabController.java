@@ -8,6 +8,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import javafx.animation.KeyFrame;
@@ -1039,6 +1040,38 @@ public final class MainRunTabController {
             appendLog("[master-workbook] opened: " + p.toAbsolutePath().normalize());
         } catch (Exception e) {
             appendLog("[master-workbook] open failed: " + e.getMessage());
+        }
+    }
+
+    @FXML
+    private void onOpenMachineDeliveryManagementXlsmAction() {
+        if (shell == null) {
+            return;
+        }
+        Optional<Path> resolved =
+                AppPaths.resolveMachineDeliveryManagementXlsm(shell.snapshotUiEnv());
+        if (resolved.isEmpty()) {
+            appendLog(
+                    "[machine-delivery-xlsm] path not set (set "
+                            + AppPaths.KEY_PM_AI_MACHINE_DELIVERY_MANAGEMENT_XLSM
+                            + " in env tab; Konan has a factory default)");
+            return;
+        }
+        Path p = resolved.get();
+        if (!Files.isRegularFile(p)) {
+            appendLog(
+                    "[machine-delivery-xlsm] file not found: "
+                            + p
+                            + " (set "
+                            + AppPaths.KEY_PM_AI_MACHINE_DELIVERY_MANAGEMENT_XLSM
+                            + ")");
+            return;
+        }
+        try {
+            DesktopFileOpener.openFileReadOnly(p);
+            appendLog("[machine-delivery-xlsm] opened read-only: " + p.toAbsolutePath().normalize());
+        } catch (Exception e) {
+            appendLog("[machine-delivery-xlsm] open failed: " + e.getMessage());
         }
     }
 

@@ -36,6 +36,7 @@ public final class DesktopUiEnvBootstrap {
                     AppPaths.KEY_PM_AI_ALADDIN_MASTER_DIR,
                     AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR,
                     AppPaths.KEY_PM_AI_REQUEST_FORM_JUCHU_FILE,
+                    AppPaths.KEY_PM_AI_MACHINE_DELIVERY_MANAGEMENT_XLSM,
                     AppPaths.KEY_PM_AI_REQUEST_FORM_TPI_PDF_DIR,
                     AppPaths.KEY_PM_AI_RESULT_DISPATCH_TABLE_DIR,
                     AppPaths.KEY_PM_AI_PLAN_RESULT_TASK_JSON,
@@ -97,6 +98,10 @@ public final class DesktopUiEnvBootstrap {
             }
             case AppPaths.KEY_PM_AI_REQUEST_FORM_JUCHU_FILE -> {
                 return AppPaths.defaultRequestFormJuchuFileForFactory(GlobalInitSettingTarget.load());
+            }
+            case AppPaths.KEY_PM_AI_MACHINE_DELIVERY_MANAGEMENT_XLSM -> {
+                return AppPaths.defaultMachineDeliveryManagementXlsmForFactory(
+                        GlobalInitSettingTarget.load());
             }
             case AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR -> {
                 return "";

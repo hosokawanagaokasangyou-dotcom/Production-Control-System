@@ -304,6 +304,7 @@ public final class MainShellController
                     AppPaths.KEY_PM_AI_ALADDIN_MASTER_DIR,
                     AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR,
                     AppPaths.KEY_PM_AI_REQUEST_FORM_JUCHU_FILE,
+                    AppPaths.KEY_PM_AI_MACHINE_DELIVERY_MANAGEMENT_XLSM,
                     AppPaths.KEY_PM_AI_REQUEST_FORM_TPI_PDF_DIR,
                     AppPaths.KEY_PM_AI_RESULT_DISPATCH_TABLE_DIR,
                     AppPaths.KEY_PM_AI_PLAN_RESULT_TASK_JSON,
@@ -8089,6 +8090,8 @@ public final class MainShellController
                 r.setValue(site.aladdinMasterDir());
             } else if (AppPaths.KEY_PM_AI_REQUEST_FORM_JUCHU_FILE.equals(name)) {
                 r.setValue(site.requestFormJuchuFile());
+            } else if (AppPaths.KEY_PM_AI_MACHINE_DELIVERY_MANAGEMENT_XLSM.equals(name)) {
+                r.setValue(site.machineDeliveryManagementXlsm());
             } else if (AppPaths.KEY_PM_AI_REQUEST_FORM_TPI_PDF_DIR.equals(name)) {
                 r.setValue(site.requestFormTpiPdfDir());
             } else if (AppPaths.KEY_PM_AI_RDP_PORTABLE_BUNDLE_SOURCE_DIR.equals(name)) {
@@ -11452,6 +11455,10 @@ public PlanInputTabController planInputTabControllerForDispatchRollUnit() {
             }
             case AppPaths.KEY_PM_AI_REQUEST_FORM_JUCHU_FILE -> {
                 return AppPaths.defaultRequestFormJuchuFileForFactory(GlobalInitSettingTarget.load());
+            }
+            case AppPaths.KEY_PM_AI_MACHINE_DELIVERY_MANAGEMENT_XLSM -> {
+                return AppPaths.defaultMachineDeliveryManagementXlsmForFactory(
+                        GlobalInitSettingTarget.load());
             }
             case AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR -> {
                 return "";

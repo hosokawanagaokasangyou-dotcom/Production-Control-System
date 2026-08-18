@@ -66,6 +66,12 @@
                 <HBox alignment="CENTER_LEFT" spacing="8.0" styleClass="pm-run-book-open-inline">
                     <Label fx:id="masterWorkbookOpenHintLabel" text="master.xlsm" />
                     <Button mnemonicParsing="false" onAction="#onOpenMasterWorkbookAction" text="エクセルを開く" />
+                    <Button mnemonicParsing="false" onAction="#onOpenMachineDeliveryManagementXlsmAction"
+                            text="マシン別納期管理表を開く">
+                        <tooltip>
+                            <Tooltip text="アラジン入力済み加工計画を Power Query で表示する「新 マシン別納期管理表.xlsm」を読み取り専用で開きます。パスは環境変数 PM_AI_MACHINE_DELIVERY_MANAGEMENT_XLSM。" />
+                        </tooltip>
+                    </Button>
                 </HBox>
             </HBox>
             <HBox alignment="CENTER_LEFT" spacing="8.0" styleClass="pm-run-log-toolbar">

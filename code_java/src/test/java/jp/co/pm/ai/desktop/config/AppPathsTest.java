@@ -83,6 +83,15 @@ class AppPathsTest {
     }
 
     @Test
+    void machineDeliveryManagementXlsm_usesFilePickerNotFolder() {
+        assertTrue(AppPaths.isFilePathEnvKey(AppPaths.KEY_PM_AI_MACHINE_DELIVERY_MANAGEMENT_XLSM));
+        assertTrue(
+                AppPaths.isExcelWorkbookPathEnvKey(
+                        AppPaths.KEY_PM_AI_MACHINE_DELIVERY_MANAGEMENT_XLSM));
+        assertFalse(AppPaths.isFolderPathEnvKey(AppPaths.KEY_PM_AI_MACHINE_DELIVERY_MANAGEMENT_XLSM));
+    }
+
+    @Test
     void requestFormOriginalDir_usesFolderPickerNotFile() {
         assertTrue(AppPaths.isFolderPathEnvKey(AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR));
         assertFalse(AppPaths.isFilePathEnvKey(AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR));
@@ -246,6 +255,37 @@ class AppPathsTest {
         assertEquals(
                 AppPaths.DEFAULT_PM_AI_REQUEST_FORM_JUCHU_FILE_KOKUBU,
                 AppPaths.resolveRequestFormJuchuFile(Map.of()).get().toString());
+    }
+
+    @Test
+    void resolveMachineDeliveryManagementXlsm_usesEnvOverrideOrKonanDefault(@TempDir Path tmp)
+            throws Exception {
+        String priorUserHome = System.getProperty("user.home");
+        String priorAppHome = AppPaths.desktopAppHomeDirName();
+        try {
+            System.setProperty("user.home", tmp.toString());
+            AppPaths.setDesktopAppHomeDirName(".pm-ai-desktop-test");
+            Path book = tmp.resolve("新 マシン別納期管理表.xlsm");
+            Files.createFile(book);
+            Map<String, String> ui =
+                    Map.of(
+                            AppPaths.KEY_PM_AI_MACHINE_DELIVERY_MANAGEMENT_XLSM,
+                            book.toString());
+            assertEquals(
+                    book.toAbsolutePath().normalize(),
+                    AppPaths.resolveMachineDeliveryManagementXlsm(ui).get());
+
+            GlobalInitSettingTarget.save(FactorySite.KONAN);
+            assertEquals(
+                    AppPaths.DEFAULT_PM_AI_MACHINE_DELIVERY_MANAGEMENT_XLSM_KONAN,
+                    AppPaths.resolveMachineDeliveryManagementXlsm(Map.of()).get().toString());
+
+            GlobalInitSettingTarget.save(FactorySite.KOKUBU);
+            assertTrue(AppPaths.resolveMachineDeliveryManagementXlsm(Map.of()).isEmpty());
+        } finally {
+            AppPaths.setDesktopAppHomeDirName(priorAppHome);
+            System.setProperty("user.home", priorUserHome);
+        }
     }
 
     @Test
@@ -1433,5 +1473,20 @@ class AppPathsTest {
         assertFalse(map.get(AppPaths.KEY_PM_AI_REQUEST_FORM_JUCHU_FILE).contains("国分"));
         assertTrue(map.get(AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR).contains("湖南"));
         assertFalse(map.get(AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR).contains("国分"));
+    }
+
+    @Test
+    void overlayFactorySiteRequestFormPaths_setsKonanMachineDeliveryAndClearsOnKokubu() {
+        LinkedHashMap<String, String> map = new LinkedHashMap<>();
+        map.put(AppPaths.KEY_PM_AI_FACTORY_SITE, "KONAN");
+        map.put(AppPaths.KEY_PM_AI_MACHINE_DELIVERY_MANAGEMENT_XLSM, "");
+
+        AppPaths.overlayFactorySiteRequestFormPaths(map, FactorySite.KONAN);
+        assertEquals(
+                AppPaths.DEFAULT_PM_AI_MACHINE_DELIVERY_MANAGEMENT_XLSM_KONAN,
+                map.get(AppPaths.KEY_PM_AI_MACHINE_DELIVERY_MANAGEMENT_XLSM));
+
+        AppPaths.overlayFactorySiteRequestFormPaths(map, FactorySite.KOKUBU);
+        assertEquals("", map.get(AppPaths.KEY_PM_AI_MACHINE_DELIVERY_MANAGEMENT_XLSM));
     }
 }

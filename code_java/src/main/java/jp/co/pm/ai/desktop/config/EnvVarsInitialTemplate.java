@@ -134,6 +134,10 @@ public final class EnvVarsInitialTemplate {
         nz(site.pmAiSummaryAiDispatchWorkbookEnvValue(ctx)));
     putIfManaged(map, AppPaths.KEY_PM_AI_ALADDIN_MASTER_DIR, site.aladdinMasterDir());
     putIfManaged(map, AppPaths.KEY_PM_AI_REQUEST_FORM_JUCHU_FILE, site.requestFormJuchuFile());
+    putIfManaged(
+        map,
+        AppPaths.KEY_PM_AI_MACHINE_DELIVERY_MANAGEMENT_XLSM,
+        site.machineDeliveryManagementXlsm());
     putIfManaged(map, AppPaths.KEY_PM_AI_REQUEST_FORM_TPI_PDF_DIR, site.requestFormTpiPdfDir());
     putIfManaged(
         map, AppPaths.KEY_PM_AI_RDP_PORTABLE_BUNDLE_SOURCE_DIR, site.rdpPortableBundleSourceDir());

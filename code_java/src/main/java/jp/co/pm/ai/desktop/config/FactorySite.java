@@ -195,6 +195,11 @@ public enum FactorySite {
         return AppPaths.defaultRequestFormJuchuFileForFactory(this);
     }
 
+    /** {@link AppPaths#KEY_PM_AI_MACHINE_DELIVERY_MANAGEMENT_XLSM} 環境タブへ書く既定（湖南のみ UNC）。 */
+    public String machineDeliveryManagementXlsm() {
+        return AppPaths.defaultMachineDeliveryManagementXlsmForFactory(this);
+    }
+
     /** {@link AppPaths#KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR} 環境タブへ書く既定（UNC）。 */
     public String requestFormOriginalDir() {
         return AppPaths.defaultRequestFormOriginalDirForFactory(this);

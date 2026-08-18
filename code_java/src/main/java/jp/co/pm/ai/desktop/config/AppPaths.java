@@ -115,6 +115,13 @@ public final class AppPaths {
     public static final String KEY_PM_AI_REQUEST_FORM_JUCHU_FILE = "PM_AI_REQUEST_FORM_JUCHU_FILE";
 
     /**
+     * アラジン入力済み加工計画を Power Query で表示する「新 マシン別納期管理表.xlsm」のフルパス。
+     * 実行・ログタブから読み取り専用で開く。
+     */
+    public static final String KEY_PM_AI_MACHINE_DELIVERY_MANAGEMENT_XLSM =
+            "PM_AI_MACHINE_DELIVERY_MANAGEMENT_XLSM";
+
+    /**
      * 依頼書入力がスキャンする依頼書原本フォルダ（{@code *加工依頼書*.xlsm} 等を含むディレクトリ）。
      */
     public static final String KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR = "PM_AI_REQUEST_FORM_ORIGINAL_DIR";
@@ -697,6 +704,7 @@ public final class AppPaths {
         s.add(KEY_PM_AI_PROCESSING_PLAN_PATH);
         s.add(KEY_PM_AI_ACTUAL_DETAIL_WORKBOOK);
         s.add(KEY_PM_AI_REQUEST_FORM_JUCHU_FILE);
+        s.add(KEY_PM_AI_MACHINE_DELIVERY_MANAGEMENT_XLSM);
         s.add(KEY_PM_AI_REQUEST_FORM_RDP_PROFILE);
         s.add(KEY_PM_AI_TESSERACT_CMD);
         s.add(KEY_PM_AI_PLAN_RESULT_TASK_JSON_PATH);
@@ -763,7 +771,8 @@ public final class AppPaths {
                 || KEY_PM_AI_COLUMN_CONFIG_WORKBOOK.equals(k)
                 || KEY_PM_AI_DATA_EXTRACTION_SOURCE_WORKBOOK.equals(k)
                 || KEY_PM_AI_ACTUAL_DETAIL_WORKBOOK.equals(k)
-                || KEY_PM_AI_REQUEST_FORM_JUCHU_FILE.equals(k);
+                || KEY_PM_AI_REQUEST_FORM_JUCHU_FILE.equals(k)
+                || KEY_PM_AI_MACHINE_DELIVERY_MANAGEMENT_XLSM.equals(k);
     }
 
     /** {@link #KEY_PM_AI_PLAN_INPUT_PATH} (CSV / Parquet / Excel plan input). */
@@ -1109,6 +1118,33 @@ public final class AppPaths {
             return DEFAULT_PM_AI_REQUEST_FORM_JUCHU_FILE_KOKUBU;
         }
         return DEFAULT_PM_AI_REQUEST_FORM_JUCHU_FILE_KONAN;
+    }
+
+    /**
+     * マシン別納期管理表 xlsm。{@link #KEY_PM_AI_MACHINE_DELIVERY_MANAGEMENT_XLSM} が空のときは
+     * 工場既定（湖南のみ UNC。国分は empty）。
+     */
+    public static Optional<Path> resolveMachineDeliveryManagementXlsm(Map<String, String> ui) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        String override = trim(u.get(KEY_PM_AI_MACHINE_DELIVERY_MANAGEMENT_XLSM));
+        if (!override.isEmpty()) {
+            return Optional.of(Path.of(override).toAbsolutePath().normalize());
+        }
+        String factoryDefault =
+                defaultMachineDeliveryManagementXlsmForFactory(
+                        GlobalInitSettingTarget.loadEffective(u));
+        if (factoryDefault.isEmpty()) {
+            return Optional.empty();
+        }
+        return Optional.of(Path.of(factoryDefault));
+    }
+
+    /** {@link FactorySite} 別の {@link #KEY_PM_AI_MACHINE_DELIVERY_MANAGEMENT_XLSM} 既定。国分は空。 */
+    public static String defaultMachineDeliveryManagementXlsmForFactory(FactorySite site) {
+        if (site == FactorySite.KONAN) {
+            return DEFAULT_PM_AI_MACHINE_DELIVERY_MANAGEMENT_XLSM_KONAN;
+        }
+        return "";
     }
 
     /**
@@ -2083,6 +2119,17 @@ public final class AppPaths {
                     + "管理システム\\"
                     + DEFAULT_REQUEST_FORM_JUCHU_FILE_NAME;
 
+    /** {@link FactorySite#KONAN} の {@link #KEY_PM_AI_MACHINE_DELIVERY_MANAGEMENT_XLSM} 既定（UNC）。 */
+    public static final String DEFAULT_PM_AI_MACHINE_DELIVERY_MANAGEMENT_XLSM_KONAN =
+            "\\\\192.168.0.101\\"
+                    + "共有フォルダ\\"
+                    + "湖南工場\\"
+                    + "湖南共有\\"
+                    + "生産管理システム\\"
+                    + "アラジンオフィスシステムデータ\\"
+                    + "納期管理\\"
+                    + "新 マシン別納期管理表.xlsm";
+
     /** {@link FactorySite#KOKUBU} の {@link #KEY_PM_AI_REQUEST_FORM_JUCHU_FILE} 既定（UNC）。 */
     public static final String DEFAULT_PM_AI_REQUEST_FORM_JUCHU_FILE_KOKUBU =
             "\\\\192.168.0.101\\"
@@ -2860,6 +2907,18 @@ public final class AppPaths {
             putFactoryManagedEnv(map, KEY_PM_AI_REQUEST_FORM_TPI_PDF_DIR, "");
         } else if (tpiPdf.isEmpty() || factoryPathHintConflictsWithSite(tpiPdf, site)) {
             putFactoryManagedEnv(map, KEY_PM_AI_REQUEST_FORM_TPI_PDF_DIR, tpiDefault);
+        }
+        String machineDelivery = trim(map.get(KEY_PM_AI_MACHINE_DELIVERY_MANAGEMENT_XLSM));
+        String machineDeliveryDefault = defaultMachineDeliveryManagementXlsmForFactory(site);
+        if (machineDeliveryDefault.isEmpty()) {
+            if (machineDelivery.isEmpty()
+                    || factoryPathHintConflictsWithSite(machineDelivery, site)) {
+                putFactoryManagedEnv(map, KEY_PM_AI_MACHINE_DELIVERY_MANAGEMENT_XLSM, "");
+            }
+        } else if (machineDelivery.isEmpty()
+                || factoryPathHintConflictsWithSite(machineDelivery, site)) {
+            putFactoryManagedEnv(
+                    map, KEY_PM_AI_MACHINE_DELIVERY_MANAGEMENT_XLSM, machineDeliveryDefault);
         }
     }
 
