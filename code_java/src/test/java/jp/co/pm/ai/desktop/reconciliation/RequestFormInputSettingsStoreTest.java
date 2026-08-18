@@ -1,8 +1,10 @@
 package jp.co.pm.ai.desktop.reconciliation;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -183,5 +185,85 @@ class RequestFormInputSettingsStoreTest {
         } finally {
             GlobalInitSettingTarget.save(prior);
         }
+    }
+
+    @Test
+    void readTextForEditor_prettyPrintsValidObject() throws Exception {
+        Path summaryXlsx = tempDir.resolve(AppPaths.SUMMARY_AI_DISPATCH_XLSX);
+        Files.createFile(summaryXlsx);
+        Map<String, String> ui =
+                Map.of(AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK, summaryXlsx.toString());
+        Path storePath = RequestFormInputSettingsStore.resolveStorePath(ui);
+        Files.writeString(storePath, "{\"inputKbn\":[\"通常入力\"]}");
+
+        String text = RequestFormInputSettingsStore.readTextForEditor(ui);
+        assertTrue(text.contains("\"inputKbn\""));
+        assertTrue(text.contains("通常入力"));
+        assertTrue(text.contains("\n"));
+    }
+
+    @Test
+    void readTextForEditor_returnsRawWhenJsonIsBroken() throws Exception {
+        Path summaryXlsx = tempDir.resolve(AppPaths.SUMMARY_AI_DISPATCH_XLSX);
+        Files.createFile(summaryXlsx);
+        Map<String, String> ui =
+                Map.of(AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK, summaryXlsx.toString());
+        Path storePath = RequestFormInputSettingsStore.resolveStorePath(ui);
+        String broken = "{ \"inputKbn\": [";
+        Files.writeString(storePath, broken);
+
+        assertEquals(broken, RequestFormInputSettingsStore.readTextForEditor(ui));
+    }
+
+    @Test
+    void savePrettyJson_roundTripPreservesChoicesAndPaths() throws Exception {
+        Path summaryXlsx = tempDir.resolve(AppPaths.SUMMARY_AI_DISPATCH_XLSX);
+        Files.createFile(summaryXlsx);
+        Map<String, String> ui =
+                Map.of(AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK, summaryXlsx.toString());
+
+        RequestFormInputSettingsStore.Settings saved =
+                RequestFormInputSettingsStore.savePrettyJson(
+                        ui,
+                        """
+                        {
+                          "inputKbn": ["通常入力", "例外入力"],
+                          "fieldDefaults": { "inputKbn": "通常入力" },
+                          "targetFolder": "C:\\\\orig",
+                          "juchuFilePath": "C:\\\\juchu.xlsm"
+                        }
+                        """);
+        assertEquals(
+                List.of("通常入力", "例外入力"),
+                saved.comboChoices().optionsFor(RequestFormComboChoices.KEY_INPUT_KBN));
+        assertEquals("C:\\orig", saved.paths().targetFolder());
+        assertEquals("C:\\juchu.xlsm", saved.paths().juchuFilePath());
+
+        RequestFormInputSettingsStore.Settings loaded =
+                RequestFormInputSettingsStore.load(ui).orElseThrow();
+        assertEquals("C:\\orig", loaded.paths().targetFolder());
+        assertEquals(
+                "通常入力",
+                loaded.comboChoices().effectiveDefaultFor(RequestFormComboChoices.KEY_INPUT_KBN));
+    }
+
+    @Test
+    void savePrettyJson_rejectsInvalidSyntaxAndArrayRoot() throws Exception {
+        Path summaryXlsx = tempDir.resolve(AppPaths.SUMMARY_AI_DISPATCH_XLSX);
+        Files.createFile(summaryXlsx);
+        Map<String, String> ui =
+                Map.of(AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK, summaryXlsx.toString());
+
+        IOException syntax =
+                assertThrows(
+                        IOException.class,
+                        () -> RequestFormInputSettingsStore.savePrettyJson(ui, "{ not json"));
+        assertTrue(syntax.getMessage().contains("構文"));
+
+        IOException arrayRoot =
+                assertThrows(
+                        IOException.class,
+                        () -> RequestFormInputSettingsStore.savePrettyJson(ui, "[1,2]"));
+        assertTrue(arrayRoot.getMessage().contains("オブジェクト"));
     }
 }

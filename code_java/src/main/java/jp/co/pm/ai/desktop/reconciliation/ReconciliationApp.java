@@ -2,6 +2,7 @@ package jp.co.pm.ai.desktop.reconciliation;
 
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
+import javafx.event.ActionEvent;
 import javafx.scene.image.ImageView;
 import javafx.scene.transform.Scale;
 import javafx.scene.transform.Translate;
@@ -28,6 +29,7 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -1151,7 +1153,26 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         registerGuestMutableControl(btnResetComboToFactory);
         btnResetComboToFactory.setOnAction(evt -> confirmAndResetComboChoicesToFactoryShipment());
 
-        HBox resetRow = new HBox(8, btnResetComboToFactory);
+        Button btnReloadInputSettingsJson = new Button("JSONを再読込");
+        btnReloadInputSettingsJson.getStyleClass().add("btn-reload");
+        btnReloadInputSettingsJson.setTooltip(
+                new Tooltip(
+                        "サマリ Excel と同じフォルダの "
+                                + AppPaths.REQUEST_FORM_INPUT_SETTINGS_JSON_FILENAME
+                                + " を読み直し、候補リストを更新します。カード上の未保存編集は破棄されます。"));
+        btnReloadInputSettingsJson.setOnAction(evt -> reloadInputSettingsJsonFromDisk());
+
+        Button btnEditInputSettingsJson = new Button("JSONを直接編集");
+        btnEditInputSettingsJson.getStyleClass().add("btn-reload");
+        btnEditInputSettingsJson.setTooltip(
+                new Tooltip(
+                        AppPaths.REQUEST_FORM_INPUT_SETTINGS_JSON_FILENAME
+                                + " の内容をテキストで編集して保存します。"));
+        registerGuestMutableControl(btnEditInputSettingsJson);
+        btnEditInputSettingsJson.setOnAction(evt -> openInputSettingsJsonEditor());
+
+        HBox resetRow =
+                new HBox(8, btnResetComboToFactory, btnReloadInputSettingsJson, btnEditInputSettingsJson);
         resetRow.setAlignment(Pos.CENTER_LEFT);
 
         root.getChildren().addAll(title, settingsComboSubtitleLabel, resetRow);
@@ -1844,6 +1865,99 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         saveSettings();
     }
 
+    /** サマリ Excel 同フォルダの正本 JSON を読み直し、候補リストへ反映する。 */
+    private void reloadInputSettingsJsonFromDisk() {
+        RequestFormInputSettingsStore.Settings settings =
+                RequestFormInputSettingsStore.load(uiEnvSnapshot).orElse(null);
+        if (settings != null) {
+            applyLoadedInputSettings(settings);
+        }
+        RequestFormComboChoices combo =
+                RequestFormInputSettingsStore.loadComboChoices(
+                        uiEnvSnapshot, GlobalInitSettingTarget.load());
+        if (combo != null && !combo.isEmpty()) {
+            applyComboChoices(combo);
+        }
+        refreshSettingsComboSubtitle();
+        if (statusLabel != null) {
+            statusLabel.setText(
+                    "設定 JSON を再読込しました: "
+                            + RequestFormInputSettingsStore.resolveStorePath(uiEnvSnapshot));
+        }
+    }
+
+    /** 正本 JSON を TextArea で直接編集し、構文検証後に保存する。 */
+    private void openInputSettingsJsonEditor() {
+        if (rejectGuestMutation("JSONの直接編集")) {
+            return;
+        }
+        Path storePath = RequestFormInputSettingsStore.resolveStorePath(uiEnvSnapshot);
+        String initial;
+        try {
+            initial = RequestFormInputSettingsStore.readTextForEditor(uiEnvSnapshot);
+        } catch (IOException ex) {
+            showAlert("読込エラー", "設定 JSON を読めませんでした。\n" + ex.getMessage());
+            return;
+        }
+
+        Dialog<ButtonType> dialog = new Dialog<>();
+        dialog.setTitle(AppPaths.REQUEST_FORM_INPUT_SETTINGS_JSON_FILENAME + " を編集");
+        dialog.setHeaderText("保存先: " + storePath);
+        if (hostWindow != null) {
+            dialog.initOwner(hostWindow);
+        }
+        ButtonType saveType = new ButtonType("保存", ButtonBar.ButtonData.OK_DONE);
+        dialog.getDialogPane().getButtonTypes().addAll(saveType, ButtonType.CANCEL);
+
+        Label hint =
+                new Label(
+                        "ルートは JSON オブジェクトである必要があります。構文が不正なときは保存できません。"
+                                + " 保存後、この設定タブの候補リストへ反映します。");
+        hint.setWrapText(true);
+        hint.setMaxWidth(760);
+
+        TextArea area = new TextArea(initial);
+        area.setStyle("-fx-font-family: monospace; -fx-font-size: 12px;");
+        area.setPrefSize(760, 480);
+        area.setWrapText(false);
+        VBox.setVgrow(area, Priority.ALWAYS);
+
+        VBox body = new VBox(8, hint, area);
+        body.setPadding(new Insets(8, 0, 0, 0));
+        dialog.getDialogPane().setContent(body);
+        dialog.getDialogPane().setPrefSize(820, 600);
+        dialog.setResizable(true);
+
+        Node saveButton = dialog.getDialogPane().lookupButton(saveType);
+        saveButton.addEventFilter(
+                ActionEvent.ACTION,
+                evt -> {
+                    try {
+                        RequestFormInputSettingsStore.Settings saved =
+                                RequestFormInputSettingsStore.savePrettyJson(
+                                        uiEnvSnapshot, area.getText());
+                        applyLoadedInputSettingsPaths(saved);
+                        RequestFormComboChoices combo =
+                                saved.comboChoices() != null && !saved.comboChoices().isEmpty()
+                                        ? saved.comboChoices().mergedWithDefaults()
+                                        : RequestFormInputSettingsStore.loadComboChoices(
+                                                uiEnvSnapshot, GlobalInitSettingTarget.load());
+                        if (combo != null && !combo.isEmpty()) {
+                            applyComboChoices(combo);
+                        }
+                        refreshSettingsComboSubtitle();
+                        if (statusLabel != null) {
+                            statusLabel.setText("設定 JSON を保存しました: " + storePath);
+                        }
+                    } catch (IOException ex) {
+                        evt.consume();
+                        showAlert("保存エラー", ex.getMessage());
+                    }
+                });
+
+        dialog.showAndWait();
+    }
+
     private void confirmAndResetComboChoicesToFactoryShipment() {
         Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
         confirm.setTitle("確認");
@@ -2427,7 +2541,9 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                         + storePath
                         + "。"
                         + " 工場出荷の既定値はアプリ同梱です。"
-                        + "「工場出荷状態に戻す」で正本 JSON へ書き戻します。");
+                        + "「工場出荷状態に戻す」で正本 JSON へ書き戻します。"
+                        + "「JSONを再読込」でディスク上の正本を読み直します。"
+                        + "「JSONを直接編集」でファイル内容をテキスト編集できます。");
     }
 
     // --- CACHE LOADER FROM THE ALADDIN INTEGRATED MASTER ---

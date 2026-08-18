@@ -158,6 +158,48 @@ public final class RequestFormInputSettingsStore {
                                 juchuFilePath != null ? juchuFilePath : "")));
     }
 
+    /**
+     * 設定タブの JSON 直接編集用。ファイルがあれば内容を返す。構文が壊れていても生テキストを返し、
+     * 正常なら pretty-print する。未作成なら空オブジェクト。
+     */
+    public static String readTextForEditor(Map<String, String> ui) throws IOException {
+        Path storePath = resolveStorePath(ui);
+        if (!Files.isRegularFile(storePath)) {
+            return JSON.writerWithDefaultPrettyPrinter().writeValueAsString(JSON.createObjectNode());
+        }
+        String raw = Files.readString(storePath, StandardCharsets.UTF_8);
+        try {
+            JsonNode root = JSON.readTree(raw);
+            return JSON.writerWithDefaultPrettyPrinter().writeValueAsString(root);
+        } catch (IOException ex) {
+            return raw;
+        }
+    }
+
+    /**
+     * 設定タブの JSON 直接編集の保存。ルートは JSON オブジェクトのみ。pretty-print して上書きする。
+     *
+     * @throws IOException 構文不正・ルートがオブジェクトでない・書込失敗
+     */
+    public static Settings savePrettyJson(Map<String, String> ui, String rawText) throws IOException {
+        if (rawText == null || rawText.isBlank()) {
+            throw new IOException("JSON が空です。");
+        }
+        JsonNode root;
+        try {
+            root = JSON.readTree(rawText);
+        } catch (IOException ex) {
+            throw new IOException("JSON の構文が不正です: " + ex.getMessage(), ex);
+        }
+        if (root == null || !root.isObject()) {
+            throw new IOException("JSON のルートはオブジェクトである必要があります。");
+        }
+        Path storePath = resolveStorePath(ui);
+        Files.createDirectories(storePath.getParent());
+        JSON.writerWithDefaultPrettyPrinter().writeValue(storePath.toFile(), root);
+        return parseRoot(root);
+    }
+
     private static Settings parseRoot(JsonNode root) {
         if (root == null || !root.isObject()) {
             return Settings.empty();
