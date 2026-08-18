@@ -126,6 +126,9 @@ public final class MainRunTabController {
     private Button stage1RunButton;
 
     @FXML
+    private Button openMachineDeliveryManagementXlsmButton;
+
+    @FXML
     private Label stage1PipelineCheckBlockBadge;
 
     private static final String STAGE1_RUN_BUTTON_TEXT_DEFAULT = "段階1 実行";
@@ -399,6 +402,7 @@ public final class MainRunTabController {
                                 }
                             });
         }
+        refreshMachineDeliveryManagementOpenButton();
     }
 
     /** フラットボタン用のごく弱いドロップシャドウ（パルスなし）。 */
@@ -840,6 +844,18 @@ public final class MainRunTabController {
             refreshPipelineExecutionTimingLabels();
         }
         refreshLogThemeCells();
+        refreshMachineDeliveryManagementOpenButton();
+    }
+
+    /** 湖南工場のみ「マシン別納期管理表を開く」を表示する。国分では非表示。 */
+    void refreshMachineDeliveryManagementOpenButton() {
+        if (openMachineDeliveryManagementXlsmButton == null) {
+            return;
+        }
+        Map<String, String> ui = shell != null ? shell.snapshotUiEnv() : Map.of();
+        boolean show = AppPaths.isMachineDeliveryManagementXlsmEnabled(ui);
+        openMachineDeliveryManagementXlsmButton.setVisible(show);
+        openMachineDeliveryManagementXlsmButton.setManaged(show);
     }
 
     /** {@link GlobalInitSettingTarget} の工場に合わせてロゴを更新する（ツールバー側）。 */
@@ -865,6 +881,7 @@ public final class MainRunTabController {
         if (shell != null) {
             shell.refreshShellFactorySiteComboFromStore();
         }
+        refreshMachineDeliveryManagementOpenButton();
     }
 
     void refreshOperatorUserLabel() {
@@ -1048,8 +1065,11 @@ public final class MainRunTabController {
         if (shell == null) {
             return;
         }
-        Optional<Path> resolved =
-                AppPaths.resolveMachineDeliveryManagementXlsm(shell.snapshotUiEnv());
+        Map<String, String> ui = shell.snapshotUiEnv();
+        if (!AppPaths.isMachineDeliveryManagementXlsmEnabled(ui)) {
+            return;
+        }
+        Optional<Path> resolved = AppPaths.resolveMachineDeliveryManagementXlsm(ui);
         if (resolved.isEmpty()) {
             appendLog(
                     "[machine-delivery-xlsm] path not set (set "

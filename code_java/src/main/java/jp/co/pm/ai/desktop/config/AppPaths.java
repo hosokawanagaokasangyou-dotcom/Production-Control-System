@@ -1204,6 +1204,19 @@ public final class AppPaths {
         return site != null && site != FactorySite.KOKUBU && site != FactorySite.RDP_LAUNCHER;
     }
 
+    /**
+     * マシン別納期管理表の読み取り専用オープンは湖南工場のみ（国分はボタン非表示・既定パス空）。
+     */
+    public static boolean isMachineDeliveryManagementXlsmEnabled(Map<String, String> ui) {
+        return isMachineDeliveryManagementXlsmEnabledForFactory(
+                resolveFactorySiteFromUi(ui != null ? ui : Map.of()));
+    }
+
+    /** マシン別納期管理表オープンは湖南工場のみ（国分・RDP ランチャーは無効）。 */
+    public static boolean isMachineDeliveryManagementXlsmEnabledForFactory(FactorySite site) {
+        return site == FactorySite.KONAN;
+    }
+
     /** Tesseract OCR 設定（画像スキャン TPI PDF 用）。{@code jpn.traineddata} が存在する tessdata のみ返す。 */
     public record TesseractConfig(Path executable, Path tessDataDir) {}
 

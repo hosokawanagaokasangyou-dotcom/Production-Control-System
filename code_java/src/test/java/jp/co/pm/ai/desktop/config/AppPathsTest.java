@@ -279,9 +279,13 @@ class AppPathsTest {
             assertEquals(
                     AppPaths.DEFAULT_PM_AI_MACHINE_DELIVERY_MANAGEMENT_XLSM_KONAN,
                     AppPaths.resolveMachineDeliveryManagementXlsm(Map.of()).get().toString());
+            assertTrue(AppPaths.isMachineDeliveryManagementXlsmEnabled(Map.of()));
 
             GlobalInitSettingTarget.save(FactorySite.KOKUBU);
             assertTrue(AppPaths.resolveMachineDeliveryManagementXlsm(Map.of()).isEmpty());
+            assertFalse(AppPaths.isMachineDeliveryManagementXlsmEnabled(Map.of()));
+            assertFalse(AppPaths.isMachineDeliveryManagementXlsmEnabledForFactory(FactorySite.KOKUBU));
+            assertTrue(AppPaths.isMachineDeliveryManagementXlsmEnabledForFactory(FactorySite.KONAN));
         } finally {
             AppPaths.setDesktopAppHomeDirName(priorAppHome);
             System.setProperty("user.home", priorUserHome);
