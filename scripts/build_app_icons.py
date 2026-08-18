@@ -15,6 +15,7 @@ except ImportError:  # pragma: no cover - Pillow optional at import, required fo
 ROOT = Path(__file__).resolve().parents[1]
 IMG_DIR = ROOT / "code_java" / "src" / "main" / "resources" / "jp" / "co" / "pm" / "ai" / "desktop" / "images"
 BRAND_DIR = ROOT / "code_java" / "branding"
+DESKTOP_ICON_SOURCE = BRAND_DIR / "app-icon-source.png"
 
 SIZES = (16, 32, 48, 64, 128, 256)
 
@@ -233,116 +234,56 @@ def _draw_corner_brackets(
     _fill_rect(pixels, right - width, bottom - arm, right, bottom, color, width * 0.35)
 
 
+def _resample_filter():
+    if Image is None:
+        raise RuntimeError("Pillow is required to render desktop icons from illustration (pip install Pillow)")
+    return Image.Resampling.LANCZOS if hasattr(Image, "Resampling") else Image.LANCZOS
+
+
+def _image_to_pixels(image: Image.Image, size: int) -> list[list[tuple[int, int, int, int]]]:
+    resized = image.convert("RGBA").resize((size, size), _resample_filter())
+    pixels: list[list[tuple[int, int, int, int]]] = []
+    for y in range(size):
+        row: list[tuple[int, int, int, int]] = []
+        for x in range(size):
+            pixel = resized.getpixel((x, y))
+            if len(pixel) == 3:
+                row.append((pixel[0], pixel[1], pixel[2], 255))
+            else:
+                row.append(pixel)
+        pixels.append(row)
+    return pixels
+
+
+def _apply_rounded_alpha(
+    pixels: list[list[tuple[int, int, int, int]]],
+    size: int,
+    radius: float,
+) -> None:
+    mask = _rounded_rect_mask(size, radius)
+    for y in range(size):
+        for x in range(size):
+            r, g, b, a = pixels[y][x]
+            pixels[y][x] = (r, g, b, _clamp(int(a * mask[y][x])))
+
+
 def _draw_desktop_icon(size: int) -> list[list[tuple[int, int, int, int]]]:
-    pixels = [[(0, 0, 0, 0) for _ in range(size)] for _ in range(size)]
-
-    # 余白を最小化して描画領域を限界まで広げる
-    outer_inset = max(size * 0.008, 0.4)
-    outer_radius = size * 0.13
-    border_w = max(size * 0.018, 1.0)
-
-    white = (*_hex_rgb("#ffffff"), 255)
-    sky_bg = (*_hex_rgb("#5cafff"), 255)
-    sky_deep = (*_hex_rgb("#3b8eef"), 255)
-    panel = (*_hex_rgb("#eef6ff"), 255)
-    amber = (*_hex_rgb("#fbbf24"), 255)
-    text_main = (*_hex_rgb("#1e40af"), 255)
-    text_shadow = (*_hex_rgb("#93c5fd"), 120)
-
-    _fill_rounded_square(pixels, size, white, outer_inset, outer_radius)
-
-    inner_inset = outer_inset + border_w
-    inner_radius = max(outer_radius - border_w * 0.5, size * 0.10)
-    _fill_rounded_square(pixels, size, sky_bg, inner_inset, inner_radius)
-    _fill_rounded_square(
+    if Image is None:
+        raise RuntimeError("Pillow is required to render desktop icons from illustration (pip install Pillow)")
+    if not DESKTOP_ICON_SOURCE.is_file():
+        raise FileNotFoundError(f"desktop icon source missing: {DESKTOP_ICON_SOURCE}")
+    with Image.open(DESKTOP_ICON_SOURCE) as src:
+        pixels = _image_to_pixels(src, size)
+    radius = size * 0.18
+    _apply_rounded_alpha(pixels, size, radius)
+    _stroke_rounded_rect(
         pixels,
         size,
-        sky_deep,
-        inner_inset + size * 0.03,
-        max(inner_radius - size * 0.02, size * 0.08),
+        (*_hex_rgb("#ffffff"), 220),
+        0.0,
+        radius,
+        max(size * 0.03, 1.0),
     )
-
-    panel_inset_x = inner_inset + size * 0.015
-    panel_inset_y = inner_inset + (size * 0.13 if size >= 32 else size * 0.08)
-    panel_right = size - panel_inset_x
-    panel_bottom = size - inner_inset - size * 0.015
-    panel_radius = size * 0.05
-    frame_w = max(size * 0.007, 0.7)
-    _fill_rect(
-        pixels,
-        panel_inset_x - frame_w,
-        panel_inset_y - frame_w,
-        panel_right + frame_w,
-        panel_bottom + frame_w,
-        amber,
-        panel_radius,
-    )
-    _fill_rect(
-        pixels,
-        panel_inset_x,
-        panel_inset_y,
-        panel_right,
-        panel_bottom,
-        panel,
-        panel_radius,
-    )
-
-    if size >= 24:
-        bar_h = max(size * 0.055, 1.2)
-        bar_y = panel_inset_y + size * 0.03
-        bar_left = panel_inset_x + size * 0.04
-        bar_right = panel_right - size * 0.04
-        bar_specs = [
-            (0.88, _hex_rgb("#22c55e")),
-            (0.72, _hex_rgb("#2563eb")),
-            (0.58, _hex_rgb("#f97316")),
-        ]
-        gap = max(size * 0.012, 0.6)
-        for i, (width_ratio, rgb) in enumerate(bar_specs):
-            y0 = bar_y + i * (bar_h + gap)
-            if y0 + bar_h > panel_inset_y + panel_bottom * 0.35:
-                break
-            w = (bar_right - bar_left) * width_ratio
-            _fill_rect(
-                pixels,
-                bar_left,
-                y0,
-                bar_left + w,
-                y0 + bar_h,
-                (*rgb, 255),
-                bar_h * 0.35,
-            )
-
-    if size >= 32:
-        _draw_corner_brackets(
-            pixels,
-            size,
-            inner_inset + size * 0.018,
-            size * 0.085,
-            max(size * 0.011, 0.9),
-            (*_hex_rgb("#f59e0b"), 230),
-        )
-
-    text_y = (panel_inset_y + panel_bottom) / 2 + (size * 0.04 if size >= 32 else 0)
-    if size >= 24:
-        _draw_centered_text(
-            pixels,
-            size,
-            "計画",
-            text_main,
-            center_y=text_y,
-            font_scale=0.54 if size >= 48 else 0.50,
-            shadow=text_shadow,
-        )
-    else:
-        _draw_centered_text(
-            pixels,
-            size,
-            "計",
-            text_main,
-            center_y=size * 0.52,
-            font_scale=0.60,
-        )
     return pixels
 
 
