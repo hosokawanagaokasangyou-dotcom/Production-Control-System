@@ -22,7 +22,7 @@ import javafx.stage.Window;
 import javafx.stage.WindowEvent;
 
 /**
- * 終了ゲート用。12桁一致で終了確認へ進む。アプリ終了のキャンセルはできないが、確認へ戻れる。
+ * 終了ゲート用。4桁一致で終了確認へ進む。アプリ終了のキャンセルはできないが、確認へ戻れる。
  */
 public final class SevenDigitChallengeDialog {
 
@@ -72,8 +72,8 @@ public final class SevenDigitChallengeDialog {
         digits.setStyle("-fx-font-size: 28px; -fx-font-weight: bold;");
 
         TextField input = new TextField();
-        input.setPromptText("12桁を入力");
-        input.setPrefColumnCount(14);
+        input.setPromptText("4桁を入力");
+        input.setPrefColumnCount(6);
         UnaryOperator<TextFormatter.Change> digitsOnly =
                 change -> {
                     String next = change.getControlNewText();
@@ -88,7 +88,7 @@ public final class SevenDigitChallengeDialog {
         Label mismatch = new Label("");
         mismatch.setStyle("-fx-text-fill: #b00020;");
 
-        Button ok = new Button("12桁を入力して終了確認へ");
+        Button ok = new Button("4桁を入力して終了確認へ");
         ok.setDefaultButton(true);
         ok.setOnAction(
                 e -> {

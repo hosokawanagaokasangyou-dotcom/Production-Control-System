@@ -9,21 +9,21 @@ import org.junit.jupiter.api.Test;
 class SevenDigitChallengeTest {
 
     @Test
-    void generate_returnsTwelveDigitsWithoutLeadingZero() {
+    void generate_returnsFourDigitsWithoutLeadingZero() {
         String code = SevenDigitChallenge.generate(bound -> 0L);
-        assertEquals("100000000000", code);
-        assertEquals(12, code.length());
+        assertEquals("1000", code);
+        assertEquals(4, code.length());
 
         String max = SevenDigitChallenge.generate(bound -> bound - 1);
-        assertEquals("999999999999", max);
+        assertEquals("9999", max);
     }
 
     @Test
     void matches_acceptsOnlyExactDigits() {
-        assertTrue(SevenDigitChallenge.matches("123456789012", "123456789012"));
-        assertFalse(SevenDigitChallenge.matches("123456789012", "123456789013"));
-        assertFalse(SevenDigitChallenge.matches("123456789012", "12345678901"));
-        assertTrue(SevenDigitChallenge.matches("123456789012", " 123456789012 "));
-        assertFalse(SevenDigitChallenge.matches("123456789012", null));
+        assertTrue(SevenDigitChallenge.matches("1234", "1234"));
+        assertFalse(SevenDigitChallenge.matches("1234", "1235"));
+        assertFalse(SevenDigitChallenge.matches("1234", "123"));
+        assertTrue(SevenDigitChallenge.matches("1234", " 1234 "));
+        assertFalse(SevenDigitChallenge.matches("1234", null));
     }
 }

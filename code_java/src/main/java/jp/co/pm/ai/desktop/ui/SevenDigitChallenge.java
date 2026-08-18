@@ -4,15 +4,15 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.LongUnaryOperator;
 
 /**
- * 終了ゲート用の12桁確認コード（100000000000〜999999999999）。
+ * 終了ゲート用の4桁確認コード（1000〜9999）。
  */
 public final class SevenDigitChallenge {
 
-    public static final int DIGIT_COUNT = 12;
+    public static final int DIGIT_COUNT = 4;
 
-    private static final long MIN = 100_000_000_000L;
+    private static final long MIN = 1000L;
 
-    private static final long SPAN = 900_000_000_000L;
+    private static final long SPAN = 9000L;
 
     private SevenDigitChallenge() {}
 
