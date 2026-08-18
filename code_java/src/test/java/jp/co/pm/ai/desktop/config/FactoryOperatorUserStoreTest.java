@@ -531,20 +531,54 @@ class FactoryOperatorUserStoreTest {
         Path summary = fakeRepo.resolve("code").resolve(AppPaths.SUMMARY_AI_DISPATCH_XLSX);
         Files.createDirectories(summary.getParent());
         Files.writeString(summary, "x");
-        Map<String, String> ui = Map.of(AppPaths.KEY_PM_AI_REPO_ROOT, fakeRepo.toString());
+        Path deploy = fakeRepo.resolve("deploy");
+        Files.createDirectories(deploy);
+        Map<String, String> ui =
+                Map.of(
+                        AppPaths.KEY_PM_AI_REPO_ROOT,
+                        fakeRepo.toString(),
+                        AppPaths.KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR,
+                        deploy.toString());
 
         FactoryOperatorUserStore.setAladdinCredentials(FactorySite.KONAN, "砂田", "000585", "000585585");
         FactoryOperatorUserStore.selectSessionOperator(FactorySite.KONAN, "砂田");
         FactoryOperatorUserStore.syncLauncherCredentialsJsonToDeployDir(ui);
 
-        Path jsonPath =
-                AppPaths.resolveRdpLauncherIni(ui, "砂田")
-                        .getParent()
-                        .resolve(OperatorAladdinCredentialsLauncherJson.FILE_NAME);
+        Path jsonPath = deploy.resolve(OperatorAladdinCredentialsLauncherJson.FILE_NAME);
         assertTrue(Files.isRegularFile(jsonPath));
         String text = Files.readString(jsonPath, StandardCharsets.UTF_8);
         assertTrue(text.contains("000585"));
         assertTrue(text.contains("砂田"));
+    }
+
+    @Test
+    void syncLauncherCredentialsJsonToDeployDir_mirrorsKokubuOperatorsUnderKonan(
+            @TempDir Path fakeRepo) throws Exception {
+        Path summary = fakeRepo.resolve("code").resolve(AppPaths.SUMMARY_AI_DISPATCH_XLSX);
+        Files.createDirectories(summary.getParent());
+        Files.writeString(summary, "x");
+        Path deploy = fakeRepo.resolve("deploy");
+        Files.createDirectories(deploy);
+        Map<String, String> ui =
+                Map.of(
+                        AppPaths.KEY_PM_AI_REPO_ROOT,
+                        fakeRepo.toString(),
+                        AppPaths.KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR,
+                        deploy.toString(),
+                        AppPaths.KEY_PM_AI_FACTORY_SITE,
+                        FactorySite.KOKUBU.name());
+
+        FactoryOperatorUserStore.setAladdinCredentials(FactorySite.KOKUBU, "細川", "00585", "secret");
+        FactoryOperatorUserStore.selectSessionOperator(FactorySite.KOKUBU, "細川");
+        FactoryOperatorUserStore.syncLauncherCredentialsJsonToDeployDir(ui);
+
+        Path jsonPath = deploy.resolve(OperatorAladdinCredentialsLauncherJson.FILE_NAME);
+        assertTrue(Files.isRegularFile(jsonPath));
+        var kokubu =
+                OperatorAladdinCredentialsLauncherJson.readOperators(jsonPath, FactorySite.KOKUBU);
+        var konan = OperatorAladdinCredentialsLauncherJson.readOperators(jsonPath, FactorySite.KONAN);
+        assertEquals("00585", kokubu.get("細川").loginId());
+        assertEquals("00585", konan.get("細川").loginId());
     }
 
     @Test

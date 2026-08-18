@@ -1812,7 +1812,37 @@ public final class FactoryOperatorUserStore {
                 }
             }
         }
+        mirrorOperatorsIntoKonanForFolderScopedDeploy(byFactory);
         OperatorAladdinCredentialsLauncherJson.writeAllFactories(jsonPath, byFactory);
+    }
+
+    /**
+     * 配備先フォルダは工場ごとに分かれる。C# 既定キー KONAN が空のとき、他工場ブロックの操作者を KONAN にも載せる。
+     */
+    private static void mirrorOperatorsIntoKonanForFolderScopedDeploy(
+            Map<FactorySite, Map<String, OperatorAladdinCredentialsLauncherJson.OperatorEntry>>
+                    byFactory) {
+        if (byFactory == null || byFactory.isEmpty()) {
+            return;
+        }
+        Map<String, OperatorAladdinCredentialsLauncherJson.OperatorEntry> konan =
+                byFactory.computeIfAbsent(FactorySite.KONAN, k -> new LinkedHashMap<>());
+        for (Map.Entry<FactorySite, Map<String, OperatorAladdinCredentialsLauncherJson.OperatorEntry>>
+                e : byFactory.entrySet()) {
+            if (e.getKey() == FactorySite.KONAN || e.getValue() == null) {
+                continue;
+            }
+            for (Map.Entry<String, OperatorAladdinCredentialsLauncherJson.OperatorEntry> op :
+                    e.getValue().entrySet()) {
+                if (op.getKey() == null || op.getValue() == null) {
+                    continue;
+                }
+                konan.putIfAbsent(op.getKey(), op.getValue());
+            }
+        }
+        if (konan.isEmpty()) {
+            byFactory.remove(FactorySite.KONAN);
+        }
     }
 
     private static Map<String, OperatorAladdinCredentialsLauncherJson.OperatorEntry>
