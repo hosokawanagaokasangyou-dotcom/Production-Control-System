@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.ComboBox?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.Separator?>
+<?import javafx.scene.control.TableColumn?>
+<?import javafx.scene.control.TableView?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.VBox?>
+
+<VBox xmlns="http://javafx.com/javafx/26" xmlns:fx="http://javafx.com/fxml/1"
+      spacing="10.0"
+      fx:controller="jp.co.pm.ai.desktop.IdentityCheckHistoryTabController">
+    <padding>
+        <Insets bottom="12.0" left="12.0" right="12.0" top="12.0"/>
+    </padding>
+    <Label styleClass="pm-section-title" text="同一化チェック履歴" wrapText="true"/>
+    <Label text="同一化チェック実行時の配台計画 Excel と加工計画 JSON を操作者別に保存します。操作者あたり最新20件を保持します。"
+           wrapText="true"/>
+    <Separator/>
+    <HBox spacing="8.0" alignment="CENTER_LEFT">
+        <Label text="操作者"/>
+        <ComboBox fx:id="operatorCombo" prefWidth="220.0"/>
+        <Button fx:id="refreshButton" mnemonicParsing="false" onAction="#onRefreshAction" text="再読み"/>
+        <Button fx:id="openExcelButton" mnemonicParsing="false" onAction="#onOpenExcelAction" text="Excelを開く"/>
+        <Button fx:id="showPlanJsonButton" mnemonicParsing="false" onAction="#onShowPlanJsonAction" text="JSONを表で表示"/>
+    </HBox>
+    <Label fx:id="pathLabel" styleClass="pm-muted-label" wrapText="true"/>
+    <Label fx:id="statusLabel" wrapText="true"/>
+    <TableView fx:id="historyTable" prefHeight="420.0" VBox.vgrow="ALWAYS">
+        <columns>
+            <TableColumn fx:id="tsColumn" text="日時" prefWidth="180.0"/>
+            <TableColumn fx:id="resultColumn" text="結果" prefWidth="90.0"/>
+            <TableColumn fx:id="diffCountColumn" text="差異件数" prefWidth="90.0"/>
+            <TableColumn fx:id="folderColumn" text="フォルダ名" prefWidth="200.0"/>
+            <TableColumn fx:id="badgeColumn" text="バッジ" prefWidth="280.0"/>
+        </columns>
+    </TableView>
+</VBox>

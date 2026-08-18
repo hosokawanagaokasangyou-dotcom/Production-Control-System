@@ -270,6 +270,11 @@
                         <fx:include fx:id="operatorActionLogTab" source="OperatorActionLogTab.fxml"/>
                     </content>
                 </Tab>
+                <Tab fx:id="mainShellTabIdentityCheckHistory" closable="false" text="同一化チェック履歴">
+                    <content>
+                        <fx:include fx:id="identityCheckHistoryTab" source="IdentityCheckHistoryTab.fxml"/>
+                    </content>
+                </Tab>
                 <Tab fx:id="mainShellTabApiModelBenchmark" closable="false" text="APIモデルベンチマーク">
                     <content>
                         <fx:include fx:id="apiModelBenchmarkTab" source="ApiModelBenchmarkTab.fxml"/>

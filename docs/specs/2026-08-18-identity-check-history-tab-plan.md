@@ -4,6 +4,8 @@
 
 **Goal:** 同一化チェック実行のたびに Excel＋加工計画 JSON のセットを操作者別フォルダへ最大20件保存し、新メインタブで閲覧できるようにする。
 
+**状態:** Task 1〜7 実装完了（2026-08-18）
+
 **Architecture:** `IdentityCheckHistoryStore` が共有 DATA 配下へセット保存・prune・一覧を担う。`AladdinEntryDispatchPlanIdentityCheck.evaluate` 成功時にスナップショットを書き出す。閲覧は `OperatorActionLogTab` と同型の操作者コンボ＋一覧タブ。
 
 **Tech Stack:** Java 21 / JavaFX / Maven (`code_java`) / Jackson (`JsonTableIo`) / JUnit 5

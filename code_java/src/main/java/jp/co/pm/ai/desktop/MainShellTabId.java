@@ -56,6 +56,8 @@ public enum MainShellTabId {
     CACHE_HISTORY("cacheHistory"),
     /** 配台重要操作の操作者別ログ（共有フォルダ、90日）。 */
     OPERATOR_ACTION_LOG("operatorActionLog"),
+    /** 同一化チェック結果の操作者別履歴（Excel＋加工計画 JSON、最新20件）。 */
+    IDENTITY_CHECK_HISTORY("identityCheckHistory"),
     /** Gemini generateContent の往復レイテンシ計測。 */
     API_MODEL_BENCHMARK("apiModelBenchmark"),
     /** 段階1～3・サマリ Excel・納期管理ビューの実行時間トレンド。 */

@@ -490,6 +490,9 @@ public final class MainShellController
     private OperatorActionLogTabController operatorActionLogTabController;
 
     @FXML
+    private IdentityCheckHistoryTabController identityCheckHistoryTabController;
+
+    @FXML
     private ApiModelBenchmarkTabController apiModelBenchmarkTabController;
 
     @FXML
@@ -602,6 +605,9 @@ public final class MainShellController
 
     @FXML
     private Tab mainShellTabOperatorActionLog;
+
+    @FXML
+    private Tab mainShellTabIdentityCheckHistory;
 
     @FXML
     private Tab mainShellTabApiModelBenchmark;
@@ -932,6 +938,9 @@ public final class MainShellController
         }
         if (operatorActionLogTabController != null) {
             operatorActionLogTabController.bindShell(this);
+        }
+        if (identityCheckHistoryTabController != null) {
+            identityCheckHistoryTabController.bindShell(this);
         }
         if (apiModelBenchmarkTabController != null) {
             apiModelBenchmarkTabController.bindShell(this);
@@ -2457,6 +2466,9 @@ public final class MainShellController
         if (t == mainShellTabOperatorActionLog) {
             return MainShellTabId.OPERATOR_ACTION_LOG;
         }
+        if (t == mainShellTabIdentityCheckHistory) {
+            return MainShellTabId.IDENTITY_CHECK_HISTORY;
+        }
         if (t == mainShellTabApiModelBenchmark) {
             return MainShellTabId.API_MODEL_BENCHMARK;
         }
@@ -2516,6 +2528,7 @@ public final class MainShellController
             case PLAN_WORKSPACE_HISTORY -> mainShellTabPlanWorkspaceHistory;
             case CACHE_HISTORY -> mainShellTabCacheHistory;
             case OPERATOR_ACTION_LOG -> mainShellTabOperatorActionLog;
+            case IDENTITY_CHECK_HISTORY -> mainShellTabIdentityCheckHistory;
             case API_MODEL_BENCHMARK -> mainShellTabApiModelBenchmark;
             case PLAN_RESULT_VIEWER -> mainShellTabPlanResultViewer;
             case EQUIPMENT_GANTT_GRAPHIC -> mainShellTabEquipmentGanttGraphic;

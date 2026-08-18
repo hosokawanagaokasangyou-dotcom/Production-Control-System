@@ -73,7 +73,7 @@ class AladdinEntryDispatchPlanIdentityCheckTest {
     }
 
     @Test
-    void compare_mismatchWhenPlanHasExtraQty() {
+    void compare_ignoresPlanQtyNotPresentInExcel() {
         LocalDate d = LocalDate.of(2026, 7, 7);
         List<AladdinEntryDispatchPlanIdentityCheck.SystemQty> system =
                 List.of(
@@ -89,11 +89,26 @@ class AladdinEntryDispatchPlanIdentityCheckTest {
         AladdinEntryDispatchPlanIdentityCheck.Result result =
                 AladdinEntryDispatchPlanIdentityCheck.compare(system, lookup);
 
-        assertFalse(result.identical());
-        assertEquals(1, result.diffs().size());
-        assertEquals("T002", result.diffs().getFirst().taskId());
-        assertEquals(0d, result.diffs().getFirst().systemQty(), 1e-9);
-        assertEquals(5d, result.diffs().getFirst().planQty(), 1e-9);
+        assertTrue(result.identical(), result.dialogBody());
+        assertTrue(result.diffs().isEmpty());
+    }
+
+    @Test
+    void excludeCompletedPlanRows_dropsFinishedKeepsFullUnprocessed() {
+        PlanInputTabularIo.TabularSheet tab =
+                new PlanInputTabularIo.TabularSheet(
+                        List.of("機械名", "依頼NO", "工程名", "換算数量", "実加工数", "未加工", "2026/08/18"),
+                        List.of(
+                                List.of("M1", "DONE1", "工程A", "600", "600", "0", "300"),
+                                List.of("M1", "EMPTY", "工程A", "0", "0", "0", "100"),
+                                List.of("M1", "OPEN1", "工程A", "500", "0", "0", "500"),
+                                List.of("M1", "OPEN2", "工程A", "1200", "0", "1200", "200")));
+
+        PlanInputTabularIo.TabularSheet kept =
+                AladdinEntryDispatchPlanIdentityCheck.excludeCompletedPlanRows(tab);
+
+        List<String> tids = kept.rows().stream().map(r -> r.get(1)).toList();
+        assertEquals(List.of("OPEN1", "OPEN2"), tids);
     }
 
     @Test
@@ -156,6 +171,14 @@ class AladdinEntryDispatchPlanIdentityCheckTest {
         assertTrue(result.excelPath().isPresent());
         assertTrue(result.planSourcePath().isPresent());
         assertEquals(shapedExisted, Files.isRegularFile(shapedBefore));
+
+        List<IdentityCheckHistoryStore.SnapshotRef> history =
+                IdentityCheckHistoryStore.listNewestFirst(ui, "テスト太郎");
+        assertEquals(1, history.size(), "同一化チェック成功時に履歴セットを1件保存する");
+        Path histDir = history.getFirst().dir();
+        assertTrue(Files.isRegularFile(histDir.resolve(IdentityCheckHistoryStore.EXCEL_FILE)));
+        assertTrue(Files.isRegularFile(histDir.resolve(IdentityCheckHistoryStore.PLAN_JSON_FILE)));
+        assertEquals("ok", history.getFirst().meta().result());
     }
 
     @Test

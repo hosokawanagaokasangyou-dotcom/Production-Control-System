@@ -57,6 +57,7 @@ public final class MainShellTabLayoutDefaults {
                     MainShellTabId.PIPELINE_EXECUTION_TIMING.key(),
                     MainShellTabId.CACHE_HISTORY.key(),
                     MainShellTabId.OPERATOR_ACTION_LOG.key(),
+                    MainShellTabId.IDENTITY_CHECK_HISTORY.key(),
                     MainShellTabId.ENV.key(),
                     MainShellTabId.GLOBAL_SETTINGS.key(),
                     MainShellTabId.USER_PROFILES.key(),
@@ -131,7 +132,9 @@ public final class MainShellTabLayoutDefaults {
                                 MainShellTabLayoutNode.tabNode(MainShellTabId.PIPELINE_EXECUTION_TIMING.key(), ""),
                                 MainShellTabLayoutNode.tabNode(MainShellTabId.CACHE_HISTORY.key(), ""),
                                 MainShellTabLayoutNode.tabNode(
-                                        MainShellTabId.OPERATOR_ACTION_LOG.key(), ""))));
+                                        MainShellTabId.OPERATOR_ACTION_LOG.key(), ""),
+                                MainShellTabLayoutNode.tabNode(
+                                        MainShellTabId.IDENTITY_CHECK_HISTORY.key(), ""))));
 
         top.add(
                 MainShellTabLayoutNode.groupNode(
