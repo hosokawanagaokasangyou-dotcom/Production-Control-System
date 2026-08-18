@@ -1,6 +1,8 @@
 package jp.co.pm.ai.desktop.config;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Path;
 import java.util.Map;
@@ -37,6 +39,7 @@ class StartupFactorySiteResolverTest {
         DesktopSessionStateStore.patchUiEnvMapAndTheme(
                 Map.of(AppPaths.KEY_PM_AI_FACTORY_SITE, FactorySite.KOKUBU.name()), "");
 
+        assertEquals(FactorySite.KONAN, StartupFactorySiteResolver.resolve());
         assertEquals(FactorySite.KONAN, StartupFactorySiteResolver.resolveForSplash());
     }
 
@@ -45,7 +48,23 @@ class StartupFactorySiteResolverTest {
         LastLaunchedFactorySiteStore.save(FactorySite.KOKUBU);
         GlobalInitSettingTarget.save(FactorySite.KONAN);
 
+        assertEquals(FactorySite.KOKUBU, StartupFactorySiteResolver.resolve());
         assertEquals(FactorySite.KOKUBU, StartupFactorySiteResolver.resolveForSplash());
         assertEquals(FactorySite.KONAN, GlobalInitSettingTarget.load());
+    }
+
+    @Test
+    void requiresStartupSwitch_onlyWhenPersistedDiffersFromAdopted() {
+        assertTrue(
+                StartupFactorySiteResolver.requiresStartupSwitch(
+                        FactorySite.KONAN, FactorySite.KOKUBU));
+        assertFalse(
+                StartupFactorySiteResolver.requiresStartupSwitch(
+                        FactorySite.KOKUBU, FactorySite.KOKUBU));
+        assertFalse(
+                StartupFactorySiteResolver.requiresStartupSwitch(
+                        FactorySite.KONAN, FactorySite.RDP_LAUNCHER));
+        assertTrue(StartupFactorySiteResolver.requiresStartupSwitch(null, FactorySite.KONAN));
+        assertFalse(StartupFactorySiteResolver.requiresStartupSwitch(FactorySite.KONAN, null));
     }
 }

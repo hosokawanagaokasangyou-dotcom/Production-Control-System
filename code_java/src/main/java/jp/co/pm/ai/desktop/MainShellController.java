@@ -139,6 +139,7 @@ import jp.co.pm.ai.desktop.config.EnvVarsInitializedAtStore;
 import jp.co.pm.ai.desktop.config.EnvVarsInitialTemplate;
 import jp.co.pm.ai.desktop.config.GlobalInitSettingTarget;
 import jp.co.pm.ai.desktop.config.LastLaunchedFactorySiteStore;
+import jp.co.pm.ai.desktop.config.StartupFactorySiteResolver;
 import jp.co.pm.ai.desktop.config.DesktopTheme;
 import jp.co.pm.ai.desktop.config.PushButtonCssEmitter;
 import jp.co.pm.ai.desktop.config.PushButtonDesignPrefs;
@@ -943,8 +944,9 @@ public final class MainShellController
         primaryStage.setMinHeight(480);
 
             applyDesktopSession(DesktopSessionStateStore.load());
-            FactorySite effectiveFactory = GlobalInitSettingTarget.loadEffective(collectUiEnv());
-            FactoryOperatorUserStore.configureFromUi(collectUiEnv(), effectiveFactory);
+            FactorySite startupFactory = StartupFactorySiteResolver.resolve();
+            GlobalInitSettingTarget.save(startupFactory);
+            FactoryOperatorUserStore.configureFromUi(collectUiEnv(), startupFactory);
             if (globalSettingsTabController != null) {
                 globalSettingsTabController.refreshInitSettingTargetComboFromStore();
             }
@@ -4568,44 +4570,41 @@ public final class MainShellController
     }
 
     /**
+     * スプラッシュで採用した工場を本番に載せる。操作者の前回工場や UNC 推定では上書きしない。
+     *
      * @return 起動時の工場切替を開始したとき {@code true}（呼び出し元は後続の環境照合を工場切替完了後に続行する）
      */
     private boolean finalizeOperatorLocalWorkspaceAfterSessionEstablished() {
+        FactorySite adopted = StartupFactorySiteResolver.resolve();
+        LastLaunchedFactorySiteStore.save(adopted);
         String operator = FactoryOperatorUserStore.sessionOperatorName();
         if (operator.isBlank() || FactoryOperatorUserStore.isGuestOperator(operator)) {
-            LastLaunchedFactorySiteStore.save(GlobalInitSettingTarget.loadEffective(collectUiEnv()));
+            if (StartupFactorySiteResolver.requiresStartupSwitch(
+                    GlobalInitSettingTarget.load(), adopted)) {
+                startupRestoredFactorySite = true;
+                switchActiveFactorySite(adopted, true);
+                return true;
+            }
+            GlobalInitSettingTarget.save(adopted);
             return false;
         }
-        FactorySite current = GlobalInitSettingTarget.loadEffective(collectUiEnv());
         FactorySiteWorkspaceMigrator.migrateIfNeeded(
                 operator,
-                current,
+                adopted,
                 snapshotUiEnvRows(),
                 DesktopSessionStateStore.load(),
                 collectUiEnv());
         FactorySiteWorkspaceStore.warmMemoryCacheFromDisk(operator);
-        Optional<FactorySite> last = FactorySiteWorkspaceStore.loadLastFactorySite(operator);
-        if (last.isPresent() && last.get() != current) {
-            FactorySite target = last.get();
-            Map<String, String> ui = collectUiEnv();
-            FactoryOperatorUserStore.configureForCurrentApp(ui, target);
-            if (!FactorySiteOperatorAccess.isSessionOperatorAllowedForFactory(ui, target)) {
-                String reason = FactorySiteOperatorAccess.comboBlockReasonJa(ui, target);
-                if (!reason.isBlank()) {
-                    appendLog("[startup] 前回工場の復元をスキップ: " + reason);
-                }
-                FactoryOperatorUserStore.configureForCurrentApp(ui, current);
-            } else {
-                startupRestoredFactorySite = true;
-                switchActiveFactorySite(target, true);
-                return true;
-            }
+        if (StartupFactorySiteResolver.requiresStartupSwitch(
+                GlobalInitSettingTarget.load(), adopted)) {
+            startupRestoredFactorySite = true;
+            switchActiveFactorySite(adopted, true);
+            return true;
         }
-        LastLaunchedFactorySiteStore.save(current);
         Optional<FactorySiteWorkspaceSnapshot> ws =
-                FactorySiteWorkspaceStore.load(operator, current);
+                FactorySiteWorkspaceStore.load(operator, adopted);
         if (ws.isPresent()) {
-            applyFactorySiteWorkspaceRestore(current, ws);
+            applyFactorySiteWorkspaceRestore(adopted, ws);
         }
         return false;
     }
@@ -8918,7 +8917,8 @@ public final class MainShellController
         if (deferOperatorPromptForPortableUpgrade.get()) {
             return;
         }
-        FactorySite factory = GlobalInitSettingTarget.loadEffective(collectUiEnv());
+        FactorySite factory = StartupFactorySiteResolver.resolve();
+        GlobalInitSettingTarget.save(factory);
         FactoryOperatorUserStore.configureFromUi(collectUiEnv(), factory);
         if (FactoryOperatorUserStore.usingLocalStoreFallback()) {
             appendLog(
