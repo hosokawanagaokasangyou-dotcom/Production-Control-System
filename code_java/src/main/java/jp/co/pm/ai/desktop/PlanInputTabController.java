@@ -219,6 +219,11 @@ public final class PlanInputTabController {
 
     private String attendanceReadinessBlockTooltip = "";
 
+    /** 加工計画／加工日報の最新拡張子が不正のとき、段階2／2.1を抑止する。 */
+    private boolean stage2BlockedBySourceExtension;
+
+    private String sourceExtensionBlockTooltip = "";
+
     /** 納期管理ビュー再読み込み中（メインシェルから同期）。 */
     private boolean deliveryCalendarReloadBlocking;
 
@@ -425,6 +430,13 @@ public final class PlanInputTabController {
         applyStage2RunButtonEnabledState();
     }
 
+    /** 加工計画・加工日報の最新拡張子不正で段階2／2.1を抑止する。 */
+    void setStage2BlockedBySourceExtension(boolean blocked, String tooltip) {
+        stage2BlockedBySourceExtension = blocked;
+        sourceExtensionBlockTooltip = tooltip != null ? tooltip.strip() : "";
+        applyStage2RunButtonEnabledState();
+    }
+
     void setAttendanceReadinessBadge(boolean visible, String labelText, String tooltipText) {
         Platform.runLater(
                 () -> {
@@ -483,7 +495,8 @@ public final class PlanInputTabController {
                         || deliveryCalendarReloadBlocking
                         || stage2BlockedByDispatchUnsavedEdit
                         || stage2BlockedByUnsavedPlanInputTableEdit
-                        || stage2BlockedByAttendanceNotReady;
+                        || stage2BlockedByAttendanceNotReady
+                        || stage2BlockedBySourceExtension;
         if (stage2RunButton != null) {
             stage2RunButton.setDisable(disable);
         }
@@ -532,6 +545,18 @@ public final class PlanInputTabController {
                             attendanceReadinessBlockTooltip.isBlank()
                                     ? "勤怠正本（attendance-data.json）が未準備です。会社カレンダー／メンバー勤怠タブでセットアップしてください。"
                                     : attendanceReadinessBlockTooltip);
+            if (stage2RunButton != null) {
+                stage2RunButton.setTooltip(blockedTip);
+            }
+            if (stage21RunButton != null) {
+                stage21RunButton.setTooltip(blockedTip);
+            }
+        } else if (stage2BlockedBySourceExtension) {
+            Tooltip blockedTip =
+                    new Tooltip(
+                            sourceExtensionBlockTooltip.isBlank()
+                                    ? "加工計画は .xlsx、加工日報は .csv の最新ファイルが必要です。"
+                                    : sourceExtensionBlockTooltip);
             if (stage2RunButton != null) {
                 stage2RunButton.setTooltip(blockedTip);
             }

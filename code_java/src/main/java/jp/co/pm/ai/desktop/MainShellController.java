@@ -144,6 +144,7 @@ import jp.co.pm.ai.desktop.config.DesktopTheme;
 import jp.co.pm.ai.desktop.config.PushButtonCssEmitter;
 import jp.co.pm.ai.desktop.config.PushButtonDesignPrefs;
 import jp.co.pm.ai.desktop.config.NetworkSourceDirResolver;
+import jp.co.pm.ai.desktop.config.SourceFileExtensionPolicy;
 import jp.co.pm.ai.desktop.gemini.GeminiFreeTierModelsRefreshService;
 import jp.co.pm.ai.desktop.config.PortableBundleBuildManifest;
 import jp.co.pm.ai.desktop.config.PortableBundlePendingUpdate;
@@ -6681,6 +6682,22 @@ public final class MainShellController
                                 "原本転記: 未走査");
         mainRunTabController.setStage1BlockedByPipelineCheck(
                 !status.permitted(), status.message(), status.badgeMessage());
+        refreshStage2SourceExtensionGate();
+    }
+
+    /** 段階2／2.1: 加工計画・加工日報の最新拡張子不正なら実行ボタンを抑止する。 */
+    void refreshStage2SourceExtensionGate() {
+        if (planInputTabController == null) {
+            return;
+        }
+        List<String> extErrs =
+                SourceFileExtensionPolicy.blockingMismatchMessages(collectUiEnv());
+        if (extErrs.isEmpty()) {
+            planInputTabController.setStage2BlockedBySourceExtension(false, "");
+        } else {
+            planInputTabController.setStage2BlockedBySourceExtension(
+                    true, String.join("\n", extErrs));
+        }
     }
 
     private boolean blockIfPipelineCheckBlocksStage1() {
@@ -6695,6 +6712,23 @@ public final class MainShellController
         }
         appendLog("[stage1] " + status.message());
         showWarningDialog("段階1", status.message());
+        return true;
+    }
+
+    /**
+     * 加工計画（.xlsx）／加工日報（.csv）の最新拡張子が不正なら段階実行を中止する。
+     *
+     * @return {@code true} のとき呼び出し側は return する
+     */
+    private boolean blockIfSourceExtensionMismatch(String stageJa) {
+        List<String> extErrs =
+                SourceFileExtensionPolicy.blockingMismatchMessages(collectUiEnv());
+        if (extErrs.isEmpty()) {
+            return false;
+        }
+        String message = String.join("\n", extErrs);
+        appendLog("[" + stageJa + "] " + message);
+        showWarningDialog(stageJa, message);
         return true;
     }
 
@@ -9625,6 +9659,9 @@ public final class MainShellController
         if (blockIfStage2SourceGuardBusy("段階2")) {
             return;
         }
+        if (blockIfSourceExtensionMismatch("段階2")) {
+            return;
+        }
         if (blockIfMaterialLookupTablesHaveBlankValues("段階2")) {
             return;
         }
@@ -9802,6 +9839,9 @@ public final class MainShellController
         if (blockIfStage2SourceGuardBusy("段階2.1")) {
             return;
         }
+        if (blockIfSourceExtensionMismatch("段階2.1")) {
+            return;
+        }
         if (blockIfMaterialLookupTablesHaveBlankValues("段階2.1")) {
             return;
         }
@@ -9878,6 +9918,9 @@ public final class MainShellController
     /** 段階2.1（残業/休出シミュ）: ウィザード確定後にフル再配台（output/stage21/）。 */
     void triggerStage21(java.nio.file.Path overtimeSimulationJson) {
         if (blockIfStage2SourceGuardBusy("段階2.1")) {
+            return;
+        }
+        if (blockIfSourceExtensionMismatch("段階2.1")) {
             return;
         }
         if (blockIfMaterialLookupTablesHaveBlankValues("段階2.1")) {
