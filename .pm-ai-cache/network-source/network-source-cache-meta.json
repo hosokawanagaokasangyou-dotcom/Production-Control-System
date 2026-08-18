@@ -1,12 +1,12 @@
 {
   "actual-detail-newest" : {
     "cacheFile" : "actual-detail-newest.xlsx",
-    "sourcePath" : "\\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\002  加工G\\●検査表作成\\加工実績明細DATA\\加工実績明細問合せ_20260818_073204.xlsx",
-    "updatedMillis" : 1787014392551
+    "sourcePath" : "\\\\192.168.0.101\\共有フォルダ\\国分工場\\国分共有\\●配台AIシステム\\DATA\\実績\\NO(ロット)別問合せ_20260811_164747.xlsx",
+    "updatedMillis" : 1787014950078
   },
   "task-input-newest" : {
     "cacheFile" : "task-input-newest.xlsx",
-    "sourcePath" : "\\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\生産管理システム\\管理システム\\●DATA\\生産計画問合せ\\工程別生産計画問合せ_20260818_085810.xlsx",
-    "updatedMillis" : 1787014392420
+    "sourcePath" : "\\\\192.168.0.101\\共有フォルダ\\国分工場\\国分共有\\●配台AIシステム\\DATA\\計画\\工程別生産計画問合せ_20260811_124623.xlsx",
+    "updatedMillis" : 1787014950030
   }
 }
