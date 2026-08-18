@@ -16,6 +16,7 @@ import javafx.stage.WindowEvent;
  * 工場切替（湖南／国分）実行中に表示する進捗モーダル。
  *
  * <p>必須処理のためキャンセル不可。呼び出し側で必ず {@link #close()} する。
+ * タイトルバーの閉じるボタンを出さないため {@link StageStyle#UNDECORATED}。
  */
 public final class FactorySiteSwitchBusyDialog {
 
@@ -28,6 +29,7 @@ public final class FactorySiteSwitchBusyDialog {
     public static final String STATUS_OPERATOR = "操作者を確認しています…";
     public static final String STATUS_STABILIZE = "環境変数の値を安定化しています…";
     public static final String STATUS_MATCH = "初期値と照合しています…";
+    public static final String STATUS_BACKGROUND_LOAD = "タブデータを読み込んでいます…";
     public static final String STATUS_DONE = "完了しました";
 
     private final Stage stage;
@@ -46,7 +48,7 @@ public final class FactorySiteSwitchBusyDialog {
      * @param initialStatus 最初の状況文言
      */
     public static FactorySiteSwitchBusyDialog show(Window owner, String header, String initialStatus) {
-        Stage stage = new Stage(StageStyle.UTILITY);
+        Stage stage = new Stage(StageStyle.UNDECORATED);
         if (owner != null) {
             stage.initOwner(owner);
         }
@@ -54,6 +56,12 @@ public final class FactorySiteSwitchBusyDialog {
         stage.setTitle(TITLE);
         stage.setResizable(false);
         stage.setOnCloseRequest(WindowEvent::consume);
+
+        Label titleBar = new Label(TITLE);
+        titleBar.setMaxWidth(Double.MAX_VALUE);
+        titleBar.setPadding(new Insets(6, 12, 6, 12));
+        titleBar.setStyle(
+                "-fx-background-color: #3d3d3d; -fx-text-fill: #f2f2f2; -fx-font-size: 12px;");
 
         Label headerLabel = new Label(header != null ? header : "工場を切り替えています");
         headerLabel.getStyleClass().add("dialog-header");
@@ -69,18 +77,32 @@ public final class FactorySiteSwitchBusyDialog {
         status.setWrapText(true);
         status.setMaxWidth(380);
 
-        VBox root = new VBox(14, headerLabel, progress, status);
-        root.setAlignment(Pos.CENTER);
-        root.setPadding(new Insets(20, 24, 24, 24));
-        root.setPrefWidth(400);
+        VBox content = new VBox(14, headerLabel, progress, status);
+        content.setAlignment(Pos.CENTER);
+        content.setPadding(new Insets(20, 24, 24, 24));
+        content.setPrefWidth(400);
 
-        stage.setScene(new Scene(root));
+        VBox windowRoot = new VBox(titleBar, content);
+        windowRoot.setStyle("-fx-background-color: #f0f0f0; -fx-border-color: #6b6b6b; -fx-border-width: 1;");
+
+        Scene scene = new Scene(windowRoot);
+        if (owner != null && owner.getScene() != null) {
+            scene.getStylesheets().setAll(owner.getScene().getStylesheets());
+        }
+        stage.setScene(scene);
         stage.sizeToScene();
         stage.show();
-        if (owner != null) {
-            stage.centerOnScreen();
-        }
+        positionOverOwner(stage, owner);
+        stage.toFront();
         return new FactorySiteSwitchBusyDialog(stage, status);
+    }
+
+    static void positionOverOwner(Stage stage, Window owner) {
+        if (owner == null) {
+            return;
+        }
+        stage.setX(FactorySiteSwitchBusySupport.centerX(owner.getX(), owner.getWidth(), stage.getWidth()));
+        stage.setY(FactorySiteSwitchBusySupport.centerY(owner.getY(), owner.getHeight(), stage.getHeight()));
     }
 
     public void setStatus(String text) {
@@ -91,6 +113,16 @@ public final class FactorySiteSwitchBusyDialog {
 
     public boolean isShowing() {
         return stage.isShowing();
+    }
+
+    /** テスト用。タイトルバーの閉じるボタンを出さないため {@link StageStyle#UNDECORATED}。 */
+    StageStyle stageStyle() {
+        return stage.getStyle();
+    }
+
+    /** テーマ CSS の追跡登録用。 */
+    public Scene scene() {
+        return stage.getScene();
     }
 
     public void close() {

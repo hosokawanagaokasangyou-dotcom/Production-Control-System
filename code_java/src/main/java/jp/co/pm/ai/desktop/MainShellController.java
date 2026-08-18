@@ -161,6 +161,7 @@ import jp.co.pm.ai.desktop.ui.AttendanceGridCellSizing;
 import jp.co.pm.ai.desktop.ui.UiRowHoverDimmingSettings;
 import jp.co.pm.ai.desktop.ui.EnvVarsStartupCheckBusyDialog;
 import jp.co.pm.ai.desktop.ui.FactorySiteSwitchBusyDialog;
+import jp.co.pm.ai.desktop.ui.FactorySiteSwitchBusySupport;
 import jp.co.pm.ai.desktop.ui.GlobalAppStatusBar;
 import jp.co.pm.ai.desktop.ui.ShellFactoryOperatorToolbar;
 import jp.co.pm.ai.desktop.ui.StageRunBusyDialog;
@@ -759,6 +760,12 @@ public final class MainShellController
 
     /** 工場切替中の進捗モーダル（表示中のみ非 null）。 */
     private FactorySiteSwitchBusyDialog factorySiteSwitchBusy;
+
+    /** 工場切替後のタブ再読込完了まで進捗モーダルを維持する。 */
+    private volatile boolean factorySwitchAwaitingBackgroundLoadBeforeModalClose;
+
+    private FactorySite factorySwitchBusyFrom;
+    private FactorySite factorySwitchBusyTo;
 
     /** 段階1／2 実行中の進捗モーダル（表示中のみ非 null）。 */
     private StageRunBusyDialog stageRunBusyDialog;
@@ -5020,6 +5027,8 @@ public final class MainShellController
     }
 
     private void beginFactorySiteSwitchBusy(FactorySite from, FactorySite to) {
+        factorySwitchBusyFrom = from;
+        factorySwitchBusyTo = to;
         if (startupSequenceActive && isEnvVarsStartupCheckBusyShowing()) {
             updateEnvVarsStartupCheckBusy(EnvVarsStartupCheckBusyDialog.STATUS_FACTORY_SWITCH);
             return;
@@ -5028,16 +5037,36 @@ public final class MainShellController
             updateFactorySiteSwitchBusy(FactorySiteSwitchBusyDialog.STATUS_SAVING);
             return;
         }
+        showFactorySiteSwitchBusy(FactorySiteSwitchBusyDialog.STATUS_SAVING);
+    }
+
+    private void beginFactorySiteSwitchTabLoadBusy() {
+        if (startupSequenceActive && isEnvVarsStartupCheckBusyShowing()) {
+            updateEnvVarsStartupCheckBusy(FactorySiteSwitchBusyDialog.STATUS_BACKGROUND_LOAD);
+            return;
+        }
+        if (isFactorySiteSwitchBusyShowing()) {
+            updateFactorySiteSwitchBusy(FactorySiteSwitchBusyDialog.STATUS_BACKGROUND_LOAD);
+            return;
+        }
+        showFactorySiteSwitchBusy(FactorySiteSwitchBusyDialog.STATUS_BACKGROUND_LOAD);
+    }
+
+    private void showFactorySiteSwitchBusy(String initialStatus) {
         if (primaryStage == null) {
             return;
         }
+        FactorySite from = factorySwitchBusyFrom;
+        FactorySite to = factorySwitchBusyTo;
         String header =
                 (from != null ? from.displayLabelJa() : "—")
                         + " → "
                         + (to != null ? to.displayLabelJa() : "—");
-        factorySiteSwitchBusy =
-                FactorySiteSwitchBusyDialog.show(
-                        primaryStage, header, FactorySiteSwitchBusyDialog.STATUS_SAVING);
+        factorySiteSwitchBusy = FactorySiteSwitchBusyDialog.show(primaryStage, header, initialStatus);
+        Scene scene = factorySiteSwitchBusy.scene();
+        if (scene != null) {
+            registerThemeTrackedScene(scene);
+        }
     }
 
     private void updateFactorySiteSwitchBusy(String status) {
@@ -5054,7 +5083,12 @@ public final class MainShellController
         if (startupSequenceActive) {
             return;
         }
+        factorySwitchAwaitingBackgroundLoadBeforeModalClose = false;
         if (factorySiteSwitchBusy != null) {
+            Scene scene = factorySiteSwitchBusy.scene();
+            if (scene != null) {
+                unregisterThemeTrackedScene(scene);
+            }
             factorySiteSwitchBusy.close();
             factorySiteSwitchBusy = null;
         }
@@ -5202,10 +5236,7 @@ public final class MainShellController
         startupSequenceActive = false;
         startupRestoredFactorySite = false;
         startupAwaitingBackgroundLoadBeforeModalClose = false;
-        if (factorySiteSwitchBusy != null) {
-            factorySiteSwitchBusy.close();
-            factorySiteSwitchBusy = null;
-        }
+        endFactorySiteSwitchBusy();
         endEnvVarsStartupCheckBusy();
         if (!isEnvVarsInitializationPending()
                 && !shouldSuppressStartupRequestFormOriginalDirPrompt()) {
@@ -6388,6 +6419,10 @@ public final class MainShellController
         } else if (isEnvVarsStartupCheckBusyShowing()
                 && startupAwaitingBackgroundLoadBeforeModalClose) {
             updateEnvVarsStartupCheckBusy(startupBackgroundLoadMessage);
+        } else if (isFactorySiteSwitchBusyShowing()
+                && factorySwitchAwaitingBackgroundLoadBeforeModalClose) {
+            updateFactorySiteSwitchBusy(
+                    FactorySiteSwitchBusySupport.resolveTabLoadStatus(startupBackgroundLoadMessage));
         }
         refreshGlobalStatusBar();
     }
@@ -6457,6 +6492,10 @@ public final class MainShellController
     public void onStartupBackgroundLoadFinished() {
         if (startupAwaitingBackgroundLoadBeforeModalClose) {
             finishStartupSequenceProgressAndPrompt();
+        }
+        if (factorySwitchAwaitingBackgroundLoadBeforeModalClose) {
+            updateFactorySiteSwitchBusy(FactorySiteSwitchBusyDialog.STATUS_DONE);
+            endFactorySiteSwitchBusy();
         }
         clearGlobalLongTaskProgress();
         refreshAttendanceReadiness();
@@ -8384,6 +8423,7 @@ public final class MainShellController
             return;
         }
         factorySiteSwitchInProgress = true;
+        factorySwitchAwaitingBackgroundLoadBeforeModalClose = false;
         setFactorySiteCombosDisabled(true);
         if (startupTabBackgroundLoad != null) {
             startupTabBackgroundLoad.cancelForFactorySwitch();
@@ -8507,10 +8547,10 @@ public final class MainShellController
     }
 
     /**
-     * 工場切替モーダルを閉じ、操作者確認・タブ更新・起動後読込を実行する。
+     * 工場切替モーダルをいったん閉じ、操作者確認のあとタブ再読込中に再度表示する。
      *
-     * <p>モーダル表示中に計画確認走査や操作者ダイアログを起動すると FX スレッドが詰まるため、
-     * 必ずモーダルを閉じてから後処理する。
+     * <p>操作者ダイアログは進捗モーダルと重ねると FX スレッドが詰まるため、確認の直前だけ閉じる。
+     * タブ再読込（リモート・カレンダー等）は起動時と同様に進捗モーダルを維持する。
      */
     private void finishFactorySiteSwitch(FactorySite newSite, boolean startup) {
         GlobalInitSettingTarget.setSuppressUiEnvInferencePersist(false);
@@ -8518,6 +8558,9 @@ public final class MainShellController
         factorySiteSwitchInProgress = false;
         setFactorySiteCombosDisabled(false);
         FactorySite site = newSite != null ? newSite : GlobalInitSettingTarget.load();
+        if (site != null) {
+            factorySwitchBusyTo = site;
+        }
         if (!FactoryOperatorUserStore.isGuestSession() && !(startup && startupSequenceActive)) {
             requireOperatorSelectionForFactory(site, startup);
         }
@@ -8528,7 +8571,13 @@ public final class MainShellController
                     if (startupSequenceActive) {
                         finishStartupSequenceAfterEnvCheck();
                     } else if (startupTabBackgroundLoad != null) {
+                        beginFactorySiteSwitchTabLoadBusy();
+                        factorySwitchAwaitingBackgroundLoadBeforeModalClose = true;
                         startupTabBackgroundLoad.resetAndScheduleAfterFactorySwitch();
+                        if (!FactorySiteSwitchBusySupport.keepBusyDialogForPostSwitchTabLoad(
+                                startupSequenceActive, startupTabBackgroundLoadActive)) {
+                            endFactorySiteSwitchBusy();
+                        }
                     }
                 });
     }
