@@ -329,7 +329,7 @@ public final class AladdinEntryDispatchPlanIdentityCheck {
         if (dir == null || !Files.isDirectory(dir)) {
             return Optional.empty();
         }
-        return NetworkSourceDirResolver.newestTaskInputFileInDirectory(dir)
+        return NetworkSourceDirResolver.newestTaskInputFileInDirectory(dir, ui)
                 .map(p -> p.toAbsolutePath().normalize());
     }
 

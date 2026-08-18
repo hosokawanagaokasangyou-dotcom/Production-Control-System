@@ -187,6 +187,21 @@ public final class EnvVarDocs {
                         + "湖南: ●DATA\\加工日報。国分: ●配台AIシステム\\DATA\\加工日報。"
                         + "環境変数を初期化（工場選択）でも上書きされる。フォルダ選択可。");
         put(
+                "PM_AI_PROCESSING_PLAN_REQUIRED_EXT",
+                "加工計画ソースの必須拡張子（例: .xlsx）。空で .xlsx。"
+                        + "先頭ドット省略可。最新候補がこの拡張子以外なら読込拒否・段階1/2・納期管理ビューをブロック。"
+                        + "SourceFileExtensionPolicy / NetworkSourceDirResolver が参照。");
+        put(
+                "PM_AI_PROCESSING_PLAN_CANDIDATE_EXTS",
+                "加工計画フォルダで最新判定に含める拡張子のカンマ区切り（例:"
+                        + " .csv,.parquet,.pq,.xlsx,.xlsm）。空で既定一覧。"
+                        + "必須拡張子が含まれていなければ自動追加。");
+        put(
+                "PM_AI_DAILY_REPORT_REQUIRED_EXT",
+                "加工日報ソースの必須拡張子（例: .csv）。空で .csv。"
+                        + "先頭ドット省略可。ファイル名接頭辞「加工日報発行問合せ_」付きの最新が"
+                        + "この拡張子以外なら読込拒否・ゲートブロック。");
+        put(
                 "PM_AI_ORDER_DETAIL_SOURCE_DIR",
                 "受注明細表 RPA 出力フォルダ（UNC 可）。将来の取得ロジック用。"
                         + "現状未設定のままでよい（未設定時は最新ファイル解決を行わない）。"

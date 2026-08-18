@@ -48,7 +48,7 @@ public final class AladdinProcessingPlanSourceFreshness {
         if (dir == null || !Files.isDirectory(dir)) {
             return new Result(false, Optional.empty());
         }
-        Optional<Path> newest = NetworkSourceDirResolver.newestTaskInputFileInDirectory(dir);
+        Optional<Path> newest = NetworkSourceDirResolver.newestTaskInputFileInDirectory(dir, u);
         if (newest.isEmpty()) {
             return new Result(false, Optional.empty());
         }

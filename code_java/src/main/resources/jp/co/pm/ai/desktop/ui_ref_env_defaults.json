@@ -467,6 +467,18 @@
     "value" : "KONAN",
     "description" : "現在選択中の利用工場（KONAN / KOKUBU）。工場切替コンボ（実行タブ）に追従して自動更新。C# ランチャーは同フォルダ JSON の operators（操作者ごとに一意）を参照する。旧 factories 形式も読取可。段階1の湖南工場限定ロジック（DISPATCHABLE_FROM_TIME_KONAN_STOCK 等）の判定にも使用。未設定時は KONAN。"
   }, {
+    "key" : "PM_AI_PROCESSING_PLAN_REQUIRED_EXT",
+    "value" : ".xlsx",
+    "description" : "加工計画ソースの必須拡張子（例: .xlsx）。空で .xlsx。先頭ドット省略可。最新候補がこの拡張子以外なら読込拒否・段階1/2・納期管理ビューをブロック。"
+  }, {
+    "key" : "PM_AI_PROCESSING_PLAN_CANDIDATE_EXTS",
+    "value" : ".csv,.parquet,.pq,.xlsx,.xlsm,.xltx,.xltm,.xls",
+    "description" : "加工計画フォルダで最新判定に含める拡張子のカンマ区切り。空で既定一覧。必須拡張子が含まれていなければ自動追加。"
+  }, {
+    "key" : "PM_AI_DAILY_REPORT_REQUIRED_EXT",
+    "value" : ".csv",
+    "description" : "加工日報ソースの必須拡張子（例: .csv）。空で .csv。先頭ドット省略可。接頭辞「加工日報発行問合せ_」付き最新がこの拡張子以外なら読込拒否・ゲートブロック。"
+  }, {
     "key" : "DISPATCHABLE_FROM_TIME_KONAN_STOCK",
     "value" : "09:30",
     "description" : "湖南工場（PM_AI_FACTORY_SITE=KONAN）かつ受注ファイル「在庫場所」列に「湖南」を含むタスクのみ: 原反投入日と同日の配台開始下限（HH:MM）。既定 09:30。他タスクは従来通り DISPATCHABLE_FROM_TIME(12:45) を使用。"

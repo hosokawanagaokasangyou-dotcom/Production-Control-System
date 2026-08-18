@@ -114,7 +114,7 @@ public final class RemoteDesktopLatestSourceFiles {
         return switch (category) {
             case PROCESSING_PLAN ->
                     NetworkSourceDirResolver.newestTaskInputFileInDirectory(
-                                    AppPaths.resolveTaskInputSourceDir(ui))
+                                    AppPaths.resolveTaskInputSourceDir(ui), ui)
                             .flatMap(RemoteDesktopLatestSourceFiles::toResolvedFile);
             case DAILY_REPORT ->
                     KonanDailyReportLookup.resolveNewestCsvPath(ui)

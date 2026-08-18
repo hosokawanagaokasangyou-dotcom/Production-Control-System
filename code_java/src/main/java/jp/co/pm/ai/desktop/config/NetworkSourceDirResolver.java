@@ -32,10 +32,9 @@ public final class NetworkSourceDirResolver {
     private static final String META_JSON = "network-source-cache-meta.json";
 
     /**
-     * 加工計画の読込対象は {@link SourceFileExtensionPolicy#PROCESSING_PLAN_REQUIRED_SUFFIX}（.xlsx）のみ。
-     * 最新判定の候補拡張子は {@link SourceFileExtensionPolicy} 側。
+     * 加工計画の読込対象拡張子は {@link AppPaths#resolveProcessingPlanRequiredExt(Map)}。
+     * 最新判定の候補拡張子は {@link AppPaths#resolveProcessingPlanCandidateExts(Map)}。
      */
-    private static final List<String> TASK_INPUT_SUFFIXES = List.of(".xlsx");
 
     /** Office Open XML（ZIP）系。中央ディレクトリ不整合を避けるためキャッシュ時に正規化する。 */
     private static final Set<String> OFFICE_ZIP_EXTENSIONS =
@@ -160,7 +159,7 @@ public final class NetworkSourceDirResolver {
             Path p = Path.of(explicit).toAbsolutePath().normalize();
             if (isReadableFile(p)) {
                 SourceFileExtensionPolicy.Result ext =
-                        SourceFileExtensionPolicy.checkProcessingPlanFile(p);
+                        SourceFileExtensionPolicy.checkProcessingPlanFile(p, u);
                 if (!ext.ok()) {
                     logs.add("[network-source] " + ext.errorMessage());
                     return new ResolvedNetworkSource(Optional.empty(), false);
@@ -191,7 +190,7 @@ public final class NetworkSourceDirResolver {
         }
         Path dir = AppPaths.resolveTaskInputSourceDir(u);
         SourceFileExtensionPolicy.Result planExt =
-                SourceFileExtensionPolicy.checkProcessingPlanDirectory(dir);
+                SourceFileExtensionPolicy.checkProcessingPlanDirectory(dir, u);
         if (!planExt.ok()) {
             logs.add("[network-source] " + planExt.errorMessage());
             if (planExt.newestCandidatePath().isPresent()) {
@@ -481,34 +480,35 @@ public final class NetworkSourceDirResolver {
     }
 
     /**
-     * {@link AppPaths#resolveTaskInputSourceDir(Map)} 直下から加工計画（.xlsx）の最新を返す。
-     * 最新候補の拡張子が .xlsx 以外のときは empty（{@link SourceFileExtensionPolicy}）。
+     * {@link AppPaths#resolveTaskInputSourceDir(Map)} 直下から加工計画の最新を返す。
+     * 最新候補の拡張子が必須拡張子以外のときは empty（{@link SourceFileExtensionPolicy}）。
      *
      * <p>{@code PM_AI_PROCESSING_PLAN_PATH} で単一ファイルが指定されている場合の優先は行わない（フォルダ内の最新のみ）。
+     * 環境変数による必須拡張子は未適用（既定）。UI マップがあるときは
+     * {@link #newestTaskInputFileInDirectory(Path, Map)} を使うこと。
      */
     public static Optional<Path> newestTaskInputFileInDirectory(Path taskInputSourceDir) {
-        return SourceFileExtensionPolicy.checkProcessingPlanDirectory(taskInputSourceDir)
+        return newestTaskInputFileInDirectory(taskInputSourceDir, Map.of());
+    }
+
+    /** {@link #newestTaskInputFileInDirectory(Path)} と同じだが、必須／候補拡張子と明示パスを ui から解決する。 */
+    public static Optional<Path> newestTaskInputFileInDirectory(
+            Path taskInputSourceDir, Map<String, String> ui) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        String explicit = trim(u.get(AppPaths.KEY_PM_AI_PROCESSING_PLAN_PATH));
+        if (!explicit.isEmpty()) {
+            Path p = Path.of(explicit);
+            if (isReadableFile(p)) {
+                return SourceFileExtensionPolicy.checkProcessingPlanFile(p, u).loadablePath();
+            }
+        }
+        return SourceFileExtensionPolicy.checkProcessingPlanDirectory(taskInputSourceDir, u)
                 .loadablePath();
     }
 
     /** {@link AppPaths#resolveActualDetailSourceDir(Map)} 直下の最新 Excel（xlsx/xlsm）。 */
     public static Optional<Path> newestExcelFileInDirectory(Path actualDetailSourceDir) {
         return pickNewestExcelInDir(actualDetailSourceDir);
-    }
-
-    private static Optional<Path> pickNewestTaskInputInDir(Path dir) {
-        if (!isAccessibleDir(dir)) {
-            return Optional.empty();
-        }
-        try (Stream<Path> stream = Files.list(dir)) {
-            return stream
-                    .filter(Files::isRegularFile)
-                    .filter(NetworkSourceDirResolver::isTaskInputSuffix)
-                    .filter(p -> !lockFile(p))
-                    .max(Comparator.comparingLong(NetworkSourceDirResolver::mtimeScore));
-        } catch (IOException e) {
-            return Optional.empty();
-        }
     }
 
     private static Optional<Path> pickNewestExcelInDir(Path dir) {
@@ -545,16 +545,6 @@ public final class NetworkSourceDirResolver {
     private static boolean lockFile(Path p) {
         String name = p.getFileName() != null ? p.getFileName().toString() : "";
         return name.startsWith("~$");
-    }
-
-    private static boolean isTaskInputSuffix(Path p) {
-        String n = p.getFileName() != null ? p.getFileName().toString().toLowerCase(Locale.ROOT) : "";
-        for (String s : TASK_INPUT_SUFFIXES) {
-            if (n.endsWith(s)) {
-                return true;
-            }
-        }
-        return false;
     }
 
     private static boolean isExcelSuffix(Path p) {

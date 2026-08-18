@@ -1355,7 +1355,7 @@ public final class RequestFormPipelineCheckTabController {
             if (dir == null || !Files.isDirectory(dir)) {
                 return Optional.empty();
             }
-            Optional<Path> newest = NetworkSourceDirResolver.newestTaskInputFileInDirectory(dir);
+            Optional<Path> newest = NetworkSourceDirResolver.newestTaskInputFileInDirectory(dir, ui);
             if (newest.isEmpty()) {
                 return Optional.empty();
             }

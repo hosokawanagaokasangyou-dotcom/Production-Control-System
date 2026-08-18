@@ -380,17 +380,7 @@ public final class AladdinProcessingPlanDataTabController {
         Path dir = AppPaths.resolveTaskInputSourceDir(ui);
         dirLabel.setText(dir != null ? dir.toString() : "(未設定)");
         SourceExtensionErrorOverlay.clear(spreadsheetHost);
-        if (dir == null || !Files.isDirectory(dir)) {
-            statusLabel.setText("ソースフォルダがありません");
-            pathLabel.setText("");
-            sheetCombo.setDisable(true);
-            sheetCombo.getItems().clear();
-            loadedPath = null;
-            applyEmpty();
-            return;
-        }
-        SourceFileExtensionPolicy.Result ext =
-                SourceFileExtensionPolicy.checkProcessingPlanDirectory(dir);
+        SourceFileExtensionPolicy.Result ext = SourceFileExtensionPolicy.checkProcessingPlanForUi(ui);
         if (!ext.ok()) {
             statusLabel.setText(ext.errorMessage());
             pathLabel.setText(

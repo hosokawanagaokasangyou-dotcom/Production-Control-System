@@ -1166,7 +1166,7 @@ public final class MainShellController
                             }
                             if (newTab == mainShellTabDeliveryCalendar
                                     && deliveryCalendarViewTabController != null) {
-                                deliveryCalendarViewTabController.refreshSourceExtensionGate();
+                                refreshStage1PipelineCheckGate();
                                 deliveryCalendarViewTabController.collapseInnerSectionPanesOnShellSelect();
                             }
                             if (newTab == mainShellTabApiModelBenchmark

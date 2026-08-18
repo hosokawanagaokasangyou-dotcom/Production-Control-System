@@ -27,6 +27,20 @@ public final class SourceExtensionErrorOverlay {
         box.setMouseTransparent(false);
         StackPane.setAlignment(box, Pos.CENTER);
         host.getChildren().add(box);
+        box.toFront();
+    }
+
+    /** 同一ホスト上で stale 等の後ろに隠れた場合に最前面へ。 */
+    public static void toFrontIfShowing(StackPane host) {
+        if (host == null) {
+            return;
+        }
+        host.getChildren().stream()
+                .filter(
+                        n ->
+                                n.getStyleClass() != null
+                                        && n.getStyleClass().contains(STYLE_CLASS))
+                .forEach(javafx.scene.Node::toFront);
     }
 
     public static void clear(StackPane host) {

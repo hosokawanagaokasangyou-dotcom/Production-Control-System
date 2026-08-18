@@ -89,6 +89,37 @@ public final class AppPaths {
     public static final String KEY_PM_AI_DAILY_REPORT_SOURCE_DIR = "PM_AI_DAILY_REPORT_SOURCE_DIR";
 
     /**
+     * 加工計画ソースの必須拡張子（例: {@code .xlsx}）。空／未設定時は
+     * {@link #DEFAULT_PROCESSING_PLAN_REQUIRED_EXT}。先頭ドット省略可。
+     */
+    public static final String KEY_PM_AI_PROCESSING_PLAN_REQUIRED_EXT =
+            "PM_AI_PROCESSING_PLAN_REQUIRED_EXT";
+
+    /** {@link #KEY_PM_AI_PROCESSING_PLAN_REQUIRED_EXT} の既定。 */
+    public static final String DEFAULT_PROCESSING_PLAN_REQUIRED_EXT = ".xlsx";
+
+    /**
+     * 加工計画フォルダで「最新判定」に含める拡張子のカンマ区切り一覧。空／未設定時は
+     * {@link #DEFAULT_PROCESSING_PLAN_CANDIDATE_EXTS}。
+     */
+    public static final String KEY_PM_AI_PROCESSING_PLAN_CANDIDATE_EXTS =
+            "PM_AI_PROCESSING_PLAN_CANDIDATE_EXTS";
+
+    /** {@link #KEY_PM_AI_PROCESSING_PLAN_CANDIDATE_EXTS} の既定。 */
+    public static final String DEFAULT_PROCESSING_PLAN_CANDIDATE_EXTS =
+            ".csv,.parquet,.pq,.xlsx,.xlsm,.xltx,.xltm,.xls";
+
+    /**
+     * 加工日報ソースの必須拡張子（例: {@code .csv}）。空／未設定時は
+     * {@link #DEFAULT_DAILY_REPORT_REQUIRED_EXT}。先頭ドット省略可。
+     */
+    public static final String KEY_PM_AI_DAILY_REPORT_REQUIRED_EXT =
+            "PM_AI_DAILY_REPORT_REQUIRED_EXT";
+
+    /** {@link #KEY_PM_AI_DAILY_REPORT_REQUIRED_EXT} の既定。 */
+    public static final String DEFAULT_DAILY_REPORT_REQUIRED_EXT = ".csv";
+
+    /**
      * 受注明細表 RPA 出力フォルダ（将来ロジック用）。未設定時は最新ファイル解決を行わない。
      */
     public static final String KEY_PM_AI_ORDER_DETAIL_SOURCE_DIR = "PM_AI_ORDER_DETAIL_SOURCE_DIR";
@@ -1049,6 +1080,70 @@ public final class AppPaths {
             return Path.of(override).toAbsolutePath().normalize();
         }
         return Path.of(defaultDailyReportSourceDirForFactory(resolveFactorySiteFromUi(u)));
+    }
+
+    /**
+     * 加工計画ソースの必須拡張子（先頭ドット付き・小文字）。未設定時は
+     * {@link #DEFAULT_PROCESSING_PLAN_REQUIRED_EXT}。
+     */
+    public static String resolveProcessingPlanRequiredExt(Map<String, String> ui) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        return normalizeFileExtension(
+                firstNonBlank(trim(u.get(KEY_PM_AI_PROCESSING_PLAN_REQUIRED_EXT)),
+                        DEFAULT_PROCESSING_PLAN_REQUIRED_EXT));
+    }
+
+    /**
+     * 加工日報ソースの必須拡張子（先頭ドット付き・小文字）。未設定時は
+     * {@link #DEFAULT_DAILY_REPORT_REQUIRED_EXT}。
+     */
+    public static String resolveDailyReportRequiredExt(Map<String, String> ui) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        return normalizeFileExtension(
+                firstNonBlank(
+                        trim(u.get(KEY_PM_AI_DAILY_REPORT_REQUIRED_EXT)),
+                        DEFAULT_DAILY_REPORT_REQUIRED_EXT));
+    }
+
+    /**
+     * 加工計画フォルダの最新判定候補拡張子一覧（先頭ドット付き・小文字）。未設定時は
+     * {@link #DEFAULT_PROCESSING_PLAN_CANDIDATE_EXTS}。必須拡張子が候補に無ければ末尾に追加する。
+     */
+    public static List<String> resolveProcessingPlanCandidateExts(Map<String, String> ui) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        String raw =
+                firstNonBlank(
+                        trim(u.get(KEY_PM_AI_PROCESSING_PLAN_CANDIDATE_EXTS)),
+                        DEFAULT_PROCESSING_PLAN_CANDIDATE_EXTS);
+        List<String> out = new ArrayList<>();
+        for (String part : raw.split(",")) {
+            String ext = normalizeFileExtension(part);
+            if (!ext.isEmpty() && !out.contains(ext)) {
+                out.add(ext);
+            }
+        }
+        String required = resolveProcessingPlanRequiredExt(u);
+        if (!required.isEmpty() && !out.contains(required)) {
+            out.add(required);
+        }
+        if (out.isEmpty()) {
+            return List.of(DEFAULT_PROCESSING_PLAN_REQUIRED_EXT);
+        }
+        return List.copyOf(out);
+    }
+
+    /** 拡張子文字列を先頭ドット付き・小文字に正規化する。空なら空文字。 */
+    public static String normalizeFileExtension(String raw) {
+        String s = trim(raw);
+        if (s.isEmpty()) {
+            return "";
+        }
+        if (s.startsWith("*.")) {
+            s = s.substring(1);
+        } else if (!s.startsWith(".")) {
+            s = "." + s;
+        }
+        return s.toLowerCase(Locale.ROOT);
     }
 
     /**

@@ -34,13 +34,9 @@ public final class AladdinProcessingPlanSourceReloader {
     public static ReloadResult reloadNewestFromDiskAndSaveShapedJson(Map<String, String> ui)
             throws IOException {
         Map<String, String> u = ui != null ? ui : Map.of();
-        Path dir = AppPaths.resolveTaskInputSourceDir(u);
-        if (dir == null || !Files.isDirectory(dir)) {
-            throw new IOException("タスク入力ソースフォルダがありません: " + dir);
-        }
-        SourceFileExtensionPolicy.Result ext =
-                SourceFileExtensionPolicy.checkProcessingPlanDirectory(dir);
+        SourceFileExtensionPolicy.Result ext = SourceFileExtensionPolicy.checkProcessingPlanForUi(u);
         if (!ext.ok()) {
+            Path dir = AppPaths.resolveTaskInputSourceDir(u);
             throw new IOException(
                     ext.errorMessage().isBlank()
                             ? "読込対象ファイルがありません: " + dir

@@ -14,8 +14,6 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-import jp.co.pm.ai.desktop.config.AppPaths;
-
 class SourceFileExtensionPolicyTest {
 
     @TempDir
@@ -68,6 +66,23 @@ class SourceFileExtensionPolicyTest {
     }
 
     @Test
+    void processingPlan_respectsRequiredExtFromUi() throws Exception {
+        Path olderXlsx = temp.resolve("plan.xlsx");
+        Path newerCsv = temp.resolve("plan.csv");
+        Files.writeString(olderXlsx, "xlsx");
+        Files.writeString(newerCsv, "csv");
+        bumpNewer(newerCsv, olderXlsx);
+
+        SourceFileExtensionPolicy.Result r =
+                SourceFileExtensionPolicy.checkProcessingPlanDirectory(
+                        temp,
+                        Map.of(AppPaths.KEY_PM_AI_PROCESSING_PLAN_REQUIRED_EXT, "csv"));
+
+        assertTrue(r.ok());
+        assertEquals(newerCsv.toAbsolutePath().normalize(), r.loadablePath().orElseThrow());
+    }
+
+    @Test
     void dailyReport_okWhenNewestMatchingPrefixIsCsv() throws Exception {
         Path older = temp.resolve("加工日報発行問合せ_20260101.csv");
         Path newer = temp.resolve("加工日報発行問合せ_20260201.csv");
@@ -100,6 +115,22 @@ class SourceFileExtensionPolicyTest {
     }
 
     @Test
+    void dailyReport_respectsRequiredExtFromUi() throws Exception {
+        Path olderCsv = temp.resolve("加工日報発行問合せ_20260101.csv");
+        Path newerXlsx = temp.resolve("加工日報発行問合せ_20260201.xlsx");
+        Files.writeString(olderCsv, "csv");
+        Files.writeString(newerXlsx, "xlsx");
+        bumpNewer(newerXlsx, olderCsv);
+
+        SourceFileExtensionPolicy.Result r =
+                SourceFileExtensionPolicy.checkDailyReportDirectory(
+                        temp, Map.of(AppPaths.KEY_PM_AI_DAILY_REPORT_REQUIRED_EXT, ".xlsx"));
+
+        assertTrue(r.ok());
+        assertEquals(newerXlsx.toAbsolutePath().normalize(), r.loadablePath().orElseThrow());
+    }
+
+    @Test
     void blockingMismatchMessages_includesPlanWhenNewestIsCsv() throws Exception {
         Path planDir = temp.resolve("plan");
         Path dailyDir = temp.resolve("daily");
@@ -122,6 +153,26 @@ class SourceFileExtensionPolicyTest {
         assertEquals(1, msgs.size());
         assertTrue(msgs.getFirst().contains("加工計画"));
         assertTrue(msgs.getFirst().contains("拡張子が不正"));
+    }
+
+    @Test
+    void dailyReport_fileRequiresFilenamePrefix() throws Exception {
+        Path badName = temp.resolve("任意名.csv");
+        Files.writeString(badName, "x");
+
+        SourceFileExtensionPolicy.Result r =
+                SourceFileExtensionPolicy.checkDailyReportFile(badName);
+
+        assertFalse(r.ok());
+        assertTrue(r.errorMessage().contains("接頭辞"));
+    }
+
+    @Test
+    void normalizeFileExtension_addsDotAndLowercases() {
+        assertEquals(".xlsx", AppPaths.normalizeFileExtension("XLSX"));
+        assertEquals(".csv", AppPaths.normalizeFileExtension(".CSV"));
+        assertEquals(".pq", AppPaths.normalizeFileExtension("*.pq"));
+        assertEquals("", AppPaths.normalizeFileExtension(""));
     }
 
     private static void bumpNewer(Path newer, Path older) throws Exception {

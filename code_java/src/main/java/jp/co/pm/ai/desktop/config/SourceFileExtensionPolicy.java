@@ -14,19 +14,23 @@ import java.util.function.Predicate;
 import java.util.stream.Stream;
 
 /**
- * 加工計画（xlsx）／加工日報（csv）の拡張子ポリシー。
+ * 加工計画／加工日報の拡張子ポリシー。
  *
- * <p>フォルダ内の候補のうち更新日時が最新のファイルが期待拡張子以外ならエラーとし、読込対象は返さない。
+ * <p>必須拡張子は環境変数（{@link AppPaths#KEY_PM_AI_PROCESSING_PLAN_REQUIRED_EXT} /
+ * {@link AppPaths#KEY_PM_AI_DAILY_REPORT_REQUIRED_EXT}）で上書き可能。フォルダ内の候補のうち更新日時が最新の
+ * ファイルが期待拡張子以外ならエラーとし、読込対象は返さない。
  */
 public final class SourceFileExtensionPolicy {
 
-    /** 加工計画フォルダで「最新判定」に含める拡張子（読込は {@link #PROCESSING_PLAN_REQUIRED_SUFFIX} のみ）。 */
-    private static final List<String> PROCESSING_PLAN_CANDIDATE_SUFFIXES =
-            List.of(".csv", ".parquet", ".pq", ".xlsx", ".xlsm", ".xltx", ".xltm", ".xls");
+    /** @deprecated 既定値。実行時は {@link AppPaths#resolveProcessingPlanRequiredExt(Map)} を使う。 */
+    @Deprecated
+    public static final String PROCESSING_PLAN_REQUIRED_SUFFIX =
+            AppPaths.DEFAULT_PROCESSING_PLAN_REQUIRED_EXT;
 
-    public static final String PROCESSING_PLAN_REQUIRED_SUFFIX = ".xlsx";
-
-    public static final String DAILY_REPORT_REQUIRED_SUFFIX = ".csv";
+    /** @deprecated 既定値。実行時は {@link AppPaths#resolveDailyReportRequiredExt(Map)} を使う。 */
+    @Deprecated
+    public static final String DAILY_REPORT_REQUIRED_SUFFIX =
+            AppPaths.DEFAULT_DAILY_REPORT_REQUIRED_EXT;
 
     public static final String DAILY_REPORT_FILENAME_PREFIX = "加工日報発行問合せ_";
 
@@ -66,42 +70,94 @@ public final class SourceFileExtensionPolicy {
 
     private SourceFileExtensionPolicy() {}
 
+    /** 既定拡張子（環境変数なし）で加工計画フォルダを検証。 */
     public static Result checkProcessingPlanDirectory(Path dir) {
+        return checkProcessingPlanDirectory(dir, Map.of());
+    }
+
+    public static Result checkProcessingPlanDirectory(Path dir, Map<String, String> ui) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        String required = AppPaths.resolveProcessingPlanRequiredExt(u);
+        List<String> candidates = AppPaths.resolveProcessingPlanCandidateExts(u);
         return checkDirectory(
                 dir,
                 "加工計画",
-                PROCESSING_PLAN_REQUIRED_SUFFIX,
-                SourceFileExtensionPolicy::isProcessingPlanCandidate,
-                SourceFileExtensionPolicy::isProcessingPlanLoadable);
+                required,
+                p -> isProcessingPlanCandidate(p, candidates),
+                p -> isProcessingPlanLoadable(p, required));
     }
 
+    /** 既定拡張子（環境変数なし）で加工日報フォルダを検証。 */
     public static Result checkDailyReportDirectory(Path dir) {
+        return checkDailyReportDirectory(dir, Map.of());
+    }
+
+    public static Result checkDailyReportDirectory(Path dir, Map<String, String> ui) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        String required = AppPaths.resolveDailyReportRequiredExt(u);
         return checkDirectory(
                 dir,
                 "加工日報",
-                DAILY_REPORT_REQUIRED_SUFFIX,
+                required,
                 SourceFileExtensionPolicy::isDailyReportCandidate,
-                SourceFileExtensionPolicy::isDailyReportLoadable);
+                p -> isDailyReportLoadable(p, required));
     }
 
-    /** 単一ファイル指定時の拡張子検証（加工計画）。 */
+    /** 単一ファイル指定時の拡張子検証（加工計画・既定拡張子）。 */
     public static Result checkProcessingPlanFile(Path file) {
-        return checkSingleFile(file, "加工計画", PROCESSING_PLAN_REQUIRED_SUFFIX);
+        return checkProcessingPlanFile(file, Map.of());
     }
 
-    /** 単一ファイル指定時の拡張子検証（加工日報）。 */
+    public static Result checkProcessingPlanFile(Path file, Map<String, String> ui) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        return checkSingleFile(file, "加工計画", AppPaths.resolveProcessingPlanRequiredExt(u));
+    }
+
+    /** 単一ファイル指定時の拡張子検証（加工日報・既定拡張子）。 */
     public static Result checkDailyReportFile(Path file) {
-        return checkSingleFile(file, "加工日報", DAILY_REPORT_REQUIRED_SUFFIX);
+        return checkDailyReportFile(file, Map.of());
+    }
+
+    public static Result checkDailyReportFile(Path file, Map<String, String> ui) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        String required = AppPaths.resolveDailyReportRequiredExt(u);
+        if (file == null || !Files.isRegularFile(file)) {
+            return Result.emptyDir("加工日報", required);
+        }
+        Path abs = file.toAbsolutePath().normalize();
+        String name = fileName(abs);
+        if (!name.startsWith(DAILY_REPORT_FILENAME_PREFIX)) {
+            return new Result(
+                    false,
+                    Optional.empty(),
+                    Optional.of(abs),
+                    "加工日報のファイル名が不正です（期待接頭辞: "
+                            + DAILY_REPORT_FILENAME_PREFIX
+                            + "）: "
+                            + name);
+        }
+        if (!endsWithIgnoreCase(name, required)) {
+            return Result.mismatch("加工日報", required, abs, extensionOf(name));
+        }
+        return Result.ok(abs);
     }
 
     public static boolean isProcessingPlanLoadable(Path p) {
-        return endsWithIgnoreCase(fileName(p), PROCESSING_PLAN_REQUIRED_SUFFIX);
+        return isProcessingPlanLoadable(p, AppPaths.DEFAULT_PROCESSING_PLAN_REQUIRED_EXT);
+    }
+
+    public static boolean isProcessingPlanLoadable(Path p, String requiredSuffix) {
+        return endsWithIgnoreCase(fileName(p), requiredSuffix);
     }
 
     public static boolean isDailyReportLoadable(Path p) {
+        return isDailyReportLoadable(p, AppPaths.DEFAULT_DAILY_REPORT_REQUIRED_EXT);
+    }
+
+    public static boolean isDailyReportLoadable(Path p, String requiredSuffix) {
         String name = fileName(p);
         return name.startsWith(DAILY_REPORT_FILENAME_PREFIX)
-                && endsWithIgnoreCase(name, DAILY_REPORT_REQUIRED_SUFFIX);
+                && endsWithIgnoreCase(name, requiredSuffix);
     }
 
     /**
@@ -128,26 +184,30 @@ public final class SourceFileExtensionPolicy {
         }
     }
 
-    private static Result checkProcessingPlanForUi(Map<String, String> ui) {
-        String explicit = trim(ui.get(AppPaths.KEY_PM_AI_PROCESSING_PLAN_PATH));
+    /** UI 環境変数から加工計画ソースを検証（明示パス優先）。 */
+    public static Result checkProcessingPlanForUi(Map<String, String> ui) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        String explicit = trim(u.get(AppPaths.KEY_PM_AI_PROCESSING_PLAN_PATH));
         if (!explicit.isEmpty()) {
             Path p = Path.of(explicit);
             if (Files.isRegularFile(p)) {
-                return checkProcessingPlanFile(p);
+                return checkProcessingPlanFile(p, u);
             }
         }
-        return checkProcessingPlanDirectory(AppPaths.resolveTaskInputSourceDir(ui));
+        return checkProcessingPlanDirectory(AppPaths.resolveTaskInputSourceDir(u), u);
     }
 
-    private static Result checkDailyReportForUi(Map<String, String> ui) {
-        String explicit = trim(ui.get("PM_AI_DAILY_REPORT_CSV_PATH"));
+    /** UI 環境変数から加工日報ソースを検証（明示パス優先）。 */
+    public static Result checkDailyReportForUi(Map<String, String> ui) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        String explicit = trim(u.get("PM_AI_DAILY_REPORT_CSV_PATH"));
         if (!explicit.isEmpty()) {
             Path p = Path.of(explicit);
             if (Files.isRegularFile(p)) {
-                return checkDailyReportFile(p);
+                return checkDailyReportFile(p, u);
             }
         }
-        return checkDailyReportDirectory(AppPaths.resolveDailyReportSourceDir(ui));
+        return checkDailyReportDirectory(AppPaths.resolveDailyReportSourceDir(u), u);
     }
 
     private static String trim(String s) {
@@ -197,9 +257,9 @@ public final class SourceFileExtensionPolicy {
         }
     }
 
-    private static boolean isProcessingPlanCandidate(Path p) {
+    private static boolean isProcessingPlanCandidate(Path p, List<String> candidateSuffixes) {
         String n = fileName(p).toLowerCase(Locale.ROOT);
-        for (String s : PROCESSING_PLAN_CANDIDATE_SUFFIXES) {
+        for (String s : candidateSuffixes) {
             if (n.endsWith(s)) {
                 return true;
             }

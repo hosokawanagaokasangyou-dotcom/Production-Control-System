@@ -1121,9 +1121,7 @@ public final class DeliveryCalendarViewTabController {
                     "段階2 完了後の納期管理更新",
                     message != null && !message.isBlank() ? message : "納期管理ビューの更新に失敗しました。");
         }
-        if (after != null) {
-            after.run();
-        }
+        // 失敗時は成功継続コールバックを実行しない（Excel 出力・完了ダイアログ等を誤発火させない）
     }
 
     /**
@@ -1263,6 +1261,7 @@ public final class DeliveryCalendarViewTabController {
                     if (pipelineStaleOverlayTitle != null) {
                         pipelineStaleOverlayTitle.setText("表示を保留しています");
                     }
+                    SourceExtensionErrorOverlay.toFrontIfShowing(deliveryCalendarBodyHost);
                 });
     }
 

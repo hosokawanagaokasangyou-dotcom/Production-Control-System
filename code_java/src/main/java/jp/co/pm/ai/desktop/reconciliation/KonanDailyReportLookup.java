@@ -324,30 +324,7 @@ public final class KonanDailyReportLookup {
     }
 
     private static Path resolveCsvPath(Map<String, String> ui) throws IOException {
-        String explicit =
-                ui != null ? ui.getOrDefault(KEY_DAILY_REPORT_CSV_PATH, "").strip() : "";
-        if (!explicit.isEmpty()) {
-            Path p = Path.of(explicit);
-            if (!Files.isRegularFile(p)) {
-                return null;
-            }
-            SourceFileExtensionPolicy.Result ext =
-                    SourceFileExtensionPolicy.checkDailyReportFile(p.toAbsolutePath().normalize());
-            if (!ext.ok()) {
-                throw new IOException(ext.errorMessage());
-            }
-            return ext.loadablePath().orElse(null);
-        }
-        String dir = ui != null ? ui.getOrDefault(KEY_DAILY_REPORT_SOURCE_DIR, "").strip() : "";
-        if (dir.isEmpty()) {
-            dir = AppPaths.resolveDailyReportSourceDir(ui).toString();
-        }
-        Path dirPath = Path.of(dir);
-        if (!Files.isDirectory(dirPath)) {
-            return null;
-        }
-        SourceFileExtensionPolicy.Result ext =
-                SourceFileExtensionPolicy.checkDailyReportDirectory(dirPath);
+        SourceFileExtensionPolicy.Result ext = SourceFileExtensionPolicy.checkDailyReportForUi(ui);
         if (!ext.ok()) {
             if (ext.newestCandidatePath().isPresent()) {
                 throw new IOException(ext.errorMessage());
