@@ -7,6 +7,7 @@
 <?import javafx.scene.control.Separator?>
 <?import javafx.scene.control.TableColumn?>
 <?import javafx.scene.control.TableView?>
+<?import javafx.scene.control.Tooltip?>
 <?import javafx.scene.layout.HBox?>
 <?import javafx.scene.layout.VBox?>
 
@@ -24,18 +25,31 @@
         <Label text="操作者"/>
         <ComboBox fx:id="operatorCombo" prefWidth="220.0"/>
         <Button fx:id="refreshButton" mnemonicParsing="false" onAction="#onRefreshAction" text="再読み"/>
-        <Button fx:id="openExcelButton" mnemonicParsing="false" onAction="#onOpenExcelAction" text="Excelを開く"/>
-        <Button fx:id="showPlanJsonButton" mnemonicParsing="false" onAction="#onShowPlanJsonAction" text="JSONを表で表示"/>
+    </HBox>
+    <HBox spacing="8.0" alignment="CENTER_LEFT">
+        <Label text="選択行"/>
+        <Button fx:id="openExcelButton" disable="true" mnemonicParsing="false" onAction="#onOpenExcelAction"
+                text="Excelを開く">
+            <tooltip>
+                <Tooltip text="一覧の行を選んでから押してください。"/>
+            </tooltip>
+        </Button>
+        <Button fx:id="showPlanJsonButton" disable="true" mnemonicParsing="false"
+                onAction="#onShowPlanJsonAction" text="JSONを表で表示">
+            <tooltip>
+                <Tooltip text="一覧の行を選んでから押してください。"/>
+            </tooltip>
+        </Button>
     </HBox>
     <Label fx:id="pathLabel" styleClass="pm-muted-label" wrapText="true"/>
     <Label fx:id="statusLabel" wrapText="true"/>
+    <Label fx:id="detailLabel" styleClass="pm-muted-label" wrapText="true"
+           text="行を選択すると保存時のソースパスなどを表示します。"/>
     <TableView fx:id="historyTable" prefHeight="420.0" VBox.vgrow="ALWAYS">
         <columns>
             <TableColumn fx:id="tsColumn" text="日時" prefWidth="180.0"/>
             <TableColumn fx:id="resultColumn" text="結果" prefWidth="90.0"/>
             <TableColumn fx:id="diffCountColumn" text="差異件数" prefWidth="90.0"/>
-            <TableColumn fx:id="folderColumn" text="フォルダ名" prefWidth="200.0"/>
-            <TableColumn fx:id="badgeColumn" text="バッジ" prefWidth="280.0"/>
         </columns>
     </TableView>
 </VBox>

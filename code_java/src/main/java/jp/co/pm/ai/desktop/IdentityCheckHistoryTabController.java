@@ -1,7 +1,6 @@
 package jp.co.pm.ai.desktop;
 
 import java.awt.Desktop;
-import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.OffsetDateTime;
@@ -11,17 +10,24 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+import javafx.application.Platform;
 import javafx.beans.property.ReadOnlyStringWrapper;
 import javafx.collections.FXCollections;
 import javafx.fxml.FXML;
+import javafx.geometry.Insets;
+import javafx.scene.control.Alert;
+import javafx.scene.control.Button;
+import javafx.scene.control.ButtonBar;
+import javafx.scene.control.ButtonType;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Dialog;
 import javafx.scene.control.Label;
-import javafx.scene.control.ButtonType;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
+import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import javafx.stage.Modality;
+import javafx.stage.Stage;
 import javafx.stage.Window;
 
 import jp.co.pm.ai.desktop.config.FactoryOperatorUserStore;
@@ -34,16 +40,29 @@ import jp.co.pm.ai.desktop.io.JsonTableIo;
  */
 public final class IdentityCheckHistoryTabController {
 
+    private static final int JSON_DIALOG_MAX_COLUMNS = 40;
+
     private MainShellController shell;
+
+    private boolean refreshing;
 
     @FXML
     private ComboBox<String> operatorCombo;
+
+    @FXML
+    private Button openExcelButton;
+
+    @FXML
+    private Button showPlanJsonButton;
 
     @FXML
     private Label pathLabel;
 
     @FXML
     private Label statusLabel;
+
+    @FXML
+    private Label detailLabel;
 
     @FXML
     private TableView<IdentityCheckHistoryStore.SnapshotRef> historyTable;
@@ -57,14 +76,13 @@ public final class IdentityCheckHistoryTabController {
     @FXML
     private TableColumn<IdentityCheckHistoryStore.SnapshotRef, String> diffCountColumn;
 
-    @FXML
-    private TableColumn<IdentityCheckHistoryStore.SnapshotRef, String> folderColumn;
-
-    @FXML
-    private TableColumn<IdentityCheckHistoryStore.SnapshotRef, String> badgeColumn;
-
     public void bindShell(MainShellController shell) {
         this.shell = shell;
+        refresh();
+    }
+
+    /** メインタブ選択時に一覧を再読込する。 */
+    public void onMainShellTabSelected() {
         refresh();
     }
 
@@ -78,22 +96,21 @@ public final class IdentityCheckHistoryTabController {
                 c ->
                         new ReadOnlyStringWrapper(
                                 Integer.toString(Math.max(0, c.getValue().meta().diffCount()))));
-        folderColumn.setCellValueFactory(
-                c ->
-                        new ReadOnlyStringWrapper(
-                                c.getValue().dir().getFileName() != null
-                                        ? c.getValue().dir().getFileName().toString()
-                                        : ""));
-        badgeColumn.setCellValueFactory(
-                c -> new ReadOnlyStringWrapper(nullToEmpty(c.getValue().meta().badgeText())));
+        historyTable.setPlaceholder(new Label("この操作者の履歴はありません。"));
+        historyTable
+                .getSelectionModel()
+                .selectedItemProperty()
+                .addListener((obs, a, b) -> onSelectionChanged(b));
         operatorCombo
                 .valueProperty()
                 .addListener(
                         (obs, a, b) -> {
-                            if (b != null) {
-                                loadRows(b);
+                            if (refreshing || b == null) {
+                                return;
                             }
+                            loadRows(b);
                         });
+        updateActionButtons(null);
     }
 
     @FXML
@@ -109,22 +126,11 @@ public final class IdentityCheckHistoryTabController {
             return;
         }
         Path excel = sel.dir().resolve(IdentityCheckHistoryStore.EXCEL_FILE);
-        if (!Files.isRegularFile(excel)) {
-            statusLabel.setText("Excel ファイルがありません: " + excel);
+        if (!isSafeHistoryFile(excel)) {
+            warnUser("Excel を開けません", "履歴フォルダ外、またはファイルがありません:\n" + excel);
             return;
         }
-        try {
-            if (!Desktop.isDesktopSupported() || !Desktop.getDesktop().isSupported(Desktop.Action.OPEN)) {
-                statusLabel.setText("この環境ではファイルを開けません。");
-                return;
-            }
-            Desktop.getDesktop().open(excel.toFile());
-            statusLabel.setText("Excel を開きました。");
-        } catch (IOException ex) {
-            statusLabel.setText(
-                    "Excel を開けませんでした: "
-                            + (ex.getMessage() != null ? ex.getMessage() : ex.toString()));
-        }
+        openPathInBackground(excel, "Excel");
     }
 
     @FXML
@@ -135,49 +141,77 @@ public final class IdentityCheckHistoryTabController {
             return;
         }
         Path json = sel.dir().resolve(IdentityCheckHistoryStore.PLAN_JSON_FILE);
-        if (!Files.isRegularFile(json)) {
-            statusLabel.setText("加工計画 JSON がありません: " + json);
+        if (!isSafeHistoryFile(json)) {
+            warnUser("JSON を開けません", "履歴フォルダ外、またはファイルがありません:\n" + json);
             return;
         }
-        try {
-            JsonTableIo.ArrayTable table = JsonTableIo.loadArrayTable(json);
-            showPlanTableDialog(table, sel.dir().getFileName().toString());
-        } catch (IOException ex) {
-            statusLabel.setText(
-                    "JSON を読めませんでした: "
-                            + (ex.getMessage() != null ? ex.getMessage() : ex.toString()));
-        }
+        String titleSuffix =
+                sel.dir().getFileName() != null ? sel.dir().getFileName().toString() : "";
+        statusLabel.setText("加工計画 JSON を読み込み中…");
+        Thread t =
+                new Thread(
+                        () -> {
+                            try {
+                                JsonTableIo.ArrayTable table = JsonTableIo.loadArrayTable(json);
+                                Platform.runLater(
+                                        () -> {
+                                            statusLabel.setText("加工計画 JSON を表示します。");
+                                            showPlanTableDialog(table, titleSuffix);
+                                        });
+                            } catch (Exception ex) {
+                                Platform.runLater(
+                                        () -> {
+                                            statusLabel.setText("JSON を読めませんでした。");
+                                            warnUser(
+                                                    "JSON を読めませんでした",
+                                                    ex.getMessage() != null
+                                                            ? ex.getMessage()
+                                                            : ex.toString());
+                                        });
+                            }
+                        },
+                        "identity-check-history-json");
+        t.setDaemon(true);
+        t.start();
     }
 
     private void refresh() {
         if (shell == null) {
             return;
         }
-        Map<String, String> ui = shell.snapshotUiEnv();
-        String self = currentOperator(ui);
-        List<String> names = new ArrayList<>(IdentityCheckHistoryStore.listOperatorDirNames(ui));
-        if (!self.isBlank() && names.stream().noneMatch(n -> n.equalsIgnoreCase(self))) {
-            names.add(0, self);
-        }
-        String selected = operatorCombo.getValue();
-        operatorCombo.setItems(FXCollections.observableArrayList(names));
-        String next =
-                selected != null && names.stream().anyMatch(n -> n.equalsIgnoreCase(selected))
-                        ? selected
-                        : (names.contains(self) ? self : (names.isEmpty() ? null : names.get(0)));
-        operatorCombo.setValue(next);
-        var root = IdentityCheckHistoryStore.resolveRoot(ui);
-        pathLabel.setText("保存先: " + root);
-        if (!Files.isDirectory(root)) {
-            historyTable.setItems(FXCollections.observableArrayList());
-            statusLabel.setText("共有の同一化チェック履歴フォルダがありません（未作成または到達不能）。");
-            return;
-        }
-        if (next != null) {
-            loadRows(next);
-        } else {
-            historyTable.setItems(FXCollections.observableArrayList());
-            statusLabel.setText("履歴はありません。");
+        refreshing = true;
+        try {
+            Map<String, String> ui = shell.snapshotUiEnv();
+            String self = currentOperator(ui);
+            List<String> names = new ArrayList<>(IdentityCheckHistoryStore.listOperatorDirNames(ui));
+            if (!self.isBlank() && names.stream().noneMatch(n -> n.equalsIgnoreCase(self))) {
+                names.add(0, self);
+            }
+            String selected = operatorCombo.getValue();
+            operatorCombo.setItems(FXCollections.observableArrayList(names));
+            String next =
+                    selected != null && names.stream().anyMatch(n -> n.equalsIgnoreCase(selected))
+                            ? selected
+                            : pickIgnoreCase(names, self)
+                                    .orElse(names.isEmpty() ? null : names.get(0));
+            operatorCombo.setValue(next);
+            var root = IdentityCheckHistoryStore.resolveRoot(ui);
+            pathLabel.setText("保存先: " + root);
+            if (!Files.isDirectory(root)) {
+                historyTable.setItems(FXCollections.observableArrayList());
+                statusLabel.setText("共有の同一化チェック履歴フォルダがありません（未作成または到達不能）。");
+                onSelectionChanged(null);
+                return;
+            }
+            if (next != null) {
+                loadRows(next);
+            } else {
+                historyTable.setItems(FXCollections.observableArrayList());
+                statusLabel.setText("履歴はありません。");
+                onSelectionChanged(null);
+            }
+        } finally {
+            refreshing = false;
         }
     }
 
@@ -187,12 +221,87 @@ public final class IdentityCheckHistoryTabController {
                 IdentityCheckHistoryStore.listNewestFirst(ui, operator);
         historyTable.setItems(FXCollections.observableArrayList(rows));
         statusLabel.setText(rows.isEmpty() ? "この操作者の履歴はありません。" : rows.size() + " 件");
+        onSelectionChanged(historyTable.getSelectionModel().getSelectedItem());
+    }
+
+    private void onSelectionChanged(IdentityCheckHistoryStore.SnapshotRef sel) {
+        updateActionButtons(sel);
+        if (detailLabel == null) {
+            return;
+        }
+        if (sel == null) {
+            detailLabel.setText("行を選択すると保存時のソースパスなどを表示します。");
+            return;
+        }
+        IdentityCheckHistoryStore.Meta m = sel.meta();
+        String folder =
+                sel.dir().getFileName() != null ? sel.dir().getFileName().toString() : "";
+        detailLabel.setText(
+                "フォルダ: "
+                        + folder
+                        + "\n結果: "
+                        + resultLabel(m.result())
+                        + " / 差異 "
+                        + Math.max(0, m.diffCount())
+                        + " 件"
+                        + (m.badgeText() != null && !m.badgeText().isBlank()
+                                ? "（" + m.badgeText() + "）"
+                                : "")
+                        + "\nExcel元: "
+                        + nullToEmpty(m.excelSourcePath())
+                        + "\n加工計画元: "
+                        + nullToEmpty(m.planSourcePath()));
+    }
+
+    private void updateActionButtons(IdentityCheckHistoryStore.SnapshotRef sel) {
+        boolean enable = sel != null;
+        if (openExcelButton != null) {
+            openExcelButton.setDisable(!enable);
+        }
+        if (showPlanJsonButton != null) {
+            showPlanJsonButton.setDisable(!enable);
+        }
+    }
+
+    private void openPathInBackground(Path path, String kind) {
+        statusLabel.setText(kind + " を開いています…");
+        Thread t =
+                new Thread(
+                        () -> {
+                            try {
+                                if (!Desktop.isDesktopSupported()
+                                        || !Desktop.getDesktop().isSupported(Desktop.Action.OPEN)) {
+                                    Platform.runLater(
+                                            () -> {
+                                                statusLabel.setText("この環境ではファイルを開けません。");
+                                                warnUser("開けません", "この環境では外部アプリ起動に対応していません。");
+                                            });
+                                    return;
+                                }
+                                Desktop.getDesktop().open(path.toFile());
+                                Platform.runLater(() -> statusLabel.setText(kind + " を開きました。"));
+                            } catch (Exception ex) {
+                                Platform.runLater(
+                                        () -> {
+                                            statusLabel.setText(kind + " を開けませんでした。");
+                                            warnUser(
+                                                    kind + " を開けませんでした",
+                                                    ex.getMessage() != null
+                                                            ? ex.getMessage()
+                                                            : ex.toString());
+                                        });
+                            }
+                        },
+                        "identity-check-history-open");
+        t.setDaemon(true);
+        t.start();
     }
 
     private void showPlanTableDialog(JsonTableIo.ArrayTable table, String titleSuffix) {
         TableView<List<String>> tv = new TableView<>();
         List<String> cols = table.columns() != null ? table.columns() : List.of();
-        for (int i = 0; i < cols.size(); i++) {
+        int colLimit = Math.min(cols.size(), JSON_DIALOG_MAX_COLUMNS);
+        for (int i = 0; i < colLimit; i++) {
             final int colIndex = i;
             TableColumn<List<String>, String> col = new TableColumn<>(cols.get(i));
             col.setPrefWidth(120);
@@ -210,18 +319,60 @@ public final class IdentityCheckHistoryTabController {
         tv.setItems(
                 FXCollections.observableArrayList(
                         table.rows() != null ? table.rows() : List.of()));
-        tv.setPrefSize(900, 480);
+        tv.setMaxSize(Double.MAX_VALUE, Double.MAX_VALUE);
+        VBox.setVgrow(tv, Priority.ALWAYS);
 
+        Label note =
+                new Label(
+                        cols.size() > JSON_DIALOG_MAX_COLUMNS
+                                ? "列が多いため先頭 " + JSON_DIALOG_MAX_COLUMNS + " 列のみ表示しています（全 "
+                                        + cols.size()
+                                        + " 列）。"
+                                : "");
+        note.setWrapText(true);
+
+        VBox content = new VBox(8, note, tv);
+        content.setPadding(new Insets(8));
+        VBox.setVgrow(tv, Priority.ALWAYS);
+
+        ButtonType closeType = new ButtonType("閉じる", ButtonBar.ButtonData.CANCEL_CLOSE);
         Dialog<Void> dialog = new Dialog<>();
         dialog.setTitle("加工計画 JSON — " + nullToEmpty(titleSuffix));
-        dialog.getDialogPane().getButtonTypes().add(ButtonType.CLOSE);
-        dialog.getDialogPane().setContent(new VBox(8, tv));
+        dialog.getDialogPane().getButtonTypes().add(closeType);
+        dialog.getDialogPane().setContent(content);
+        dialog.setResizable(true);
         dialog.initModality(Modality.WINDOW_MODAL);
         Window owner = historyTable.getScene() != null ? historyTable.getScene().getWindow() : null;
         if (owner != null) {
             dialog.initOwner(owner);
+            dialog.setWidth(Math.max(640, owner.getWidth() * 0.8));
+            dialog.setHeight(Math.max(420, owner.getHeight() * 0.75));
+        } else {
+            dialog.setWidth(900);
+            dialog.setHeight(560);
         }
         dialog.showAndWait();
+    }
+
+    private boolean isSafeHistoryFile(Path file) {
+        if (file == null || !Files.isRegularFile(file) || shell == null) {
+            return false;
+        }
+        Path root = IdentityCheckHistoryStore.resolveRoot(shell.snapshotUiEnv()).toAbsolutePath().normalize();
+        Path abs = file.toAbsolutePath().normalize();
+        return abs.startsWith(root);
+    }
+
+    private void warnUser(String title, String message) {
+        Alert a = new Alert(Alert.AlertType.WARNING);
+        a.setTitle(title);
+        a.setHeaderText(null);
+        a.setContentText(message);
+        Window owner = historyTable.getScene() != null ? historyTable.getScene().getWindow() : null;
+        if (owner instanceof Stage stage) {
+            a.initOwner(stage);
+        }
+        a.show();
     }
 
     private static String currentOperator(Map<String, String> ui) {
@@ -230,6 +381,13 @@ public final class IdentityCheckHistoryTabController {
             return OperatorUserPaths.sanitizeOperatorDirName(session);
         }
         return OperatorUserPaths.sanitizeOperatorDirName(OperatorUserPaths.resolveOperatorUser(ui));
+    }
+
+    private static java.util.Optional<String> pickIgnoreCase(List<String> names, String target) {
+        if (target == null || target.isBlank() || names == null) {
+            return java.util.Optional.empty();
+        }
+        return names.stream().filter(n -> n.equalsIgnoreCase(target)).findFirst();
     }
 
     static String formatTs(String ts) {
@@ -251,6 +409,7 @@ public final class IdentityCheckHistoryTabController {
         return switch (result) {
             case "ok" -> "同一";
             case "mismatch" -> "差異";
+            case "error" -> "失敗";
             default -> result;
         };
     }

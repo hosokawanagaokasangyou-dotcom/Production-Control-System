@@ -115,6 +115,7 @@ public final class AladdinEntryDispatchPlanIdentityCheck {
     /**
      * 操作者世代の最新 Excel シス計と、ソース最新の加工計画を突合する。
      * 失敗時は {@link Result#error} が true（例外は投げない）。
+     * 成功時は履歴セットを保存する。
      */
     public static Result evaluate(Map<String, String> ui) {
         Map<String, String> u = ui != null ? ui : Map.of();
@@ -122,14 +123,21 @@ public final class AladdinEntryDispatchPlanIdentityCheck {
         if (excel.isEmpty()) {
             return errorResult(ERROR_NO_GENERATION, Optional.empty(), Optional.empty());
         }
-        return evaluate(u, excel.get());
+        return evaluate(u, excel.get(), true);
     }
 
     /**
      * 指定した配台計画 Excel のシス計と、ソース最新の加工計画を突合する。
-     * Excel の再出力と shaped JSON の上書きは行わない。
+     * Excel の再出力と shaped JSON の上書きは行わない。成功時は履歴セットを保存する。
      */
     public static Result evaluate(Map<String, String> ui, Path excelPath) {
+        return evaluate(ui, excelPath, true);
+    }
+
+    /**
+     * @param persistHistory true のとき比較成功後に履歴セットを保存する（終了ゲートの再比較は false）
+     */
+    public static Result evaluate(Map<String, String> ui, Path excelPath, boolean persistHistory) {
         Map<String, String> u = ui != null ? ui : Map.of();
         if (excelPath == null || !Files.isRegularFile(excelPath)) {
             return errorResult(
@@ -167,18 +175,20 @@ public final class AladdinEntryDispatchPlanIdentityCheck {
                             AladdinEntryDispatchPlanWorkbookReader.readSystemQtys(excel.get(), ref),
                             loadMachineSnapshot(u));
             Result compared = compare(system, lookup);
-            String resultKey = compared.identical() ? "ok" : "mismatch";
-            int diffCount = compared.diffs() != null ? compared.diffs().size() : 0;
-            // 完了行除外前の読込表を履歴保存する（設計どおりチェック時に読んだ表）。
-            IdentityCheckHistoryStore.save(
-                    u,
-                    excel.get(),
-                    tab,
-                    resultKey,
-                    compared.badgeText(),
-                    diffCount,
-                    excel,
-                    planSource);
+            if (persistHistory) {
+                String resultKey = compared.identical() ? "ok" : "mismatch";
+                int diffCount = compared.diffs() != null ? compared.diffs().size() : 0;
+                // 完了行除外前の読込表を履歴保存する（設計どおりチェック時に読んだ表）。
+                IdentityCheckHistoryStore.save(
+                        u,
+                        excel.get(),
+                        tab,
+                        resultKey,
+                        compared.badgeText(),
+                        diffCount,
+                        excel,
+                        planSource);
+            }
             return new Result(
                     compared.identical(),
                     false,

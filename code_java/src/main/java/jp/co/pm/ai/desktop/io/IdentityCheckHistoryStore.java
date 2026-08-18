@@ -75,6 +75,7 @@ public final class IdentityCheckHistoryStore {
 
     /**
      * 比較に使った Excel と加工計画表を操作者フォルダへ保存する。失敗時は empty（例外は投げない）。
+     * 途中失敗時は作成したディレクトリを削除する。
      */
     public static Optional<Path> save(
             Map<String, String> ui,
@@ -90,9 +91,10 @@ public final class IdentityCheckHistoryStore {
         }
         String operator = OperatorUserPaths.resolveOperatorUser(ui);
         Path operatorDir = resolveOperatorDir(ui, operator);
+        Path dest = null;
         try {
             Files.createDirectories(operatorDir);
-            Path dest = uniqueSnapshotDir(operatorDir, OffsetDateTime.now(ZoneId.systemDefault()));
+            dest = uniqueSnapshotDir(operatorDir, OffsetDateTime.now(ZoneId.systemDefault()));
             Files.createDirectories(dest);
             Files.copy(
                     excelPath,
@@ -120,6 +122,13 @@ public final class IdentityCheckHistoryStore {
             prune(operatorDir);
             return Optional.of(dest);
         } catch (IOException ex) {
+            if (dest != null) {
+                try {
+                    deleteRecursive(dest);
+                } catch (IOException ignored) {
+                    // 失敗セットの掃除も失敗しうる。呼び出し側は empty で続行する。
+                }
+            }
             return Optional.empty();
         }
     }
@@ -139,7 +148,7 @@ public final class IdentityCheckHistoryStore {
         } catch (IOException ex) {
             return List.of();
         }
-        dirs.sort(Comparator.comparingLong(IdentityCheckHistoryStore::lastModifiedMillis).reversed());
+        dirs.sort(snapshotFolderNameOrder().reversed());
         List<SnapshotRef> out = new ArrayList<>();
         for (Path dir : dirs) {
             Optional<Meta> meta = readMeta(dir);
@@ -197,22 +206,38 @@ public final class IdentityCheckHistoryStore {
         throw new IOException("同一化チェック履歴フォルダ名を確保できません: " + operatorDir);
     }
 
+    /**
+     * 不完全セット（meta 無し）を削除し、フォルダ名が古いものから削って件数を揃える。
+     * 並びは {@code yyyyMMdd-HHmmss}（同一秒は {@code -2} 等）の文字列順。mtime は使わない。
+     */
     static void prune(Path operatorDir) throws IOException {
         if (operatorDir == null || !Files.isDirectory(operatorDir)) {
             return;
         }
-        List<Path> dirs = new ArrayList<>();
+        List<Path> complete = new ArrayList<>();
         try (DirectoryStream<Path> stream = Files.newDirectoryStream(operatorDir)) {
             for (Path p : stream) {
-                if (Files.isDirectory(p)) {
-                    dirs.add(p);
+                if (!Files.isDirectory(p)) {
+                    continue;
+                }
+                if (Files.isRegularFile(p.resolve(META_FILE))) {
+                    complete.add(p);
+                } else {
+                    deleteRecursive(p);
                 }
             }
         }
-        dirs.sort(Comparator.comparingLong(IdentityCheckHistoryStore::lastModifiedMillis));
-        while (dirs.size() > MAX_SNAPSHOTS_PER_USER) {
-            deleteRecursive(dirs.removeFirst());
+        complete.sort(snapshotFolderNameOrder());
+        while (complete.size() > MAX_SNAPSHOTS_PER_USER) {
+            deleteRecursive(complete.removeFirst());
         }
+    }
+
+    /** フォルダ名の昇順（古い → 新しい）。同一秒の {@code -2} は基本名より新しい。 */
+    static Comparator<Path> snapshotFolderNameOrder() {
+        return Comparator.comparing(
+                p -> p.getFileName() != null ? p.getFileName().toString() : "",
+                String::compareTo);
     }
 
     private static void deleteRecursive(Path root) throws IOException {
@@ -236,14 +261,6 @@ public final class IdentityCheckHistoryStore {
                         return FileVisitResult.CONTINUE;
                     }
                 });
-    }
-
-    private static long lastModifiedMillis(Path p) {
-        try {
-            return Files.getLastModifiedTime(p).toMillis();
-        } catch (IOException e) {
-            return Long.MIN_VALUE;
-        }
     }
 
     private static String pathString(Path p) {

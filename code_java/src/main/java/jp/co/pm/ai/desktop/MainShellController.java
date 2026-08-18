@@ -1137,6 +1137,15 @@ public final class MainShellController
                                 Platform.runLater(
                                         machineCalendarTabController::onMainShellTabSelected);
                             }
+                            if (newTab == mainShellTabIdentityCheckHistory
+                                    && identityCheckHistoryTabController != null) {
+                                Platform.runLater(
+                                        identityCheckHistoryTabController::onMainShellTabSelected);
+                            }
+                            if (newTab == mainShellTabOperatorActionLog
+                                    && operatorActionLogTabController != null) {
+                                Platform.runLater(operatorActionLogTabController::onMainShellTabSelected);
+                            }
                             if (prevTab == mainShellTabEquipmentStatusDashboard
                                     && equipmentStatusDashboardTabController != null) {
                                 equipmentStatusDashboardTabController.onMainShellTabDeselected();

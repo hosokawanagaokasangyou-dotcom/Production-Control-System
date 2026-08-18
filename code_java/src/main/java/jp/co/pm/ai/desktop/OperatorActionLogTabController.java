@@ -57,6 +57,11 @@ public final class OperatorActionLogTabController {
         refresh();
     }
 
+    /** メインタブ選択時に一覧を再読込する。 */
+    public void onMainShellTabSelected() {
+        refresh();
+    }
+
     @FXML
     private void initialize() {
         tsColumn.setCellValueFactory(c -> new ReadOnlyStringWrapper(formatTs(c.getValue().ts())));

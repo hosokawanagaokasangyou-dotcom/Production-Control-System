@@ -12,6 +12,7 @@ class IdentityCheckHistoryTabControllerTest {
         assertEquals("差異", IdentityCheckHistoryTabController.resultLabel("mismatch"));
         assertEquals("", IdentityCheckHistoryTabController.resultLabel(null));
         assertEquals("other", IdentityCheckHistoryTabController.resultLabel("other"));
+        assertEquals("失敗", IdentityCheckHistoryTabController.resultLabel("error"));
     }
 
     @Test

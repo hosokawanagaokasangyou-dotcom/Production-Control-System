@@ -123,6 +123,9 @@ class AladdinEntryDispatchPlanIdentityCheckTest {
         assertFalse(result.identical());
         assertEquals(
                 AladdinEntryDispatchPlanIdentityCheck.ERROR_NO_GENERATION, result.message());
+        assertTrue(
+                IdentityCheckHistoryStore.listNewestFirst(ui, "テスト太郎").isEmpty(),
+                "エラー時は履歴を保存しない");
     }
 
     @Test
@@ -182,6 +185,65 @@ class AladdinEntryDispatchPlanIdentityCheckTest {
     }
 
     @Test
+    void evaluate_historyJsonKeepsCompletedRowsBeforeExclusion(@TempDir Path tempDir)
+            throws Exception {
+        Map<String, String> ui = testUi(tempDir);
+        Path sourceDir = AppPaths.resolveTaskInputSourceDir(ui);
+        Files.createDirectories(sourceDir);
+        String csv =
+                "列1,列2,列3,列4,列5,列6,列7\n"
+                        + "上段1,,,,,,\n"
+                        + "上段2,,,,,,\n"
+                        + "上段3,,,,,,\n"
+                        + "機械名,依頼NO,工程名,換算数量,実加工数,未加工,2026/07/07\n"
+                        + ",,,,,,\n"
+                        + "M1,DONE1,工程A,600,600,0,0\n"
+                        + "M1,T001,工程A,10,0,10,10\n";
+        Files.writeString(sourceDir.resolve("aladdin-plan.csv"), csv);
+        Files.createDirectories(Path.of(ui.get(AppPaths.KEY_PM_AI_REPO_ROOT)).resolve("code"));
+
+        LocalDate d = LocalDate.of(2026, 7, 7);
+        DispatchAladdinEntryWorkbookExporter.write(ui, matchingWorkbook(d, 10));
+
+        AladdinEntryDispatchPlanIdentityCheck.Result result =
+                AladdinEntryDispatchPlanIdentityCheck.evaluate(ui);
+
+        assertFalse(result.error(), result.message());
+        assertTrue(result.identical(), result.dialogBody());
+        List<IdentityCheckHistoryStore.SnapshotRef> history =
+                IdentityCheckHistoryStore.listNewestFirst(ui, "テスト太郎");
+        assertEquals(1, history.size());
+        JsonTableIo.ArrayTable saved =
+                JsonTableIo.loadArrayTable(
+                        history.getFirst().dir().resolve(IdentityCheckHistoryStore.PLAN_JSON_FILE));
+        assertTrue(
+                saved.rows().stream().anyMatch(r -> r.contains("DONE1")),
+                "履歴JSONは完了行除外前の表を保存する");
+        assertTrue(saved.rows().stream().anyMatch(r -> r.contains("T001")));
+    }
+
+    @Test
+    void evaluate_persistHistoryFalse_doesNotWriteSnapshot(@TempDir Path tempDir) throws Exception {
+        Map<String, String> ui = testUi(tempDir);
+        Path sourceDir = AppPaths.resolveTaskInputSourceDir(ui);
+        Files.createDirectories(sourceDir);
+        Files.writeString(sourceDir.resolve("aladdin-plan.csv"), PLAN_CSV);
+        Files.createDirectories(Path.of(ui.get(AppPaths.KEY_PM_AI_REPO_ROOT)).resolve("code"));
+        LocalDate d = LocalDate.of(2026, 7, 7);
+        DispatchAladdinEntryWorkbookExporter.ExportResult exported =
+                DispatchAladdinEntryWorkbookExporter.write(ui, matchingWorkbook(d, 10));
+
+        AladdinEntryDispatchPlanIdentityCheck.Result result =
+                AladdinEntryDispatchPlanIdentityCheck.evaluate(ui, exported.generationPath(), false);
+
+        assertFalse(result.error(), result.message());
+        assertTrue(result.identical(), result.dialogBody());
+        assertTrue(
+                IdentityCheckHistoryStore.listNewestFirst(ui, "テスト太郎").isEmpty(),
+                "persistHistory=false では履歴を書かない");
+    }
+
+    @Test
     void evaluate_usesSpecifiedExcelNotNewestGeneration(@TempDir Path tempDir) throws Exception {
         Map<String, String> ui = testUi(tempDir);
         Path sourceDir = AppPaths.resolveTaskInputSourceDir(ui);
@@ -217,6 +279,7 @@ class AladdinEntryDispatchPlanIdentityCheckTest {
 
         assertTrue(result.error());
         assertEquals(AladdinEntryDispatchPlanIdentityCheck.ERROR_NO_EXCEL, result.message());
+        assertTrue(IdentityCheckHistoryStore.listNewestFirst(ui, "テスト太郎").isEmpty());
     }
 
     @Test

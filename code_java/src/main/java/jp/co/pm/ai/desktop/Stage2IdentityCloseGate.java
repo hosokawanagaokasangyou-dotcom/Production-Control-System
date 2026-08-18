@@ -60,7 +60,7 @@ public final class Stage2IdentityCloseGate {
         try {
             Path excel = AppPaths.aladdinEntryDispatchPlanLocalXlsxPath(ui);
             AladdinEntryDispatchPlanIdentityCheck.Result result =
-                    AladdinEntryDispatchPlanIdentityCheck.evaluate(ui, excel);
+                    AladdinEntryDispatchPlanIdentityCheck.evaluate(ui, excel, false);
             if (!result.error() && result.identical()) {
                 return new Decision(false, "", "");
             }
