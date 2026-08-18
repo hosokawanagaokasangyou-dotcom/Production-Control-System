@@ -860,6 +860,7 @@ public final class EditableMemberAttendanceGridPane extends VBox {
         fixedNameHeader.setMaxWidth(nameW);
 
         Locale locale = Locale.JAPAN;
+        LocalDate today = LocalDate.now();
         for (int col = 0; col < dates.size(); col++) {
             LocalDate d = dates.get(col);
             String dow = d.getDayOfWeek().getDisplayName(TextStyle.SHORT, locale);
@@ -871,6 +872,10 @@ public final class EditableMemberAttendanceGridPane extends VBox {
             h.setMaxSize(dayW, cellH);
             if (isCompanyOffDay(d)) {
                 h.getStyleClass().add("pm-member-attendance-company-off");
+            }
+            if (d.equals(today)) {
+                h.getStyleClass().add("pm-member-attendance-grid-header-today");
+                h.setAccessibleText(d + "（本日）");
             }
             GridPane.setHalignment(h, HPos.CENTER);
             headerDateGrid.add(h, col, 0);
@@ -936,6 +941,9 @@ public final class EditableMemberAttendanceGridPane extends VBox {
                 commentMark.setVisible(hasComment(st.comment));
                 StackPane cellWrap = new StackPane(cell, commentMark);
                 cellWrap.setMaxSize(Region.USE_PREF_SIZE, Region.USE_PREF_SIZE);
+                if (d.equals(today)) {
+                    cellWrap.getStyleClass().add("pm-member-att-cell-wrap-today");
+                }
                 installCellInteractions(cell, d, member, dKey);
                 cellUiMap.put(cellKey(dKey, member), new CellUi(cell, commentMark));
                 rowDimming.installHover(cellWrap, row);

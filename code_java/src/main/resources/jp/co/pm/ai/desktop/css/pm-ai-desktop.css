@@ -1358,6 +1358,21 @@
     -fx-font-weight: bold;
 }
 
+.pm-member-attendance-grid-header-today {
+    -fx-border-color: -fx-accent;
+    -fx-border-width: 2;
+    -fx-border-radius: 3;
+    -fx-background-color: rgba(56, 189, 248, 0.22);
+    -fx-background-radius: 3;
+    -fx-alignment: center;
+}
+
+.pm-member-att-cell-wrap-today {
+    -fx-border-color: -fx-accent;
+    -fx-border-width: 2;
+    -fx-border-radius: 2;
+}
+
 .pm-member-attendance-grid-member-selected {
     -fx-background-color: rgba(56, 189, 248, 0.22);
     -fx-background-radius: 4;
