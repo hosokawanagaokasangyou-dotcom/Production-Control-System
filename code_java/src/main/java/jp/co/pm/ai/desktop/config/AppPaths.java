@@ -3094,6 +3094,9 @@ public final class AppPaths {
     /** 操作者別操作ログのルートフォルダ名（親は {@link #summaryAiDispatchXlsxPath} と同一）。 */
     public static final String OPERATOR_ACTION_LOG_DIR_NAME = "操作ログ";
 
+    /** 同一化チェック履歴のルートフォルダ名（親は {@link #summaryAiDispatchXlsxPath} と同一）。 */
+    public static final String IDENTITY_CHECK_HISTORY_DIR_NAME = "同一化チェック履歴";
+
     /** Python planning_core が書く実行ログファイル名（{@code code/log/} 配下）。 */
     public static final String EXECUTION_LOG_TXT = "execution_log.txt";
 
@@ -3124,6 +3127,14 @@ public final class AppPaths {
      */
     public static Path resolveOperatorActionLogRoot(Map<String, String> ui) {
         return siblingOfSummaryAiDispatchWorkbook(ui, OPERATOR_ACTION_LOG_DIR_NAME);
+    }
+
+    /**
+     * 同一化チェック履歴のルート（{@link #summaryAiDispatchXlsxPath(Map)} の親 +
+     * {@link #IDENTITY_CHECK_HISTORY_DIR_NAME}）。
+     */
+    public static Path resolveIdentityCheckHistoryRoot(Map<String, String> ui) {
+        return siblingOfSummaryAiDispatchWorkbook(ui, IDENTITY_CHECK_HISTORY_DIR_NAME);
     }
 
     /**
