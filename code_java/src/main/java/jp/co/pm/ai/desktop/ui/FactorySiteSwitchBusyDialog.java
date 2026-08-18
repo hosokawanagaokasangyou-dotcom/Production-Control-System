@@ -22,6 +22,13 @@ public final class FactorySiteSwitchBusyDialog {
 
     public static final String TITLE = "工場切替";
 
+    /** 明るいダイアログ本文用。テーマ CSS の白文字を載せない。 */
+    public static final String BODY_TEXT_FILL = "#1a1a1a";
+    private static final String BODY_TEXT_STYLE =
+            "-fx-text-fill: " + BODY_TEXT_FILL + "; -fx-font-size: 13px;";
+    private static final String HEADER_TEXT_STYLE =
+            "-fx-font-weight: bold; -fx-font-size: 14px; -fx-text-fill: " + BODY_TEXT_FILL + ";";
+
     public static final String STATUS_SAVING = "現在の工場設定を保存しています…";
     public static final String STATUS_LOADING = "切替先の工場ワークスペースを読み込んでいます…";
     public static final String STATUS_ENV = "環境変数を切り替えています…";
@@ -64,8 +71,7 @@ public final class FactorySiteSwitchBusyDialog {
                 "-fx-background-color: #3d3d3d; -fx-text-fill: #f2f2f2; -fx-font-size: 12px;");
 
         Label headerLabel = new Label(header != null ? header : "工場を切り替えています");
-        headerLabel.getStyleClass().add("dialog-header");
-        headerLabel.setStyle("-fx-font-weight: bold; -fx-font-size: 14px;");
+        headerLabel.setStyle(HEADER_TEXT_STYLE);
         headerLabel.setWrapText(true);
         headerLabel.setMaxWidth(380);
 
@@ -74,6 +80,7 @@ public final class FactorySiteSwitchBusyDialog {
         progress.setMaxSize(48, 48);
 
         Label status = new Label(initialStatus != null ? initialStatus : STATUS_SAVING);
+        status.setStyle(BODY_TEXT_STYLE);
         status.setWrapText(true);
         status.setMaxWidth(380);
 
@@ -86,9 +93,6 @@ public final class FactorySiteSwitchBusyDialog {
         windowRoot.setStyle("-fx-background-color: #f0f0f0; -fx-border-color: #6b6b6b; -fx-border-width: 1;");
 
         Scene scene = new Scene(windowRoot);
-        if (owner != null && owner.getScene() != null) {
-            scene.getStylesheets().setAll(owner.getScene().getStylesheets());
-        }
         stage.setScene(scene);
         stage.sizeToScene();
         stage.show();
@@ -120,7 +124,11 @@ public final class FactorySiteSwitchBusyDialog {
         return stage.getStyle();
     }
 
-    /** テーマ CSS の追跡登録用。 */
+    /** テスト用。明るい背景に対する本文色。 */
+    String bodyTextStyle() {
+        return statusLabel.getStyle() != null ? statusLabel.getStyle() : "";
+    }
+
     public Scene scene() {
         return stage.getScene();
     }

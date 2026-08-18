@@ -5066,10 +5066,6 @@ public final class MainShellController
                         + " → "
                         + (to != null ? to.displayLabelJa() : "—");
         factorySiteSwitchBusy = FactorySiteSwitchBusyDialog.show(primaryStage, header, initialStatus);
-        Scene scene = factorySiteSwitchBusy.scene();
-        if (scene != null) {
-            registerThemeTrackedScene(scene);
-        }
     }
 
     private void updateFactorySiteSwitchBusy(String status) {
@@ -5088,10 +5084,6 @@ public final class MainShellController
         }
         factorySwitchAwaitingBackgroundLoadBeforeModalClose = false;
         if (factorySiteSwitchBusy != null) {
-            Scene scene = factorySiteSwitchBusy.scene();
-            if (scene != null) {
-                unregisterThemeTrackedScene(scene);
-            }
             factorySiteSwitchBusy.close();
             factorySiteSwitchBusy = null;
         }

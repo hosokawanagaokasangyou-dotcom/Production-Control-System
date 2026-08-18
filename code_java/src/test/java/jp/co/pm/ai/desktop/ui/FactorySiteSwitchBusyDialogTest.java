@@ -60,6 +60,10 @@ class FactorySiteSwitchBusyDialogTest {
         assertEquals(
                 FactorySiteSwitchBusyDialog.STATUS_BACKGROUND_LOAD,
                 FactorySiteSwitchBusySupport.resolveTabLoadStatus(""));
+        assertTrue(dialog.scene().getStylesheets().isEmpty());
+        assertTrue(
+                dialog.bodyTextStyle().contains(FactorySiteSwitchBusyDialog.BODY_TEXT_FILL),
+                "明るい背景向けに本文は暗い文字色にする");
 
         CountDownLatch closed = new CountDownLatch(1);
         Platform.runLater(
