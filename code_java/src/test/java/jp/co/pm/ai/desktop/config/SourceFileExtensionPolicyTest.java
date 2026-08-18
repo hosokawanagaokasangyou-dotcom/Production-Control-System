@@ -8,9 +8,13 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
 import java.time.Instant;
+import java.util.List;
+import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+
+import jp.co.pm.ai.desktop.config.AppPaths;
 
 class SourceFileExtensionPolicyTest {
 
@@ -93,6 +97,31 @@ class SourceFileExtensionPolicyTest {
         assertTrue(r.loadablePath().isEmpty());
         assertEquals(newerXlsx.toAbsolutePath().normalize(), r.newestCandidatePath().orElseThrow());
         assertTrue(r.errorMessage().contains(".csv"));
+    }
+
+    @Test
+    void blockingMismatchMessages_includesPlanWhenNewestIsCsv() throws Exception {
+        Path planDir = temp.resolve("plan");
+        Path dailyDir = temp.resolve("daily");
+        Files.createDirectories(planDir);
+        Files.createDirectories(dailyDir);
+        Files.writeString(planDir.resolve("old.xlsx"), "x");
+        Path newerCsv = planDir.resolve("new.csv");
+        Files.writeString(newerCsv, "c");
+        bumpNewer(newerCsv, planDir.resolve("old.xlsx"));
+        Files.writeString(dailyDir.resolve("加工日報発行問合せ_1.csv"), "d");
+
+        List<String> msgs =
+                SourceFileExtensionPolicy.blockingMismatchMessages(
+                        Map.of(
+                                AppPaths.KEY_PM_AI_TASK_INPUT_SOURCE_DIR,
+                                planDir.toString(),
+                                AppPaths.KEY_PM_AI_DAILY_REPORT_SOURCE_DIR,
+                                dailyDir.toString()));
+
+        assertEquals(1, msgs.size());
+        assertTrue(msgs.getFirst().contains("加工計画"));
+        assertTrue(msgs.getFirst().contains("拡張子が不正"));
     }
 
     private static void bumpNewer(Path newer, Path older) throws Exception {

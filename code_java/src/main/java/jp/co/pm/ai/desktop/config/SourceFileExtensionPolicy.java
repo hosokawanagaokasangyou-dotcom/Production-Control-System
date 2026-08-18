@@ -4,9 +4,11 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
@@ -100,6 +102,56 @@ public final class SourceFileExtensionPolicy {
         String name = fileName(p);
         return name.startsWith(DAILY_REPORT_FILENAME_PREFIX)
                 && endsWithIgnoreCase(name, DAILY_REPORT_REQUIRED_SUFFIX);
+    }
+
+    /**
+     * 段階1実行前ゲート用: 最新ファイルの拡張子不一致メッセージのみ返す（空フォルダは含めない）。
+     *
+     * <p>加工計画は {@link AppPaths#KEY_PM_AI_PROCESSING_PLAN_PATH} があれば単一ファイル、なければ
+     * {@link AppPaths#resolveTaskInputSourceDir}。加工日報は {@code PM_AI_DAILY_REPORT_CSV_PATH} があれば単一、
+     * なければ {@link AppPaths#resolveDailyReportSourceDir}。
+     */
+    public static List<String> blockingMismatchMessages(Map<String, String> ui) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        List<String> messages = new ArrayList<>();
+        appendMismatchIfPresent(messages, checkProcessingPlanForUi(u));
+        appendMismatchIfPresent(messages, checkDailyReportForUi(u));
+        return List.copyOf(messages);
+    }
+
+    private static void appendMismatchIfPresent(List<String> messages, Result result) {
+        if (result != null && !result.ok() && result.newestCandidatePath().isPresent()) {
+            String msg = result.errorMessage();
+            if (msg != null && !msg.isBlank()) {
+                messages.add(msg);
+            }
+        }
+    }
+
+    private static Result checkProcessingPlanForUi(Map<String, String> ui) {
+        String explicit = trim(ui.get(AppPaths.KEY_PM_AI_PROCESSING_PLAN_PATH));
+        if (!explicit.isEmpty()) {
+            Path p = Path.of(explicit);
+            if (Files.isRegularFile(p)) {
+                return checkProcessingPlanFile(p);
+            }
+        }
+        return checkProcessingPlanDirectory(AppPaths.resolveTaskInputSourceDir(ui));
+    }
+
+    private static Result checkDailyReportForUi(Map<String, String> ui) {
+        String explicit = trim(ui.get("PM_AI_DAILY_REPORT_CSV_PATH"));
+        if (!explicit.isEmpty()) {
+            Path p = Path.of(explicit);
+            if (Files.isRegularFile(p)) {
+                return checkDailyReportFile(p);
+            }
+        }
+        return checkDailyReportDirectory(AppPaths.resolveDailyReportSourceDir(ui));
+    }
+
+    private static String trim(String s) {
+        return s != null ? s.strip() : "";
     }
 
     private static Result checkSingleFile(Path file, String label, String requiredSuffix) {

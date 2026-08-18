@@ -50,6 +50,7 @@ import javafx.util.Duration;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.config.NetworkSourceDirResolver;
+import jp.co.pm.ai.desktop.config.SourceFileExtensionPolicy;
 
 import jp.co.pm.ai.desktop.dispatch.AladdinShapedPlanQtyLookup;
 import jp.co.pm.ai.desktop.dispatch.AladdinShapedPlanQtyLookup.PlanEntry;
@@ -98,7 +99,8 @@ public final class RequestFormPipelineCheckTabController {
                     + "・①〜⑦ … 依頼ごとの計画日（昇順・最大7日。例: 7/3 100m）\n"
                     + "・投入日一致 … 原反投入日を4ソース照合（全一致のみ「一致」）\n"
                     + "・確認 … 要チェック行はフィルタ無視で表示（日報「完了」は不要）。一括チェック可\n"
-                    + "・段階1 … 未確認がある間は実行不可。計画更新で確認リセット（1分監視）\n"
+                    + "・段階1 … 未確認がある間は実行不可。計画更新で確認リセット（1分監視）。"
+                    + " 加工計画最新が.xlsx以外／加工日報最新が.csv以外のときも実行不可\n"
                     + "・依頼NO先頭「2」… 自社加工品（配台対象外・段階1要確認対象外）";
 
     private record MainColDef(String title, String property, double defaultWidth) {}
@@ -1466,7 +1468,7 @@ public final class RequestFormPipelineCheckTabController {
                         });
     }
 
-    /** 段階1実行可否（未走査・未確認の問題があれば不可）。 */
+    /** 段階1実行可否（未走査・未確認・ソース拡張子不正があれば不可）。 */
     public Stage1GateStatus evaluateStage1Gate() {
         if (shell != null
                 && !AppPaths.isRequestFormOriginalDirEnvConfigured(shell.snapshotUiEnv())) {
@@ -1475,6 +1477,14 @@ public final class RequestFormPipelineCheckTabController {
                             + AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR
                             + "）を設定してから、原本転記・計画確認で「更新」を実行してください。",
                     "原本転記: 原本フォルダ未設定");
+        }
+        if (shell != null) {
+            List<String> extErrs =
+                    SourceFileExtensionPolicy.blockingMismatchMessages(shell.snapshotUiEnv());
+            if (!extErrs.isEmpty()) {
+                return Stage1GateStatus.blocked(
+                        String.join("\n", extErrs), "ソース拡張子不正");
+            }
         }
         if (!scanApplied) {
             return Stage1GateStatus.blocked(
@@ -1692,38 +1702,54 @@ public final class RequestFormPipelineCheckTabController {
                 stage1GateLabel.setText(
                         "段階1: 依頼書原本フォルダ未設定 — 環境変数タブで設定してください。");
                 stage1GateLabel.getStyleClass().setAll("pipeline-check-stage1-gate-label", "warn");
-            } else if (!scanApplied) {
-                stage1GateLabel.setText("段階1: 未走査 — 「更新」で照合してから実行してください。");
-                stage1GateLabel.getStyleClass().setAll("pipeline-check-stage1-gate-label", "warn");
             } else {
-                Stage1ConfirmationCounts counts = countStage1ConfirmationRequirements();
-                if (counts.totalIssues() == 0) {
-                    stage1GateLabel.setText("段階1: 問題なし — 実行できます。");
-                    stage1GateLabel.getStyleClass().setAll("pipeline-check-stage1-gate-label", "ok");
-                } else if (counts.unconfirmedRequiringConfirmation() > 0) {
+                List<String> extErrs =
+                        shell != null
+                                ? SourceFileExtensionPolicy.blockingMismatchMessages(
+                                        shell.snapshotUiEnv())
+                                : List.of();
+                if (!extErrs.isEmpty()) {
                     stage1GateLabel.setText(
-                            "段階1: 要確認 "
-                                    + counts.requiringConfirmation()
-                                    + " 件（未確認 "
-                                    + counts.unconfirmedRequiringConfirmation()
-                                    + " 件）— 確認チェック対象行のみ要確認");
+                            "段階1: ソース拡張子不正 — " + String.join(" / ", extErrs));
                     stage1GateLabel.getStyleClass().setAll("pipeline-check-stage1-gate-label", "warn");
-                } else if (counts.requiringConfirmation() == 0) {
+                } else if (!scanApplied) {
                     stage1GateLabel.setText(
-                            "段階1: 問題 "
-                                    + counts.totalIssues()
-                                    + " 件（確認チェック対象外あり）— 実行できます。");
-                    stage1GateLabel.getStyleClass().setAll("pipeline-check-stage1-gate-label", "ok");
+                            "段階1: 未走査 — 「更新」で照合してから実行してください。");
+                    stage1GateLabel.getStyleClass().setAll("pipeline-check-stage1-gate-label", "warn");
                 } else {
-                    stage1GateLabel.setText(
-                            "段階1: 要確認 "
-                                    + counts.requiringConfirmation()
-                                    + " 件 — すべて確認済み。実行できます。");
-                    stage1GateLabel.getStyleClass().setAll("pipeline-check-stage1-gate-label", "ok");
+                    applyStage1GateLabelFromConfirmationCounts();
                 }
             }
         }
         refreshConfirmAllIssuesButtonState();
+    }
+
+    private void applyStage1GateLabelFromConfirmationCounts() {
+        Stage1ConfirmationCounts counts = countStage1ConfirmationRequirements();
+        if (counts.totalIssues() == 0) {
+            stage1GateLabel.setText("段階1: 問題なし — 実行できます。");
+            stage1GateLabel.getStyleClass().setAll("pipeline-check-stage1-gate-label", "ok");
+        } else if (counts.unconfirmedRequiringConfirmation() > 0) {
+            stage1GateLabel.setText(
+                    "段階1: 要確認 "
+                            + counts.requiringConfirmation()
+                            + " 件（未確認 "
+                            + counts.unconfirmedRequiringConfirmation()
+                            + " 件）— 確認チェック対象行のみ要確認");
+            stage1GateLabel.getStyleClass().setAll("pipeline-check-stage1-gate-label", "warn");
+        } else if (counts.requiringConfirmation() == 0) {
+            stage1GateLabel.setText(
+                    "段階1: 問題 "
+                            + counts.totalIssues()
+                            + " 件（確認チェック対象外あり）— 実行できます。");
+            stage1GateLabel.getStyleClass().setAll("pipeline-check-stage1-gate-label", "ok");
+        } else {
+            stage1GateLabel.setText(
+                    "段階1: 要確認 "
+                            + counts.requiringConfirmation()
+                            + " 件 — すべて確認済み。実行できます。");
+            stage1GateLabel.getStyleClass().setAll("pipeline-check-stage1-gate-label", "ok");
+        }
     }
 
     private void refreshConfirmAllIssuesButtonState() {
