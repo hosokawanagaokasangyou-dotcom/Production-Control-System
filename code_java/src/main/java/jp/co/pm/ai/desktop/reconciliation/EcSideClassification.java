@@ -89,9 +89,18 @@ public final class EcSideClassification {
 
     /**
      * 配台: 両面EC は EC 工程では2回分。SEC 工程はワンパスで両面EC 可能のため1回分。
+     * 国分工場（{@code PM_AI_FACTORY_SITE=KOKUBU}）は1パスで両面EC 可能なため等倍。
      */
     public static int ecDispatchPassCount(String ecSideClass, String processName) {
+        return ecDispatchPassCount(ecSideClass, processName, System.getenv("PM_AI_FACTORY_SITE"));
+    }
+
+    public static int ecDispatchPassCount(
+            String ecSideClass, String processName, String factorySite) {
         if (!DOUBLE_SIDED.equals(ecSideClass != null ? ecSideClass.strip() : "")) {
+            return 1;
+        }
+        if (isKokubuFactory(factorySite)) {
             return 1;
         }
         String proc = normalizeProcessName(processName);
@@ -102,6 +111,13 @@ public final class EcSideClassification {
             return 2;
         }
         return 1;
+    }
+
+    static boolean isKokubuFactory(String factorySite) {
+        if (factorySite == null || factorySite.isBlank()) {
+            return false;
+        }
+        return "KOKUBU".equalsIgnoreCase(factorySite.strip());
     }
 
     static String normalizeProcessName(String raw) {

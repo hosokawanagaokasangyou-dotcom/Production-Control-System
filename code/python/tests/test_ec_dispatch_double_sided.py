@@ -25,7 +25,8 @@ def _minimal_ec_plan_row(*, ec_side: str) -> dict:
     }
 
 
-def test_build_task_queue_double_sided_ec_doubles_base_time_per_unit():
+def test_build_task_queue_double_sided_ec_doubles_base_time_per_unit(monkeypatch):
+    monkeypatch.setenv("PM_AI_FACTORY_SITE", "KONAN")
     tasks = pd.DataFrame([_minimal_ec_plan_row(ec_side=EC_SIDE_CLASS_DOUBLE)])
     queue = pc.build_task_queue_from_planning_df(
         tasks,
@@ -38,6 +39,22 @@ def test_build_task_queue_double_sided_ec_doubles_base_time_per_unit():
     task = queue[0]
     assert task["ec_dispatch_pass_count"] == 2
     assert task["base_time_per_unit"] == 20.0
+
+
+def test_build_task_queue_kokubu_double_sided_ec_keeps_base_time_per_unit(monkeypatch):
+    monkeypatch.setenv("PM_AI_FACTORY_SITE", "KOKUBU")
+    tasks = pd.DataFrame([_minimal_ec_plan_row(ec_side=EC_SIDE_CLASS_DOUBLE)])
+    queue = pc.build_task_queue_from_planning_df(
+        tasks,
+        date(2026, 8, 17),
+        {},
+        ai_by_tid={},
+        equipment_list=[],
+    )
+    assert len(queue) == 1
+    task = queue[0]
+    assert task["ec_dispatch_pass_count"] == 1
+    assert task["base_time_per_unit"] == 10.0
 
 
 def test_build_task_queue_single_sided_ec_keeps_base_time_per_unit():

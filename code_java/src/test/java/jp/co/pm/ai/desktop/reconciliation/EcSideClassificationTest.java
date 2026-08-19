@@ -83,13 +83,42 @@ class EcSideClassificationTest {
 
     @Test
     void ecDispatchPassCount_secDoubleSidedIsOnePass() {
-        assertEquals(2, EcSideClassification.ecDispatchPassCount(EcSideClassification.DOUBLE_SIDED, "EC"));
-        assertEquals(1, EcSideClassification.ecDispatchPassCount(EcSideClassification.DOUBLE_SIDED, "SEC"));
+        assertEquals(
+                2,
+                EcSideClassification.ecDispatchPassCount(
+                        EcSideClassification.DOUBLE_SIDED, "EC", "KONAN"));
         assertEquals(
                 1,
                 EcSideClassification.ecDispatchPassCount(
-                        EcSideClassification.DOUBLE_SIDED, "SEC機　湖南"));
-        assertEquals(1, EcSideClassification.ecDispatchPassCount(EcSideClassification.SINGLE_SIDED, "EC"));
+                        EcSideClassification.DOUBLE_SIDED, "SEC", "KONAN"));
+        assertEquals(
+                1,
+                EcSideClassification.ecDispatchPassCount(
+                        EcSideClassification.DOUBLE_SIDED, "SEC機　湖南", "KONAN"));
+        assertEquals(
+                1,
+                EcSideClassification.ecDispatchPassCount(
+                        EcSideClassification.SINGLE_SIDED, "EC", "KONAN"));
+    }
+
+    @Test
+    void ecDispatchPassCount_kokubuDoubleSidedIsOnePass() {
+        assertEquals(
+                1,
+                EcSideClassification.ecDispatchPassCount(
+                        EcSideClassification.DOUBLE_SIDED, "EC", "KOKUBU"));
+        assertEquals(
+                1,
+                EcSideClassification.ecDispatchPassCount(
+                        EcSideClassification.DOUBLE_SIDED, "EC機　国分", "KOKUBU"));
+        assertEquals(
+                1,
+                EcSideClassification.ecDispatchPassCount(
+                        EcSideClassification.DOUBLE_SIDED, "SEC", "KOKUBU"));
+        assertEquals(
+                1,
+                EcSideClassification.ecDispatchPassCount(
+                        EcSideClassification.SINGLE_SIDED, "EC", "KOKUBU"));
     }
 
     @Test

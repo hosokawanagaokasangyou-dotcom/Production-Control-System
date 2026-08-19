@@ -146,13 +146,31 @@ def test_ec_dispatch_pass_count():
         ec_dispatch_pass_count,
     )
 
-    assert ec_dispatch_pass_count(EC_SIDE_CLASS_DOUBLE, "EC") == EC_DISPATCH_PASS_COUNT_DOUBLE
-    assert ec_dispatch_pass_count(EC_SIDE_CLASS_DOUBLE, "SEC") == 1
-    assert ec_dispatch_pass_count(EC_SIDE_CLASS_DOUBLE, "SEC機　湖南") == 1
-    assert ec_dispatch_pass_count(EC_SIDE_CLASS_SINGLE, "EC") == 1
-    assert ec_dispatch_pass_count(EC_SIDE_CLASS_UNKNOWN, "EC") == 1
-    assert ec_dispatch_pass_count("", "EC") == 1
-    assert ec_dispatch_pass_count(EC_SIDE_CLASS_DOUBLE) == 1
+    assert (
+        ec_dispatch_pass_count(EC_SIDE_CLASS_DOUBLE, "EC", factory_site="KONAN")
+        == EC_DISPATCH_PASS_COUNT_DOUBLE
+    )
+    assert ec_dispatch_pass_count(EC_SIDE_CLASS_DOUBLE, "SEC", factory_site="KONAN") == 1
+    assert (
+        ec_dispatch_pass_count(EC_SIDE_CLASS_DOUBLE, "SEC機　湖南", factory_site="KONAN") == 1
+    )
+    assert ec_dispatch_pass_count(EC_SIDE_CLASS_SINGLE, "EC", factory_site="KONAN") == 1
+    assert ec_dispatch_pass_count(EC_SIDE_CLASS_UNKNOWN, "EC", factory_site="KONAN") == 1
+    assert ec_dispatch_pass_count("", "EC", factory_site="KONAN") == 1
+    assert ec_dispatch_pass_count(EC_SIDE_CLASS_DOUBLE, factory_site="KONAN") == 1
+
+
+def test_ec_dispatch_pass_count_kokubu_double_sided_is_one_pass():
+    from planning_core.core.ec_side_classification import (
+        EC_SIDE_CLASS_DOUBLE,
+        EC_SIDE_CLASS_SINGLE,
+        ec_dispatch_pass_count,
+    )
+
+    assert ec_dispatch_pass_count(EC_SIDE_CLASS_DOUBLE, "EC", factory_site="KOKUBU") == 1
+    assert ec_dispatch_pass_count(EC_SIDE_CLASS_DOUBLE, "EC機　国分", factory_site="KOKUBU") == 1
+    assert ec_dispatch_pass_count(EC_SIDE_CLASS_DOUBLE, "SEC", factory_site="KOKUBU") == 1
+    assert ec_dispatch_pass_count(EC_SIDE_CLASS_SINGLE, "EC", factory_site="KOKUBU") == 1
 
 
 def test_lookup_juchu_ec_row_enriches_ec_men_from_original_when_juchu_blank():

@@ -133,6 +133,12 @@
       <li>開始下限は <code>配台可能日時_上書き → 配台可能日時 → 原反投入日由来</code> の順で解決する。</li>
       <li>同日下限は <code>DISPATCHABLE_FROM_TIME = 12:45</code> を適用（13:00は使用しない）。</li>
       <li><strong>例外</strong>: 湖南工場（<code>PM_AI_FACTORY_SITE=KONAN</code>）かつ在庫場所「湖南」は <code>DISPATCHABLE_FROM_TIME_KONAN_STOCK</code>（既定 9:30）。</li>
+      <li><strong>両面EC の配台時間</strong>:
+        <ul>
+          <li>湖南工場: 両面EC を EC 機械に載せるときは EC 加工2回分（配台時間を倍化）。SEC 機械はワンパスのため等倍。</li>
+          <li>国分工場（<code>PM_AI_FACTORY_SITE=KOKUBU</code>）: 1パスで両面EC 可能なため、EC 機械でも配台時間は等倍。</li>
+        </ul>
+      </li>
     </ul>
 
     <h3>1.3 段階2.1（時間外）</h3>
@@ -276,7 +282,7 @@
       <li>B系: <code>PLANNING_B1_INSPECTION_EXCLUSIVE_MACHINE</code> / <code>PLANNING_B2_EC_FOLLOWER_DISJOINT_TEAMS</code></li>
       <li>WIP: <code>WIP_LIMIT_EC_BEFORE_INSP_ROLLS</code> / <code>WIP_LIMIT_SLIT_BEFORE_SEC_ROLLS</code> / <code>WIP_LIMIT_CONNECTION_BEFORE_SEC_ROLLS</code></li>
       <li>配台試行: <code>PM_AI_INTERACTIVE_TRIAL_STAGE2_PARITY</code></li>
-      <li>工場別例外: <code>PM_AI_FACTORY_SITE</code> / <code>DISPATCHABLE_FROM_TIME_KONAN_STOCK</code>（既定 9:30）</li>
+      <li>工場別例外: <code>PM_AI_FACTORY_SITE</code>（KONAN / KOKUBU。国分は両面EC 配台時間等倍） / <code>DISPATCHABLE_FROM_TIME_KONAN_STOCK</code>（既定 9:30）</li>
     </ul>
   </section>
 
