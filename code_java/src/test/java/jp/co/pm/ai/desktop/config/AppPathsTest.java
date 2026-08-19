@@ -193,6 +193,23 @@ class AppPathsTest {
     }
 
     @Test
+    void resolveRequestFormRdpProfile_doesNotTreatDirectoryAsProfile(@TempDir Path tmp)
+            throws Exception {
+        Path dataDir = tmp.resolve("pm-ai-data");
+        Files.createDirectories(dataDir);
+        Optional<Path> resolved =
+                AppPaths.resolveRequestFormRdpProfile(
+                        Map.of(AppPaths.KEY_PM_AI_REQUEST_FORM_RDP_PROFILE, dataDir.toString()));
+        assertTrue(resolved.isEmpty());
+    }
+
+    @Test
+    void resolveRequestFormRdpProfile_emptyEnvDoesNotSelectWindowsDefault() {
+        Optional<Path> resolved = AppPaths.resolveRequestFormRdpProfile(Map.of());
+        resolved.ifPresent(p -> assertFalse(AppPaths.isWindowsDefaultRdpProfile(p)));
+    }
+
+    @Test
     void isWindowsDefaultRdpProfile_matchesFilenameOnly(@TempDir Path tmp) throws Exception {
         Path customDir = tmp.resolve("pm-ai-data");
         Files.createDirectories(customDir);

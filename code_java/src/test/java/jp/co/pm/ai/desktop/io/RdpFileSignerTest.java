@@ -218,4 +218,44 @@ class RdpFileSignerTest {
         assertTrue(script.contains("HKCU"));
         assertTrue(script.contains("A1B2C3D4E5F6A1B2C3D4E5F6A1B2C3D4E5F6A1B2"));
     }
+
+    @Test
+    void resolvePreferredSignedProfilePath_usesSignedFileWhenConfiguredIsDirectory(
+            @TempDir Path repoRoot) throws Exception {
+        Path signed =
+                repoRoot.resolve("Default" + RdpFileSigner.SIGNED_OUTPUT_SUFFIX);
+        Files.writeString(signed, "screen mode id:i:2\nsignature:s:BASE64\n");
+        Map<String, String> ui = Map.of(AppPaths.KEY_PM_AI_REPO_ROOT, repoRoot.toString());
+
+        Path resolved = RdpFileSigner.resolvePreferredSignedProfilePath(repoRoot, ui);
+
+        assertEquals(signed.toAbsolutePath().normalize(), resolved);
+        assertTrue(Files.isRegularFile(resolved));
+    }
+
+    @Test
+    void resolvePreferredSignedProfilePath_findsSignedFileInsideConfiguredDirectory(
+            @TempDir Path repoRoot) throws Exception {
+        Path dataDir = repoRoot.resolve("pm-ai-data");
+        Files.createDirectories(dataDir);
+        Path signed = dataDir.resolve("Default" + RdpFileSigner.SIGNED_OUTPUT_SUFFIX);
+        Files.writeString(signed, "screen mode id:i:2\nsignature:s:BASE64\n");
+        Map<String, String> ui = Map.of(AppPaths.KEY_PM_AI_REPO_ROOT, repoRoot.toString());
+
+        Path resolved = RdpFileSigner.resolvePreferredSignedProfilePath(dataDir, ui);
+
+        assertEquals(signed.toAbsolutePath().normalize(), resolved);
+    }
+
+    @Test
+    void resolvePreferredSignedProfilePathFromUi_findsRepoSignedWhenEnvEmpty(
+            @TempDir Path repoRoot) throws Exception {
+        Path signed = repoRoot.resolve("Default" + RdpFileSigner.SIGNED_OUTPUT_SUFFIX);
+        Files.writeString(signed, "screen mode id:i:2\nsignature:s:BASE64\n");
+        Map<String, String> ui = Map.of(AppPaths.KEY_PM_AI_REPO_ROOT, repoRoot.toString());
+
+        Path resolved = RdpFileSigner.resolvePreferredSignedProfilePathFromUi(ui);
+
+        assertEquals(signed.toAbsolutePath().normalize(), resolved);
+    }
 }

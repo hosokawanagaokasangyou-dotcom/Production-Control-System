@@ -1489,13 +1489,20 @@ public final class RequestFormRemoteDesktopPane {
                     final LaunchDisplay resolvedDisplay = launchDisplay;
                     final boolean previewEnabled = previewSession;
                     final Map<String, String> launchUi = ui;
-                    Optional<Path> profile = AppPaths.resolveRequestFormRdpProfile(launchUi);
-                    if (profile.isEmpty()) {
+                    Path launchProfilePath =
+                            RdpFileSigner.resolvePreferredSignedProfilePathFromUi(launchUi);
+                    if (!Files.isRegularFile(launchProfilePath)
+                            || !launchProfilePath
+                                    .getFileName()
+                                    .toString()
+                                    .toLowerCase(Locale.ROOT)
+                                    .endsWith(".rdp")) {
                         showAlert(
                                 Alert.AlertType.WARNING,
                                 "プロファイル未設定",
                                 AppPaths.KEY_PM_AI_REQUEST_FORM_RDP_PROFILE
-                                        + " に .rdp ファイルを指定してください。");
+                                        + " に .rdp ファイルを指定するか、"
+                                        + "RDP 署名ウィザードで署名済みプロファイルを作成してください。");
                         return;
                     }
                     if (!RemoteDesktopLauncher.isSupportedPlatform()) {
@@ -1505,9 +1512,7 @@ public final class RequestFormRemoteDesktopPane {
                                 "リモートデスクトップの起動は Windows 上のデスクトップアプリでのみ利用できます。");
                         return;
                     }
-                    Path configuredProfile = profile.get();
-                    Path launchProfilePath =
-                            RdpFileSigner.resolvePreferredSignedProfilePath(configuredProfile, launchUi);
+                    Path configuredProfile = launchProfilePath;
                     if (warnDefaultRdpBlockedAndMaybeOpenSignWizard(
                             owner != null ? owner : btnLaunch.getScene().getWindow(),
                             launchProfilePath,
@@ -2522,11 +2527,10 @@ public final class RequestFormRemoteDesktopPane {
                     } catch (IOException ex) {
                         iniError = ex;
                     }
-                    Optional<Path> configured = AppPaths.resolveRequestFormRdpProfile(ui);
-                    Path preferredProfile = null;
-                    if (configured.isPresent()) {
-                        preferredProfile =
-                                RdpFileSigner.resolvePreferredSignedProfilePath(configured.get(), ui);
+                    Path preferredProfile =
+                            RdpFileSigner.resolvePreferredSignedProfilePathFromUi(ui);
+                    if (!Files.isRegularFile(preferredProfile)) {
+                        preferredProfile = null;
                     }
                     final RdpRemoteLauncherIni loadedIni = ini;
                     final IOException loadError = iniError;
@@ -2534,7 +2538,6 @@ public final class RequestFormRemoteDesktopPane {
                     final Path resolvedProfilesPath = profilesPath;
                     final List<RdpLaunchProfile> resolvedCatalogProfiles = catalogProfiles;
                     final Path resolvedPreferred = preferredProfile;
-                    final Optional<Path> resolvedConfigured = configured;
                     final Optional<String> deployMessage = deploy.message();
                     final boolean deploySucceeded = deploy.succeeded();
                     Platform.runLater(
@@ -2549,17 +2552,12 @@ public final class RequestFormRemoteDesktopPane {
                                             deployStatusLabel.setText(msg);
                                             status.accept(msg);
                                         });
-                                if (resolvedConfigured.isEmpty()) {
+                                if (resolvedPreferred == null) {
                                     profileField.setText("");
                                 } else {
-                                    Path preferred =
-                                            resolvedPreferred != null
-                                                    ? resolvedPreferred
-                                                    : resolvedConfigured.get();
-                                    profileField.setText(preferred.toString());
-                                    if (!preferred.equals(resolvedConfigured.get())
-                                            && profileChangeHandler != null) {
-                                        profileChangeHandler.accept(preferred.toString());
+                                    profileField.setText(resolvedPreferred.toString());
+                                    if (profileChangeHandler != null) {
+                                        profileChangeHandler.accept(resolvedPreferred.toString());
                                     }
                                 }
                                 companionProgramField.setText(

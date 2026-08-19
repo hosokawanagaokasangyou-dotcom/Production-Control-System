@@ -3,6 +3,7 @@ package jp.co.pm.ai.desktop.io;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -17,6 +18,9 @@ import jp.co.pm.ai.desktop.config.AppPaths;
  * Windows リモートデスクトップ接続（{@code mstsc.exe}）を .rdp プロファイルで起動する。
  */
 public final class RemoteDesktopLauncher {
+
+    /** mstsc に渡す作業用 .rdp（Windows 既定 Default.rdp とタイトルが衝突しない名前）。 */
+    public static final String LAUNCH_SESSION_RDP_FILENAME = "pm-ai-session.rdp";
 
     /** {@link #ensureLaunchableRdpProfile(Path)} で拒否したときの説明（UI と共有）。 */
     public static final String DEFAULT_RDP_LAUNCH_BLOCKED_MESSAGE =
@@ -70,8 +74,7 @@ public final class RemoteDesktopLauncher {
      */
     public static LaunchOutcome launch(Path rdpProfile, Map<String, String> ui) throws IOException {
         Path preferred = RdpFileSigner.resolvePreferredSignedProfilePath(rdpProfile, ui);
-        Path abs = validateRdpProfile(preferred);
-        ensureLaunchableRdpProfile(abs);
+        Path session = materializeLaunchSessionProfile(preferred);
         if (!isSupportedPlatform()) {
             throw new IOException("リモートデスクトップの起動は Windows のみ対応です。");
         }
@@ -86,9 +89,9 @@ public final class RemoteDesktopLauncher {
         boolean embedInProfile = RdpCompanionLauncher.isEmbedStartupInProfileEnabled(env);
         boolean signatureRemoved =
                 embedInProfile
-                        ? RdpProfileEditor.applyRemoteStartupProgram(abs, remoteProgram, remoteArgs)
+                        ? RdpProfileEditor.applyRemoteStartupProgram(session, remoteProgram, remoteArgs)
                         : false;
-        boolean displaySignatureRemoved = RdpLaunchDisplaySettings.applyToProfile(abs, env);
+        boolean displaySignatureRemoved = RdpLaunchDisplaySettings.applyToProfile(session, env);
         signatureRemoved = signatureRemoved || displaySignatureRemoved;
         Optional<String> summary =
                 embedInProfile ? RdpCompanionLauncher.formatEmbeddedSummary(env) : Optional.empty();
@@ -98,14 +101,14 @@ public final class RemoteDesktopLauncher {
             mstscPidMarker =
                     Optional.of(
                             RdpSecurityDialogAutomator.launchWithAutomatedConfirm(
-                                    mstsc, abs, env));
+                                    mstsc, session, env));
         } else {
-            Process started = startDetached(List.of(mstsc.toString(), abs.toString()));
+            Process started = startDetached(List.of(mstsc.toString(), session.toString()));
             mstscPidHint = OptionalLong.of(started.pid());
         }
         OptionalLong mstscPid =
-                mstscPidHint.isPresent() ? mstscPidHint : findLatestMstscPidForProfile(abs);
-        return new LaunchOutcome(abs, summary, signatureRemoved, mstscPid, mstscPidMarker);
+                mstscPidHint.isPresent() ? mstscPidHint : findLatestMstscPidForProfile(session);
+        return new LaunchOutcome(session, summary, signatureRemoved, mstscPid, mstscPidMarker);
     }
 
     /**
@@ -173,6 +176,10 @@ public final class RemoteDesktopLauncher {
             throw new IOException("RDP プロファイルが未指定です。");
         }
         Path abs = rdpProfile.toAbsolutePath().normalize();
+        if (Files.isDirectory(abs)) {
+            throw new IOException(
+                    "RDP プロファイルにフォルダが指定されています。.rdp ファイルを指定してください: " + abs);
+        }
         if (!Files.isRegularFile(abs)) {
             throw new IOException("RDP プロファイルが見つかりません: " + abs);
         }
@@ -192,6 +199,20 @@ public final class RemoteDesktopLauncher {
         if (isDefaultRdpLaunchBlocked(rdpProfile)) {
             throw new IOException(DEFAULT_RDP_LAUNCH_BLOCKED_MESSAGE);
         }
+    }
+
+    /**
+     * 署名済み（または起動可能な）.rdp を作業用 {@link #LAUNCH_SESSION_RDP_FILENAME} へコピーする。
+     * mstsc のウィンドウタイトルが Default にならないようにする。
+     */
+    public static Path materializeLaunchSessionProfile(Path source) throws IOException {
+        Path abs = validateRdpProfile(source);
+        ensureLaunchableRdpProfile(abs);
+        Path dir = RdpFileSigner.resolveRdpsignLogDir();
+        Files.createDirectories(dir);
+        Path dest = dir.resolve(LAUNCH_SESSION_RDP_FILENAME);
+        Files.copy(abs, dest, StandardCopyOption.REPLACE_EXISTING);
+        return dest.toAbsolutePath().normalize();
     }
 
     private static Path resolveMstscExe() {

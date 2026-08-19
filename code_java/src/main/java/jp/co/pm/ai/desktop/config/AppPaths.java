@@ -1733,15 +1733,19 @@ public final class AppPaths {
     }
 
     /**
-     * 依頼書入力タブの RDP プロファイル（{@code *.rdp}）。未設定・空は Windows 既定 {@code Default.rdp} を試す。
+     * 依頼書入力タブの RDP プロファイル（{@code *.rdp}）。未設定・空、ディレクトリ、Default.rdp は空。
      */
     public static Optional<Path> resolveRequestFormRdpProfile(Map<String, String> ui) {
         Map<String, String> u = ui != null ? ui : Map.of();
         String override = trim(u.get(KEY_PM_AI_REQUEST_FORM_RDP_PROFILE));
         if (override.isEmpty()) {
-            return resolveWindowsDefaultRdpProfile();
+            return Optional.empty();
         }
-        return Optional.of(Path.of(override).toAbsolutePath().normalize());
+        Path configured = Path.of(override).toAbsolutePath().normalize();
+        if (Files.isDirectory(configured) || isWindowsDefaultRdpProfile(configured)) {
+            return Optional.empty();
+        }
+        return Optional.of(configured);
     }
 
     /** {@link FactorySite} 別の {@link #KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR} 既定（受注ファイルの親フォルダ）。 */

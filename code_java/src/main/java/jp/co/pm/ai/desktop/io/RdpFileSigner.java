@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -608,12 +609,27 @@ public final class RdpFileSigner {
     /**
      * 環境変数等で設定された .rdp を起動・署名に使う前に正規化する。
      * 二重サフィックスや {@code .pm-ai-signed.rdp} 再指定時に、正しい署名済み1ファイルへ寄せる。
+     * ディレクトリや Windows 既定 {@code Default.rdp} が指定されたときは、署名済みプロファイルを探索する。
      */
     public static Path resolvePreferredSignedProfilePath(Path configured, Map<String, String> ui) {
         if (configured == null) {
             throw new IllegalArgumentException("configured");
         }
         Path configuredAbs = configured.toAbsolutePath().normalize();
+        Path signedDir = resolveSignedOutputDir(ui);
+        if (Files.isDirectory(configuredAbs)) {
+            Path found = findSignedProfileNear(configuredAbs, signedDir);
+            if (found != null) {
+                return found;
+            }
+            return configuredAbs;
+        }
+        if (AppPaths.isWindowsDefaultRdpProfile(configuredAbs)) {
+            Path found = findSignedProfileNear(configuredAbs.getParent(), signedDir);
+            if (found != null) {
+                return found;
+            }
+        }
         Path canonical = resolveSignedOutputPath(configuredAbs, ui);
         try {
             if (Files.isRegularFile(canonical) && isSigned(canonical)) {
@@ -628,7 +644,53 @@ public final class RdpFileSigner {
         if (Files.isRegularFile(canonical)) {
             return canonical;
         }
+        Path nearby = findSignedProfileNear(configuredAbs.getParent(), signedDir);
+        if (nearby != null) {
+            return nearby;
+        }
         return configuredAbs;
+    }
+
+    /**
+     * UI 環境変数から起動に使う .rdp を決める。未設定時はリポジトリの署名済みプロファイルを探す（Default.rdp には落とさない）。
+     */
+    public static Path resolvePreferredSignedProfilePathFromUi(Map<String, String> ui) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        String raw = u.getOrDefault(AppPaths.KEY_PM_AI_REQUEST_FORM_RDP_PROFILE, "");
+        Path signedDir = resolveSignedOutputDir(u);
+        Path configured =
+                raw == null || raw.isBlank()
+                        ? signedDir.resolve("Default.rdp")
+                        : Path.of(raw.strip());
+        return resolvePreferredSignedProfilePath(configured, u);
+    }
+
+    static Path findSignedProfileNear(Path directory, Path signedOutputDir) {
+        Path found = findDefaultSignedProfileIn(directory);
+        if (found != null) {
+            return found;
+        }
+        return findDefaultSignedProfileIn(signedOutputDir);
+    }
+
+    private static Path findDefaultSignedProfileIn(Path directory) {
+        if (directory == null || !Files.isDirectory(directory)) {
+            return null;
+        }
+        Path named = directory.resolve("Default" + SIGNED_OUTPUT_SUFFIX);
+        if (Files.isRegularFile(named)) {
+            return named.toAbsolutePath().normalize();
+        }
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(directory, "*" + SIGNED_OUTPUT_SUFFIX)) {
+            for (Path p : stream) {
+                if (Files.isRegularFile(p)) {
+                    return p.toAbsolutePath().normalize();
+                }
+            }
+        } catch (IOException ignored) {
+            return null;
+        }
+        return null;
     }
 
     /** {@link #resolveSignedOutputPath(Path, Map)} の ui 未指定版。 */

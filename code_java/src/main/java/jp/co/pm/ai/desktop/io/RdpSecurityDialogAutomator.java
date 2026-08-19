@@ -144,9 +144,10 @@ public final class RdpSecurityDialogAutomator {
                 $pidFile = '%s'
                 $timeout = %d
                 if (-not (Test-Path -LiteralPath $mstsc)) { exit 3 }
-                if (-not (Test-Path -LiteralPath $rdp)) { exit 4 }
+                if (-not (Test-Path -LiteralPath $rdp -PathType Leaf)) { exit 4 }
                 try {
-                  $proc = Start-Process -FilePath $mstsc -ArgumentList @($rdp) -WindowStyle Normal -PassThru
+                  $rdpArg = '"' + $rdp + '"'
+                  $proc = Start-Process -FilePath $mstsc -ArgumentList $rdpArg -WindowStyle Normal -PassThru
                   if ($null -ne $proc) {
                     Set-Content -LiteralPath $pidFile -Value ([string]$proc.Id) -Encoding ascii -NoNewline
                   }

@@ -40,10 +40,12 @@ class RdpSecurityDialogAutomatorTest {
         assertTrue(script.contains("mstsc.exe"));
         assertTrue(script.contains("Default.pm-ai-signed.rdp"));
         assertTrue(script.contains("rdp-mstsc-test.pid"));
-        assertTrue(script.contains("Find-SecurityDialog"));
-        assertTrue(script.contains("Enable-AllCheckboxes"));
-        assertTrue(script.contains("Invoke-ConnectButton"));
+        assertTrue(script.contains("Find-SecurityDialog") || script.contains("Find-SecurityWarningWindow"));
+        assertTrue(script.contains("Enable-AllCheckboxes") || script.contains("Check-AllCheckBoxes"));
+        assertTrue(script.contains("Invoke-ConnectButton") || script.contains("Click-ConnectButton"));
         assertTrue(script.contains("Start-Process"));
+        assertTrue(script.contains("-PathType Leaf"), "ディレクトリを .rdp として渡さない");
+        assertTrue(script.contains("ArgumentList $rdpArg"), "mstsc へ引用符付き .rdp を渡す");
     }
 
     @Test

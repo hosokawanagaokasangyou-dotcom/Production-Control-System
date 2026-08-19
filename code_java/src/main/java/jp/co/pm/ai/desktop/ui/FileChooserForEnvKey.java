@@ -38,6 +38,11 @@ public final class FileChooserForEnvKey {
                     .addAll(
                             new FileChooser.ExtensionFilter("Excel", "*.xlsm", "*.xlsx"),
                             new FileChooser.ExtensionFilter("All", "*.*"));
+        } else if (AppPaths.KEY_PM_AI_REQUEST_FORM_RDP_PROFILE.equals(k)) {
+            fc.getExtensionFilters()
+                    .addAll(
+                            new FileChooser.ExtensionFilter("リモートデスクトップ接続 (*.rdp)", "*.rdp"),
+                            new FileChooser.ExtensionFilter("All", "*.*"));
         } else {
             fc.getExtensionFilters().add(new FileChooser.ExtensionFilter("All", "*.*"));
         }
