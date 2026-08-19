@@ -53,20 +53,20 @@
     <Label fx:id="hintLabel" wrapText="true" maxWidth="Infinity"
            style="-fx-font-size: 11px; -fx-text-fill: #555555;"/>
     <HBox alignment="CENTER_LEFT" spacing="8.0" maxWidth="Infinity">
-        <Label fx:id="aladdinPlanSourceLabel" wrapText="true" maxWidth="Infinity"
-               HBox.hgrow="ALWAYS" style="-fx-font-size: 10px; -fx-text-fill: #555555;"/>
         <Button fx:id="openAladdinPlanSourceFolderButton" mnemonicParsing="false"
                 text="フォルダを開く" minWidth="-Infinity" disable="true"
                 style="-fx-font-size: 10px;"
                 onAction="#onOpenAladdinPlanSourceFolderAction"/>
+        <Label fx:id="aladdinPlanSourceLabel" wrapText="true" maxWidth="Infinity"
+               HBox.hgrow="ALWAYS" style="-fx-font-size: 10px; -fx-text-fill: #555555;"/>
     </HBox>
     <HBox alignment="CENTER_LEFT" spacing="8.0" maxWidth="Infinity">
-        <Label fx:id="dailyReportSourceLabel" wrapText="true" maxWidth="Infinity"
-               HBox.hgrow="ALWAYS" style="-fx-font-size: 10px; -fx-text-fill: #555555;"/>
         <Button fx:id="openDailyReportSourceFolderButton" mnemonicParsing="false"
                 text="フォルダを開く" minWidth="-Infinity" disable="true"
                 style="-fx-font-size: 10px;"
                 onAction="#onOpenDailyReportSourceFolderAction"/>
+        <Label fx:id="dailyReportSourceLabel" wrapText="true" maxWidth="Infinity"
+               HBox.hgrow="ALWAYS" style="-fx-font-size: 10px; -fx-text-fill: #555555;"/>
     </HBox>
     <SplitPane fx:id="mainDetailSplitPane" dividerPositions="0.62" minHeight="360.0" orientation="VERTICAL"
                VBox.vgrow="ALWAYS">
