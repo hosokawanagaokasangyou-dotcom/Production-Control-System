@@ -43,6 +43,7 @@ import javafx.stage.Window;
 
 import jp.co.pm.ai.desktop.io.PlanInputTabularIo;
 import jp.co.pm.ai.desktop.io.PostProcessingProductMasterIo;
+import jp.co.pm.ai.desktop.ui.PostProcessingMasterLoadBusyDialog;
 
 /**
  * 依頼書入力タブ内「後加工商品マスタ編集」カードの UI。
@@ -887,6 +888,7 @@ public final class PostProcessingProductMasterEditorPane {
         if (deferInitialLoad) {
             statusLabel.setText("マスタデータを読み込んでいます…");
             startDeferredInitialization(
+                    owner,
                     uiEnv,
                     statusLabel,
                     referenceHeaders,
@@ -915,6 +917,7 @@ public final class PostProcessingProductMasterEditorPane {
      * フォーム構築（{@code rebuildForm}）だけ UI スレッドで行う。
      */
     private static void startDeferredInitialization(
+            Window owner,
             Supplier<Map<String, String>> uiEnv,
             Label statusLabel,
             List<String> referenceHeaders,
@@ -931,6 +934,9 @@ public final class PostProcessingProductMasterEditorPane {
             Runnable rebuildForm,
             Runnable loadUploadFile,
             Consumer<String> log) {
+        PostProcessingMasterLoadBusyDialog busyDialog =
+                PostProcessingMasterLoadBusyDialog.show(
+                        owner, PostProcessingMasterLoadBusyDialog.STATUS_LOADING);
         Thread worker =
                 new Thread(
                         () -> {
@@ -1013,46 +1019,50 @@ public final class PostProcessingProductMasterEditorPane {
                                     planMachine;
                             Platform.runLater(
                                     () -> {
-                                        kouteiNaiyoLookupRef.set(loadedKouteiNaiyo);
-                                        shuruiLookupRef.set(loadedShurui);
-                                        keiriBunruiLookupRef.set(loadedKeiriBunrui);
-                                        yotoLookupRef.set(loadedYoto);
-                                        bunrui4LookupRef.set(loadedBunrui4);
-                                        zaikoBunruiLookupRef.set(loadedZaikoBunrui);
-                                        planMachineLookupRef.set(loadedPlanMachine);
-                                        if (finalRefOk && !loadedHeaders.isEmpty()) {
-                                            referenceHeaders.clear();
-                                            referenceHeaders.addAll(loadedHeaders);
-                                            editorModelRef.set(
-                                                    new PostProcessingProductMasterEditorModel(
-                                                            referenceHeaders));
-                                            rebuildForm.run();
-                                        }
-                                        if (finalUploadOk && loadedUpload != null) {
-                                            try {
-                                                applyUploadSheet(
-                                                        loadedUpload,
-                                                        referenceHeaders,
-                                                        uploadRows,
-                                                        statusLabel);
-                                            } catch (IllegalArgumentException ex) {
-                                                statusLabel.setText(ex.getMessage());
+                                        try {
+                                            kouteiNaiyoLookupRef.set(loadedKouteiNaiyo);
+                                            shuruiLookupRef.set(loadedShurui);
+                                            keiriBunruiLookupRef.set(loadedKeiriBunrui);
+                                            yotoLookupRef.set(loadedYoto);
+                                            bunrui4LookupRef.set(loadedBunrui4);
+                                            zaikoBunruiLookupRef.set(loadedZaikoBunrui);
+                                            planMachineLookupRef.set(loadedPlanMachine);
+                                            if (finalRefOk && !loadedHeaders.isEmpty()) {
+                                                referenceHeaders.clear();
+                                                referenceHeaders.addAll(loadedHeaders);
+                                                editorModelRef.set(
+                                                        new PostProcessingProductMasterEditorModel(
+                                                                referenceHeaders));
+                                                rebuildForm.run();
                                             }
-                                        } else if (finalRefOk) {
-                                            statusLabel.setText(
-                                                    "参照マスタ準備完了。"
-                                                            + masterLookupSuffix(
-                                                                    loadedKouteiNaiyo,
-                                                                    loadedShurui,
-                                                                    loadedKeiriBunrui,
-                                                                    loadedYoto,
-                                                                    loadedBunrui4,
-                                                                    loadedZaikoBunrui,
-                                                                    loadedPlanMachine)
-                                                            + "アップロード用ファイルがありません（新規作成可）");
-                                        } else {
-                                            statusLabel.setText(
-                                                    "参照マスタを確認してください。");
+                                            if (finalUploadOk && loadedUpload != null) {
+                                                try {
+                                                    applyUploadSheet(
+                                                            loadedUpload,
+                                                            referenceHeaders,
+                                                            uploadRows,
+                                                            statusLabel);
+                                                } catch (IllegalArgumentException ex) {
+                                                    statusLabel.setText(ex.getMessage());
+                                                }
+                                            } else if (finalRefOk) {
+                                                statusLabel.setText(
+                                                        "参照マスタ準備完了。"
+                                                                + masterLookupSuffix(
+                                                                        loadedKouteiNaiyo,
+                                                                        loadedShurui,
+                                                                        loadedKeiriBunrui,
+                                                                        loadedYoto,
+                                                                        loadedBunrui4,
+                                                                        loadedZaikoBunrui,
+                                                                        loadedPlanMachine)
+                                                                + "アップロード用ファイルがありません（新規作成可）");
+                                            } else {
+                                                statusLabel.setText(
+                                                        "参照マスタを確認してください。");
+                                            }
+                                        } finally {
+                                            busyDialog.close();
                                         }
                                     });
                         },
