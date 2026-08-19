@@ -271,10 +271,10 @@ public final class FactoryOperatorUserStore {
         if (AppPaths.usesRemoteDesktopAppHome()) {
             return FactorySite.RDP_LAUNCHER;
         }
-        if (site != null) {
+        if (site != null && site != FactorySite.RDP_LAUNCHER) {
             return site;
         }
-        return GlobalInitSettingTarget.loadEffective(ui != null ? ui : Map.of());
+        return StartupFactorySiteResolver.resolve();
     }
 
     public static String sessionRdpDepartmentKey() {

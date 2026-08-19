@@ -596,6 +596,33 @@ public final class AppPaths {
     public static final String DEFAULT_PM_AI_PORTABLE_BUNDLE_SOURCE_DIR =
             DEFAULT_PM_AI_PORTABLE_BUNDLE_RELEASE_DIR_KONAN;
 
+    /**
+     * 自動バージョンアップ正本パス。環境タブが別工場 UNC を指すときは {@code site} の工場既定を使う。
+     */
+    public static String resolvePortableBundleSourceDir(Map<String, String> ui, FactorySite site) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        String override = trim(u.get(KEY_PM_AI_PORTABLE_BUNDLE_SOURCE_DIR));
+        FactorySite effective =
+                site != null && site != FactorySite.RDP_LAUNCHER ? site : null;
+        if (effective != null) {
+            if (!override.isEmpty()) {
+                Optional<FactorySite> inferred =
+                        FactorySite.inferFromPortableBundleSourceValue(override);
+                if (inferred.isEmpty() || inferred.get() == effective) {
+                    return override;
+                }
+            }
+            String factoryDefault = effective.portableBundleSourceDir();
+            if (factoryDefault != null && !factoryDefault.isBlank()) {
+                return factoryDefault;
+            }
+        }
+        if (!override.isEmpty()) {
+            return override;
+        }
+        return DEFAULT_PM_AI_PORTABLE_BUNDLE_SOURCE_DIR;
+    }
+
     /** RDP ランチャー向けバージョンアップ正本（掲示板共有）。 */
     public static final String DEFAULT_PM_AI_RDP_PORTABLE_BUNDLE_SOURCE_DIR =
             DEFAULT_PM_AI_RDP_PORTABLE_BUNDLE_RELEASE_DIR;

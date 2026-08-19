@@ -54,6 +54,25 @@ class StartupFactorySiteResolverTest {
     }
 
     @Test
+    void resolveForPortableUpgrade_prefersLastLaunchedOverKonanEnvUnc() {
+        LastLaunchedFactorySiteStore.save(FactorySite.KOKUBU);
+        GlobalInitSettingTarget.save(FactorySite.KOKUBU);
+        Map<String, String> ui =
+                Map.of(
+                        AppPaths.KEY_PM_AI_PORTABLE_BUNDLE_SOURCE_DIR,
+                        FactorySite.KONAN.portableBundleSourceDir(),
+                        AppPaths.KEY_PM_AI_TASK_INPUT_SOURCE_DIR,
+                        FactorySite.KONAN.taskInputSourceDir(),
+                        AppPaths.KEY_PM_AI_ACTUAL_DETAIL_SOURCE_DIR,
+                        FactorySite.KONAN.actualDetailSourceDir());
+
+        assertEquals(
+                FactorySite.KOKUBU,
+                StartupFactorySiteResolver.resolveForPortableUpgrade(
+                        java.util.Optional.empty(), ui, java.util.Optional.empty()));
+    }
+
+    @Test
     void requiresStartupSwitch_onlyWhenPersistedDiffersFromAdopted() {
         assertTrue(
                 StartupFactorySiteResolver.requiresStartupSwitch(

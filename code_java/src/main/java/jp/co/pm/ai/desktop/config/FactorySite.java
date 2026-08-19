@@ -298,17 +298,7 @@ public enum FactorySite {
             }
         }
         int[] scores = new int[2];
-        List<String> keys =
-                List.of(
-                        AppPaths.KEY_PM_AI_PORTABLE_BUNDLE_SOURCE_DIR,
-                        AppPaths.KEY_PM_AI_TASK_INPUT_SOURCE_DIR,
-                        AppPaths.KEY_PM_AI_ACTUAL_DETAIL_SOURCE_DIR,
-                        AppPaths.KEY_PM_AI_MASTER_WORKBOOK,
-                        AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK,
-                        AppPaths.KEY_PM_AI_ALADDIN_MASTER_DIR,
-                        AppPaths.KEY_PM_AI_REQUEST_FORM_JUCHU_FILE,
-                        AppPaths.KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR);
-        for (String key : keys) {
+        for (String key : NETWORK_FACTORY_UNC_KEYS) {
             int weight =
                     AppPaths.KEY_PM_AI_TASK_INPUT_SOURCE_DIR.equals(key)
                                     || AppPaths.KEY_PM_AI_ACTUAL_DETAIL_SOURCE_DIR.equals(key)
@@ -324,6 +314,35 @@ public enum FactorySite {
         }
         return Optional.empty();
     }
+
+    /**
+     * 環境タブの工場別 UNC が {@code site} と食い違うか。{@link AppPaths#KEY_PM_AI_FACTORY_SITE} は見ない
+     * （国分選択のまま湖南 UNC が残る起動不整合を検出するため）。
+     */
+    public static boolean networkUncConflictsWith(Map<String, String> ui, FactorySite site) {
+        if (ui == null || ui.isEmpty() || site == null || site == RDP_LAUNCHER) {
+            return false;
+        }
+        for (String key : NETWORK_FACTORY_UNC_KEYS) {
+            Optional<FactorySite> inferred =
+                    inferFromPortableBundleSourceValue(ui.getOrDefault(key, ""));
+            if (inferred.isPresent() && inferred.get() != site) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static final List<String> NETWORK_FACTORY_UNC_KEYS =
+            List.of(
+                    AppPaths.KEY_PM_AI_PORTABLE_BUNDLE_SOURCE_DIR,
+                    AppPaths.KEY_PM_AI_TASK_INPUT_SOURCE_DIR,
+                    AppPaths.KEY_PM_AI_ACTUAL_DETAIL_SOURCE_DIR,
+                    AppPaths.KEY_PM_AI_MASTER_WORKBOOK,
+                    AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK,
+                    AppPaths.KEY_PM_AI_ALADDIN_MASTER_DIR,
+                    AppPaths.KEY_PM_AI_REQUEST_FORM_JUCHU_FILE,
+                    AppPaths.KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR);
 
     private static void scoreEnvValue(String raw, int weight, int[] scores) {
         Optional<FactorySite> site = inferFromPortableBundleSourceValue(raw);

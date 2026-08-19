@@ -79,12 +79,20 @@ public final class DesktopUiEnvBootstrap {
                 return "";
             }
             case AppPaths.KEY_PM_AI_TASK_INPUT_SOURCE_DIR -> {
+                FactorySite site = GlobalInitSettingTarget.load();
+                if (site == FactorySite.KOKUBU) {
+                    return FactorySite.KOKUBU.taskInputSourceDir();
+                }
                 return AppPaths.DEFAULT_PM_AI_TASK_INPUT_SOURCE_DIR;
             }
             case AppPaths.KEY_PM_AI_PROCESSING_PLAN_PATH -> {
                 return "";
             }
             case AppPaths.KEY_PM_AI_ACTUAL_DETAIL_SOURCE_DIR -> {
+                FactorySite site = GlobalInitSettingTarget.load();
+                if (site == FactorySite.KOKUBU) {
+                    return FactorySite.KOKUBU.actualDetailSourceDir();
+                }
                 return AppPaths.DEFAULT_PM_AI_ACTUAL_DETAIL_SOURCE_DIR;
             }
             case AppPaths.KEY_PM_AI_DAILY_REPORT_SOURCE_DIR -> {
@@ -146,7 +154,11 @@ public final class DesktopUiEnvBootstrap {
                 return "";
             }
             case AppPaths.KEY_PM_AI_PORTABLE_BUNDLE_SOURCE_DIR -> {
-                return AppPaths.DEFAULT_PM_AI_PORTABLE_BUNDLE_SOURCE_DIR;
+                FactorySite site = GlobalInitSettingTarget.load();
+                String dir = site != null ? site.portableBundleSourceDir() : "";
+                return dir.isBlank()
+                        ? AppPaths.DEFAULT_PM_AI_PORTABLE_BUNDLE_SOURCE_DIR
+                        : dir;
             }
             default -> {
                 return "";

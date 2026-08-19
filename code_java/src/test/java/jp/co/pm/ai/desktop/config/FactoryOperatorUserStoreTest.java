@@ -45,6 +45,39 @@ class FactoryOperatorUserStoreTest {
     }
 
     @Test
+    void operatorScopeForCurrentApp_ignoresKonanEnvWhenKokubuIsAdopted(@TempDir Path tmpHome)
+            throws Exception {
+        String priorHome = System.getProperty("user.home");
+        String priorDesktopHome = AppPaths.desktopAppHomeDirName();
+        try {
+            System.setProperty("user.home", tmpHome.toString());
+            AppPaths.setDesktopAppHomeDirName(".pm-ai-desktop-test");
+            LastLaunchedFactorySiteStore.resetForTests();
+            LastLaunchedFactorySiteStore.save(FactorySite.KOKUBU);
+            GlobalInitSettingTarget.save(FactorySite.KOKUBU);
+            Map<String, String> konanEnv =
+                    Map.of(
+                            AppPaths.KEY_PM_AI_PORTABLE_BUNDLE_SOURCE_DIR,
+                            FactorySite.KONAN.portableBundleSourceDir(),
+                            AppPaths.KEY_PM_AI_TASK_INPUT_SOURCE_DIR,
+                            FactorySite.KONAN.taskInputSourceDir(),
+                            AppPaths.KEY_PM_AI_ACTUAL_DETAIL_SOURCE_DIR,
+                            FactorySite.KONAN.actualDetailSourceDir(),
+                            AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK,
+                            AppPaths.DEFAULT_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK_KONAN);
+            assertEquals(
+                    FactorySite.KOKUBU,
+                    FactoryOperatorUserStore.operatorScopeForCurrentApp(konanEnv, null));
+            assertEquals(
+                    FactorySite.KOKUBU, GlobalInitSettingTarget.load(), "湖南 UNC 推定で国分を上書きしない");
+        } finally {
+            LastLaunchedFactorySiteStore.resetForTests();
+            AppPaths.setDesktopAppHomeDirName(priorDesktopHome);
+            System.setProperty("user.home", priorHome);
+        }
+    }
+
+    @Test
     void addRemoveAndSelectAreFactoryScoped() throws Exception {
         FactoryOperatorUserStore.addName(FactorySite.KONAN, "山田");
         FactoryOperatorUserStore.selectSessionOperator(FactorySite.KONAN, "山田");

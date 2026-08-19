@@ -1040,6 +1040,28 @@ class AppPathsTest {
     }
 
     @Test
+    void resolvePortableBundleSourceDir_usesFactoryDefaultWhenEnvPointsToOtherFactory() {
+        Map<String, String> ui =
+                Map.of(
+                        AppPaths.KEY_PM_AI_PORTABLE_BUNDLE_SOURCE_DIR,
+                        FactorySite.KONAN.portableBundleSourceDir());
+        assertEquals(
+                FactorySite.KOKUBU.portableBundleSourceDir(),
+                AppPaths.resolvePortableBundleSourceDir(ui, FactorySite.KOKUBU));
+        assertEquals(
+                FactorySite.KONAN.portableBundleSourceDir(),
+                AppPaths.resolvePortableBundleSourceDir(ui, FactorySite.KONAN));
+    }
+
+    @Test
+    void resolvePortableBundleSourceDir_keepsSameFactoryOverride() {
+        String kokubuZip = FactorySite.KOKUBU.portableBundleSourceDir() + "\\PMD_version_upgrade.zip";
+        Map<String, String> ui =
+                Map.of(AppPaths.KEY_PM_AI_PORTABLE_BUNDLE_SOURCE_DIR, kokubuZip);
+        assertEquals(kokubuZip, AppPaths.resolvePortableBundleSourceDir(ui, FactorySite.KOKUBU));
+    }
+
+    @Test
     void factoryOperatorUsersStorePath_usesEffectiveFactoryDataDirWhenSummaryMismatch(@TempDir Path tmp)
             throws Exception {
         Path konanSummary =

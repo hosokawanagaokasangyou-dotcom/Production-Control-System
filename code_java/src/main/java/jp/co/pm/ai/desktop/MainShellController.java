@@ -831,7 +831,7 @@ public final class MainShellController
 
             pipelineExecutionTimingHistory.configureFromUi(ui0);
             pipelineExecutionTimingHistory.setPersistLog(this::appendLog);
-            FactoryOperatorUserStore.configureFromUi(ui0);
+            FactoryOperatorUserStore.configureFromUi(ui0, StartupFactorySiteResolver.resolve());
 
             factoryOperatorToolbar =
                     new ShellFactoryOperatorToolbar(
@@ -5389,7 +5389,7 @@ public final class MainShellController
         suppressGuestSessionTabGuard.set(true);
         try {
             ensureMainShellRunTabSelected();
-            appendLog("[guest] ゲスト操作者は工場切替のみ利用できます。");
+            appendLog("[guest] ゲスト操作者は工場切替と操作者変更のみ利用できます。");
         } finally {
             suppressGuestSessionTabGuard.set(false);
         }
@@ -5418,6 +5418,7 @@ public final class MainShellController
     void schedulePortableBundleSelfUpdateAfterSplash() {
         Platform.runLater(
                 () -> {
+                    alignStartupFactoryNetworkUncIfMismatched();
                     maybePortableBundleSelfUpdate();
                     maybePromptOperatorUserAtStartup();
                 });
@@ -5429,6 +5430,26 @@ public final class MainShellController
     private boolean shouldSuppressStartupRequestFormOriginalDirPrompt() {
         return deferOperatorPromptForPortableUpgrade.get()
                 || skipOperatorPromptAfterPortableUpgrade.get();
+    }
+
+    /**
+     * 起動直後、環境タブに別工場 UNC が残っていれば採用工場の既定へ直す。
+     * 自動バージョンアップと操作者 bin が湖南／国分で食い違わないようにする。
+     */
+    private void alignStartupFactoryNetworkUncIfMismatched() {
+        FactorySite adopted = StartupFactorySiteResolver.resolve();
+        if (adopted == null || adopted == FactorySite.RDP_LAUNCHER) {
+            return;
+        }
+        GlobalInitSettingTarget.save(adopted);
+        if (FactorySite.networkUncConflictsWith(collectUiEnv(), adopted)) {
+            appendLog(
+                    "[startup] 環境タブのネットワークパスが "
+                            + adopted.displayLabelJa()
+                            + " と不一致のため、工場既定 UNC に揃えました。");
+            applyFactorySitePortableAndNetworkDefaults(adopted);
+        }
+        FactoryOperatorUserStore.configureFromUi(collectUiEnv(), adopted);
     }
 
     private void maybePromptRequestFormOriginalDirAtStartup() {
@@ -8688,13 +8709,6 @@ public final class MainShellController
 
     @Override
     public void changeSessionOperator(FactorySite site) {
-        if (FactoryOperatorUserStore.isGuestSession()) {
-            showWarningDialog(
-                    "操作不可",
-                    "ゲスト操作者は工場切替のみ利用できます。\n"
-                            + "登録操作者で利用するには、アプリを再起動して操作者を選び直してください。");
-            return;
-        }
         OperatorUserSelectionSupport.changeSessionOperator(this, site);
         scheduleDesktopSessionSave();
         applyRunTabGating();
@@ -10796,7 +10810,8 @@ public PlanInputTabController planInputTabControllerForDispatchRollUnit() {
             return;
         }
         Map<String, String> ui = collectUiEnv();
-        String raw = ui.get(AppPaths.KEY_PM_AI_PORTABLE_BUNDLE_SOURCE_DIR);
+        FactorySite adopted = resolveFactorySiteForPortableUpgrade(Optional.empty());
+        String raw = AppPaths.resolvePortableBundleSourceDir(ui, adopted);
         if (raw == null || raw.isBlank()) {
             Alert a = new Alert(AlertType.INFORMATION);
             initDialogOwnerIfSceneReady(a);
@@ -11316,31 +11331,15 @@ public PlanInputTabController planInputTabControllerForDispatchRollUnit() {
     }
 
     /**
-     * ポータル自動バージョンアップ時に利用工場を決める。環境タブの UNC 推定 → 永続ファイル → 正本パス の順。
+     * ポータル自動バージョンアップ時に利用工場を決める。Follow-up → 前回起動工場 → 環境タブ推定 の順。
      * いずれも判定不能のときのみ {@link FactorySite#KONAN}。
      */
     private FactorySite resolveFactorySiteForPortableUpgrade(Optional<Path> canonicalOpt) {
         Optional<FactorySite> fromFollowUp =
                 PortableBundleUpgradeFollowUp.readIfPresent()
                         .flatMap(PortableBundleUpgradeFollowUp::factorySiteOrEmpty);
-        if (fromFollowUp.isPresent()) {
-            return fromFollowUp.get();
-        }
-        Optional<FactorySite> fromEnv = FactorySite.inferFromUiEnv(collectUiEnv());
-        if (fromEnv.isPresent()) {
-            return fromEnv.get();
-        }
-        FactorySite stored = GlobalInitSettingTarget.load();
-        if (stored != null) {
-            return stored;
-        }
-        Optional<FactorySite> fromCanonical =
-                canonicalOpt.flatMap(FactorySite::inferFromPortableBundleInitSetting);
-        if (fromCanonical.isEmpty() && canonicalOpt.isPresent()) {
-            fromCanonical =
-                    FactorySite.inferFromPortableBundleSourceValue(canonicalOpt.get().toString());
-        }
-        return fromCanonical.orElse(FactorySite.KONAN);
+        return StartupFactorySiteResolver.resolveForPortableUpgrade(
+                fromFollowUp, collectUiEnv(), canonicalOpt);
     }
 
     /** バージョンアップ後: 操作者選択ダイアログは出さず、前回選択の復元のみ試みる。 */

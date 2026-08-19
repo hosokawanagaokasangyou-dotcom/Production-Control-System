@@ -166,6 +166,18 @@ class FactorySiteTest {
     }
 
     @Test
+    void networkUncConflictsWith_detectsPortableBundleOfOtherFactory() {
+        Map<String, String> ui =
+                Map.of(
+                        AppPaths.KEY_PM_AI_FACTORY_SITE,
+                        FactorySite.KOKUBU.name(),
+                        AppPaths.KEY_PM_AI_PORTABLE_BUNDLE_SOURCE_DIR,
+                        FactorySite.KONAN.portableBundleSourceDir());
+        assertTrue(FactorySite.networkUncConflictsWith(ui, FactorySite.KOKUBU));
+        assertFalse(FactorySite.networkUncConflictsWith(ui, FactorySite.KONAN));
+    }
+
+    @Test
     void inferFromUiEnv_emptyWhenKonanAndKokubuSignalsTie() {
         assertFalse(
                 FactorySite.inferFromUiEnv(
