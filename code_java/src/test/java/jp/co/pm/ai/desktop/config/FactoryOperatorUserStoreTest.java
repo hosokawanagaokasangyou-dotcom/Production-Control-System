@@ -788,4 +788,83 @@ class FactoryOperatorUserStoreTest {
             }
         }
     }
+
+    @Test
+    void adminTabPassword_isNagaoka1() {
+        assertEquals("nagaoka1", FactoryOperatorUserStore.ADMIN_TAB_PASSWORD);
+    }
+
+    @Test
+    void sessionOperatorIsAdmin_falseWhenNoAdminConfigured() throws Exception {
+        FactoryOperatorUserStore.selectSessionOperator(FactorySite.KONAN, "砂田");
+        assertFalse(FactoryOperatorUserStore.hasAnyAdminOperator(FactorySite.KONAN));
+        assertFalse(FactoryOperatorUserStore.sessionOperatorIsAdmin(FactorySite.KONAN));
+        assertFalse(FactoryOperatorUserStore.isAdminOperator(FactorySite.KONAN, "砂田"));
+    }
+
+    @Test
+    void setAdminOperator_sessionOperatorCanOpenWithoutPassword() throws Exception {
+        FactoryOperatorUserStore.setAdminOperator(FactorySite.KONAN, "砂田", true);
+        FactoryOperatorUserStore.selectSessionOperator(FactorySite.KONAN, "砂田");
+        assertTrue(FactoryOperatorUserStore.hasAnyAdminOperator(FactorySite.KONAN));
+        assertTrue(FactoryOperatorUserStore.isAdminOperator(FactorySite.KONAN, "砂田"));
+        assertTrue(FactoryOperatorUserStore.sessionOperatorIsAdmin(FactorySite.KONAN));
+    }
+
+    @Test
+    void sessionOperatorIsAdmin_falseWhenAdminIsAnotherUser() throws Exception {
+        FactoryOperatorUserStore.setAdminOperator(FactorySite.KONAN, "砂田", true);
+        FactoryOperatorUserStore.selectSessionOperator(FactorySite.KONAN, "古家");
+        assertTrue(FactoryOperatorUserStore.hasAnyAdminOperator(FactorySite.KONAN));
+        assertFalse(FactoryOperatorUserStore.sessionOperatorIsAdmin(FactorySite.KONAN));
+    }
+
+    @Test
+    void sessionOperatorIsAdmin_falseForGuestEvenIfAdminExists() throws Exception {
+        FactoryOperatorUserStore.setAdminOperator(FactorySite.KONAN, "砂田", true);
+        FactoryOperatorUserStore.selectSessionOperator(FactorySite.KONAN, FactoryOperatorUserStore.GUEST_OPERATOR_NAME);
+        assertFalse(FactoryOperatorUserStore.sessionOperatorIsAdmin(FactorySite.KONAN));
+    }
+
+    @Test
+    void setAdminOperator_falseClearsFlag() throws Exception {
+        FactoryOperatorUserStore.setAdminOperator(FactorySite.KONAN, "砂田", true);
+        FactoryOperatorUserStore.setAdminOperator(FactorySite.KONAN, "砂田", false);
+        FactoryOperatorUserStore.selectSessionOperator(FactorySite.KONAN, "砂田");
+        assertFalse(FactoryOperatorUserStore.isAdminOperator(FactorySite.KONAN, "砂田"));
+        assertFalse(FactoryOperatorUserStore.hasAnyAdminOperator(FactorySite.KONAN));
+        assertFalse(FactoryOperatorUserStore.sessionOperatorIsAdmin(FactorySite.KONAN));
+    }
+
+    @Test
+    void adminOperatorFlag_persistsAcrossReload() throws Exception {
+        FactoryOperatorUserStore.setAdminOperator(FactorySite.KONAN, "砂田", true);
+        FactoryOperatorUserStore.clearSessionOperatorName();
+        assertTrue(FactoryOperatorUserStore.isAdminOperator(FactorySite.KONAN, "砂田"));
+    }
+
+    @Test
+    void guestCannotBeMarkedAdmin() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () ->
+                        FactoryOperatorUserStore.setAdminOperator(
+                                FactorySite.KONAN, FactoryOperatorUserStore.GUEST_OPERATOR_NAME, true));
+    }
+
+    @Test
+    void removeName_dropsAdminFlag() throws Exception {
+        FactoryOperatorUserStore.addName(FactorySite.KONAN, "管理者候補");
+        FactoryOperatorUserStore.setAdminOperator(FactorySite.KONAN, "管理者候補", true);
+        FactoryOperatorUserStore.removeName(FactorySite.KONAN, "管理者候補");
+        assertFalse(FactoryOperatorUserStore.isAdminOperator(FactorySite.KONAN, "管理者候補"));
+        assertFalse(FactoryOperatorUserStore.hasAnyAdminOperator(FactorySite.KONAN));
+    }
+
+    @Test
+    void setAladdinCredentials_preservesAdminFlag() throws Exception {
+        FactoryOperatorUserStore.setAdminOperator(FactorySite.KONAN, "砂田", true);
+        FactoryOperatorUserStore.setAladdinCredentials(FactorySite.KONAN, "砂田", "login1", "secret");
+        assertTrue(FactoryOperatorUserStore.isAdminOperator(FactorySite.KONAN, "砂田"));
+    }
 }

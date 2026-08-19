@@ -20,7 +20,7 @@
     </padding>
     <Label styleClass="pm-section-title" text="ユーザー管理者（操作者名・PIN）"
            wrapText="true"/>
-    <Label fx:id="introDescriptionLabel" text="工場ごとに配台システム起動時の名前選択肢と PIN（4～10 桁）を管理します。管理者は一覧の「PIN（管理者閲覧）」列で各ユーザーの PIN を確認でき、PDF 出力で工場別のユーザー情報を保存できます。編集対象は環境変数で設定された利用工場（湖南／国分）に固定されます。"
+    <Label fx:id="introDescriptionLabel" text="工場ごとに配台システム起動時の名前選択肢と PIN（4～10 桁）を管理します。管理者は一覧の「PIN（管理者閲覧）」列で各ユーザーの PIN を確認でき、PDF 出力で工場別のユーザー情報を保存できます。一覧の「管理者」列で、ユーザー管理者タブをパスワード無しで開ける操作者を指定できます。編集対象は環境変数で設定された利用工場（湖南／国分）に固定されます。"
            wrapText="true"/>
     <HBox fx:id="managedFactoryRow" spacing="8.0" alignment="CENTER_LEFT">
         <Label text="管理対象工場"/>

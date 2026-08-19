@@ -1,25 +1,20 @@
 package jp.co.pm.ai.desktop;
 
 import java.io.IOException;
-import java.security.SecureRandom;
 
 import javafx.application.Platform;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.Dialog;
 import javafx.scene.control.Label;
-import javafx.scene.control.TextField;
+import javafx.scene.control.PasswordField;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 
-import jp.co.pm.ai.desktop.config.AdminTabCredentialsStore;
+import jp.co.pm.ai.desktop.config.FactoryOperatorUserStore;
+import jp.co.pm.ai.desktop.config.FactorySite;
 
 /** ユーザー管理者タブ解錠ダイアログ（PMD / RDP 共通）。 */
 public final class AdminTabUnlockSupport {
-
-    /** 画面表示・入力するロックNOの桁数。 */
-    public static final int LOCK_NO_DIGITS = 4;
-
-    private static final SecureRandom LOCK_NO_RANDOM = new SecureRandom();
 
     @FunctionalInterface
     public interface DialogPreparer {
@@ -28,32 +23,35 @@ public final class AdminTabUnlockSupport {
 
     private AdminTabUnlockSupport() {}
 
-    /** ダイアログ表示用のロックNO（ゼロ埋めの数字列）。 */
-    public static String generateLockNo() {
-        int n = LOCK_NO_RANDOM.nextInt(10_000);
-        return String.format("%04d", n);
-    }
-
-    /** 表示中のロックNOと入力値を照合する（前後空白は無視）。 */
-    public static boolean verifyLockNo(String displayed, String entered) {
-        if (displayed == null || displayed.isEmpty()) {
-            return false;
-        }
+    /** フォールバックパスワード（前後空白は無視）。 */
+    public static boolean verifyFallbackPassword(String entered) {
         String input = entered != null ? entered.strip() : "";
-        return displayed.equals(input);
+        return FactoryOperatorUserStore.ADMIN_TAB_PASSWORD.equals(input);
     }
 
     /**
-     * 保存済み解錠が有効ならダイアログなしで true。未保存・失効時はダイアログを表示する。
+     * セッション操作者が管理者ならダイアログなしで true。それ以外はパスワード入力。
      *
-     * <p>OK で認証失敗した場合は保存済み解錠を削除する。
+     * <p>管理者が未設定でも、管理者がログインしていなくても、フォールバックパスワードで入れる。
      */
     public static boolean ensureUnlocked(Stage stage, DialogPreparer preparer) {
+        return ensureUnlocked(stage, preparer, null);
+    }
+
+    public static boolean ensureUnlocked(Stage stage, DialogPreparer preparer, FactorySite site) {
         if (stage == null) {
             return false;
         }
-        if (AdminTabCredentialsStore.hasValidSavedUnlock()) {
-            return true;
+        FactorySite scope =
+                site != null
+                        ? site
+                        : FactoryOperatorUserStore.operatorScopeForCurrentApp(java.util.Map.of(), null);
+        try {
+            if (FactoryOperatorUserStore.sessionOperatorIsAdmin(scope)) {
+                return true;
+            }
+        } catch (IOException ignored) {
+            // ストア読込失敗時はパスワードへフォールバック
         }
         Dialog<ButtonType> dialog = new Dialog<>();
         if (preparer != null) {
@@ -61,21 +59,14 @@ public final class AdminTabUnlockSupport {
         }
         dialog.setTitle("ユーザー管理者");
         dialog.setHeaderText(null);
-        String lockNo = generateLockNo();
-        Label hint = new Label("ユーザー管理者タブを開くには、表示されているロックNOを入力してください。");
+        Label hint =
+                new Label(
+                        "ログイン中のユーザーが管理者のときはパスワード不要です。"
+                                + "管理者が未設定、または管理者が不在のときはパスワードを入力してください。");
         hint.setWrapText(true);
-        Label lockNoValue = new Label(lockNo);
-        lockNoValue.setStyle("-fx-font-size: 28px; -fx-font-weight: bold;");
-        TextField inputField = new TextField();
-        inputField.setPromptText("ロックNO");
-        VBox box =
-                new VBox(
-                        8,
-                        hint,
-                        new Label("ロックNO:"),
-                        lockNoValue,
-                        new Label("ロックNO入力:"),
-                        inputField);
+        PasswordField inputField = new PasswordField();
+        inputField.setPromptText("パスワード");
+        VBox box = new VBox(8, hint, new Label("パスワード:"), inputField);
         dialog.getDialogPane().setContent(box);
         dialog.getDialogPane().getButtonTypes().setAll(ButtonType.OK, ButtonType.CANCEL);
         focusInputWhenDialogShown(dialog, inputField);
@@ -83,16 +74,7 @@ public final class AdminTabUnlockSupport {
         if (ans.isEmpty() || ans.get() != ButtonType.OK) {
             return false;
         }
-        if (verifyLockNo(lockNo, inputField.getText())) {
-            try {
-                AdminTabCredentialsStore.saveAfterSuccessfulUnlock();
-            } catch (IOException ignored) {
-                // 解錠自体は成功。次回起動で再プロンプトされる。
-            }
-            return true;
-        }
-        AdminTabCredentialsStore.clearSavedUnlock();
-        return false;
+        return verifyFallbackPassword(inputField.getText());
     }
 
     private static void focusInputWhenDialogShown(Dialog<?> dialog, javafx.scene.Node input) {

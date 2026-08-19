@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import javafx.beans.property.SimpleBooleanProperty;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.FXCollections;
 import javafx.fxml.FXML;
@@ -19,13 +20,14 @@ import javafx.scene.control.Alert;
 import javafx.scene.control.Alert.AlertType;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
+import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
-import javafx.scene.control.ButtonType;
 import javafx.scene.control.Dialog;
 import javafx.scene.control.PasswordField;
+import javafx.scene.control.TableCell;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextField;
@@ -44,7 +46,7 @@ import jp.co.pm.ai.desktop.io.FactoryOperatorUserBackupStore;
 import jp.co.pm.ai.desktop.print.FactoryOperatorUserPdfExporter;
 import jp.co.pm.ai.desktop.io.FactoryOperatorUserBackupStore.FactoryOperatorUserBackupEntry;
 
-/** 工場別の配台システム操作者名と PIN（4～10 桁）の管理タブ（ロックNOで開く）。 */
+/** 工場別の配台システム操作者名と PIN（4～10 桁）の管理タブ。 */
 public final class OperatorUserManagementTabController {
 
     private static final DateTimeFormatter BACKUP_TS =
@@ -54,11 +56,13 @@ public final class OperatorUserManagementTabController {
         private final SimpleStringProperty name = new SimpleStringProperty();
         private final SimpleStringProperty pinStatus = new SimpleStringProperty();
         private final SimpleStringProperty adminPin = new SimpleStringProperty();
+        private final SimpleBooleanProperty admin = new SimpleBooleanProperty();
 
-        OperatorRow(String name, String pinStatus, String adminPin) {
+        OperatorRow(String name, String pinStatus, String adminPin, boolean admin) {
             this.name.set(name);
             this.pinStatus.set(pinStatus);
             this.adminPin.set(adminPin);
+            this.admin.set(admin);
         }
 
         String getName() {
@@ -83,6 +87,14 @@ public final class OperatorUserManagementTabController {
 
         SimpleStringProperty adminPinProperty() {
             return adminPin;
+        }
+
+        boolean isAdmin() {
+            return admin.get();
+        }
+
+        SimpleBooleanProperty adminProperty() {
+            return admin;
         }
     }
 
@@ -251,7 +263,11 @@ public final class OperatorUserManagementTabController {
             TableColumn<OperatorRow, String> adminPinCol = new TableColumn<>("PIN（管理者閲覧）");
             adminPinCol.setCellValueFactory(row -> row.getValue().adminPinProperty());
             adminPinCol.setPrefWidth(140);
-            operatorTableView.getColumns().setAll(nameCol, pinCol, adminPinCol);
+            TableColumn<OperatorRow, Boolean> adminCol = new TableColumn<>("管理者");
+            adminCol.setCellValueFactory(row -> row.getValue().adminProperty());
+            adminCol.setPrefWidth(70);
+            adminCol.setCellFactory(col -> newAdminFlagCell());
+            operatorTableView.getColumns().setAll(nameCol, pinCol, adminCol, adminPinCol);
             operatorTableView.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
         }
         if (backupListView != null) {
@@ -414,10 +430,12 @@ public final class OperatorUserManagementTabController {
                                     + "保存フォルダは下で変更できます（UNC 可）。"
                                     + "左ペインで部署を選び、右ペインでユーザー・保存先・バックアップを管理します。"
                                     + "初期状態はゲストのみ（PIN 不要）。"
+                                    + "一覧の「管理者」列で、ユーザー管理者タブをパスワード無しで開ける操作者を指定できます。"
                                     + "ランチャー exe の転送先は下で設定できます（UNC 可）。"
                             : "工場ごとに配台システム起動時の名前選択肢と PIN（4～10 桁）を管理します。"
                                     + "管理者は一覧の「PIN（管理者閲覧）」列で各ユーザーの PIN を確認でき、"
                                     + "PDF 出力で工場別のユーザー情報を保存できます。"
+                                    + "一覧の「管理者」列で、ユーザー管理者タブをパスワード無しで開ける操作者を指定できます。"
                                     + "編集対象は環境変数で設定された利用工場（湖南／国分）に固定されます。");
         }
         if (backupSectionTitleLabel != null) {
@@ -1330,6 +1348,48 @@ public final class OperatorUserManagementTabController {
         }
     }
 
+    private TableCell<OperatorRow, Boolean> newAdminFlagCell() {
+        return new TableCell<>() {
+            private final CheckBox checkBox = new CheckBox();
+
+            {
+                checkBox.setOnAction(
+                        event -> {
+                            OperatorRow row = getTableRow() != null ? getTableRow().getItem() : null;
+                            if (row == null || FactoryOperatorUserStore.isGuestOperator(row.getName())) {
+                                checkBox.setSelected(false);
+                                return;
+                            }
+                            boolean selected = checkBox.isSelected();
+                            try {
+                                FactoryOperatorUserStore.setAdminOperator(
+                                        effectiveAppFactory(), row.getName(), selected);
+                                row.adminProperty().set(selected);
+                            } catch (Exception ex) {
+                                checkBox.setSelected(row.isAdmin());
+                                warn(
+                                        "管理者設定",
+                                        ex.getMessage() != null ? ex.getMessage() : ex.toString());
+                            }
+                        });
+            }
+
+            @Override
+            protected void updateItem(Boolean item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty) {
+                    setGraphic(null);
+                    return;
+                }
+                OperatorRow row = getTableRow() != null ? getTableRow().getItem() : null;
+                boolean guest = row != null && FactoryOperatorUserStore.isGuestOperator(row.getName());
+                checkBox.setDisable(guest);
+                checkBox.setSelected(!guest && Boolean.TRUE.equals(item));
+                setGraphic(checkBox);
+            }
+        };
+    }
+
     private void refreshOperatorTableOnly() {
         if (operatorTableView == null) {
             return;
@@ -1345,7 +1405,8 @@ public final class OperatorUserManagementTabController {
                         new OperatorRow(
                                 name,
                                 FactoryOperatorUserStore.pinStatusLabel(site, name),
-                                FactoryOperatorUserStore.adminPinDisplayLabel(site, name)));
+                                FactoryOperatorUserStore.adminPinDisplayLabel(site, name),
+                                FactoryOperatorUserStore.isAdminOperator(site, name)));
             }
             operatorTableView.setItems(FXCollections.observableArrayList(rows));
         } catch (IOException ex) {
