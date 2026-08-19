@@ -643,6 +643,7 @@
     "companyCalendar",
     "memberAttendance",
     "machineCalendar",
+    "masterDispatchSheets",
     "planInputStage3",
     "run",
     "planInput",
@@ -707,6 +708,11 @@
       "kind": "tab",
       "color": "#800000",
       "id": "machineCalendar"
+    },
+    {
+      "kind": "tab",
+      "color": "#800000",
+      "id": "masterDispatchSheets"
     },
     {
       "kind": "tab",

@@ -46,6 +46,10 @@
     "value" : "",
     "description" : "マスタブック（master.xlsm / 国分master.xlsm 等）のフルパス（UNC 可）。空のときは code/ 等から master.xlsm を探索して補完。ファイル名のみは planning cwd（通常 code/）相対。planning_core 子プロセス必須。環境変数タブ「ファイル...」で選択可。「マスタ読込サマリ」タブで内容確認可。"
   }, {
+    "key" : "PM_AI_MASTER_DISPATCH_SHEETS_JSON",
+    "value" : "",
+    "description" : "MASTERタブ 4シート格子 JSON。空なら現在工場の共有 DATA 直下 master-dispatch-sheets.json。書けないときは ~/.pm-ai-desktop/master-dispatch-sheets-{KONAN|KOKUBU}.json。配台は第1段階では Excel を読む。"
+  }, {
     "key" : "PM_AI_COLUMN_CONFIG_WORKBOOK",
     "value" : "",
     "description" : "列設定_結果_タスク一覧 を含むブック。PM_AI_PLAN_INPUT_PATH と別ファイルのときに指定。空なら input_resolution の既定探索。"

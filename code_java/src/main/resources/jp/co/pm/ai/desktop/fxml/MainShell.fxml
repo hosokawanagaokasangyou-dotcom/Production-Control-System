@@ -143,6 +143,11 @@
                         <fx:include fx:id="machineCalendarTab" source="MachineCalendarTab.fxml"/>
                     </content>
                 </Tab>
+                <Tab fx:id="mainShellTabMasterDispatchSheets" closable="false" text="MASTER">
+                    <content>
+                        <fx:include fx:id="masterDispatchSheetsTab" source="MasterDispatchSheetsTab.fxml"/>
+                    </content>
+                </Tab>
                 <Tab fx:id="mainShellTabMasterSummary" closable="false"
                      text="マスタ読込サマリ">
                     <content>

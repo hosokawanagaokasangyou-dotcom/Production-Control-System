@@ -24,6 +24,8 @@ public enum MainShellTabId {
     MEMBER_ATTENDANCE("memberAttendance"),
     /** 機械カレンダー（JSON 正本）。 */
     MACHINE_CALENDAR("machineCalendar"),
+    /** MASTER（skills / need / speed / 組み合わせ表の JSON）。 */
+    MASTER_DISPATCH_SHEETS("masterDispatchSheets"),
     MASTER_SUMMARY("masterSummary"),
     PLAN_INPUT("planInput"),
     /** 加工依頼書の照合・対比型入力（湖南工場・ReconciliationApp 由来）。 */

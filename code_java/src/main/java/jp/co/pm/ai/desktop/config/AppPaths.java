@@ -331,6 +331,10 @@ public final class AppPaths {
     /** マスタブック（{@code master.xlsm} 等）の絶対パスまたは {@code code/} 相対。planning_core 子プロセスの必須 env。 */
     public static final String KEY_PM_AI_MASTER_WORKBOOK = "PM_AI_MASTER_WORKBOOK";
 
+    /** MASTER タブ 4 シート格子 JSON（現在工場の共有 DATA 既定。空なら工場既定 UNC）。 */
+    public static final String KEY_PM_AI_MASTER_DISPATCH_SHEETS_JSON =
+            "PM_AI_MASTER_DISPATCH_SHEETS_JSON";
+
     /**
      * @deprecated {@link #KEY_PM_AI_MASTER_WORKBOOK} に一本化。セッション移行・除去用のキー名のみ。
      */
@@ -771,6 +775,7 @@ public final class AppPaths {
         s.add(KEY_PM_AI_REQUEST_FORM_RDP_PROFILE);
         s.add(KEY_PM_AI_TESSERACT_CMD);
         s.add(KEY_PM_AI_PLAN_RESULT_TASK_JSON_PATH);
+        s.add(KEY_PM_AI_MASTER_DISPATCH_SHEETS_JSON);
         s.add(KEY_PM_AI_CURSOR_DEBUG_LOG);
         s.add(KEY_PM_AI_DEBUG_LOG_MIRROR);
         s.add(KEY_PM_AI_PORTABLE_BUNDLE_SOURCE_DIR);
@@ -824,7 +829,8 @@ public final class AppPaths {
         String k = key != null ? key.trim() : "";
         return KEY_GEMINI_CREDENTIALS_JSON.equals(k)
                 || KEY_PM_AI_EXCLUDE_RULES_JSON.equals(k)
-                || KEY_PM_AI_PLAN_RESULT_TASK_JSON_PATH.equals(k);
+                || KEY_PM_AI_PLAN_RESULT_TASK_JSON_PATH.equals(k)
+                || KEY_PM_AI_MASTER_DISPATCH_SHEETS_JSON.equals(k);
     }
 
     /** Master / column-config / data-extraction workbooks ({@code *.xlsm}, {@code *.xlsx}). */
@@ -2993,6 +2999,10 @@ public final class AppPaths {
     public static final String MACHINE_CALENDAR_DATA_JSON_FILENAME =
             "machine-calendar-data.json";
 
+    /** MASTER タブ 4 シート格子 JSON ファイル名。 */
+    public static final String MASTER_DISPATCH_SHEETS_JSON_FILENAME =
+            "master-dispatch-sheets.json";
+
     public static final String KEY_PM_AI_MACHINE_CALENDAR_JSON = "PM_AI_MACHINE_CALENDAR_JSON";
 
     public static final String KEY_PM_AI_MACHINE_CALENDAR_HISTORY_DIR =
@@ -3153,6 +3163,91 @@ public final class AppPaths {
                 .resolve(MACHINE_CALENDAR_DATA_JSON_FILENAME)
                 .toAbsolutePath()
                 .normalize();
+    }
+
+    /**
+     * 配台 MASTER 4 シート JSON の対象工場（湖南／国分）。RDP 専用は湖南扱い。
+     * 他工場の UNC へはアクセスしない（パス文字列の組み立てのみ）。
+     */
+    public static FactorySite currentDispatchFactorySite(Map<String, String> ui) {
+        return FactorySite.inferFromUiEnv(ui)
+                .filter(s -> s == FactorySite.KONAN || s == FactorySite.KOKUBU)
+                .orElse(FactorySite.KONAN);
+    }
+
+    /** 現在工場の共有 DATA 上の {@link #MASTER_DISPATCH_SHEETS_JSON_FILENAME}（UNC 文字列組み立てのみ）。 */
+    public static Path masterDispatchSheetsDefaultSharedPath(FactorySite site) {
+        FactorySite effective = site == FactorySite.KOKUBU ? FactorySite.KOKUBU : FactorySite.KONAN;
+        String dir =
+                effective == FactorySite.KOKUBU
+                        ? DEFAULT_KOKUBU_DATA_DIR
+                        : DEFAULT_KONAN_SHARED_DATA_DIR;
+        return Path.of(dir, MASTER_DISPATCH_SHEETS_JSON_FILENAME).toAbsolutePath().normalize();
+    }
+
+    /** {@code ~/.pm-ai-desktop/master-dispatch-sheets-{KONAN|KOKUBU}.json}。 */
+    public static Path masterDispatchSheetsLocalFallbackPath(FactorySite site) {
+        FactorySite effective = site == FactorySite.KOKUBU ? FactorySite.KOKUBU : FactorySite.KONAN;
+        return resolveDesktopAppHomeDir()
+                .resolve("master-dispatch-sheets-" + effective.name() + ".json")
+                .toAbsolutePath()
+                .normalize();
+    }
+
+    /**
+     * 表示・保存の希望パス。env 上書きがあればそれ、なければ現在工場の共有 DATA。
+     * {@link Files#exists} は呼ばない。
+     */
+    public static Path masterDispatchSheetsPreferredPath(Map<String, String> ui) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        String explicit = u.get(KEY_PM_AI_MASTER_DISPATCH_SHEETS_JSON);
+        if (explicit != null && !explicit.isBlank()) {
+            return Path.of(explicit.trim()).toAbsolutePath().normalize();
+        }
+        return masterDispatchSheetsDefaultSharedPath(currentDispatchFactorySite(u));
+    }
+
+    /**
+     * 実際に読む／書く JSON。希望パスの親が既存ディレクトリで書き込み可能、またはファイルが既にあるとき希望パス。
+     * それ以外は現在工場のローカルフォールバック。他工場 UNC は見ない。
+     */
+    public static Path masterDispatchSheetsJsonPath(Map<String, String> ui) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        FactorySite site = currentDispatchFactorySite(u);
+        Path preferred = masterDispatchSheetsPreferredPath(u);
+        if (Files.isRegularFile(preferred)) {
+            return preferred;
+        }
+        Path parent = preferred.getParent();
+        if (parent != null && Files.isDirectory(parent) && Files.isWritable(parent)) {
+            return preferred;
+        }
+        return masterDispatchSheetsLocalFallbackPath(site);
+    }
+
+    /**
+     * 吸い出し元 master。現在工場の既定 UNC のみ（{@link #KEY_PM_AI_MASTER_WORKBOOK} のローカル上書きは使わない）。
+     */
+    public static Path masterDispatchSheetsSourceWorkbookPath(Map<String, String> ui) {
+        FactorySite site = currentDispatchFactorySite(ui);
+        String raw = site.pmAiMasterWorkbookEnvValue(ui != null ? ui : Map.of());
+        if (raw == null || raw.isBlank()) {
+            return masterDispatchSheetsDefaultSharedPath(site).getParent().resolve("master.xlsm");
+        }
+        return Path.of(raw.trim()).toAbsolutePath().normalize();
+    }
+
+    /** 工場切替時に現在工場の共有 JSON パス文字列だけを env へ載せる（存在確認はしない）。 */
+    public static void overlayFactorySiteMasterDispatchSheetsPath(
+            Map<String, String> map, FactorySite site) {
+        if (map == null || site == null) {
+            return;
+        }
+        FactorySite dispatch = site == FactorySite.KOKUBU ? FactorySite.KOKUBU : FactorySite.KONAN;
+        putFactoryManagedEnv(
+                map,
+                KEY_PM_AI_MASTER_DISPATCH_SHEETS_JSON,
+                masterDispatchSheetsDefaultSharedPath(dispatch).toString());
     }
 
     /**

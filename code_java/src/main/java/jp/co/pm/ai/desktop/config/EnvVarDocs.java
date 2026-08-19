@@ -431,6 +431,13 @@ public final class EnvVarDocs {
                         + " 空のとき resolveMasterWorkbookCandidate 等で補完。"
                         + " JavaFX の「マスタ読込サマリ」タブで内容を確認可。");
         put(
+                "PM_AI_MASTER_DISPATCH_SHEETS_JSON",
+                "MASTER タブの skills / need / speed / 組み合わせ表格子 JSON。"
+                        + " 空なら現在工場の共有 DATA（湖南: 共有DATA、国分: DATA）直下"
+                        + " master-dispatch-sheets.json。"
+                        + " 書けないときは ~/.pm-ai-desktop/master-dispatch-sheets-{KONAN|KOKUBU}.json。"
+                        + " 配台ロジックは第1段階ではまだ Excel を読む。");
+        put(
                 "PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK",
                 "工場共有 DATA フォルダの絶対パス（UNC 可）。"
                         + " 操作者 bin・PDF・バックアップ・remote_log、"

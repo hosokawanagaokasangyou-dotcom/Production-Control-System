@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.Tab?>
+<?import javafx.scene.control.TabPane?>
+<?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.StackPane?>
+<?import javafx.scene.layout.VBox?>
+
+<BorderPane xmlns="http://javafx.com/javafx/26" xmlns:fx="http://javafx.com/fxml/1"
+            fx:controller="jp.co.pm.ai.desktop.MasterDispatchSheetsTabController">
+    <top>
+        <VBox spacing="8.0">
+            <padding>
+                <Insets bottom="8.0" left="12.0" right="12.0" top="12.0"/>
+            </padding>
+            <HBox spacing="8.0">
+                <Button text="保存" onAction="#onSaveAction"/>
+                <Button text="共有フォルダから再取込" onAction="#onReimportAction"/>
+            </HBox>
+            <Label fx:id="statusLabel" wrapText="true" styleClass="pm-muted-label"/>
+        </VBox>
+    </top>
+    <center>
+        <TabPane fx:id="innerTabPane" tabClosingPolicy="UNAVAILABLE">
+            <tabs>
+                <Tab closable="false" text="skills">
+                    <content>
+                        <StackPane fx:id="skillsHost"/>
+                    </content>
+                </Tab>
+                <Tab closable="false" text="need">
+                    <content>
+                        <StackPane fx:id="needHost"/>
+                    </content>
+                </Tab>
+                <Tab closable="false" text="speed">
+                    <content>
+                        <StackPane fx:id="speedHost"/>
+                    </content>
+                </Tab>
+                <Tab closable="false" text="組み合わせ表">
+                    <content>
+                        <StackPane fx:id="comboHost"/>
+                    </content>
+                </Tab>
+            </tabs>
+        </TabPane>
+    </center>
+</BorderPane>

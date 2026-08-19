@@ -150,6 +150,7 @@ public final class EnvVarsInitialTemplate {
         site.rpaLauncherOperatorUsersStoreDir());
     putIfManaged(map, AppPaths.KEY_PM_AI_FACTORY_SITE, site.name());
     AppPaths.overlayFactorySiteAttendancePaths(map, site);
+    AppPaths.overlayFactorySiteMasterDispatchSheetsPath(map, site);
   }
 
   private static void putIfManaged(Map<String, String> map, String key, String value) {

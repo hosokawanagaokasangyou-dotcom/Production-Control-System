@@ -423,6 +423,9 @@ public final class MainShellController
     private MachineCalendarTabController machineCalendarTabController;
 
     @FXML
+    private MasterDispatchSheetsTabController masterDispatchSheetsTabController;
+
+    @FXML
     private PlanInputTabController planInputTabController;
 
     @FXML
@@ -543,6 +546,9 @@ public final class MainShellController
 
     @FXML
     private Tab mainShellTabMachineCalendar;
+
+    @FXML
+    private Tab mainShellTabMasterDispatchSheets;
 
     @FXML
     private Tab mainShellTabMasterSummary;
@@ -870,6 +876,9 @@ public final class MainShellController
             if (machineCalendarTabController != null) {
                 machineCalendarTabController.bindShell(this);
             }
+            if (masterDispatchSheetsTabController != null) {
+                masterDispatchSheetsTabController.bindShell(this);
+            }
             masterReadSummaryTabController.bindShell(this);
             planResultViewerTabController.bindShell(this);
             equipmentGanttGraphicTabController.bindShell(this);
@@ -1137,6 +1146,12 @@ public final class MainShellController
                                     && !startupTabBackgroundLoadActive) {
                                 Platform.runLater(
                                         machineCalendarTabController::onMainShellTabSelected);
+                            }
+                            if (newTab == mainShellTabMasterDispatchSheets
+                                    && masterDispatchSheetsTabController != null
+                                    && !startupTabBackgroundLoadActive) {
+                                Platform.runLater(
+                                        masterDispatchSheetsTabController::onMainShellTabSelected);
                             }
                             if (newTab == mainShellTabIdentityCheckHistory
                                     && identityCheckHistoryTabController != null) {
@@ -1691,6 +1706,9 @@ public final class MainShellController
         }
         if (machineCalendarTabController != null) {
             machineCalendarTabController.reloadMachineCalendarDataIfEnabled();
+        }
+        if (masterDispatchSheetsTabController != null) {
+            masterDispatchSheetsTabController.reloadFromCurrentFactory(false);
         }
         refreshAttendanceReadiness(force);
     }
@@ -2426,6 +2444,9 @@ public final class MainShellController
         if (t == mainShellTabMachineCalendar) {
             return MainShellTabId.MACHINE_CALENDAR;
         }
+        if (t == mainShellTabMasterDispatchSheets) {
+            return MainShellTabId.MASTER_DISPATCH_SHEETS;
+        }
         if (t == mainShellTabMasterSummary) {
             return MainShellTabId.MASTER_SUMMARY;
         }
@@ -2522,6 +2543,7 @@ public final class MainShellController
             case COMPANY_CALENDAR -> mainShellTabCompanyCalendar;
             case MEMBER_ATTENDANCE -> mainShellTabMemberAttendance;
             case MACHINE_CALENDAR -> mainShellTabMachineCalendar;
+            case MASTER_DISPATCH_SHEETS -> mainShellTabMasterDispatchSheets;
             case MASTER_SUMMARY -> mainShellTabMasterSummary;
             case PLAN_INPUT -> mainShellTabPlanInput;
             case REQUEST_FORM_INPUT -> mainShellTabRequestFormInput;
@@ -8241,6 +8263,7 @@ public final class MainShellController
         }
         Map<String, String> ui = new LinkedHashMap<>(collectUiEnv());
         AppPaths.overlayFactorySiteAttendancePaths(ui, site);
+        AppPaths.overlayFactorySiteMasterDispatchSheetsPath(ui, site);
         for (EnvVarRow row : envRows) {
             String name = row.getName() != null ? row.getName().trim() : "";
             if (ui.containsKey(name)) {
