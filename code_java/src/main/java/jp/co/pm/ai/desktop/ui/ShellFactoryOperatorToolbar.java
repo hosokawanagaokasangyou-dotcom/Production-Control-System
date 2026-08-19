@@ -110,13 +110,12 @@ public final class ShellFactoryOperatorToolbar {
         }
         String op = FactoryOperatorUserStore.sessionOperatorName();
         operatorUserLabel.setText(op.isBlank() ? "操作者: （未選択）" : "操作者: " + op);
-        boolean disableOperatorActions =
-                op.isBlank() || FactoryOperatorUserStore.isGuestSession();
+        boolean disablePinChange = op.isBlank() || FactoryOperatorUserStore.isGuestSession();
         if (changeOperatorPinButton != null) {
-            changeOperatorPinButton.setDisable(disableOperatorActions);
+            changeOperatorPinButton.setDisable(disablePinChange);
         }
         if (changeSessionOperatorButton != null) {
-            changeSessionOperatorButton.setDisable(disableOperatorActions);
+            changeSessionOperatorButton.setDisable(false);
         }
     }
 

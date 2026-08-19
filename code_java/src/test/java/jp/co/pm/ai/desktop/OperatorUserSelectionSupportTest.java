@@ -155,6 +155,15 @@ class OperatorUserSelectionSupportTest {
     }
 
     @Test
+    void mainShellController_allowsOperatorChangeFromGuestWithoutRestart() throws Exception {
+        Path java = Path.of("src/main/java/jp/co/pm/ai/desktop/MainShellController.java");
+        String text = Files.readString(java, StandardCharsets.UTF_8);
+        assertFalse(
+                text.contains("登録操作者で利用するには、アプリを再起動して操作者を選び直してください。"),
+                "ゲストからも操作者変更できること（再起動必須にしない）");
+    }
+
+    @Test
     void productionOperatorChange_cancelRestoresSession(@TempDir Path tmp) throws Exception {
         Path customDir = tmp.resolve("factory-user-store");
         System.setProperty(

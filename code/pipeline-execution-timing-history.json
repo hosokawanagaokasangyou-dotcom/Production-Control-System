@@ -545,5 +545,29 @@
     "durationMs" : 7381,
     "writerHost" : "20250401-02",
     "writerIp" : "192.168.30.58"
+  }, {
+    "kind" : "STAGE1",
+    "finishedAtEpochMs" : 1787096604956,
+    "durationMs" : 22006,
+    "writerHost" : "20250401-02",
+    "writerIp" : "192.168.30.58"
+  }, {
+    "kind" : "STAGE1",
+    "finishedAtEpochMs" : 1787096852882,
+    "durationMs" : 24740,
+    "writerHost" : "20250401-02",
+    "writerIp" : "192.168.30.58"
+  }, {
+    "kind" : "STAGE2_0",
+    "finishedAtEpochMs" : 1787096916092,
+    "durationMs" : 57030,
+    "writerHost" : "20250401-02",
+    "writerIp" : "192.168.30.58"
+  }, {
+    "kind" : "DELIVERY_CALENDAR_VIEW",
+    "finishedAtEpochMs" : 1787096925607,
+    "durationMs" : 7348,
+    "writerHost" : "20250401-02",
+    "writerIp" : "192.168.30.58"
   } ]
 }
