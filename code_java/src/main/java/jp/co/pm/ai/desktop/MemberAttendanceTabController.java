@@ -221,7 +221,7 @@ public class MemberAttendanceTabController {
                 "勤怠カレンダー.xlsx を Excel で読み取り専用で開きます（未出力の場合は先に保存してください）");
         installTooltip(
                 refreshButton,
-                "JSON 正本から再読込します（未保存の変更がある場合は確認します）");
+                "JSON 正本から再読込します（未保存の変更がある場合は破棄確認します）");
         installTooltip(addMemberButton, "名簿にメンバーを追加します（保存で JSON に反映）");
         installTooltip(editMemberButton, "選択したメンバー行の氏名・主担当を編集します");
         installTooltip(
@@ -822,14 +822,35 @@ public class MemberAttendanceTabController {
 
     @FXML
     private void onRefresh() {
-        handleUnsavedThen(
-                "再読込",
-                () -> {
-                    clearMemberGridCache();
-                    loadGridFromPython();
-                    refreshLocalReadiness();
-                },
-                () -> {});
+        if (!confirmReloadDiscardingUnsaved()) {
+            return;
+        }
+        clearMemberGridCache();
+        loadGridFromPython();
+        refreshLocalReadiness();
+    }
+
+    /**
+     * 再読込ボタン専用。未保存があっても保存は出さず、再読込／キャンセルのみ。
+     *
+     * @return 再読込してよいとき true
+     */
+    private boolean confirmReloadDiscardingUnsaved() {
+        if (!hasUnsavedEdits()) {
+            return true;
+        }
+        Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+        if (shell != null) {
+            alert.initOwner(shell.primaryStageForDialogs());
+            shell.applyAlertStylesheets(alert);
+        }
+        alert.setTitle("再読込");
+        alert.setHeaderText(null);
+        alert.setContentText("メンバー勤怠に未保存の変更があります。再読込すると破棄されます。");
+        ButtonType reload = new ButtonType("再読込", ButtonBar.ButtonData.OK_DONE);
+        alert.getButtonTypes().setAll(reload, ButtonType.CANCEL);
+        Optional<ButtonType> ans = alert.showAndWait();
+        return ans.isPresent() && ans.get() == reload;
     }
 
     @FXML
