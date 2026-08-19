@@ -47,6 +47,8 @@ public final class AladdinEntryDispatchPlanIdentityCheck {
 
     public static final String ERROR_NO_PLAN_SOURCE = "アラジン加工計画の最新ソースがありません";
 
+    public static final String ERROR_NO_PLAN_FILE = "比較する加工計画がありません";
+
     private static final int DIALOG_DIFF_LIMIT = 50;
 
     private static final Pattern GEN_TS =
@@ -158,14 +160,38 @@ public final class AladdinEntryDispatchPlanIdentityCheck {
         if (planSource.isEmpty()) {
             return errorResult(ERROR_NO_PLAN_SOURCE, excel, Optional.empty());
         }
+        return evaluate(u, excelPath, planSource.get(), persistHistory);
+    }
+
+    /**
+     * 指定した配台計画 Excel と加工計画ファイル（xlsx / csv / 履歴 JSON）を突合する。
+     *
+     * @param persistHistory true のとき比較成功後に履歴セットを保存する
+     */
+    public static Result evaluate(
+            Map<String, String> ui, Path excelPath, Path planPath, boolean persistHistory) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        if (excelPath == null || !Files.isRegularFile(excelPath)) {
+            return errorResult(
+                    ERROR_NO_EXCEL,
+                    excelPath != null ? Optional.of(excelPath) : Optional.empty(),
+                    planPath != null ? Optional.of(planPath) : Optional.empty());
+        }
+        Optional<Path> excel = Optional.of(excelPath.toAbsolutePath().normalize());
+        if (planPath == null || !Files.isRegularFile(planPath)) {
+            return errorResult(
+                    ERROR_NO_PLAN_FILE,
+                    excel,
+                    planPath != null ? Optional.of(planPath) : Optional.empty());
+        }
+        Optional<Path> planSource = Optional.of(planPath.toAbsolutePath().normalize());
         Path planFile = planSource.get();
         String low = planFile.getFileName().toString().toLowerCase(Locale.ROOT);
         if (low.endsWith(".pq") || low.endsWith(".parquet")) {
             return errorResult("Parquet は未対応です: " + planFile, excel, planSource);
         }
         try {
-            PlanInputTabularIo.TabularSheet tab =
-                    AladdinProcessingPlanSourceReloader.readNewestAladdinTabularFromDisk(planFile);
+            PlanInputTabularIo.TabularSheet tab = readPlanTabular(planFile);
             PlanInputTabularIo.TabularSheet activePlan = excludeCompletedPlanRows(tab);
             Map<String, Map<String, Map<String, Map<String, Double>>>> lookup =
                     AladdinShapedPlanQtyLookup.buildLookup(activePlan.headers(), activePlan.rows());
@@ -201,6 +227,22 @@ public final class AladdinEntryDispatchPlanIdentityCheck {
             return errorResult(
                     ex.getMessage() != null ? ex.getMessage() : ex.toString(), excel, planSource);
         }
+    }
+
+    /**
+     * 同一化チェック履歴フォルダ（配台計画.xlsx + 加工計画.json）を突合する。
+     * 履歴タブからの再実行は {@code persistHistory=false} を推奨する。
+     */
+    public static Result evaluateSnapshot(
+            Map<String, String> ui, Path snapshotDir, boolean persistHistory) {
+        if (snapshotDir == null || !Files.isDirectory(snapshotDir)) {
+            return errorResult(ERROR_NO_EXCEL, Optional.empty(), Optional.empty());
+        }
+        return evaluate(
+                ui,
+                snapshotDir.resolve(IdentityCheckHistoryStore.EXCEL_FILE),
+                snapshotDir.resolve(IdentityCheckHistoryStore.PLAN_JSON_FILE),
+                persistHistory);
     }
 
     /** シス計があるキーだけを突合する。加工計画にあってシス計が無いセルは比較しない。 */
@@ -331,6 +373,23 @@ public final class AladdinEntryDispatchPlanIdentityCheck {
         }
         return NetworkSourceDirResolver.newestTaskInputFileInDirectory(dir, ui)
                 .map(p -> p.toAbsolutePath().normalize());
+    }
+
+    /**
+     * 履歴 JSON は保存時に整形済みのため再整形しない。xlsx / csv はソース読込と同じ経路。
+     */
+    static PlanInputTabularIo.TabularSheet readPlanTabular(Path planFile) throws IOException {
+        if (planFile == null) {
+            throw new IOException(ERROR_NO_PLAN_FILE);
+        }
+        String low = planFile.getFileName().toString().toLowerCase(Locale.ROOT);
+        if (low.endsWith(".json")) {
+            JsonTableIo.ArrayTable table = JsonTableIo.loadArrayTable(planFile);
+            return new PlanInputTabularIo.TabularSheet(
+                    table.columns() != null ? table.columns() : List.of(),
+                    table.rows() != null ? table.rows() : List.of());
+        }
+        return AladdinProcessingPlanSourceReloader.readNewestAladdinTabularFromDisk(planFile);
     }
 
     private static Result errorResult(String message, Optional<Path> excel, Optional<Path> plan) {

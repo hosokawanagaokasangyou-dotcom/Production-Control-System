@@ -40,6 +40,12 @@
                 <Tooltip text="一覧の行を選んでから押してください。"/>
             </tooltip>
         </Button>
+        <Button fx:id="runIdentityCheckButton" disable="true" mnemonicParsing="false"
+                onAction="#onRunIdentityCheckAction" text="同一化チェック">
+            <tooltip>
+                <Tooltip text="選択行の保存済み Excel と加工計画 JSON で同一化チェックを再実行します。"/>
+            </tooltip>
+        </Button>
     </HBox>
     <Label fx:id="pathLabel" styleClass="pm-muted-label" wrapText="true"/>
     <Label fx:id="statusLabel" wrapText="true"/>

@@ -9,6 +9,7 @@ import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import javafx.application.Platform;
 import javafx.beans.property.ReadOnlyStringWrapper;
@@ -32,8 +33,10 @@ import javafx.stage.Window;
 
 import jp.co.pm.ai.desktop.config.FactoryOperatorUserStore;
 import jp.co.pm.ai.desktop.config.OperatorUserPaths;
+import jp.co.pm.ai.desktop.io.AladdinEntryDispatchPlanIdentityCheck;
 import jp.co.pm.ai.desktop.io.IdentityCheckHistoryStore;
 import jp.co.pm.ai.desktop.io.JsonTableIo;
+import jp.co.pm.ai.desktop.ui.AladdinEntryIdentityCheckResultDialog;
 
 /**
  * 同一化チェック履歴（操作者別・Excel＋加工計画 JSON）を閲覧する。
@@ -41,6 +44,8 @@ import jp.co.pm.ai.desktop.io.JsonTableIo;
 public final class IdentityCheckHistoryTabController {
 
     private static final int JSON_DIALOG_MAX_COLUMNS = 40;
+
+    private final AtomicInteger identityCheckGeneration = new AtomicInteger();
 
     private MainShellController shell;
 
@@ -54,6 +59,9 @@ public final class IdentityCheckHistoryTabController {
 
     @FXML
     private Button showPlanJsonButton;
+
+    @FXML
+    private Button runIdentityCheckButton;
 
     @FXML
     private Label pathLabel;
@@ -175,6 +183,79 @@ public final class IdentityCheckHistoryTabController {
         t.start();
     }
 
+    @FXML
+    private void onRunIdentityCheckAction() {
+        IdentityCheckHistoryStore.SnapshotRef sel = historyTable.getSelectionModel().getSelectedItem();
+        if (sel == null) {
+            statusLabel.setText("行を選択してください。");
+            return;
+        }
+        if (shell == null) {
+            return;
+        }
+        Path excel = sel.dir().resolve(IdentityCheckHistoryStore.EXCEL_FILE);
+        Path planJson = sel.dir().resolve(IdentityCheckHistoryStore.PLAN_JSON_FILE);
+        if (!isSafeHistoryFile(excel) || !isSafeHistoryFile(planJson)) {
+            warnUser(
+                    "同一化チェック",
+                    "履歴フォルダ外、またはファイルがありません:\nExcel: " + excel + "\nJSON: " + planJson);
+            return;
+        }
+        Map<String, String> ui = shell.snapshotUiEnv();
+        int generation = identityCheckGeneration.incrementAndGet();
+        statusLabel.setText("同一化チェック中…");
+        Thread worker =
+                new Thread(
+                        () -> {
+                            AladdinEntryDispatchPlanIdentityCheck.Result result =
+                                    AladdinEntryDispatchPlanIdentityCheck.evaluateSnapshot(
+                                            ui, sel.dir(), false);
+                            Platform.runLater(
+                                    () -> {
+                                        if (generation != identityCheckGeneration.get()) {
+                                            return;
+                                        }
+                                        finishIdentityCheck(result);
+                                    });
+                        },
+                        "identity-check-history-rerun");
+        worker.setDaemon(true);
+        worker.start();
+    }
+
+    private void finishIdentityCheck(AladdinEntryDispatchPlanIdentityCheck.Result result) {
+        if (result.excelPath().isPresent()) {
+            shell.appendLog("[aladdin-identity-check] excel=" + result.excelPath().get());
+        }
+        if (result.planSourcePath().isPresent()) {
+            shell.appendLog("[aladdin-identity-check] plan=" + result.planSourcePath().get());
+        }
+        shell.appendLog("[aladdin-identity-check] 履歴再実行 " + result.message());
+        String identityResult = result.error() ? "error" : (result.identical() ? "ok" : "mismatch");
+        String identityDetail =
+                result.error()
+                        ? (result.message() != null ? result.message() : "比較失敗")
+                        : (result.identical()
+                                ? "同一"
+                                : (result.badgeText() != null ? result.badgeText() : "差異"));
+        shell.recordOperatorAction("identity_check", identityResult, "履歴再実行 " + identityDetail);
+        if (result.error()) {
+            statusLabel.setText("同一化チェック失敗");
+            shell.showWarningDialog("同一化チェック", result.message());
+            return;
+        }
+        statusLabel.setText(
+                result.identical()
+                        ? "同一化チェック: 同一"
+                        : "同一化チェック: " + (result.badgeText() != null ? result.badgeText() : "差異"));
+        if (result.identical()) {
+            shell.showInformationDialog("同一化チェック", result.message());
+            return;
+        }
+        Window owner = historyTable.getScene() != null ? historyTable.getScene().getWindow() : null;
+        AladdinEntryIdentityCheckResultDialog.show(owner, result);
+    }
+
     private void refresh() {
         if (shell == null) {
             return;
@@ -260,6 +341,9 @@ public final class IdentityCheckHistoryTabController {
         }
         if (showPlanJsonButton != null) {
             showPlanJsonButton.setDisable(!enable);
+        }
+        if (runIdentityCheckButton != null) {
+            runIdentityCheckButton.setDisable(!enable);
         }
     }
 

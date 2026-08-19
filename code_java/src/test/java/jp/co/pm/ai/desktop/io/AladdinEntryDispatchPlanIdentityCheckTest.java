@@ -10,6 +10,7 @@ import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -283,6 +284,101 @@ class AladdinEntryDispatchPlanIdentityCheckTest {
         assertTrue(result.error());
         assertEquals(AladdinEntryDispatchPlanIdentityCheck.ERROR_NO_EXCEL, result.message());
         assertTrue(IdentityCheckHistoryStore.listNewestFirst(ui, "テスト太郎").isEmpty());
+    }
+
+    @Test
+    void evaluate_usesSpecifiedPlanJsonNotNewestSource(@TempDir Path tempDir) throws Exception {
+        Map<String, String> ui = testUi(tempDir);
+        Path sourceDir = AppPaths.resolveTaskInputSourceDir(ui);
+        Files.createDirectories(sourceDir);
+        TestAladdinPlanXlsx.writeGrid(
+                sourceDir,
+                "aladdin-plan.xlsx",
+                new String[][] {
+                    {"列1", "列2", "列3", "列4"},
+                    {"上段1", "", "", ""},
+                    {"上段2", "", "", ""},
+                    {"上段3", "", "", ""},
+                    {"機械名", "依頼NO", "工程名", "2026/07/07"},
+                    {"", "", "", ""},
+                    {"M1", "T001", "工程A", "99"}
+                });
+        Files.createDirectories(Path.of(ui.get(AppPaths.KEY_PM_AI_REPO_ROOT)).resolve("code"));
+        LocalDate d = LocalDate.of(2026, 7, 7);
+        DispatchAladdinEntryWorkbookExporter.ExportResult exported =
+                DispatchAladdinEntryWorkbookExporter.write(ui, matchingWorkbook(d, 10));
+
+        Path planJson = tempDir.resolve("加工計画.json");
+        JsonTableIo.saveArrayTable(
+                planJson,
+                List.of("機械名", "依頼NO", "工程名", "換算数量", "実加工数", "未加工", "2026/07/07"),
+                List.of(List.of("M1", "T001", "工程A", "10", "0", "10", "10")));
+
+        AladdinEntryDispatchPlanIdentityCheck.Result newest =
+                AladdinEntryDispatchPlanIdentityCheck.evaluate(ui, exported.generationPath(), false);
+        AladdinEntryDispatchPlanIdentityCheck.Result specified =
+                AladdinEntryDispatchPlanIdentityCheck.evaluate(
+                        ui, exported.generationPath(), planJson, false);
+
+        assertFalse(newest.identical(), newest.dialogBody());
+        assertFalse(specified.error(), specified.message());
+        assertTrue(specified.identical(), specified.dialogBody());
+        assertEquals(planJson.toAbsolutePath().normalize(), specified.planSourcePath().orElseThrow());
+        assertTrue(
+                IdentityCheckHistoryStore.listNewestFirst(ui, "テスト太郎").isEmpty(),
+                "persistHistory=false では履歴を書かない");
+    }
+
+    @Test
+    void evaluateSnapshot_comparesHistoryExcelAndPlanJson(@TempDir Path tempDir) throws Exception {
+        Map<String, String> ui = testUi(tempDir);
+        Files.createDirectories(Path.of(ui.get(AppPaths.KEY_PM_AI_REPO_ROOT)).resolve("code"));
+        LocalDate d = LocalDate.of(2026, 7, 7);
+        DispatchAladdinEntryWorkbookExporter.ExportResult exported =
+                DispatchAladdinEntryWorkbookExporter.write(ui, matchingWorkbook(d, 10));
+        PlanInputTabularIo.TabularSheet tab =
+                new PlanInputTabularIo.TabularSheet(
+                        List.of("機械名", "依頼NO", "工程名", "換算数量", "実加工数", "未加工", "2026/07/07"),
+                        List.of(List.of("M1", "T001", "工程A", "10", "0", "10", "10")));
+        Path snap =
+                IdentityCheckHistoryStore.save(
+                                ui,
+                                exported.generationPath(),
+                                tab,
+                                "ok",
+                                AladdinEntryDispatchPlanIdentityCheck.BADGE_IDENTICAL,
+                                0,
+                                Optional.of(exported.generationPath()),
+                                Optional.of(tempDir.resolve("plan-source.xlsx")))
+                        .orElseThrow();
+
+        AladdinEntryDispatchPlanIdentityCheck.Result result =
+                AladdinEntryDispatchPlanIdentityCheck.evaluateSnapshot(ui, snap, false);
+
+        assertFalse(result.error(), result.message());
+        assertTrue(result.identical(), result.dialogBody());
+        assertEquals(
+                snap.resolve(IdentityCheckHistoryStore.EXCEL_FILE).toAbsolutePath().normalize(),
+                result.excelPath().orElseThrow());
+        assertEquals(
+                snap.resolve(IdentityCheckHistoryStore.PLAN_JSON_FILE).toAbsolutePath().normalize(),
+                result.planSourcePath().orElseThrow());
+    }
+
+    @Test
+    void evaluate_errorWhenSpecifiedPlanMissing(@TempDir Path tempDir) throws Exception {
+        Map<String, String> ui = testUi(tempDir);
+        Files.createDirectories(Path.of(ui.get(AppPaths.KEY_PM_AI_REPO_ROOT)).resolve("code"));
+        LocalDate d = LocalDate.of(2026, 7, 7);
+        DispatchAladdinEntryWorkbookExporter.ExportResult exported =
+                DispatchAladdinEntryWorkbookExporter.write(ui, matchingWorkbook(d, 10));
+
+        AladdinEntryDispatchPlanIdentityCheck.Result result =
+                AladdinEntryDispatchPlanIdentityCheck.evaluate(
+                        ui, exported.generationPath(), tempDir.resolve("missing-plan.json"), false);
+
+        assertTrue(result.error());
+        assertEquals(AladdinEntryDispatchPlanIdentityCheck.ERROR_NO_PLAN_FILE, result.message());
     }
 
     @Test
