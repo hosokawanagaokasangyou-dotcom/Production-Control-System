@@ -133,11 +133,6 @@ public final class ShellFactoryOperatorToolbar {
                             if (suppressFactorySiteComboEvents || newV == null || shell == null) {
                                 return;
                             }
-                            Map<String, String> ui = shell.snapshotUiEnv();
-                            if (!FactorySiteComboPresentation.isSelectable(newV, ui)) {
-                                refreshFactorySiteComboFromStore();
-                                return;
-                            }
                             shell.switchActiveFactorySite(newV);
                         });
         refreshFactorySiteComboFromStore();

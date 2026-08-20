@@ -1,5 +1,8 @@
 package jp.co.pm.ai.desktop.ui;
 
+import javafx.scene.Parent;
+import javafx.stage.Stage;
+
 /**
  * 工場切替プログレスの表示方針（起動シーケンス中は起動側モーダルに任せる）。
  */
@@ -34,5 +37,20 @@ public final class FactorySiteSwitchBusySupport {
     /** 子ウィンドウをオーナー中央に置く Y。 */
     public static double centerY(double ownerY, double ownerHeight, double childHeight) {
         return ownerY + (ownerHeight - childHeight) / 2.0;
+    }
+
+    /**
+     * 進捗 Stage を {@link javafx.stage.Stage#show()} する前に CSS／レイアウトを確定させ、
+     * 最初のパルスでウィンドウサイズが 0 のまま出ないようにする。
+     */
+    public static void realizeStageForImmediateShow(Stage stage) {
+        if (stage == null || stage.getScene() == null || stage.getScene().getRoot() == null) {
+            return;
+        }
+        Parent root = stage.getScene().getRoot();
+        root.applyCss();
+        root.autosize();
+        root.layout();
+        stage.sizeToScene();
     }
 }

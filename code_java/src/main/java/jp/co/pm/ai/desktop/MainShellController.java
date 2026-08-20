@@ -8535,29 +8535,13 @@ public final class MainShellController
         if (factorySiteSwitchInProgress) {
             return;
         }
-        Map<String, String> ui = collectUiEnv();
-        FactoryOperatorUserStore.configureForCurrentApp(ui, newSite);
-        if (!FactorySiteOperatorAccess.isSessionOperatorAllowedForFactory(ui, newSite)) {
-            String reason = FactorySiteOperatorAccess.comboBlockReasonJa(ui, newSite);
-            if (!reason.isBlank()) {
-                appendLog("[factory] 切替不可: " + reason);
-            }
-            refreshFactorySiteComboPresentation();
-            if (mainRunTabController != null) {
-                factoryOperatorToolbar.refreshFactorySiteComboFromStore();
-            }
-            if (globalSettingsTabController != null) {
-                globalSettingsTabController.refreshInitSettingTargetComboFromStore();
-            }
-            return;
-        }
         factorySiteSwitchInProgress = true;
         factorySwitchAwaitingBackgroundLoadBeforeModalClose = false;
         setFactorySiteCombosDisabled(true);
+        beginFactorySiteSwitchBusy(oldSite, newSite);
         if (startupTabBackgroundLoad != null) {
             startupTabBackgroundLoad.cancelForFactorySwitch();
         }
-        beginFactorySiteSwitchBusy(oldSite, newSite);
         FactorySiteSwitchContext ctx = new FactorySiteSwitchContext(oldSite, newSite, startup);
         runAfterUiPulse(() -> runFactorySiteSwitchStep(ctx, 0));
     }
@@ -8605,8 +8589,16 @@ public final class MainShellController
         try {
             switch (step) {
                 case 0 -> {
-                    GlobalInitSettingTarget.setSuppressUiEnvInferencePersist(true);
                     updateFactorySiteSwitchBusy(FactorySiteSwitchBusyDialog.STATUS_SAVING);
+                    Map<String, String> ui = collectUiEnv();
+                    FactoryOperatorUserStore.configureForCurrentApp(ui, ctx.newSite());
+                    if (!FactorySiteOperatorAccess.isSessionOperatorAllowedForFactory(
+                            ui, ctx.newSite())) {
+                        abortFactorySiteSwitch(
+                                FactorySiteOperatorAccess.comboBlockReasonJa(ui, ctx.newSite()));
+                        return;
+                    }
+                    GlobalInitSettingTarget.setSuppressUiEnvInferencePersist(true);
                     String operator = FactoryOperatorUserStore.sessionOperatorName();
                     if (!operator.isBlank()
                             && ctx.oldSite() != null
@@ -8674,6 +8666,24 @@ public final class MainShellController
     /** 工場切替の進行中（モーダル表示前後を含む）。タブ再走査の抑止に使う。 */
     boolean isFactorySiteSwitchInProgress() {
         return factorySiteSwitchInProgress;
+    }
+
+    /** 到達不可などで切替を中止し、コンボを永続工場へ戻す。 */
+    private void abortFactorySiteSwitch(String reason) {
+        GlobalInitSettingTarget.setSuppressUiEnvInferencePersist(false);
+        endFactorySiteSwitchBusy();
+        factorySiteSwitchInProgress = false;
+        setFactorySiteCombosDisabled(false);
+        refreshFactorySiteComboPresentation();
+        if (factoryOperatorToolbar != null) {
+            factoryOperatorToolbar.refreshFactorySiteComboFromStore();
+        }
+        if (globalSettingsTabController != null) {
+            globalSettingsTabController.refreshInitSettingTargetComboFromStore();
+        }
+        if (reason != null && !reason.isBlank()) {
+            appendLog("[factory] 切替不可: " + reason);
+        }
     }
 
     /**

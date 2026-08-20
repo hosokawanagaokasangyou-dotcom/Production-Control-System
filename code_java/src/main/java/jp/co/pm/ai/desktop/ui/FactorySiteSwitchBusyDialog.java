@@ -94,10 +94,12 @@ public final class FactorySiteSwitchBusyDialog {
 
         Scene scene = new Scene(windowRoot);
         stage.setScene(scene);
-        stage.sizeToScene();
+        FactorySiteSwitchBusySupport.realizeStageForImmediateShow(stage);
         stage.show();
+        FactorySiteSwitchBusySupport.realizeStageForImmediateShow(stage);
         positionOverOwner(stage, owner);
         stage.toFront();
+        stage.requestFocus();
         return new FactorySiteSwitchBusyDialog(stage, status);
     }
 
@@ -117,6 +119,16 @@ public final class FactorySiteSwitchBusyDialog {
 
     public boolean isShowing() {
         return stage.isShowing();
+    }
+
+    /** テスト用。{@link #show} 直後の幅。 */
+    double windowWidth() {
+        return stage.getWidth();
+    }
+
+    /** テスト用。{@link #show} 直後の高さ。 */
+    double windowHeight() {
+        return stage.getHeight();
     }
 
     /** テスト用。タイトルバーの閉じるボタンを出さないため {@link StageStyle#UNDECORATED}。 */

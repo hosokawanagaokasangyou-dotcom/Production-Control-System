@@ -34,4 +34,9 @@ class FactorySiteSwitchBusySupportTest {
         assertEquals(400.0, FactorySiteSwitchBusySupport.centerX(100.0, 800.0, 200.0), 0.001);
         assertEquals(240.0, FactorySiteSwitchBusySupport.centerY(40.0, 600.0, 200.0), 0.001);
     }
+
+    @Test
+    void realizeStageForImmediateShow_noOpWhenStageOrSceneMissing() {
+        FactorySiteSwitchBusySupport.realizeStageForImmediateShow(null);
+    }
 }

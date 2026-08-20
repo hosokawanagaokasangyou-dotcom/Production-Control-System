@@ -5,8 +5,6 @@ import java.util.function.Supplier;
 
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.ListCell;
-import javafx.scene.control.ListView;
-import javafx.util.Callback;
 import javafx.util.StringConverter;
 
 import jp.co.pm.ai.desktop.config.FactorySite;
@@ -16,6 +14,11 @@ import jp.co.pm.ai.desktop.config.FactorySiteOperatorAccess;
 public final class FactorySiteComboPresentation {
 
     private FactorySiteComboPresentation() {}
+
+    /** 選択中ボタン表示。共有 UNC 到達確認をしない（切替確定時に FX スレッドを止めない）。 */
+    public static String selectedDisplayLabel(FactorySite site) {
+        return site == null ? "" : site.displayLabelJa();
+    }
 
     public static String labelFor(FactorySite site, Map<String, String> ui) {
         if (site == null) {
@@ -35,8 +38,7 @@ public final class FactorySiteComboPresentation {
                 new StringConverter<>() {
                     @Override
                     public String toString(FactorySite site) {
-                        Map<String, String> ui = uiSupplier != null ? uiSupplier.get() : Map.of();
-                        return labelFor(site, ui);
+                        return selectedDisplayLabel(site);
                     }
 
                     @Override
@@ -44,7 +46,7 @@ public final class FactorySiteComboPresentation {
                         return null;
                     }
                 });
-        Callback<ListView<FactorySite>, ListCell<FactorySite>> cellFactory =
+        combo.setCellFactory(
                 lv ->
                         new ListCell<>() {
                             @Override
@@ -70,9 +72,17 @@ public final class FactorySiteComboPresentation {
                                     getStyleClass().remove("pm-ai-factory-site-unregistered");
                                 }
                             }
-                        };
-        combo.setCellFactory(cellFactory);
-        combo.setButtonCell(cellFactory.call(null));
+                        });
+        combo.setButtonCell(
+                new ListCell<>() {
+                    @Override
+                    protected void updateItem(FactorySite item, boolean empty) {
+                        super.updateItem(item, empty);
+                        setText(empty ? null : selectedDisplayLabel(item));
+                        setDisable(false);
+                        getStyleClass().remove("pm-ai-factory-site-unregistered");
+                    }
+                });
     }
 
     public static boolean isSelectable(FactorySite site, Map<String, String> ui) {

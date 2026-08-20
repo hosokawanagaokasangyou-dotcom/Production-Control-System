@@ -56,6 +56,8 @@ class FactorySiteSwitchBusyDialogTest {
         FactorySiteSwitchBusyDialog dialog = ref.get();
         assertNotNull(dialog);
         assertTrue(dialog.isShowing());
+        assertTrue(dialog.windowWidth() > 8, "show 直後に幅が確定していること");
+        assertTrue(dialog.windowHeight() > 8, "show 直後に高さが確定していること");
         assertEquals(StageStyle.UNDECORATED, dialog.stageStyle());
         assertEquals(
                 FactorySiteSwitchBusyDialog.STATUS_BACKGROUND_LOAD,

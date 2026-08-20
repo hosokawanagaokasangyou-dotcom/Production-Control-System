@@ -94,11 +94,6 @@ public final class GlobalSettingsTabController {
                             if (suppressInitSettingTargetComboEvents || newV == null || shell == null) {
                                 return;
                             }
-                            Map<String, String> ui = shell.snapshotUiEnv();
-                            if (!FactorySiteComboPresentation.isSelectable(newV, ui)) {
-                                refreshInitSettingTargetComboFromStore();
-                                return;
-                            }
                             shell.switchActiveFactorySite(newV);
                         });
         setInitSettingTargetComboValueSilently(GlobalInitSettingTarget.load());
