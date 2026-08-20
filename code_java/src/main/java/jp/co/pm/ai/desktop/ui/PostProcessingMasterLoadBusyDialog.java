@@ -13,7 +13,7 @@ import javafx.stage.Window;
 import javafx.stage.WindowEvent;
 
 /**
- * 後加工商品マスタの参照・連携マスタ読込中に表示する進捗モーダル。
+ * 後加工商品マスタの参照・連携マスタ読込中、および参照マスタ検索中に表示する進捗モーダル。
  *
  * <p>必須処理のためキャンセル不可。呼び出し側で必ず {@link #close()} する。
  * タイトルバーの閉じるボタンを出さないため {@link StageStyle#UNDECORATED}。
@@ -22,7 +22,9 @@ public final class PostProcessingMasterLoadBusyDialog {
 
     public static final String TITLE = "後加工商品マスタ";
     public static final String HEADER = "マスタデータを読み込んでいます";
+    public static final String HEADER_SEARCHING = "マスタを検索しています";
     public static final String STATUS_LOADING = "参照マスタ・連携マスタを読み込んでいます…";
+    public static final String STATUS_SEARCHING = "参照マスタを検索しています…";
 
     /** 明るいダイアログ本文用。テーマ CSS の白文字を載せない。 */
     public static final String BODY_TEXT_FILL = "#1a1a1a";
@@ -32,10 +34,12 @@ public final class PostProcessingMasterLoadBusyDialog {
             "-fx-font-weight: bold; -fx-font-size: 14px; -fx-text-fill: " + BODY_TEXT_FILL + ";";
 
     private final Stage stage;
+    private final Label headerLabel;
     private final Label statusLabel;
 
-    private PostProcessingMasterLoadBusyDialog(Stage stage, Label statusLabel) {
+    private PostProcessingMasterLoadBusyDialog(Stage stage, Label headerLabel, Label statusLabel) {
         this.stage = stage;
+        this.headerLabel = headerLabel;
         this.statusLabel = statusLabel;
     }
 
@@ -46,6 +50,18 @@ public final class PostProcessingMasterLoadBusyDialog {
      * @param initialStatus 最初の状況文言
      */
     public static PostProcessingMasterLoadBusyDialog show(Window owner, String initialStatus) {
+        return show(owner, HEADER, initialStatus);
+    }
+
+    /**
+     * モーダル Stage を表示する。
+     *
+     * @param owner 親ウィンドウ（{@code null} 可）
+     * @param header 見出し
+     * @param initialStatus 最初の状況文言
+     */
+    public static PostProcessingMasterLoadBusyDialog show(
+            Window owner, String header, String initialStatus) {
         Stage stage = new Stage(StageStyle.UNDECORATED);
         if (owner != null) {
             stage.initOwner(owner);
@@ -61,7 +77,7 @@ public final class PostProcessingMasterLoadBusyDialog {
         titleBar.setStyle(
                 "-fx-background-color: #3d3d3d; -fx-text-fill: #f2f2f2; -fx-font-size: 12px;");
 
-        Label headerLabel = new Label(HEADER);
+        Label headerLabel = new Label(header != null ? header : HEADER);
         headerLabel.setStyle(HEADER_TEXT_STYLE);
         headerLabel.setWrapText(true);
         headerLabel.setMaxWidth(380);
@@ -89,7 +105,7 @@ public final class PostProcessingMasterLoadBusyDialog {
         stage.show();
         positionOverOwner(stage, owner);
         stage.toFront();
-        return new PostProcessingMasterLoadBusyDialog(stage, status);
+        return new PostProcessingMasterLoadBusyDialog(stage, headerLabel, status);
     }
 
     static void positionOverOwner(Stage stage, Window owner) {
@@ -108,6 +124,16 @@ public final class PostProcessingMasterLoadBusyDialog {
         if (text != null) {
             statusLabel.setText(text);
         }
+    }
+
+    /** テスト用。見出し文言。 */
+    String headerText() {
+        return headerLabel.getText();
+    }
+
+    /** テスト用。状況文言。 */
+    String statusText() {
+        return statusLabel.getText();
     }
 
     public boolean isShowing() {

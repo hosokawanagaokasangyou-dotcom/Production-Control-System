@@ -32,11 +32,22 @@ class PostProcessingMasterLoadBusyDialogTest {
     @Test
     void show_updatesStatus_andCloses() throws Exception {
         AtomicReference<PostProcessingMasterLoadBusyDialog> ref = new AtomicReference<>();
+        AtomicReference<String> searchHeader = new AtomicReference<>();
+        AtomicReference<String> searchStatus = new AtomicReference<>();
         AtomicReference<Throwable> fxError = new AtomicReference<>();
         CountDownLatch shown = new CountDownLatch(1);
         Platform.runLater(
                 () -> {
                     try {
+                        PostProcessingMasterLoadBusyDialog searchDialog =
+                                PostProcessingMasterLoadBusyDialog.show(
+                                        null,
+                                        PostProcessingMasterLoadBusyDialog.HEADER_SEARCHING,
+                                        PostProcessingMasterLoadBusyDialog.STATUS_SEARCHING);
+                        searchHeader.set(searchDialog.headerText());
+                        searchStatus.set(searchDialog.statusText());
+                        searchDialog.close();
+
                         PostProcessingMasterLoadBusyDialog dialog =
                                 PostProcessingMasterLoadBusyDialog.show(
                                         null, PostProcessingMasterLoadBusyDialog.STATUS_LOADING);
@@ -50,6 +61,9 @@ class PostProcessingMasterLoadBusyDialogTest {
                 });
         assertTrue(shown.await(10, TimeUnit.SECONDS), "FX スレッドで show が完了しない");
         assertEquals(null, fxError.get());
+
+        assertEquals(PostProcessingMasterLoadBusyDialog.HEADER_SEARCHING, searchHeader.get());
+        assertEquals(PostProcessingMasterLoadBusyDialog.STATUS_SEARCHING, searchStatus.get());
 
         PostProcessingMasterLoadBusyDialog dialog = ref.get();
         assertNotNull(dialog);
@@ -69,5 +83,8 @@ class PostProcessingMasterLoadBusyDialogTest {
         assertTrue(closed.await(5, TimeUnit.SECONDS));
         assertFalse(dialog.isShowing());
         assertEquals("後加工商品マスタ", PostProcessingMasterLoadBusyDialog.TITLE);
+        assertEquals("マスタを検索しています", PostProcessingMasterLoadBusyDialog.HEADER_SEARCHING);
+        assertEquals(
+                "参照マスタを検索しています…", PostProcessingMasterLoadBusyDialog.STATUS_SEARCHING);
     }
 }

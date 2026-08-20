@@ -515,6 +515,18 @@ public final class PostProcessingProductMasterEditorPane {
                         return;
                     }
                     statusLabel.setText("検索中...");
+                    Window dialogOwner =
+                            owner != null
+                                    ? owner
+                                    : (btnSearch.getScene() != null
+                                            ? btnSearch.getScene().getWindow()
+                                            : null);
+                    PostProcessingMasterLoadBusyDialog searchBusy =
+                            PostProcessingMasterLoadBusyDialog.show(
+                                    dialogOwner,
+                                    PostProcessingMasterLoadBusyDialog.HEADER_SEARCHING,
+                                    PostProcessingMasterLoadBusyDialog.STATUS_SEARCHING);
+                    btnSearch.setDisable(true);
                     Path ref = Path.of(refPathField.getText().trim());
                     PostProcessingProductMasterIo.SearchFilter filter =
                             new PostProcessingProductMasterIo.SearchFilter(
@@ -526,6 +538,9 @@ public final class PostProcessingProductMasterEditorPane {
                     Thread t =
                             new Thread(
                                     () -> {
+                                        List<PostProcessingProductMasterIo.SearchHit> hits =
+                                                List.of();
+                                        Exception error = null;
                                         try {
                                             List<ProductInfo> catalog =
                                                     ctx.integratedProductCatalog() != null
@@ -539,31 +554,42 @@ public final class PostProcessingProductMasterEditorPane {
                                                                     : PostProcessingProductMasterSearch
                                                                             .MasterReferencePrefixFilters
                                                                             .none();
-                                            List<PostProcessingProductMasterIo.SearchHit> hits =
+                                            hits =
                                                     PostProcessingProductMasterIo.searchReference(
                                                             ref, filter, 200, catalog, prefixes);
-                                            Platform.runLater(
-                                                    () -> {
-                                                        if (formPreparing.get() || formDirty.get()) {
-                                                            return;
-                                                        }
-                                                        searchResults
-                                                                .setItems(
-                                                                        FXCollections
-                                                                                .observableArrayList(
-                                                                                        hits));
-                                                        statusLabel.setText(
-                                                                "検索結果 "
-                                                                        + hits.size()
-                                                                        + " 件");
-                                                    });
                                         } catch (Exception ex) {
-                                            Platform.runLater(
-                                                    () ->
+                                            error = ex;
+                                        }
+                                        Exception finalError = error;
+                                        List<PostProcessingProductMasterIo.SearchHit> finalHits =
+                                                hits;
+                                        Platform.runLater(
+                                                () -> {
+                                                    try {
+                                                        if (finalError != null) {
                                                             statusLabel.setText(
                                                                     "検索失敗: "
-                                                                            + ex.getMessage()));
-                                        }
+                                                                            + finalError
+                                                                                    .getMessage());
+                                                            return;
+                                                        }
+                                                        if (formPreparing.get()
+                                                                || formDirty.get()) {
+                                                            return;
+                                                        }
+                                                        searchResults.setItems(
+                                                                FXCollections
+                                                                        .observableArrayList(
+                                                                                finalHits));
+                                                        statusLabel.setText(
+                                                                "検索結果 "
+                                                                        + finalHits.size()
+                                                                        + " 件");
+                                                    } finally {
+                                                        searchBusy.close();
+                                                        refreshInteractionStateRef.get().run();
+                                                    }
+                                                });
                                     },
                                     "postproc-master-search");
                     t.setDaemon(true);
