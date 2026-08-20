@@ -25,8 +25,9 @@ import org.controlsfx.control.spreadsheet.SpreadsheetView;
 import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.config.FactorySite;
 import jp.co.pm.ai.desktop.io.MasterDispatchSheetsDocument;
+import jp.co.pm.ai.desktop.io.MasterDispatchSheetsSaveWriter;
 import jp.co.pm.ai.desktop.io.MasterDispatchSheetsSeeder;
-import jp.co.pm.ai.desktop.io.MasterDispatchSheetsJsonStore;
+import jp.co.pm.ai.desktop.ui.FourDigitConfirmationDialog;
 import jp.co.pm.ai.desktop.ui.MasterDispatchSheetEditRules;
 import jp.co.pm.ai.desktop.ui.MasterDispatchSheetGridSupport;
 import jp.co.pm.ai.desktop.ui.SpreadsheetTabularSupport;
@@ -148,6 +149,19 @@ public final class MasterDispatchSheetsTabController {
             statusLabel.setText("保存を中止しました。検証エラーがあります。");
             return;
         }
+        Window owner = shell.primaryStageForDialogs();
+        if (owner == null && statusLabel != null && statusLabel.getScene() != null) {
+            owner = statusLabel.getScene().getWindow();
+        }
+        if (!FourDigitConfirmationDialog.confirm(
+                owner,
+                "配台マスタ保存",
+                "編集内容を JSON に保存し、master.xlsm へ書き戻します。\n"
+                        + "保存前に JSON と master.xlsm の世代バックアップを取ります。",
+                "保存")) {
+            statusLabel.setText("保存を中止しました。");
+            return;
+        }
         LinkedHashMap<String, MasterDispatchSheetsDocument.SheetGrid> sheets = new LinkedHashMap<>();
         sheets.put(
                 MasterDispatchSheetsDocument.KEY_SKILLS,
@@ -169,9 +183,24 @@ public final class MasterDispatchSheetsTabController {
                         OffsetDateTime.now(TOKYO).truncatedTo(ChronoUnit.SECONDS).toString(),
                         sheets);
         try {
-            MasterDispatchSheetsJsonStore.write(json, document);
-            loadedJsonPath = json;
-            statusLabel.setText("保存しました: " + json);
+            MasterDispatchSheetsSaveWriter.Result saved =
+                    MasterDispatchSheetsSaveWriter.save(json, source, document, ui);
+            loadedJsonPath = saved.jsonPath();
+            String jsonBackup =
+                    saved.jsonBackup() != null ? saved.jsonBackup().toString() : "（JSON 正本なし）";
+            String xlsmBackup =
+                    saved.workbookBackup() != null
+                            ? saved.workbookBackup().toString()
+                            : "（ブック正本なし）";
+            statusLabel.setText(
+                    "保存しました。JSON: "
+                            + saved.jsonPath()
+                            + "\nmaster: "
+                            + saved.workbookPath()
+                            + "\n世代バックアップ JSON: "
+                            + jsonBackup
+                            + "\n世代バックアップ master: "
+                            + xlsmBackup);
         } catch (Exception e) {
             statusLabel.setText("保存に失敗しました: " + e.getMessage());
         }
