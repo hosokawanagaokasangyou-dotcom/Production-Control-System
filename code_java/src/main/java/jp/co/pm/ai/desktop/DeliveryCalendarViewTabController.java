@@ -1136,10 +1136,15 @@ public final class DeliveryCalendarViewTabController {
     private void failPendingPipelineReload(String message) {
         Runnable after = pendingAfterPipelineReloadSuccess;
         pendingAfterPipelineReloadSuccess = null;
-        if (after != null && shell != null) {
-            shell.showErrorDialog(
-                    "段階2 完了後の納期管理更新",
-                    message != null && !message.isBlank() ? message : "納期管理ビューの更新に失敗しました。");
+        if (shell != null) {
+            shell.endStageRunBusyDialog();
+            if (after != null) {
+                shell.showErrorDialog(
+                        "段階2 完了後の納期管理更新",
+                        message != null && !message.isBlank()
+                                ? message
+                                : "納期管理ビューの更新に失敗しました。");
+            }
         }
         // 失敗時は成功継続コールバックを実行しない（Excel 出力・完了ダイアログ等を誤発火させない）
     }

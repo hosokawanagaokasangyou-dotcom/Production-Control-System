@@ -8,22 +8,35 @@ import org.junit.jupiter.api.Test;
 class MainShellStage2BusyDialogLifecycleTest {
 
     @Test
-    void shouldCloseStageRunBusyForPostStage2AsyncWork_trueForLongRunningFollowUps() {
+    void shouldKeepStageRunBusyForPostStage2AsyncWork_trueForTabSwitchFollowUps() {
         assertTrue(
-                MainShellController.shouldCloseStageRunBusyForPostStage2AsyncWork(
+                MainShellController.shouldKeepStageRunBusyForPostStage2AsyncWork(
                         MainRunStage2Progress.State.DISPATCH_RELOADING));
         assertTrue(
-                MainShellController.shouldCloseStageRunBusyForPostStage2AsyncWork(
+                MainShellController.shouldKeepStageRunBusyForPostStage2AsyncWork(
                         MainRunStage2Progress.State.DELIVERY_RELOADING));
         assertTrue(
-                MainShellController.shouldCloseStageRunBusyForPostStage2AsyncWork(
+                MainShellController.shouldKeepStageRunBusyForPostStage2AsyncWork(
                         MainRunStage2Progress.State.EXCEL_GENERATING));
     }
 
     @Test
-    void shouldCloseStageRunBusyForPostStage2AsyncWork_falseWhilePythonRuns() {
+    void shouldKeepStageRunBusyForPostStage2AsyncWork_falseWhilePythonRuns() {
+        assertFalse(
+                MainShellController.shouldKeepStageRunBusyForPostStage2AsyncWork(
+                        MainRunStage2Progress.State.RUNNING));
+    }
+
+    @Test
+    void shouldCloseStageRunBusyForPostStage2AsyncWork_falseSoDialogStaysDuringFollowUps() {
         assertFalse(
                 MainShellController.shouldCloseStageRunBusyForPostStage2AsyncWork(
-                        MainRunStage2Progress.State.RUNNING));
+                        MainRunStage2Progress.State.DISPATCH_RELOADING));
+        assertFalse(
+                MainShellController.shouldCloseStageRunBusyForPostStage2AsyncWork(
+                        MainRunStage2Progress.State.DELIVERY_RELOADING));
+        assertFalse(
+                MainShellController.shouldCloseStageRunBusyForPostStage2AsyncWork(
+                        MainRunStage2Progress.State.EXCEL_GENERATING));
     }
 }

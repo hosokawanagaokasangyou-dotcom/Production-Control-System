@@ -51,6 +51,18 @@ class StageRunBusyDialogTest {
         StageRunBusyDialog dialog = ref.get();
         assertTrue(dialog.isShowing());
         assertEquals(StageStyle.UNDECORATED, dialog.stageStyle());
+        assertTrue(dialog.isInterruptEnabled());
+
+        CountDownLatch interruptHidden = new CountDownLatch(1);
+        Platform.runLater(
+                () -> {
+                    dialog.setPhase("納期管理を更新中…");
+                    dialog.setInterruptEnabled(false);
+                    interruptHidden.countDown();
+                });
+        assertTrue(interruptHidden.await(5, TimeUnit.SECONDS));
+        assertFalse(dialog.isInterruptEnabled());
+        assertTrue(dialog.isShowing());
 
         CountDownLatch closed = new CountDownLatch(1);
         Platform.runLater(

@@ -5219,18 +5219,32 @@ public final class MainShellController
         if (detail != null && !detail.isBlank()) {
             stageRunBusyDialog.setDetail(detail.strip());
         }
+        if (shouldKeepStageRunBusyForPostStage2AsyncWork(state)) {
+            stageRunBusyDialog.setInterruptEnabled(false);
+        }
     }
 
     /**
-     * 段階2 Python 完了後の配台表再読込・納期管理更新・Excel 生成は非同期が長い。モーダルを閉じ、各タブの進捗 UI に任せる。
+     * 段階2 Python 完了後の配台表再読込・納期管理更新・Excel 生成中もモーダルを残す。
+     * 実行・ログから納期管理ビューへ切り替えるあいだ進捗が消えてフリーズに見えるのを防ぐ。
      */
-    static boolean shouldCloseStageRunBusyForPostStage2AsyncWork(MainRunStage2Progress.State state) {
+    static boolean shouldKeepStageRunBusyForPostStage2AsyncWork(MainRunStage2Progress.State state) {
         return state == MainRunStage2Progress.State.DISPATCH_RELOADING
                 || state == MainRunStage2Progress.State.DELIVERY_RELOADING
                 || state == MainRunStage2Progress.State.EXCEL_GENERATING;
     }
 
-    private void endStageRunBusyDialog() {
+    /**
+     * 後続の非同期処理中はモーダルを閉じない。閉じるのは完了／失敗時の {@link #endStageRunBusyDialog()}。
+     */
+    static boolean shouldCloseStageRunBusyForPostStage2AsyncWork(MainRunStage2Progress.State state) {
+        return !shouldKeepStageRunBusyForPostStage2AsyncWork(state)
+                && (state == MainRunStage2Progress.State.DISPATCH_RELOADING
+                        || state == MainRunStage2Progress.State.DELIVERY_RELOADING
+                        || state == MainRunStage2Progress.State.EXCEL_GENERATING);
+    }
+
+    void endStageRunBusyDialog() {
         if (stageRunBusyDialog != null) {
             stageRunBusyDialog.close();
             stageRunBusyDialog = null;

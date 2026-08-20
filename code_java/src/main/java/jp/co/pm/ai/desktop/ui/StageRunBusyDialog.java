@@ -24,11 +24,14 @@ public final class StageRunBusyDialog {
     private final Stage stage;
     private final Label phaseLabel;
     private final Label detailLabel;
+    private final Button cancelButton;
 
-    private StageRunBusyDialog(Stage stage, Label phaseLabel, Label detailLabel) {
+    private StageRunBusyDialog(
+            Stage stage, Label phaseLabel, Label detailLabel, Button cancelButton) {
         this.stage = stage;
         this.phaseLabel = phaseLabel;
         this.detailLabel = detailLabel;
+        this.cancelButton = cancelButton;
     }
 
     /**
@@ -87,8 +90,9 @@ public final class StageRunBusyDialog {
         content.setPrefWidth(440);
 
         VBox root;
+        Button cancel = null;
         if (onCancel != null) {
-            Button cancel = new Button("中断");
+            cancel = new Button("中断");
             cancel.setOnAction(e -> onCancel.run());
             VBox actions = new VBox(cancel);
             actions.setAlignment(Pos.CENTER_RIGHT);
@@ -107,7 +111,7 @@ public final class StageRunBusyDialog {
         if (owner != null) {
             stage.centerOnScreen();
         }
-        return new StageRunBusyDialog(stage, phase, detail);
+        return new StageRunBusyDialog(stage, phase, detail, cancel);
     }
 
     public void setPhase(String text) {
@@ -126,6 +130,25 @@ public final class StageRunBusyDialog {
         detailLabel.setText(text.strip());
         detailLabel.setManaged(true);
         detailLabel.setVisible(true);
+    }
+
+    /**
+     * Python 完了後の後続処理では中断できないため非表示にする。
+     */
+    public void setInterruptEnabled(boolean enabled) {
+        if (cancelButton == null) {
+            return;
+        }
+        cancelButton.setDisable(!enabled);
+        cancelButton.setVisible(enabled);
+        cancelButton.setManaged(enabled);
+        if (stage.getScene() != null && stage.getScene().getWindow() != null) {
+            stage.sizeToScene();
+        }
+    }
+
+    boolean isInterruptEnabled() {
+        return cancelButton != null && cancelButton.isVisible() && !cancelButton.isDisabled();
     }
 
     public boolean isShowing() {
