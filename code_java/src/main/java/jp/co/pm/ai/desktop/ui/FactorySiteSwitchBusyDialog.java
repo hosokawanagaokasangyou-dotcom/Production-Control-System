@@ -29,13 +29,21 @@ public final class FactorySiteSwitchBusyDialog {
     private static final String HEADER_TEXT_STYLE =
             "-fx-font-weight: bold; -fx-font-size: 14px; -fx-text-fill: " + BODY_TEXT_FILL + ";";
 
+    public static final String STATUS_CONNECT = "切替先工場への接続を確認しています…";
     public static final String STATUS_SAVING = "現在の工場設定を保存しています…";
     public static final String STATUS_LOADING = "切替先の工場ワークスペースを読み込んでいます…";
     public static final String STATUS_ENV = "環境変数を切り替えています…";
     public static final String STATUS_REFRESH = "関連画面を更新しています…";
+    public static final String STATUS_REFRESH_REQUEST_FORM = "原本転記画面を更新しています…";
+    public static final String STATUS_REFRESH_PIPELINE = "計画確認画面を更新しています…";
+    public static final String STATUS_REFRESH_REMOTE = "リモートデスクトップ画面を更新しています…";
     public static final String STATUS_OPERATOR = "操作者を確認しています…";
     public static final String STATUS_STABILIZE = "環境変数の値を安定化しています…";
     public static final String STATUS_MATCH = "初期値と照合しています…";
+    public static final String STATUS_ATTENDANCE_COMPANY = "会社カレンダーを再読込しています…";
+    public static final String STATUS_ATTENDANCE_MEMBER = "メンバー勤怠を再読込しています…";
+    public static final String STATUS_ATTENDANCE_MACHINE = "機械カレンダーを再読込しています…";
+    public static final String STATUS_ATTENDANCE_MASTER = "マスタ配台シートを再読込しています…";
     public static final String STATUS_BACKGROUND_LOAD = "タブデータを読み込んでいます…";
     public static final String STATUS_DONE = "完了しました";
 

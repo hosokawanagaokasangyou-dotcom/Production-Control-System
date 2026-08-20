@@ -4576,13 +4576,19 @@ public final class MainShellController
         }
     }
 
-    private void refreshFactoryDependentTabs(FactorySite site, boolean lightweight) {
+    private void refreshFactoryRequestFormTab(boolean lightweight) {
         if (requestFormInputTabController != null) {
             requestFormInputTabController.onFactorySiteChanged(lightweight);
         }
+    }
+
+    private void refreshFactoryPipelineCheckTab(boolean lightweight) {
         if (requestFormPipelineCheckTabController != null) {
             requestFormPipelineCheckTabController.onFactorySiteChanged(lightweight);
         }
+    }
+
+    private void refreshFactoryRemoteAndToolbar(boolean lightweight) {
         if (remoteDesktopTabController != null) {
             remoteDesktopTabController.onFactorySiteChanged(lightweight);
         }
@@ -8543,7 +8549,7 @@ public final class MainShellController
             startupTabBackgroundLoad.cancelForFactorySwitch();
         }
         FactorySiteSwitchContext ctx = new FactorySiteSwitchContext(oldSite, newSite, startup);
-        runAfterUiPulse(() -> runFactorySiteSwitchStep(ctx, 0));
+        runFactorySiteSwitchStep(ctx, FactorySiteSwitchBusySupport.WORK_CONNECT);
     }
 
     private static final class FactorySiteSwitchContext {
@@ -8586,10 +8592,14 @@ public final class MainShellController
     }
 
     private void runFactorySiteSwitchStep(FactorySiteSwitchContext ctx, int step) {
+        updateFactorySiteSwitchBusy(FactorySiteSwitchBusySupport.statusForWorkUnit(step));
+        runAfterUiPulse(() -> executeFactorySiteSwitchWork(ctx, step));
+    }
+
+    private void executeFactorySiteSwitchWork(FactorySiteSwitchContext ctx, int step) {
         try {
             switch (step) {
-                case 0 -> {
-                    updateFactorySiteSwitchBusy(FactorySiteSwitchBusyDialog.STATUS_SAVING);
+                case FactorySiteSwitchBusySupport.WORK_CONNECT -> {
                     Map<String, String> ui = collectUiEnv();
                     FactoryOperatorUserStore.configureForCurrentApp(ui, ctx.newSite());
                     if (!FactorySiteOperatorAccess.isSessionOperatorAllowedForFactory(
@@ -8598,6 +8608,9 @@ public final class MainShellController
                                 FactorySiteOperatorAccess.comboBlockReasonJa(ui, ctx.newSite()));
                         return;
                     }
+                    runFactorySiteSwitchStep(ctx, FactorySiteSwitchBusySupport.WORK_SAVE);
+                }
+                case FactorySiteSwitchBusySupport.WORK_SAVE -> {
                     GlobalInitSettingTarget.setSuppressUiEnvInferencePersist(true);
                     String operator = FactoryOperatorUserStore.sessionOperatorName();
                     if (!operator.isBlank()
@@ -8612,34 +8625,42 @@ public final class MainShellController
                     if (!operator.isBlank()) {
                         FactorySiteWorkspaceStore.saveLastFactorySite(operator, ctx.newSite());
                     }
-                    runAfterUiPulse(() -> runFactorySiteSwitchStep(ctx, 1));
+                    runFactorySiteSwitchStep(ctx, FactorySiteSwitchBusySupport.WORK_LOAD);
                 }
-                case 1 -> {
-                    updateFactorySiteSwitchBusy(FactorySiteSwitchBusyDialog.STATUS_LOADING);
+                case FactorySiteSwitchBusySupport.WORK_LOAD -> {
                     String operator = FactoryOperatorUserStore.sessionOperatorName();
                     Optional<FactorySiteWorkspaceSnapshot> loaded =
                             operator.isBlank()
                                     ? Optional.empty()
                                     : FactorySiteWorkspaceStore.load(operator, ctx.newSite());
                     ctx.setLoaded(loaded);
-                    runAfterUiPulse(() -> runFactorySiteSwitchStep(ctx, 2));
+                    runFactorySiteSwitchStep(ctx, FactorySiteSwitchBusySupport.WORK_ENV);
                 }
-                case 2 -> {
-                    updateFactorySiteSwitchBusy(FactorySiteSwitchBusyDialog.STATUS_ENV);
+                case FactorySiteSwitchBusySupport.WORK_ENV -> {
                     applyFactorySiteWorkspaceRestore(ctx.newSite(), ctx.loaded());
-                    runAfterUiPulse(() -> runFactorySiteSwitchStep(ctx, 3));
+                    runFactorySiteSwitchStep(
+                            ctx, FactorySiteSwitchBusySupport.WORK_REFRESH_REQUEST_FORM);
                 }
-                case 3 -> {
-                    updateFactorySiteSwitchBusy(FactorySiteSwitchBusyDialog.STATUS_REFRESH);
-                    refreshFactoryDependentTabs(ctx.newSite(), true);
+                case FactorySiteSwitchBusySupport.WORK_REFRESH_REQUEST_FORM -> {
+                    refreshFactoryRequestFormTab(true);
+                    runFactorySiteSwitchStep(ctx, FactorySiteSwitchBusySupport.WORK_REFRESH_PIPELINE);
+                }
+                case FactorySiteSwitchBusySupport.WORK_REFRESH_PIPELINE -> {
+                    refreshFactoryPipelineCheckTab(true);
+                    runFactorySiteSwitchStep(ctx, FactorySiteSwitchBusySupport.WORK_REFRESH_REMOTE);
+                }
+                case FactorySiteSwitchBusySupport.WORK_REFRESH_REMOTE -> {
+                    refreshFactoryRemoteAndToolbar(true);
                     schedulePersistSessionDebounced();
-                    runAfterUiPulse(() -> runFactorySiteSwitchStep(ctx, 4));
+                    runFactorySiteSwitchStep(ctx, FactorySiteSwitchBusySupport.WORK_STABILIZE);
                 }
-                case 4 -> {
-                    updateFactorySiteSwitchBusy(FactorySiteSwitchBusyDialog.STATUS_OPERATOR);
-                    runAfterUiPulse(() -> runFactorySiteSwitchStep(ctx, 5));
+                case FactorySiteSwitchBusySupport.WORK_STABILIZE -> {
+                    if (!envVarsStartupCheckCompleted.get()) {
+                        stabilizeEnvRowsForInitializationBaseline();
+                    }
+                    runFactorySiteSwitchStep(ctx, FactorySiteSwitchBusySupport.WORK_MATCH);
                 }
-                case 5 -> {
+                case FactorySiteSwitchBusySupport.WORK_MATCH -> {
                     completeEnvVarsStartupCheck(!(ctx.startup() && startupSequenceActive));
                     long ms = (System.nanoTime() - ctx.t0Nanos()) / 1_000_000L;
                     appendLog(
@@ -8649,8 +8670,10 @@ public final class MainShellController
                                     + ctx.newSite().displayLabelJa()
                                     + " ms="
                                     + ms);
-                    runAfterUiPulse(() -> finishFactorySiteSwitch(ctx.newSite(), ctx.startup()));
+                    runFactorySiteSwitchStep(ctx, FactorySiteSwitchBusySupport.WORK_FINISH);
                 }
+                case FactorySiteSwitchBusySupport.WORK_FINISH ->
+                        finishFactorySiteSwitch(ctx.newSite(), ctx.startup());
                 default -> finishFactorySiteSwitch(null, false);
             }
         } catch (RuntimeException ex) {
@@ -8708,39 +8731,74 @@ public final class MainShellController
             if (operatorDialogNeeded && factorySiteSwitchBusy != null) {
                 factorySiteSwitchBusy.hideTemporarily();
             }
-        } else {
-            updateFactorySiteSwitchBusy(FactorySiteSwitchBusyDialog.STATUS_BACKGROUND_LOAD);
         }
         if (callOperator) {
             requireOperatorSelectionForFactory(site, startup);
         }
-        if (!startupSequenceActive) {
-            if (factorySiteSwitchBusy != null && !factorySiteSwitchBusy.isShowing()) {
-                factorySiteSwitchBusy.showAgain();
-            }
-            if (!isFactorySiteSwitchBusyShowing()) {
-                beginFactorySiteSwitchTabLoadBusy();
-            } else {
-                updateFactorySiteSwitchBusy(FactorySiteSwitchBusyDialog.STATUS_BACKGROUND_LOAD);
-            }
-            factorySwitchAwaitingBackgroundLoadBeforeModalClose = true;
+        if (startupSequenceActive) {
+            runAfterUiPulse(this::finishStartupSequenceAfterEnvCheck);
+            return;
         }
-        reloadAttendanceTabsFromJson(true);
-        runAfterUiPulse(
-                () -> {
-                    notifyActiveMainShellTabAfterWorkspaceChange();
-                    if (startupSequenceActive) {
-                        finishStartupSequenceAfterEnvCheck();
-                    } else if (startupTabBackgroundLoad != null) {
-                        beginFactorySiteSwitchTabLoadBusy();
-                        factorySwitchAwaitingBackgroundLoadBeforeModalClose = true;
-                        startupTabBackgroundLoad.resetAndScheduleAfterFactorySwitch();
-                        if (!FactorySiteSwitchBusySupport.keepBusyDialogForPostSwitchTabLoad(
-                                startupSequenceActive, startupTabBackgroundLoadActive)) {
-                            endFactorySiteSwitchBusy();
-                        }
+        if (factorySiteSwitchBusy != null && !factorySiteSwitchBusy.isShowing()) {
+            factorySiteSwitchBusy.showAgain();
+        }
+        if (!isFactorySiteSwitchBusyShowing()) {
+            beginFactorySiteSwitchTabLoadBusy();
+        }
+        factorySwitchAwaitingBackgroundLoadBeforeModalClose = true;
+        runFactorySiteSwitchPostWork(FactorySiteSwitchBusySupport.POST_ATTENDANCE_COMPANY);
+    }
+
+    private void runFactorySiteSwitchPostWork(int unit) {
+        updateFactorySiteSwitchBusy(FactorySiteSwitchBusySupport.statusForPostSwitchWork(unit));
+        runAfterUiPulse(() -> executeFactorySiteSwitchPostWork(unit));
+    }
+
+    private void executeFactorySiteSwitchPostWork(int unit) {
+        switch (unit) {
+            case FactorySiteSwitchBusySupport.POST_ATTENDANCE_COMPANY -> {
+                Path jsonPath = AppPaths.attendanceDataJsonPath(collectUiEnv());
+                appendLog("[attendance] JSON 再読込: " + jsonPath);
+                if (companyCalendarTabController != null) {
+                    companyCalendarTabController.reloadAttendanceDataFromJsonIfEnabled();
+                }
+                runFactorySiteSwitchPostWork(FactorySiteSwitchBusySupport.POST_ATTENDANCE_MEMBER);
+            }
+            case FactorySiteSwitchBusySupport.POST_ATTENDANCE_MEMBER -> {
+                if (memberAttendanceTabController != null) {
+                    memberAttendanceTabController.reloadAttendanceDataFromJsonIfEnabled();
+                }
+                runFactorySiteSwitchPostWork(FactorySiteSwitchBusySupport.POST_ATTENDANCE_MACHINE);
+            }
+            case FactorySiteSwitchBusySupport.POST_ATTENDANCE_MACHINE -> {
+                if (machineCalendarTabController != null) {
+                    machineCalendarTabController.reloadMachineCalendarDataIfEnabled();
+                }
+                runFactorySiteSwitchPostWork(FactorySiteSwitchBusySupport.POST_ATTENDANCE_MASTER);
+            }
+            case FactorySiteSwitchBusySupport.POST_ATTENDANCE_MASTER -> {
+                if (masterDispatchSheetsTabController != null) {
+                    masterDispatchSheetsTabController.reloadFromCurrentFactory(false);
+                }
+                refreshAttendanceReadiness(true);
+                runFactorySiteSwitchPostWork(FactorySiteSwitchBusySupport.POST_BACKGROUND_LOAD);
+            }
+            case FactorySiteSwitchBusySupport.POST_BACKGROUND_LOAD -> {
+                notifyActiveMainShellTabAfterWorkspaceChange();
+                if (startupTabBackgroundLoad != null) {
+                    beginFactorySiteSwitchTabLoadBusy();
+                    factorySwitchAwaitingBackgroundLoadBeforeModalClose = true;
+                    startupTabBackgroundLoad.resetAndScheduleAfterFactorySwitch();
+                    if (!FactorySiteSwitchBusySupport.keepBusyDialogForPostSwitchTabLoad(
+                            startupSequenceActive, startupTabBackgroundLoadActive)) {
+                        endFactorySiteSwitchBusy();
                     }
-                });
+                } else {
+                    endFactorySiteSwitchBusy();
+                }
+            }
+            default -> endFactorySiteSwitchBusy();
+        }
     }
 
     @Override
