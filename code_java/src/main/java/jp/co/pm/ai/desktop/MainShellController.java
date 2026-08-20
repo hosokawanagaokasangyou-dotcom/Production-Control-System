@@ -131,6 +131,7 @@ import jp.co.pm.ai.desktop.config.OperatorUserPaths;
 import jp.co.pm.ai.desktop.config.FactorySite;
 import jp.co.pm.ai.desktop.config.FactorySiteOperatorAccess;
 import jp.co.pm.ai.desktop.config.FactorySiteWorkspaceMigrator;
+import jp.co.pm.ai.desktop.config.FactorySiteWorkspaceRestorePlan;
 import jp.co.pm.ai.desktop.config.FactorySiteWorkspaceSnapshot;
 import jp.co.pm.ai.desktop.config.FactorySiteWorkspaceStore;
 import jp.co.pm.ai.desktop.config.PortableBundleUpgradeUiSnapshot;
@@ -4440,28 +4441,58 @@ public final class MainShellController
     }
 
     /**
-     * 工場切替・起動復元: 保存済み env 行（または ui_ref 既定）を先に載せ替え、続けて {@code init_setting} と session 断片を適用する。
+     * 工場切替・起動復元: 先に {@code init_setting} を適用し、保存済み env 行があれば復元、
+     * なければ ui_ref 既定＋工場 overlay で初期化する。
      */
     private void applyFactorySiteWorkspaceRestore(
             FactorySite site, Optional<FactorySiteWorkspaceSnapshot> workspace) {
         FactorySite effective = site != null ? site : FactorySite.KONAN;
-        if (workspace.isPresent() && workspace.get().hasUiEnvRows()) {
+        FactorySiteWorkspaceRestorePlan plan = FactorySiteWorkspaceRestorePlan.of(workspace);
+        if (plan.applyInitSettingBeforeEnv()) {
+            applyGlobalInitSettingBeforeEnvReset(effective);
+        }
+        if (plan.restoreSavedUiEnvRows()) {
             suppressEnvSessionPersistence.set(true);
             envResetInProgress.set(true);
             try {
-                applyFactoryWorkspaceEnvSnapshot(workspace.get());
-                applyFactorySitePortableAndNetworkDefaults(effective);
-                applyRepoFolderPathNormalization();
+                applyFactoryWorkspaceEnvSnapshot(workspace.orElseThrow());
             } finally {
                 envResetInProgress.set(false);
                 suppressEnvSessionPersistence.set(false);
                 uiEnvSaveDebounce.stop();
             }
-        } else {
+            rehookEnvRowsForAutoSave();
+            refreshEnvTabAfterExternalReplace();
+            appendLog(
+                    "[factory] 環境変数を工場ワークスペースから復元しました。工場: "
+                            + effective.displayLabelJa());
+        } else if (plan.bundledEnvReset()) {
             applyEnvRowsFullBundledResetAndPersist(false, effective);
+            refreshEnvTabAfterExternalReplace();
         }
-        applyGlobalInitSettingBeforeEnvReset(effective);
-        workspace.ifPresent(this::applyFactoryWorkspaceSessionFragment);
+        if (plan.applySessionFragment()) {
+            applyFactoryWorkspaceSessionFragment(
+                    workspace.orElseThrow(),
+                    plan.preserveEnvInitializationInSessionFragment());
+        }
+    }
+
+    /** {@link #envResetInProgress} 中の {@code setAll} では自動保存フックが付かないため、復元後に付け直す。 */
+    private void rehookEnvRowsForAutoSave() {
+        Runnable sched = uiEnvPersistSchedule;
+        if (sched == null || envRows == null) {
+            return;
+        }
+        for (EnvVarRow row : envRows) {
+            hookEnvRowForAutoSave(row, sched);
+        }
+    }
+
+    /** 工場切替で env 行を差し替えたあと、検索・列フィルタが空表に見せないようにする。 */
+    private void refreshEnvTabAfterExternalReplace() {
+        if (envTabController != null) {
+            envTabController.clearColumnFiltersAndSort();
+        }
     }
 
     /** 工場ワークスペースの環境変数行のみ復元（session は別途）。 */
