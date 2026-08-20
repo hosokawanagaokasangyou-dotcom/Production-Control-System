@@ -11,22 +11,20 @@ import javafx.geometry.Insets;
 import javafx.scene.Node;
 import javafx.scene.Parent;
 import javafx.scene.control.ButtonType;
+import javafx.scene.control.ComboBox;
+import javafx.scene.control.ContentDisplay;
 import javafx.scene.control.Dialog;
 import javafx.scene.control.Label;
 import javafx.scene.control.TableCell;
 import javafx.scene.control.TableColumn;
-import javafx.scene.control.TablePosition;
 import javafx.scene.control.TableRow;
 import javafx.scene.control.TableView;
-import javafx.scene.control.TextField;
-import javafx.scene.control.cell.TextFieldTableCell;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.stage.Modality;
 import javafx.stage.Window;
-import javafx.util.Callback;
 
 import jp.co.pm.ai.desktop.dispatch.DispatchInteractiveRollUnitSupport;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchNormalizer;
@@ -265,26 +263,7 @@ final class Stage2NextDayRollDispatchDialogSupport {
         cUnit.setStyle("-fx-alignment: CENTER-RIGHT;");
         cUnit.setPrefWidth(64);
 
-        TableColumn<RowModel, String> cRolls = new TableColumn<>(theme.rollsColumnLabel());
-        cRolls.getStyleClass().add("pm-next-day-roll-input-column");
-        cRolls.setCellValueFactory(cd -> cd.getValue().rollCountProperty());
-        Callback<TableColumn<RowModel, String>, TableCell<RowModel, String>> rollCellFactory =
-                TextFieldTableCell.forTableColumn();
-        cRolls.setCellFactory(
-                col -> {
-                    TableCell<RowModel, String> cell = rollCellFactory.call(col);
-                    cell.getStyleClass().add("pm-next-day-roll-input-cell");
-                    return cell;
-                });
-        cRolls.setOnEditCommit(
-                ev -> {
-                    if (ev.getNewValue() != null) {
-                        ev.getRowValue().rollCountProperty().set(ev.getNewValue());
-                    }
-                });
-        cRolls.setEditable(true);
-        cRolls.setStyle("-fx-alignment: CENTER-RIGHT;");
-        cRolls.setPrefWidth(72);
+        TableColumn<RowModel, String> cRolls = createRollCountColumn(theme.rollsColumnLabel());
 
         TableColumn<RowModel, String> cMeters = new TableColumn<>("換算(m)");
         cMeters.setCellValueFactory(
@@ -388,6 +367,96 @@ final class Stage2NextDayRollDispatchDialogSupport {
         return column;
     }
 
+    static TableColumn<RowModel, String> createRollCountColumn(String label) {
+        TableColumn<RowModel, String> column = new TableColumn<>(label);
+        column.getStyleClass().add("pm-next-day-roll-input-column");
+        column.setCellValueFactory(cd -> cd.getValue().rollCountProperty());
+        column.setCellFactory(col -> new RollCountComboTableCell());
+        column.setEditable(false);
+        column.setStyle("-fx-alignment: CENTER;");
+        column.setPrefWidth(88);
+        return column;
+    }
+
+    static List<String> rollCountChoices(int maxRolls) {
+        int n = Math.max(0, maxRolls);
+        java.util.ArrayList<String> out = new java.util.ArrayList<>(n + 1);
+        for (int i = 0; i <= n; i++) {
+            out.add(String.valueOf(i));
+        }
+        return List.copyOf(out);
+    }
+
+    static String clampRollCountChoice(String raw, int maxRolls) {
+        int max = Math.max(0, maxRolls);
+        int n = Stage2InProgressNextDayRollInput.parseNonNegativeRollCount(raw).orElse(0);
+        if (n > max) {
+            n = max;
+        }
+        return String.valueOf(n);
+    }
+
+    private static final class RollCountComboTableCell extends TableCell<RowModel, String> {
+        private final ComboBox<String> combo = new ComboBox<>();
+        private boolean syncing;
+
+        RollCountComboTableCell() {
+            getStyleClass().add("pm-next-day-roll-input-cell");
+            combo.getStyleClass().add("pm-next-day-roll-input-combo");
+            combo.setEditable(false);
+            combo.setMaxWidth(Double.MAX_VALUE);
+            combo.valueProperty()
+                    .addListener(
+                            (o, a, b) -> {
+                                if (syncing || b == null) {
+                                    return;
+                                }
+                                RowModel row = currentRow();
+                                if (row != null) {
+                                    row.rollCountProperty().set(b);
+                                }
+                            });
+            setGraphic(combo);
+            setContentDisplay(ContentDisplay.GRAPHIC_ONLY);
+        }
+
+        private RowModel currentRow() {
+            if (getTableRow() != null && getTableRow().getItem() != null) {
+                return getTableRow().getItem();
+            }
+            if (getTableView() != null
+                    && getIndex() >= 0
+                    && getIndex() < getTableView().getItems().size()) {
+                return getTableView().getItems().get(getIndex());
+            }
+            return null;
+        }
+
+        @Override
+        protected void updateItem(String item, boolean empty) {
+            super.updateItem(item, empty);
+            RowModel row = currentRow();
+            if (empty || row == null) {
+                setGraphic(null);
+                return;
+            }
+            List<String> choices = rollCountChoices(row.maxRolls());
+            String clamped = clampRollCountChoice(item, row.maxRolls());
+            syncing = true;
+            try {
+                combo.setItems(FXCollections.observableArrayList(choices));
+                combo.setVisibleRowCount(Math.min(12, choices.size()));
+                combo.setValue(clamped);
+            } finally {
+                syncing = false;
+            }
+            if (!clamped.equals(row.rollCountProperty().get())) {
+                row.rollCountProperty().set(clamped);
+            }
+            setGraphic(combo);
+        }
+    }
+
     private static String rowDetail(RowModel row) {
         String unitLine =
                 row.unitM() > 1e-9
@@ -402,51 +471,25 @@ final class Stage2NextDayRollDispatchDialogSupport {
     }
 
     private static void commitPendingTableCellEdit(TableView<RowModel> table) {
-        TablePosition<RowModel, ?> editing = table.getEditingCell();
-        if (editing == null) {
-            return;
-        }
-        int rowIdx = editing.getRow();
-        if (rowIdx < 0 || rowIdx >= table.getItems().size()) {
-            table.edit(-1, null);
-            return;
-        }
-        RowModel row = table.getItems().get(rowIdx);
-        String committed = null;
-        if (table.getScene() != null) {
-            Node focus = table.getScene().getFocusOwner();
-            if (focus instanceof TextField tf) {
-                committed = tf.getText();
+        for (Node node : table.lookupAll(".combo-box.pm-next-day-roll-input-combo")) {
+            if (!(node instanceof ComboBox<?> combo) || combo.getValue() == null) {
+                continue;
             }
-        }
-        if (committed == null) {
-            for (Node node : table.lookupAll(".table-row-cell")) {
-                if (node instanceof TableRow<?> tr && tr.getIndex() == rowIdx) {
-                    TextField tf = findTextFieldIn(tr);
-                    if (tf != null) {
-                        committed = tf.getText();
-                        break;
-                    }
-                }
+            TableRow<?> tr = findTableRow(combo);
+            if (tr != null && tr.getItem() instanceof RowModel row) {
+                row.rollCountProperty().set(String.valueOf(combo.getValue()));
             }
-        }
-        if (committed != null) {
-            row.rollCountProperty().set(committed);
         }
         table.edit(-1, null);
     }
 
-    private static TextField findTextFieldIn(Parent parent) {
-        for (Node child : parent.getChildrenUnmodifiable()) {
-            if (child instanceof TextField tf) {
-                return tf;
+    private static TableRow<?> findTableRow(Node node) {
+        Parent p = node.getParent();
+        while (p != null) {
+            if (p instanceof TableRow<?> tr) {
+                return tr;
             }
-            if (child instanceof Parent p) {
-                TextField nested = findTextFieldIn(p);
-                if (nested != null) {
-                    return nested;
-                }
-            }
+            p = p.getParent();
         }
         return null;
     }

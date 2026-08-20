@@ -2,11 +2,21 @@ package jp.co.pm.ai.desktop.ui;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
+import javafx.application.Platform;
+import javafx.scene.control.ComboBox;
+import javafx.scene.control.TableCell;
+import javafx.scene.control.TableColumn;
+
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import jp.co.pm.ai.planning.stage2.core.Stage2PlanRowDispatchQtyMetrics;
@@ -95,5 +105,64 @@ class Stage2NextDayDispatchDialogTest {
         assertEquals("工程名", column.getText());
         assertEquals("スリット", cellValue.getValue());
         assertFalse(column.isEditable());
+    }
+
+    @BeforeAll
+    static void initJavaFx() {
+        try {
+            Platform.startup(() -> {});
+        } catch (IllegalStateException ignored) {
+            // already started
+        }
+    }
+
+    @Test
+    void rollCountChoicesAreZeroThroughMaxInclusive() {
+        assertEquals(List.of("0"), Stage2NextDayRollDispatchDialogSupport.rollCountChoices(0));
+        assertEquals(
+                List.of("0", "1", "2", "3"),
+                Stage2NextDayRollDispatchDialogSupport.rollCountChoices(3));
+        assertEquals(List.of("0"), Stage2NextDayRollDispatchDialogSupport.rollCountChoices(-1));
+    }
+
+    @Test
+    void clampRollCountChoiceStaysWithinMax() {
+        assertEquals("0", Stage2NextDayRollDispatchDialogSupport.clampRollCountChoice("", 3));
+        assertEquals("2", Stage2NextDayRollDispatchDialogSupport.clampRollCountChoice("2", 3));
+        assertEquals("3", Stage2NextDayRollDispatchDialogSupport.clampRollCountChoice("9", 3));
+        assertEquals("0", Stage2NextDayRollDispatchDialogSupport.clampRollCountChoice("x", 3));
+    }
+
+    @Test
+    void rollCountColumnUsesNonEditableComboBox() throws Exception {
+        CountDownLatch done = new CountDownLatch(1);
+        AtomicReference<ComboBox<?>> comboRef = new AtomicReference<>();
+        AtomicReference<String> columnText = new AtomicReference<>();
+        AtomicReference<Throwable> error = new AtomicReference<>();
+        Platform.runLater(
+                () -> {
+                    try {
+                        TableColumn<Stage2NextDayRollDispatchDialogSupport.RowModel, String>
+                                column =
+                                        Stage2NextDayRollDispatchDialogSupport
+                                                .createRollCountColumn("翌日配台(ロール)");
+                        columnText.set(column.getText());
+                        TableCell<Stage2NextDayRollDispatchDialogSupport.RowModel, String> cell =
+                                column.getCellFactory().call(column);
+                        assertInstanceOf(ComboBox.class, cell.getGraphic());
+                        comboRef.set((ComboBox<?>) cell.getGraphic());
+                    } catch (Throwable t) {
+                        error.set(t);
+                    } finally {
+                        done.countDown();
+                    }
+                });
+        assertTrue(done.await(5, TimeUnit.SECONDS));
+        if (error.get() != null) {
+            throw new AssertionError(error.get());
+        }
+        assertEquals("翌日配台(ロール)", columnText.get());
+        ComboBox<?> combo = comboRef.get();
+        assertFalse(combo.isEditable());
     }
 }

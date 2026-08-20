@@ -399,10 +399,17 @@
 
 .table-view.pm-next-day-roll-dialog-table .table-cell.pm-next-day-roll-input-cell {
     -fx-background-color: rgba(56, 189, 248, 0.08);
+    -fx-padding: 1 4 1 4;
+    -fx-alignment: CENTER;
 }
 
 .table-view.pm-next-day-roll-dialog-table .table-cell.pm-next-day-roll-input-cell:selected {
     -fx-background-color: rgba(56, 189, 248, 0.22);
+}
+
+.table-view.pm-next-day-roll-dialog-table .combo-box.pm-next-day-roll-input-combo {
+    -fx-background-insets: 0;
+    -fx-padding: 0;
 }
 
 .pm-next-day-roll-column-overlay-frame {
