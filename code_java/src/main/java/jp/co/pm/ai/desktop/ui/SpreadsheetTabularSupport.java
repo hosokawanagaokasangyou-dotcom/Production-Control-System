@@ -953,6 +953,25 @@ public final class SpreadsheetTabularSupport {
     }
 
     /**
+     * フィルタ行以外の見出し行を縦スクロール固定する。{@link #pinSpreadsheetFilterRow} の後に呼ぶ。
+     */
+    public static void pinSpreadsheetRows(SpreadsheetView view, int fromInclusive, int toInclusive) {
+        if (view == null || toInclusive < fromInclusive) {
+            return;
+        }
+        ObservableList<Integer> fixed = view.getFixedRows();
+        for (int r = fromInclusive; r <= toInclusive; r++) {
+            if (!view.isRowFixable(r)) {
+                continue;
+            }
+            Integer boxed = Integer.valueOf(r);
+            if (!fixed.contains(boxed)) {
+                fixed.add(boxed);
+            }
+        }
+    }
+
+    /**
      * 見出し列固定・フィルタ行ピン・UNCONSTRAINED 列幅をまとめて適用する。
      * TitledPane／アコーディオン開閉後など、レイアウトでスキンが組み替わったあとに再度呼ぶこと。
      */

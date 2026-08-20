@@ -5,9 +5,11 @@ import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import javafx.application.Platform;
 import javafx.fxml.FXML;
 import javafx.geometry.Insets;
 import javafx.scene.control.Alert;
@@ -25,7 +27,9 @@ import jp.co.pm.ai.desktop.config.FactorySite;
 import jp.co.pm.ai.desktop.io.MasterDispatchSheetsDocument;
 import jp.co.pm.ai.desktop.io.MasterDispatchSheetsSeeder;
 import jp.co.pm.ai.desktop.io.MasterDispatchSheetsJsonStore;
+import jp.co.pm.ai.desktop.ui.MasterDispatchSheetEditRules;
 import jp.co.pm.ai.desktop.ui.MasterDispatchSheetGridSupport;
+import jp.co.pm.ai.desktop.ui.SpreadsheetTabularSupport;
 import jp.co.pm.ai.desktop.ui.SpreadsheetThemeBridge;
 
 /**
@@ -53,18 +57,20 @@ public final class MasterDispatchSheetsTabController {
 
     @FXML
     private void initialize() {
-        install(skillsHost, skillsView);
-        install(needHost, needView);
-        install(speedHost, speedView);
-        install(comboHost, comboView);
+        install(skillsHost, skillsView, 1);
+        install(needHost, needView, 3);
+        install(speedHost, speedView, 3);
+        install(comboHost, comboView, 4);
         applyDocument(document);
     }
 
-    private static void install(StackPane host, SpreadsheetView view) {
+    private static void install(StackPane host, SpreadsheetView view, int leadingCols) {
         SpreadsheetThemeBridge.install(view);
+        SpreadsheetTabularSupport.installPmAiReadableSpreadsheetChrome(view);
         view.setEditable(true);
         StackPane.setMargin(view, new Insets(0));
         host.getChildren().setAll(view);
+        SpreadsheetTabularSupport.installSpreadsheetChromeRelayoutDebouncerForHost(host, () -> leadingCols);
     }
 
     void bindShell(MainShellController shell) {
@@ -104,23 +110,57 @@ public final class MasterDispatchSheetsTabController {
         FactorySite site = AppPaths.currentDispatchFactorySite(ui);
         Path json = loadedJsonPath != null ? loadedJsonPath : AppPaths.masterDispatchSheetsJsonPath(ui);
         Path source = AppPaths.masterDispatchSheetsSourceWorkbookPath(ui);
+        List<List<String>> skillsRows =
+                MasterDispatchSheetGridSupport.extract(
+                        skillsView, MasterDispatchSheetEditRules.SheetKind.SKILLS);
+        List<List<String>> needRows =
+                MasterDispatchSheetGridSupport.extract(
+                        needView, MasterDispatchSheetEditRules.SheetKind.NEED);
+        List<List<String>> speedRows =
+                MasterDispatchSheetGridSupport.extract(
+                        speedView, MasterDispatchSheetEditRules.SheetKind.SPEED);
+        List<List<String>> comboRows =
+                MasterDispatchSheetGridSupport.extract(
+                        comboView, MasterDispatchSheetEditRules.SheetKind.COMBINATIONS);
+        List<String> errors = new java.util.ArrayList<>();
+        errors.addAll(
+                MasterDispatchSheetEditRules.validateForSave(
+                        MasterDispatchSheetEditRules.SheetKind.SKILLS, skillsRows));
+        errors.addAll(
+                MasterDispatchSheetEditRules.validateForSave(
+                        MasterDispatchSheetEditRules.SheetKind.NEED, needRows));
+        errors.addAll(
+                MasterDispatchSheetEditRules.validateForSave(
+                        MasterDispatchSheetEditRules.SheetKind.SPEED, speedRows));
+        errors.addAll(
+                MasterDispatchSheetEditRules.validateForSave(
+                        MasterDispatchSheetEditRules.SheetKind.COMBINATIONS, comboRows));
+        if (!errors.isEmpty()) {
+            Alert alert = new Alert(AlertType.ERROR);
+            alert.setTitle("MASTER 保存");
+            alert.setHeaderText("入力内容を直してから保存してください。");
+            alert.setContentText(String.join("\n", errors.subList(0, Math.min(8, errors.size()))));
+            Window w = statusLabel != null && statusLabel.getScene() != null ? statusLabel.getScene().getWindow() : null;
+            if (w != null) {
+                alert.initOwner(w);
+            }
+            alert.showAndWait();
+            statusLabel.setText("保存を中止しました。検証エラーがあります。");
+            return;
+        }
         LinkedHashMap<String, MasterDispatchSheetsDocument.SheetGrid> sheets = new LinkedHashMap<>();
         sheets.put(
                 MasterDispatchSheetsDocument.KEY_SKILLS,
-                new MasterDispatchSheetsDocument.SheetGrid(
-                        "skills", MasterDispatchSheetGridSupport.extract(skillsView)));
+                new MasterDispatchSheetsDocument.SheetGrid("skills", skillsRows));
         sheets.put(
                 MasterDispatchSheetsDocument.KEY_NEED,
-                new MasterDispatchSheetsDocument.SheetGrid(
-                        "need", MasterDispatchSheetGridSupport.extract(needView)));
+                new MasterDispatchSheetsDocument.SheetGrid("need", needRows));
         sheets.put(
                 MasterDispatchSheetsDocument.KEY_SPEED,
-                new MasterDispatchSheetsDocument.SheetGrid(
-                        "speed", MasterDispatchSheetGridSupport.extract(speedView)));
+                new MasterDispatchSheetsDocument.SheetGrid("speed", speedRows));
         sheets.put(
                 MasterDispatchSheetsDocument.KEY_TEAM_COMBINATIONS,
-                new MasterDispatchSheetsDocument.SheetGrid(
-                        "組み合わせ表", MasterDispatchSheetGridSupport.extract(comboView)));
+                new MasterDispatchSheetsDocument.SheetGrid("組み合わせ表", comboRows));
         document =
                 new MasterDispatchSheetsDocument(
                         MasterDispatchSheetsDocument.SCHEMA_VERSION,
@@ -156,11 +196,60 @@ public final class MasterDispatchSheetsTabController {
 
     private void applyDocument(MasterDispatchSheetsDocument doc) {
         MasterDispatchSheetsDocument d = doc != null ? doc : MasterDispatchSheetsDocument.empty("");
-        skillsView.setGrid(MasterDispatchSheetGridSupport.buildEditable(d.sheet("skills").rows()));
-        needView.setGrid(MasterDispatchSheetGridSupport.buildEditable(d.sheet("need").rows()));
-        speedView.setGrid(MasterDispatchSheetGridSupport.buildEditable(d.sheet("speed").rows()));
-        comboView.setGrid(
-                MasterDispatchSheetGridSupport.buildEditable(d.sheet("teamCombinations").rows()));
+        attachGrid(
+                skillsView,
+                MasterDispatchSheetEditRules.SheetKind.SKILLS,
+                d.sheet("skills").rows(),
+                2,
+                1);
+        attachGrid(
+                needView,
+                MasterDispatchSheetEditRules.SheetKind.NEED,
+                d.sheet("need").rows(),
+                2,
+                3);
+        attachGrid(
+                speedView,
+                MasterDispatchSheetEditRules.SheetKind.SPEED,
+                d.sheet("speed").rows(),
+                5,
+                3);
+        attachGrid(
+                comboView,
+                MasterDispatchSheetEditRules.SheetKind.COMBINATIONS,
+                d.sheet("teamCombinations").rows(),
+                1,
+                4);
+    }
+
+    private static void attachGrid(
+            SpreadsheetView view,
+            MasterDispatchSheetEditRules.SheetKind kind,
+            List<List<String>> rows,
+            int frozenDataHeaderRows,
+            int leadingCols) {
+        view.setGrid(MasterDispatchSheetGridSupport.buildEditable(kind, rows));
+        List<Double> widths =
+                MasterDispatchSheetEditRules.preferredColumnWidths(
+                        rows, view.getGrid() != null ? view.getGrid().getColumnCount() : 1);
+        Platform.runLater(
+                () -> applyMasterSheetChrome(view, widths, frozenDataHeaderRows, leadingCols));
+    }
+
+    private static void applyMasterSheetChrome(
+            SpreadsheetView view,
+            List<Double> widths,
+            int frozenDataHeaderRows,
+            int leadingCols) {
+        SpreadsheetTabularSupport.applyColumnWidths(view, widths, 120);
+        SpreadsheetTabularSupport.applyFixedLeadingColumns(view, leadingCols);
+        SpreadsheetTabularSupport.applyColumnFiltersWithDialog(view);
+        SpreadsheetTabularSupport.pinSpreadsheetFilterRow(view);
+        if (frozenDataHeaderRows > 0) {
+            SpreadsheetTabularSupport.pinSpreadsheetRows(view, 1, frozenDataHeaderRows);
+        }
+        SpreadsheetTabularSupport.applyUnconstrainedColumnResizePolicyAfterSkinSettles(view);
+        Platform.runLater(() -> SpreadsheetTabularSupport.applyColumnWidths(view, widths, 120));
     }
 
     private static String statusText(
