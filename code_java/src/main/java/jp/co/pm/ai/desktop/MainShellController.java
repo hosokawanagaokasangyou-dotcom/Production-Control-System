@@ -8687,22 +8687,43 @@ public final class MainShellController
     }
 
     /**
-     * 工場切替モーダルをいったん閉じ、操作者確認のあとタブ再読込中に再度表示する。
+     * 工場切替のワークスペース適用後。進捗モーダルは閉じず、タブ再読込完了まで同一 Stage を維持する。
      *
-     * <p>操作者ダイアログは進捗モーダルと重ねると FX スレッドが詰まるため、確認の直前だけ閉じる。
-     * タブ再読込（リモート・カレンダー等）は起動時と同様に進捗モーダルを維持する。
+     * <p>操作者ダイアログは進捗と重ねると FX スレッドが詰まるため、必要なときだけ一時的に隠す。
      */
     private void finishFactorySiteSwitch(FactorySite newSite, boolean startup) {
         GlobalInitSettingTarget.setSuppressUiEnvInferencePersist(false);
-        endFactorySiteSwitchBusy();
         factorySiteSwitchInProgress = false;
         setFactorySiteCombosDisabled(false);
         FactorySite site = newSite != null ? newSite : GlobalInitSettingTarget.load();
         if (site != null) {
             factorySwitchBusyTo = site;
         }
-        if (!FactoryOperatorUserStore.isGuestSession() && !(startup && startupSequenceActive)) {
+        boolean callOperator =
+                !FactoryOperatorUserStore.isGuestSession() && !(startup && startupSequenceActive);
+        boolean operatorDialogNeeded =
+                callOperator && !OperatorUserSelectionSupport.sessionOperatorValidForFactory(site);
+        if (!FactorySiteSwitchBusySupport.keepBusyVisibleThroughFinish(
+                startupSequenceActive, operatorDialogNeeded)) {
+            if (operatorDialogNeeded && factorySiteSwitchBusy != null) {
+                factorySiteSwitchBusy.hideTemporarily();
+            }
+        } else {
+            updateFactorySiteSwitchBusy(FactorySiteSwitchBusyDialog.STATUS_BACKGROUND_LOAD);
+        }
+        if (callOperator) {
             requireOperatorSelectionForFactory(site, startup);
+        }
+        if (!startupSequenceActive) {
+            if (factorySiteSwitchBusy != null && !factorySiteSwitchBusy.isShowing()) {
+                factorySiteSwitchBusy.showAgain();
+            }
+            if (!isFactorySiteSwitchBusyShowing()) {
+                beginFactorySiteSwitchTabLoadBusy();
+            } else {
+                updateFactorySiteSwitchBusy(FactorySiteSwitchBusyDialog.STATUS_BACKGROUND_LOAD);
+            }
+            factorySwitchAwaitingBackgroundLoadBeforeModalClose = true;
         }
         reloadAttendanceTabsFromJson(true);
         runAfterUiPulse(

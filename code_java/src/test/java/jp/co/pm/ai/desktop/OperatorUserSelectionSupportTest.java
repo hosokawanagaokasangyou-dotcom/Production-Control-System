@@ -164,6 +164,29 @@ class OperatorUserSelectionSupportTest {
     }
 
     @Test
+    void sessionOperatorValidForFactory_trueOnlyWhenCurrentIsInFactoryList(@TempDir Path tmp)
+            throws Exception {
+        Path customDir = tmp.resolve("factory-user-store");
+        System.setProperty(
+                "pm.ai.test.factoryOperatorUserStore",
+                customDir.resolve("operators.bin").toString());
+        System.setProperty(
+                "pm.ai.test.factoryOperatorLastSelectedDir", tmp.resolve("last-selected").toString());
+        FactoryOperatorUserStore.resetStoreForTests();
+        FactoryOperatorUserStore.configureForCurrentApp(Map.of(), FactorySite.KONAN);
+        FactoryOperatorUserStore.addName(FactorySite.KONAN, "湖南太郎");
+        FactoryOperatorUserStore.addName(FactorySite.KOKUBU, "国分花子");
+
+        assertFalse(OperatorUserSelectionSupport.sessionOperatorValidForFactory(FactorySite.KONAN));
+
+        FactoryOperatorUserStore.selectSessionOperator(FactorySite.KONAN, "湖南太郎");
+        assertTrue(OperatorUserSelectionSupport.sessionOperatorValidForFactory(FactorySite.KONAN));
+        assertFalse(
+                OperatorUserSelectionSupport.sessionOperatorValidForFactory(FactorySite.KOKUBU),
+                "切替先工場の一覧に無い操作者はダイアログが必要");
+    }
+
+    @Test
     void productionOperatorChange_cancelRestoresSession(@TempDir Path tmp) throws Exception {
         Path customDir = tmp.resolve("factory-user-store");
         System.setProperty(

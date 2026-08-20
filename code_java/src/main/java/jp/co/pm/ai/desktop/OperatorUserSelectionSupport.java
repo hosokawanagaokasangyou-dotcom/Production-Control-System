@@ -35,6 +35,22 @@ public final class OperatorUserSelectionSupport {
         return startup ? "[startup]" : "[operator]";
     }
 
+    /**
+     * 現在のセッション操作者が当該工場のログイン一覧に含まれるか。
+     * 工場切替の進捗モーダルを操作者ダイアログの前に隠す判定に使う。
+     */
+    static boolean sessionOperatorValidForFactory(FactorySite factory) {
+        String current = FactoryOperatorUserStore.sessionOperatorName();
+        if (current == null || current.isBlank()) {
+            return false;
+        }
+        try {
+            return FactoryOperatorUserStore.loginChoicesForFactory(factory).contains(current);
+        } catch (IOException ex) {
+            return false;
+        }
+    }
+
     static String operatorSelectionScopeLabel(FactorySite factory) {
         if (RemoteDesktopStandaloneBootstrap.isActivated() || factory == FactorySite.RDP_LAUNCHER) {
             return "";

@@ -67,6 +67,26 @@ class FactorySiteSwitchBusyDialogTest {
                 dialog.bodyTextStyle().contains(FactorySiteSwitchBusyDialog.BODY_TEXT_FILL),
                 "明るい背景向けに本文は暗い文字色にする");
 
+        CountDownLatch hidden = new CountDownLatch(1);
+        Platform.runLater(
+                () -> {
+                    dialog.hideTemporarily();
+                    hidden.countDown();
+                });
+        assertTrue(hidden.await(5, TimeUnit.SECONDS));
+        assertFalse(dialog.isShowing());
+
+        CountDownLatch shownAgain = new CountDownLatch(1);
+        Platform.runLater(
+                () -> {
+                    dialog.showAgain();
+                    shownAgain.countDown();
+                });
+        assertTrue(shownAgain.await(5, TimeUnit.SECONDS));
+        assertTrue(dialog.isShowing(), "同一 Stage を再表示し、別ダイアログを作らない");
+        assertTrue(dialog.windowWidth() > 8);
+        assertTrue(dialog.windowHeight() > 8);
+
         CountDownLatch closed = new CountDownLatch(1);
         Platform.runLater(
                 () -> {

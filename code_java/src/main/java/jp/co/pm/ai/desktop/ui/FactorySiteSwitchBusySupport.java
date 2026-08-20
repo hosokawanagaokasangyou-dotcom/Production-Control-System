@@ -21,6 +21,17 @@ public final class FactorySiteSwitchBusySupport {
         return !startupSequenceActive && backgroundLoadStarted;
     }
 
+    /**
+     * ワークスペース適用直後も同一の進捗 Stage を表示したままにするか。
+     *
+     * <p>操作者のブロッキングダイアログを重ねると FX スレッドが詰まるため、そのときだけ false。
+     * 起動シーケンス中は起動側ダイアログに任せる。
+     */
+    public static boolean keepBusyVisibleThroughFinish(
+            boolean startupSequenceActive, boolean operatorBlockingDialogNeeded) {
+        return !startupSequenceActive && !operatorBlockingDialogNeeded;
+    }
+
     /** 起動後読込の状況文言を工場切替ダイアログへ載せる。空なら既定文言。 */
     public static String resolveTabLoadStatus(String startupBackgroundLoadMessage) {
         if (startupBackgroundLoadMessage == null || startupBackgroundLoadMessage.isBlank()) {

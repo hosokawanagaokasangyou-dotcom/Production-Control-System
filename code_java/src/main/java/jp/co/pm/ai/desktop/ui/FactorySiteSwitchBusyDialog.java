@@ -145,6 +145,28 @@ public final class FactorySiteSwitchBusyDialog {
         return stage.getScene();
     }
 
+    /**
+     * 操作者ダイアログを重ねる直前に隠す。{@link #close()} せず同一 Stage を残す。
+     */
+    public void hideTemporarily() {
+        if (stage.isShowing()) {
+            stage.hide();
+        }
+    }
+
+    /** {@link #hideTemporarily()} のあと、同じ Stage を再表示する。 */
+    public void showAgain() {
+        if (stage.isShowing()) {
+            return;
+        }
+        FactorySiteSwitchBusySupport.realizeStageForImmediateShow(stage);
+        stage.show();
+        FactorySiteSwitchBusySupport.realizeStageForImmediateShow(stage);
+        positionOverOwner(stage, stage.getOwner());
+        stage.toFront();
+        stage.requestFocus();
+    }
+
     public void close() {
         stage.setOnCloseRequest(null);
         if (stage.isShowing()) {
