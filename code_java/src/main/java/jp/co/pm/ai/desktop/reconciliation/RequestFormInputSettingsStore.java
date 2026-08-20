@@ -130,8 +130,7 @@ public final class RequestFormInputSettingsStore {
         }
         ObjectNode root = readExistingObjectOrEmpty(storePath);
         if (settings.comboChoices() != null && !settings.comboChoices().isEmpty()) {
-            root.remove(RequestFormComboChoices.JSON_KEY);
-            settings.comboChoices().writeToObjectNode(root);
+            settings.comboChoices().mergeIntoSettingsRoot(root);
         }
         ReconciliationPaths paths = settings.paths();
         if (paths != null) {

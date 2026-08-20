@@ -350,7 +350,29 @@ public final class RequestFormComboChoices {
         if (root == null || isEmpty()) {
             return;
         }
+        root.remove(JSON_KEY);
         ObjectNode choices = root.putObject(JSON_KEY);
+        writeChoicesBody(choices);
+    }
+
+    /**
+     * 設定 JSON 根へ候補をマージする。スナップショットに無いキー（空リストで落ちた投入場所など）は既存値を残す。
+     */
+    public void mergeIntoSettingsRoot(ObjectNode root) {
+        if (root == null || isEmpty()) {
+            return;
+        }
+        ObjectNode choices;
+        JsonNode existing = root.get(JSON_KEY);
+        if (existing != null && existing.isObject()) {
+            choices = (ObjectNode) existing;
+        } else {
+            choices = root.putObject(JSON_KEY);
+        }
+        writeChoicesBody(choices);
+    }
+
+    private void writeChoicesBody(ObjectNode choices) {
         for (Map.Entry<String, List<String>> entry : byKey.entrySet()) {
             ArrayNode arr = choices.putArray(entry.getKey());
             for (String value : entry.getValue()) {
@@ -358,7 +380,13 @@ public final class RequestFormComboChoices {
             }
         }
         if (!fieldDefaults.isEmpty()) {
-            ObjectNode defaultsNode = choices.putObject(JSON_FIELD_DEFAULTS_KEY);
+            ObjectNode defaultsNode;
+            JsonNode existingDefaults = choices.get(JSON_FIELD_DEFAULTS_KEY);
+            if (existingDefaults != null && existingDefaults.isObject()) {
+                defaultsNode = (ObjectNode) existingDefaults;
+            } else {
+                defaultsNode = choices.putObject(JSON_FIELD_DEFAULTS_KEY);
+            }
             for (Map.Entry<String, String> entry : fieldDefaults.entrySet()) {
                 defaultsNode.put(entry.getKey(), entry.getValue());
             }

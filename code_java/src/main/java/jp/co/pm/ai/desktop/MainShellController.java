@@ -1850,9 +1850,6 @@ public final class MainShellController
 
     /** 現在の UI 状態を直ちに session-state.json に保存する（タブ内の微調整の自動保存用）。 */
     public void persistDesktopSessionNow() {
-        if (requestFormInputTabController != null) {
-            requestFormInputTabController.persistInputSettings();
-        }
         DesktopSessionStateStore.save(collectDesktopSession());
     }
 

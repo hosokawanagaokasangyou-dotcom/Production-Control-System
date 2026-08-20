@@ -273,6 +273,43 @@ class RequestFormInputSettingsStoreTest {
     }
 
     @Test
+    void save_partialComboDoesNotDropOmittedFeedLoc() throws Exception {
+        Path summaryXlsx = tempDir.resolve(AppPaths.SUMMARY_AI_DISPATCH_XLSX);
+        Files.createFile(summaryXlsx);
+        Map<String, String> ui =
+                Map.of(AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK, summaryXlsx.toString());
+
+        RequestFormComboChoices full =
+                RequestFormComboChoices.of(
+                        Map.of(
+                                RequestFormComboChoices.KEY_FEED_LOC,
+                                List.of("EC", "SEC", "ｽﾗｲｽ", "ｽﾘｯﾄ", "ｴﾝﾎﾞｽ", "検反", "融着"),
+                                RequestFormComboChoices.KEY_USER,
+                                List.of("自動転記", "ｵｶﾓﾄ")));
+        RequestFormInputSettingsStore.save(ui, full, "", "");
+
+        RequestFormComboChoices partial =
+                RequestFormComboChoices.of(
+                        Map.of(RequestFormComboChoices.KEY_USER, List.of("自動転記", "ｵｶﾓﾄ", "追加ユーザー")));
+        RequestFormInputSettingsStore.save(ui, partial, "", "");
+
+        RequestFormInputSettingsStore.Settings loaded =
+                RequestFormInputSettingsStore.load(ui).orElseThrow();
+        assertTrue(
+                loaded.comboChoices().asMap().containsKey(RequestFormComboChoices.KEY_FEED_LOC),
+                "部分保存で投入場所キーが消えてはならない");
+        assertEquals(
+                List.of("EC", "SEC", "ｽﾗｲｽ", "ｽﾘｯﾄ", "ｴﾝﾎﾞｽ", "検反", "融着"),
+                loaded.comboChoices().asMap().get(RequestFormComboChoices.KEY_FEED_LOC));
+        assertEquals(
+                List.of("自動転記", "ｵｶﾓﾄ", "追加ユーザー"),
+                loaded.comboChoices().optionsFor(RequestFormComboChoices.KEY_USER));
+        String raw = Files.readString(RequestFormInputSettingsStore.resolveStorePath(ui));
+        assertTrue(raw.contains("\"feedLoc\""));
+        assertTrue(raw.contains("ｽﾗｲｽ"));
+    }
+
+    @Test
     void saveAndLoad_deletedBundledOptionDoesNotReappear() throws Exception {
         Path summaryXlsx = tempDir.resolve(AppPaths.SUMMARY_AI_DISPATCH_XLSX);
         Files.createFile(summaryXlsx);

@@ -1732,7 +1732,6 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                                         || change.wasRemoved()
                                         || change.wasUpdated()) {
                                     updateComboChoiceListViewHeight(listView, items.size());
-                                    listView.setItems(items);
                                     listView.refresh();
                                 }
                             }
@@ -1868,6 +1867,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
 
     /** サマリ Excel 同フォルダの正本 JSON を読み直し、候補リストへ反映する。 */
     private void reloadInputSettingsJsonFromDisk() {
+        comboChoicesLoadGeneration.incrementAndGet();
         RequestFormInputSettingsStore.Settings settings =
                 RequestFormInputSettingsStore.load(uiEnvSnapshot).orElse(null);
         if (settings != null) {
@@ -2226,9 +2226,6 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         if (target == null || values == null || values.isEmpty()) {
             return;
         }
-        if (target.size() == values.size() && target.equals(values)) {
-            return;
-        }
         target.setAll(values);
     }
 
@@ -2247,6 +2244,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
             ObservableList<String> items = listView.getItems();
             updateComboChoiceListViewHeight(listView, items != null ? items.size() : 0);
             if (items != null) {
+                listView.setItems(null);
                 listView.setItems(items);
             }
             listView.refresh();
