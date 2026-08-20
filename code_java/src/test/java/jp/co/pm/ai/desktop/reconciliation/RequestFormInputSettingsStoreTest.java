@@ -1,6 +1,7 @@
 package jp.co.pm.ai.desktop.reconciliation;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -245,6 +246,74 @@ class RequestFormInputSettingsStoreTest {
         assertEquals(
                 "通常入力",
                 loaded.comboChoices().effectiveDefaultFor(RequestFormComboChoices.KEY_INPUT_KBN));
+    }
+
+    @Test
+    void save_emptyComboDoesNotWipeExistingComboChoices() throws Exception {
+        Path summaryXlsx = tempDir.resolve(AppPaths.SUMMARY_AI_DISPATCH_XLSX);
+        Files.createFile(summaryXlsx);
+        Map<String, String> ui =
+                Map.of(AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK, summaryXlsx.toString());
+
+        RequestFormComboChoices combo =
+                RequestFormComboChoices.of(
+                        Map.of(RequestFormComboChoices.KEY_YOTO, List.of("W（自動車）", "独自用途")));
+        RequestFormInputSettingsStore.save(ui, combo, "C:\\orig", "C:\\juchu.xlsm");
+
+        RequestFormInputSettingsStore.save(
+                ui, RequestFormComboChoices.empty(), "C:\\orig2", "C:\\juchu2.xlsm");
+
+        RequestFormInputSettingsStore.Settings loaded =
+                RequestFormInputSettingsStore.load(ui).orElseThrow();
+        assertEquals(
+                List.of("W（自動車）", "独自用途"),
+                loaded.comboChoices().optionsFor(RequestFormComboChoices.KEY_YOTO));
+        assertEquals("C:\\orig2", loaded.paths().targetFolder());
+        assertEquals("C:\\juchu2.xlsm", loaded.paths().juchuFilePath());
+    }
+
+    @Test
+    void saveAndLoad_deletedBundledOptionDoesNotReappear() throws Exception {
+        Path summaryXlsx = tempDir.resolve(AppPaths.SUMMARY_AI_DISPATCH_XLSX);
+        Files.createFile(summaryXlsx);
+        Map<String, String> ui =
+                Map.of(AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK, summaryXlsx.toString());
+
+        RequestFormComboChoices combo =
+                RequestFormComboChoices.of(
+                        Map.of(
+                                RequestFormComboChoices.KEY_YOTO,
+                                List.of("W（自動車）", "B（輸出）", "Y（工材）")));
+        RequestFormInputSettingsStore.save(ui, combo, "", "");
+
+        RequestFormComboChoices loaded =
+                RequestFormInputSettingsStore.loadComboChoices(ui, GlobalInitSettingTarget.load());
+        assertEquals(
+                List.of("W（自動車）", "B（輸出）", "Y（工材）"),
+                loaded.optionsFor(RequestFormComboChoices.KEY_YOTO));
+        assertFalse(loaded.optionsFor(RequestFormComboChoices.KEY_YOTO).contains("小口加工"));
+    }
+
+    @Test
+    void save_throwsWhenDestinationIsADirectory() throws Exception {
+        Path summaryXlsx = tempDir.resolve(AppPaths.SUMMARY_AI_DISPATCH_XLSX);
+        Files.createFile(summaryXlsx);
+        Map<String, String> ui =
+                Map.of(AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK, summaryXlsx.toString());
+        Path storePath = RequestFormInputSettingsStore.resolveStorePath(ui);
+        Files.createDirectories(storePath);
+
+        assertThrows(
+                IOException.class,
+                () ->
+                        RequestFormInputSettingsStore.save(
+                                ui,
+                                RequestFormComboChoices.of(
+                                        Map.of(
+                                                RequestFormComboChoices.KEY_INPUT_KBN,
+                                                List.of("通常入力"))),
+                                "",
+                                ""));
     }
 
     @Test

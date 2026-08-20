@@ -214,7 +214,10 @@ public final class RequestFormComboChoices {
         return options.isEmpty() ? "" : options.get(0);
     }
 
-    /** 保存済みキーだけ上書きし、欠落キーは bundled 既定を使う。空リストは欠落とみなし bundled を残す。 */
+    /**
+     * 欠落キー（未保存・空リスト）は bundled 既定で補完する。保存済みの非空リストはユーザーの完全な意思として採用し、
+     * bundled を足し戻さない（設定タブでの削除が再読込で復活しないようにする）。
+     */
     public RequestFormComboChoices mergedWithDefaults() {
         LinkedHashMap<String, List<String>> mergedLists = new LinkedHashMap<>();
         RequestFormComboChoices bundled = bundledDefaults();
@@ -226,7 +229,7 @@ public final class RequestFormComboChoices {
                     mergedLists.put(key, bundledOpts);
                 }
             } else {
-                mergedLists.put(key, unionDistinct(saved, bundledOpts));
+                mergedLists.put(key, saved);
             }
         }
         LinkedHashMap<String, String> mergedDefaults = new LinkedHashMap<>(bundledFieldDefaultsMap());
@@ -312,11 +315,15 @@ public final class RequestFormComboChoices {
             }
             List<String> values = new ArrayList<>();
             for (JsonNode el : arr) {
-                if (el != null && el.isTextual()) {
-                    String text = el.asText("").strip();
-                    if (!text.isEmpty() && !values.contains(text)) {
-                        values.add(text);
-                    }
+                if (el == null || el.isNull()) {
+                    continue;
+                }
+                if (!el.isTextual() && !el.isNumber()) {
+                    continue;
+                }
+                String text = el.asText("").strip();
+                if (!text.isEmpty() && !values.contains(text)) {
+                    values.add(text);
                 }
             }
             if (!values.isEmpty()) {

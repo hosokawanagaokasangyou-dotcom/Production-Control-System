@@ -3679,7 +3679,7 @@ public final class AppPaths {
      */
     public static Path requestFormInputSettingsJsonPath(Map<String, String> ui) {
         Map<String, String> u = ui != null ? ui : Map.of();
-        FactorySite site = GlobalInitSettingTarget.loadEffective(u);
+        FactorySite site = GlobalInitSettingTarget.peekEffective(u);
         return siblingOfSummaryAiDispatchWorkbookForFactory(
                 u, site, REQUEST_FORM_INPUT_SETTINGS_JSON_FILENAME);
     }

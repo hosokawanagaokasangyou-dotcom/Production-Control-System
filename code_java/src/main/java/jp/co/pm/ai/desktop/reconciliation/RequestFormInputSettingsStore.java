@@ -12,8 +12,10 @@ import jp.co.pm.ai.desktop.config.GlobalInitSettingTarget;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
@@ -117,38 +119,38 @@ public final class RequestFormInputSettingsStore {
         return DesktopSessionStateStore.loadFactoryRequestFormComboChoices(ui, site).mergedWithDefaults();
     }
 
-    public static void save(Map<String, String> ui, Settings settings) {
+    public static void save(Map<String, String> ui, Settings settings) throws IOException {
         if (settings == null) {
             return;
         }
         Path storePath = resolveStorePath(ui);
-        try {
-            Files.createDirectories(storePath.getParent());
-            ObjectNode root = JSON.createObjectNode();
-            if (settings.comboChoices() != null && !settings.comboChoices().isEmpty()) {
-                settings.comboChoices().writeToObjectNode(root);
-            }
-            ReconciliationPaths paths = settings.paths();
-            if (paths != null) {
-                if (paths.targetFolder() != null && !paths.targetFolder().isBlank()) {
-                    root.put(KEY_TARGET_FOLDER, paths.targetFolder().strip());
-                }
-                if (paths.juchuFilePath() != null) {
-                    root.put(KEY_JUCHU_FILE_PATH, paths.juchuFilePath().strip());
-                }
-            }
-            JSON.writerWithDefaultPrettyPrinter().writeValue(storePath.toFile(), root);
-        } catch (IOException ex) {
-            System.err.println(
-                    "Could not save request form input settings: " + storePath + " — " + ex.getMessage());
+        Path parent = storePath.getParent();
+        if (parent != null) {
+            Files.createDirectories(parent);
         }
+        ObjectNode root = readExistingObjectOrEmpty(storePath);
+        if (settings.comboChoices() != null && !settings.comboChoices().isEmpty()) {
+            root.remove(RequestFormComboChoices.JSON_KEY);
+            settings.comboChoices().writeToObjectNode(root);
+        }
+        ReconciliationPaths paths = settings.paths();
+        if (paths != null) {
+            if (paths.targetFolder() != null && !paths.targetFolder().isBlank()) {
+                root.put(KEY_TARGET_FOLDER, paths.targetFolder().strip());
+            }
+            if (paths.juchuFilePath() != null) {
+                root.put(KEY_JUCHU_FILE_PATH, paths.juchuFilePath().strip());
+            }
+        }
+        writeJsonAtomically(storePath, root);
     }
 
     public static void save(
             Map<String, String> ui,
             RequestFormComboChoices comboChoices,
             String targetFolder,
-            String juchuFilePath) {
+            String juchuFilePath)
+            throws IOException {
         save(
                 ui,
                 new Settings(
@@ -165,7 +167,12 @@ public final class RequestFormInputSettingsStore {
     public static String readTextForEditor(Map<String, String> ui) throws IOException {
         Path storePath = resolveStorePath(ui);
         if (!Files.isRegularFile(storePath)) {
-            return JSON.writerWithDefaultPrettyPrinter().writeValueAsString(JSON.createObjectNode());
+            Path legacyPath = AppPaths.requestFormInputSettingsJsonPathLegacy(ui);
+            if (legacyPath != null && !legacyPath.equals(storePath) && Files.isRegularFile(legacyPath)) {
+                storePath = legacyPath;
+            } else {
+                return JSON.writerWithDefaultPrettyPrinter().writeValueAsString(JSON.createObjectNode());
+            }
         }
         String raw = Files.readString(storePath, StandardCharsets.UTF_8);
         try {
@@ -195,9 +202,50 @@ public final class RequestFormInputSettingsStore {
             throw new IOException("JSON のルートはオブジェクトである必要があります。");
         }
         Path storePath = resolveStorePath(ui);
-        Files.createDirectories(storePath.getParent());
-        JSON.writerWithDefaultPrettyPrinter().writeValue(storePath.toFile(), root);
+        Path parent = storePath.getParent();
+        if (parent != null) {
+            Files.createDirectories(parent);
+        }
+        writeJsonAtomically(storePath, (ObjectNode) root);
         return parseRoot(root);
+    }
+
+    private static ObjectNode readExistingObjectOrEmpty(Path storePath) {
+        if (!Files.isRegularFile(storePath)) {
+            return JSON.createObjectNode();
+        }
+        try {
+            JsonNode existing = JSON.readTree(storePath.toFile());
+            if (existing != null && existing.isObject()) {
+                return (ObjectNode) existing;
+            }
+        } catch (IOException ignored) {
+            return JSON.createObjectNode();
+        }
+        return JSON.createObjectNode();
+    }
+
+    private static void writeJsonAtomically(Path storePath, ObjectNode root) throws IOException {
+        Path parent = storePath.getParent();
+        Path staging =
+                parent != null
+                        ? Files.createTempFile(parent, "rfis-", ".tmp")
+                        : Files.createTempFile("rfis-", ".tmp");
+        try {
+            JSON.writerWithDefaultPrettyPrinter().writeValue(staging.toFile(), root);
+            try {
+                Files.move(
+                        staging,
+                        storePath,
+                        StandardCopyOption.REPLACE_EXISTING,
+                        StandardCopyOption.ATOMIC_MOVE);
+            } catch (AtomicMoveNotSupportedException ex) {
+                Files.move(staging, storePath, StandardCopyOption.REPLACE_EXISTING);
+            }
+        } catch (IOException ex) {
+            Files.deleteIfExists(staging);
+            throw ex;
+        }
     }
 
     private static Settings parseRoot(JsonNode root) {
@@ -238,7 +286,15 @@ public final class RequestFormInputSettingsStore {
                         combo != null ? combo : RequestFormComboChoices.empty(),
                         new ReconciliationPaths(folder, juchu));
         if (!folder.isBlank() || !juchu.isBlank() || !migrated.comboChoices().isEmpty()) {
-            save(ui, migrated);
+            try {
+                save(ui, migrated);
+            } catch (IOException ex) {
+                System.err.println(
+                        "Could not migrate request form input settings: "
+                                + resolveStorePath(ui)
+                                + " — "
+                                + ex.getMessage());
+            }
         }
         return Optional.of(migrated);
     }

@@ -7191,9 +7191,23 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                 || !FactoryOperatorUserStore.sessionMayMutateRequestFormInput()) {
             return;
         }
+        comboChoicesLoadGeneration.incrementAndGet();
         comboChoicesState = snapshotComboChoices();
-        RequestFormInputSettingsStore.save(
-                uiEnvSnapshot, comboChoicesState, targetFolder, juchuFilePath);
+        try {
+            RequestFormInputSettingsStore.save(
+                    uiEnvSnapshot, comboChoicesState, targetFolder, juchuFilePath);
+        } catch (IOException ex) {
+            Path storePath = RequestFormInputSettingsStore.resolveStorePath(uiEnvSnapshot);
+            String message =
+                    "依頼書入力設定を保存できませんでした。\n"
+                            + storePath
+                            + "\n"
+                            + ex.getMessage();
+            if (statusLabel != null) {
+                statusLabel.setText("設定の保存に失敗しました: " + ex.getMessage());
+            }
+            showAlert("保存エラー", message);
+        }
     }
 
     /** サマリ Excel 同フォルダの {@link AppPaths#REQUEST_FORM_INPUT_SETTINGS_JSON_FILENAME} から候補を再読込。 */
