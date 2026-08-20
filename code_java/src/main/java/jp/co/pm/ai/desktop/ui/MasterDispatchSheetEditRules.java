@@ -92,8 +92,8 @@ public final class MasterDispatchSheetEditRules {
                 titles.set(2, "備考");
             }
         }
-        int procRow = findFirstRowExact(src, "工程名");
-        int machRow = findFirstRowExact(src, "機械名");
+        int procRow = findProcessHeaderRow(src);
+        int machRow = findMachineHeaderRow(src);
         if (procRow < 0) {
             procRow = 0;
         }
@@ -237,7 +237,21 @@ public final class MasterDispatchSheetEditRules {
             return "組み合わせ行ID".equals(a) || "組合せ行ID".equals(a) || "インデックス".equals(a);
         }
         String a = cell(rows, dataRow, 0);
-        return "工程名".equals(a) || "機械名".equals(a);
+        if (isProcessOrMachineHeaderLabel(a)) {
+            return true;
+        }
+        return kind == SheetKind.NEED && isNeedColumnCaptionRow(rows, dataRow);
+    }
+
+    static boolean isProcessOrMachineHeaderLabel(String a) {
+        return a.startsWith("工程名") || a.startsWith("機械名");
+    }
+
+    static boolean isNeedColumnCaptionRow(List<List<String>> rows, int dataRow) {
+        String a = cell(rows, dataRow, 0);
+        String b = cell(rows, dataRow, 1);
+        String c = cell(rows, dataRow, 2);
+        return a.isEmpty() && "依頼NO条件".equals(b) && "備考".equals(c);
     }
 
     public static boolean isEditable(SheetKind kind, int dataRow, int col, List<List<String>> rows) {
@@ -372,8 +386,7 @@ public final class MasterDispatchSheetEditRules {
         if (a.isEmpty()) {
             return false;
         }
-        return a.equals("工程名")
-                || a.equals("機械名")
+        return isProcessOrMachineHeaderLabel(a)
                 || a.contains("必須人数")
                 || a.contains("必要人数")
                 || a.contains("追加人数")
@@ -385,8 +398,7 @@ public final class MasterDispatchSheetEditRules {
         if (a.isEmpty()) {
             return false;
         }
-        return a.equals("工程名")
-                || a.equals("機械名")
+        return isProcessOrMachineHeaderLabel(a)
                 || a.contains("基本速度")
                 || a.contains("実稼働比率")
                 || a.startsWith("特別指定");
@@ -604,6 +616,31 @@ public final class MasterDispatchSheetEditRules {
             }
         }
         return -1;
+    }
+
+    private static int findProcessHeaderRow(List<List<String>> rows) {
+        return findHeaderRowPreferExact(rows, "工程名");
+    }
+
+    private static int findMachineHeaderRow(List<List<String>> rows) {
+        return findHeaderRowPreferExact(rows, "機械名");
+    }
+
+    private static int findHeaderRowPreferExact(List<List<String>> rows, String exact) {
+        int alias = -1;
+        if (rows == null || exact == null) {
+            return -1;
+        }
+        for (int r = 0; r < rows.size(); r++) {
+            String a = cell(rows, r, 0);
+            if (exact.equals(a)) {
+                return r;
+            }
+            if (alias < 0 && a.startsWith(exact)) {
+                alias = r;
+            }
+        }
+        return alias;
     }
 
     private static int findFirstRowContaining(List<List<String>> rows, String... needles) {

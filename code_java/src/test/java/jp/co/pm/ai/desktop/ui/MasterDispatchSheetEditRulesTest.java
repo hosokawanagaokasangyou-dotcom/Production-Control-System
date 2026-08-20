@@ -117,6 +117,47 @@ class MasterDispatchSheetEditRulesTest {
     }
 
     @Test
+    void displayRows_omitProcessAliasAndNeedCaptionRows() {
+        List<List<String>> need =
+                List.of(
+                        List.of("工程名", "", "", "EC"),
+                        List.of("機械名", "", "", "EC機 湖南"),
+                        List.of("工程名(通称)", "", "", ""),
+                        List.of("基本必要人数", "", "", "2"),
+                        List.of("余力時追加人数", "", "", "0"),
+                        List.of("", "依頼NO条件", "備考", ""));
+        assertEquals(
+                List.of(
+                        List.of("基本必要人数", "", "", "2"),
+                        List.of("余力時追加人数", "", "", "0")),
+                MasterDispatchSheetEditRules.displayRows(
+                        MasterDispatchSheetEditRules.SheetKind.NEED, need));
+
+        List<List<String>> speed =
+                List.of(
+                        List.of("工程名", "", "", "EC"),
+                        List.of("機械名", "", "", "EC機 湖南"),
+                        List.of("工程名(通称)", "", "", ""),
+                        List.of("基本速度", "", "", "20"));
+        assertEquals(
+                List.of(List.of("基本速度", "", "", "20")),
+                MasterDispatchSheetEditRules.displayRows(
+                        MasterDispatchSheetEditRules.SheetKind.SPEED, speed));
+        List<String> titles =
+                MasterDispatchSheetEditRules.columnTitles(
+                        MasterDispatchSheetEditRules.SheetKind.SPEED, speed, 4);
+        assertEquals(
+                List.of(
+                        List.of("工程名", "", "", "EC"),
+                        List.of("機械名", "", "", "EC機 湖南"),
+                        List.of("基本速度", "", "", "20")),
+                MasterDispatchSheetEditRules.restoreTitleRows(
+                        MasterDispatchSheetEditRules.SheetKind.SPEED,
+                        titles,
+                        List.of(List.of("基本速度", "", "", "20"))));
+    }
+
+    @Test
     void comboRowStyle_sameEquipmentProcessKeyIsStable() {
         String a = MasterDispatchSheetEditRules.comboRowStyle("巻返し", "機1");
         String b = MasterDispatchSheetEditRules.comboRowStyle("巻返し", "機1");
