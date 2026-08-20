@@ -354,6 +354,21 @@ class RequestFormInputSettingsStoreTest {
     }
 
     @Test
+    void confirmWriteMessage_distinguishesCreateAndOverwrite(@TempDir Path tmp) throws Exception {
+        Path missing = tmp.resolve("request_form_input_settings.json");
+        String create = RequestFormInputSettingsStore.confirmWriteMessage(missing);
+        assertTrue(create.contains("新規作成"));
+        assertTrue(create.contains(AppPaths.REQUEST_FORM_INPUT_SETTINGS_JSON_FILENAME));
+        assertTrue(create.contains(missing.toString()));
+
+        Files.writeString(missing, "{}");
+        String overwrite = RequestFormInputSettingsStore.confirmWriteMessage(missing);
+        assertTrue(overwrite.contains("上書き"));
+        assertTrue(overwrite.contains(missing.toString()));
+        assertFalse(overwrite.contains("新規作成"));
+    }
+
+    @Test
     void savePrettyJson_rejectsInvalidSyntaxAndArrayRoot() throws Exception {
         Path summaryXlsx = tempDir.resolve(AppPaths.SUMMARY_AI_DISPATCH_XLSX);
         Files.createFile(summaryXlsx);

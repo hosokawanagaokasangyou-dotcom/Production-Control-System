@@ -81,6 +81,20 @@ public final class RequestFormInputSettingsStore {
         return AppPaths.requestFormInputSettingsJsonPath(ui);
     }
 
+    /**
+     * 設定 JSON をディスクへ書く直前の確認ダイアログ本文。既存ファイルは上書き、未作成は新規作成。
+     */
+    public static String confirmWriteMessage(Path storePath) {
+        String dest = storePath != null ? storePath.toString() : "";
+        boolean exists = storePath != null && Files.isRegularFile(storePath);
+        String verb = exists ? "上書き" : "新規作成";
+        return AppPaths.REQUEST_FORM_INPUT_SETTINGS_JSON_FILENAME
+                + " を"
+                + verb
+                + "します。よろしいですか？\n保存先: "
+                + dest;
+    }
+
     public static Optional<Settings> load(Map<String, String> ui) {
         Optional<Settings> fromPrimary = loadFromFile(resolveStorePath(ui));
         if (fromPrimary.isPresent()) {

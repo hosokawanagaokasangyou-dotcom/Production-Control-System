@@ -418,9 +418,12 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
             }
             File selectedDirectory = directoryChooser.showDialog(hostWindow);
             if (selectedDirectory != null) {
+                if (!confirmWriteInputSettingsJson()) {
+                    return;
+                }
                 applySelectedOriginalDir(selectedDirectory.getAbsolutePath());
                 statusLabel.setText("選択フォルダ: " + targetFolder);
-                saveSettings();
+                saveSettings(false);
                 requestReloadData(
                         "フォルダ変更後、データを再読込します。", this::loadMasterProductList);
             }
@@ -1298,8 +1301,11 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
             }
             File chosenFile = fileChooser.showOpenDialog(hostWindow);
             if (chosenFile != null) {
+                if (!confirmWriteInputSettingsJson()) {
+                    return;
+                }
                 applySelectedJuchuFile(chosenFile.getAbsolutePath());
-                saveSettings();
+                saveSettings(false);
                 statusLabel.setText("受注ファイルを更新しました: " + juchuFilePath);
                 updateTransferButtonState();
                 if (shouldReloadRelatedDataAfterJuchuFileReselect()) {
@@ -1755,10 +1761,13 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                 e -> {
                     String v = tfNew.getText().trim();
                     if (!v.isEmpty() && !items.contains(v)) {
+                        if (!confirmWriteInputSettingsJson()) {
+                            return;
+                        }
                         items.add(v);
                         updateComboChoiceListViewHeight(listView, items.size());
                         tfNew.clear();
-                        saveSettings();
+                        saveSettings(false);
                         if (afterChange != null) {
                             afterChange.run();
                         }
@@ -1774,9 +1783,12 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                 e -> {
                     String sel = listView.getSelectionModel().getSelectedItem();
                     if (sel != null) {
+                        if (!confirmWriteInputSettingsJson()) {
+                            return;
+                        }
                         items.remove(sel);
                         updateComboChoiceListViewHeight(listView, items.size());
-                        saveSettings();
+                        saveSettings(false);
                         if (afterChange != null) {
                             afterChange.run();
                         }
@@ -1843,12 +1855,16 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         if (suppressComboChoiceAutosave || key == null || value == null || value.isBlank()) {
             return;
         }
+        if (!confirmWriteInputSettingsJson()) {
+            syncFieldDefaultSelectorCombos();
+            return;
+        }
         LinkedHashMap<String, String> nextDefaults =
                 new LinkedHashMap<>(comboChoicesState.fieldDefaultsAsMap());
         nextDefaults.put(key, value.strip());
         comboChoicesState =
                 RequestFormComboChoices.of(comboChoicesState.asMap(), nextDefaults);
-        saveSettings();
+        saveSettings(false);
     }
 
     /** サマリ Excel 同フォルダへ依頼書入力設定を書き出す（ComboBox 候補・パス）。 */
@@ -1862,7 +1878,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                 DesktopSessionStateStore.factoryShipmentRequestFormComboChoices(
                         uiEnvSnapshot, GlobalInitSettingTarget.load());
         applyComboChoices(factory);
-        saveSettings();
+        saveSettings(false);
     }
 
     /** サマリ Excel 同フォルダの正本 JSON を読み直し、候補リストへ反映する。 */
@@ -1933,6 +1949,10 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         saveButton.addEventFilter(
                 ActionEvent.ACTION,
                 evt -> {
+                    if (!confirmWriteInputSettingsJson()) {
+                        evt.consume();
+                        return;
+                    }
                     try {
                         RequestFormInputSettingsStore.Settings saved =
                                 RequestFormInputSettingsStore.savePrettyJson(
@@ -7184,9 +7204,28 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         refreshJuchuBackupList();
     }
 
+    private boolean confirmWriteInputSettingsJson() {
+        Path storePath = RequestFormInputSettingsStore.resolveStorePath(uiEnvSnapshot);
+        Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
+        confirm.setTitle("確認");
+        confirm.setHeaderText(null);
+        confirm.setContentText(RequestFormInputSettingsStore.confirmWriteMessage(storePath));
+        if (hostWindow != null) {
+            confirm.initOwner(hostWindow);
+        }
+        return confirm.showAndWait().filter(btn -> btn == ButtonType.OK).isPresent();
+    }
+
     private void saveSettings() {
+        saveSettings(true);
+    }
+
+    private void saveSettings(boolean confirmWrite) {
         if (suppressComboChoiceAutosave
                 || !FactoryOperatorUserStore.sessionMayMutateRequestFormInput()) {
+            return;
+        }
+        if (confirmWrite && !confirmWriteInputSettingsJson()) {
             return;
         }
         comboChoicesLoadGeneration.incrementAndGet();
