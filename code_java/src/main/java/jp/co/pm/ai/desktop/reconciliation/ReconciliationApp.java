@@ -59,6 +59,7 @@ import jp.co.pm.ai.desktop.io.PoiWorkbookSaver;
 import jp.co.pm.ai.desktop.io.RequestFormJuchuFileBackupStore;
 import jp.co.pm.ai.desktop.ui.ComboBoxPopupRightAlign;
 import jp.co.pm.ai.desktop.ui.DatePickerPopupAbove;
+import jp.co.pm.ai.desktop.ui.FourDigitConfirmationDialog;
 import jp.co.pm.ai.desktop.ui.PersonBadgeNodeFactory;
 
 public class ReconciliationApp {
@@ -7215,10 +7216,14 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
 
     private boolean confirmWriteInputSettingsJson() {
         Path storePath = RequestFormInputSettingsStore.resolveStorePath(uiEnvSnapshot);
+        String message = RequestFormInputSettingsStore.confirmWriteMessage(storePath);
+        if (storePath != null && Files.isRegularFile(storePath)) {
+            return FourDigitConfirmationDialog.confirm(hostWindow, "確認", message, "OK");
+        }
         Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
         confirm.setTitle("確認");
         confirm.setHeaderText(null);
-        confirm.setContentText(RequestFormInputSettingsStore.confirmWriteMessage(storePath));
+        confirm.setContentText(message);
         if (hostWindow != null) {
             confirm.initOwner(hostWindow);
         }

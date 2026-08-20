@@ -5,6 +5,7 @@ import java.util.function.UnaryOperator;
 
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.TextField;
@@ -16,25 +17,26 @@ import javafx.scene.layout.VBox;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
 import javafx.stage.StageStyle;
+import javafx.stage.Window;
 
 /** 誤操作防止: 表示した4桁数字の入力を要求する確認ダイアログ。 */
 public final class FourDigitConfirmationDialog {
 
     private FourDigitConfirmationDialog() {}
 
-    public static boolean confirm(Stage owner, String title, String message) {
+    public static boolean confirm(Window owner, String title, String message) {
         return confirm(owner, title, message, "実行");
     }
 
     /**
-     * @param owner 親ステージ（null 可）
+     * @param owner 親ウィンドウ（null 可）
      * @param title ダイアログタイトル
      * @param message 警告本文
      * @param confirmButtonText OK ボタン文言
      * @return 番号が一致して OK されたとき true
      */
     public static boolean confirm(
-            Stage owner, String title, String message, String confirmButtonText) {
+            Window owner, String title, String message, String confirmButtonText) {
         int code = ThreadLocalRandom.current().nextInt(9000) + 1000;
         String expected = Integer.toString(code);
 
@@ -51,6 +53,7 @@ public final class FourDigitConfirmationDialog {
         Label codeHint = new Label("確認のため、下記の4桁を入力してください:");
         Label codeLabel = new Label(expected);
         codeLabel.getStyleClass().add("pm-four-digit-confirmation-code");
+        codeLabel.setStyle("-fx-font-size: 28px; -fx-font-weight: bold;");
 
         TextField input = new TextField();
         input.setPromptText("4桁の数字");
@@ -100,8 +103,12 @@ public final class FourDigitConfirmationDialog {
 
         VBox root = new VBox(10, messageLabel, codeHint, codeLabel, input, buttons);
         root.setPadding(new Insets(14));
-        root.setPrefWidth(400);
-        stage.setScene(new javafx.scene.Scene(root));
+        root.setPrefWidth(480);
+        Scene scene = new Scene(root);
+        if (owner != null && owner.getScene() != null) {
+            scene.getStylesheets().setAll(owner.getScene().getStylesheets());
+        }
+        stage.setScene(scene);
         stage.showAndWait();
         return confirmed[0];
     }
