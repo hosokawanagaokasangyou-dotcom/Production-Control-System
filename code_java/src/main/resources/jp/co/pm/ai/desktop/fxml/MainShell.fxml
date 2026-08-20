@@ -143,7 +143,7 @@
                         <fx:include fx:id="machineCalendarTab" source="MachineCalendarTab.fxml"/>
                     </content>
                 </Tab>
-                <Tab fx:id="mainShellTabMasterDispatchSheets" closable="false" text="MASTER">
+                <Tab fx:id="mainShellTabMasterDispatchSheets" closable="false" text="配台マスタ">
                     <content>
                         <fx:include fx:id="masterDispatchSheetsTab" source="MasterDispatchSheetsTab.fxml"/>
                     </content>
@@ -155,7 +155,7 @@
                     </content>
                 </Tab>
                 <Tab fx:id="mainShellTabPlanInput" closable="false"
-                     text="配台計画_タスク入力">
+                     text="配台計画（タスク入力）">
                     <content>
                         <fx:include fx:id="planInputTab" source="PlanInputTab.fxml"/>
                     </content>
@@ -188,7 +188,7 @@
                     </content>
                 </Tab>
                 <Tab fx:id="mainShellTabExcludeRules" closable="false"
-                     text="配台不要ルール (JSON)">
+                     text="配台不要ルール">
                     <content>
                         <fx:include fx:id="excludeRulesTab" source="ExcludeRulesTab.fxml"/>
                     </content>
@@ -200,7 +200,7 @@
                     </content>
                 </Tab>
                 <Tab fx:id="mainShellTabActualsStatus" closable="false"
-                     text="実績DATA・明細の取得状態">
+                     text="実績の取得状態">
                     <content>
                         <fx:include fx:id="actualsStatusTab" source="ActualsStatusTab.fxml"/>
                     </content>
@@ -217,7 +217,7 @@
                     </content>
                 </Tab>
                 <Tab fx:id="mainShellTabResultDispatch" closable="false"
-                     text="結果_配台表 (JSON)">
+                     text="配台結果">
                     <content>
                         <fx:include fx:id="resultDispatchTableTab" source="ResultDispatchTableTab.fxml"/>
                     </content>
@@ -229,13 +229,13 @@
                     </content>
                 </Tab>
                 <Tab fx:id="mainShellTabPlanResultViewer" closable="false"
-                     text="計画結果ビューア (JSON)">
+                     text="計画結果">
                     <content>
                         <fx:include fx:id="planResultViewerTab" source="PlanResultViewerTab.fxml"/>
                     </content>
                 </Tab>
                 <Tab fx:id="mainShellTabEquipmentGanttGraphic" closable="false"
-                     text="設備ガント（グラフィック）">
+                     text="設備ガント">
                     <content>
                         <fx:include fx:id="equipmentGanttGraphicTab" source="EquipmentGanttGraphicTab.fxml"/>
                     </content>

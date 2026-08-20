@@ -67,6 +67,76 @@ public final class MasterDispatchSheetEditRules {
         return List.copyOf(out);
     }
 
+    public static List<String> columnTitles(SheetKind kind, List<List<String>> rows, int colCount) {
+        int cols = Math.max(1, colCount);
+        List<String> titles = new ArrayList<>(cols);
+        for (int c = 0; c < cols; c++) {
+            titles.add("");
+        }
+        List<List<String>> src = rows != null ? rows : List.of();
+        if (kind == SheetKind.COMBINATIONS) {
+            List<String> header = headerRow(src);
+            for (int c = 0; c < cols && c < header.size(); c++) {
+                titles.set(c, header.get(c) != null ? header.get(c).strip() : "");
+            }
+            return List.copyOf(titles);
+        }
+        if (kind == SheetKind.SKILLS) {
+            titles.set(0, "メンバー");
+        } else {
+            titles.set(0, "項目");
+        }
+        if (kind == SheetKind.NEED) {
+            titles.set(1, "依頼NO条件");
+            if (cols > 2) {
+                titles.set(2, "備考");
+            }
+        }
+        int procRow = findFirstRowExact(src, "工程名");
+        int machRow = findFirstRowExact(src, "機械名");
+        if (procRow < 0) {
+            procRow = 0;
+        }
+        if (machRow < 0) {
+            machRow = src.size() > 1 ? 1 : -1;
+        }
+        int firstEq = kind == SheetKind.NEED || kind == SheetKind.SPEED ? 3 : 1;
+        for (int c = firstEq; c < cols; c++) {
+            String proc = cell(src, procRow, c);
+            String mach = machRow >= 0 ? cell(src, machRow, c) : "";
+            titles.set(c, equipmentColumnTitle(proc, mach));
+        }
+        return List.copyOf(titles);
+    }
+
+    public static List<Double> preferredColumnWidths(
+            List<List<String>> dataRows, int colCount, List<String> titles) {
+        List<Double> fromData = preferredColumnWidths(dataRows, colCount);
+        if (titles == null || titles.isEmpty()) {
+            return fromData;
+        }
+        List<Double> out = new ArrayList<>(fromData);
+        for (int c = 0; c < out.size() && c < titles.size(); c++) {
+            double tw = measureTextWidth(titles.get(c));
+            if (tw > 28.0) {
+                out.set(c, Math.min(COL_WIDTH_MAX, Math.max(out.get(c), Math.max(COL_WIDTH_MIN, tw))));
+            }
+        }
+        return List.copyOf(out);
+    }
+
+    static String equipmentColumnTitle(String process, String machine) {
+        String p = process != null ? process.strip() : "";
+        String m = machine != null ? machine.strip() : "";
+        if (!p.isEmpty() && !m.isEmpty()) {
+            return p + "\n" + m;
+        }
+        if (!p.isEmpty()) {
+            return p;
+        }
+        return m;
+    }
+
     public static String comboRowStyle(String process, String machine) {
         return comboRowStyle(process, machine, "");
     }
@@ -83,6 +153,15 @@ public final class MasterDispatchSheetEditRules {
                 + "; -fx-control-inner-background: "
                 + bg
                 + "; -fx-text-fill: #111111;";
+    }
+
+    public static boolean isColumnTitleSourceRow(
+            SheetKind kind, int dataRow, List<List<String>> rows) {
+        if (kind == SheetKind.COMBINATIONS) {
+            return dataRow == 0;
+        }
+        String a = cell(rows, dataRow, 0);
+        return "工程名".equals(a) || "機械名".equals(a);
     }
 
     public static boolean isEditable(SheetKind kind, int dataRow, int col, List<List<String>> rows) {
@@ -428,6 +507,18 @@ public final class MasterDispatchSheetEditRules {
         return rows.get(0);
     }
 
+    private static int findFirstRowExact(List<List<String>> rows, String label) {
+        if (rows == null || label == null) {
+            return -1;
+        }
+        for (int r = 0; r < rows.size(); r++) {
+            if (label.equals(cell(rows, r, 0))) {
+                return r;
+            }
+        }
+        return -1;
+    }
+
     private static int findFirstRowContaining(List<List<String>> rows, String... needles) {
         for (int r = 0; r < rows.size(); r++) {
             String a = cell(rows, r, 0);
@@ -520,11 +611,15 @@ public final class MasterDispatchSheetEditRules {
         if (raw == null || raw.isEmpty()) {
             return 0;
         }
-        double w = 28.0;
-        for (int i = 0; i < raw.length(); i++) {
-            w += raw.charAt(i) > 127 ? 14.0 : 8.0;
+        double best = 0;
+        for (String line : raw.split("\n", -1)) {
+            double w = 28.0;
+            for (int i = 0; i < line.length(); i++) {
+                w += line.charAt(i) > 127 ? 14.0 : 8.0;
+            }
+            best = Math.max(best, w);
         }
-        return w;
+        return best;
     }
 
     private static List<List<String>> copyRows(List<List<String>> rows) {

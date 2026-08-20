@@ -34,10 +34,9 @@ public final class MasterDispatchSheetGridSupport {
         int firstData = SpreadsheetTabularSupport.spreadsheetFirstDataRowIndex();
         int rc = firstData + Math.max(src.size(), 1) + MasterDispatchSheetEditRules.EXTRA_ROWS;
         GridBase grid = new GridBase(rc, cols);
+        List<String> titles = MasterDispatchSheetEditRules.columnTitles(sheet, src, cols);
         grid.getColumnHeaders().clear();
-        for (int c = 0; c < cols; c++) {
-            grid.getColumnHeaders().add(excelColumnLabel(c));
-        }
+        grid.getColumnHeaders().addAll(titles);
         List<ObservableList<SpreadsheetCell>> gridRows = new ArrayList<>(rc);
         ObservableList<SpreadsheetCell> filterRow = FXCollections.observableArrayList();
         for (int c = 0; c < cols; c++) {
@@ -64,8 +63,11 @@ public final class MasterDispatchSheetGridSupport {
             gridRows.add(rowCells);
         }
         grid.setRows(gridRows);
+        applyTitleRowHeights(grid, sheet);
         if (sheet == MasterDispatchSheetEditRules.SheetKind.COMBINATIONS) {
             wireCombinationLiveSync(grid);
+        } else {
+            wireEquipmentColumnTitles(grid, sheet);
         }
         return grid;
     }
@@ -97,17 +99,6 @@ public final class MasterDispatchSheetGridSupport {
         return MasterDispatchSheetEditRules.normalizeOnExtract(kind, trimmed);
     }
 
-    static String excelColumnLabel(int col0) {
-        StringBuilder sb = new StringBuilder();
-        int n = col0 + 1;
-        while (n > 0) {
-            n--;
-            sb.append((char) ('A' + (n % 26)));
-            n /= 26;
-        }
-        return sb.reverse().toString();
-    }
-
     private static SpreadsheetCell createCell(
             MasterDispatchSheetEditRules.SheetKind kind,
             List<List<String>> src,
@@ -127,6 +118,9 @@ public final class MasterDispatchSheetGridSupport {
         }
         cell.setEditable(MasterDispatchSheetEditRules.isEditable(kind, dataRow, col, src));
         cell.setStyle(cellStyle(kind, src, dataRow, col, raw));
+        if (MasterDispatchSheetEditRules.isColumnTitleSourceRow(kind, dataRow, src)) {
+            cell.setWrapText(true);
+        }
         return cell;
     }
 
@@ -185,6 +179,79 @@ public final class MasterDispatchSheetGridSupport {
             return List.of();
         }
         return src.get(0);
+    }
+
+    private static void applyTitleRowHeights(
+            GridBase grid, MasterDispatchSheetEditRules.SheetKind kind) {
+        int firstData = SpreadsheetTabularSupport.spreadsheetFirstDataRowIndex();
+        List<List<String>> snap = snapshotSkippingFilter(grid);
+        grid.setRowHeightCallback(
+                row -> {
+                    if (row == SpreadsheetTabularSupport.SPREADSHEET_FILTER_ROW) {
+                        return 26.0;
+                    }
+                    int dataRow = row - firstData;
+                    if (MasterDispatchSheetEditRules.isColumnTitleSourceRow(kind, dataRow, snap)) {
+                        return 42.0;
+                    }
+                    return 24.0;
+                });
+    }
+
+    private static void wireEquipmentColumnTitles(
+            GridBase grid, MasterDispatchSheetEditRules.SheetKind kind) {
+        int firstData = SpreadsheetTabularSupport.spreadsheetFirstDataRowIndex();
+        if (grid == null || grid.getRows() == null) {
+            return;
+        }
+        Runnable refresh = () -> refreshColumnTitles(grid, kind);
+        int limit = Math.min(grid.getRowCount(), firstData + 8);
+        for (int gridRow = firstData; gridRow < limit; gridRow++) {
+            ObservableList<SpreadsheetCell> row = grid.getRows().get(gridRow);
+            if (row == null || row.isEmpty()) {
+                continue;
+            }
+            String a = cellText(row, 0);
+            if (!"工程名".equals(a) && !"機械名".equals(a)) {
+                continue;
+            }
+            for (SpreadsheetCell cell : row) {
+                if (cell != null) {
+                    cell.itemProperty().addListener((obs, o, n) -> refresh.run());
+                }
+            }
+        }
+    }
+
+    private static void refreshColumnTitles(
+            GridBase grid, MasterDispatchSheetEditRules.SheetKind kind) {
+        List<String> titles =
+                MasterDispatchSheetEditRules.columnTitles(
+                        kind, snapshotSkippingFilter(grid), grid.getColumnCount());
+        ObservableList<String> headers = grid.getColumnHeaders();
+        for (int c = 0; c < titles.size() && c < headers.size(); c++) {
+            if (!titles.get(c).equals(headers.get(c))) {
+                headers.set(c, titles.get(c));
+            }
+        }
+    }
+
+    private static List<List<String>> snapshotSkippingFilter(GridBase grid) {
+        if (grid == null || grid.getRows() == null) {
+            return List.of();
+        }
+        int firstData = SpreadsheetTabularSupport.spreadsheetFirstDataRowIndex();
+        List<List<String>> out = new ArrayList<>();
+        for (int r = firstData; r < grid.getRowCount(); r++) {
+            ObservableList<SpreadsheetCell> row = grid.getRows().get(r);
+            List<String> cells = new ArrayList<>();
+            int cols = grid.getColumnCount();
+            for (int c = 0; c < cols; c++) {
+                cells.add(cellText(row, c));
+            }
+            out.add(cells);
+        }
+        return out;
     }
 
     private static void wireCombinationLiveSync(GridBase grid) {

@@ -27,17 +27,17 @@
     <center>
         <TabPane fx:id="innerTabPane" tabClosingPolicy="UNAVAILABLE">
             <tabs>
-                <Tab closable="false" text="skills">
+                <Tab closable="false" text="資格（skills）">
                     <content>
                         <StackPane fx:id="skillsHost"/>
                     </content>
                 </Tab>
-                <Tab closable="false" text="need">
+                <Tab closable="false" text="必要人数（need）">
                     <content>
                         <StackPane fx:id="needHost"/>
                     </content>
                 </Tab>
-                <Tab closable="false" text="speed">
+                <Tab closable="false" text="加工速度（speed）">
                     <content>
                         <StackPane fx:id="speedHost"/>
                     </content>

@@ -34,6 +34,52 @@ class MasterDispatchSheetEditRulesTest {
     }
 
     @Test
+    void columnTitles_skillsUseTwoLineProcessAndMachine() {
+        List<List<String>> rows =
+                List.of(
+                        List.of("工程名", "巻返し", "EC"),
+                        List.of("機械名", "機1", "EC機 湖南"));
+        List<String> titles =
+                MasterDispatchSheetEditRules.columnTitles(
+                        MasterDispatchSheetEditRules.SheetKind.SKILLS, rows, 4);
+        assertEquals("メンバー", titles.get(0));
+        assertEquals("巻返し\n機1", titles.get(1));
+        assertEquals("EC\nEC機 湖南", titles.get(2));
+        assertEquals("", titles.get(3));
+    }
+
+    @Test
+    void columnTitles_needUsesDetectedHeadersAndNeedLabels() {
+        List<List<String>> rows =
+                List.of(
+                        List.of("工程名", "", "", "巻返し"),
+                        List.of("機械名", "", "", "機1"),
+                        List.of("必須人数", "", "", "2"));
+        List<String> titles =
+                MasterDispatchSheetEditRules.columnTitles(
+                        MasterDispatchSheetEditRules.SheetKind.NEED, rows, 4);
+        assertEquals("項目", titles.get(0));
+        assertEquals("依頼NO条件", titles.get(1));
+        assertEquals("備考", titles.get(2));
+        assertEquals("巻返し\n機1", titles.get(3));
+    }
+
+    @Test
+    void columnTitles_combinationsUseFirstRow() {
+        List<List<String>> rows =
+                List.of(
+                        List.of("組み合わせ行ID", "工程名", "機械名", "工程+機械"),
+                        List.of("1", "巻返し", "機1", "巻返し+機1"));
+        List<String> titles =
+                MasterDispatchSheetEditRules.columnTitles(
+                        MasterDispatchSheetEditRules.SheetKind.COMBINATIONS, rows, 4);
+        assertEquals("組み合わせ行ID", titles.get(0));
+        assertEquals("工程名", titles.get(1));
+        assertEquals("機械名", titles.get(2));
+        assertEquals("工程+機械", titles.get(3));
+    }
+
+    @Test
     void comboRowStyle_sameEquipmentProcessKeyIsStable() {
         String a = MasterDispatchSheetEditRules.comboRowStyle("巻返し", "機1");
         String b = MasterDispatchSheetEditRules.comboRowStyle("巻返し", "機1");

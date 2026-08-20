@@ -229,9 +229,10 @@ public final class MasterDispatchSheetsTabController {
             int frozenDataHeaderRows,
             int leadingCols) {
         view.setGrid(MasterDispatchSheetGridSupport.buildEditable(kind, rows));
+        int colCount = view.getGrid() != null ? view.getGrid().getColumnCount() : 1;
+        List<String> titles = MasterDispatchSheetEditRules.columnTitles(kind, rows, colCount);
         List<Double> widths =
-                MasterDispatchSheetEditRules.preferredColumnWidths(
-                        rows, view.getGrid() != null ? view.getGrid().getColumnCount() : 1);
+                MasterDispatchSheetEditRules.preferredColumnWidths(rows, colCount, titles);
         Platform.runLater(
                 () -> applyMasterSheetChrome(view, widths, frozenDataHeaderRows, leadingCols));
     }

@@ -74,6 +74,13 @@ HorizontalHeaderColumn > TableColumnHeader.column-header.table-column {
     -fx-background-color: -fx-box-border, derive(-fx-base, 18%);
     -fx-text-fill: -fx-dark-text-color;
     -fx-background-insets: 0, 0 1 1 0, 1 2 2 1;
+    -fx-pref-height: 48;
+}
+
+HorizontalHeaderColumn > TableColumnHeader.column-header.table-column > .label {
+    -fx-wrap-text: true;
+    -fx-text-alignment: center;
+    -fx-padding: 4 6 4 6;
 }
 
 VerticalHeader > Label.selected {
