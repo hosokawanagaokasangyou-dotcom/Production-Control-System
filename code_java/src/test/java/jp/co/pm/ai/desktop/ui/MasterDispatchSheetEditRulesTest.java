@@ -80,6 +80,43 @@ class MasterDispatchSheetEditRulesTest {
     }
 
     @Test
+    void displayRows_omitDuplicatedTitleRows_andRestoreFromColumnTitles() {
+        List<List<String>> skills =
+                List.of(
+                        List.of("工程名", "巻返し"),
+                        List.of("機械名", "機1"),
+                        List.of("山田", "OP1"));
+        assertEquals(
+                List.of(List.of("山田", "OP1")),
+                MasterDispatchSheetEditRules.displayRows(
+                        MasterDispatchSheetEditRules.SheetKind.SKILLS, skills));
+        List<String> titles =
+                MasterDispatchSheetEditRules.columnTitles(
+                        MasterDispatchSheetEditRules.SheetKind.SKILLS, skills, 2);
+        assertEquals(
+                skills,
+                MasterDispatchSheetEditRules.restoreTitleRows(
+                        MasterDispatchSheetEditRules.SheetKind.SKILLS,
+                        titles,
+                        List.of(List.of("山田", "OP1"))));
+
+        List<List<String>> combo =
+                List.of(
+                        List.of("組み合わせ行ID", "工程名", "機械名", "工程+機械"),
+                        List.of("1", "巻返し", "機1", "巻返し+機1"));
+        assertEquals(
+                List.of(List.of("1", "巻返し", "機1", "巻返し+機1")),
+                MasterDispatchSheetEditRules.displayRows(
+                        MasterDispatchSheetEditRules.SheetKind.COMBINATIONS, combo));
+        assertEquals(
+                combo,
+                MasterDispatchSheetEditRules.restoreTitleRows(
+                        MasterDispatchSheetEditRules.SheetKind.COMBINATIONS,
+                        combo.get(0),
+                        List.of(List.of("1", "巻返し", "機1", "巻返し+機1"))));
+    }
+
+    @Test
     void comboRowStyle_sameEquipmentProcessKeyIsStable() {
         String a = MasterDispatchSheetEditRules.comboRowStyle("巻返し", "機1");
         String b = MasterDispatchSheetEditRules.comboRowStyle("巻返し", "機1");

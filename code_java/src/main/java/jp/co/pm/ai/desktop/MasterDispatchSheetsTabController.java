@@ -200,25 +200,25 @@ public final class MasterDispatchSheetsTabController {
                 skillsView,
                 MasterDispatchSheetEditRules.SheetKind.SKILLS,
                 d.sheet("skills").rows(),
-                2,
+                0,
                 1);
         attachGrid(
                 needView,
                 MasterDispatchSheetEditRules.SheetKind.NEED,
                 d.sheet("need").rows(),
-                2,
+                0,
                 3);
         attachGrid(
                 speedView,
                 MasterDispatchSheetEditRules.SheetKind.SPEED,
                 d.sheet("speed").rows(),
-                5,
+                0,
                 3);
         attachGrid(
                 comboView,
                 MasterDispatchSheetEditRules.SheetKind.COMBINATIONS,
                 d.sheet("teamCombinations").rows(),
-                1,
+                0,
                 4);
     }
 

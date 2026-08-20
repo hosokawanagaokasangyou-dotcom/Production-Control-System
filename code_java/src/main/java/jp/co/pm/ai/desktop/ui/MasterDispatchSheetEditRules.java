@@ -109,6 +109,60 @@ public final class MasterDispatchSheetEditRules {
         return List.copyOf(titles);
     }
 
+    public static List<List<String>> displayRows(SheetKind kind, List<List<String>> rows) {
+        List<List<String>> src = rows != null ? rows : List.of();
+        List<List<String>> out = new ArrayList<>();
+        for (int r = 0; r < src.size(); r++) {
+            if (isColumnTitleSourceRow(kind, r, src)) {
+                continue;
+            }
+            out.add(src.get(r));
+        }
+        return freeze(out);
+    }
+
+    public static List<List<String>> restoreTitleRows(
+            SheetKind kind, List<String> titles, List<List<String>> displayRows) {
+        List<List<String>> body = displayRows != null ? displayRows : List.of();
+        if (kind == SheetKind.COMBINATIONS) {
+            if (!body.isEmpty() && isColumnTitleSourceRow(kind, 0, body)) {
+                return copyRows(body);
+            }
+            if (titles == null || titles.isEmpty()) {
+                return copyRows(body);
+            }
+            List<List<String>> out = new ArrayList<>();
+            out.add(paddedRow(titles, titles.size()));
+            out.addAll(mutableCopy(body));
+            return freeze(out);
+        }
+        if (!body.isEmpty() && "工程名".equals(cell(body, 0, 0))) {
+            return copyRows(body);
+        }
+        int cols = Math.max(widthOf(body), titles != null ? titles.size() : 1);
+        int firstEq = kind == SheetKind.NEED || kind == SheetKind.SPEED ? 3 : 1;
+        List<String> proc = new ArrayList<>(cols);
+        List<String> mach = new ArrayList<>(cols);
+        proc.add("工程名");
+        mach.add("機械名");
+        for (int c = 1; c < cols; c++) {
+            if (c < firstEq) {
+                proc.add("");
+                mach.add("");
+                continue;
+            }
+            String title = titles != null && c < titles.size() ? titles.get(c) : "";
+            String[] pm = splitEquipmentTitle(title);
+            proc.add(pm[0]);
+            mach.add(pm[1]);
+        }
+        List<List<String>> out = new ArrayList<>();
+        out.add(proc);
+        out.add(mach);
+        out.addAll(mutableCopy(body));
+        return freeze(out);
+    }
+
     public static List<Double> preferredColumnWidths(
             List<List<String>> dataRows, int colCount, List<String> titles) {
         List<Double> fromData = preferredColumnWidths(dataRows, colCount);
@@ -137,6 +191,27 @@ public final class MasterDispatchSheetEditRules {
         return m;
     }
 
+    static String[] splitEquipmentTitle(String title) {
+        String t = title != null ? title.strip() : "";
+        if (t.isEmpty()) {
+            return new String[] {"", ""};
+        }
+        int nl = t.indexOf('\n');
+        if (nl < 0) {
+            return new String[] {t, ""};
+        }
+        return new String[] {t.substring(0, nl).strip(), t.substring(nl + 1).strip()};
+    }
+
+    private static List<String> paddedRow(List<String> src, int cols) {
+        List<String> row = new ArrayList<>(cols);
+        for (int c = 0; c < cols; c++) {
+            String v = src != null && c < src.size() && src.get(c) != null ? src.get(c) : "";
+            row.add(v);
+        }
+        return row;
+    }
+
     public static String comboRowStyle(String process, String machine) {
         return comboRowStyle(process, machine, "");
     }
@@ -158,22 +233,33 @@ public final class MasterDispatchSheetEditRules {
     public static boolean isColumnTitleSourceRow(
             SheetKind kind, int dataRow, List<List<String>> rows) {
         if (kind == SheetKind.COMBINATIONS) {
-            return dataRow == 0;
+            String a = cell(rows, dataRow, 0);
+            return "組み合わせ行ID".equals(a) || "組合せ行ID".equals(a) || "インデックス".equals(a);
         }
         String a = cell(rows, dataRow, 0);
         return "工程名".equals(a) || "機械名".equals(a);
     }
 
     public static boolean isEditable(SheetKind kind, int dataRow, int col, List<List<String>> rows) {
+        return isEditable(kind, dataRow, col, rows, rows);
+    }
+
+    public static boolean isEditable(
+            SheetKind kind,
+            int dataRow,
+            int col,
+            List<List<String>> displayRows,
+            List<List<String>> originalRows) {
         if (kind == null || dataRow < 0 || col < 0) {
             return false;
         }
-        List<List<String>> src = rows != null ? rows : List.of();
+        List<List<String>> display = displayRows != null ? displayRows : List.of();
+        List<List<String>> original = originalRows != null ? originalRows : display;
         return switch (kind) {
-            case SKILLS -> isSkillsEditable(dataRow, col);
-            case NEED -> isNeedEditable(dataRow, col, src);
-            case SPEED -> isSpeedEditable(dataRow, col, src);
-            case COMBINATIONS -> isCombinationsEditable(dataRow, col, src);
+            case SKILLS -> isSkillsEditable(dataRow, col, display);
+            case NEED -> isNeedEditable(dataRow, col, display);
+            case SPEED -> isSpeedEditable(dataRow, col, display);
+            case COMBINATIONS -> isCombinationsEditable(dataRow, col, display, original);
         };
     }
 
@@ -205,7 +291,10 @@ public final class MasterDispatchSheetEditRules {
             return false;
         }
         return switch (kind) {
-            case SKILLS -> dataRow >= 2 && col >= 1 && parseOpAs(v) == null;
+            case SKILLS ->
+                    col >= 1
+                            && !isColumnTitleSourceRow(kind, dataRow, rows)
+                            && parseOpAs(v) == null;
             case NEED -> isNeedValueInvalid(dataRow, col, rows, v);
             case SPEED -> isSpeedNumericCell(dataRow, col, rows) && !isPositiveNumber(v);
             case COMBINATIONS -> isCombinationsNumericInvalid(dataRow, col, rows, v);
@@ -252,11 +341,8 @@ public final class MasterDispatchSheetEditRules {
         return row.get(c).strip();
     }
 
-    private static boolean isSkillsEditable(int dataRow, int col) {
-        if (dataRow <= 1 && col == 0) {
-            return false;
-        }
-        return true;
+    private static boolean isSkillsEditable(int dataRow, int col, List<List<String>> rows) {
+        return col != 0 || !isColumnTitleSourceRow(SheetKind.SKILLS, dataRow, rows);
     }
 
     private static boolean isNeedEditable(int dataRow, int col, List<List<String>> rows) {
@@ -273,11 +359,12 @@ public final class MasterDispatchSheetEditRules {
         return true;
     }
 
-    private static boolean isCombinationsEditable(int dataRow, int col, List<List<String>> rows) {
-        if (dataRow == 0) {
+    private static boolean isCombinationsEditable(
+            int dataRow, int col, List<List<String>> display, List<List<String>> original) {
+        if (isColumnTitleSourceRow(SheetKind.COMBINATIONS, dataRow, display)) {
             return false;
         }
-        int comboCol = headerIndex(headerRow(rows), "工程+機械", "工程＋機械");
+        int comboCol = headerIndex(headerRow(original), "工程+機械", "工程＋機械");
         return comboCol < 0 || col != comboCol;
     }
 
@@ -434,12 +521,12 @@ public final class MasterDispatchSheetEditRules {
         if (a.contains("基本速度") || a.contains("実稼働比率")) {
             return true;
         }
-        return dataRow == 3 || dataRow == 4;
+        return findFirstRowExact(rows, "工程名") == 0 && (dataRow == 3 || dataRow == 4);
     }
 
     private static boolean isCombinationsNumericInvalid(
             int dataRow, int col, List<List<String>> rows, String v) {
-        if (dataRow == 0) {
+        if (isColumnTitleSourceRow(SheetKind.COMBINATIONS, dataRow, rows)) {
             return false;
         }
         List<String> header = headerRow(rows);
