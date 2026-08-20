@@ -2815,6 +2815,7 @@ def build_actual_timeline_events(
     bad_time = 0
     no_plan_overlap = 0
     mismatch_norm_samples = []
+    mismatch_skipped_labels = []
 
     for _, row in df.iterrows():
         tid = row.get(ACT_COL_TASK_ID)
@@ -2840,6 +2841,10 @@ def build_actual_timeline_events(
             if len(mismatch_norm_samples) < 12 and proc_key:
                 if proc_key not in mismatch_norm_samples:
                     mismatch_norm_samples.append(proc_key)
+            proc_shown = proc_key or str(proc).strip()
+            mismatch_skipped_labels.append(
+                f"依頼NO={display_tid} 工程名={proc_shown}"
+            )
             continue
         start_dt, end_dt = _actual_row_time_bounds(row)
         if not start_dt or not end_dt or start_dt >= end_dt:
@@ -2989,6 +2994,15 @@ def build_actual_timeline_events(
         logging.warning(
             f"{log_sheet_name}: 工程名はマスタ設備と一致しない行を {bad_eq} 件スキップしました（空白等は正規化済み）。"
         )
+        _max_show = 80
+        shown = mismatch_skipped_labels[:_max_show]
+        extra = ""
+        if len(mismatch_skipped_labels) > _max_show:
+            extra = f" …他 {len(mismatch_skipped_labels) - _max_show} 件"
+        if shown:
+            logging.warning(
+                f"{log_sheet_name}: ガント非表示: " + " | ".join(shown) + extra
+            )
         if mismatch_norm_samples:
             logging.info(
                 "  厳密一致となった工程名の正規化後サンプル: "
