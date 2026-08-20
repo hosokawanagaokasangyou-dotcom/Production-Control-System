@@ -2263,10 +2263,6 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
             }
             ObservableList<String> items = listView.getItems();
             updateComboChoiceListViewHeight(listView, items != null ? items.size() : 0);
-            if (items != null) {
-                listView.setItems(null);
-                listView.setItems(items);
-            }
             listView.refresh();
         }
     }
@@ -2365,25 +2361,38 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                 masterProductList, List.copyOf(optMasterCandidatePrefixRaw));
     }
 
+    /**
+     * 行 ComboBox は {@code new ComboBox<>(optXxx)} で候補リストを共有している。
+     * {@code combo.getItems().setAll(optXxx)} は同一リストへの {@code setAll} になり、
+     * JavaFX が先に clear してから addAll するため候補が空になる。
+     */
+    static void bindSharedComboBoxItems(ComboBox<String> combo, ObservableList<String> source) {
+        if (combo == null || source == null) {
+            return;
+        }
+        if (combo.getItems() != source) {
+            combo.setItems(source);
+        }
+    }
+
+    /** 同一参照なら何もしない。異なるリストなら内容をコピーする。 */
+    static void replaceItemsUnlessSameList(
+            ObservableList<String> target, ObservableList<String> source) {
+        if (target == null || source == null || target == source) {
+            return;
+        }
+        target.setAll(source);
+    }
+
     private void refreshDynamicRowComboItems() {
         for (ProductRow pRow : productRows) {
-            if (pRow.cmbEcSide != null) {
-                pRow.cmbEcSide.getItems().setAll(optEcSide);
-            }
-            if (pRow.cmbTrimming != null) {
-                pRow.cmbTrimming.getItems().setAll(optTrimming);
-            }
+            bindSharedComboBoxItems(pRow.cmbEcSide, optEcSide);
+            bindSharedComboBoxItems(pRow.cmbTrimming, optTrimming);
         }
         for (RawMaterialRow rRow : rawRows) {
-            if (rRow.cmbWariSu != null) {
-                rRow.cmbWariSu.getItems().setAll(optWariSu);
-            }
-            if (rRow.cmbFeedLoc != null) {
-                rRow.cmbFeedLoc.getItems().setAll(optFeedLoc);
-            }
-            if (rRow.cmbStorageLoc != null) {
-                rRow.cmbStorageLoc.getItems().setAll(optStorageLoc);
-            }
+            bindSharedComboBoxItems(rRow.cmbWariSu, optWariSu);
+            bindSharedComboBoxItems(rRow.cmbFeedLoc, optFeedLoc);
+            bindSharedComboBoxItems(rRow.cmbStorageLoc, optStorageLoc);
         }
     }
 
