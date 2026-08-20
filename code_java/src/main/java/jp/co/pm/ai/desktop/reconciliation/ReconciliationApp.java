@@ -58,6 +58,7 @@ import jp.co.pm.ai.desktop.io.PoiWorkbookOpener;
 import jp.co.pm.ai.desktop.io.PoiWorkbookSaver;
 import jp.co.pm.ai.desktop.io.RequestFormJuchuFileBackupStore;
 import jp.co.pm.ai.desktop.ui.ComboBoxPopupRightAlign;
+import jp.co.pm.ai.desktop.ui.DatePickerPopupAbove;
 import jp.co.pm.ai.desktop.ui.PersonBadgeNodeFactory;
 
 public class ReconciliationApp {
@@ -7482,6 +7483,9 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
 
     private static void addFormField(
             GridPane grid, Node field, int col, int row, int colSpan, int rowSpan) {
+        if (field instanceof DatePicker datePicker) {
+            DatePickerPopupAbove.install(datePicker);
+        }
         if (field instanceof Region region) {
             region.setMaxWidth(Double.MAX_VALUE);
         }
