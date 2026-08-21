@@ -222,12 +222,6 @@
                         <fx:include fx:id="resultDispatchTableTab" source="ResultDispatchTableTab.fxml"/>
                     </content>
                 </Tab>
-                <Tab fx:id="mainShellTabDispatchInteractive" closable="false"
-                     text="配台計画手動修正">
-                    <content>
-                        <fx:include fx:id="dispatchInteractiveTab" source="DispatchInteractiveTab.fxml"/>
-                    </content>
-                </Tab>
                 <Tab fx:id="mainShellTabPlanResultViewer" closable="false"
                      text="計画結果">
                     <content>

@@ -51,7 +51,6 @@ public enum MainShellTabId {
     /** 依頼書プレビュー・原本更新バッジのデザイン。 */
     REQUEST_FORM_PREVIEW_BADGE_DESIGN("requestFormPreviewBadgeDesign"),
     OPERATOR_CARD("operatorCard"),
-    DISPATCH_INTERACTIVE("dispatchInteractive"),
     /** 配台ワークスペースのスナップショット履歴（結果 JSON・ガント表示・列順の復元）。 */
     PLAN_WORKSPACE_HISTORY("planWorkspaceHistory"),
     /** 段階1キャッシュ等の退避履歴（クリア前退避・復元）。 */

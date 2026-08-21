@@ -183,6 +183,7 @@ import jp.co.pm.ai.desktop.runtime.MemoryJvmRingLog;
 import jp.co.pm.ai.desktop.dispatch.RawInputMorningDispatchRateAnalyzer;
 import jp.co.pm.ai.desktop.dispatch.RawInputMorningDispatchRateWarning;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchDocument;
+import jp.co.pm.ai.desktop.dispatch.ResultDispatchJsonIo;
 import jp.co.pm.ai.desktop.io.Stage2EquipmentGanttContractPaths;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchPythonExport;
 import jp.co.pm.ai.desktop.io.DesktopFileOpener;
@@ -463,9 +464,6 @@ public final class MainShellController
     private ResultDispatchTableTabController resultDispatchTableTabController;
 
     @FXML
-    private DispatchInteractiveTabController dispatchInteractiveTabController;
-
-    @FXML
     private PlanResultViewerTabController planResultViewerTabController;
 
     @FXML
@@ -586,9 +584,6 @@ public final class MainShellController
 
     @FXML
     private Tab mainShellTabResultDispatch;
-
-    @FXML
-    private Tab mainShellTabDispatchInteractive;
 
     @FXML
     private Tab mainShellTabPlanResultViewer;
@@ -940,7 +935,6 @@ public final class MainShellController
         }
         deliveryCalendarViewTabController.bindShell(this);
         resultDispatchTableTabController.bindShell(this);
-        dispatchInteractiveTabController.bindShell(this);
         if (planWorkspaceHistoryTabController != null) {
             planWorkspaceHistoryTabController.bindShell(this);
         }
@@ -1056,10 +1050,6 @@ public final class MainShellController
                                                 refreshMainShellTabHeaderChromeFromStoredColors();
                                                 scheduleEquipmentStatusDashboardInitialReloadIfSelected();
                                                 scheduleRequestFormPipelineCheckInitialRefreshIfSelected();
-                                                if (dispatchInteractiveTabController != null) {
-                                                    dispatchInteractiveTabController
-                                                            .scheduleInitialReloadAfterMainWindowShown();
-                                                }
                                             }));
                 });
 
@@ -1192,10 +1182,6 @@ public final class MainShellController
                             if (newTab == mainShellTabPipelineExecutionTiming
                                     && pipelineExecutionTimingTabController != null) {
                                 pipelineExecutionTimingTabController.refreshFromStore();
-                            }
-                            if (newTab == mainShellTabDispatchInteractive
-                                    && dispatchInteractiveTabController != null) {
-                                dispatchInteractiveTabController.onMainShellDispatchTabSelected();
                             }
                             if (newTab == mainShellTabOrganizer
                                     && mainShellTabOrganizerPaneController != null) {
@@ -1855,9 +1841,18 @@ public final class MainShellController
 
     /** 配台ワークスペース用スナップショットに書き出す現在の配台表ドキュメント（未初期化時は {@code null}）。 */
     public ResultDispatchDocument snapshotDispatchDocumentForPlanWorkspace() {
-        return dispatchInteractiveTabController != null
-                ? dispatchInteractiveTabController.copyDispatchDocumentForSnapshot()
-                : null;
+        Path json = AppPaths.resolveResultDispatchTableJsonPath(collectUiEnv());
+        if (json == null || !Files.isRegularFile(json)) {
+            return null;
+        }
+        try {
+            return ResultDispatchJsonIo.read(json);
+        } catch (Exception ex) {
+            appendLog(
+                    "[plan-workspace-snapshot] 結果_配台表 JSON の読込に失敗: "
+                            + (ex.getMessage() != null ? ex.getMessage() : ex));
+            return null;
+        }
     }
 
     /**
@@ -1877,9 +1872,6 @@ public final class MainShellController
             appendLog(line);
         }
         appendLog("[cache-archive] キャッシュを復元しました（履歴 ID: " + entry.id() + "）。");
-        if (dispatchInteractiveTabController != null) {
-            dispatchInteractiveTabController.reloadTableFromDiskAfterExternalUpdate();
-        }
         if (resultDispatchTableTabController != null) {
             resultDispatchTableTabController.reloadResultDispatchTableFromDisk();
         }
@@ -1913,9 +1905,6 @@ public final class MainShellController
         PlanWorkspaceSessionFragment frag = PlanWorkspaceSnapshotStore.readSessionFragment(entry);
         DesktopSessionState merged = frag.mergeOnto(collectDesktopSession());
         applyDesktopSession(merged, false, true, false);
-        if (dispatchInteractiveTabController != null) {
-            dispatchInteractiveTabController.reloadTableFromDiskAfterExternalUpdate();
-        }
         if (resultDispatchTableTabController != null) {
             resultDispatchTableTabController.reloadResultDispatchTableFromDisk();
         }
@@ -2484,9 +2473,6 @@ public final class MainShellController
         if (t == mainShellTabResultDispatch) {
             return MainShellTabId.RESULT_DISPATCH;
         }
-        if (t == mainShellTabDispatchInteractive) {
-            return MainShellTabId.DISPATCH_INTERACTIVE;
-        }
         if (t == mainShellTabPlanWorkspaceHistory) {
             return MainShellTabId.PLAN_WORKSPACE_HISTORY;
         }
@@ -2555,7 +2541,6 @@ public final class MainShellController
             case DAILY_REPORT_CSV_VIEW -> mainShellTabDailyReportCsvView;
             case DELIVERY_CALENDAR_VIEW -> mainShellTabDeliveryCalendar;
             case RESULT_DISPATCH -> mainShellTabResultDispatch;
-            case DISPATCH_INTERACTIVE -> mainShellTabDispatchInteractive;
             case PLAN_WORKSPACE_HISTORY -> mainShellTabPlanWorkspaceHistory;
             case CACHE_HISTORY -> mainShellTabCacheHistory;
             case OPERATOR_ACTION_LOG -> mainShellTabOperatorActionLog;
@@ -2913,12 +2898,6 @@ public final class MainShellController
                 m.put(MainShellTabId.DELIVERY_CALENDAR_VIEW.key(), i);
             }
         }
-        if (dispatchInteractiveTabController != null) {
-            int i = dispatchInteractiveTabController.snapshotInnerTabSelectedIndex();
-            if (i >= 0) {
-                m.put(MainShellTabId.DISPATCH_INTERACTIVE.key(), i);
-            }
-        }
         if (codeDispatchLookupTablesTabController != null) {
             int i = codeDispatchLookupTablesTabController.snapshotInnerTabSelectedIndex();
             if (i >= 0) {
@@ -2937,10 +2916,6 @@ public final class MainShellController
                     Integer dc = map.get(MainShellTabId.DELIVERY_CALENDAR_VIEW.key());
                     if (dc != null && deliveryCalendarViewTabController != null) {
                         deliveryCalendarViewTabController.applyInnerTabSelectedIndex(dc.intValue());
-                    }
-                    Integer di = map.get(MainShellTabId.DISPATCH_INTERACTIVE.key());
-                    if (di != null && dispatchInteractiveTabController != null) {
-                        dispatchInteractiveTabController.applyInnerTabSelectedIndex(di.intValue());
                     }
                     Integer lk = map.get(MainShellTabId.CODE_LOOKUP_TABLES.key());
                     if (lk != null && codeDispatchLookupTablesTabController != null) {
@@ -3268,51 +3243,6 @@ public final class MainShellController
         placeholder.setPrefSize(0, 0);
         placeholder.getProperties().put(PM_LAZY_TAB_PLACEHOLDER, Boolean.TRUE);
         tab.setContent(placeholder);
-    }
-
-    /**
-     * 配台計画手動修正タブで {@link SpreadsheetView#setGrid} する直前に呼ぶ。メインシェル遅延ロードで
-     * プレースホルダに差し替えられていると、再構築しても画面に反映されない。
-     */
-    void ensureDispatchInteractiveReadyForGridRebuild() {
-        if (mainShellTabDispatchInteractive == null) {
-            return;
-        }
-        boolean prev = suppressLazyMainShellTabContentSwap.get();
-        suppressLazyMainShellTabContentSwap.set(true);
-        try {
-            restoreDeferredTabContent(mainShellTabDispatchInteractive);
-            if (dispatchInteractiveTabController != null) {
-                dispatchInteractiveTabController.ensureInnerTabsMaterializedForRebuild();
-            }
-        } finally {
-            suppressLazyMainShellTabContentSwap.set(prev);
-        }
-    }
-
-    /**
-     * 配台 Spreadsheet をシーングラフ上に載せてから {@code setGrid} する。未選択タブのコンテンツは
-     * {@link javafx.scene.Node#getScene()} が null のままになり、オフシーンでの再構築は空表示・IOOBE の原因になる。
-     *
-     * @param forceSelectTab {@code true} のとき配台タブが未選択なら選択する（手動「再読み」向け）
-     */
-    void ensureDispatchInteractiveOnSceneForGridRebuild(boolean forceSelectTab) {
-        ensureDispatchInteractiveReadyForGridRebuild();
-        if (mainShellTabDispatchInteractive == null || tabPane == null) {
-            return;
-        }
-        Tab effective = resolveEffectiveLeafTab(tabPane.getSelectionModel().getSelectedItem());
-        if (effective != mainShellTabDispatchInteractive && forceSelectTab) {
-            selectMainShellTab(MainShellTabId.DISPATCH_INTERACTIVE);
-        }
-        boolean prev = suppressLazyMainShellTabContentSwap.get();
-        suppressLazyMainShellTabContentSwap.set(true);
-        try {
-            activateMainShellTabHeavyContentRecursive(mainShellTabDispatchInteractive);
-            ensureDispatchInteractiveReadyForGridRebuild();
-        } finally {
-            suppressLazyMainShellTabContentSwap.set(prev);
-        }
     }
 
     void restoreDeferredTabContent(Tab tab) {
@@ -4568,9 +4498,6 @@ public final class MainShellController
                 && equipmentGanttGraphicTabController != null) {
             equipmentGanttGraphicTabController.flushPendingGraphicRebuildAfterSessionApply();
         }
-        if (effective == mainShellTabDispatchInteractive && dispatchInteractiveTabController != null) {
-            dispatchInteractiveTabController.onMainShellDispatchTabSelected();
-        }
     }
 
     private void refreshFactoryRequestFormTab(boolean lightweight) {
@@ -5735,15 +5662,6 @@ public final class MainShellController
             }
         }
         mainRunTabController.beginLogTailFollowForRun();
-        if (STAGE2.equals(script) && dispatchInteractiveTabController != null) {
-            Runnable clearDispatch =
-                    () -> dispatchInteractiveTabController.resetTableDisplayForStage2Run();
-            if (Platform.isFxApplicationThread()) {
-                clearDispatch.run();
-            } else {
-                Platform.runLater(clearDispatch);
-            }
-        }
         try {
             Map<String, String> uiRun = collectUiEnv();
             if (STAGE1.equals(script) || STAGE2.equals(script) || STAGE2_1.equals(script)) {
@@ -5992,9 +5910,6 @@ public final class MainShellController
                     () -> {
                         endStageRunBusyDialog();
                         applyRunTabGating();
-                        if (stage2 && dispatchInteractiveTabController != null) {
-                            dispatchInteractiveTabController.reloadTableFromDiskAfterExternalUpdate();
-                        }
                         if (stage1) {
                             mainRunTabController.resetDevCheckboxesAfterStage1Run();
                         }
@@ -6028,12 +5943,6 @@ public final class MainShellController
             appendLog(
                     "[end] exceptional exit: "
                             + (err.getMessage() != null ? err.getMessage() : err.toString()));
-            if (STAGE2.equals(script) && dispatchInteractiveTabController != null) {
-                dispatchInteractiveTabController.reloadTableFromDiskAfterExternalUpdate();
-            }
-            if (STAGE2_1.equals(script) && dispatchInteractiveTabController != null) {
-                dispatchInteractiveTabController.reloadTableFromDiskAfterExternalUpdate();
-            }
         } else {
             int c = code != null ? code : -1;
             mainRunTabController.getStatusLabel().setText(exitCodeLegend(c));
@@ -6112,8 +6021,8 @@ public final class MainShellController
                             () -> {
                                 refreshEquipmentGanttGraphicAfterPipelineRun();
                                 refreshOperatorCardAfterPipelineRun();
-                                if (dispatchInteractiveTabController != null) {
-                                    dispatchInteractiveTabController.reloadSpecialRuleBadges();
+                                if (resultDispatchTableTabController != null) {
+                                    resultDispatchTableTabController.reloadResultDispatchTableFromDisk();
                                 }
                                 Runnable afterDispatchReload =
                                         () -> {
@@ -6179,19 +6088,12 @@ public final class MainShellController
                                                 afterDeliveryCalendarReload.run();
                                             }
                                         };
-                                if (dispatchInteractiveTabController != null) {
-                                    dispatchInteractiveTabController.reloadTableFromDiskAfterStage2Success(
-                                            afterDispatchReload);
-                                } else {
-                                    afterDispatchReload.run();
-                                }
+                                afterDispatchReload.run();
                                 if (specialRulesTabController != null) {
                                     specialRulesTabController.reloadTraceFromDisk();
                                 }
                             });
                     // サマリ xlsx は段階2 exit 0 直後には作らない。納期管理ビュー再読込完了後に出力する。
-                } else if (dispatchInteractiveTabController != null) {
-                    dispatchInteractiveTabController.reloadTableFromDiskAfterExternalUpdate();
                 }
             }
             if (STAGE2_1.equals(script)) {
@@ -6220,23 +6122,15 @@ public final class MainShellController
                                                     : overtimeJson;
                                     java.nio.file.Path stage21Json =
                                             AppPaths.resolveStage21ResultDispatchJsonPath(ui);
-                                    if (dispatchInteractiveTabController != null) {
-                                        dispatchInteractiveTabController
-                                                .finalizeStage21PromotedWithComparisonAfterRunSuccess(
-                                                        mainJson,
-                                                        stage21Json,
-                                                        overridesForMeta);
-                                    } else {
-                                        jp.co.pm.ai.desktop.dispatch.Stage21TrialSnapshotStore
-                                                .writePromotedWithComparison(
-                                                        mainJson,
-                                                        java.util.Map.of(),
-                                                        stage21Json,
-                                                        overridesForMeta,
-                                                        jp.co.pm.ai.desktop.dispatch
-                                                                .OvertimeSimulationOverridesReader
-                                                                .summarize(overridesForMeta));
-                                    }
+                                    jp.co.pm.ai.desktop.dispatch.Stage21TrialSnapshotStore
+                                            .writePromotedWithComparison(
+                                                    mainJson,
+                                                    java.util.Map.of(),
+                                                    stage21Json,
+                                                    overridesForMeta,
+                                                    jp.co.pm.ai.desktop.dispatch
+                                                            .OvertimeSimulationOverridesReader
+                                                            .summarize(overridesForMeta));
                                     refreshStage2OutputArtifacts();
                                     if (promoted.mainPlanJson() != null
                                             && equipmentGanttGraphicTabController != null) {
@@ -6246,15 +6140,10 @@ public final class MainShellController
                                         refreshEquipmentGanttGraphicAfterPipelineRun();
                                     }
                                     refreshOperatorCardAfterPipelineRun();
-                                    if (dispatchInteractiveTabController != null) {
-                                        dispatchInteractiveTabController
-                                                .reloadTableFromDiskAfterStage21PromotedSuccess(
-                                                        () ->
-                                                                notifyStage21OvertimeSimulationSuccess(
-                                                                        promoted));
-                                    } else {
-                                        notifyStage21OvertimeSimulationSuccess(promoted);
+                                    if (resultDispatchTableTabController != null) {
+                                        resultDispatchTableTabController.reloadResultDispatchTableFromDisk();
                                     }
+                                    notifyStage21OvertimeSimulationSuccess(promoted);
                                 } catch (Exception ex) {
                                     appendLog(
                                             "[stage2.1] 正本への反映に失敗: "
@@ -6268,14 +6157,8 @@ public final class MainShellController
                                                             ? ex.getMessage()
                                                             : ex.toString())
                                                     + "\n\noutput/stage21/ の成果物を手動で確認してください。");
-                                    if (dispatchInteractiveTabController != null) {
-                                        dispatchInteractiveTabController
-                                                .reloadTableFromDiskAfterExternalUpdate();
-                                    }
                                 }
                             });
-                } else if (dispatchInteractiveTabController != null) {
-                    dispatchInteractiveTabController.reloadTableFromDiskAfterExternalUpdate();
                 }
             }
         }
@@ -6422,9 +6305,6 @@ public final class MainShellController
         boolean pipelineBusy = stageScriptRunning || dispatchTrialBusy || sourceGuardBusy;
         if (mainRunTabController != null) {
             mainRunTabController.setStageRunProgressVisible(stage1Running, pipelineBusy);
-        }
-        if (dispatchInteractiveTabController != null) {
-            dispatchInteractiveTabController.setStageRunProgressVisible(stage1Running, pipelineBusy);
         }
         if (planInputTabController != null) {
             planInputTabController.setStageRunProgressVisible(stage1Running, pipelineBusy);
@@ -6828,8 +6708,7 @@ public final class MainShellController
 
     /**
      * メインウィンドウ上部ツールバーに段階1/2／配台試行 実行中を表示する。
-     * プログレスは {@link DispatchInteractiveTabController} の「機械 JSON 再読み」と同じ
-     * {@link ProgressIndicator}（22×22）+ {@link ProgressBar}（prefWidth 220・不定）の組み合わせ。
+     * プログレスは {@link ProgressIndicator}（22×22）+ {@link ProgressBar}（prefWidth 220・不定）の組み合わせ。
      */
     private void updateShellStageProgressOverlay(
             String script, PipelineExecutionTimingKind dispatchTrialKind) {
@@ -6995,7 +6874,7 @@ public final class MainShellController
         appendLog("[end] 配台試行 正常終了");
         refreshOperatorCardAfterPipelineRun();
         MacroCompleteChime.playIfAvailable(collectUiEnv());
-        selectMainShellTab(MainShellTabId.DISPATCH_INTERACTIVE);
+        selectMainShellTab(MainShellTabId.DELIVERY_CALENDAR_VIEW);
         showStageCompletionDialog("配台試行 完了", "配台試行の処理が正常終了しました。");
     }
 
@@ -8384,9 +8263,6 @@ public final class MainShellController
         if (planInputTabController != null) {
             planInputTabController.setDeliveryCalendarReloadBlocking(blocking);
         }
-        if (dispatchInteractiveTabController != null) {
-            dispatchInteractiveTabController.setDeliveryCalendarReloadBlocking(blocking);
-        }
     }
 
     boolean isDeliveryCalendarReloadBlockingStageRuns() {
@@ -8480,11 +8356,6 @@ public final class MainShellController
         String p = productionPlanPath != null ? productionPlanPath : "";
         String m = memberSchedulePath != null ? memberSchedulePath : "";
         equipmentGanttGraphicTabController.tryAutofillJsonFromStage2Xlsx(p, m);
-    }
-
-    /** 配台計画手動修正タブへ切り替える。 */
-    public void navigateDispatchInteractiveTab() {
-        selectMainShellTab(MainShellTabId.DISPATCH_INTERACTIVE);
     }
 
     /** {@link AppPaths#defaultPlanningOutputDir} を OS のファイルマネージャで開く。 */
@@ -9382,7 +9253,7 @@ public final class MainShellController
             jp.co.pm.ai.desktop.dispatch.Stage21OutputPromoter.Result promoted) {
         appendLog("[end] 段階2.1（残業/休出シミュ）正常終了");
         MacroCompleteChime.playIfAvailable(collectUiEnv());
-        selectMainShellTab(MainShellTabId.DISPATCH_INTERACTIVE);
+        selectMainShellTab(MainShellTabId.DELIVERY_CALENDAR_VIEW);
         java.nio.file.Path jsonPath =
                 AppPaths.resolveResultDispatchTableJsonPath(collectUiEnv());
         jp.co.pm.ai.desktop.dispatch.Stage21TrialSnapshotStore.Stage21TrialMeta meta =
@@ -9399,8 +9270,7 @@ public final class MainShellController
             if (promoted.mainDispatchJson() != null) {
                 body.append("\n配台表: ").append(promoted.mainDispatchJson());
             }
-            body.append(
-                    "\n配台計画手動修正タブで (段階2後) と (段階2.1後) を比較できます。");
+            body.append("\n納期管理ビューの配台結果で確認できます。");
         } else {
             body.append("\nメイン output（結果_配台表.json・計画 JSON 等）へ正本反映済みです。");
         }
@@ -9463,8 +9333,8 @@ public final class MainShellController
 
     /** 段階1開始時: 段階2〜段階2.1 成果物削除後に関連タブの表示を初期化する。 */
     private void syncUiAfterDownstreamPipelineResultsCleared() {
-        if (dispatchInteractiveTabController != null) {
-            dispatchInteractiveTabController.resetTableDisplayForStage2Run();
+        if (resultDispatchTableTabController != null) {
+            resultDispatchTableTabController.reloadResultDispatchTableFromDisk();
         }
         if (mainRunTabController != null) {
             mainRunTabController.setStage2ArtifactPaths("", "");
@@ -9479,24 +9349,6 @@ public final class MainShellController
 
     void acceptReloadAfterStage1Preview(Runnable r) {
         this.reloadAfterStage1Preview = r;
-    }
-
-    /** 手動修正タブの未保存状態をタスク入力の段階2ボタンへ反映する（起動時・bind 直後用）。 */
-    void syncPlanInputStage2ButtonFromDispatchDirty() {
-        boolean dirty =
-                dispatchInteractiveTabController != null
-                        && dispatchInteractiveTabController.isDispatchDocDirtySinceSave();
-        onDispatchInteractiveTableDirtyChanged(dirty);
-    }
-
-    void onDispatchInteractiveTableDirtyChanged(boolean dispatchTableDirty) {
-        if (lastDispatchTableDirty != dispatchTableDirty) {
-            dispatchTableDirtyGeneration++;
-            lastDispatchTableDirty = dispatchTableDirty;
-        }
-        if (planInputTabController != null) {
-            planInputTabController.setStage2BlockedByUnsavedDispatchEdit(dispatchTableDirty);
-        }
     }
 
     void triggerStage1() {
@@ -9732,9 +9584,8 @@ public final class MainShellController
                 planInputTabController != null
                         ? planInputTabController.snapshotPlanInputDirtyGeneration()
                         : 0L,
-                dispatchInteractiveTabController != null
-                        && dispatchInteractiveTabController.isDispatchDocDirtySinceSave(),
-                dispatchTableDirtyGeneration,
+                false,
+                0L,
                 runLock.get(),
                 environment);
     }
@@ -9860,12 +9711,6 @@ public final class MainShellController
             return;
         }
         if (blockIfMaterialLookupTablesHaveBlankValues("段階2")) {
-            return;
-        }
-        if (dispatchInteractiveTabController != null
-                && dispatchInteractiveTabController.isDispatchDocDirtySinceSave()) {
-            appendLog(
-                    "[stage2] 配台計画手動修正に未保存の変更があります。JSON を「保存」するか「再読み」後に実行してください。");
             return;
         }
         if (planInputTabController != null
@@ -10051,15 +9896,6 @@ public final class MainShellController
                     "配台計画_タスク入力タブの変更を「保存」または「再読み」で確定してから段階2.1 を実行してください。");
             return;
         }
-        if (dispatchInteractiveTabController != null
-                && dispatchInteractiveTabController.isDispatchDocDirtySinceSave()) {
-            appendLog(
-                    "[stage2.1] 配台計画手動修正に未保存の変更があります。「保存」してから実行してください。");
-            showErrorDialog(
-                    "段階2.1",
-                    "配台計画手動修正タブの変更を「保存 (JSON+xlsx)」で確定してから段階2.1 を実行してください。");
-            return;
-        }
         if (blockIfAttendanceNotReadyForStage2()) {
             showErrorDialog(
                     "段階2.1",
@@ -10133,12 +9969,6 @@ public final class MainShellController
                     "段階2.1 を実行する前に段階2を実行し、結果_配台表.json を生成してください。");
             return;
         }
-        if (dispatchInteractiveTabController != null
-                && dispatchInteractiveTabController.isDispatchDocDirtySinceSave()) {
-            appendLog(
-                    "[stage2.1] 配台計画手動修正に未保存の変更があります。JSON を「保存」するか「再読み」後に実行してください。");
-            return;
-        }
         if (planInputTabController != null
                 && planInputTabController.isPlanInputTableDirtySinceSave()) {
             appendLog(
@@ -10147,13 +9977,12 @@ public final class MainShellController
         }
         if (!guardTodayDispatchSourceBundleBeforeStageRun(
                 "段階2.1",
-                () -> continueStage21AfterSourceGuard(overtimeSimulationJson, mainJson))) {
+                () -> continueStage21AfterSourceGuard(overtimeSimulationJson))) {
             return;
         }
     }
 
-    private void continueStage21AfterSourceGuard(
-            java.nio.file.Path overtimeSimulationJson, java.nio.file.Path mainJson) {
+    private void continueStage21AfterSourceGuard(java.nio.file.Path overtimeSimulationJson) {
         if (overtimeSimulationJson == null
                 || !java.nio.file.Files.isRegularFile(overtimeSimulationJson)) {
             appendLog("[stage2.1] 残業シミュレーション JSON が無効です。");
@@ -10161,10 +9990,6 @@ public final class MainShellController
         }
         pendingStage21OvertimeJsonPath =
                 overtimeSimulationJson.toAbsolutePath().normalize();
-        if (dispatchInteractiveTabController != null) {
-            dispatchInteractiveTabController.captureStage21BaselineBeforeRun(
-                    mainJson, pendingStage21OvertimeJsonPath);
-        }
         runStageAfterStage2SourceGuard(STAGE2_1);
     }
 
@@ -10184,9 +10009,6 @@ public final class MainShellController
      * ソース束の保存要否は開始時の意図に従う。
      */
     private boolean stage1StartedWithTodayDispatch;
-
-    private boolean lastDispatchTableDirty;
-    private long dispatchTableDirtyGeneration;
 
     private Stage1SourceBundle pendingTodayDispatchStageBundle;
 
@@ -10255,9 +10077,8 @@ public final class MainShellController
         }
     }
 
-    /** 配台計画手動修正タブの配台ロール単位 (m) 解決用。未初期化時は {@code null}。 */
     /** Package / dispatch-rules access to plan input tab. */
-public PlanInputTabController planInputTabControllerForDispatchRollUnit() {
+    public PlanInputTabController planInputTabControllerForDispatchRollUnit() {
         return planInputTabController;
     }
 

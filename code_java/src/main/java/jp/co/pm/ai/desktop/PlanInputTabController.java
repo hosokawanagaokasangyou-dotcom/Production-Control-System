@@ -205,9 +205,6 @@ public final class PlanInputTabController {
     /** 段階1／段階2 の Python 実行中（メインシェルから同期）。 */
     private boolean stage2RunPipelineBusy;
 
-    /** 配台計画手動修正タブの表が未保存のとき、段階2を抑止する。 */
-    private boolean stage2BlockedByDispatchUnsavedEdit;
-
     /**
      * 配台計画_タスク入力タブの表を手動変更したが「保存」または「再読み」でディスクと同期していないとき、段階2を抑止する。
      */
@@ -383,7 +380,6 @@ public final class PlanInputTabController {
                         loadFromCurrentPath(false);
                     }
                 });
-        shell.syncPlanInputStage2ButtonFromDispatchDirty();
     }
 
     private void editLimitedOperators(
@@ -413,14 +409,6 @@ public final class PlanInputTabController {
 
     void setDeliveryCalendarReloadBlocking(boolean blocking) {
         deliveryCalendarReloadBlocking = blocking;
-        applyStage2RunButtonEnabledState();
-    }
-
-    /**
-     * 配台計画手動修正の表に未保存の変更があるとき {@code blocked} を true にする（保存または「再読み」で false）。
-     */
-    void setStage2BlockedByUnsavedDispatchEdit(boolean blocked) {
-        stage2BlockedByDispatchUnsavedEdit = blocked;
         applyStage2RunButtonEnabledState();
     }
 
@@ -493,7 +481,6 @@ public final class PlanInputTabController {
         boolean disable =
                 stage2RunPipelineBusy
                         || deliveryCalendarReloadBlocking
-                        || stage2BlockedByDispatchUnsavedEdit
                         || stage2BlockedByUnsavedPlanInputTableEdit
                         || stage2BlockedByAttendanceNotReady
                         || stage2BlockedBySourceExtension;
@@ -513,16 +500,6 @@ public final class PlanInputTabController {
         } else if (deliveryCalendarReloadBlocking) {
             Tooltip blockedTip =
                     new Tooltip("納期管理ビューを再読み込み中です。完了後に実行してください。");
-            if (stage2RunButton != null) {
-                stage2RunButton.setTooltip(blockedTip);
-            }
-            if (stage21RunButton != null) {
-                stage21RunButton.setTooltip(blockedTip);
-            }
-        } else if (stage2BlockedByDispatchUnsavedEdit) {
-            Tooltip blockedTip =
-                    new Tooltip(
-                            "配台計画手動修正タブに未保存の変更があります。「保存 (JSON+xlsx)」または「再読み」で確定してから実行してください。");
             if (stage2RunButton != null) {
                 stage2RunButton.setTooltip(blockedTip);
             }

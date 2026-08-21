@@ -18,7 +18,7 @@
   "planInputTodayDispatch" : false,
   "mainRunSkipGeminiApi" : false,
   "mainRunStage1MarkAllExcludeAfterRun" : false,
-  "mainShellTabOrder" : [ "equipmentStatusDashboard", "remoteDesktop", "requestFormInput", "requestFormPipelineCheck", "companyCalendar", "memberAttendance", "machineCalendar", "masterDispatchSheets", "planInputStage3", "run", "planInput", "dispatchInteractive", "equipmentGanttGraphic", "deliveryCalendarView", "operatorCard", "codeLookupTables", "uiBadgeDesign", "pushButtonDesign", "ganttPersonBadgeDesign", "requestFormPreviewBadgeDesign", "planResultViewer", "stage1Preview", "resultDispatch", "masterSummary", "excludeRules", "specialRules", "planWorkspaceHistory", "memorySettings", "apiModelBenchmark", "actualsStatus", "pipelineExecutionTiming", "cacheHistory", "env", "globalSettings", "userProfiles", "operatorUserManagement" ],
+  "mainShellTabOrder" : [ "equipmentStatusDashboard", "remoteDesktop", "requestFormInput", "requestFormPipelineCheck", "companyCalendar", "memberAttendance", "machineCalendar", "masterDispatchSheets", "planInputStage3", "run", "planInput", "equipmentGanttGraphic", "deliveryCalendarView", "operatorCard", "codeLookupTables", "uiBadgeDesign", "pushButtonDesign", "ganttPersonBadgeDesign", "requestFormPreviewBadgeDesign", "planResultViewer", "stage1Preview", "resultDispatch", "masterSummary", "excludeRules", "specialRules", "planWorkspaceHistory", "memorySettings", "apiModelBenchmark", "actualsStatus", "pipelineExecutionTiming", "cacheHistory", "env", "globalSettings", "userProfiles", "operatorUserManagement" ],
   "mainShellTabLayout" : [ {
     "kind" : "tab",
     "color" : "#994d66",
@@ -63,10 +63,6 @@
     "kind" : "tab",
     "color" : "#000080",
     "id" : "planInput"
-  }, {
-    "kind" : "tab",
-    "color" : "#1a3399",
-    "id" : "dispatchInteractive"
   }, {
     "kind" : "tab",
     "color" : "#1a4d1a",
@@ -166,7 +162,6 @@
   } ],
   "innerTabSelectedIndexByShellTabKey" : {
     "codeLookupTables" : 0,
-    "dispatchInteractive" : 0,
     "deliveryCalendarView" : 1
   },
   "innerTabHeaderColorByKey" : {

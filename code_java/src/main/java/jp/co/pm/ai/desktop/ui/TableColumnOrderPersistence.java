@@ -130,175 +130,6 @@ public final class TableColumnOrderPersistence {
         }
     }
 
-    /**
-     * 配台計画手動修正タブの日付セル内数量行フィルタ（(アラ計画)/(段階2後)/(段階3前)/(段階3.x後)/(段階2.1後) 等）。
-     */
-    public record DispatchInteractiveDateQtyLineFilterPrefs(
-            boolean showAladdinPlan,
-            boolean showStage2Plan,
-            boolean showStage3Plan,
-            boolean showStage3After,
-            boolean showStage21After) {
-        public DispatchInteractiveDateQtyLineFilterPrefs(
-                boolean showAladdinPlan, boolean showStage3Plan, boolean showStage3After) {
-            this(showAladdinPlan, true, showStage3Plan, showStage3After, true);
-        }
-
-        public DispatchInteractiveDateQtyLineFilterPrefs(
-                boolean showAladdinPlan,
-                boolean showStage3Plan,
-                boolean showStage3After,
-                boolean showStage21After) {
-            this(showAladdinPlan, true, showStage3Plan, showStage3After, showStage21After);
-        }
-
-        public boolean showStage21After() {
-            return showStage21After;
-        }
-
-        /** @deprecated {@link #showStage21After()} */
-        @Deprecated
-        public boolean showStage35After() {
-            return showStage21After;
-        }
-
-        public static DispatchInteractiveDateQtyLineFilterPrefs defaults() {
-            return new DispatchInteractiveDateQtyLineFilterPrefs(true, true, true, true, true);
-        }
-    }
-
-    private static final String KEY_DISPATCH_INTERACTIVE_SHOW_ALADDIN_PLAN_QTY_LINE =
-            "dispatchInteractive_ui_showAladdinPlanQtyLine";
-
-    private static final String KEY_DISPATCH_INTERACTIVE_SHOW_STAGE2_PLAN_QTY_LINE =
-            "dispatchInteractive_ui_showStage2PlanQtyLine";
-
-    private static final String KEY_DISPATCH_INTERACTIVE_SHOW_STAGE3_PLAN_QTY_LINE =
-            "dispatchInteractive_ui_showStage3PlanQtyLine";
-
-    private static final String KEY_DISPATCH_INTERACTIVE_SHOW_STAGE3_AFTER_QTY_LINE =
-            "dispatchInteractive_ui_showStage3AfterQtyLine";
-
-    private static final String KEY_DISPATCH_INTERACTIVE_SHOW_STAGE35_AFTER_QTY_LINE =
-            "dispatchInteractive_ui_showStage35AfterQtyLine";
-
-    /** 配台計画手動修正タブの日付セル数量行フィルタを読み込む。 */
-    public static DispatchInteractiveDateQtyLineFilterPrefs
-            loadDispatchInteractiveDateQtyLineFilterPrefs() {
-        try {
-            if (!Files.isRegularFile(STORE)) {
-                return DispatchInteractiveDateQtyLineFilterPrefs.defaults();
-            }
-            JsonNode root = JSON.readTree(STORE.toFile());
-            if (root == null || !root.isObject()) {
-                return DispatchInteractiveDateQtyLineFilterPrefs.defaults();
-            }
-            boolean aladdin =
-                    root.path(KEY_DISPATCH_INTERACTIVE_SHOW_ALADDIN_PLAN_QTY_LINE).asBoolean(true);
-            boolean stage2 =
-                    root.path(KEY_DISPATCH_INTERACTIVE_SHOW_STAGE2_PLAN_QTY_LINE).asBoolean(true);
-            boolean plan =
-                    root.path(KEY_DISPATCH_INTERACTIVE_SHOW_STAGE3_PLAN_QTY_LINE).asBoolean(true);
-            boolean after =
-                    root.path(KEY_DISPATCH_INTERACTIVE_SHOW_STAGE3_AFTER_QTY_LINE).asBoolean(true);
-            boolean stage35After =
-                    root.path(KEY_DISPATCH_INTERACTIVE_SHOW_STAGE35_AFTER_QTY_LINE).asBoolean(true);
-            return new DispatchInteractiveDateQtyLineFilterPrefs(
-                    aladdin, stage2, plan, after, stage35After);
-        } catch (IOException e) {
-            return DispatchInteractiveDateQtyLineFilterPrefs.defaults();
-        }
-    }
-
-    /** {@link #loadDispatchInteractiveDateQtyLineFilterPrefs()} を {@link #STORE} に保存する。 */
-    public static void saveDispatchInteractiveDateQtyLineFilterPrefs(
-            DispatchInteractiveDateQtyLineFilterPrefs prefs) {
-        if (prefs == null) {
-            return;
-        }
-        try {
-            Files.createDirectories(STORE.getParent());
-            ObjectNode root;
-            if (Files.isRegularFile(STORE)) {
-                JsonNode tree = JSON.readTree(STORE.toFile());
-                root =
-                        tree != null && tree.isObject()
-                                ? (ObjectNode) tree.deepCopy()
-                                : JSON.createObjectNode();
-            } else {
-                root = JSON.createObjectNode();
-            }
-            root.put(KEY_DISPATCH_INTERACTIVE_SHOW_ALADDIN_PLAN_QTY_LINE, prefs.showAladdinPlan());
-            root.put(KEY_DISPATCH_INTERACTIVE_SHOW_STAGE2_PLAN_QTY_LINE, prefs.showStage2Plan());
-            root.put(KEY_DISPATCH_INTERACTIVE_SHOW_STAGE3_PLAN_QTY_LINE, prefs.showStage3Plan());
-            root.put(KEY_DISPATCH_INTERACTIVE_SHOW_STAGE3_AFTER_QTY_LINE, prefs.showStage3After());
-            root.put(KEY_DISPATCH_INTERACTIVE_SHOW_STAGE35_AFTER_QTY_LINE, prefs.showStage21After());
-            JSON.writerWithDefaultPrettyPrinter().writeValue(STORE.toFile(), root);
-        } catch (IOException ignored) {
-        }
-    }
-
-    /**
-     * 配台計画手動修正タブの日付列: 本日基準で列表示を開始する過去日数（{@code today.minusDays(n)}）。
-     */
-    public record DispatchInteractiveDateAxisPastDaysPrefs(int pastDays) {
-        public static final int MIN = 0;
-        public static final int MAX = 365;
-        public static final int DEFAULT_PAST = 1;
-
-        public static DispatchInteractiveDateAxisPastDaysPrefs defaults() {
-            return new DispatchInteractiveDateAxisPastDaysPrefs(DEFAULT_PAST);
-        }
-
-        public DispatchInteractiveDateAxisPastDaysPrefs {
-            pastDays = Math.max(MIN, Math.min(MAX, pastDays));
-        }
-    }
-
-    private static final String KEY_DISPATCH_INTERACTIVE_DATE_AXIS_PAST_DAYS =
-            "dispatchInteractive_ui_dateAxisPastDays";
-
-    public static DispatchInteractiveDateAxisPastDaysPrefs loadDispatchInteractiveDateAxisPastDaysPrefs() {
-        try {
-            if (!Files.isRegularFile(STORE)) {
-                return DispatchInteractiveDateAxisPastDaysPrefs.defaults();
-            }
-            JsonNode root = JSON.readTree(STORE.toFile());
-            if (root == null || !root.isObject()) {
-                return DispatchInteractiveDateAxisPastDaysPrefs.defaults();
-            }
-            int past =
-                    root.path(KEY_DISPATCH_INTERACTIVE_DATE_AXIS_PAST_DAYS)
-                            .asInt(DispatchInteractiveDateAxisPastDaysPrefs.DEFAULT_PAST);
-            return new DispatchInteractiveDateAxisPastDaysPrefs(past);
-        } catch (IOException e) {
-            return DispatchInteractiveDateAxisPastDaysPrefs.defaults();
-        }
-    }
-
-    public static void saveDispatchInteractiveDateAxisPastDaysPrefs(
-            DispatchInteractiveDateAxisPastDaysPrefs prefs) {
-        if (prefs == null) {
-            return;
-        }
-        try {
-            Files.createDirectories(STORE.getParent());
-            ObjectNode root;
-            if (Files.isRegularFile(STORE)) {
-                JsonNode tree = JSON.readTree(STORE.toFile());
-                root =
-                        tree != null && tree.isObject()
-                                ? (ObjectNode) tree.deepCopy()
-                                : JSON.createObjectNode();
-            } else {
-                root = JSON.createObjectNode();
-            }
-            root.put(KEY_DISPATCH_INTERACTIVE_DATE_AXIS_PAST_DAYS, prefs.pastDays());
-            JSON.writerWithDefaultPrettyPrinter().writeValue(STORE.toFile(), root);
-        } catch (IOException ignored) {
-        }
-    }
-
     private static String spreadsheetTabRowHeightKey(TableId id) {
         return id.jsonKey() + "_ui_rowHeightPercent";
     }
@@ -764,10 +595,6 @@ public final class TableColumnOrderPersistence {
         ALADDIN_PROCESSING_PLAN_RAW("aladdinProcessingPlanRaw"),
         /** PM_AI_ACTUAL_DETAIL_* で解決した加工実績明細ブックの生表（納期管理ビュー子タブ） */
         PROCESSING_ACTUALS_DETAIL_RAW("processingActualsDetailRaw"),
-        /** 配台計画手動修正タブ「タスク×日付」 */
-        DISPATCH_INTERACTIVE_WIDE("dispatchInteractiveWide"),
-        /** 配台計画手動修正タブ「工程+機械×日」 */
-        DISPATCH_INTERACTIVE_BY_DAY("dispatchInteractiveByDay"),
         /** 納期管理ビュー「カレンダー」メイン表 */
         DELIVERY_CALENDAR_MAIN("deliveryCalendarMain"),
         /** 納期管理ビュー「計画比較」別表 */
@@ -798,13 +625,10 @@ public final class TableColumnOrderPersistence {
     }
 
     private static final List<String> PLAN_WORKSPACE_COLUMN_ORDER_JSON_KEYS =
-            List.of(
-                    TableId.DISPATCH_INTERACTIVE_WIDE.jsonKey(),
-                    TableId.DISPATCH_INTERACTIVE_BY_DAY.jsonKey(),
-                    TableId.RESULT_DISPATCH_TABLE.jsonKey());
+            List.of(TableId.RESULT_DISPATCH_TABLE.jsonKey());
 
     /**
-     * 配台ワークスペース用スナップショット: 配台手動修正・結果_配台表タブの列順／幅だけを
+     * 配台ワークスペース用スナップショット: 結果_配台表タブの列順／幅だけを
      * {@link #readCurrentStoreRoot()} から抽出する。
      */
     public static ObjectNode capturePlanWorkspaceColumnOrderPartial() {

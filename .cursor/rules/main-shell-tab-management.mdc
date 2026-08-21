@@ -19,7 +19,6 @@ JavaFX デスクトップの **メインシェル最上段タブ**を増減す�
 |-----|--------|
 | run | 実行・ログ |
 | planInput | 配台計画_タスク入力 |
-| dispatchInteractive | 配台計画手動修正 |
 | equipmentGanttGraphic | 設備ガント（グラフィック） |
 | deliveryCalendarView | 納期管理ビュー |
 | operatorCard | オペレーターカード |

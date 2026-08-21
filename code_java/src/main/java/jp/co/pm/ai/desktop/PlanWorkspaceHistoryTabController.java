@@ -120,7 +120,7 @@ public final class PlanWorkspaceHistoryTabController {
             JsonNode colPart = TableColumnOrderPersistence.capturePlanWorkspaceColumnOrderPartial();
             ResultDispatchDocument doc = shell.snapshotDispatchDocumentForPlanWorkspace();
             if (doc == null) {
-                throw new IllegalStateException("配台計画手動修正タブが未初期化です");
+                throw new IllegalStateException("結果_配台表.json がありません。先に段階2を実行してください");
             }
             Path tmp = Files.createTempFile("pm-plan-workspace-snap-", ".json");
             try {

@@ -37,7 +37,6 @@ public final class DispatchTrialUnassignedWizard {
         CLOSE,
         PLAN_VIEWER,
         EQUIPMENT_GANTT,
-        INTERACTIVE_EDIT,
         OPEN_OUTPUT_FOLDER
     }
 
@@ -157,13 +156,10 @@ public final class DispatchTrialUnassignedWizard {
         RadioButton rViewer =
                 new RadioButton("計画結果ビューアで production_plan / member_schedule の JSON を開く");
         RadioButton rGantt = new RadioButton("設備ガントで計画を確認する");
-        RadioButton rEdit =
-                new RadioButton("配台計画手動修正タブへ戻り、表を編集して保存後に再度配台試行する");
         RadioButton rFolder = new RadioButton("出力フォルダをファイルマネージャで開く");
         rClose.setToggleGroup(group);
         rViewer.setToggleGroup(group);
         rGantt.setToggleGroup(group);
-        rEdit.setToggleGroup(group);
         rFolder.setToggleGroup(group);
         rViewer.setSelected(true);
 
@@ -172,7 +168,7 @@ public final class DispatchTrialUnassignedWizard {
                         "ステップ 2: どれを実行しますか？（タブ切替やフォルダを開く処理をその場で行います）");
         step2Title.setWrapText(true);
 
-        VBox step2 = new VBox(8, step2Title, rClose, rViewer, rGantt, rEdit, rFolder);
+        VBox step2 = new VBox(8, step2Title, rClose, rViewer, rGantt, rFolder);
         step2.setPadding(new Insets(0, 0, 8, 0));
 
         BorderPane center = new BorderPane();
@@ -213,8 +209,6 @@ public final class DispatchTrialUnassignedWizard {
                             choice = NextStepAction.PLAN_VIEWER;
                         } else if (rGantt.isSelected()) {
                             choice = NextStepAction.EQUIPMENT_GANTT;
-                        } else if (rEdit.isSelected()) {
-                            choice = NextStepAction.INTERACTIVE_EDIT;
                         } else if (rFolder.isSelected()) {
                             choice = NextStepAction.OPEN_OUTPUT_FOLDER;
                         } else {
@@ -260,10 +254,6 @@ public final class DispatchTrialUnassignedWizard {
             case EQUIPMENT_GANTT -> {
                 shell.appendLog("[dispatch-wizard] ユーザー: 設備ガントへ");
                 shell.navigateEquipmentGanttWithArtifacts(plan, mem);
-            }
-            case INTERACTIVE_EDIT -> {
-                shell.appendLog("[dispatch-wizard] ユーザー: 配台計画手動修正タブへ");
-                shell.navigateDispatchInteractiveTab();
             }
             case OPEN_OUTPUT_FOLDER -> {
                 shell.appendLog("[dispatch-wizard] ユーザー: 出力フォルダを開く");

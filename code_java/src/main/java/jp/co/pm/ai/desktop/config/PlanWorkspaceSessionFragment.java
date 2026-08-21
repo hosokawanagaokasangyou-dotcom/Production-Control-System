@@ -61,7 +61,6 @@ public record PlanWorkspaceSessionFragment(
                     MainShellTabId.PLAN_INPUT.key(),
                     MainShellTabId.STAGE1_PREVIEW.key(),
                     MainShellTabId.CODE_LOOKUP_TABLES.key(),
-                    MainShellTabId.DISPATCH_INTERACTIVE.key(),
                     MainShellTabId.EQUIPMENT_GANTT_GRAPHIC.key(),
                     MainShellTabId.PLAN_RESULT_VIEWER.key(),
                     MainShellTabId.DELIVERY_CALENDAR_VIEW.key(),

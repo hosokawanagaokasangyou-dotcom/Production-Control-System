@@ -1717,7 +1717,6 @@
     "planInputStage3",
     "run",
     "planInput",
-    "dispatchInteractive",
     "equipmentGanttGraphic",
     "deliveryCalendarView",
     "operatorCard",
@@ -1798,11 +1797,6 @@
       "kind": "tab",
       "color": "#000080",
       "id": "planInput"
-    },
-    {
-      "kind": "tab",
-      "color": "#1a3399",
-      "id": "dispatchInteractive"
     },
     {
       "kind": "tab",
@@ -1934,8 +1928,7 @@
     }
   ],
   "innerTabSelectedIndexByShellTabKey": {
-    "deliveryCalendarView": 1,
-    "dispatchInteractive": 0
+    "deliveryCalendarView": 1
   },
   "equipmentGanttGraphicZoomPercent": 121.15384798783523,
   "equipmentGanttBarFontFamily": "Meiryo UI",

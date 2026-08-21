@@ -647,7 +647,6 @@
     "planInputStage3",
     "run",
     "planInput",
-    "dispatchInteractive",
     "equipmentGanttGraphic",
     "deliveryCalendarView",
     "operatorCard",
@@ -728,11 +727,6 @@
       "kind": "tab",
       "color": "#000080",
       "id": "planInput"
-    },
-    {
-      "kind": "tab",
-      "color": "#1a3399",
-      "id": "dispatchInteractive"
     },
     {
       "kind": "tab",
@@ -865,8 +859,7 @@
   ],
   "innerTabSelectedIndexByShellTabKey": {
     "codeLookupTables": 5,
-    "deliveryCalendarView": 1,
-    "dispatchInteractive": 0
+    "deliveryCalendarView": 1
   },
   "equipmentGanttGraphicZoomPercent": 150.57693591484662,
   "equipmentGanttMachineColWidth": 50.45043326712945,

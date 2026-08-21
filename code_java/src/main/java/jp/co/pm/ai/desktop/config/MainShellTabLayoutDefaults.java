@@ -35,7 +35,6 @@ public final class MainShellTabLayoutDefaults {
                     MainShellTabId.MASTER_DISPATCH_SHEETS.key(),
                     MainShellTabId.RUN.key(),
                     MainShellTabId.PLAN_INPUT.key(),
-                    MainShellTabId.DISPATCH_INTERACTIVE.key(),
                     MainShellTabId.EQUIPMENT_GANTT_GRAPHIC.key(),
                     MainShellTabId.DELIVERY_CALENDAR_VIEW.key(),
                     MainShellTabId.OPERATOR_CARD.key(),
@@ -91,7 +90,6 @@ public final class MainShellTabLayoutDefaults {
         top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.MASTER_DISPATCH_SHEETS.key(), "#800000"));
         top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.RUN.key(), "#0000ff"));
         top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.PLAN_INPUT.key(), "#000080"));
-        top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.DISPATCH_INTERACTIVE.key(), "#1a3399"));
         top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.EQUIPMENT_GANTT_GRAPHIC.key(), "#1a4d1a"));
         top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.DELIVERY_CALENDAR_VIEW.key(), "#669966"));
         top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.OPERATOR_CARD.key(), "#336666"));
