@@ -530,11 +530,11 @@ public final class EnvVarDocs {
         put(
                 "PM_AI_OVERTIME_SIMULATION_JSON",
                 "段階2.1 残業/休出シミュ: ウィザード確定時に JavaFX が書く UTF-8 JSON。"
-                        + " working_overrides（休日出勤○/グレー）と overtime_minutes（分）を段階2.1 フル再配台に適用する。"
+                        + " working_overrides（休日出勤○/グレー）と overtime_minutes（分）を段階2（配台A）に適用する。"
                         + " master.xlsm は変更しない。成果物は output/stage21/ へ出力。");
         put(
                 "PM_AI_STAGE2_1_OVERTIME",
-                "1/true/yes/on のとき段階2.1（残業/休出シミュ）のフル再配台。output/stage21/ へ成果物を分離出力する。");
+                "1/true/yes/on のとき段階2.1（残業を適用した段階2）。output/stage21/ へ成果物を分離出力する。");
         put(
                 "PM_AI_STAGE2_ENGINE",
                 "段階2の実行エンジン（互換用キー）。JavaFX 実行タブからの段階2は常に Python 子プロセス（plan_simulation_stage2.py）のみ。"

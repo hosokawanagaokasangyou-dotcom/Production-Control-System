@@ -9876,7 +9876,7 @@ public final class MainShellController
         return true;
     }
 
-    /** 段階2.1（残業/休出シミュ）: 時間外ウィザードを起動し、確定後に {@link #triggerStage21} へ進む。 */
+    /** 段階2.1（残業シミュ）: 時間外ウィザードを起動し、確定後に段階2（配台A）を実行する。 */
     void launchStage21OvertimeSimulationWizard() {
         if (blockIfStage2SourceGuardBusy("段階2.1")) {
             return;
@@ -9902,15 +9902,6 @@ public final class MainShellController
                     attendanceReadinessTooltip.isBlank()
                             ? "勤怠正本（attendance-data.json）が未準備です。会社カレンダー／メンバー勤怠タブでセットアップしてください。"
                             : attendanceReadinessTooltip);
-            return;
-        }
-        java.nio.file.Path mainJson = AppPaths.resolveResultDispatchTableJsonPath(collectUiEnv());
-        if (!java.nio.file.Files.isRegularFile(mainJson)) {
-            appendLog(
-                    "[stage2.1] 段階2 の成果物（結果_配台表.json）がありません。先に段階2を実行してください。");
-            showErrorDialog(
-                    "段階2.1",
-                    "段階2.1 を実行する前に段階2を実行し、結果_配台表.json を生成してください。");
             return;
         }
         final java.nio.file.Path pyExe = resolveStagePythonExecutablePath(collectUiEnv());
@@ -9948,7 +9939,7 @@ public final class MainShellController
         worker.start();
     }
 
-    /** 段階2.1（残業/休出シミュ）: ウィザード確定後にフル再配台（output/stage21/）。 */
+    /** 段階2.1: 残業確定後に段階2と同一エンジンでフル配台（output/stage21/）。 */
     void triggerStage21(java.nio.file.Path overtimeSimulationJson) {
         if (blockIfStage2SourceGuardBusy("段階2.1")) {
             return;
@@ -9957,16 +9948,6 @@ public final class MainShellController
             return;
         }
         if (blockIfMaterialLookupTablesHaveBlankValues("段階2.1")) {
-            return;
-        }
-        java.nio.file.Path mainJson =
-                AppPaths.resolveResultDispatchTableJsonPath(collectUiEnv());
-        if (!java.nio.file.Files.isRegularFile(mainJson)) {
-            appendLog(
-                    "[stage2.1] 段階2 の成果物（結果_配台表.json）がありません。先に段階2を実行してください。");
-            showErrorDialog(
-                    "段階2.1",
-                    "段階2.1 を実行する前に段階2を実行し、結果_配台表.json を生成してください。");
             return;
         }
         if (planInputTabController != null
@@ -9987,6 +9968,14 @@ public final class MainShellController
                 || !java.nio.file.Files.isRegularFile(overtimeSimulationJson)) {
             appendLog("[stage2.1] 残業シミュレーション JSON が無効です。");
             return;
+        }
+        if (planInputTabController != null) {
+            if (!prepareStage2NextDayDialogJsonPaths(collectUiEnv())) {
+                return;
+            }
+        } else {
+            pendingStage2InProgressNextDayJsonPath = null;
+            pendingStage2AladdinTodayExcludeJsonPath = null;
         }
         pendingStage21OvertimeJsonPath =
                 overtimeSimulationJson.toAbsolutePath().normalize();

@@ -126,7 +126,7 @@
       <li><a href="#flow">全体パイプライン</a></li>
       <li><a href="#stage1">段階1 — タスク抽出</a></li>
       <li><a href="#stage20">段階2.0 — 初回フル配台</a></li>
-      <li><a href="#stage21">段階2.1 — 時間外再配台</a></li>
+      <li><a href="#stage21">段階2.1 — 残業決定後の段階2シミュレーション</a></li>
       <li><a href="#stage25">段階2.5(AI) — アラジン整列</a></li>
       <li><a href="#manual">手動修正・関連操作</a></li>
       <li><a href="#trial">配台試行（インタラクティブ）</a></li>
@@ -164,9 +164,9 @@
     <h2>全体パイプライン</h2>
     <div class="flow">段階1 → 入力1表編集
   ↓
-段階2.0（配台A）→ 結果_配台表.json
+段階2.0（定時）または段階2.1（残業を決めて段階2を実行）→ 結果_配台表.json
   ↓
-（任意）段階2.1 時間外 / 段階2.5 整列 / 手動修正・アラジン合わせ
+（任意）段階2.5 整列 / 手動修正・アラジン合わせ
   ↓
 配台試行（dispatch_interactive_trial.py）→ 結果_配台表.json
 
@@ -219,11 +219,11 @@
   </section>
 
   <section id="stage21" class="card">
-    <h2>段階2.1（時間外）— 入力1表フル再配台</h2>
+    <h2>段階2.1（時間外）— 残業決定後の段階2シミュレーション</h2>
     <table>
-      <tr><th>UI</th><td>配台計画_タスク入力 → <strong>段階2.1(時間外)</strong> → 残業ウィザード</td></tr>
+      <tr><th>UI</th><td>配台計画_タスク入力 → <strong>段階2.1(時間外)</strong> → 残業ウィザード → 段階2と同一の次日ダイアログ</td></tr>
       <tr><th>Python</th><td><span class="file">plan_simulation_stage2_1.py</span>（<code>PM_AI_STAGE2_1_OVERTIME=1</code>）</td></tr>
-      <tr><th>配台</th><td>段階2.0 と同一配台A + <code>overtime_simulation_overrides.json</code> で勤怠一時上書き</td></tr>
+      <tr><th>配台</th><td>段階2.0 と同一配台A + <code>overtime_simulation_overrides.json</code> で勤怠一時上書き。段階2.0 の事前実行は不要。</td></tr>
     </table>
     <h3>入出力</h3>
     <ul>

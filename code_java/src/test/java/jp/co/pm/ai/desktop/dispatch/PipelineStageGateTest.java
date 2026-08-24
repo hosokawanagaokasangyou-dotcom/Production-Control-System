@@ -18,13 +18,16 @@ class PipelineStageGateTest {
     }
 
     @Test
-    void stage21NeedsStage2Result() {
-        var noResult = state(true, false);
-        var withResult = state(true, true);
-        assertFalse(PipelineStageGate.canRunStage21(noResult));
-        assertTrue(PipelineStageGate.canRunStage21(withResult));
-        assertFalse(PipelineStageGate.stage21DisabledReason(noResult).isEmpty());
-        assertTrue(PipelineStageGate.stage21DisabledReason(withResult).isEmpty());
+    void stage21NeedsPlanInputLikeStage20() {
+        var noPlan = state(false, false);
+        var planOnly = state(true, false);
+        var both = state(true, true);
+        assertFalse(PipelineStageGate.canRunStage21(noPlan));
+        assertTrue(PipelineStageGate.canRunStage21(planOnly));
+        assertTrue(PipelineStageGate.canRunStage21(both));
+        assertFalse(PipelineStageGate.stage21DisabledReason(noPlan).isEmpty());
+        assertTrue(PipelineStageGate.stage21DisabledReason(planOnly).isEmpty());
+        assertTrue(PipelineStageGate.stage21DisabledReason(both).isEmpty());
     }
 
     @Test

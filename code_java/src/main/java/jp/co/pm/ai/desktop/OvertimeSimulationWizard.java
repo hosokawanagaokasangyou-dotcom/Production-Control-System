@@ -37,7 +37,7 @@ import jp.co.pm.ai.desktop.dispatch.OvertimeSimulationEditState;
 import jp.co.pm.ai.desktop.dispatch.OvertimeSimulationOverridesWriter;
 
 /**
- * 段階2.1 残業シミュレーション: 勤怠（チェック）と残業時間（分）を編集し、確定後に段階2.1を実行するウィザード。
+ * 段階2.1 残業シミュレーション: 勤怠（チェック）と残業時間（分）を編集し、確定後に段階2（配台A）を実行するウィザード。
  */
 public final class OvertimeSimulationWizard {
 
@@ -62,15 +62,15 @@ public final class OvertimeSimulationWizard {
         }
 
         String executeButtonText() {
-            return label + "を実行";
+            return "段階2を実行（残業シミュ）";
         }
 
         String introConfirmLine() {
-            return "確定後、変更内容を反映して" + label + "（残業/休出シミュ）を実行します。";
+            return "確定後、残業・休出を適用して段階2（配台）を実行します。段階2の事前実行は不要です。";
         }
 
         String noChangeSummarySuffix() {
-            return "\n（変更なし — master 勤怠のまま" + label + "を実行します）";
+            return "\n（変更なし — master 勤怠のまま段階2を実行します）";
         }
     }
 
