@@ -1,8 +1,12 @@
 package jp.co.pm.ai.desktop.ui;
 
 import javafx.geometry.Pos;
+import javafx.geometry.VPos;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
+import javafx.scene.layout.Priority;
+import javafx.scene.layout.RowConstraints;
+import javafx.scene.layout.StackPane;
 
 /** 会社カレンダー・メンバー勤怠グリッドのセル寸法。 */
 public final class AttendanceGridCellSizing {
@@ -141,15 +145,43 @@ public final class AttendanceGridCellSizing {
         label.setStyle(headerFontStyle(cellPx));
     }
 
+    /** 左右グリッドで同一行高にするための行制約。 */
+    public static RowConstraints memberRowConstraints(int cellPx) {
+        int h = memberCellHeight(cellPx);
+        RowConstraints rc = new RowConstraints();
+        rc.setMinHeight(h);
+        rc.setPrefHeight(h);
+        rc.setMaxHeight(h);
+        rc.setValignment(VPos.CENTER);
+        rc.setVgrow(Priority.NEVER);
+        return rc;
+    }
+
+    public static void applyMemberCellWrap(StackPane wrap, int cellPx) {
+        int w = memberDayColumnWidth(cellPx);
+        int h = memberCellHeight(cellPx);
+        wrap.setMinSize(w, h);
+        wrap.setPrefSize(w, h);
+        wrap.setMaxSize(w, h);
+    }
+
     /** メンバー名列の見出しセル（行の勤怠セル高さに揃える）。 */
     public static void applyMemberNameLabel(Label label, int cellPx) {
+        applyFixedRowLabel(label, memberNameColumnWidth(cellPx), cellPx);
+    }
+
+    /** 主担当列の見出しセル（氏名列と同じ行高、列幅は主担当用）。 */
+    public static void applyMemberRoleLabel(Label label, int cellPx) {
+        applyFixedRowLabel(label, memberPrimaryRoleColumnWidth(cellPx), cellPx);
+    }
+
+    private static void applyFixedRowLabel(Label label, int widthPx, int cellPx) {
         int h = memberCellHeight(cellPx);
-        int w = memberNameColumnWidth(cellPx);
-        label.setMinSize(w, h);
-        label.setPrefSize(w, h);
-        label.setMaxWidth(w);
+        label.setMinSize(widthPx, h);
+        label.setPrefSize(widthPx, h);
+        label.setMaxSize(widthPx, h);
         label.setAlignment(Pos.CENTER);
-        label.setWrapText(true);
+        label.setWrapText(false);
         label.setStyle(headerFontStyle(cellPx));
     }
 }

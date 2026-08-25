@@ -219,31 +219,34 @@ def format_member_calendar_sheet(
     insert_menu_back_link_row(ws)
 
     total_cols = num_day_cols + 1
+    # タイトル・凡例はフリーズ列（A）を跨いで結合しない。Excel で氏名行が日付行とずれるため。
     ws.merge_cells(
         start_row=MEMBER_CALENDAR_TITLE_ROW,
-        start_column=1,
+        start_column=2,
         end_row=MEMBER_CALENDAR_TITLE_ROW,
         end_column=total_cols,
     )
-    title_cell = ws.cell(MEMBER_CALENDAR_TITLE_ROW, 1, f"{year}年{month}月 メンバー勤怠")
+    title_cell = ws.cell(MEMBER_CALENDAR_TITLE_ROW, 2, f"{year}年{month}月 メンバー勤怠")
     title_cell.font = _result_font(size=12, bold=True, color=FONT_BANNER)
     title_cell.fill = cached_fill(FILL_MONTH_TITLE)
     title_cell.alignment = Alignment(horizontal="left", vertical="center")
+    ws.cell(MEMBER_CALENDAR_TITLE_ROW, 1).fill = cached_fill(FILL_MONTH_TITLE)
     ws.row_dimensions[MEMBER_CALENDAR_TITLE_ROW].height = 24
 
     ws.merge_cells(
         start_row=MEMBER_CALENDAR_LEGEND_ROW,
-        start_column=1,
+        start_column=2,
         end_row=MEMBER_CALENDAR_LEGEND_ROW,
         end_column=total_cols,
     )
     legend_cell = ws.cell(
         MEMBER_CALENDAR_LEGEND_ROW,
-        1,
+        2,
         "凡例: ·=通常  休=全休  年休=有給休暇  欠=欠勤  前休/後休=半休  休出/前出/後出=休出系  時=時間別",
     )
     legend_cell.font = _result_font(size=8, color=FONT_HEADER)
     legend_cell.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
+    ws.cell(MEMBER_CALENDAR_LEGEND_ROW, 1).fill = cached_fill(FILL_MONTH_TITLE)
     ws.row_dimensions[MEMBER_CALENDAR_LEGEND_ROW].height = 18
 
     hdr = ws.cell(MEMBER_CALENDAR_HEADER_ROW, 1, "メンバー")

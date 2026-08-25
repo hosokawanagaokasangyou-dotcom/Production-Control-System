@@ -1086,8 +1086,8 @@ def populate_member_calendar_worksheet(ws, store: dict, year: int, month: int) -
             )
     row = MEMBER_CALENDAR_DATA_START_ROW
     ma = store.get("member_attendance", {})
-    align = Alignment(horizontal="center", vertical="center")
-    name_align = Alignment(horizontal="left", vertical="center")
+    align = Alignment(horizontal="center", vertical="center", wrap_text=False)
+    name_align = Alignment(horizontal="left", vertical="center", wrap_text=False)
     for member in members:
         name_cell = ws.cell(row, 1, member)
         name_cell.font = _result_font(size=10)
@@ -1110,6 +1110,7 @@ def populate_member_calendar_worksheet(ws, store: dict, year: int, month: int) -
             cell.font = font
             cell.alignment = align
             cell.border = _GRID_BORDER
+        ws.row_dimensions[row].height = 18
         row += 1
 
 

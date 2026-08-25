@@ -29,6 +29,7 @@ import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
+import javafx.scene.layout.RowConstraints;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.scene.shape.Polygon;
@@ -816,10 +817,13 @@ public final class EditableMemberAttendanceGridPane extends VBox {
     private void rebuildGrid() {
         headerDateGrid.getChildren().clear();
         headerDateGrid.getColumnConstraints().clear();
+        headerDateGrid.getRowConstraints().clear();
         leftBodyGrid.getChildren().clear();
         leftBodyGrid.getColumnConstraints().clear();
+        leftBodyGrid.getRowConstraints().clear();
         bodyDateGrid.getChildren().clear();
         bodyDateGrid.getColumnConstraints().clear();
+        bodyDateGrid.getRowConstraints().clear();
         cellUiMap.clear();
         rowDimming.clear();
         if (members.isEmpty() || dates.isEmpty()) {
@@ -850,14 +854,15 @@ public final class EditableMemberAttendanceGridPane extends VBox {
             bodyDateGrid.getColumnConstraints().add(cloneColumnConstraints(cc));
         }
 
+        headerDateGrid.getRowConstraints().add(AttendanceGridCellSizing.memberRowConstraints(cellSizePx));
         AttendanceGridCellSizing.applyHeaderLabel(fixedRoleHeader, cellSizePx);
         fixedRoleHeader.setMinSize(roleW, cellH);
         fixedRoleHeader.setPrefSize(roleW, cellH);
-        fixedRoleHeader.setMaxWidth(roleW);
+        fixedRoleHeader.setMaxSize(roleW, cellH);
         AttendanceGridCellSizing.applyHeaderLabel(fixedNameHeader, cellSizePx);
         fixedNameHeader.setMinSize(nameW, cellH);
         fixedNameHeader.setPrefSize(nameW, cellH);
-        fixedNameHeader.setMaxWidth(nameW);
+        fixedNameHeader.setMaxSize(nameW, cellH);
 
         Locale locale = Locale.JAPAN;
         LocalDate today = LocalDate.now();
@@ -883,11 +888,15 @@ public final class EditableMemberAttendanceGridPane extends VBox {
 
         for (int row = 0; row < members.size(); row++) {
             String member = members.get(row);
+            leftBodyGrid.getRowConstraints().add(AttendanceGridCellSizing.memberRowConstraints(cellSizePx));
+            bodyDateGrid.getRowConstraints().add(AttendanceGridCellSizing.memberRowConstraints(cellSizePx));
             Region rowBand = new Region();
             rowBand.getStyleClass().add(GridRowHoverDimmingController.STYLE_BAND);
             rowBand.setMouseTransparent(true);
+            rowBand.setMinHeight(cellH);
+            rowBand.setPrefHeight(cellH);
+            rowBand.setMaxHeight(cellH);
             rowBand.setMaxWidth(Double.MAX_VALUE);
-            rowBand.setMaxHeight(Double.MAX_VALUE);
             GridPane.setColumnSpan(rowBand, dates.size());
             bodyDateGrid.add(rowBand, 0, row);
 
@@ -896,7 +905,7 @@ public final class EditableMemberAttendanceGridPane extends VBox {
                             primaryRoles.getOrDefault(
                                     member, MemberAttendanceMemberEditDialog.ROLE_POST));
             roleLabel.getStyleClass().add("pm-member-attendance-grid-role");
-            AttendanceGridCellSizing.applyMemberNameLabel(roleLabel, cellSizePx);
+            AttendanceGridCellSizing.applyMemberRoleLabel(roleLabel, cellSizePx);
             GridPane.setHalignment(roleLabel, HPos.CENTER);
             GridPane.setValignment(roleLabel, VPos.CENTER);
             leftBodyGrid.add(roleLabel, 0, row);
@@ -936,14 +945,14 @@ public final class EditableMemberAttendanceGridPane extends VBox {
                 if (!st.hourly.isEmpty()) {
                     cell.getStyleClass().add("pm-member-att-cell-hourly");
                 }
+                if (d.equals(today)) {
+                    cell.getStyleClass().add("pm-member-att-cell-today");
+                }
                 applyCellTooltip(cell, st);
                 Polygon commentMark = buildCommentMark();
                 commentMark.setVisible(hasComment(st.comment));
                 StackPane cellWrap = new StackPane(cell, commentMark);
-                cellWrap.setMaxSize(Region.USE_PREF_SIZE, Region.USE_PREF_SIZE);
-                if (d.equals(today)) {
-                    cellWrap.getStyleClass().add("pm-member-att-cell-wrap-today");
-                }
+                AttendanceGridCellSizing.applyMemberCellWrap(cellWrap, cellSizePx);
                 installCellInteractions(cell, d, member, dKey);
                 cellUiMap.put(cellKey(dKey, member), new CellUi(cell, commentMark));
                 rowDimming.installHover(cellWrap, row);
@@ -953,6 +962,67 @@ public final class EditableMemberAttendanceGridPane extends VBox {
             rowDimming.addRow(rowBand, name, new ArrayList<>(rowWraps));
         }
         javafx.application.Platform.runLater(this::syncHeaderDateViewportWidth);
+    }
+
+    void forceLayoutForTests() {
+        leftBodyGrid.applyCss();
+        bodyDateGrid.applyCss();
+        leftBodyGrid.autosize();
+        bodyDateGrid.autosize();
+        leftBodyGrid.layout();
+        bodyDateGrid.layout();
+    }
+
+    int memberRowCountForTest() {
+        return members.size();
+    }
+
+    double leftBodyPrefHeightForTest() {
+        return leftBodyGrid.prefHeight(-1);
+    }
+
+    double bodyDatePrefHeightForTest() {
+        return bodyDateGrid.prefHeight(-1);
+    }
+
+    double maxNameCellRowLayoutYDelta() {
+        double max = 0;
+        for (int row = 0; row < members.size(); row++) {
+            Node name = childAt(leftBodyGrid, 1, row);
+            Node cell = firstStackPaneAtRow(bodyDateGrid, row);
+            if (name == null || cell == null) {
+                return Double.POSITIVE_INFINITY;
+            }
+            max = Math.max(max, Math.abs(name.getLayoutY() - cell.getLayoutY()));
+        }
+        return max;
+    }
+
+    private static Node childAt(GridPane grid, int col, int row) {
+        for (Node child : grid.getChildren()) {
+            Integer c = GridPane.getColumnIndex(child);
+            Integer r = GridPane.getRowIndex(child);
+            int cc = c == null ? 0 : c;
+            int rr = r == null ? 0 : r;
+            if (cc == col && rr == row) {
+                return child;
+            }
+        }
+        return null;
+    }
+
+    private static Node firstStackPaneAtRow(GridPane grid, int row) {
+        for (Node child : grid.getChildren()) {
+            if (!(child instanceof StackPane)) {
+                continue;
+            }
+            Integer r = GridPane.getRowIndex(child);
+            int rr = r == null ? 0 : r;
+            if (rr == row) {
+                return child;
+            }
+        }
+        return null;
     }
 
     private static ColumnConstraints cloneColumnConstraints(ColumnConstraints src) {

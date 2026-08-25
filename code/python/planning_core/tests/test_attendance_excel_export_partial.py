@@ -17,7 +17,7 @@ def test_partial_member_export_updates_single_month_sheet(tmp_path):
     wb_before = load_workbook(calendar)
     company_before = wb_before[APP_MASTER_COMPANY_SHEET].cell(2, 1).value
     member_sheet = f"{APP_MASTER_MEMBER_SHEET_PREFIX}2026年4月"
-    member_before = wb_before[member_sheet].cell(2, 1).value
+    member_before = wb_before[member_sheet].cell(2, 2).value
 
     export_attendance_to_calendar_workbook(
         store,
@@ -30,4 +30,5 @@ def test_partial_member_export_updates_single_month_sheet(tmp_path):
 
     wb_after = load_workbook(calendar)
     assert wb_after[APP_MASTER_COMPANY_SHEET].cell(2, 1).value == company_before
-    assert wb_after[member_sheet].cell(2, 1).value == member_before
+    assert wb_after[member_sheet].cell(2, 2).value == member_before
+    assert member_before == "2026年4月 メンバー勤怠"

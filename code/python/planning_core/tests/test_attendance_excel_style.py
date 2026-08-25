@@ -30,7 +30,10 @@ def test_format_member_calendar_sheet_layout():
     ws = wb.active
     format_member_calendar_sheet(ws, 2026, 4, 30, {})
     assert ws.cell(1, 1).value == "メニューに戻る"
-    assert ws.cell(2, 1).value == "2026年4月 メンバー勤怠"
+    assert ws.cell(2, 2).value == "2026年4月 メンバー勤怠"
     assert ws.cell(MEMBER_CALENDAR_HEADER_ROW, 1).value == "メンバー"
     assert ws.cell(MEMBER_CALENDAR_HEADER_ROW, 2).value is not None
     assert ws.freeze_panes == f"B{MEMBER_CALENDAR_DATA_START_ROW}"
+    for merged in ws.merged_cells.ranges:
+        if merged.min_row in (2, 3):
+            assert merged.min_col >= 2, f"フリーズ列を跨ぐ結合: {merged}"

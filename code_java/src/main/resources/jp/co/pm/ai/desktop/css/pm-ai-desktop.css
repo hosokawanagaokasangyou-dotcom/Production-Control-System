@@ -526,6 +526,23 @@
     -fx-background-color: #7c2d12;
 }
 
+.button.pm-cluster-emboss-button {
+    -fx-cursor: hand;
+    -fx-font-weight: bold;
+}
+
+.button.pm-plan-input-action-hot {
+    -fx-background-color: #ea580c;
+    -fx-border-color: #c2410c;
+    -fx-border-width: 1;
+    -fx-text-fill: #ffffff;
+    -fx-effect: dropshadow(gaussian, #fb923c, 18, 0.55, 0, 0);
+}
+
+.button.pm-plan-input-action-hot:hover {
+    -fx-background-color: #c2410c;
+}
+
 /* ===== 残業シミュレーション ダイアログ（常にライト紙面・テーマ非連動） ===== */
 .overtime-sim-dialog {
     -fx-background-color: #f8fafc;
@@ -1374,10 +1391,11 @@
     -fx-alignment: center;
 }
 
-.pm-member-att-cell-wrap-today {
+.pm-member-att-cell-today {
     -fx-border-color: -fx-accent;
     -fx-border-width: 2;
     -fx-border-radius: 2;
+    -fx-background-insets: 2;
 }
 
 .pm-member-attendance-grid-member-selected {
@@ -1389,7 +1407,7 @@
     -fx-font-size: 10px;
     -fx-alignment: center;
     -fx-text-alignment: center;
-    -fx-padding: 2 4 2 4;
+    -fx-padding: 0 4 0 4;
 }
 
 .pm-machine-calendar-grid-loading .scroll-pane {
@@ -1459,13 +1477,13 @@
     -fx-font-size: 11px;
     -fx-alignment: center;
     -fx-text-alignment: center;
-    -fx-padding: 2 6 2 6;
+    -fx-padding: 0 6 0 6;
 }
 
 .pm-member-attendance-row-band {
     -fx-background-color: transparent;
     -fx-border-color: transparent;
-    -fx-border-width: 2;
+    -fx-border-width: 0;
     -fx-border-radius: 4;
     -fx-background-radius: 4;
 }
@@ -1473,7 +1491,7 @@
 .pm-grid-row-hover-band {
     -fx-background-color: transparent;
     -fx-border-color: transparent;
-    -fx-border-width: 2;
+    -fx-border-width: 0;
     -fx-border-radius: 4;
     -fx-background-radius: 4;
 }
