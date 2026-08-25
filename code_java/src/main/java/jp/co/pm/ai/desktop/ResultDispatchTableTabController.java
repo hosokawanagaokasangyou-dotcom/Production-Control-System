@@ -1035,12 +1035,24 @@ public final class ResultDispatchTableTabController {
         if (shell == null) {
             return;
         }
-        Path local = AppPaths.aladdinEntryDispatchPlanLocalXlsxPath(shell.snapshotUiEnv());
-        if (!Files.isRegularFile(local)) {
-            shell.showWarningDialog("同一化チェック", "ローカル最新の配台計画 Excel がありません。");
-            return;
-        }
-        runIdentityCheck(local);
+        runAladdinEntryExport(
+                false,
+                false,
+                outcome -> {
+                    AladdinIdentityCheckLocalFlow.NextStep next =
+                            AladdinIdentityCheckLocalFlow.afterExport(outcome);
+                    if (!next.canCheck()) {
+                        shell.showErrorDialog("同一化チェック", next.errorMessage());
+                        return;
+                    }
+                    Path excel = next.excelPath();
+                    if (!Files.isRegularFile(excel)) {
+                        shell.showWarningDialog(
+                                "同一化チェック", "ローカル最新の配台計画 Excel がありません。");
+                        return;
+                    }
+                    runIdentityCheck(excel);
+                });
     }
 
     @FXML

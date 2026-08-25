@@ -1,5 +1,6 @@
 package jp.co.pm.ai.desktop;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -59,6 +60,17 @@ class ResultDispatchTableTabFxmlTest {
         assertTrue(buttonStyleById.containsKey("aladdinEntryOpenLatestButton"));
         assertTrue(labelIds.contains("aladdinEntryOpenLatestDisabledBadge"));
         assertTrue(buttonStyleById.containsKey("aladdinEntryIdentityCheckButton"));
+        assertEquals(
+                "#onAladdinEntryIdentityCheckLocalAction",
+                buttonsById.get("aladdinEntryIdentityCheckButton").getAttribute("onAction"));
+        var tooltips = document.getElementsByTagName("Tooltip");
+        boolean identityCheckTooltip =
+                IntStream.range(0, tooltips.getLength())
+                        .mapToObj(tooltips::item)
+                        .filter(Element.class::isInstance)
+                        .map(Element.class::cast)
+                        .anyMatch(t -> t.getAttribute("text").contains("アラジン入力用Excelを生成"));
+        assertTrue(identityCheckTooltip);
         assertTrue(labelIds.contains("aladdinEntryIdentityCheckBadge"));
         assertFalse(
                 "true".equalsIgnoreCase(

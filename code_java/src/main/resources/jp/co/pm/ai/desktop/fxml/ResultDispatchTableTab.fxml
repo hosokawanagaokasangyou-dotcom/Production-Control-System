@@ -7,6 +7,7 @@
 <?import javafx.scene.control.ProgressBar?>
 <?import javafx.scene.control.Slider?>
 <?import javafx.scene.control.TitledPane?>
+<?import javafx.scene.control.Tooltip?>
 <?import javafx.scene.layout.FlowPane?>
 <?import javafx.scene.layout.HBox?>
 <?import javafx.scene.layout.StackPane?>
@@ -59,7 +60,9 @@
                         <Button fx:id="aladdinEntryIdentityCheckButton" mnemonicParsing="false"
                                 styleClass="pm-aladdin-entry-open-button"
                                 text="同一化チェック（ローカル最新）"
-                                onAction="#onAladdinEntryIdentityCheckLocalAction"/>
+                                onAction="#onAladdinEntryIdentityCheckLocalAction">
+                            <Tooltip text="先にアラジン入力用Excelを生成し、ローカル最新と加工計画を比較します。"/>
+                        </Button>
                         <Label fx:id="aladdinEntryIdentityCheckBadge"
                                styleClass="pm-aladdin-entry-identity-badge"
                                text="配台計画と加工計画は同一"
