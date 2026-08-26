@@ -20,6 +20,7 @@ import javafx.stage.DirectoryChooser;
 import javafx.stage.Window;
 
 import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.xssf.usermodel.XSSFCell;
 import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.apache.poi.ss.util.CellRangeAddress;
@@ -3099,6 +3100,8 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
             int destRowIdx = insertNewJuchuDataRowPreservingFormulas(sheet, lastDataRowIndex, null);
             targetRow = sheet.getRow(destRowIdx);
             applyDefaultJuchuFormulasIfMissing(targetRow, colMap, destRowIdx + 1);
+        } else {
+            writeJuchuAoTextsSplitSumArrayFormula(targetRow, targetRowIndex);
         }
 
         setJuchuSheetReqNoIfIncluded(wb, sheet, targetRow, reqNo);
@@ -5792,6 +5795,8 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                 targetRow = sheet.getRow(destRowIdx);
                 targetRowIndex = destRowIdx + 1;
                 applyDefaultJuchuFormulasIfMissing(targetRow, colMap, targetRowIndex);
+            } else {
+                writeJuchuAoTextsSplitSumArrayFormula(targetRow, targetRowIndex);
             }
 
             progress.accept(
@@ -6329,22 +6334,20 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         cell.setCellValue(value);
     }
 
-    /** テンプレートに無い列向けの既定数式（既に数式があれば触らない）。 */
+    /** テンプレートに無い列向けの既定数式（既に数式があれば触らない）。AO 列は常に配列数式で上書きする。 */
     private static void applyDefaultJuchuFormulasIfMissing(
             Row row, Map<String, Integer> colMap, int excelRow1Based) {
-        String aoAmountFormula = buildJuchuAoTextsSplitSumFormula(excelRow1Based);
         setJuchuFormulaIfMissing(row, colMap, "月数", "MONTH(AF" + excelRow1Based + ")");
         setJuchuFormulaIfMissing(row, colMap, "受注金額", "AI" + excelRow1Based + "*AH" + excelRow1Based);
         setJuchuFormulaIfMissing(row, colMap, "受注数", "M" + excelRow1Based);
-        setJuchuFormulaIfMissing(row, colMap, "単価", aoAmountFormula);
-        setJuchuFormulaByColumnIndexIfMissing(row, JUCHU_AO_COLUMN_INDEX, aoAmountFormula);
+        writeJuchuAoTextsSplitSumArrayFormula(row, excelRow1Based);
     }
 
     /**
      * AO 列向け: AH 列と AM 列の改行区切り値を対応ペアで掛け合わせて合計する数式。
      *
-     * <p>シート修飾なしの {@code $AH} / {@code $AM} だと Excel が {@code @TEXTSPLIT}（暗黙の交差）に
-     * 書き換え、結果が 0 になるため {@code 受注ﾌｧｲﾙ!$AH} / {@code 受注ﾌｧｲﾙ!$AM} を使う。
+     * <p>通常数式として書くと Excel 365 が {@code @TEXTSPLIT}（暗黙の交差）を挿入し結果が 0 になる。
+     * 配列数式（{@code t="array"}）として書き、シート修飾付き参照を使う。
      *
      * <p>例: {@code =SUM(IFERROR(VALUE(TEXTSPLIT(受注ﾌｧｲﾙ!$AH373,CHAR(10))),0)*IFERROR(VALUE(TEXTSPLIT(受注ﾌｧｲﾙ!$AM373,CHAR(10))),0))}
      */
@@ -6358,6 +6361,41 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                 + "!$AM"
                 + excelRow1Based
                 + ",CHAR(10))),0))";
+    }
+
+    /**
+     * AO 列へ TEXTSPLIT 積和を配列数式として書き込む。テンプレート複製の通常数式や {@code @TEXTSPLIT} を上書きする。
+     */
+    static void writeJuchuAoTextsSplitSumArrayFormula(Row row, int excelRow1Based) {
+        if (row == null || excelRow1Based < 1) {
+            return;
+        }
+        Sheet sheet = row.getSheet();
+        if (sheet == null) {
+            return;
+        }
+        String formula = buildJuchuAoTextsSplitSumFormula(excelRow1Based);
+        int col = JUCHU_AO_COLUMN_INDEX;
+        Cell cell = row.getCell(col);
+        if (cell != null && cell.getCellType() == CellType.FORMULA) {
+            try {
+                sheet.removeArrayFormula(cell);
+            } catch (IllegalArgumentException | IllegalStateException ignored) {
+                cell.setBlank();
+            }
+        }
+        if (row.getCell(col) == null) {
+            row.createCell(col);
+        }
+        CellRangeAddress range =
+                new CellRangeAddress(row.getRowNum(), row.getRowNum(), col, col);
+        sheet.setArrayFormula(formula, range);
+        Cell written = row.getCell(col);
+        if (written instanceof XSSFCell xssfCell
+                && xssfCell.getCTCell() != null
+                && xssfCell.getCTCell().getF() != null) {
+            xssfCell.getCTCell().getF().setAca(true);
+        }
     }
 
     private static void setJuchuFormulaIfMissing(
