@@ -774,6 +774,7 @@ public final class MainShellController
 
     /** 工場切替後のタブ再読込完了まで進捗モーダルを維持する。 */
     private volatile boolean factorySwitchAwaitingBackgroundLoadBeforeModalClose;
+    private FactorySiteSwitchTiming activeFactorySiteSwitchTiming;
 
     private FactorySite factorySwitchBusyFrom;
     private FactorySite factorySwitchBusyTo;
@@ -5254,6 +5255,7 @@ public final class MainShellController
         startupSequenceActive = false;
         startupRestoredFactorySite = false;
         startupAwaitingBackgroundLoadBeforeModalClose = false;
+        appendFactorySiteSwitchTotal();
         endFactorySiteSwitchBusy();
         endEnvVarsStartupCheckBusy();
         if (!isEnvVarsInitializationPending()
@@ -6487,6 +6489,7 @@ public final class MainShellController
         }
         if (factorySwitchAwaitingBackgroundLoadBeforeModalClose) {
             updateFactorySiteSwitchBusy(FactorySiteSwitchBusyDialog.STATUS_DONE);
+            appendFactorySiteSwitchTotal();
             endFactorySiteSwitchBusy();
         }
         clearGlobalLongTaskProgress();
@@ -8433,6 +8436,7 @@ public final class MainShellController
             startupTabBackgroundLoad.cancelForFactorySwitch();
         }
         FactorySiteSwitchContext ctx = new FactorySiteSwitchContext(oldSite, newSite, startup);
+        activeFactorySiteSwitchTiming = ctx.timing();
         runFactorySiteSwitchStep(ctx, FactorySiteSwitchBusySupport.WORK_CONNECT);
     }
 
@@ -8441,6 +8445,7 @@ public final class MainShellController
         private final FactorySite newSite;
         private final boolean startup;
         private final long t0Nanos;
+        private final FactorySiteSwitchTiming timing;
         private Optional<FactorySiteWorkspaceSnapshot> loaded = Optional.empty();
 
         private FactorySiteSwitchContext(FactorySite oldSite, FactorySite newSite, boolean startup) {
@@ -8448,6 +8453,7 @@ public final class MainShellController
             this.newSite = newSite;
             this.startup = startup;
             this.t0Nanos = System.nanoTime();
+            this.timing = new FactorySiteSwitchTiming(t0Nanos);
         }
 
         private FactorySite oldSite() {
@@ -8466,6 +8472,10 @@ public final class MainShellController
             return t0Nanos;
         }
 
+        private FactorySiteSwitchTiming timing() {
+            return timing;
+        }
+
         private Optional<FactorySiteWorkspaceSnapshot> loaded() {
             return loaded;
         }
@@ -8481,6 +8491,7 @@ public final class MainShellController
     }
 
     private void executeFactorySiteSwitchWork(FactorySiteSwitchContext ctx, int step) {
+        long workStartedAtNanos = System.nanoTime();
         try {
             switch (step) {
                 case FactorySiteSwitchBusySupport.WORK_CONNECT -> {
@@ -8567,6 +8578,34 @@ public final class MainShellController
                 finishFactorySiteSwitch(null, false);
             }
             throw ex;
+        } finally {
+            appendFactorySiteSwitchTiming(
+                    ctx.timing(),
+                    FactorySiteSwitchTiming.corePhaseName(step),
+                    workStartedAtNanos);
+        }
+    }
+
+    private void appendFactorySiteSwitchTiming(
+            FactorySiteSwitchTiming timing, String phase, long workStartedAtNanos) {
+        if (timing == null) {
+            return;
+        }
+        String line = timing.phaseLine(phase, workStartedAtNanos, System.nanoTime());
+        if (!line.isEmpty()) {
+            appendLog(line);
+        }
+    }
+
+    private void appendFactorySiteSwitchTotal() {
+        FactorySiteSwitchTiming timing = activeFactorySiteSwitchTiming;
+        activeFactorySiteSwitchTiming = null;
+        if (timing == null) {
+            return;
+        }
+        String line = timing.totalLine(System.nanoTime());
+        if (!line.isEmpty()) {
+            appendLog(line);
         }
     }
 
@@ -8578,6 +8617,7 @@ public final class MainShellController
     /** 到達不可などで切替を中止し、コンボを永続工場へ戻す。 */
     private void abortFactorySiteSwitch(String reason) {
         GlobalInitSettingTarget.setSuppressUiEnvInferencePersist(false);
+        activeFactorySiteSwitchTiming = null;
         endFactorySiteSwitchBusy();
         factorySiteSwitchInProgress = false;
         setFactorySiteCombosDisabled(false);
@@ -8639,7 +8679,10 @@ public final class MainShellController
     }
 
     private void executeFactorySiteSwitchPostWork(int unit) {
-        switch (unit) {
+        long workStartedAtNanos = System.nanoTime();
+        boolean finishTimingAfterWork = false;
+        try {
+            switch (unit) {
             case FactorySiteSwitchBusySupport.POST_ATTENDANCE_COMPANY -> {
                 Path jsonPath = AppPaths.attendanceDataJsonPath(collectUiEnv());
                 appendLog("[attendance] JSON 再読込: " + jsonPath);
@@ -8675,13 +8718,24 @@ public final class MainShellController
                     startupTabBackgroundLoad.resetAndScheduleAfterFactorySwitch();
                     if (!FactorySiteSwitchBusySupport.keepBusyDialogForPostSwitchTabLoad(
                             startupSequenceActive, startupTabBackgroundLoadActive)) {
+                        finishTimingAfterWork = true;
                         endFactorySiteSwitchBusy();
                     }
                 } else {
+                    finishTimingAfterWork = true;
                     endFactorySiteSwitchBusy();
                 }
             }
             default -> endFactorySiteSwitchBusy();
+            }
+        } finally {
+            appendFactorySiteSwitchTiming(
+                    activeFactorySiteSwitchTiming,
+                    FactorySiteSwitchTiming.postPhaseName(unit),
+                    workStartedAtNanos);
+            if (finishTimingAfterWork) {
+                appendFactorySiteSwitchTotal();
+            }
         }
     }
 
