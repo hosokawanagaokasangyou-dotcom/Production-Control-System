@@ -39,7 +39,7 @@ class SpreadsheetTabularSupportSelectionFocusTest {
         assertEquals(
                 5,
                 SpreadsheetTabularSupport.resolveExpansionFocusViewRow(
-                        FIRST_DATA, Set.of(1, 5), 1));
+                        FIRST_DATA, Set.of(1, 5), 3));
     }
 
     @Test
@@ -47,6 +47,6 @@ class SpreadsheetTabularSupportSelectionFocusTest {
         assertEquals(
                 25,
                 SpreadsheetTabularSupport.resolveExpansionFocusModelRow(
-                        FIRST_DATA, Set.of(17, 25), 17));
+                        FIRST_DATA, Set.of(17, 25), 19));
     }
 }

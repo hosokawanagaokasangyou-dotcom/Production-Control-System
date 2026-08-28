@@ -1,5 +1,6 @@
 {
   "mainShellTabOrder": [
+    "equipmentStatusDashboard",
     "run",
     "uiBadgeDesign",
     "pushButtonDesign",

@@ -29,7 +29,7 @@ class EquipmentStatusDashboardSourceLoaderTest {
         Files.createDirectories(dir.resolve("actual-empty"));
         Path taskInputDir = dir.resolve("task-input");
         Files.createDirectories(taskInputDir);
-        Files.writeString(taskInputDir.resolve("plan.csv"), "機械名\n");
+        Files.writeString(taskInputDir.resolve("plan.xlsx"), "機械名\n");
         Files.writeString(
                 dir.resolve(AppPaths.RESULT_DISPATCH_TABLE_JSON_BASENAME),
                 "{\"columns\":[],\"rows\":[]}");
@@ -49,8 +49,8 @@ class EquipmentStatusDashboardSourceLoaderTest {
         Files.createDirectories(dir.resolve("actual-empty"));
         Path taskInputDir = dir.resolve("task-input");
         Files.createDirectories(taskInputDir);
-        Path planCsv = taskInputDir.resolve("plan.csv");
-        Files.writeString(planCsv, "機械名\nM1\n");
+        Path planXlsx = taskInputDir.resolve("plan.xlsx");
+        Files.writeString(planXlsx, "機械名\nM1\n");
         Files.writeString(
                 dir.resolve(AppPaths.RESULT_DISPATCH_TABLE_JSON_BASENAME),
                 "{\"columns\":[],\"rows\":[]}");
@@ -60,7 +60,7 @@ class EquipmentStatusDashboardSourceLoaderTest {
         SourceFingerprint fp1 = EquipmentStatusDashboardSourceLoader.fingerprint(ui);
 
         Thread.sleep(20);
-        Files.writeString(planCsv, "機械名,依頼NO\nM1,R1\n");
+        Files.writeString(planXlsx, "機械名,依頼NO\nM1,R1\n");
         SourceFingerprint fp2 = EquipmentStatusDashboardSourceLoader.fingerprint(ui);
         Assertions.assertNotEquals(fp1, fp2);
     }
@@ -73,8 +73,8 @@ class EquipmentStatusDashboardSourceLoaderTest {
         Files.writeString(
                 dir.resolve(AppPaths.SHAPED_ALADDIN_PLAN_JSON_BASENAME),
                 "{\"columns\":[\"機械名\"],\"rows\":[[\"M1\"]]}");
-        Path planCsv = taskInputDir.resolve("plan.csv");
-        Files.writeString(planCsv, "機械名,依頼NO\nM1,R1\n");
+        Path planXlsx = taskInputDir.resolve("plan.xlsx");
+        Files.writeString(planXlsx, "機械名,依頼NO\nM1,R1\n");
 
         Map<String, String> ui = uiForDir(dir);
         ui.put(AppPaths.KEY_PM_AI_TASK_INPUT_SOURCE_DIR, taskInputDir.toString());

@@ -6,7 +6,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.reconciliation.EcSideClassification;
@@ -15,11 +20,19 @@ import jp.co.pm.ai.desktop.reconciliation.EcSideClassification;
 class PlanInputEcSideW818IntegrationTest {
 
     @Test
-    void readW818EcSideFromRepoOutputIfPresent() throws Exception {
-        Path repoRoot = Path.of("..").toAbsolutePath().normalize();
-        Path plan = repoRoot.resolve("output").resolve(AppPaths.STAGE1_PLAN_TASKS_FILENAME);
-        if (!Files.isRegularFile(plan)) {
-            return;
+    void readW818EcSideFromFixture(@TempDir Path tempDir) throws Exception {
+        Path plan = tempDir.resolve(AppPaths.STAGE1_PLAN_TASKS_FILENAME);
+        try (Workbook workbook = new XSSFWorkbook()) {
+            Sheet sheet = workbook.createSheet(AppPaths.STAGE1_PLAN_OUTPUT_SHEET);
+            Row header = sheet.createRow(0);
+            header.createCell(0).setCellValue("依頼NO");
+            header.createCell(1).setCellValue(EcSideClassification.COLUMN_TITLE);
+            Row data = sheet.createRow(1);
+            data.createCell(0).setCellValue("W8-18");
+            data.createCell(1).setCellValue(EcSideClassification.DOUBLE_SIDED);
+            try (var out = Files.newOutputStream(plan)) {
+                workbook.write(out);
+            }
         }
         PlanInputTabularIo.TabularRead tr =
                 PlanInputTabularIo.readWithResolvedSheet(plan, AppPaths.STAGE1_PLAN_OUTPUT_SHEET);

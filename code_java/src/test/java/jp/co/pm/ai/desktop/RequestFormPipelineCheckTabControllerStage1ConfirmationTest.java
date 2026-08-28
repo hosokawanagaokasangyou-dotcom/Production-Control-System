@@ -100,10 +100,11 @@ class RequestFormPipelineCheckTabControllerStage1ConfirmationTest {
 
     @Test
     void requiresStage1Confirmation_usesDisplayWhenParsedDateMissing() {
+        LocalDate future = LocalDate.now().plusDays(3);
         MainRow row =
                 sampleRow(
                         null,
-                        "2026/8/17",
+                        future.getYear() + "/" + future.getMonthValue() + "/" + future.getDayOfMonth(),
                         "―",
                         RawInputDateCrossSourceCheck.STATUS_MISMATCH,
                         true,
