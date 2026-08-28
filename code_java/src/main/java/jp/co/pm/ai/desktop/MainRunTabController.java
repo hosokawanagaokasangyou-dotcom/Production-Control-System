@@ -1179,6 +1179,32 @@ public final class MainRunTabController {
         }
     }
 
+    /** シェルUI復元前に、同一起動中に出力したログを退避する（呼び出し元はFXスレッド）。 */
+    List<String> snapshotLogLinesForShellUiRestore() {
+        if (Platform.isFxApplicationThread()) {
+            flushPendingLogAppendsOnFxThread();
+        }
+        return List.copyOf(logLinesAll);
+    }
+
+    /** セッション復元で空になったログへ、同一起動中のログを戻す（呼び出し元はFXスレッド）。 */
+    void restoreLogLinesAfterShellUiRestore(List<String> lines) {
+        Runnable restore =
+                () -> {
+                    flushPendingLogAppendsOnFxThread();
+                    if (lines != null && !lines.isEmpty()) {
+                        logLinesAll.addAll(lines);
+                    }
+                    refreshLogLinesVisiblePredicate();
+                    scrollLogListToLastVisibleRowIfNeeded();
+                };
+        if (Platform.isFxApplicationThread()) {
+            restore.run();
+        } else {
+            Platform.runLater(restore);
+        }
+    }
+
     TextField getWorkbookField() {
         return workbookField;
     }

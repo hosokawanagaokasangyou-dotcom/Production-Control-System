@@ -4622,7 +4622,9 @@ public final class MainShellController
             return;
         }
         DesktopSessionState merged = collectDesktopSession().mergeShellTabUiFrom(snap);
+        List<String> upgradeLogs = mainRunTabController.snapshotLogLinesForShellUiRestore();
         applyDesktopSession(merged, false, false);
+        mainRunTabController.restoreLogLinesAfterShellUiRestore(upgradeLogs);
         refreshDesktopSessionDependentUi();
         PortableBundleUpgradeUiSnapshot.clear();
         appendLog("[startup] バージョンアップ: メインシェルタブ配置を前回状態から復元しました。");
