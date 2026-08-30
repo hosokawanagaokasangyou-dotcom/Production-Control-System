@@ -70,10 +70,15 @@ public final class EnvVarsInitializedAtStore {
     /** 現在時刻を記録する（ISO-8601 instant 文字列）。 */
     public static void recordNow() {
         try {
-            Files.createDirectories(storePath().getParent());
-            Files.writeString(storePath(), Instant.now().toString(), StandardCharsets.UTF_8);
+            recordNowOrThrow();
         } catch (Exception ignored) {
         }
+    }
+
+    /** 現在時刻を記録し、保存失敗を呼び出し元へ返す。VU完了判定で使用する。 */
+    public static void recordNowOrThrow() throws java.io.IOException {
+        Files.createDirectories(storePath().getParent());
+        Files.writeString(storePath(), Instant.now().toString(), StandardCharsets.UTF_8);
     }
 
     /**
@@ -81,15 +86,21 @@ public final class EnvVarsInitializedAtStore {
      */
     public static void recordEnvFingerprint(Map<String, String> env, Predicate<String> includeKey) {
         try {
-            CanonicalEnvBody canonical = canonicalEnvBody(env, includeKey);
-            if (canonical.digest().isEmpty()) {
-                return;
-            }
-            Files.createDirectories(fingerprintPath().getParent());
-            Files.writeString(fingerprintPath(), canonical.digest(), StandardCharsets.UTF_8);
-            Files.writeString(baselineCanonicalPath(), canonical.body(), StandardCharsets.UTF_8);
+            recordEnvFingerprintOrThrow(env, includeKey);
         } catch (Exception ignored) {
         }
+    }
+
+    /** フィンガープリントを記録し、保存失敗を呼び出し元へ返す。VU完了判定で使用する。 */
+    public static void recordEnvFingerprintOrThrow(
+            Map<String, String> env, Predicate<String> includeKey) throws java.io.IOException {
+        CanonicalEnvBody canonical = canonicalEnvBody(env, includeKey);
+        if (canonical.digest().isEmpty()) {
+            throw new java.io.IOException("環境変数フィンガープリントが空です");
+        }
+        Files.createDirectories(fingerprintPath().getParent());
+        Files.writeString(fingerprintPath(), canonical.digest(), StandardCharsets.UTF_8);
+        Files.writeString(baselineCanonicalPath(), canonical.body(), StandardCharsets.UTF_8);
     }
 
     static Map<String, String> loadRecordedBaselineEnv(Predicate<String> includeKey) {

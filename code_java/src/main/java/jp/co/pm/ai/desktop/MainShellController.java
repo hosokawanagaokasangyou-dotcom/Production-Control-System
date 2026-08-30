@@ -774,6 +774,7 @@ public final class MainShellController
 
     /** 工場切替後のタブ再読込完了まで進捗モーダルを維持する。 */
     private volatile boolean factorySwitchAwaitingBackgroundLoadBeforeModalClose;
+
     private FactorySiteSwitchTiming activeFactorySiteSwitchTiming;
 
     private FactorySite factorySwitchBusyFrom;
@@ -4403,6 +4404,10 @@ public final class MainShellController
                     workspace.orElseThrow(),
                     plan.preserveEnvInitializationInSessionFragment());
         }
+        if (plan.overlayFactoryNetworkDefaults() && plan.restoreSavedUiEnvRows()) {
+            applyFactorySitePortableAndNetworkDefaults(effective);
+        }
+        restoreRequestFormOriginalDirFromFactoryWorkspace(effective, "");
     }
 
     /** {@link #envResetInProgress} 中の {@code setAll} では自動保存フックが付かないため、復元後に付け直す。 */
@@ -4446,6 +4451,16 @@ public final class MainShellController
             FactorySiteWorkspaceStore.save(operator, site, buildFactorySiteWorkspaceSnapshot());
         }
         DesktopSessionStateStore.save(collectDesktopSessionForGlobalPersistence());
+    }
+
+    private void persistOperatorWorkspaceForEnvInitBaselineStrict(FactorySite site)
+            throws IOException {
+        stabilizeEnvRowsForInitializationBaseline();
+        String operator = FactoryOperatorUserStore.sessionOperatorName();
+        if (!operator.isBlank() && site != null && site != FactorySite.RDP_LAUNCHER) {
+            FactorySiteWorkspaceStore.save(operator, site, buildFactorySiteWorkspaceSnapshot());
+        }
+        DesktopSessionStateStore.saveOrThrow(collectDesktopSessionForGlobalPersistence());
     }
 
     /** 工場ワークスペースの session 断片のみ適用（環境変数行は {@link #applyEnvRowsFullBundledResetAndPersist} 後に使う）。 */
@@ -4744,8 +4759,75 @@ public final class MainShellController
      */
     private void applyFactoryScopedGlobalAndEnvReset(FactorySite site, boolean persistSession) {
         FactorySite effective = site != null ? site : FactorySite.KONAN;
+        String preservedOriginalDir = captureReachableRequestFormOriginalDir();
+        preserveRequestFormOriginalDirForFactory(effective, preservedOriginalDir);
         applyGlobalInitSettingBeforeEnvReset(effective);
         applyEnvRowsFullBundledResetAndPersist(persistSession, effective);
+        restoreRequestFormOriginalDirFromFactoryWorkspace(effective, preservedOriginalDir);
+    }
+
+    private void applyFactoryScopedGlobalAndEnvResetStrict(
+            FactorySite site, boolean persistSession) throws IOException {
+        FactorySite effective = site != null ? site : FactorySite.KONAN;
+        String preservedOriginalDir = captureReachableRequestFormOriginalDir();
+        preserveRequestFormOriginalDirForFactory(effective, preservedOriginalDir);
+        applyGlobalInitSettingBeforeEnvReset(effective);
+        applyEnvRowsFullBundledResetAndPersist(persistSession, effective, true);
+        restoreRequestFormOriginalDirFromFactoryWorkspace(effective, preservedOriginalDir);
+    }
+
+    private String captureReachableRequestFormOriginalDir() {
+        String configured = envTabValueTrimmed(AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR);
+        if (configured.isEmpty()
+                || !NetworkSourceDirResolver.isRequestFormOriginalDirReachable(
+                        Map.of(AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR, configured))) {
+            return "";
+        }
+        try {
+            return Path.of(configured).toAbsolutePath().normalize().toString();
+        } catch (RuntimeException ex) {
+            return "";
+        }
+    }
+
+    private void preserveRequestFormOriginalDirForFactory(
+            FactorySite site, String preservedOriginalDir) {
+        if (preservedOriginalDir == null || preservedOriginalDir.isBlank()) {
+            return;
+        }
+        String operator = FactoryOperatorUserStore.sessionOperatorName();
+        if (!operator.isBlank() && site != null && site != FactorySite.RDP_LAUNCHER) {
+            FactorySiteWorkspaceStore.save(operator, site, buildFactorySiteWorkspaceSnapshot());
+        }
+    }
+
+    private void saveCurrentFactoryWorkspace() {
+        String operator = FactoryOperatorUserStore.sessionOperatorName();
+        FactorySite site = GlobalInitSettingTarget.load();
+        if (operator.isBlank() || site == null || site == FactorySite.RDP_LAUNCHER) {
+            return;
+        }
+        FactorySiteWorkspaceStore.save(operator, site, buildFactorySiteWorkspaceSnapshot());
+        FactorySiteWorkspaceStore.flushMemoryCacheToDisk(operator);
+    }
+
+    private boolean restoreRequestFormOriginalDirFromFactoryWorkspace(
+            FactorySite site, String fallbackOriginalDir) {
+        String operator = FactoryOperatorUserStore.sessionOperatorName();
+        String originalDir =
+                !operator.isBlank() && site != null && site != FactorySite.RDP_LAUNCHER
+                        ? FactorySiteWorkspaceStore
+                                .loadReachableRequestFormOriginalDir(operator, site)
+                                .orElse("")
+                        : "";
+        if (originalDir.isBlank() && fallbackOriginalDir != null) {
+            originalDir = fallbackOriginalDir.strip();
+        }
+        if (originalDir.isBlank()) {
+            return false;
+        }
+        updateEnvTabValue(AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR, originalDir);
+        return true;
     }
 
     private void applyGlobalInitSettingBeforeEnvReset(FactorySite site) {
@@ -4845,6 +4927,16 @@ public final class MainShellController
      * @param factorySite テンプレ再構築後に適用する工場別ネットワーク／マスタ既定（湖南＝従来のコード既定）
      */
     private void applyEnvRowsFullBundledResetAndPersist(boolean persistSession, FactorySite factorySite) {
+        try {
+            applyEnvRowsFullBundledResetAndPersist(persistSession, factorySite, false);
+        } catch (IOException impossible) {
+            throw new IllegalStateException(impossible);
+        }
+    }
+
+    private void applyEnvRowsFullBundledResetAndPersist(
+            boolean persistSession, FactorySite factorySite, boolean strictPersistence)
+            throws IOException {
         if (envRows == null) {
             return;
         }
@@ -4876,12 +4968,20 @@ public final class MainShellController
         applyRepoFolderPathNormalization();
         syncDesktopSessionPathFieldsFromEnvTab();
         if (persistSession) {
-            DesktopSessionStateStore.save(collectDesktopSessionForGlobalPersistence());
+            if (strictPersistence) {
+                DesktopSessionStateStore.saveOrThrow(collectDesktopSessionForGlobalPersistence());
+            } else {
+                DesktopSessionStateStore.save(collectDesktopSessionForGlobalPersistence());
+            }
         }
         refreshPersonBadgeSkillsMembersFromMaster();
         mainRunTabController.refreshOpenWorkbookHintLabels();
         uiEnvSaveDebounce.stop();
-        EnvVarsInitializedAtStore.recordNow();
+        if (strictPersistence) {
+            EnvVarsInitializedAtStore.recordNowOrThrow();
+        } else {
+            EnvVarsInitializedAtStore.recordNow();
+        }
         envVarsDifferFromInitialAtStartup.set(false);
         envInitTabBlockLogEmitted.set(false);
         envVarsStartupCheckCompleted.set(true);
@@ -5278,6 +5378,12 @@ public final class MainShellController
                 collectUiEnv(), MainShellController::includeInEnvInitFingerprint);
     }
 
+    private void recordEnvInitializationBaselineStrict() throws IOException {
+        stabilizeEnvRowsForInitializationBaseline();
+        EnvVarsInitializedAtStore.recordEnvFingerprintOrThrow(
+                collectUiEnv(), MainShellController::includeInEnvInitFingerprint);
+    }
+
     /**
      * 起動時（工場ワークスペース復元後）に、環境変数タブの値が初期化テンプレートと一致するか一度だけ判定する。
      */
@@ -5470,8 +5576,14 @@ public final class MainShellController
         if (primaryStage == null || envRows == null) {
             return;
         }
-        if (!envTabValueTrimmed(AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR).isEmpty()) {
+        String configured = envTabValueTrimmed(AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR);
+        if (!configured.isEmpty()
+                && NetworkSourceDirResolver.isRequestFormOriginalDirReachable(
+                        Map.of(AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR, configured))) {
             return;
+        }
+        if (!configured.isEmpty()) {
+            updateEnvTabValue(AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR, "");
         }
         Alert intro = new Alert(AlertType.INFORMATION);
         initDialogOwnerIfSceneReady(intro);
@@ -5514,6 +5626,7 @@ public final class MainShellController
         }
         String abs = selected.toPath().toAbsolutePath().normalize().toString();
         updateEnvTabValue(AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR, abs);
+        saveCurrentFactoryWorkspace();
         DesktopSessionStateStore.save(collectDesktopSession());
         appendLog(logPrefix + " " + AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR + " を設定: " + abs);
     }
@@ -6488,9 +6601,11 @@ public final class MainShellController
             finishStartupSequenceProgressAndPrompt();
         }
         if (factorySwitchAwaitingBackgroundLoadBeforeModalClose) {
+            FactorySite switchedFactory = factorySwitchBusyTo;
             updateFactorySiteSwitchBusy(FactorySiteSwitchBusyDialog.STATUS_DONE);
             appendFactorySiteSwitchTotal();
             endFactorySiteSwitchBusy();
+            maybePromptRequestFormOriginalDirIfUnset("[factory]", switchedFactory);
         }
         clearGlobalLongTaskProgress();
         refreshAttendanceReadiness();
@@ -8683,50 +8798,50 @@ public final class MainShellController
         boolean finishTimingAfterWork = false;
         try {
             switch (unit) {
-            case FactorySiteSwitchBusySupport.POST_ATTENDANCE_COMPANY -> {
-                Path jsonPath = AppPaths.attendanceDataJsonPath(collectUiEnv());
-                appendLog("[attendance] JSON 再読込: " + jsonPath);
-                if (companyCalendarTabController != null) {
-                    companyCalendarTabController.reloadAttendanceDataFromJsonIfEnabled();
+                case FactorySiteSwitchBusySupport.POST_ATTENDANCE_COMPANY -> {
+                    Path jsonPath = AppPaths.attendanceDataJsonPath(collectUiEnv());
+                    appendLog("[attendance] JSON 再読込: " + jsonPath);
+                    if (companyCalendarTabController != null) {
+                        companyCalendarTabController.reloadAttendanceDataFromJsonIfEnabled();
+                    }
+                    runFactorySiteSwitchPostWork(FactorySiteSwitchBusySupport.POST_ATTENDANCE_MEMBER);
                 }
-                runFactorySiteSwitchPostWork(FactorySiteSwitchBusySupport.POST_ATTENDANCE_MEMBER);
-            }
-            case FactorySiteSwitchBusySupport.POST_ATTENDANCE_MEMBER -> {
-                if (memberAttendanceTabController != null) {
-                    memberAttendanceTabController.reloadAttendanceDataFromJsonIfEnabled();
+                case FactorySiteSwitchBusySupport.POST_ATTENDANCE_MEMBER -> {
+                    if (memberAttendanceTabController != null) {
+                        memberAttendanceTabController.reloadAttendanceDataFromJsonIfEnabled();
+                    }
+                    runFactorySiteSwitchPostWork(FactorySiteSwitchBusySupport.POST_ATTENDANCE_MACHINE);
                 }
-                runFactorySiteSwitchPostWork(FactorySiteSwitchBusySupport.POST_ATTENDANCE_MACHINE);
-            }
-            case FactorySiteSwitchBusySupport.POST_ATTENDANCE_MACHINE -> {
-                if (machineCalendarTabController != null) {
-                    machineCalendarTabController.reloadMachineCalendarDataIfEnabled();
+                case FactorySiteSwitchBusySupport.POST_ATTENDANCE_MACHINE -> {
+                    if (machineCalendarTabController != null) {
+                        machineCalendarTabController.reloadMachineCalendarDataIfEnabled();
+                    }
+                    runFactorySiteSwitchPostWork(FactorySiteSwitchBusySupport.POST_ATTENDANCE_MASTER);
                 }
-                runFactorySiteSwitchPostWork(FactorySiteSwitchBusySupport.POST_ATTENDANCE_MASTER);
-            }
-            case FactorySiteSwitchBusySupport.POST_ATTENDANCE_MASTER -> {
-                if (masterDispatchSheetsTabController != null) {
-                    masterDispatchSheetsTabController.reloadFromCurrentFactory(false);
+                case FactorySiteSwitchBusySupport.POST_ATTENDANCE_MASTER -> {
+                    if (masterDispatchSheetsTabController != null) {
+                        masterDispatchSheetsTabController.reloadFromCurrentFactory(false);
+                    }
+                    refreshAttendanceReadiness(true);
+                    runFactorySiteSwitchPostWork(FactorySiteSwitchBusySupport.POST_BACKGROUND_LOAD);
                 }
-                refreshAttendanceReadiness(true);
-                runFactorySiteSwitchPostWork(FactorySiteSwitchBusySupport.POST_BACKGROUND_LOAD);
-            }
-            case FactorySiteSwitchBusySupport.POST_BACKGROUND_LOAD -> {
-                notifyActiveMainShellTabAfterWorkspaceChange();
-                if (startupTabBackgroundLoad != null) {
-                    beginFactorySiteSwitchTabLoadBusy();
-                    factorySwitchAwaitingBackgroundLoadBeforeModalClose = true;
-                    startupTabBackgroundLoad.resetAndScheduleAfterFactorySwitch();
-                    if (!FactorySiteSwitchBusySupport.keepBusyDialogForPostSwitchTabLoad(
-                            startupSequenceActive, startupTabBackgroundLoadActive)) {
+                case FactorySiteSwitchBusySupport.POST_BACKGROUND_LOAD -> {
+                    notifyActiveMainShellTabAfterWorkspaceChange();
+                    if (startupTabBackgroundLoad != null) {
+                        beginFactorySiteSwitchTabLoadBusy();
+                        factorySwitchAwaitingBackgroundLoadBeforeModalClose = true;
+                        startupTabBackgroundLoad.resetAndScheduleAfterFactorySwitch();
+                        if (!FactorySiteSwitchBusySupport.keepBusyDialogForPostSwitchTabLoad(
+                                startupSequenceActive, startupTabBackgroundLoadActive)) {
+                            finishTimingAfterWork = true;
+                            endFactorySiteSwitchBusy();
+                        }
+                    } else {
                         finishTimingAfterWork = true;
                         endFactorySiteSwitchBusy();
                     }
-                } else {
-                    finishTimingAfterWork = true;
-                    endFactorySiteSwitchBusy();
                 }
-            }
-            default -> endFactorySiteSwitchBusy();
+                default -> endFactorySiteSwitchBusy();
             }
         } finally {
             appendFactorySiteSwitchTiming(
@@ -10789,13 +10904,9 @@ public final class MainShellController
         if (!PortableBundleUpgradeFollowUp.isPendingFor(cwd)) {
             return;
         }
-        FactorySite site = resolveFactorySiteForPortableUpgrade(Optional.empty());
-        appendLog(
-                "[startup] バージョンアップ後の再起動: 環境変数初期化を強制実行します。工場="
-                        + site.displayLabelJa());
-        applyFactoryScopedGlobalAndEnvReset(site, true);
-        persistOperatorWorkspaceForEnvInitBaseline(site);
-        recordEnvInitializationBaseline();
+        alignPortableUpgradeRepoRoot(cwd.resolve("pm-ai-data"));
+        deferOperatorPromptForPortableUpgrade.set(true);
+        appendLog("[startup] バージョンアップ後の再起動を検出しました。VU後処理で設定を反映します。");
     }
 
     /**
@@ -11195,7 +11306,6 @@ public final class MainShellController
                         }
                         return;
                     }
-                    applyPortableUpgradeBundledPolicyFromPmAiData(localData);
                     applyBundledPortableDefaultsIfPresent();
                     String doneBanner =
                             "[startup] --- ポータルバージョンアップ完了（同期ファイル約 "
@@ -11265,17 +11375,20 @@ public final class MainShellController
         return 0;
     }
 
-    private void applyPortableUpgradeBundledPolicyFromPmAiData(Path localData) {
+    private boolean applyPortableUpgradeBundledPolicyFromPmAiData(Path localData) {
         try {
             InitSettingPersistence.applyPortableUpgradeOverwriteFromPmAiData(
-                    localData, collectUiEnv());
-            DesktopSessionStateStore.applyPortableUpgradeBundledPolicyToSessionStore(collectUiEnv());
+                    localData, localData);
+            Map<String, String> portableUi = portableUpgradeUi(localData);
+            DesktopSessionStateStore.applyPortableUpgradeBundledPolicyToSessionStore(portableUi);
             TableColumnOrderPersistence.overwriteTableColumnOrderStoreAfterPortableUpgrade(
-                    collectUiEnv());
+                    portableUi);
+            return true;
         } catch (IOException ex) {
             appendLog(
                     "[startup] バージョンアップ後のバンドル既定（タブ／列順／配台不要 JSON パス）の上書きに失敗: "
                             + ex.getMessage());
+            return false;
         }
     }
 
@@ -11294,15 +11407,32 @@ public final class MainShellController
             PortableBundleUpgradeLog fileLog,
             String completionNoteSuffix,
             Optional<Path> canonicalOpt) {
-        applyPortableUpgradeBundledPolicyFromPmAiData(localData);
         FactorySite siteAfterUpgrade = resolveFactorySiteForPortableUpgrade(canonicalOpt);
         GlobalInitSettingTarget.save(siteAfterUpgrade);
+        alignPortableUpgradeRepoRoot(localData);
+        if (!applyPortableUpgradeBundledPolicyFromPmAiData(localData)) {
+            retainPortableUpgradeFollowUp(cwd, canonicalOpt, siteAfterUpgrade);
+            deferOperatorPromptForPortableUpgrade.set(false);
+            appendLog(
+                    "[startup] VU後処理を中断しました。次回起動時に再試行するため、フォローアップを保持します。");
+            return;
+        }
         restoreOperatorAfterPortableUpgrade(siteAfterUpgrade);
         skipOperatorPromptAfterPortableUpgrade.set(true);
         deferOperatorPromptForPortableUpgrade.set(false);
         String operator = FactoryOperatorUserStore.sessionOperatorName();
-        applyFactoryScopedGlobalAndEnvReset(siteAfterUpgrade, true);
-        applyBundledPortableDefaultsIfPresent();
+        try {
+            applyFactoryScopedGlobalAndEnvResetStrict(siteAfterUpgrade, true);
+            applyBundledPortableDefaultsIfPresent();
+        } catch (Exception ex) {
+            retainPortableUpgradeFollowUp(cwd, canonicalOpt, siteAfterUpgrade);
+            skipOperatorPromptAfterPortableUpgrade.set(false);
+            appendLog(
+                    "[startup] VU後のグローバル設定・環境変数初期化に失敗しました。"
+                            + "次回起動時に再試行します: "
+                            + (ex.getMessage() != null ? ex.getMessage() : ex.toString()));
+            return;
+        }
         Optional<FactorySiteWorkspaceSnapshot> workspace = Optional.empty();
         if (!operator.isBlank()) {
             FactorySiteWorkspaceMigrator.migrateIfNeeded(
@@ -11318,8 +11448,18 @@ public final class MainShellController
             applyFactoryWorkspaceSessionFragment(workspace.get(), true);
         }
         applyPortableUpgradeShellUiSnapshotIfPresent();
-        persistOperatorWorkspaceForEnvInitBaseline(siteAfterUpgrade);
-        recordEnvInitializationBaseline();
+        try {
+            persistOperatorWorkspaceForEnvInitBaselineStrict(siteAfterUpgrade);
+            recordEnvInitializationBaselineStrict();
+        } catch (Exception ex) {
+            retainPortableUpgradeFollowUp(cwd, canonicalOpt, siteAfterUpgrade);
+            skipOperatorPromptAfterPortableUpgrade.set(false);
+            appendLog(
+                    "[startup] VU後のセッション・環境初期化記録の保存に失敗しました。"
+                            + "次回起動時に再試行します: "
+                            + (ex.getMessage() != null ? ex.getMessage() : ex.toString()));
+            return;
+        }
         int badgeMembers = refreshPersonBadgeSkillsMembersFromMaster();
         DesktopSessionStateStore.save(collectDesktopSessionForGlobalPersistence());
         mainRunTabController.refreshAppVersionLabel();
@@ -11347,6 +11487,48 @@ public final class MainShellController
         if (filesSyncedApprox > 0 && fileLog != null) {
             fileLog.appendLine(
                     "[startup] finishPortableUpgrade filesSyncedApprox=" + filesSyncedApprox);
+        }
+    }
+
+    private void alignPortableUpgradeRepoRoot(Path localData) {
+        if (envRows == null || localData == null) {
+            return;
+        }
+        String repoRoot = localData.toAbsolutePath().normalize().toString();
+        for (EnvVarRow row : envRows) {
+            if (AppPaths.KEY_PM_AI_REPO_ROOT.equals(nz(row.getName()).trim())) {
+                row.setValue(repoRoot);
+                return;
+            }
+        }
+    }
+
+    private Map<String, String> portableUpgradeUi(Path localData) {
+        LinkedHashMap<String, String> ui = new LinkedHashMap<>(collectUiEnv());
+        if (localData != null) {
+            ui.put(
+                    AppPaths.KEY_PM_AI_REPO_ROOT,
+                    localData.toAbsolutePath().normalize().toString());
+        }
+        return ui;
+    }
+
+    private void retainPortableUpgradeFollowUp(
+            Path cwd, Optional<Path> canonicalOpt, FactorySite site) {
+        if (cwd == null || PortableBundleUpgradeFollowUp.isPendingFor(cwd)) {
+            return;
+        }
+        String version =
+                canonicalOpt != null
+                        ? canonicalOpt
+                                .flatMap(PortableBundleSelfUpdater::readCanonicalPortableBundleVersion)
+                                .map(BigDecimal::toPlainString)
+                                .orElse("")
+                        : "";
+        try {
+            PortableBundleUpgradeFollowUp.writePending(cwd, version, site);
+        } catch (IOException ex) {
+            appendLog("[startup] VU後処理の再試行マーカー保存に失敗: " + ex.getMessage());
         }
     }
 

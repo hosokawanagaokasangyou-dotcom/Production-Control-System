@@ -78,6 +78,20 @@ public final class InitSettingPersistence {
      */
     public static void applyPortableUpgradeOverwriteFromPmAiData(Path pmAiDataRoot, Map<String, String> ui)
             throws IOException {
+        String configuredRepoRoot = ui != null ? ui.get(AppPaths.KEY_PM_AI_REPO_ROOT) : null;
+        Path destinationRepoRoot =
+                configuredRepoRoot != null && !configuredRepoRoot.isBlank()
+                        ? Path.of(configuredRepoRoot)
+                        : null;
+        applyPortableUpgradeOverwriteFromPmAiData(pmAiDataRoot, destinationRepoRoot);
+    }
+
+    /**
+     * ポータブル VU 用に、コピー元とコピー先のリポジトリ根を明示して既定設定を反映する。
+     * {@code sourceRepoRoot} と {@code destinationRepoRoot} が同一の場合はコピーを省略する。
+     */
+    public static void applyPortableUpgradeOverwriteFromPmAiData(
+            Path pmAiDataRoot, Path destinationRepoRoot) throws IOException {
         if (pmAiDataRoot == null) {
             return;
         }
@@ -85,7 +99,10 @@ public final class InitSettingPersistence {
         if (!Files.isDirectory(srcDir)) {
             return;
         }
-        Path dstDir = InitSettingPaths.resolveRepoInitSettingDir(ui);
+        Path dstDir =
+                destinationRepoRoot != null
+                        ? destinationRepoRoot.toAbsolutePath().normalize().resolve("init_setting")
+                        : InitSettingPaths.resolveRepoInitSettingDir(Map.of());
         Files.createDirectories(dstDir);
         copyIfRegularFile(srcDir, dstDir, InitSettingPaths.SESSION_DEFAULTS_FILE);
         copyIfRegularFile(srcDir, dstDir, InitSettingPaths.TABLE_COLUMN_DEFAULTS_FILE);
@@ -98,9 +115,18 @@ public final class InitSettingPersistence {
 
     private static void copyIfRegularFile(Path srcDir, Path dstDir, String fileName) throws IOException {
         Path src = srcDir.resolve(fileName);
-        if (!Files.isRegularFile(src)) {
+        Path dst = dstDir.resolve(fileName);
+        if (!Files.isRegularFile(src) || sameFile(src, dst)) {
             return;
         }
-        Files.copy(src, dstDir.resolve(fileName), StandardCopyOption.REPLACE_EXISTING);
+        Files.copy(src, dst, StandardCopyOption.REPLACE_EXISTING);
+    }
+
+    private static boolean sameFile(Path left, Path right) {
+        try {
+            return Files.exists(right) && Files.isSameFile(left, right);
+        } catch (IOException ignored) {
+            return left.toAbsolutePath().normalize().equals(right.toAbsolutePath().normalize());
+        }
     }
 }

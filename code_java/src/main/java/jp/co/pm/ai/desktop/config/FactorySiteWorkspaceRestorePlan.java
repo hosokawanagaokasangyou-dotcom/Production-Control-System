@@ -21,6 +21,6 @@ public record FactorySiteWorkspaceRestorePlan(
         boolean present = workspace != null && workspace.isPresent();
         boolean hasEnv = present && workspace.get().hasUiEnvRows();
         return new FactorySiteWorkspaceRestorePlan(
-                true, hasEnv, !hasEnv, !hasEnv, present, !hasEnv);
+                true, hasEnv, !hasEnv, true, present, !hasEnv);
     }
 }

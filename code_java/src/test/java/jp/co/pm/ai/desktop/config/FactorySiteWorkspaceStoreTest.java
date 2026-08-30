@@ -104,6 +104,77 @@ class FactorySiteWorkspaceStoreTest {
     }
 
     @Test
+    void loadReachableRequestFormOriginalDir_returnsOnlyTargetFactoryPath(@TempDir Path tmp)
+            throws Exception {
+        Path konanOriginal = Files.createDirectory(tmp.resolve("konan-original"));
+        Path kokubuOriginal = Files.createDirectory(tmp.resolve("kokubu-original"));
+        FactorySiteWorkspaceStore.save(
+                "砂田",
+                FactorySite.KONAN,
+                new FactorySiteWorkspaceSnapshot(
+                        List.of(
+                                new UiEnvRowSnapshot(
+                                        AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR,
+                                        konanOriginal.toString(),
+                                        "")),
+                        DesktopSessionState.empty()));
+        FactorySiteWorkspaceStore.save(
+                "砂田",
+                FactorySite.KOKUBU,
+                new FactorySiteWorkspaceSnapshot(
+                        List.of(
+                                new UiEnvRowSnapshot(
+                                        AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR,
+                                        kokubuOriginal.toString(),
+                                        "")),
+                        DesktopSessionState.empty()));
+
+        assertEquals(
+                konanOriginal.toAbsolutePath().normalize().toString(),
+                FactorySiteWorkspaceStore.loadReachableRequestFormOriginalDir(
+                                "砂田", FactorySite.KONAN)
+                        .orElseThrow());
+        assertEquals(
+                kokubuOriginal.toAbsolutePath().normalize().toString(),
+                FactorySiteWorkspaceStore.loadReachableRequestFormOriginalDir(
+                                "砂田", FactorySite.KOKUBU)
+                        .orElseThrow());
+    }
+
+    @Test
+    void loadReachableRequestFormOriginalDir_ignoresMissingOrBlankPath(@TempDir Path tmp)
+            throws Exception {
+        Path missing = tmp.resolve("missing-original");
+        FactorySiteWorkspaceStore.save(
+                "砂田",
+                FactorySite.KONAN,
+                new FactorySiteWorkspaceSnapshot(
+                        List.of(
+                                new UiEnvRowSnapshot(
+                                        AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR,
+                                        missing.toString(),
+                                        "")),
+                        DesktopSessionState.empty()));
+        FactorySiteWorkspaceStore.save(
+                "砂田",
+                FactorySite.KOKUBU,
+                new FactorySiteWorkspaceSnapshot(
+                        List.of(
+                                new UiEnvRowSnapshot(
+                                        AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR, "  ", "")),
+                        DesktopSessionState.empty()));
+
+        assertTrue(
+                FactorySiteWorkspaceStore.loadReachableRequestFormOriginalDir(
+                                "砂田", FactorySite.KONAN)
+                        .isEmpty());
+        assertTrue(
+                FactorySiteWorkspaceStore.loadReachableRequestFormOriginalDir(
+                                "砂田", FactorySite.KOKUBU)
+                        .isEmpty());
+    }
+
+    @Test
     void saveLastFactorySite_persistsToDisk() throws Exception {
         FactorySiteWorkspaceStore.saveLastFactorySite("砂田", FactorySite.KOKUBU);
         assertEquals(

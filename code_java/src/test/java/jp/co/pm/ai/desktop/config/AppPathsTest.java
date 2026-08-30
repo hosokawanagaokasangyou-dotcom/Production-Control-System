@@ -1527,8 +1527,7 @@ class AppPathsTest {
 
         assertTrue(map.get(AppPaths.KEY_PM_AI_REQUEST_FORM_JUCHU_FILE).contains("湖南"));
         assertFalse(map.get(AppPaths.KEY_PM_AI_REQUEST_FORM_JUCHU_FILE).contains("国分"));
-        assertTrue(map.get(AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR).contains("湖南"));
-        assertFalse(map.get(AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR).contains("国分"));
+        assertEquals("", map.get(AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR));
     }
 
     @Test

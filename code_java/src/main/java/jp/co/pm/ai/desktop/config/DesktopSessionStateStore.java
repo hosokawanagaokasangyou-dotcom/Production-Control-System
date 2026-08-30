@@ -134,6 +134,18 @@ public final class DesktopSessionStateStore {
      * {@code factorySite} を明示指定する（環境変数初期化など、ストアと読みたい工場を一致させたいとき用）。
      */
     static JsonNode readMergedSessionUiDefaultsNode(Map<String, String> ui, FactorySite factorySite) {
+        Path repoInit =
+                ui != null ? InitSettingPaths.resolveRepoInitSettingDir(ui) : null;
+        return readMergedSessionUiDefaultsNode(ui, factorySite, repoInit);
+    }
+
+    /**
+     * {@link #readMergedSessionUiDefaultsNode(Map, FactorySite)} と同じマージだが、最終の
+     * {@code init_setting} 参照先を明示する。ポータブル VU では旧
+     * {@code PM_AI_REPO_ROOT} を参照しないために使用する。
+     */
+    static JsonNode readMergedSessionUiDefaultsNode(
+            Map<String, String> ui, FactorySite factorySite, Path explicitRepoInitDir) {
         ObjectNode acc = JSON.createObjectNode();
         mergeSessionUiFromClasspath(acc, BUNDLED_SESSION_UI_DEFAULTS_RESOURCE);
         mergeSessionUiFromClasspath(acc, LEGACY_BUNDLED_SESSION_BADGE_DEFAULTS_RESOURCE);
@@ -151,8 +163,8 @@ public final class DesktopSessionStateStore {
                 acc,
                 InitSettingPaths.portableBundleInitSettingDir()
                         .resolve(InitSettingPaths.SESSION_DEFAULTS_FILE));
-        if (ui != null) {
-            Path repoInit = InitSettingPaths.resolveRepoInitSettingDir(ui);
+        if (explicitRepoInitDir != null) {
+            Path repoInit = explicitRepoInitDir.toAbsolutePath().normalize();
             mergeSessionUiFromPath(acc, repoInit.resolve(InitSettingPaths.SESSION_DEFAULTS_FILE));
             FactorySite g = factorySite != null ? factorySite : GlobalInitSettingTarget.load();
             if (g != null) {
@@ -280,6 +292,24 @@ public final class DesktopSessionStateStore {
     public static DesktopSessionState buildFactoryResetSessionFromInitSettingOnly(
             Map<String, String> ui, FactorySite factorySite) {
         JsonNode merged = readMergedSessionUiDefaultsNode(ui, factorySite);
+        return parseFactoryResetSession(merged);
+    }
+
+    /**
+     * {@code init_setting} の参照先を明示した工場別グローバル設定読込。
+     *
+     * <p>ポータブル VU 後は {@code cwd/pm-ai-data/init_setting} を渡し、旧セッションの
+     * {@code PM_AI_REPO_ROOT} に依存しない。
+     */
+    public static DesktopSessionState buildFactoryResetSessionFromInitSettingOnly(
+            Path explicitRepoInitSettingDir, FactorySite factorySite) {
+        JsonNode merged =
+                readMergedSessionUiDefaultsNode(
+                        Map.of(), factorySite, explicitRepoInitSettingDir);
+        return parseFactoryResetSession(merged);
+    }
+
+    private static DesktopSessionState parseFactoryResetSession(JsonNode merged) {
         ObjectNode root =
                 merged != null && merged.isObject()
                         ? ((ObjectNode) merged).deepCopy()
@@ -575,10 +605,15 @@ public final class DesktopSessionStateStore {
 
     public static void save(DesktopSessionState state) {
         try {
-            Files.createDirectories(storePath().getParent());
-            JSON.writerWithDefaultPrettyPrinter().writeValue(storePath().toFile(), toJsonObject(state));
+            saveOrThrow(state);
         } catch (IOException ignored) {
         }
+    }
+
+    /** セッションを保存し、保存失敗を呼び出し元へ返す。VU完了判定で使用する。 */
+    public static void saveOrThrow(DesktopSessionState state) throws IOException {
+        Files.createDirectories(storePath().getParent());
+        JSON.writerWithDefaultPrettyPrinter().writeValue(storePath().toFile(), toJsonObject(state));
     }
 
     /**

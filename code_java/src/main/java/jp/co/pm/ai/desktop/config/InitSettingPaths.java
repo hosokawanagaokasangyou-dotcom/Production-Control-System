@@ -44,11 +44,19 @@ public final class InitSettingPaths {
 
     /** {@code <cwd>/pm-ai-data/init_setting} next to portable exe. */
     public static Path portableBundleInitSettingDir() {
-        return Path.of(System.getProperty("user.dir", "."))
-                .toAbsolutePath()
-                .normalize()
-                .resolve("pm-ai-data")
-                .resolve("init_setting");
+        return portableBundleInitSettingDir(
+                Path.of(System.getProperty("user.dir", ".")).toAbsolutePath().normalize());
+    }
+
+    /** {@code <installRoot>/pm-ai-data/init_setting} for a portable bundle. */
+    public static Path portableBundleInitSettingDir(Path installRoot) {
+        Path root =
+                installRoot != null
+                        ? installRoot.toAbsolutePath().normalize()
+                        : Path.of(System.getProperty("user.dir", "."))
+                                .toAbsolutePath()
+                                .normalize();
+        return root.resolve("pm-ai-data").resolve("init_setting");
     }
 
     /** 工場別の列定義ウィザード設定 JSON（{@code init_setting} 書き出し用）。 */

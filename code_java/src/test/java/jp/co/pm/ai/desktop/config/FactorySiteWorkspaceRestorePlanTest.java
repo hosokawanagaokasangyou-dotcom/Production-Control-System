@@ -23,7 +23,7 @@ class FactorySiteWorkspaceRestorePlanTest {
         assertTrue(plan.applyInitSettingBeforeEnv());
         assertTrue(plan.restoreSavedUiEnvRows());
         assertFalse(plan.bundledEnvReset());
-        assertFalse(plan.overlayFactoryNetworkDefaults());
+        assertTrue(plan.overlayFactoryNetworkDefaults());
         assertTrue(plan.applySessionFragment());
         assertFalse(plan.preserveEnvInitializationInSessionFragment());
     }

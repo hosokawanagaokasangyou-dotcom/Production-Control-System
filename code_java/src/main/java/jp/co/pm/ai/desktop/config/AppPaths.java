@@ -3075,8 +3075,7 @@ public final class AppPaths {
         String originalDir = trim(map.get(KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR));
         // 未設定は空のまま（ui_ref 既定・BOX フォルダ案内用）。実行時フォールバックは resolveRequestFormOriginalDir。
         if (!originalDir.isEmpty() && factoryPathHintConflictsWithSite(originalDir, site)) {
-            putFactoryManagedEnv(
-                    map, KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR, defaultRequestFormOriginalDirForFactory(site));
+            putFactoryManagedEnv(map, KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR, "");
         }
         String tpiPdf = trim(map.get(KEY_PM_AI_REQUEST_FORM_TPI_PDF_DIR));
         String tpiDefault = defaultRequestFormTpiPdfDirForFactory(site);

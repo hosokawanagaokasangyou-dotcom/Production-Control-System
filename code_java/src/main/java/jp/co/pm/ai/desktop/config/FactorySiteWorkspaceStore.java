@@ -67,6 +67,35 @@ public final class FactorySiteWorkspaceStore {
         return disk;
     }
 
+    /** 対象工場に保存された、現在も一覧可能な依頼書原本フォルダを返す。 */
+    public static Optional<String> loadReachableRequestFormOriginalDir(
+            String operatorName, FactorySite site) {
+        return load(operatorName, site)
+                .flatMap(
+                        snapshot ->
+                                snapshot.uiEnvRows().stream()
+                                        .filter(
+                                                row ->
+                                                        AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR
+                                                                .equals(row.name()))
+                                        .map(UiEnvRowSnapshot::value)
+                                        .map(value -> value != null ? value.strip() : "")
+                                        .filter(value -> !value.isEmpty())
+                                        .map(
+                                                value -> {
+                                                    try {
+                                                        return Path.of(value)
+                                                                .toAbsolutePath()
+                                                                .normalize();
+                                                    } catch (RuntimeException ex) {
+                                                        return null;
+                                                    }
+                                                })
+                                        .filter(NetworkSourceDirResolver::isDirectoryListingReachable)
+                                        .map(Path::toString)
+                                        .findFirst());
+    }
+
     public static void saveLastFactorySite(String operatorName, FactorySite site) {
         if (FactoryOperatorUserStore.operatorLocalStorageSlug(operatorName).isEmpty()
                 || site == null
