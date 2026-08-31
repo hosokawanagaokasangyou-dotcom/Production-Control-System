@@ -14,6 +14,7 @@ import java.util.Optional;
 import java.util.Set;
 
 import javafx.application.Platform;
+import javafx.event.EventHandler;
 import javafx.fxml.FXML;
 import javafx.geometry.Insets;
 import javafx.scene.control.Alert;
@@ -28,6 +29,8 @@ import javafx.scene.control.Tooltip;
 import javafx.scene.layout.StackPane;
 import javafx.stage.Window;
 
+import org.controlsfx.control.spreadsheet.Grid;
+import org.controlsfx.control.spreadsheet.GridChange;
 import org.controlsfx.control.spreadsheet.SpreadsheetView;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
@@ -62,6 +65,7 @@ public final class MasterDispatchSheetsTabController {
     @FXML private StackPane needHost;
     @FXML private StackPane speedHost;
     @FXML private StackPane comboHost;
+    @FXML private Button saveButton;
     @FXML private Button addEquipmentColumnButton;
     @FXML private Button addMissingEquipmentButton;
     @FXML private Button addCombinationRowButton;
@@ -78,7 +82,15 @@ public final class MasterDispatchSheetsTabController {
     /** 4タブ共通。工程+機械の正規化キー。空なら空き列以外をすべて表示。 */
     private final Set<String> equipmentFocusKeys = new LinkedHashSet<>();
     private ButtonAttentionGlow missingEquipmentGlow;
+    private ButtonAttentionGlow saveButtonGlow;
     private int missingGlowEpoch;
+    private boolean suppressGridDirty;
+    private final EventHandler<GridChange> gridDirtyHandler =
+            e -> {
+                if (!suppressGridDirty) {
+                    applySaveDirtyState(true);
+                }
+            };
 
     @FXML
     private void initialize() {
@@ -98,7 +110,11 @@ public final class MasterDispatchSheetsTabController {
                             });
             updateToolbarForInnerTab(innerTabPane.getSelectionModel().getSelectedIndex());
         }
+        if (saveButton != null && saveButtonGlow == null) {
+            saveButtonGlow = new ButtonAttentionGlow(saveButton);
+        }
         applyDocument(document);
+        applySaveDirtyState(false);
     }
 
     private static void install(StackPane host, SpreadsheetView view, int leadingCols) {
@@ -150,6 +166,7 @@ public final class MasterDispatchSheetsTabController {
             loadedJsonPath = json;
             applyDocument(document);
             statusLabel.setText(statusText(site, json, source, result));
+            applySaveDirtyState(false);
         } catch (Exception e) {
             statusLabel.setText("読込に失敗しました: " + e.getMessage());
         }
@@ -223,7 +240,8 @@ public final class MasterDispatchSheetsTabController {
                 owner,
                 "配台マスタ保存",
                 "編集内容を JSON に保存し、master.xlsm へ書き戻します。\n"
-                        + "保存前に JSON と master.xlsm の世代バックアップを取ります。",
+                        + "保存前に JSON と master.xlsm の世代バックアップを取ります。\n"
+                        + "誤操作防止のため、表示されるランダムな4桁の数字を入力してください。",
                 "保存")) {
             statusLabel.setText("保存を中止しました。");
             return;
@@ -268,6 +286,7 @@ public final class MasterDispatchSheetsTabController {
                             + "\n世代バックアップ master: "
                             + xlsmBackup);
             refreshMissingEquipmentAttention();
+            applySaveDirtyState(false);
         } catch (Exception e) {
             statusLabel.setText("保存に失敗しました: " + e.getMessage());
         }
@@ -598,6 +617,7 @@ public final class MasterDispatchSheetsTabController {
                 new MasterDispatchSheetsDocument(
                         MasterDispatchSheetsDocument.SCHEMA_VERSION, site, source, imported, sheets);
         applyDocument(document);
+        applySaveDirtyState(true);
     }
 
     private Window dialogOwner() {
@@ -613,34 +633,39 @@ public final class MasterDispatchSheetsTabController {
     private void applyDocument(MasterDispatchSheetsDocument doc) {
         this.document = doc != null ? doc : MasterDispatchSheetsDocument.empty("");
         MasterDispatchSheetsDocument d = this.document;
-        attachGrid(
-                skillsView,
-                MasterDispatchSheetEditRules.SheetKind.SKILLS,
-                d.sheet("skills").rows(),
-                MasterDispatchSheetEditRules.frozenTitleRowCount(
-                        MasterDispatchSheetEditRules.SheetKind.SKILLS),
-                1);
-        attachGrid(
-                needView,
-                MasterDispatchSheetEditRules.SheetKind.NEED,
-                d.sheet("need").rows(),
-                MasterDispatchSheetEditRules.frozenTitleRowCount(
-                        MasterDispatchSheetEditRules.SheetKind.NEED),
-                3);
-        attachGrid(
-                speedView,
-                MasterDispatchSheetEditRules.SheetKind.SPEED,
-                d.sheet("speed").rows(),
-                MasterDispatchSheetEditRules.frozenTitleRowCount(
-                        MasterDispatchSheetEditRules.SheetKind.SPEED),
-                3);
-        attachGrid(
-                comboView,
-                MasterDispatchSheetEditRules.SheetKind.COMBINATIONS,
-                d.sheet("teamCombinations").rows(),
-                0,
-                4,
-                d.sheet("skills").rows());
+        suppressGridDirty = true;
+        try {
+            attachGrid(
+                    skillsView,
+                    MasterDispatchSheetEditRules.SheetKind.SKILLS,
+                    d.sheet("skills").rows(),
+                    MasterDispatchSheetEditRules.frozenTitleRowCount(
+                            MasterDispatchSheetEditRules.SheetKind.SKILLS),
+                    1);
+            attachGrid(
+                    needView,
+                    MasterDispatchSheetEditRules.SheetKind.NEED,
+                    d.sheet("need").rows(),
+                    MasterDispatchSheetEditRules.frozenTitleRowCount(
+                            MasterDispatchSheetEditRules.SheetKind.NEED),
+                    3);
+            attachGrid(
+                    speedView,
+                    MasterDispatchSheetEditRules.SheetKind.SPEED,
+                    d.sheet("speed").rows(),
+                    MasterDispatchSheetEditRules.frozenTitleRowCount(
+                            MasterDispatchSheetEditRules.SheetKind.SPEED),
+                    3);
+            attachGrid(
+                    comboView,
+                    MasterDispatchSheetEditRules.SheetKind.COMBINATIONS,
+                    d.sheet("teamCombinations").rows(),
+                    0,
+                    4,
+                    d.sheet("skills").rows());
+        } finally {
+            Platform.runLater(() -> Platform.runLater(() -> suppressGridDirty = false));
+        }
         applyAllEquipmentVisibility();
         updateToolbarForInnerTab(
                 innerTabPane != null ? innerTabPane.getSelectionModel().getSelectedIndex() : 0);
@@ -706,6 +731,25 @@ public final class MasterDispatchSheetsTabController {
                         + " 件）。"
                         + (combo ? "組み合わせ表は行を隠しています。" : "資格・必要人数・加工速度は列を隠しています。")
                         + " データは残ります。「すべて表示」で戻せます。");
+    }
+
+    private void applySaveDirtyState(boolean dirty) {
+        if (saveButtonGlow == null && saveButton != null) {
+            saveButtonGlow = new ButtonAttentionGlow(saveButton);
+        }
+        if (saveButtonGlow != null) {
+            if (dirty) {
+                saveButtonGlow.startIfIdle();
+            } else {
+                saveButtonGlow.stop();
+            }
+        }
+        if (saveButton != null) {
+            saveButton.setTooltip(
+                    dirty
+                            ? new Tooltip("未保存の変更があります。保存時は表示される4桁の数字を入力してください。")
+                            : null);
+        }
     }
 
     private void refreshMissingEquipmentAttention() {
@@ -860,7 +904,7 @@ public final class MasterDispatchSheetsTabController {
                 view, () -> titles, () -> vis);
     }
 
-    private static void attachGrid(
+    private void attachGrid(
             SpreadsheetView view,
             MasterDispatchSheetEditRules.SheetKind kind,
             List<List<String>> rows,
@@ -869,7 +913,7 @@ public final class MasterDispatchSheetsTabController {
         attachGrid(view, kind, rows, frozenDataHeaderRows, leadingCols, List.of());
     }
 
-    private static void attachGrid(
+    private void attachGrid(
             SpreadsheetView view,
             MasterDispatchSheetEditRules.SheetKind kind,
             List<List<String>> rows,
@@ -880,7 +924,15 @@ public final class MasterDispatchSheetsTabController {
         if (kind == MasterDispatchSheetEditRules.SheetKind.COMBINATIONS) {
             src = MasterDispatchSheetEditRules.ensureCombinationMetaColumns(rows);
         }
+        Grid previous = view.getGrid();
+        if (previous != null) {
+            previous.removeEventHandler(GridChange.GRID_CHANGE_EVENT, gridDirtyHandler);
+        }
         view.setGrid(MasterDispatchSheetGridSupport.buildEditable(kind, src, skillsRows));
+        Grid grid = view.getGrid();
+        if (grid != null) {
+            grid.addEventHandler(GridChange.GRID_CHANGE_EVENT, gridDirtyHandler);
+        }
         int colCount = view.getGrid() != null ? view.getGrid().getColumnCount() : 1;
         List<String> titles = MasterDispatchSheetEditRules.columnTitles(kind, src, colCount);
         List<Double> widths =
