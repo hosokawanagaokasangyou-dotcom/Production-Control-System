@@ -8854,12 +8854,21 @@ public final class MainShellController
         try {
             switch (unit) {
                 case FactorySiteSwitchBusySupport.POST_ATTENDANCE_COMPANY -> {
+                    if (companyCalendarTabController != null) {
+                        companyCalendarTabController.reloadAttendanceDataFromJsonIfEnabled();
+                    }
                     runFactorySiteSwitchPostWork(FactorySiteSwitchBusySupport.POST_ATTENDANCE_MEMBER);
                 }
                 case FactorySiteSwitchBusySupport.POST_ATTENDANCE_MEMBER -> {
+                    if (memberAttendanceTabController != null) {
+                        memberAttendanceTabController.reloadAttendanceDataFromJsonIfEnabled();
+                    }
                     runFactorySiteSwitchPostWork(FactorySiteSwitchBusySupport.POST_ATTENDANCE_MACHINE);
                 }
                 case FactorySiteSwitchBusySupport.POST_ATTENDANCE_MACHINE -> {
+                    if (machineCalendarTabController != null) {
+                        machineCalendarTabController.reloadMachineCalendarDataIfEnabled();
+                    }
                     runFactorySiteSwitchPostWork(FactorySiteSwitchBusySupport.POST_ATTENDANCE_MASTER);
                 }
                 case FactorySiteSwitchBusySupport.POST_ATTENDANCE_MASTER -> {

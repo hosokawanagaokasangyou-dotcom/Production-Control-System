@@ -39,6 +39,8 @@ import javafx.util.Duration;
 
 import jp.co.pm.ai.desktop.bridge.PythonProcessRunner;
 import jp.co.pm.ai.desktop.config.AppPaths;
+import jp.co.pm.ai.desktop.config.FactorySite;
+import jp.co.pm.ai.desktop.config.GlobalInitSettingTarget;
 import jp.co.pm.ai.desktop.dispatch.AttendanceOvertimePreview;
 import jp.co.pm.ai.desktop.ui.AttendanceGridCellSizing;
 import jp.co.pm.ai.desktop.ui.AttendanceSyncStatusPane;
@@ -438,8 +440,18 @@ public class MemberAttendanceTabController {
         gridReloadDebounce.playFromStart();
     }
 
-    private static String memberGridCacheKey(int year, int month) {
-        return year + "-" + month;
+    static String memberGridCacheKey(String factorySite, int year, int month) {
+        String site = factorySite == null || factorySite.isBlank() ? "_" : factorySite.trim();
+        return site + "-" + year + "-" + month;
+    }
+
+    private String memberGridCacheKey(int year, int month) {
+        return memberGridCacheKey(currentFactoryCacheToken(), year, month);
+    }
+
+    private static String currentFactoryCacheToken() {
+        FactorySite site = GlobalInitSettingTarget.load();
+        return site != null ? site.name() : "_";
     }
 
     private void clearMemberGridCache() {
@@ -640,6 +652,7 @@ public class MemberAttendanceTabController {
         if (!attendanceLoadEnabled) {
             attendanceLoadEnabled = true;
         }
+        clearMemberGridCache();
         loadGridFromPython(onComplete);
         refreshLocalReadiness();
     }

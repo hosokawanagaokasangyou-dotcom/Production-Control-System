@@ -104,6 +104,9 @@ class FactorySiteSwitchBusySupportTest {
         String text = Files.readString(java, StandardCharsets.UTF_8);
         assertTrue(text.contains("statusForWorkUnit"), "切替ステップの状況文言カタログを使う");
         assertTrue(text.contains("statusForPostSwitchWork"), "勤怠再読込も細かい進捗タスクにする");
+        assertTrue(
+                text.contains("memberAttendanceTabController.reloadAttendanceDataFromJsonIfEnabled()"),
+                "工場切替後に表示済みメンバー勤怠を再読込する");
         int finish = text.indexOf("private void finishFactorySiteSwitch");
         assertTrue(finish >= 0);
         int next = text.indexOf("\n    @Override\n    public Map<String, String> snapshotUiEnv", finish);
