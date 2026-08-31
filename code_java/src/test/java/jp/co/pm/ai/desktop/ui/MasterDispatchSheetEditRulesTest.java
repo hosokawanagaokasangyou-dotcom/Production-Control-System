@@ -247,6 +247,86 @@ class MasterDispatchSheetEditRulesTest {
     }
 
     @Test
+    void visibilityMask_needLeadingThreeUsesSameFocusKeys() {
+        List<String> titles =
+                List.of("項目", "依頼NO条件", "備考", "巻返し\n機1", "分割\nスライス機1", "");
+        boolean[] vis =
+                MasterDispatchSheetEditRules.visibilityMask(
+                        titles,
+                        3,
+                        java.util.Set.of(
+                                jp.co.pm.ai.desktop.io.MasterTeamCombinationTableReader
+                                        .normalizedComboKey("分割", "スライス機1")));
+        assertTrue(vis[0]);
+        assertTrue(vis[1]);
+        assertTrue(vis[2]);
+        assertFalse(vis[3]);
+        assertTrue(vis[4]);
+        assertFalse(vis[5]);
+    }
+
+    @Test
+    void focusKeysFromVisibility_subsetAndAllSelectedIsEmptyFocus() {
+        List<String> titles =
+                List.of("メンバー", "巻返し\n機1", "分割\nLAC/EC機", "分割\nスライス機1", "");
+        java.util.Set<String> subset =
+                MasterDispatchSheetEditRules.focusKeysFromVisibility(
+                        titles, 1, new boolean[] {true, false, true, true, false});
+        assertEquals(2, subset.size());
+        assertTrue(
+                subset.contains(
+                        jp.co.pm.ai.desktop.io.MasterTeamCombinationTableReader.normalizedComboKey(
+                                "分割", "LAC/EC機")));
+        assertTrue(
+                MasterDispatchSheetEditRules.focusKeysFromVisibility(
+                                titles, 1, new boolean[] {true, true, true, true, false})
+                        .isEmpty());
+    }
+
+    @Test
+    void combinationDisplayRowVisible_filtersByProcessAndMachine() {
+        List<String> header = List.of("組み合わせ行ID", "工程名", "機械名", "工程+機械");
+        java.util.Set<String> focus =
+                java.util.Set.of(
+                        jp.co.pm.ai.desktop.io.MasterTeamCombinationTableReader.normalizedComboKey(
+                                "分割", "スライス機1"));
+        assertTrue(
+                MasterDispatchSheetEditRules.combinationDisplayRowVisible(
+                        header, List.of("1", "分割", "スライス機1", "分割+スライス機1"), focus));
+        assertFalse(
+                MasterDispatchSheetEditRules.combinationDisplayRowVisible(
+                        header, List.of("2", "巻返し", "機1", "巻返し+機1"), focus));
+        assertTrue(
+                MasterDispatchSheetEditRules.combinationDisplayRowVisible(
+                        header, List.of("2", "巻返し", "機1", "巻返し+機1"), java.util.Set.of()));
+        assertTrue(
+                MasterDispatchSheetEditRules.combinationDisplayRowVisible(
+                        header, List.of("", "", "", ""), focus));
+    }
+
+    @Test
+    void combinationHiddenGridRows_hidesNonMatchingDataRowsAfterFilterRow() {
+        List<List<String>> rows =
+                List.of(
+                        List.of("組み合わせ行ID", "工程名", "機械名", "工程+機械"),
+                        List.of("1", "分割", "スライス機1", "分割+スライス機1"),
+                        List.of("2", "巻返し", "機1", "巻返し+機1"));
+        java.util.Set<String> focus =
+                java.util.Set.of(
+                        jp.co.pm.ai.desktop.io.MasterTeamCombinationTableReader.normalizedComboKey(
+                                "分割", "スライス機1"));
+        java.util.BitSet hidden =
+                MasterDispatchSheetEditRules.combinationHiddenGridRows(rows, 24, 1, focus);
+        assertFalse(hidden.get(0));
+        assertFalse(hidden.get(1));
+        assertTrue(hidden.get(2));
+        assertTrue(
+                MasterDispatchSheetEditRules.combinationHiddenGridRows(
+                                rows, 24, 1, java.util.Set.of())
+                        .isEmpty());
+    }
+
+    @Test
     void dialogLabel_replacesNewlineWithSlash() {
         assertEquals("分割 / LAC/EC機", MasterDispatchSheetEditRules.dialogColumnLabel("分割\nLAC/EC機"));
         assertEquals("メンバー", MasterDispatchSheetEditRules.dialogColumnLabel("メンバー"));

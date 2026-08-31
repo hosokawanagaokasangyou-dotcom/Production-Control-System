@@ -17,6 +17,7 @@ import org.controlsfx.control.spreadsheet.SpreadsheetView;
  *
  * <p>各列の「表示する値」の集合を保持し、{@link SpreadsheetView#setHiddenRows} で行の表示を更新する。
  * {@link #setRowTextSearchQuery} による行検索（いずれかの列への部分一致）が有効なときは、列フィルタと AND で合成する。
+ * {@link #setAdditionalHiddenRows} も同じ AND に載せる。
  */
 public final class SpreadsheetMultiColumnFilterCoordinator {
 
@@ -32,7 +33,27 @@ public final class SpreadsheetMultiColumnFilterCoordinator {
     private static final WeakHashMap<SpreadsheetView, Runnable> COLUMN_FILTER_COMMIT_HOOK =
             new WeakHashMap<>();
 
+    /**
+     * 列フィルタ以外で隠す行（配台マスタ組み合わせ表の工程+機械絞り込みなど）。{@link #recomputeHiddenRows} と AND。
+     */
+    private static final WeakHashMap<SpreadsheetView, BitSet> ADDITIONAL_HIDDEN_ROWS = new WeakHashMap<>();
+
     private SpreadsheetMultiColumnFilterCoordinator() {}
+
+    /**
+     * 列フィルタ・行検索と AND する追加の非表示行。空または null なら解除する。
+     */
+    public static void setAdditionalHiddenRows(SpreadsheetView spv, BitSet extra) {
+        if (spv == null) {
+            return;
+        }
+        if (extra == null || extra.isEmpty()) {
+            ADDITIONAL_HIDDEN_ROWS.remove(spv);
+        } else {
+            ADDITIONAL_HIDDEN_ROWS.put(spv, (BitSet) extra.clone());
+        }
+        recomputeHiddenRows(spv);
+    }
 
     /**
      * 列フィルタ適用（{@link #commitColumnSelection}）のたびに呼ぶデバウンス用フック。
@@ -252,16 +273,18 @@ public final class SpreadsheetMultiColumnFilterCoordinator {
         return false;
     }
 
-    static void recomputeHiddenRows(SpreadsheetView spv) {
+    public static void recomputeHiddenRows(SpreadsheetView spv) {
         Map<Integer, Set<String>> map = COLUMN_ALLOWED.get(spv);
         Grid grid = spv.getGrid();
         if (grid == null || grid.getRows() == null) {
             return;
         }
-        int first = spv.getFilteredRow() + 1;
+        Integer filtered = spv.getFilteredRow();
+        int first = filtered == null ? 1 : filtered + 1;
         int n = grid.getRowCount();
         BitSet hidden = new BitSet(Math.max(n, spv.getHiddenRows().size()));
         boolean hasColumnFilters = map != null && !map.isEmpty();
+        BitSet extra = ADDITIONAL_HIDDEN_ROWS.get(spv);
         int colCount = spv.getColumns().size();
         for (int i = first; i < n; i++) {
             boolean hide = false;
@@ -284,6 +307,9 @@ public final class SpreadsheetMultiColumnFilterCoordinator {
                 }
             }
             if (!hide && !rowMatchesTextSearch(spv, i)) {
+                hide = true;
+            }
+            if (!hide && extra != null && extra.get(i)) {
                 hide = true;
             }
             hidden.set(i, hide);

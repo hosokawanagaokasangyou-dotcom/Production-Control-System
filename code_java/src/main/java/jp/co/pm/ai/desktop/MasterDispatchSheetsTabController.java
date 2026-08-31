@@ -4,6 +4,7 @@ import java.nio.file.Path;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
+import java.util.BitSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -36,6 +37,7 @@ import jp.co.pm.ai.desktop.ui.FourDigitConfirmationDialog;
 import jp.co.pm.ai.desktop.ui.MasterDispatchEquipmentColumnDialog;
 import jp.co.pm.ai.desktop.ui.MasterDispatchSheetEditRules;
 import jp.co.pm.ai.desktop.ui.MasterDispatchSheetGridSupport;
+import jp.co.pm.ai.desktop.ui.SpreadsheetMultiColumnFilterCoordinator;
 import jp.co.pm.ai.desktop.ui.SpreadsheetTabularSupport;
 import jp.co.pm.ai.desktop.ui.SpreadsheetThemeBridge;
 
@@ -61,10 +63,8 @@ public final class MasterDispatchSheetsTabController {
     private MainShellController shell;
     private MasterDispatchSheetsDocument document = MasterDispatchSheetsDocument.empty("");
     private Path loadedJsonPath;
-    /** 資格タブでフォーカスする工程+機械（正規化キー）。空なら空き列以外をすべて表示。 */
-    private final Set<String> skillsFocusKeys = new LinkedHashSet<>();
-    /** 「表示する設備を選ぶ」の結果。null のときは {@link #skillsFocusKeys} を使う。 */
-    private boolean[] skillsVisibilityOverride;
+    /** 4タブ共通。工程+機械の正規化キー。空なら空き列以外をすべて表示。 */
+    private final Set<String> equipmentFocusKeys = new LinkedHashSet<>();
 
     @FXML
     private void initialize() {
@@ -72,6 +72,12 @@ public final class MasterDispatchSheetsTabController {
         install(needHost, needView, 3);
         install(speedHost, speedView, 3);
         install(comboHost, comboView, 4);
+        if (innerTabPane != null) {
+            innerTabPane
+                    .getSelectionModel()
+                    .selectedIndexProperty()
+                    .addListener((obs, o, n) -> applyAllEquipmentVisibility());
+        }
         applyDocument(document);
     }
 
@@ -96,8 +102,7 @@ public final class MasterDispatchSheetsTabController {
     }
 
     void reloadFromCurrentFactory(boolean reimport) {
-        skillsFocusKeys.clear();
-        skillsVisibilityOverride = null;
+        equipmentFocusKeys.clear();
         if (shell == null) {
             return;
         }
@@ -247,8 +252,7 @@ public final class MasterDispatchSheetsTabController {
             return;
         }
         MasterDispatchEquipmentColumnDialog.Result r = ans.get();
-        skillsFocusKeys.clear();
-        skillsVisibilityOverride = null;
+        equipmentFocusKeys.clear();
         int added = applyEquipmentColumn(r.process(), r.machine());
         focusSkillsTab();
         if (added <= 0) {
@@ -300,8 +304,7 @@ public final class MasterDispatchSheetsTabController {
             }
             return 0;
         }
-        skillsFocusKeys.clear();
-        skillsVisibilityOverride = null;
+        equipmentFocusKeys.clear();
         int added = 0;
         for (PlanTasksMissingSkillsColumnPrompt.MissingPair pair : bundle.pairs()) {
             added += applyEquipmentColumn(pair.process(), pair.machine());
@@ -318,8 +321,7 @@ public final class MasterDispatchSheetsTabController {
         if (pairs == null || pairs.isEmpty()) {
             return 0;
         }
-        skillsFocusKeys.clear();
-        skillsVisibilityOverride = null;
+        equipmentFocusKeys.clear();
         int added = 0;
         for (PlanTasksMissingSkillsColumnPrompt.MissingPair pair : pairs) {
             added += applyEquipmentColumn(pair.process(), pair.machine());
@@ -344,30 +346,29 @@ public final class MasterDispatchSheetsTabController {
                         document.sheet("skills").rows(),
                         colCount);
         List<String> labels = MasterDispatchSheetEditRules.dialogColumnLabels(titles);
-        boolean[] vis =
-                skillsVisibilityOverride != null && skillsVisibilityOverride.length == titles.size()
-                        ? skillsVisibilityOverride
-                        : MasterDispatchSheetEditRules.visibilityMask(titles, 1, skillsFocusKeys);
+        boolean[] vis = MasterDispatchSheetEditRules.visibilityMask(titles, 1, equipmentFocusKeys);
         boolean[] mandatory = MasterDispatchSheetEditRules.mandatoryLeadingMask(titles.size(), 1);
         ColumnVisibilityDialog.show(dialogOwner(), labels, vis, mandatory)
                 .ifPresent(
                         arr -> {
-                            skillsVisibilityOverride =
+                            boolean[] merged =
                                     ColumnVisibilitySupport.mergeMandatoryIntoVisibility(
                                             arr, mandatory);
-                            skillsFocusKeys.clear();
-                            applySkillsColumnVisibility();
-                            statusLabel.setText("表示する設備列を更新しました。保存時に非表示列のデータは消えません。");
+                            equipmentFocusKeys.clear();
+                            equipmentFocusKeys.addAll(
+                                    MasterDispatchSheetEditRules.focusKeysFromVisibility(
+                                            titles, 1, merged));
+                            applyAllEquipmentVisibility();
+                            statusLabel.setText(
+                                    "表示する設備を資格・必要人数・加工速度・組み合わせ表に適用しました。保存時に非表示のデータは消えません。");
                         });
     }
 
     @FXML
     private void onShowAllEquipmentColumnsAction() {
-        skillsFocusKeys.clear();
-        skillsVisibilityOverride = null;
-        applySkillsColumnVisibility();
-        applyNeedSpeedEmptyColumnHide();
-        statusLabel.setText("すべての設備列を表示しています（空き列は隠しています）。");
+        equipmentFocusKeys.clear();
+        applyAllEquipmentVisibility();
+        statusLabel.setText("すべての設備を表示しています（空き列は隠しています）。");
     }
 
     void focusSkillsTab() {
@@ -395,9 +396,8 @@ public final class MasterDispatchSheetsTabController {
         if (!existed) {
             String key = MasterTeamCombinationTableReader.normalizedComboKey(process, machine);
             if (!key.isEmpty()) {
-                skillsFocusKeys.add(key);
+                equipmentFocusKeys.add(key);
             }
-            skillsVisibilityOverride = null;
         }
         skills =
                 MasterDispatchSheetEditRules.addEquipmentColumn(
@@ -450,7 +450,8 @@ public final class MasterDispatchSheetsTabController {
     }
 
     private void applyDocument(MasterDispatchSheetsDocument doc) {
-        MasterDispatchSheetsDocument d = doc != null ? doc : MasterDispatchSheetsDocument.empty("");
+        this.document = doc != null ? doc : MasterDispatchSheetsDocument.empty("");
+        MasterDispatchSheetsDocument d = this.document;
         attachGrid(
                 skillsView,
                 MasterDispatchSheetEditRules.SheetKind.SKILLS,
@@ -478,35 +479,42 @@ public final class MasterDispatchSheetsTabController {
                 d.sheet("teamCombinations").rows(),
                 0,
                 4);
-        applySkillsColumnVisibility();
-        applyNeedSpeedEmptyColumnHide();
+        applyAllEquipmentVisibility();
     }
 
-    private void applySkillsColumnVisibility() {
+    private void applyAllEquipmentVisibility() {
         applyEquipmentColumnVisibility(
                 skillsView,
                 MasterDispatchSheetEditRules.SheetKind.SKILLS,
                 document.sheet("skills").rows(),
                 1,
-                skillsVisibilityOverride,
-                skillsFocusKeys);
-    }
-
-    private void applyNeedSpeedEmptyColumnHide() {
+                equipmentFocusKeys);
         applyEquipmentColumnVisibility(
                 needView,
                 MasterDispatchSheetEditRules.SheetKind.NEED,
                 document.sheet("need").rows(),
                 3,
-                null,
-                Set.of());
+                equipmentFocusKeys);
         applyEquipmentColumnVisibility(
                 speedView,
                 MasterDispatchSheetEditRules.SheetKind.SPEED,
                 document.sheet("speed").rows(),
                 3,
-                null,
-                Set.of());
+                equipmentFocusKeys);
+        applyCombinationRowVisibility();
+    }
+
+    private void applyCombinationRowVisibility() {
+        if (comboView == null || comboView.getGrid() == null) {
+            return;
+        }
+        BitSet extra =
+                MasterDispatchSheetEditRules.combinationHiddenGridRows(
+                        document.sheet("teamCombinations").rows(),
+                        comboView.getGrid().getRowCount(),
+                        SpreadsheetTabularSupport.spreadsheetFirstDataRowIndex(),
+                        equipmentFocusKeys);
+        SpreadsheetMultiColumnFilterCoordinator.setAdditionalHiddenRows(comboView, extra);
     }
 
     private static void applyEquipmentColumnVisibility(
@@ -514,17 +522,13 @@ public final class MasterDispatchSheetsTabController {
             MasterDispatchSheetEditRules.SheetKind kind,
             List<List<String>> rows,
             int leadingCols,
-            boolean[] override,
             Set<String> focusKeys) {
         if (view == null || view.getGrid() == null) {
             return;
         }
         int colCount = view.getGrid().getColumnCount();
         List<String> titles = MasterDispatchSheetEditRules.columnTitles(kind, rows, colCount);
-        boolean[] vis =
-                override != null && override.length == titles.size()
-                        ? override
-                        : MasterDispatchSheetEditRules.visibilityMask(titles, leadingCols, focusKeys);
+        boolean[] vis = MasterDispatchSheetEditRules.visibilityMask(titles, leadingCols, focusKeys);
         ColumnVisibilitySupport.applyColumnVisibilityToSpreadsheetWhenReady(
                 view, () -> titles, () -> vis);
     }
@@ -552,6 +556,7 @@ public final class MasterDispatchSheetsTabController {
         SpreadsheetTabularSupport.applyColumnWidths(view, widths, 120);
         SpreadsheetTabularSupport.applyFixedLeadingColumns(view, leadingCols);
         SpreadsheetTabularSupport.applyColumnFiltersWithDialog(view);
+        SpreadsheetMultiColumnFilterCoordinator.recomputeHiddenRows(view);
         SpreadsheetTabularSupport.pinSpreadsheetFilterRow(view);
         if (frozenDataHeaderRows > 0) {
             SpreadsheetTabularSupport.pinSpreadsheetRows(view, 1, frozenDataHeaderRows);

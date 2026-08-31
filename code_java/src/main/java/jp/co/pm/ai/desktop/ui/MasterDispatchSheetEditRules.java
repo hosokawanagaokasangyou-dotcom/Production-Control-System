@@ -1,10 +1,13 @@
 package jp.co.pm.ai.desktop.ui;
 
 import java.util.ArrayList;
+import java.util.BitSet;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -250,6 +253,85 @@ public final class MasterDispatchSheetEditRules {
             vis[i] = !key.isEmpty() && focusNormalizedKeys.contains(key);
         }
         return vis;
+    }
+
+    /**
+     * 「表示する設備を選ぶ」のチェック結果を工程+機械キーへ変換する。全設備を出しているときは空集合（絞り込みなし）。
+     */
+    public static Set<String> focusKeysFromVisibility(
+            List<String> titles, int leadingCols, boolean[] visible) {
+        LinkedHashSet<String> all = new LinkedHashSet<>();
+        LinkedHashSet<String> selected = new LinkedHashSet<>();
+        int n = titles != null ? titles.size() : 0;
+        int lead = Math.max(0, leadingCols);
+        for (int i = lead; i < n; i++) {
+            String[] pm = splitEquipmentTitle(titles.get(i));
+            if (pm[0].isEmpty() && pm[1].isEmpty()) {
+                continue;
+            }
+            String key = MasterTeamCombinationTableReader.normalizedComboKey(pm[0], pm[1]);
+            if (key.isEmpty()) {
+                continue;
+            }
+            all.add(key);
+            if (visible != null && i < visible.length && visible[i]) {
+                selected.add(key);
+            }
+        }
+        if (all.isEmpty() || selected.size() == all.size()) {
+            return Set.of();
+        }
+        return Set.copyOf(selected);
+    }
+
+    /**
+     * 組み合わせ表の本文行を表示するか。{@code focusKeys} が空ならすべて表示。空の追加入力行は残す。
+     */
+    public static boolean combinationDisplayRowVisible(
+            List<String> header, List<String> dataRow, Set<String> focusKeys) {
+        if (focusKeys == null || focusKeys.isEmpty()) {
+            return true;
+        }
+        int procCol = headerIndex(header, "工程名");
+        int machCol = headerIndex(header, "機械名");
+        String proc =
+                procCol >= 0 && dataRow != null && procCol < dataRow.size() && dataRow.get(procCol) != null
+                        ? dataRow.get(procCol)
+                        : "";
+        String mach =
+                machCol >= 0 && dataRow != null && machCol < dataRow.size() && dataRow.get(machCol) != null
+                        ? dataRow.get(machCol)
+                        : "";
+        if (proc.isBlank() && mach.isBlank()) {
+            return true;
+        }
+        String key = MasterTeamCombinationTableReader.normalizedComboKey(proc, mach);
+        return !key.isEmpty() && focusKeys.contains(key);
+    }
+
+    /**
+     * 組み合わせ表グリッドで隠す行。フィルタ行（{@code firstDataRow} 未満）は対象外。
+     */
+    public static BitSet combinationHiddenGridRows(
+            List<List<String>> originalRows, int gridRowCount, int firstDataRow, Set<String> focusKeys) {
+        BitSet hidden = new BitSet(Math.max(0, gridRowCount));
+        if (focusKeys == null || focusKeys.isEmpty()) {
+            return hidden;
+        }
+        List<String> header = headerRow(originalRows);
+        List<List<String>> display = displayRows(SheetKind.COMBINATIONS, originalRows);
+        int first = Math.max(0, firstDataRow);
+        int n = Math.max(0, gridRowCount);
+        for (int i = 0; i < display.size(); i++) {
+            int gridRow = first + i;
+            if (gridRow < 0 || gridRow >= n) {
+                continue;
+            }
+            if (!combinationDisplayRowVisible(header, display.get(i), focusKeys)) {
+                hidden.set(gridRow);
+            }
+        }
+        return hidden;
     }
 
     public static boolean[] mandatoryLeadingMask(int colCount, int leadingCols) {
