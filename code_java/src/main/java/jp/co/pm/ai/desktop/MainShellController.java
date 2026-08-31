@@ -5227,17 +5227,26 @@ public final class MainShellController
         if (factorySiteSwitchBusy != null) {
             factorySiteSwitchBusy.setStatus(status);
         }
-        selectFactorySiteSwitchStatusTab(status);
+        selectBusyProgressStatusTab(status);
     }
 
-    private void selectFactorySiteSwitchStatusTab(String status) {
-        if (startupSequenceActive || tabPane == null) {
+    /**
+     * 工場切替／起動時チェックの進捗文言に対応するメインタブへ遷移する。
+     *
+     * <p>起動シーケンス中でも「起動後読込」段階なら遷移する（実行・ログに固定したままにしない）。
+     */
+    private void selectBusyProgressStatusTab(String status) {
+        if (tabPane == null) {
             return;
         }
-        /* finishFactorySiteSwitch で inProgress は先に落ちる。起動後読込中もモーダル進捗に追従する。 */
-        if (!factorySiteSwitchInProgress
-                && !factorySwitchAwaitingBackgroundLoadBeforeModalClose
-                && !isFactorySiteSwitchBusyShowing()) {
+        boolean factorySwitchProgress =
+                factorySiteSwitchInProgress
+                        || factorySwitchAwaitingBackgroundLoadBeforeModalClose
+                        || isFactorySiteSwitchBusyShowing();
+        boolean startupTabLoadProgress =
+                startupAwaitingBackgroundLoadBeforeModalClose
+                        || (startupTabBackgroundLoadActive && isEnvVarsStartupCheckBusyShowing());
+        if (!factorySwitchProgress && !startupTabLoadProgress) {
             return;
         }
         FactorySiteSwitchBusySupport.targetTabForStatus(status)
@@ -6599,6 +6608,7 @@ public final class MainShellController
         } else if (isEnvVarsStartupCheckBusyShowing()
                 && startupAwaitingBackgroundLoadBeforeModalClose) {
             updateEnvVarsStartupCheckBusy(startupBackgroundLoadMessage);
+            selectBusyProgressStatusTab(startupBackgroundLoadMessage);
         } else if (isFactorySiteSwitchBusyShowing()
                 && factorySwitchAwaitingBackgroundLoadBeforeModalClose) {
             updateFactorySiteSwitchBusy(
@@ -8501,6 +8511,12 @@ public final class MainShellController
         }
         Runnable select =
                 () -> {
+                    if (startupAwaitingBackgroundLoadBeforeModalClose
+                            || factorySwitchAwaitingBackgroundLoadBeforeModalClose
+                            || startupTabBackgroundLoadActive
+                            || suppressFactorySiteSwitchTabNavigation.get()) {
+                        return;
+                    }
                     if (!selectShellTabLeaf(mainShellTabRun)) {
                         selectMainShellTabRecursive(tabPane, MainShellTabId.RUN);
                     }
