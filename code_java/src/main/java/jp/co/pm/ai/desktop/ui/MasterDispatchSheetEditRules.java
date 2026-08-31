@@ -1171,7 +1171,7 @@ public final class MasterDispatchSheetEditRules {
             if (prioCol >= 0) {
                 String v = cell(rows, r, prioCol);
                 if (!v.isEmpty() && !isCombinationPriorityNumber(v)) {
-                    errors.add("組み合わせ優先度は 1 以上の数値です（小数可）。行" + (r + 1) + ": " + v);
+                    errors.add("組み合わせ優先度は 0 以上の数値です（小数可）。行" + (r + 1) + ": " + v);
                 }
             }
             if (reqCol >= 0) {
@@ -1454,7 +1454,7 @@ public final class MasterDispatchSheetEditRules {
         }
         try {
             double d = Double.parseDouble(s.strip().replace(",", ""));
-            return !Double.isNaN(d) && !Double.isInfinite(d) && d >= 1.0;
+            return !Double.isNaN(d) && !Double.isInfinite(d) && d >= 0.0;
         } catch (NumberFormatException e) {
             return false;
         }
