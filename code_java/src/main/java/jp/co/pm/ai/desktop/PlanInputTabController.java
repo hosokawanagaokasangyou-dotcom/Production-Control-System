@@ -59,6 +59,7 @@ import jp.co.pm.ai.desktop.ui.LimitedOperatorCellEditor;
 import jp.co.pm.ai.desktop.ui.PlanInputDeprecatedOverrideColumnSupport;
 import jp.co.pm.ai.desktop.ui.PlanInputEditedCellMarks;
 import jp.co.pm.ai.desktop.ui.PlanInputProcessSequenceRowOrder;
+import jp.co.pm.ai.desktop.ui.PlanInputEmbossClusterHighlight;
 import jp.co.pm.ai.desktop.ui.PlanInputSpreadsheetRowReorder;
 import jp.co.pm.ai.desktop.ui.PlanInputDateColumnSupport;
 import jp.co.pm.ai.desktop.ui.PlanInputRawInputDateShift;
@@ -122,6 +123,12 @@ public final class PlanInputTabController {
 
     @FXML
     private Button saveButton;
+
+    @FXML
+    private Button clusterEmbossButton;
+
+    private final PlanInputEmbossClusterHighlight embossClusterHighlight =
+            new PlanInputEmbossClusterHighlight();
 
     @FXML
     private Button addRowButton;
@@ -297,6 +304,7 @@ public final class PlanInputTabController {
                         (obs, prev, cur) ->
                                 SpreadsheetMultiColumnFilterCoordinator.setRowTextSearchQuery(
                                         spreadsheetView, cur));
+        refreshEmbossClusterButtonHighlight();
     }
 
     /** 実行・ログタブの段階ボタンと同系のごく弱いドロップシャドウ。 */
@@ -547,7 +555,7 @@ public final class PlanInputTabController {
             if (stage21RunButton != null) {
                 stage21RunButton.setTooltip(
                         new Tooltip(
-                                "残業/休出シミュ付きフル再配台（成功時はメイン output へ正本反映）"));
+                                "残業を決めたうえで段階2を実行する（残業・休出ありのシミュレーション）"));
             }
         }
         if (stage2RunButton != null) {
@@ -1254,9 +1262,42 @@ public final class PlanInputTabController {
         }
         clearColumnFiltersAndSort();
         clearPlanInputTableDirtySinceSave();
+        embossClusterHighlight.resetForLoadedTable();
         rebuildSpreadsheet();
         if (shell != null) {
             shell.appendLog("[plan-input] キャッシュクリアに伴い表を空にしました。");
+        }
+    }
+
+    @FXML
+    private void onClusterEmbossButtonAction() {
+        if (headersRef.isEmpty() || rows == null || rows.isEmpty()) {
+            return;
+        }
+        PlanInputSpreadsheetRowReorder.clusterEmbossRequestBlocksByMachine(headersRef, rows);
+        embossClusterHighlight.markClusterApplied();
+        markPlanInputTableDirtySinceSave();
+        rebuildSpreadsheet();
+        if (shell != null) {
+            shell.appendLog(
+                    "[plan-input] エンボス依頼を同一機械ごとにまとめ、配台試行順番を振り直しました。");
+        }
+    }
+
+    private void refreshEmbossClusterButtonHighlight() {
+        boolean hasEmboss =
+                PlanInputProcessSequenceRowOrder.hasEligibleEmbossInDispatch(headersRef, rows);
+        applyActionHot(clusterEmbossButton, embossClusterHighlight.clusterHot(hasEmboss));
+        applyActionHot(saveButton, embossClusterHighlight.saveHot());
+    }
+
+    private static void applyActionHot(Button button, boolean hot) {
+        if (button == null) {
+            return;
+        }
+        button.getStyleClass().remove("pm-plan-input-action-hot");
+        if (hot) {
+            button.getStyleClass().add("pm-plan-input-action-hot");
         }
     }
 
@@ -1289,6 +1330,8 @@ public final class PlanInputTabController {
             PlanInputEditedCellMarks.save(path, editedCellMarks);
             shell.appendLog("[plan-input] saved " + path);
             clearPlanInputTableDirtySinceSave();
+            embossClusterHighlight.markSaved();
+            refreshEmbossClusterButtonHighlight();
             shell.showInformationDialog(
                     "保存完了",
                     "配台計画_タスク入力を保存しました。\n"
@@ -1408,6 +1451,7 @@ public final class PlanInputTabController {
                     spreadsheetView, empty, SpreadsheetTabularSupport.GridAttachMode.STANDARD);
             currentGrid = empty;
             updatePlanInputUnprocessedDispatchRemainingWarning();
+            refreshEmbossClusterButtonHighlight();
             return;
         }
         final Map<Integer, Set<String>> columnFilterSnapshot =
@@ -1457,11 +1501,13 @@ public final class PlanInputTabController {
                         if (!suppressPlanInputDirtyFromGridEvents.get()) {
                             markPlanInputTableDirtySinceSave();
                         }
+                        refreshEmbossClusterButtonHighlight();
                     };
             grid.addEventHandler(GridChange.GRID_CHANGE_EVENT, gridChangeHandler);
             currentGrid = grid;
             SpreadsheetTabularSupport.attachGridToSpreadsheetView(
                     spreadsheetView, grid, attachMode);
+            refreshEmbossClusterButtonHighlight();
 
             Platform.runLater(
                     () -> {
@@ -1645,6 +1691,7 @@ public final class PlanInputTabController {
             TableColumnOrderPersistence.saveColumnVisibility(
                     TableColumnOrderPersistence.TableId.PLAN_INPUT, visAfter);
             loadPlanInputEditMarks(path);
+            embossClusterHighlight.resetForLoadedTable();
             applyLoaded();
             clearPlanInputTableDirtySinceSave();
             shell.appendLog(

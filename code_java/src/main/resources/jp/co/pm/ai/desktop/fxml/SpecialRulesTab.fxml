@@ -41,6 +41,10 @@
                 <Tab text="適用トレース">
                     <fx:include fx:id="traceTab" source="dispatch/rules/SpecialRulesTraceTab.fxml"/>
                 </Tab>
+                <Tab text="工程優先">
+                    <fx:include fx:id="processMachinePriorityTab"
+                                source="dispatch/rules/ProcessMachinePriorityTab.fxml"/>
+                </Tab>
                 <Tab text="JSON">
                     <content>
                         <VBox spacing="8">

@@ -525,6 +525,7 @@ def _trial_order_flow_eligible_tasks(
             assign_probe_ctx=assign_probe_ctx,
             pending_by_occ=pending_by_occ,
             window_left_cache=window_left_cache,
+            candidate_task=task,
         ):
             continue
         _elig_acc_equip += time_module.perf_counter() - _t_ee0
@@ -577,6 +578,7 @@ def _assign_one_roll_trial_order_flow(
     _mh = machine_handoff or {
         "last_tid": {},
         "last_eq": {},
+        "last_process": {},
         "started_today": set(),
         "machining_today_occ": set(),
         "last_machining_dt": {},
@@ -2046,6 +2048,7 @@ def _trial_order_first_schedule_pass(
     machine_handoff = {
         "last_tid": dict(_mh_init["last_tid"]),
         "last_eq": dict(_mh_init["last_eq"]),
+        "last_process": dict(_mh_init.get("last_process") or {}),
         "started_today": set(_mh_init["started_today"]),
         "machining_today_occ": set(_mh_init.get("machining_today_occ") or set()),
         "last_machining_dt": dict(_mh_init.get("last_machining_dt") or {}),
@@ -2126,9 +2129,41 @@ def _trial_order_first_schedule_pass(
             int(t.get("same_request_line_seq") or 0),
         )
 
-    def _phase1_sort_key(t: dict) -> tuple:
+    from planning_core.core.process_machine_priority import (
+        consecutive_prefer_sort_penalty,
+        last_process_for_occupancy,
+        load_priority_rules,
+        priority_rank_for_task,
+        should_defer_blocker_behind_consecutive_peers,
+    )
+
+    l14_rules = load_priority_rules()
+
+    def _occ_of(t: dict) -> str:
+        eqt = str(t.get("equipment_line_key") or t.get("machine") or "").strip()
+        return (_machine_occupancy_key_resolve(t, eqt) or "").strip()
+
+    def _phase1_sort_key(t: dict, peers: list | None = None) -> tuple:
         """段階3: 当該暦日キャップ未達 m が大きいタスクを先に（同一機械の依頼切替待ちを後ろ倒ししない）。"""
-        base = _l9_slice_continuity_key(t)
+        dto_k, l9_pen, tid, seq = _l9_slice_continuity_key(t)
+        occ = _occ_of(t)
+        last_proc = last_process_for_occupancy(machine_handoff, occ)
+        cons = consecutive_prefer_sort_penalty(
+            t, machine_handoff, occupancy=occ, rules=l14_rules
+        )
+        rank = priority_rank_for_task(t, l14_rules)
+        defer = 0
+        if peers:
+            if should_defer_blocker_behind_consecutive_peers(
+                t,
+                peers,
+                occupancy=occ,
+                last_process=last_proc,
+                occupancy_of=_occ_of,
+                rules=l14_rules,
+            ):
+                defer = 1
+        rest = (defer, dto_k, l9_pen, cons, rank, tid, seq)
         unmet = _interactive_stage3_unmet_cap_m_on_date(
             t,
             current_date,
@@ -2136,11 +2171,10 @@ def _trial_order_first_schedule_pass(
             interactive_trial_meters_done=interactive_trial_meters_done,
         )
         if _interactive_stage2_parity_active():
-            # 段階2同一パリティ: 未達 m 降順は試行順 3(W6-7)より 10(W6-2)を先にし段階2と乖離するため試行順のみ。
-            return base
+            return rest
         if unmet <= 1e-9:
-            return (1, 0.0) + base
-        return (0, -unmet) + base
+            return (1, 0.0) + rest
+        return (0, -unmet) + rest
 
     def _drain_rolls_for_task(
         task: dict, *, max_rolls: int | None = None
@@ -2433,6 +2467,14 @@ def _trial_order_first_schedule_pass(
                 task.get("task_id") or ""
             ).strip()
             machine_handoff["last_eq"][machine_occ_key] = eq_line
+            from planning_core.core.process_machine_priority import remember_last_process
+
+            remember_last_process(
+                machine_handoff,
+                machine_occ_key,
+                process_name=str(task.get("machine") or ""),
+                eq_line=eq_line,
+            )
             machine_handoff["started_today"].add(machine_occ_key)
             machine_handoff["machining_today_occ"].add(machine_occ_key)
             machine_handoff["last_machining_dt"][machine_occ_key] = best_end
@@ -2536,19 +2578,20 @@ def _trial_order_first_schedule_pass(
             if cap_drain_only
             else list(phase1_tasks)
         )
+        _cap_drain_selected = [
+            t
+            for t in _cap_drain_source
+            if _interactive_stage3_unmet_cap_m_on_date(
+                t,
+                current_date,
+                interactive_dispatch_targets=interactive_dispatch_targets,
+                interactive_trial_meters_done=interactive_trial_meters_done,
+            )
+            > 1e-9
+        ]
         _cap_drain_tasks = sorted(
-            [
-                t
-                for t in _cap_drain_source
-                if _interactive_stage3_unmet_cap_m_on_date(
-                    t,
-                    current_date,
-                    interactive_dispatch_targets=interactive_dispatch_targets,
-                    interactive_trial_meters_done=interactive_trial_meters_done,
-                )
-                > 1e-9
-            ],
-            key=_phase1_sort_key,
+            _cap_drain_selected,
+            key=lambda t: _phase1_sort_key(t, _cap_drain_selected),
         )
         _cap_drain_ids = {id(t) for t in _cap_drain_tasks}
         for _ct in _cap_drain_tasks:
@@ -2572,14 +2615,17 @@ def _trial_order_first_schedule_pass(
         ):
             # 段階3（非パリティ）: B2 ラウンドロビン（1ロールずつ）だと同一機械で未達大の依頼と交替し
             # 開始が遅れる。phase1_rest は暦日キャップ優先で一括ドレインする。
-            for task in sorted(phase1_rest, key=_phase1_sort_key):
+            for task in sorted(phase1_rest, key=lambda t: _phase1_sort_key(t, phase1_rest)):
                 if _drain_rolls_for_task(task):
                     pass_made = True
             phase1_rest = []
         elif phase1_rest or phase1_interleave:
             # 段階2: §B-2 後続が載る日は、同一依頼の先行（例: スリット残）を
             # 1ロール交互より先にドレインする。interleave（機械共有の EC 等）も対象。
-            for task in sorted(phase1_rest + phase1_interleave, key=_phase1_sort_key):
+            for task in sorted(
+                phase1_rest + phase1_interleave,
+                key=lambda t: _phase1_sort_key(t, phase1_rest + phase1_interleave),
+            ):
                 if _drain_rolls_for_task(task):
                     pass_made = True
             phase1_rest = [
@@ -2594,12 +2640,12 @@ def _trial_order_first_schedule_pass(
             ]
         merged_b2 = sorted(
             phase1_interleave + phase2_tasks,
-            key=_phase1_sort_key,
+            key=lambda t: _phase1_sort_key(t, phase1_interleave + phase2_tasks),
         )
         _merged_row_ids = {id(x) for x in merged_b2}
 
         def _b2_rr_key(t: dict) -> tuple:
-            return _phase1_sort_key(t)
+            return _phase1_sort_key(t, merged_b2 + phase1_rest)
 
         while True:
             round_made = False
@@ -2613,7 +2659,7 @@ def _trial_order_first_schedule_pass(
                 break
             pass_made = True
     else:
-        for task in sorted(phase1_tasks, key=_phase1_sort_key):
+        for task in sorted(phase1_tasks, key=lambda t: _phase1_sort_key(t, phase1_tasks)):
             if _drain_rolls_for_task(task):
                 pass_made = True
     _dispatch_loop_profile_add(

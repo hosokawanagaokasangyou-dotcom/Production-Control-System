@@ -3866,6 +3866,7 @@ def _equipment_line_lower_dispatch_trial_still_pending(
     assign_probe_ctx: dict | None = None,
     pending_by_occ: dict[str, list[tuple[int, dict]]] | None = None,
     window_left_cache: dict | None = None,
+    candidate_task: dict | None = None,
 ) -> bool:
     """
     同一実機械（machine 占有キー）上で」より尝さい配台試行順の行はまて残量を挝つか。
@@ -3922,6 +3923,15 @@ def _equipment_line_lower_dispatch_trial_still_pending(
             t, current_date, daily_status, assign_probe_ctx
         ):
             return False
+        if candidate_task is not None:
+            from planning_core.core.process_machine_priority import (
+                last_process_for_occupancy,
+                may_skip_lower_trial_blocker,
+            )
+
+            last_proc = last_process_for_occupancy(machine_handoff, line)
+            if may_skip_lower_trial_blocker(candidate_task, t, last_proc):
+                return False
         return True
 
     if pending_by_occ is not None:
@@ -4042,7 +4052,43 @@ def _task_blocked_by_global_dispatch_trial_order(
         my_o = _dispatch_trial_order_key(task)
     except (TypeError, ValueError):
         my_o = 10**9
-    return my_o > m
+    if my_o <= m:
+        return False
+    pool = _tasks_in_min_pending_dispatch_pool(
+        task_queue,
+        current_date,
+        daily_status=daily_status,
+        members=members,
+        machine_avail_dt=machine_avail_dt,
+        machine_day_start=machine_day_start,
+        machine_handoff=machine_handoff,
+        skills_dict=skills_dict,
+        abolish_all_scheduling_limits=abolish_all_scheduling_limits,
+        dispatch_interval_mirror=dispatch_interval_mirror,
+    )
+    from planning_core.core.process_machine_priority import (
+        last_process_for_occupancy,
+        may_skip_lower_trial_blocker,
+    )
+
+    cand_eq = str(task.get("equipment_line_key") or task.get("machine") or "").strip()
+    cand_occ = (_machine_occupancy_key_resolve(task, cand_eq) or "").strip()
+    last_proc = last_process_for_occupancy(machine_handoff, cand_occ)
+    for t in pool:
+        if t is task:
+            continue
+        try:
+            o = _dispatch_trial_order_key(t)
+        except (TypeError, ValueError):
+            continue
+        if o >= my_o:
+            continue
+        t_eq = str(t.get("equipment_line_key") or t.get("machine") or "").strip()
+        t_occ = (_machine_occupancy_key_resolve(t, t_eq) or "").strip()
+        if t_occ == cand_occ and may_skip_lower_trial_blocker(task, t, last_proc):
+            continue
+        return True
+    return False
 def _purge_attendance_days_not_in_set(attendance_data: dict, keep_dates: frozenset) -> None:
     """勤怠辞書からマスタに無い日付キーを削除する（自動拡張分の巻し戻し）。"""
     for dk in list(attendance_data.keys()):
@@ -10709,6 +10755,7 @@ def _snapshot_machine_handoff_state(template: dict) -> dict:
     return {
         "last_tid": dict(template["last_tid"]),
         "last_eq": dict(template["last_eq"]),
+        "last_process": dict(template.get("last_process") or {}),
         "last_machining_dt": dict(template["last_machining_dt"]),
         "last_machining_date": dict(template["last_machining_date"]),
         "last_lead_op": dict(template["last_lead_op"]),
@@ -10769,6 +10816,9 @@ def _machine_handoff_merge_machining_event(
         state["last_machining_dt"][occ] = end_dt
         state["last_tid"][occ] = tid
         state["last_eq"][occ] = eq_line
+        from planning_core.core.process_machine_priority import remember_last_process
+
+        remember_last_process(state, occ, eq_line=eq_line)
         state["last_machining_date"][occ] = ed
         state["last_lead_op"][occ] = lead_op
         state["last_machining_sub"][occ] = sub_csv
@@ -10808,6 +10858,9 @@ def _machine_handoff_state_from_timeline(
             best[occ] = (end_dt, tid, eq_line, ed, lead_op, sub_csv)
     last_tid = {k: v[1] for k, v in best.items()}
     last_eq = {k: v[2] for k, v in best.items()}
+    from planning_core.core.process_machine_priority import process_from_eq_line
+
+    last_process = {k: process_from_eq_line(v[2]) for k, v in best.items()}
     last_machining_dt = {k: v[0] for k, v in best.items()}
     last_machining_date = {k: v[3] for k, v in best.items()}
     last_lead_op = {k: v[4] for k, v in best.items()}
@@ -10816,6 +10869,7 @@ def _machine_handoff_state_from_timeline(
     return {
         "last_tid": last_tid,
         "last_eq": last_eq,
+        "last_process": last_process,
         "last_machining_dt": last_machining_dt,
         "last_machining_date": last_machining_date,
         "last_lead_op": last_lead_op,
@@ -11099,6 +11153,7 @@ def _append_legacy_dispatch_candidate_for_team(
     _mh_legacy = machine_handoff or {
         "last_tid": {},
         "last_eq": {},
+        "last_process": {},
         "started_today": set(),
         "machining_today_occ": set(),
         "last_machining_dt": {},

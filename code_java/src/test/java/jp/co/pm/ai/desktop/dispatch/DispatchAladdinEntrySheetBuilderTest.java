@@ -199,6 +199,21 @@ class DispatchAladdinEntrySheetBuilderTest {
     }
 
     @Test
+    void completionDateCheckClassifiesExactlyOneDayBeforeAsYellowOk() {
+        List<Map<String, String>> rows = new ArrayList<>();
+        Map<String, String> r = row("W1", "巻返し", "M1", "2026-07-08", "100");
+        r.put("回答納期", "2026-07-30");
+        r.put("加工完了日", "2026-07-29");
+        rows.add(r);
+
+        DispatchAladdinEntrySheetBuilder.EntryRow out = buildSingleRow(rows);
+
+        assertEquals(
+                DispatchAladdinEntrySheetBuilder.CompletionDateCheckStatus.OK_YELLOW,
+                out.completionDateCheckStatus());
+    }
+
+    @Test
     void completionDateCheckOkWhenEarlierThanOneDayBeforeAnswerNoki() {
         List<Map<String, String>> rows = new ArrayList<>();
         Map<String, String> r = row("W1", "巻返し", "M1", "2026-07-08", "100");
@@ -213,6 +228,21 @@ class DispatchAladdinEntrySheetBuilderTest {
     }
 
     @Test
+    void completionDateCheckClassifiesTwoOrMoreDaysBeforeAsWhiteOk() {
+        List<Map<String, String>> rows = new ArrayList<>();
+        Map<String, String> r = row("W1", "巻返し", "M1", "2026-07-08", "100");
+        r.put("回答納期", "2026-07-30");
+        r.put("加工完了日", "2026-07-28");
+        rows.add(r);
+
+        DispatchAladdinEntrySheetBuilder.EntryRow out = buildSingleRow(rows);
+
+        assertEquals(
+                DispatchAladdinEntrySheetBuilder.CompletionDateCheckStatus.OK_WHITE,
+                out.completionDateCheckStatus());
+    }
+
+    @Test
     void completionDateCheckNgWhenOnOrAfterAnswerNoki() {
         List<Map<String, String>> rows = new ArrayList<>();
         Map<String, String> r = row("W1", "巻返し", "M1", "2026-07-08", "100");
@@ -224,6 +254,9 @@ class DispatchAladdinEntrySheetBuilderTest {
 
         assertFalse(out.completionDateCheckOk());
         assertEquals("NG", out.completionDateCheckText());
+        assertEquals(
+                DispatchAladdinEntrySheetBuilder.CompletionDateCheckStatus.NG_RED,
+                out.completionDateCheckStatus());
 
         assertEquals(
                 "NG",

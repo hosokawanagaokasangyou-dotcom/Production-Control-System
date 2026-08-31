@@ -27,6 +27,12 @@
                 styleClass="pm-stage-run-button,pm-stage-run-2-1" text="段階2.1(時間外)" />
         <Button fx:id="loadButton" mnemonicParsing="false" onAction="#onLoadButtonAction" text="読み込み" />
         <Button fx:id="saveButton" mnemonicParsing="false" onAction="#onSaveButtonAction" text="保存" />
+        <Button fx:id="clusterEmbossButton" mnemonicParsing="false" onAction="#onClusterEmbossButtonAction"
+                styleClass="pm-cluster-emboss-button" text="エンボスをまとめる">
+            <tooltip>
+                <Tooltip text="同一機械のエンボス依頼を一塊にまとめ、配台試行順番を振り直します。同一依頼の先行工程はエンボスの直前に残します。段階1直後は自動では並べ替えません。" />
+            </tooltip>
+        </Button>
         <HBox alignment="CENTER_LEFT" spacing="6.0" HBox.hgrow="ALWAYS">
             <Label text="行検索" />
             <TextField fx:id="rowSearchField" maxWidth="Infinity" promptText="列の部分一致（空欄で解除）" HBox.hgrow="ALWAYS" />

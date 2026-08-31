@@ -380,15 +380,17 @@ public final class DispatchAladdinEntryWorkbookExporter {
             writeFixedCell(row, 3, entry.inputDate(), styles.data());
             writeFixedCell(row, 4, entry.kaitoNoki(), styles.data());
             String completionCheck = entry.completionDateCheckText();
+            DispatchAladdinEntrySheetBuilder.CompletionDateCheckStatus completionStatus =
+                    entry.completionDateCheckStatus();
+            CellStyle completionCheckStyle =
+                    switch (completionStatus) {
+                        case BLANK -> styles.data();
+                        case OK_WHITE -> styles.checkOk();
+                        case OK_YELLOW -> styles.checkOkYellow();
+                        case NG_RED -> styles.checkNg();
+                    };
             writeFixedCell(
-                    row,
-                    5,
-                    completionCheck,
-                    completionCheck.isEmpty()
-                            ? styles.data()
-                            : entry.completionDateCheckOk()
-                                    ? styles.checkOk()
-                                    : styles.checkNg());
+                    row, 5, completionCheck, completionCheckStyle);
             writeFixedCell(
                     row, 6, ResultDispatchNormalizer.formatQty(entry.conversionQty()), styles.qty());
             writeFixedCell(
@@ -508,6 +510,7 @@ public final class DispatchAladdinEntryWorkbookExporter {
             CellStyle ecDoubleSided,
             CellStyle qty,
             CellStyle checkOk,
+            CellStyle checkOkYellow,
             CellStyle checkNg,
             CellStyle dateCell,
             CellStyle dateCellMismatch,
@@ -608,6 +611,8 @@ public final class DispatchAladdinEntryWorkbookExporter {
             fill(ecDoubleSided, EC_DOUBLE_SIDED_FILL_RGB);
             CellStyle qty = borderedStyle(wb, dataFont, HorizontalAlignment.RIGHT, false);
             CellStyle checkOk = borderedStyle(wb, dataFont, HorizontalAlignment.CENTER, false);
+            CellStyle checkOkYellow = borderedStyle(wb, dataFont, HorizontalAlignment.CENTER, false);
+            fill(checkOkYellow, new byte[] {(byte) 0xFF, (byte) 0xF2, (byte) 0xCC}); // 薄黄
             CellStyle checkNg = borderedStyle(wb, ngFont, HorizontalAlignment.CENTER, false);
             fill(checkNg, new byte[] {(byte) 0xFF, (byte) 0xC7, (byte) 0xCE}); // 赤系
 
@@ -634,6 +639,7 @@ public final class DispatchAladdinEntryWorkbookExporter {
                     ecDoubleSided,
                     qty,
                     checkOk,
+                    checkOkYellow,
                     checkNg,
                     dateCell,
                     dateCellMismatch,

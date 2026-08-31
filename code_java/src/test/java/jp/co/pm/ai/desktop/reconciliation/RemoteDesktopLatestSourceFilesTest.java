@@ -1,6 +1,7 @@
 package jp.co.pm.ai.desktop.reconciliation;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
@@ -151,6 +152,93 @@ class RemoteDesktopLatestSourceFilesTest {
                         RemoteDesktopLatestSourceFiles.PIPELINE_CHECK_MAX_SOURCE_AGE_MS,
                         System.currentTimeMillis());
         assertTrue(stale.isEmpty());
+    }
+
+    @Test
+    void pipelineCheckUsedPathsDifferFromLatest_falseWhenUsedMatchesLatest() throws Exception {
+        Path planDir = temp.resolve("plan-match");
+        Path dailyDir = temp.resolve("daily-match");
+        Files.createDirectories(planDir);
+        Files.createDirectories(dailyDir);
+        Path planFile = planDir.resolve("工程別生産計画問合せ_20260824.xlsx");
+        Path dailyFile = dailyDir.resolve("加工日報発行問合せ_20260824.csv");
+        Files.writeString(planFile, "p");
+        Files.writeString(dailyFile, "a,b\n1,2");
+
+        Map<String, String> ui =
+                Map.of(
+                        AppPaths.KEY_PM_AI_TASK_INPUT_SOURCE_DIR,
+                        planDir.toString(),
+                        KonanDailyReportLookup.KEY_DAILY_REPORT_SOURCE_DIR,
+                        dailyDir.toString());
+
+        assertFalse(
+                RemoteDesktopLatestSourceFiles.pipelineCheckUsedPathsDifferFromLatest(
+                        planFile.toAbsolutePath().normalize().toString(),
+                        dailyFile.toAbsolutePath().normalize().toString(),
+                        ui));
+    }
+
+    @Test
+    void pipelineCheckUsedPathsDifferFromLatest_trueWhenPlanOrDailyDiffers() throws Exception {
+        Path planDir = temp.resolve("plan-diff");
+        Path dailyDir = temp.resolve("daily-diff");
+        Files.createDirectories(planDir);
+        Files.createDirectories(dailyDir);
+        Path planOld = planDir.resolve("工程別生産計画問合せ_20260801.xlsx");
+        Path planNew = planDir.resolve("工程別生産計画問合せ_20260824.xlsx");
+        Path dailyOld = dailyDir.resolve("加工日報発行問合せ_20260801.csv");
+        Path dailyNew = dailyDir.resolve("加工日報発行問合せ_20260824.csv");
+        Files.writeString(planOld, "old");
+        Files.writeString(planNew, "new");
+        Files.writeString(dailyOld, "a,b\n1,2");
+        Files.writeString(dailyNew, "a,b\n3,4");
+        bumpMtime(planNew, planOld);
+        bumpMtime(dailyNew, dailyOld);
+
+        Map<String, String> ui =
+                Map.of(
+                        AppPaths.KEY_PM_AI_TASK_INPUT_SOURCE_DIR,
+                        planDir.toString(),
+                        KonanDailyReportLookup.KEY_DAILY_REPORT_SOURCE_DIR,
+                        dailyDir.toString());
+
+        String latestPlan = planNew.toAbsolutePath().normalize().toString();
+        String latestDaily = dailyNew.toAbsolutePath().normalize().toString();
+        String usedPlan = planOld.toAbsolutePath().normalize().toString();
+        String usedDaily = dailyOld.toAbsolutePath().normalize().toString();
+
+        assertTrue(
+                RemoteDesktopLatestSourceFiles.pipelineCheckUsedPathsDifferFromLatest(
+                        usedPlan, latestDaily, ui),
+                "加工計画が最新と異なる");
+        assertTrue(
+                RemoteDesktopLatestSourceFiles.pipelineCheckUsedPathsDifferFromLatest(
+                        latestPlan, usedDaily, ui),
+                "加工日報が最新と異なる");
+        assertTrue(
+                RemoteDesktopLatestSourceFiles.pipelineCheckUsedPathsDifferFromLatest(
+                        usedPlan, usedDaily, ui),
+                "両方とも最新と異なる");
+        assertTrue(
+                RemoteDesktopLatestSourceFiles.pipelineCheckUsedPathsDifferFromLatest("", latestDaily, ui),
+                "使用中の加工計画が未読込");
+    }
+
+    @Test
+    void pipelineCheckUsedPathsDifferFromLatest_falseWhenLatestMissing() throws Exception {
+        Map<String, String> ui =
+                Map.of(
+                        AppPaths.KEY_PM_AI_TASK_INPUT_SOURCE_DIR,
+                        temp.resolve("missing-plan-2").toString(),
+                        KonanDailyReportLookup.KEY_DAILY_REPORT_SOURCE_DIR,
+                        temp.resolve("missing-daily-2").toString());
+
+        assertFalse(
+                RemoteDesktopLatestSourceFiles.pipelineCheckUsedPathsDifferFromLatest(
+                        "C:\\old\\plan.xlsx", "C:\\old\\daily.csv", ui));
+        assertFalse(
+                RemoteDesktopLatestSourceFiles.pipelineCheckUsedPathsDifferFromLatest("", "", ui));
     }
 
     @Test

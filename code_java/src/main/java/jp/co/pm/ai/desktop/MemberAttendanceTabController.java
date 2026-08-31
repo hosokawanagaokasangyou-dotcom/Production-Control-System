@@ -118,6 +118,7 @@ public class MemberAttendanceTabController {
             };
     private volatile boolean memberGridPrefetchInFlight = false;
     private boolean attendanceLoadEnabled = false;
+    private boolean memberGridPrefetchSuppressed = false;
     private boolean suppressMonthGuard = false;
     private int tabProcessingDepth = 0;
     private int setupWizardGridOverlayDepth = 0;
@@ -459,7 +460,7 @@ public class MemberAttendanceTabController {
     }
 
     private void scheduleMemberGridIdlePrefetch() {
-        if (!attendanceLoadEnabled || shell == null) {
+        if (!attendanceLoadEnabled || memberGridPrefetchSuppressed || shell == null) {
             return;
         }
         memberGridIdlePrefetch.playFromStart();
@@ -467,6 +468,7 @@ public class MemberAttendanceTabController {
 
     private void runMemberGridIdlePrefetchStep() {
         if (!attendanceLoadEnabled
+                || memberGridPrefetchSuppressed
                 || shell == null
                 || tabProcessingDepth > 0
                 || setupWizardGridOverlayDepth > 0
@@ -517,7 +519,7 @@ public class MemberAttendanceTabController {
     }
 
     private void prefetchAdjacentMemberGrids(int year, int month) {
-        if (!attendanceLoadEnabled || shell == null) {
+        if (!attendanceLoadEnabled || memberGridPrefetchSuppressed || shell == null) {
             return;
         }
         YearMonth center = YearMonth.of(year, month);
@@ -634,11 +636,21 @@ public class MemberAttendanceTabController {
 
     /** 起動後バックグラウンド読込（MainShell コーディネータから呼ぶ）。 */
     void preloadInBackground(Consumer<Boolean> onComplete) {
+        memberGridPrefetchSuppressed = true;
         if (!attendanceLoadEnabled) {
             attendanceLoadEnabled = true;
         }
         loadGridFromPython(onComplete);
         refreshLocalReadiness();
+    }
+
+    /** 起動後バックグラウンド読込完了後に、利用者向け先読みを再開する。 */
+    void resumeBackgroundPrefetch() {
+        if (!memberGridPrefetchSuppressed) {
+            return;
+        }
+        memberGridPrefetchSuppressed = false;
+        scheduleMemberGridIdlePrefetch();
     }
 
     private void installGridCellSizeSpinner() {

@@ -2,6 +2,15 @@
   "schemaVersion": 1,
   "engineMinVersion": "1.0.0",
   "savedAt": "2026-05-26T00:00:00+09:00",
+  "processMachinePriorities": [
+    {
+      "processName": "エンボス",
+      "machineName": "",
+      "priority": "通常",
+      "consecutive": true,
+      "enabled": true
+    }
+  ],
   "rules": [
     {
       "id": "L13",

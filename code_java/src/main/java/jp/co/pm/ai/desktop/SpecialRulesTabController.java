@@ -15,6 +15,7 @@ import javafx.scene.control.TabPane;
 import javafx.scene.control.TextArea;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
+import jp.co.pm.ai.desktop.dispatch.rules.ProcessMachinePriorityTabController;
 import jp.co.pm.ai.desktop.dispatch.rules.SpecialRulesBuilderTabController;
 import jp.co.pm.ai.desktop.dispatch.rules.SpecialRulesTestLabTabController;
 import jp.co.pm.ai.desktop.dispatch.rules.migration.DispatchRuleMigrationService;
@@ -39,6 +40,7 @@ public final class SpecialRulesTabController {
     @FXML private SpecialRulesBuilderTabController builderTabController;
     @FXML private SpecialRulesTestLabTabController testLabTabController;
     @FXML private SpecialRulesTraceTabController traceTabController;
+    @FXML private ProcessMachinePriorityTabController processMachinePriorityTabController;
 
     @FXML
     private void initialize() {
@@ -61,6 +63,7 @@ public final class SpecialRulesTabController {
         loadMarkdown(false);
         reloadJsonEditor();
         if (builderTabController != null) {
+            builderTabController.setAfterSave(this::reloadLinkedDispatchRuleTabs);
             builderTabController.bindShell(shell);
         }
         if (testLabTabController != null && builderTabController != null) {
@@ -69,6 +72,20 @@ public final class SpecialRulesTabController {
         }
         if (traceTabController != null) {
             traceTabController.bindShell(shell);
+        }
+        if (processMachinePriorityTabController != null) {
+            processMachinePriorityTabController.setAfterSave(this::reloadLinkedDispatchRuleTabs);
+            processMachinePriorityTabController.bindShell(shell);
+        }
+    }
+
+    private void reloadLinkedDispatchRuleTabs() {
+        reloadJsonEditor();
+        if (builderTabController != null) {
+            builderTabController.bindShell(shell);
+        }
+        if (processMachinePriorityTabController != null) {
+            processMachinePriorityTabController.bindShell(shell);
         }
     }
 
@@ -96,13 +113,11 @@ public final class SpecialRulesTabController {
             return;
         }
         try {
-            Path work = DispatchRulePaths.resolveWorkJson(shell.snapshotUiEnv());
+            Path work = DispatchRulePaths.resolveWorkJson(shell.dispatchRulesUiEnv());
             Files.createDirectories(work.getParent());
             Files.writeString(work, jsonBodyArea.getText(), StandardCharsets.UTF_8);
             shell.dispatchRulesAppendLog("[dispatch-rules] JSON tab saved: " + work);
-            if (builderTabController != null) {
-                builderTabController.bindShell(shell);
-            }
+            reloadLinkedDispatchRuleTabs();
         } catch (IOException ex) {
             shell.showErrorDialog("保存エラー", ex.getMessage());
         }

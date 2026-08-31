@@ -5,8 +5,10 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 import javafx.collections.ObservableList;
@@ -27,7 +29,9 @@ public final class PlanInputProcessSequenceRowOrder {
     public static final String COL_TASK_ID = "依頼NO";
     public static final String COL_PROCESS = "工程名";
     public static final String COL_PROCESS_CONTENT = "加工内容";
+    public static final String COL_MACHINE = "機械名";
     public static final String COL_EXCLUDE_FROM_ASSIGNMENT = "配台不要";
+    public static final String PROCESS_EMBOSS = "エンボス";
 
     private static final Pattern WS_COLLAPSE = Pattern.compile("[\\s　]+");
     private static final int RANK_MISSING = 1_000_000_000;
@@ -374,6 +378,144 @@ public final class PlanInputProcessSequenceRowOrder {
             row.set(colDto, Integer.toString(i + 1));
         }
     }
+
+    /**
+     * 配台対象のエンボス行が1行でもあるか（配台不要オンは対象外）。ボタン点灯用。
+     */
+    public static boolean hasEligibleEmbossInDispatch(
+            List<String> headers, ObservableList<ObservableList<String>> rows) {
+        if (headers == null || rows == null || rows.isEmpty()) {
+            return false;
+        }
+        int colProc = headers.indexOf(COL_PROCESS);
+        if (colProc < 0) {
+            return false;
+        }
+        int colExclude = headers.indexOf(COL_EXCLUDE_FROM_ASSIGNMENT);
+        for (ObservableList<String> row : rows) {
+            if (isRowExcludedFromAssignment(row, colExclude)) {
+                continue;
+            }
+            if (isEmbossProcess(cellAt(row, colProc))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 同一実機械のエンボス依頼塊を、最初の当該塊の位置へ集約する。
+     *
+     * <p>先に §A-1 整列を行い、同一依頼の先行工程はエンボスの直前に残す。湖南と国分は混ぜない。
+     * エンボスを含まない行の前後関係は維持する。配台不要オン行は塊に入れない。
+     */
+    public static void clusterEmbossRequestBlocksByMachine(
+            List<String> headers, ObservableList<ObservableList<String>> rows) {
+        if (headers == null || rows == null || rows.isEmpty()) {
+            return;
+        }
+        stabilizeAndRenumberDispatchTrialOrder(headers, rows);
+        int colTask = headers.indexOf(COL_TASK_ID);
+        int colParent = headers.indexOf(COL_PARENT_TASK_ID);
+        int colProc = headers.indexOf(COL_PROCESS);
+        int colMachine = headers.indexOf(COL_MACHINE);
+        int colExclude = headers.indexOf(COL_EXCLUDE_FROM_ASSIGNMENT);
+        if (colProc < 0) {
+            return;
+        }
+
+        Map<String, String> embossMachineByBlockKey = new LinkedHashMap<>();
+        for (ObservableList<String> row : rows) {
+            if (isRowExcludedFromAssignment(row, colExclude)) {
+                continue;
+            }
+            if (!isEmbossProcess(cellAt(row, colProc))) {
+                continue;
+            }
+            String key = blockGroupKey(row, colTask, colParent);
+            if (key.isEmpty() || embossMachineByBlockKey.containsKey(key)) {
+                continue;
+            }
+            embossMachineByBlockKey.put(key, normalizeProcessName(cellAt(row, colMachine)));
+        }
+        if (embossMachineByBlockKey.isEmpty()) {
+            return;
+        }
+
+        List<EmbossClusterUnit> units = new ArrayList<>();
+        int i = 0;
+        int n = rows.size();
+        while (i < n) {
+            ObservableList<String> row = rows.get(i);
+            String key = blockGroupKey(row, colTask, colParent);
+            boolean excluded = isRowExcludedFromAssignment(row, colExclude);
+            if (!excluded && embossMachineByBlockKey.containsKey(key)) {
+                List<ObservableList<String>> block = new ArrayList<>();
+                while (i < n) {
+                    ObservableList<String> cur = rows.get(i);
+                    if (isRowExcludedFromAssignment(cur, colExclude)) {
+                        break;
+                    }
+                    if (!key.equals(blockGroupKey(cur, colTask, colParent))) {
+                        break;
+                    }
+                    block.add(cur);
+                    i++;
+                }
+                units.add(new EmbossClusterUnit(block, embossMachineByBlockKey.get(key)));
+            } else {
+                units.add(new EmbossClusterUnit(List.of(row), null));
+                i++;
+            }
+        }
+
+        Set<String> machines = new LinkedHashSet<>();
+        for (EmbossClusterUnit u : units) {
+            if (u.machineKey() != null) {
+                machines.add(u.machineKey());
+            }
+        }
+        for (String machine : machines) {
+            units = gatherEmbossUnitsForMachine(units, machine);
+        }
+
+        List<ObservableList<String>> reordered = new ArrayList<>(n);
+        for (EmbossClusterUnit u : units) {
+            reordered.addAll(u.rows());
+        }
+        rows.setAll(reordered);
+        renumberDispatchTrialOrderInCurrentRowOrder(headers, rows);
+    }
+
+    private static List<EmbossClusterUnit> gatherEmbossUnitsForMachine(
+            List<EmbossClusterUnit> units, String machine) {
+        List<EmbossClusterUnit> rest = new ArrayList<>();
+        List<EmbossClusterUnit> pulled = new ArrayList<>();
+        int insertAt = 0;
+        boolean seen = false;
+        for (EmbossClusterUnit u : units) {
+            if (machine.equals(u.machineKey())) {
+                if (!seen) {
+                    insertAt = rest.size();
+                    seen = true;
+                }
+                pulled.add(u);
+            } else {
+                rest.add(u);
+            }
+        }
+        if (pulled.size() <= 1) {
+            return units;
+        }
+        rest.addAll(insertAt, pulled);
+        return rest;
+    }
+
+    private static boolean isEmbossProcess(String processName) {
+        return PROCESS_EMBOSS.equals(normalizeProcessName(processName));
+    }
+
+    private record EmbossClusterUnit(List<ObservableList<String>> rows, String machineKey) {}
 
     static boolean isStage3Headers(List<String> headers) {
         return headers != null

@@ -92,7 +92,8 @@ public final class RequestFormPipelineCheckTabController {
                     + " を設定してください（走査は実行しません）";
 
     private static final String HINT_TEXT =
-            "「更新」…加工計画の再読込・原本走査・転記率と shaped_aladdin_plan.json を照合。\n"
+            "「更新」…加工計画の再読込・原本走査・転記率と shaped_aladdin_plan.json を照合。"
+                    + " 使用中の加工計画・加工日報がリモートデスクトップの取得データ最新と異なると更新ボタンが点灯。\n"
                     + "・依頼書原本フォルダ（環境変数 "
                     + AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR
                     + "）を設定するまで走査しません\n"
@@ -830,6 +831,7 @@ public final class RequestFormPipelineCheckTabController {
         aladdinPlanSourcePath = "";
         lastScannedAladdinPlanSourceRevisionKey = "";
         lastAladdinPlanSourceRevisionKey = "";
+        dailyReportLookup = KonanDailyReportLookup.empty();
         stopRefreshButtonGlow();
         allRows.clear();
         mismatchRows.clear();
@@ -840,6 +842,7 @@ public final class RequestFormPipelineCheckTabController {
             statusLabel.setText("工場切替: タブを開くと再走査します");
         }
         updateAladdinPlanSourceLabel();
+        updateDailyReportSourceLabel();
         updateStage1GateLabel();
         notifyStage1GateChanged();
     }
@@ -1437,11 +1440,14 @@ public final class RequestFormPipelineCheckTabController {
             return;
         }
         Map<String, String> ui = shell.snapshotUiEnv();
+        String usedPlan = aladdinPlanSourcePath;
+        String usedDaily = dailyReportLookup != null ? dailyReportLookup.sourcePath() : "";
         Thread worker =
                 new Thread(
                         () -> {
-                            boolean newer = isAladdinPlanSourceNewerThanLastScan(ui);
-                            Platform.runLater(() -> setRefreshButtonAttentionForAladdinPlanNewer(newer));
+                            boolean attention = refreshButtonNeedsAttention(ui, usedPlan, usedDaily);
+                            Platform.runLater(
+                                    () -> setRefreshButtonAttentionForAladdinPlanNewer(attention));
                         },
                         "pipeline-check-aladdin-watch");
         worker.setDaemon(true);
@@ -1452,8 +1458,20 @@ public final class RequestFormPipelineCheckTabController {
         if (shell == null || refreshInProgress) {
             return;
         }
-        boolean newer = isAladdinPlanSourceNewerThanLastScan(shell.snapshotUiEnv());
-        setRefreshButtonAttentionForAladdinPlanNewer(newer);
+        String usedDaily = dailyReportLookup != null ? dailyReportLookup.sourcePath() : "";
+        boolean attention =
+                refreshButtonNeedsAttention(shell.snapshotUiEnv(), aladdinPlanSourcePath, usedDaily);
+        setRefreshButtonAttentionForAladdinPlanNewer(attention);
+    }
+
+    /**
+     * 加工計画の版が走査時と異なる、または使用中の加工計画／加工日報が 取得データ最新表と異なるとき更新ボタンを点灯する。
+     */
+    boolean refreshButtonNeedsAttention(
+            Map<String, String> ui, String usedPlanPath, String usedDailyPath) {
+        return isAladdinPlanSourceNewerThanLastScan(ui)
+                || RemoteDesktopLatestSourceFiles.pipelineCheckUsedPathsDifferFromLatest(
+                        usedPlanPath, usedDailyPath, ui);
     }
 
     private void setRefreshButtonAttentionForAladdinPlanNewer(boolean newer) {

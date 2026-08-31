@@ -25,6 +25,12 @@ public final class PlanInputSpreadsheetRowReorder {
         PlanInputProcessSequenceRowOrder.stabilizeAndRenumberDispatchTrialOrder(headers, rows);
     }
 
+    /** 同一実機械のエンボス依頼塊を集約し、配台試行順番を 1..n に振り直す。 */
+    public static void clusterEmbossRequestBlocksByMachine(
+            List<String> headers, ObservableList<ObservableList<String>> rows) {
+        PlanInputProcessSequenceRowOrder.clusterEmbossRequestBlocksByMachine(headers, rows);
+    }
+
     /**
      * ↑ ボタン。選択データ行 index を 1 段上へ（複数工程・枝番はブロック単位）。
      *

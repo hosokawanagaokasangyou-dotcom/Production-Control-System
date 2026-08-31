@@ -31,6 +31,14 @@ public final class DispatchAladdinEntrySheetBuilder {
     /** 数量照合の許容誤差。 */
     public static final double QTY_MATCH_EPS = 0.01;
 
+    /** 完了日チェックの判定・表示色。 */
+    public enum CompletionDateCheckStatus {
+        BLANK,
+        OK_WHITE,
+        OK_YELLOW,
+        NG_RED
+    }
+
     /** セル上段の接頭辞。 */
     public static final String ALADDIN_LINE_PREFIX = "（現アラ計）";
 
@@ -105,7 +113,10 @@ public final class DispatchAladdinEntrySheetBuilder {
 
         /** 実効完了日（加工完了日と最終シス計日の遅い方）が回答納期の一日前以前か。 */
         public boolean completionDateCheckOk() {
-            return "OK".equals(completionDateCheckText());
+            return switch (completionDateCheckStatus()) {
+                case OK_WHITE, OK_YELLOW -> true;
+                case BLANK, NG_RED -> false;
+            };
         }
 
         /**
@@ -116,10 +127,16 @@ public final class DispatchAladdinEntrySheetBuilder {
          * そちらを優先する（配台日が納期当日なのに加工完了日だけ早いと誤って OK になるのを防ぐ）。
          */
         public String completionDateCheckText() {
-            if (kaitoNoki == null || kaitoNoki.isBlank()) {
-                return "";
-            }
-            return completionDateOneDayBeforeAnswerCheck(
+            return switch (completionDateCheckStatus()) {
+                case OK_WHITE, OK_YELLOW -> "OK";
+                case NG_RED -> "NG";
+                case BLANK -> "";
+            };
+        }
+
+        /** 完了日チェックの判定とExcel背景色の区分。 */
+        public CompletionDateCheckStatus completionDateCheckStatus() {
+            return DispatchAladdinEntrySheetBuilder.completionDateCheckStatus(
                     processCompleteDate, kaitoNoki, referenceYear, lastSystemDispatchDate());
         }
 
@@ -315,8 +332,21 @@ public final class DispatchAladdinEntrySheetBuilder {
             String answerNoki,
             int referenceYear,
             LocalDate lastSystemDispatch) {
+        return switch (completionDateCheckStatus(
+                processCompleteDate, answerNoki, referenceYear, lastSystemDispatch)) {
+            case OK_WHITE, OK_YELLOW -> "OK";
+            case NG_RED -> "NG";
+            case BLANK -> "";
+        };
+    }
+
+    private static CompletionDateCheckStatus completionDateCheckStatus(
+            String processCompleteDate,
+            String answerNoki,
+            int referenceYear,
+            LocalDate lastSystemDispatch) {
         if (answerNoki == null || answerNoki.isBlank()) {
-            return "";
+            return CompletionDateCheckStatus.BLANK;
         }
         LocalDate answer = parseAladdinEntryDate(answerNoki, referenceYear);
         int completeYear = answer != null ? answer.getYear() : referenceYear;
@@ -327,9 +357,16 @@ public final class DispatchAladdinEntrySheetBuilder {
             effective = lastSystemDispatch;
         }
         if (effective == null || answer == null) {
-            return "";
+            return CompletionDateCheckStatus.BLANK;
         }
-        return !effective.isAfter(answer.minusDays(1)) ? "OK" : "NG";
+        LocalDate oneDayBeforeAnswer = answer.minusDays(1);
+        if (effective.isBefore(oneDayBeforeAnswer)) {
+            return CompletionDateCheckStatus.OK_WHITE;
+        }
+        if (effective.equals(oneDayBeforeAnswer)) {
+            return CompletionDateCheckStatus.OK_YELLOW;
+        }
+        return CompletionDateCheckStatus.NG_RED;
     }
 
     /**

@@ -26,6 +26,7 @@ public final class RdpRightPanePreviewController implements AutoCloseable {
     private static final int MAX_BLANK_FRAMES = 10;
 
     private final javafx.scene.control.SplitPane rightPaneSplit;
+    private final RdpPreviewSessionGate sessionGate = new RdpPreviewSessionGate();
     private RdpRightPanePreviewPane previewPane;
     private double[] savedDividers;
     private Thread worker;
@@ -55,6 +56,8 @@ public final class RdpRightPanePreviewController implements AutoCloseable {
     }
 
     public void removePreviewPane() {
+        // 意図的停止。遅延 notifyStopped が次セッションのプレビューを壊さないよう世代を無効化。
+        sessionGate.invalidate();
         stopWorker();
         if (previewPane == null) {
             return;
@@ -86,15 +89,23 @@ public final class RdpRightPanePreviewController implements AutoCloseable {
             return;
         }
         stopWorker();
+        long sessionToken = sessionGate.begin();
         worker =
                 new Thread(
-                        () -> runPreviewLoop(mstscPidHint, pidMarkerFile, rdpProfile, onStopped),
+                        () ->
+                                runPreviewLoop(
+                                        sessionToken,
+                                        mstscPidHint,
+                                        pidMarkerFile,
+                                        rdpProfile,
+                                        onStopped),
                         "rdp-preview-capture");
         worker.setDaemon(true);
         worker.start();
     }
 
     private void runPreviewLoop(
+            long sessionToken,
             OptionalLong mstscPidHint,
             Optional<Path> pidMarkerFile,
             Path rdpProfile,
@@ -105,7 +116,7 @@ public final class RdpRightPanePreviewController implements AutoCloseable {
         java.util.Optional<MstscCaptureTarget> captureTarget = java.util.Optional.empty();
         while (System.nanoTime() < deadline && captureTarget.isEmpty()) {
             if (Thread.currentThread().isInterrupted()) {
-                notifyStopped(onStopped, "プレビュー待機が中断されました");
+                notifyStopped(sessionToken, onStopped, "プレビュー待機が中断されました");
                 return;
             }
             if (resolvedPid.get() <= 0) {
@@ -125,7 +136,10 @@ public final class RdpRightPanePreviewController implements AutoCloseable {
             }
         }
         if (captureTarget.isEmpty()) {
-            notifyStopped(onStopped, "mstsc ウィンドウを特定できずプレビューを中止しました（別ウィンドウで操作してください）");
+            notifyStopped(
+                    sessionToken,
+                    onStopped,
+                    "mstsc ウィンドウを特定できずプレビューを中止しました（別ウィンドウで操作してください）");
             return;
         }
 
@@ -156,6 +170,7 @@ public final class RdpRightPanePreviewController implements AutoCloseable {
             if (blankStreak >= MAX_BLANK_FRAMES) {
                 if (publishedFrames == 0) {
                     notifyStopped(
+                            sessionToken,
                             onStopped,
                             "プレビューが取得できませんでした（黒画面または非対応）。別ウィンドウで操作してください");
                     return;
@@ -164,7 +179,7 @@ public final class RdpRightPanePreviewController implements AutoCloseable {
             }
             sleepQuiet(FRAME_INTERVAL);
         }
-        notifyStopped(onStopped, "プレビュー待機が中断されました");
+        notifyStopped(sessionToken, onStopped, "プレビュー待機が中断されました");
     }
 
     private void publishFrame(BufferedImage buffered) {
@@ -201,9 +216,13 @@ public final class RdpRightPanePreviewController implements AutoCloseable {
         }
     }
 
-    private void notifyStopped(Consumer<String> onStopped, String message) {
+    private void notifyStopped(long sessionToken, Consumer<String> onStopped, String message) {
         Platform.runLater(
                 () -> {
+                    // 連続実行: 前セッションの interrupt 遅延通知が次セッションを壊さない
+                    if (!sessionGate.isCurrent(sessionToken)) {
+                        return;
+                    }
                     removePreviewPane();
                     if (onStopped != null) {
                         onStopped.accept(message);

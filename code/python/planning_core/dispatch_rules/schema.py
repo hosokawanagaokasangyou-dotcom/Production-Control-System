@@ -113,7 +113,7 @@ class RuleDocument:
         )
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        out = {
             "schemaVersion": self.schema_version,
             "engineMinVersion": self.engine_min_version,
             "savedAt": self.saved_at,
@@ -152,6 +152,10 @@ class RuleDocument:
                 for r in self.rules
             ],
         }
+        extra = self.raw.get("processMachinePriorities")
+        if extra is not None:
+            out["processMachinePriorities"] = extra
+        return out
 
 
 @dataclass

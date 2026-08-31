@@ -895,6 +895,7 @@ def _generate_plan_impl(
                     machine_handoff_legacy = {
                         "last_tid": dict(_mh_legacy_day["last_tid"]),
                         "last_eq": dict(_mh_legacy_day["last_eq"]),
+                        "last_process": dict(_mh_legacy_day.get("last_process") or {}),
                         "started_today": set(_mh_legacy_day["started_today"]),
                         "machining_today_occ": set(
                             _mh_legacy_day.get("machining_today_occ") or set()
@@ -1116,6 +1117,7 @@ def _generate_plan_impl(
                                 _equipment_occupancy_abolished_legacy
                             ),
                             dispatch_interval_mirror=_dispatch_interval_mirror,
+                            candidate_task=task,
                         ):
                             if _trace_schedule_task_enabled(task.get("task_id")):
                                 _log_dispatch_trace_schedule(
@@ -2125,6 +2127,16 @@ def _generate_plan_impl(
                                 task.get("task_id") or ""
                             ).strip()
                             machine_handoff_legacy["last_eq"][machine_occ_key] = eq_line
+                            from planning_core.core.process_machine_priority import (
+                                remember_last_process,
+                            )
+
+                            remember_last_process(
+                                machine_handoff_legacy,
+                                machine_occ_key,
+                                process_name=str(task.get("machine") or ""),
+                                eq_line=eq_line,
+                            )
                             machine_handoff_legacy["started_today"].add(
                                 machine_occ_key
                             )

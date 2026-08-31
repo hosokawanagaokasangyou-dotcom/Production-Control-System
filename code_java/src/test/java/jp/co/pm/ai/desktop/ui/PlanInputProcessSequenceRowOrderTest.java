@@ -1,6 +1,8 @@
 package jp.co.pm.ai.desktop.ui;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
 
@@ -196,6 +198,52 @@ class PlanInputProcessSequenceRowOrderTest {
         assertEquals(2, PlanInputProcessSequenceRowOrder.processSequenceRank("融着", tokens));
     }
 
+    @Test
+    void hasEligibleEmbossInDispatch_trueOnlyForNonExcludedEmboss() {
+        List<String> headers = embossHeaders();
+        ObservableList<ObservableList<String>> rows = FXCollections.observableArrayList();
+        rows.add(embossRow("1", "D", "スリット", "スリット", "スリット機", ""));
+        assertFalse(PlanInputProcessSequenceRowOrder.hasEligibleEmbossInDispatch(headers, rows));
+        rows.add(embossRow("2", "A", "エンボス", "エンボス", "エンボス　湖南", "yes"));
+        assertFalse(PlanInputProcessSequenceRowOrder.hasEligibleEmbossInDispatch(headers, rows));
+        rows.add(embossRow("3", "B", "　エンボス　", "エンボス", "エンボス　湖南", ""));
+        assertTrue(PlanInputProcessSequenceRowOrder.hasEligibleEmbossInDispatch(headers, rows));
+    }
+
+    @Test
+    void clusterEmboss_gathersSameMachineRequestBlocks_keepsPredecessor_andSeparatesMachines() {
+        List<String> headers = embossHeaders();
+        ObservableList<ObservableList<String>> rows = FXCollections.observableArrayList();
+        rows.add(embossRow("1", "D", "スリット", "スリット", "スリット機", ""));
+        rows.add(embossRow("2", "A", "分割", "分割,エンボス", "分割　湖南", ""));
+        rows.add(embossRow("3", "A", "エンボス", "分割,エンボス", "エンボス　湖南", ""));
+        rows.add(embossRow("4", "E", "検査", "検査", "検査機", ""));
+        rows.add(embossRow("5", "B", "エンボス", "エンボス", "エンボス　湖南", ""));
+        rows.add(embossRow("6", "C", "分割", "分割,エンボス", "分割　湖南", ""));
+        rows.add(embossRow("7", "C", "エンボス", "分割,エンボス", "エンボス　湖南", ""));
+        rows.add(embossRow("8", "F", "スリット", "スリット", "スリット機", ""));
+        rows.add(embossRow("9", "G", "エンボス", "エンボス", "エンボス　国分", ""));
+
+        PlanInputProcessSequenceRowOrder.clusterEmbossRequestBlocksByMachine(headers, rows);
+
+        assertEquals("D", cell(rows, 0, 1));
+        assertEquals("A", cell(rows, 1, 1));
+        assertEquals("分割", cell(rows, 1, 2));
+        assertEquals("A", cell(rows, 2, 1));
+        assertEquals("エンボス", cell(rows, 2, 2));
+        assertEquals("B", cell(rows, 3, 1));
+        assertEquals("エンボス", cell(rows, 3, 2));
+        assertEquals("C", cell(rows, 4, 1));
+        assertEquals("分割", cell(rows, 4, 2));
+        assertEquals("C", cell(rows, 5, 1));
+        assertEquals("エンボス", cell(rows, 5, 2));
+        assertEquals("E", cell(rows, 6, 1));
+        assertEquals("F", cell(rows, 7, 1));
+        assertEquals("G", cell(rows, 8, 1));
+        assertEquals("1", cell(rows, 0, 0));
+        assertEquals("9", cell(rows, 8, 0));
+    }
+
     private static ObservableList<String> row(String dto, String tid, String proc, String content) {
         return FXCollections.observableArrayList(dto, tid, proc, content);
     }
@@ -203,6 +251,21 @@ class PlanInputProcessSequenceRowOrderTest {
     private static ObservableList<String> row(
             String dto, String tid, String proc, String content, String exclude) {
         return FXCollections.observableArrayList(dto, tid, proc, content, exclude);
+    }
+
+    private static List<String> embossHeaders() {
+        return List.of(
+                PlanInputProcessSequenceRowOrder.COL_DISPATCH_TRIAL_ORDER,
+                PlanInputProcessSequenceRowOrder.COL_TASK_ID,
+                PlanInputProcessSequenceRowOrder.COL_PROCESS,
+                PlanInputProcessSequenceRowOrder.COL_PROCESS_CONTENT,
+                PlanInputProcessSequenceRowOrder.COL_MACHINE,
+                PlanInputProcessSequenceRowOrder.COL_EXCLUDE_FROM_ASSIGNMENT);
+    }
+
+    private static ObservableList<String> embossRow(
+            String dto, String tid, String proc, String content, String machine, String exclude) {
+        return FXCollections.observableArrayList(dto, tid, proc, content, machine, exclude);
     }
 
     private static String cell(ObservableList<ObservableList<String>> rows, int r, int c) {

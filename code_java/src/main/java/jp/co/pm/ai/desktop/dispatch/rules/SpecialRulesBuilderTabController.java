@@ -55,6 +55,7 @@ public final class SpecialRulesBuilderTabController {
     private static final List<String> EXECUTION_MODES = List.of("auto", "dsl", "legacy");
 
     private MainShellController shell;
+    private Runnable afterSave;
     private DispatchRuleDocument document = new DispatchRuleDocument();
     private Path workPath;
     private boolean suppressDirty;
@@ -165,6 +166,10 @@ public final class SpecialRulesBuilderTabController {
         reloadFromDisk(false);
     }
 
+    public void setAfterSave(Runnable afterSave) {
+        this.afterSave = afterSave;
+    }
+
     DispatchRuleDocument snapshotDocument() {
         return document;
     }
@@ -191,6 +196,9 @@ public final class SpecialRulesBuilderTabController {
             refreshHistory();
             shell.dispatchRulesAppendLog("[dispatch-rules] saved: " + workPath);
             refreshConflicts();
+            if (afterSave != null) {
+                afterSave.run();
+            }
         } catch (IOException ex) {
             shell.showErrorDialog("保存エラー", ex.getMessage());
         }

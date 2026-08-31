@@ -203,6 +203,85 @@ class DispatchAladdinEntryWorkbookExporterTest {
     }
 
     @Test
+    void write_colorsCompletionDateCheckByDaysBeforeAnswerNoki() throws IOException {
+        Path repo = tempDir.resolve("completion-check-repo");
+        Files.createDirectories(repo.resolve("code"));
+        Map<String, String> ui =
+                Map.of(jp.co.pm.ai.desktop.config.AppPaths.KEY_PM_AI_REPO_ROOT, repo.toString());
+        LocalDate dispatchDate = LocalDate.of(2026, 7, 30);
+
+        DispatchAladdinEntrySheetBuilder.EntryRow early =
+                completionCheckRow("EARLY", "2026-07-28");
+        DispatchAladdinEntrySheetBuilder.EntryRow eve =
+                completionCheckRow("EVE", "2026-07-29");
+        DispatchAladdinEntrySheetBuilder.EntryRow overdue =
+                completionCheckRow("OVERDUE", "2026-07-30");
+        DispatchAladdinEntrySheetBuilder.EntryWorkbook model =
+                new DispatchAladdinEntrySheetBuilder.EntryWorkbook(
+                        List.of(dispatchDate),
+                        List.of(
+                                new DispatchAladdinEntrySheetBuilder.MachineSheet(
+                                        "テスト機", List.of(early, eve, overdue))));
+
+        DispatchAladdinEntryWorkbookExporter.ExportResult result =
+                DispatchAladdinEntryWorkbookExporter.write(ui, model);
+
+        try (XSSFWorkbook wb =
+                new XSSFWorkbook(Files.newInputStream(result.latestPath()))) {
+            org.apache.poi.ss.usermodel.Sheet sh = wb.getSheetAt(0);
+            assertEquals("OK", sh.getRow(2).getCell(5).getStringCellValue());
+            assertEquals("OK", sh.getRow(3).getCell(5).getStringCellValue());
+            assertEquals("NG", sh.getRow(4).getCell(5).getStringCellValue());
+
+            org.apache.poi.xssf.usermodel.XSSFCellStyle earlyStyle =
+                    (org.apache.poi.xssf.usermodel.XSSFCellStyle)
+                            sh.getRow(2).getCell(5).getCellStyle();
+            assertTrue(earlyStyle.getFillForegroundXSSFColor() == null);
+
+            org.apache.poi.xssf.usermodel.XSSFCellStyle eveStyle =
+                    (org.apache.poi.xssf.usermodel.XSSFCellStyle)
+                            sh.getRow(3).getCell(5).getCellStyle();
+            assertRgb(eveStyle, (byte) 0xFF, (byte) 0xF2, (byte) 0xCC);
+
+            org.apache.poi.xssf.usermodel.XSSFCellStyle overdueStyle =
+                    (org.apache.poi.xssf.usermodel.XSSFCellStyle)
+                            sh.getRow(4).getCell(5).getCellStyle();
+            assertRgb(overdueStyle, (byte) 0xFF, (byte) 0xC7, (byte) 0xCE);
+        }
+    }
+
+    private static DispatchAladdinEntrySheetBuilder.EntryRow completionCheckRow(
+            String taskId, String processCompleteDate) {
+        return new DispatchAladdinEntrySheetBuilder.EntryRow(
+                taskId,
+                "",
+                "巻返し",
+                "",
+                "2026-07-30",
+                processCompleteDate,
+                100,
+                0,
+                0,
+                Map.of(),
+                null,
+                2026);
+    }
+
+    private static void assertRgb(
+            org.apache.poi.xssf.usermodel.XSSFCellStyle style,
+            byte red,
+            byte green,
+            byte blue) {
+        org.apache.poi.xssf.usermodel.XSSFColor fill = style.getFillForegroundXSSFColor();
+        assertNotNull(fill);
+        byte[] rgb = fill.getRGB();
+        assertNotNull(rgb);
+        assertEquals(red, rgb[0]);
+        assertEquals(green, rgb[1]);
+        assertEquals(blue, rgb[2]);
+    }
+
+    @Test
     void sheetNameForMachine_prefixesMachineCodeWhenKnown() {
         PostProcessingPlanMachineLookup.Snapshot snap =
                 new PostProcessingPlanMachineLookup.Snapshot(

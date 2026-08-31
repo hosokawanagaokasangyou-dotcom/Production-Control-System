@@ -59,4 +59,49 @@ class RequestFormPipelineCheckAladdinPlanRevisionTest {
         assertTrue(key.startsWith(file.toAbsolutePath().normalize() + "|"));
         assertEquals(key, RequestFormPipelineCheckTabController.aladdinPlanSourceRevisionKey(file));
     }
+
+    @Test
+    void refreshButtonNeedsAttention_whenUsedFilesDifferFromRemoteDesktopLatest(
+            @TempDir Path tempDir) throws Exception {
+        Path planDir = tempDir.resolve("plan");
+        Path dailyDir = tempDir.resolve("daily");
+        Files.createDirectories(planDir);
+        Files.createDirectories(dailyDir);
+        Path planOld = planDir.resolve("plan-old.xlsx");
+        Path planNew = planDir.resolve("plan-new.xlsx");
+        Path dailyOld = dailyDir.resolve("加工日報発行問合せ_old.csv");
+        Path dailyNew = dailyDir.resolve("加工日報発行問合せ_new.csv");
+        Files.writeString(planOld, "old");
+        Files.writeString(planNew, "new");
+        Files.writeString(dailyOld, "a,b\n1,2");
+        Files.writeString(dailyNew, "a,b\n3,4");
+        Files.setLastModifiedTime(
+                planNew,
+                java.nio.file.attribute.FileTime.fromMillis(
+                        Files.getLastModifiedTime(planOld).toMillis() + 60_000));
+        Files.setLastModifiedTime(
+                dailyNew,
+                java.nio.file.attribute.FileTime.fromMillis(
+                        Files.getLastModifiedTime(dailyOld).toMillis() + 60_000));
+
+        Map<String, String> ui =
+                Map.of(
+                        "PM_AI_TASK_INPUT_SOURCE_DIR",
+                        planDir.toString(),
+                        jp.co.pm.ai.desktop.reconciliation.KonanDailyReportLookup
+                                .KEY_DAILY_REPORT_SOURCE_DIR,
+                        dailyDir.toString());
+        RequestFormPipelineCheckTabController controller =
+                new RequestFormPipelineCheckTabController();
+        controller.captureLastScannedAladdinPlanRevisionForTest(ui);
+
+        String latestPlan = planNew.toAbsolutePath().normalize().toString();
+        String latestDaily = dailyNew.toAbsolutePath().normalize().toString();
+        String usedPlan = planOld.toAbsolutePath().normalize().toString();
+        String usedDaily = dailyOld.toAbsolutePath().normalize().toString();
+
+        assertFalse(controller.refreshButtonNeedsAttention(ui, latestPlan, latestDaily));
+        assertTrue(controller.refreshButtonNeedsAttention(ui, usedPlan, latestDaily));
+        assertTrue(controller.refreshButtonNeedsAttention(ui, latestPlan, usedDaily));
+    }
 }

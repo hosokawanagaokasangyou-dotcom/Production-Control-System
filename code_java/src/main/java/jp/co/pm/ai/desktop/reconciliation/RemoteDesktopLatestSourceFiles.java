@@ -110,6 +110,58 @@ public final class RemoteDesktopLatestSourceFiles {
                 .toList();
     }
 
+    /**
+     * 原本転記・計画確認で使用中の加工計画／加工日報が、 リモートデスクトップ「取得データ最新ファイル」の同種最新と異なるとき {@code true}。
+     *
+     * <p>最新側が未検出の種別は比較しない。
+     */
+    public static boolean pipelineCheckUsedPathsDifferFromLatest(
+            String usedPlanPath, String usedDailyReportPath, Map<String, String> ui) {
+        return pipelineCheckUsedPathsDifferFromLatest(
+                usedPlanPath, usedDailyReportPath, resolveAll(ui));
+    }
+
+    static boolean pipelineCheckUsedPathsDifferFromLatest(
+            String usedPlanPath, String usedDailyReportPath, List<Row> latestRows) {
+        if (latestRows == null || latestRows.isEmpty()) {
+            return false;
+        }
+        for (Row row : latestRows) {
+            if (row.category() == Category.PROCESSING_PLAN
+                    && categoryUsedPathDiffers(usedPlanPath, row.fullPath())) {
+                return true;
+            }
+            if (row.category() == Category.DAILY_REPORT
+                    && categoryUsedPathDiffers(usedDailyReportPath, row.fullPath())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    static boolean categoryUsedPathDiffers(String usedPath, String latestPath) {
+        if (latestPath == null || latestPath.isBlank()) {
+            return false;
+        }
+        return !sameNormalizedPath(usedPath, latestPath);
+    }
+
+    static boolean sameNormalizedPath(String a, String b) {
+        String left = a != null ? a.strip() : "";
+        String right = b != null ? b.strip() : "";
+        if (left.isEmpty() || right.isEmpty()) {
+            return left.isEmpty() && right.isEmpty();
+        }
+        try {
+            return Path.of(left)
+                    .toAbsolutePath()
+                    .normalize()
+                    .equals(Path.of(right).toAbsolutePath().normalize());
+        } catch (Exception ex) {
+            return left.equalsIgnoreCase(right);
+        }
+    }
+
     private static Optional<ResolvedFile> resolveFile(Category category, Map<String, String> ui) {
         return switch (category) {
             case PROCESSING_PLAN ->

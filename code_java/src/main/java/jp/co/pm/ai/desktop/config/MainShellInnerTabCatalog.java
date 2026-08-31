@@ -87,6 +87,7 @@ public final class MainShellInnerTabCatalog {
                             "ルールビルダー",
                             "ルール試走",
                             "適用トレース",
+                            "工程優先",
                             "JSON");
             case REQUEST_FORM_INPUT ->
                     List.of(
