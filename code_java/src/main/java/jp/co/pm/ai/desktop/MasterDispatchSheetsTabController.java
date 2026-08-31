@@ -24,6 +24,7 @@ import javafx.scene.control.Label;
 import javafx.scene.control.TabPane;
 import javafx.scene.control.TablePosition;
 import javafx.scene.control.TextArea;
+import javafx.scene.control.Tooltip;
 import javafx.scene.layout.StackPane;
 import javafx.stage.Window;
 
@@ -35,6 +36,7 @@ import jp.co.pm.ai.desktop.io.MasterDispatchSheetsDocument;
 import jp.co.pm.ai.desktop.io.MasterDispatchSheetsSaveWriter;
 import jp.co.pm.ai.desktop.io.MasterDispatchSheetsSeeder;
 import jp.co.pm.ai.desktop.io.MasterTeamCombinationTableReader;
+import jp.co.pm.ai.desktop.ui.ButtonAttentionGlow;
 import jp.co.pm.ai.desktop.ui.ColumnVisibilityDialog;
 import jp.co.pm.ai.desktop.ui.ColumnVisibilitySupport;
 import jp.co.pm.ai.desktop.ui.FourDigitConfirmationDialog;
@@ -75,6 +77,8 @@ public final class MasterDispatchSheetsTabController {
     private Path loadedJsonPath;
     /** 4タブ共通。工程+機械の正規化キー。空なら空き列以外をすべて表示。 */
     private final Set<String> equipmentFocusKeys = new LinkedHashSet<>();
+    private ButtonAttentionGlow missingEquipmentGlow;
+    private int missingGlowEpoch;
 
     @FXML
     private void initialize() {
@@ -133,6 +137,7 @@ public final class MasterDispatchSheetsTabController {
                         || !loadedJsonPath.equals(json);
         if (!reimport && !factoryChanged && loadedJsonPath != null) {
             updateFilterHint();
+            refreshMissingEquipmentAttention();
             return;
         }
         if (reimport || factoryChanged) {
@@ -262,6 +267,7 @@ public final class MasterDispatchSheetsTabController {
                             + jsonBackup
                             + "\n世代バックアップ master: "
                             + xlsmBackup);
+            refreshMissingEquipmentAttention();
         } catch (Exception e) {
             statusLabel.setText("保存に失敗しました: " + e.getMessage());
         }
@@ -357,6 +363,7 @@ public final class MasterDispatchSheetsTabController {
                 "未登録の工程+機械を "
                         + added
                         + " 列追加しました。追加した列だけ表示しています。OP/AS を設定し、保存してください。「すべて表示」で全列に戻せます。");
+        refreshMissingEquipmentAttention();
         return added;
     }
 
@@ -374,6 +381,7 @@ public final class MasterDispatchSheetsTabController {
                 "未登録の工程+機械を "
                         + added
                         + " 列追加しました。追加した列だけ表示しています。OP/AS を設定し、保存してください。「すべて表示」で全列に戻せます。");
+        refreshMissingEquipmentAttention();
         return added;
     }
 
@@ -636,6 +644,7 @@ public final class MasterDispatchSheetsTabController {
         applyAllEquipmentVisibility();
         updateToolbarForInnerTab(
                 innerTabPane != null ? innerTabPane.getSelectionModel().getSelectedIndex() : 0);
+        refreshMissingEquipmentAttention();
     }
 
     private void applyAllEquipmentVisibility() {
@@ -697,6 +706,77 @@ public final class MasterDispatchSheetsTabController {
                         + " 件）。"
                         + (combo ? "組み合わせ表は行を隠しています。" : "資格・必要人数・加工速度は列を隠しています。")
                         + " データは残ります。「すべて表示」で戻せます。");
+    }
+
+    private void refreshMissingEquipmentAttention() {
+        if (addMissingEquipmentButton == null || shell == null) {
+            return;
+        }
+        if (missingEquipmentGlow == null) {
+            missingEquipmentGlow = new ButtonAttentionGlow(addMissingEquipmentButton);
+        }
+        Map<String, String> ui = shell.snapshotUiEnv();
+        List<List<String>> skills = currentSkillsRowsForMissingCheck();
+        int epoch = ++missingGlowEpoch;
+        Thread worker =
+                new Thread(
+                        () -> {
+                            boolean has = false;
+                            int count = 0;
+                            try {
+                                var keys =
+                                        PlanTasksMissingSkillsColumnPrompt.normalizedSkillsKeys(
+                                                skills);
+                                var bundle =
+                                        PlanTasksMissingSkillsColumnPrompt
+                                                .collectMissingAgainstSkillsKeys(ui, keys);
+                                has = !bundle.empty();
+                                count = has ? bundle.pairs().size() : 0;
+                            } catch (Exception ignored) {
+                                has = false;
+                            }
+                            boolean glow = has;
+                            int n = count;
+                            Platform.runLater(
+                                    () -> {
+                                        if (epoch != missingGlowEpoch) {
+                                            return;
+                                        }
+                                        applyMissingEquipmentGlow(glow, n);
+                                    });
+                        },
+                        "master-dispatch-missing-glow");
+        worker.setDaemon(true);
+        worker.start();
+    }
+
+    private List<List<String>> currentSkillsRowsForMissingCheck() {
+        if (skillsView.getGrid() != null) {
+            return MasterDispatchSheetGridSupport.extract(
+                    skillsView, MasterDispatchSheetEditRules.SheetKind.SKILLS);
+        }
+        if (document != null) {
+            return document.sheet("skills").rows();
+        }
+        return List.of();
+    }
+
+    private void applyMissingEquipmentGlow(boolean hasMissing, int count) {
+        if (addMissingEquipmentButton == null) {
+            return;
+        }
+        if (hasMissing) {
+            missingEquipmentGlow.startIfIdle();
+            addMissingEquipmentButton.setTooltip(
+                    new Tooltip(
+                            "計画タスクに未登録の工程+機械が "
+                                    + count
+                                    + " 件あります。押すと資格・必要人数・加工速度へ列を追加します。"));
+        } else {
+            ButtonAttentionGlow.stopAll(missingEquipmentGlow);
+            addMissingEquipmentButton.setTooltip(
+                    new Tooltip("計画タスクの工程+機械で、資格シートに無い列を追加します。"));
+        }
     }
 
     private void showInfo(String title, String header, String content) {

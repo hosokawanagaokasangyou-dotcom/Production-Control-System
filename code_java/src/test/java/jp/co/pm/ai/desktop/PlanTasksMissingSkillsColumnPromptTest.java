@@ -68,6 +68,23 @@ class PlanTasksMissingSkillsColumnPromptTest {
         assertEquals("検反", bundle.pairs().getFirst().process());
         assertEquals("フィルム挿入機(間紙)", bundle.pairs().getFirst().machine());
         assertEquals("W7-22", bundle.pairs().getFirst().sampleTaskId());
+
+        var stillMissing =
+                PlanTasksMissingSkillsColumnPrompt.collectMissingAgainstSkillsKeys(
+                        ui,
+                        PlanTasksMissingSkillsColumnPrompt.normalizedSkillsKeys(
+                                List.of(
+                                        List.of("工程名", "スライス"),
+                                        List.of("機械名", "スライス機3"))));
+        assertEquals(1, stillMissing.pairs().size());
+        var afterUiAdd =
+                PlanTasksMissingSkillsColumnPrompt.collectMissingAgainstSkillsKeys(
+                        ui,
+                        PlanTasksMissingSkillsColumnPrompt.normalizedSkillsKeys(
+                                List.of(
+                                        List.of("工程名", "スライス", "検反"),
+                                        List.of("機械名", "スライス機3", "フィルム挿入機(間紙)"))));
+        assertTrue(afterUiAdd.empty());
     }
 
     @Test

@@ -4,13 +4,16 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.io.MasterTeamCombinationTableReader;
 import jp.co.pm.ai.desktop.io.PlanInputTabularIo;
 import jp.co.pm.ai.desktop.io.SkillsSheetEquipmentListReader;
+import jp.co.pm.ai.desktop.ui.MasterDispatchSheetEditRules;
 import jp.co.pm.ai.desktop.ui.TabularCellHighlight;
 
 /**
@@ -60,6 +63,17 @@ public final class PlanTasksMissingSkillsColumnPrompt {
 
     private PlanTasksMissingSkillsColumnPrompt() {}
 
+    public static Set<String> normalizedSkillsKeys(List<List<String>> skillsRows) {
+        LinkedHashSet<String> keys = new LinkedHashSet<>();
+        for (String[] pm : MasterDispatchSheetEditRules.skillsEquipmentPairs(skillsRows)) {
+            String k = MasterTeamCombinationTableReader.normalizedComboKey(pm[0], pm[1]);
+            if (!k.isEmpty()) {
+                keys.add(k);
+            }
+        }
+        return Set.copyOf(keys);
+    }
+
     public static PromptBundle collectMissingPairs(Map<String, String> ui) throws IOException {
         Map<String, String> u = ui != null ? ui : Map.of();
         Path master = resolveMasterWorkbook(u);
@@ -67,7 +81,16 @@ public final class PlanTasksMissingSkillsColumnPrompt {
             return new PromptBundle(List.of());
         }
         var skillsKeys = SkillsSheetEquipmentListReader.readNormalizedComboKeys(master);
-        if (skillsKeys.isEmpty()) {
+        return collectMissingAgainstSkillsKeys(u, skillsKeys);
+    }
+
+    /**
+     * 計画タスクにあって {@code skillsKeys} に無い工程+機械。空のキー集合なら未登録なしとみなす。
+     */
+    public static PromptBundle collectMissingAgainstSkillsKeys(
+            Map<String, String> ui, Set<String> skillsKeys) throws IOException {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        if (skillsKeys == null || skillsKeys.isEmpty()) {
             return new PromptBundle(List.of());
         }
         Path plan = resolvePlanInputPath(u);
