@@ -171,6 +171,19 @@ class FactorySiteSwitchBusySupportTest {
         assertTrue(
                 text.contains("memberAttendanceTabController.reloadAttendanceDataFromJsonIfEnabled()"),
                 "工場切替後に表示済みメンバー勤怠を再読込する");
+        int select = text.indexOf("private void selectFactorySiteSwitchStatusTab(String status)");
+        assertTrue(select >= 0, "selectFactorySiteSwitchStatusTab が見つからない");
+        int selectEnd = text.indexOf("\n    private void endFactorySiteSwitchBusy", select);
+        String selectBody =
+                selectEnd > select
+                        ? text.substring(select, selectEnd)
+                        : text.substring(select, select + 900);
+        assertTrue(
+                selectBody.contains("factorySwitchAwaitingBackgroundLoadBeforeModalClose"),
+                "切替本処理終了後の起動後読込でも対象タブへ遷移する");
+        assertFalse(
+                selectBody.contains("!factorySiteSwitchInProgress || tabPane == null"),
+                "factorySiteSwitchInProgress だけで起動後読込中の遷移を止めない");
         int finish = text.indexOf("private void finishFactorySiteSwitch");
         assertTrue(finish >= 0);
         int next = text.indexOf("\n    @Override\n    public Map<String, String> snapshotUiEnv", finish);

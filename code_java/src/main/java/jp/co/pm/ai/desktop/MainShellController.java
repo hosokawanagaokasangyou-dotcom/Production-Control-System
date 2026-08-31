@@ -5217,7 +5217,13 @@ public final class MainShellController
     }
 
     private void selectFactorySiteSwitchStatusTab(String status) {
-        if (startupSequenceActive || !factorySiteSwitchInProgress || tabPane == null) {
+        if (startupSequenceActive || tabPane == null) {
+            return;
+        }
+        /* finishFactorySiteSwitch で inProgress は先に落ちる。起動後読込中もモーダル進捗に追従する。 */
+        if (!factorySiteSwitchInProgress
+                && !factorySwitchAwaitingBackgroundLoadBeforeModalClose
+                && !isFactorySiteSwitchBusyShowing()) {
             return;
         }
         FactorySiteSwitchBusySupport.targetTabForStatus(status)
@@ -5226,6 +5232,8 @@ public final class MainShellController
                             if (!suppressFactorySiteSwitchTabNavigation.compareAndSet(false, true)) {
                                 return;
                             }
+                            boolean prevEnvGuard = suppressEnvVarsInitTabGuard.getAndSet(true);
+                            boolean prevGuestGuard = suppressGuestSessionTabGuard.getAndSet(true);
                             try {
                                 if (selectMainShellTabRecursive(tabPane, target)
                                         && !suppressLazyMainShellTabContentSwap.get()) {
@@ -5233,6 +5241,8 @@ public final class MainShellController
                                             tabPane.getSelectionModel().getSelectedItem());
                                 }
                             } finally {
+                                suppressEnvVarsInitTabGuard.set(prevEnvGuard);
+                                suppressGuestSessionTabGuard.set(prevGuestGuard);
                                 suppressFactorySiteSwitchTabNavigation.set(false);
                             }
                         });
