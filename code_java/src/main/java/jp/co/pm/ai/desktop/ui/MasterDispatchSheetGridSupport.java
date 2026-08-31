@@ -13,6 +13,7 @@ import org.controlsfx.control.spreadsheet.SpreadsheetCellType;
 import org.controlsfx.control.spreadsheet.SpreadsheetView;
 
 import jp.co.pm.ai.desktop.io.MasterDispatchSheetsDocument;
+import jp.co.pm.ai.desktop.io.MasterTeamCombinationTableReader;
 
 /** MASTER 4 シート用の編集可能格子。 */
 public final class MasterDispatchSheetGridSupport {
@@ -21,10 +22,21 @@ public final class MasterDispatchSheetGridSupport {
 
     public static GridBase buildEditable(
             MasterDispatchSheetEditRules.SheetKind kind, List<List<String>> rows) {
+        return buildEditable(kind, rows, List.of());
+    }
+
+    public static GridBase buildEditable(
+            MasterDispatchSheetEditRules.SheetKind kind,
+            List<List<String>> rows,
+            List<List<String>> skillsRows) {
         MasterDispatchSheetEditRules.SheetKind sheet =
                 kind != null ? kind : MasterDispatchSheetEditRules.SheetKind.SKILLS;
         List<List<String>> original = rows != null ? rows : List.of();
+        if (sheet == MasterDispatchSheetEditRules.SheetKind.COMBINATIONS) {
+            original = MasterDispatchSheetEditRules.ensureCombinationMetaColumns(original);
+        }
         List<List<String>> display = MasterDispatchSheetEditRules.displayRows(sheet, original);
+        List<List<String>> skills = skillsRows != null ? skillsRows : List.of();
         int dataCols = 1;
         for (List<String> row : original) {
             if (row != null && row.size() > dataCols) {
@@ -58,14 +70,15 @@ public final class MasterDispatchSheetGridSupport {
                         srcRow != null && c < srcRow.size() && srcRow.get(c) != null
                                 ? srcRow.get(c)
                                 : "";
-                SpreadsheetCell cell = createCell(sheet, display, original, dataRow, gridRow, c, raw);
+                SpreadsheetCell cell =
+                        createCell(sheet, display, original, skills, dataRow, gridRow, c, raw);
                 rowCells.add(cell);
             }
             gridRows.add(rowCells);
         }
         grid.setRows(gridRows);
         if (sheet == MasterDispatchSheetEditRules.SheetKind.COMBINATIONS) {
-            wireCombinationLiveSync(grid);
+            wireCombinationLiveSync(grid, original, skills);
         }
         return grid;
     }
@@ -107,12 +120,38 @@ public final class MasterDispatchSheetGridSupport {
             MasterDispatchSheetEditRules.SheetKind kind,
             List<List<String>> display,
             List<List<String>> original,
+            List<List<String>> skills,
             int dataRow,
             int gridRow,
             int col,
             String raw) {
         SpreadsheetCell cell;
-        if (MasterDispatchSheetEditRules.isSkillsSkillValueCell(dataRow, col, display)) {
+        List<String> header = header(original);
+        boolean comboData =
+                kind == MasterDispatchSheetEditRules.SheetKind.COMBINATIONS
+                        && !MasterDispatchSheetEditRules.isColumnTitleSourceRow(
+                                MasterDispatchSheetEditRules.SheetKind.COMBINATIONS, dataRow, display);
+        if (comboData && MasterDispatchSheetEditRules.isCombinationLockColumn(header, col)) {
+            cell =
+                    SpreadsheetCellType.LIST(lockChoices(raw))
+                            .createCell(gridRow, col, 1, 1, raw);
+        } else if (comboData && MasterDispatchSheetEditRules.isCombinationMemberColumn(header, col)) {
+            int procCol = MasterDispatchSheetEditRules.headerIndex(header, "工程名");
+            int machCol = MasterDispatchSheetEditRules.headerIndex(header, "機械名");
+            String proc = MasterDispatchSheetEditRules.cell(display, dataRow, procCol);
+            String mach = MasterDispatchSheetEditRules.cell(display, dataRow, machCol);
+            String want =
+                    MasterTeamCombinationTableReader.normalizedComboKey(proc, mach);
+            if (want.isEmpty()) {
+                cell = SpreadsheetCellType.STRING.createCell(gridRow, col, 1, 1, raw);
+            } else {
+                cell =
+                        SpreadsheetCellType.LIST(
+                                        MasterDispatchSheetEditRules.combinationMemberChoices(
+                                                skills, proc, mach, raw))
+                                .createCell(gridRow, col, 1, 1, raw);
+            }
+        } else if (MasterDispatchSheetEditRules.isSkillsSkillValueCell(dataRow, col, display)) {
             cell =
                     SpreadsheetCellType.LIST(skillChoices(raw))
                             .createCell(gridRow, col, 1, 1, raw);
@@ -123,6 +162,17 @@ public final class MasterDispatchSheetGridSupport {
                 MasterDispatchSheetEditRules.isEditable(kind, dataRow, col, display, original));
         cell.setStyle(cellStyle(kind, display, original, dataRow, col, raw));
         return cell;
+    }
+
+    private static List<String> lockChoices(String current) {
+        List<String> items = new ArrayList<>();
+        items.add("");
+        items.add(MasterDispatchSheetEditRules.LOCK_VALUE);
+        String cur = current != null ? current.strip() : "";
+        if (!cur.isEmpty() && !items.contains(cur)) {
+            items.add(cur);
+        }
+        return items;
     }
 
     private static List<String> skillChoices(String current) {
@@ -165,10 +215,26 @@ public final class MasterDispatchSheetGridSupport {
             int procCol = MasterDispatchSheetEditRules.headerIndex(header, "工程名");
             int machCol = MasterDispatchSheetEditRules.headerIndex(header, "機械名");
             int comboCol = MasterDispatchSheetEditRules.headerIndex(header, "工程+機械", "工程＋機械");
+            int addedCol =
+                    MasterDispatchSheetEditRules.headerIndex(
+                            header, MasterDispatchSheetEditRules.COL_ADDED_ROW);
             String proc = MasterDispatchSheetEditRules.cell(display, dataRow, procCol);
             String mach = MasterDispatchSheetEditRules.cell(display, dataRow, machCol);
             String comboCell = MasterDispatchSheetEditRules.cell(display, dataRow, comboCol);
-            String combo = MasterDispatchSheetEditRules.comboRowStyle(proc, mach, comboCell);
+            boolean added =
+                    addedCol >= 0
+                            && MasterDispatchSheetEditRules.isCombinationAddedValue(
+                                    MasterDispatchSheetEditRules.cell(display, dataRow, addedCol));
+            boolean locked =
+                    MasterDispatchSheetEditRules.isCombinationLockValue(
+                            MasterDispatchSheetEditRules.cell(
+                                    display,
+                                    dataRow,
+                                    MasterDispatchSheetEditRules.headerIndex(
+                                            header, MasterDispatchSheetEditRules.COL_EDIT_LOCK)));
+            String combo =
+                    MasterDispatchSheetEditRules.combinationRowStyle(
+                            proc, mach, comboCell, added, locked);
             if (!combo.isEmpty()) {
                 return combo;
             }
@@ -189,38 +255,64 @@ public final class MasterDispatchSheetGridSupport {
         return src.get(0);
     }
 
-    private static void wireCombinationLiveSync(GridBase grid) {
+    private static void wireCombinationLiveSync(
+            GridBase grid, List<List<String>> original, List<List<String>> skills) {
         int firstData = SpreadsheetTabularSupport.spreadsheetFirstDataRowIndex();
         if (grid == null || grid.getRows() == null || grid.getRowCount() <= firstData) {
             return;
         }
-        List<String> header = new ArrayList<>();
-        if (grid.getColumnHeaders() != null) {
-            header.addAll(grid.getColumnHeaders());
-        }
+        List<String> header = header(original);
         int procCol = MasterDispatchSheetEditRules.headerIndex(header, "工程名");
         int machCol = MasterDispatchSheetEditRules.headerIndex(header, "機械名");
         int comboCol = MasterDispatchSheetEditRules.headerIndex(header, "工程+機械", "工程＋機械");
+        int lockCol =
+                MasterDispatchSheetEditRules.headerIndex(
+                        header, MasterDispatchSheetEditRules.COL_EDIT_LOCK);
+        int addedCol =
+                MasterDispatchSheetEditRules.headerIndex(
+                        header, MasterDispatchSheetEditRules.COL_ADDED_ROW);
         if (procCol < 0 || machCol < 0) {
             return;
         }
+        List<List<String>> skillsRows = skills != null ? skills : List.of();
         for (int gridRow = firstData; gridRow < grid.getRowCount(); gridRow++) {
             ObservableList<SpreadsheetCell> row = grid.getRows().get(gridRow);
             if (row == null) {
                 continue;
             }
-            Runnable refresh = () -> applyCombinationRowLive(row, procCol, machCol, comboCol);
+            Runnable refresh =
+                    () ->
+                            applyCombinationRowLive(
+                                    row,
+                                    header,
+                                    skillsRows,
+                                    procCol,
+                                    machCol,
+                                    comboCol,
+                                    lockCol,
+                                    addedCol);
             if (procCol < row.size() && row.get(procCol) != null) {
                 row.get(procCol).itemProperty().addListener((obs, o, n) -> refresh.run());
             }
             if (machCol < row.size() && row.get(machCol) != null) {
                 row.get(machCol).itemProperty().addListener((obs, o, n) -> refresh.run());
             }
+            if (lockCol >= 0 && lockCol < row.size() && row.get(lockCol) != null) {
+                row.get(lockCol).itemProperty().addListener((obs, o, n) -> refresh.run());
+            }
+            refresh.run();
         }
     }
 
     private static void applyCombinationRowLive(
-            ObservableList<SpreadsheetCell> row, int procCol, int machCol, int comboCol) {
+            ObservableList<SpreadsheetCell> row,
+            List<String> header,
+            List<List<String>> skills,
+            int procCol,
+            int machCol,
+            int comboCol,
+            int lockCol,
+            int addedCol) {
         String proc = cellText(row, procCol);
         String mach = cellText(row, machCol);
         String display =
@@ -231,7 +323,14 @@ public final class MasterDispatchSheetGridSupport {
                 row.get(comboCol).setItem(display);
             }
         }
-        String style = MasterDispatchSheetEditRules.comboRowStyle(proc, mach, display);
+        boolean added =
+                addedCol >= 0
+                        && MasterDispatchSheetEditRules.isCombinationAddedValue(cellText(row, addedCol));
+        boolean locked =
+                lockCol >= 0
+                        && MasterDispatchSheetEditRules.isCombinationLockValue(cellText(row, lockCol));
+        String style =
+                MasterDispatchSheetEditRules.combinationRowStyle(proc, mach, display, added, locked);
         if (style.isEmpty()) {
             style = SpreadsheetTabularSupport.READABLE_STYLE_DATA_WHITE;
         }
@@ -241,6 +340,14 @@ public final class MasterDispatchSheetGridSupport {
                 continue;
             }
             cell.setStyle(style);
+            boolean lockColumn = MasterDispatchSheetEditRules.isCombinationLockColumn(header, c);
+            boolean comboColumn =
+                    MasterDispatchSheetEditRules.headerIndex(header, "工程+機械", "工程＋機械") == c;
+            boolean addedColumn =
+                    MasterDispatchSheetEditRules.headerIndex(
+                                    header, MasterDispatchSheetEditRules.COL_ADDED_ROW)
+                            == c;
+            cell.setEditable(!comboColumn && !addedColumn && (lockColumn || !locked));
         }
     }
 

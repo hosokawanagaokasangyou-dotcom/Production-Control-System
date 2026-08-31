@@ -224,10 +224,274 @@ public final class MasterDispatchSheetEditRules {
         return false;
     }
 
-    /**
-     * 表示列マスク。先頭 {@code leadingCols} は常に表示。空き設備列（見出し空）は隠す。
-     * {@code focusNormalizedKeys} が空でなければ、その工程+機械だけ表示する（データは消さない）。
-     */
+    public static final String COL_EDIT_LOCK = "編集ロック";
+    public static final String COL_ADDED_ROW = "追加行";
+    public static final String LOCK_VALUE = "ロック";
+    public static final String ADDED_FLAG = "1";
+    public static final String ADDED_ROW_BG = "#f4c36a";
+
+    private static final Pattern COMBO_MEMBER_ROLE_PREFIX =
+            Pattern.compile("(?i)^(OP|AS)\\s*\\d*\\s+");
+
+    public static List<List<String>> ensureCombinationMetaColumns(List<List<String>> rows) {
+        List<List<String>> out = mutableCopy(rows != null ? rows : List.of());
+        if (out.isEmpty()) {
+            out.add(new ArrayList<>(List.of("組み合わせ行ID", "工程名", "機械名", "工程+機械")));
+        }
+        List<String> header = out.get(0);
+        if (headerIndex(header, COL_EDIT_LOCK) < 0) {
+            header.add(COL_EDIT_LOCK);
+        }
+        if (headerIndex(header, COL_ADDED_ROW) < 0) {
+            header.add(COL_ADDED_ROW);
+        }
+        padWidth(out, header.size());
+        return freeze(out);
+    }
+
+    public static boolean isCombinationRowLocked(List<List<String>> rows, int dataRow) {
+        if (rows == null || dataRow <= 0 || dataRow >= rows.size()) {
+            return false;
+        }
+        int lockCol = headerIndex(headerRow(rows), COL_EDIT_LOCK);
+        return lockCol >= 0 && isLockFlag(cell(rows, dataRow, lockCol));
+    }
+
+    public static boolean isAddedCombinationRow(List<List<String>> rows, int dataRow) {
+        if (rows == null || dataRow <= 0 || dataRow >= rows.size()) {
+            return false;
+        }
+        int addedCol = headerIndex(headerRow(rows), COL_ADDED_ROW);
+        return addedCol >= 0 && isAddedFlag(cell(rows, dataRow, addedCol));
+    }
+
+    public static boolean isCombinationLockColumn(List<String> header, int col) {
+        return col >= 0 && headerIndex(header, COL_EDIT_LOCK) == col;
+    }
+
+    public static boolean isCombinationMemberColumn(List<String> header, int col) {
+        if (header == null || col < 0 || col >= header.size() || header.get(col) == null) {
+            return false;
+        }
+        String h = header.get(col).strip().replace("組合せ", "組み合わせ");
+        return h.startsWith("メンバー");
+    }
+
+    public static List<List<String>> addCombinationRow(
+            List<List<String>> rows, String process, String machine) {
+        String p = process != null ? process.strip() : "";
+        String m = machine != null ? machine.strip() : "";
+        if (p.isEmpty() || m.isEmpty()) {
+            return copyRows(rows != null ? rows : List.of());
+        }
+        String want = MasterTeamCombinationTableReader.normalizedComboKey(p, m);
+        if (want.isEmpty()) {
+            return copyRows(rows != null ? rows : List.of());
+        }
+        if (containsCombinationEquipment(rows, p, m)) {
+            return copyRows(rows != null ? rows : List.of());
+        }
+        List<List<String>> out = mutableCopy(ensureCombinationMetaColumns(rows));
+        List<String> header = out.get(0);
+        int width = header.size();
+        List<String> row = new ArrayList<>();
+        while (row.size() < width) {
+            row.add("");
+        }
+        int idCol = headerIndex(header, "組み合わせ行ID", "組合せ行ID", "インデックス");
+        int procCol = headerIndex(header, "工程名");
+        int machCol = headerIndex(header, "機械名");
+        int comboCol = headerIndex(header, "工程+機械", "工程＋機械");
+        int prioCol = headerIndex(header, "組み合わせ優先度", "組合せ優先度");
+        int addedCol = headerIndex(header, COL_ADDED_ROW);
+        if (idCol >= 0) {
+            row.set(idCol, String.valueOf(nextCombinationRowId(out)));
+        }
+        if (procCol >= 0) {
+            row.set(procCol, p);
+        }
+        if (machCol >= 0) {
+            row.set(machCol, m);
+        }
+        if (comboCol >= 0) {
+            row.set(comboCol, p + "+" + m);
+        }
+        if (prioCol >= 0) {
+            row.set(prioCol, "1");
+        }
+        if (addedCol >= 0) {
+            row.set(addedCol, ADDED_FLAG);
+        }
+        out.add(row);
+        return freeze(out);
+    }
+
+    public static boolean containsCombinationEquipment(
+            List<List<String>> rows, String process, String machine) {
+        String want =
+                MasterTeamCombinationTableReader.normalizedComboKey(
+                        process != null ? process : "", machine != null ? machine : "");
+        if (want.isEmpty() || rows == null || rows.size() < 2) {
+            return false;
+        }
+        List<String> header = headerRow(rows);
+        int procCol = headerIndex(header, "工程名");
+        int machCol = headerIndex(header, "機械名");
+        int comboCol = headerIndex(header, "工程+機械", "工程＋機械");
+        for (int r = 1; r < rows.size(); r++) {
+            if (isColumnTitleSourceRow(SheetKind.COMBINATIONS, r, rows)) {
+                continue;
+            }
+            String proc = procCol >= 0 ? cell(rows, r, procCol) : "";
+            String mach = machCol >= 0 ? cell(rows, r, machCol) : "";
+            String combo = comboCol >= 0 ? cell(rows, r, comboCol) : "";
+            String have = MasterTeamCombinationTableReader.comboKeyFromCells(proc, mach, combo);
+            if (want.equals(have)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public static List<List<String>> deleteCombinationRows(
+            List<List<String>> rows, Set<Integer> originalRowIndexes) {
+        if (rows == null || rows.isEmpty() || originalRowIndexes == null || originalRowIndexes.isEmpty()) {
+            return copyRows(rows != null ? rows : List.of());
+        }
+        List<List<String>> out = new ArrayList<>();
+        for (int r = 0; r < rows.size(); r++) {
+            if (r > 0
+                    && originalRowIndexes.contains(r)
+                    && !isCombinationRowLocked(rows, r)
+                    && !isColumnTitleSourceRow(SheetKind.COMBINATIONS, r, rows)) {
+                continue;
+            }
+            List<String> copy = new ArrayList<>();
+            if (rows.get(r) != null) {
+                for (String c : rows.get(r)) {
+                    copy.add(c != null ? c : "");
+                }
+            }
+            out.add(copy);
+        }
+        return freeze(out);
+    }
+
+    public static List<String> combinationMemberChoices(
+            List<List<String>> skillsRows, String process, String machine, String current) {
+        LinkedHashSet<String> items = new LinkedHashSet<>();
+        items.add("");
+        List<List<String>> skills = skillsRows != null ? skillsRows : List.of();
+        int procRow = findProcessHeaderRow(skills);
+        int machRow = findMachineHeaderRow(skills);
+        String want = MasterTeamCombinationTableReader.normalizedComboKey(process, machine);
+        int eqCol = -1;
+        if (!want.isEmpty() && procRow >= 0 && machRow >= 0) {
+            int width = widthOf(skills);
+            for (int c = 1; c < width; c++) {
+                String have =
+                        MasterTeamCombinationTableReader.normalizedComboKey(
+                                cell(skills, procRow, c), cell(skills, machRow, c));
+                if (want.equals(have)) {
+                    eqCol = c;
+                    break;
+                }
+            }
+        }
+        if (eqCol >= 0) {
+            for (int r = 0; r < skills.size(); r++) {
+                if (isColumnTitleSourceRow(SheetKind.SKILLS, r, skills)) {
+                    continue;
+                }
+                if (isProcessOrMachineHeaderLabel(cell(skills, r, 0))) {
+                    continue;
+                }
+                OpAs parsed = parseOpAs(cell(skills, r, eqCol));
+                if (parsed == null) {
+                    continue;
+                }
+                String name = cell(skills, r, 0);
+                if (name.isEmpty()) {
+                    continue;
+                }
+                items.add(parsed.role() + " " + name);
+            }
+        }
+        String cur = current != null ? current.strip() : "";
+        if (!cur.isEmpty() && !items.contains(cur)) {
+            items.add(cur);
+        }
+        return List.copyOf(items);
+    }
+
+    public static String combinationMemberName(String raw) {
+        String t = raw != null ? raw.strip() : "";
+        if (t.isEmpty()) {
+            return "";
+        }
+        Matcher m = COMBO_MEMBER_ROLE_PREFIX.matcher(t);
+        if (m.find()) {
+            return m.replaceFirst("").strip();
+        }
+        return t;
+    }
+
+    public static List<String[]> skillsEquipmentPairs(List<List<String>> skillsRows) {
+        List<String> titles =
+                columnTitles(SheetKind.SKILLS, skillsRows, Math.max(1, widthOf(skillsRows != null ? skillsRows : List.of())));
+        List<String[]> out = new ArrayList<>();
+        LinkedHashSet<String> seen = new LinkedHashSet<>();
+        for (int i = 1; i < titles.size(); i++) {
+            String[] pm = splitEquipmentTitle(titles.get(i));
+            if (pm[0].isEmpty() || pm[1].isEmpty()) {
+                continue;
+            }
+            String key = MasterTeamCombinationTableReader.normalizedComboKey(pm[0], pm[1]);
+            if (key.isEmpty() || !seen.add(key)) {
+                continue;
+            }
+            out.add(new String[] {pm[0], pm[1]});
+        }
+        return List.copyOf(out);
+    }
+
+    private static int nextCombinationRowId(List<List<String>> rows) {
+        int idCol = headerIndex(headerRow(rows), "組み合わせ行ID", "組合せ行ID", "インデックス");
+        int max = 0;
+        if (idCol < 0) {
+            return 1;
+        }
+        for (int r = 1; r < rows.size(); r++) {
+            String v = cell(rows, r, idCol);
+            try {
+                int n = Integer.parseInt(stripTrailingDotZero(v));
+                if (n > max) {
+                    max = n;
+                }
+            } catch (NumberFormatException ignored) {
+                // skip
+            }
+        }
+        return max + 1;
+    }
+
+    private static boolean isLockFlag(String v) {
+        String t = v != null ? v.strip() : "";
+        return LOCK_VALUE.equals(t) || "1".equals(t) || "true".equalsIgnoreCase(t);
+    }
+
+    private static boolean isAddedFlag(String v) {
+        String t = v != null ? v.strip() : "";
+        return ADDED_FLAG.equals(t) || "true".equalsIgnoreCase(t) || "追加".equals(t);
+    }
+
+    public static boolean isCombinationLockValue(String raw) {
+        return isLockFlag(raw);
+    }
+
+    public static boolean isCombinationAddedValue(String raw) {
+        return isAddedFlag(raw);
+    }
     public static boolean[] visibilityMask(
             List<String> titles, int leadingCols, java.util.Set<String> focusNormalizedKeys) {
         int n = titles != null ? titles.size() : 0;
@@ -467,10 +731,22 @@ public final class MasterDispatchSheetEditRules {
     }
 
     public static String comboRowStyle(String process, String machine) {
-        return comboRowStyle(process, machine, "");
+        return combinationRowStyle(process, machine, "", false, false);
     }
 
     public static String comboRowStyle(String process, String machine, String comboCell) {
+        return combinationRowStyle(process, machine, comboCell, false, false);
+    }
+
+    public static String combinationRowStyle(
+            String process, String machine, String comboCell, boolean added, boolean locked) {
+        if (added) {
+            return "-fx-background-color: "
+                    + ADDED_ROW_BG
+                    + "; -fx-control-inner-background: "
+                    + ADDED_ROW_BG
+                    + "; -fx-text-fill: #111111;";
+        }
         String key = MasterTeamCombinationTableReader.comboKeyFromCells(process, machine, comboCell);
         if (key.isEmpty()) {
             return "";
@@ -643,8 +919,19 @@ public final class MasterDispatchSheetEditRules {
         if (isColumnTitleSourceRow(SheetKind.COMBINATIONS, dataRow, display)) {
             return false;
         }
-        int comboCol = headerIndex(headerRow(original), "工程+機械", "工程＋機械");
-        return comboCol < 0 || col != comboCol;
+        List<String> header = headerRow(original);
+        int comboCol = headerIndex(header, "工程+機械", "工程＋機械");
+        if (comboCol >= 0 && col == comboCol) {
+            return false;
+        }
+        if (headerIndex(header, COL_ADDED_ROW) == col) {
+            return false;
+        }
+        if (isCombinationLockColumn(header, col)) {
+            return true;
+        }
+        int lockCol = headerIndex(header, COL_EDIT_LOCK);
+        return lockCol < 0 || !isLockFlag(cell(display, dataRow, lockCol));
     }
 
     private static boolean isNeedStructureLabel(String a) {

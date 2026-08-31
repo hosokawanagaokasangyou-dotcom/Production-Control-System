@@ -24,6 +24,8 @@
                 <Button text="未登録の工程+機械を追加" onAction="#onAddMissingEquipmentColumnsAction"/>
                 <Button text="表示する設備を選ぶ" onAction="#onChooseVisibleEquipmentAction"/>
                 <Button text="すべて表示" onAction="#onShowAllEquipmentColumnsAction"/>
+                <Button text="組み合わせ行を追加" onAction="#onAddCombinationRowAction"/>
+                <Button text="選択行を削除" onAction="#onDeleteCombinationRowAction"/>
             </HBox>
             <Label fx:id="statusLabel" wrapText="true" styleClass="pm-muted-label"/>
         </VBox>

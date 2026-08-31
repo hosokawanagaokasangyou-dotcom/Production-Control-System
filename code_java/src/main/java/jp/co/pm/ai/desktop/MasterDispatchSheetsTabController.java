@@ -5,6 +5,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.BitSet;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -20,6 +21,7 @@ import javafx.scene.control.Alert.AlertType;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.Label;
 import javafx.scene.control.TabPane;
+import javafx.scene.control.TablePosition;
 import javafx.scene.layout.StackPane;
 import javafx.stage.Window;
 
@@ -34,6 +36,7 @@ import jp.co.pm.ai.desktop.io.MasterTeamCombinationTableReader;
 import jp.co.pm.ai.desktop.ui.ColumnVisibilityDialog;
 import jp.co.pm.ai.desktop.ui.ColumnVisibilitySupport;
 import jp.co.pm.ai.desktop.ui.FourDigitConfirmationDialog;
+import jp.co.pm.ai.desktop.ui.MasterDispatchCombinationRowDialog;
 import jp.co.pm.ai.desktop.ui.MasterDispatchEquipmentColumnDialog;
 import jp.co.pm.ai.desktop.ui.MasterDispatchSheetEditRules;
 import jp.co.pm.ai.desktop.ui.MasterDispatchSheetGridSupport;
@@ -371,6 +374,90 @@ public final class MasterDispatchSheetsTabController {
         statusLabel.setText("すべての設備を表示しています（空き列は隠しています）。");
     }
 
+    @FXML
+    private void onAddCombinationRowAction() {
+        List<List<String>> skills =
+                MasterDispatchSheetGridSupport.extract(
+                        skillsView, MasterDispatchSheetEditRules.SheetKind.SKILLS);
+        List<List<String>> combo =
+                MasterDispatchSheetGridSupport.extract(
+                        comboView, MasterDispatchSheetEditRules.SheetKind.COMBINATIONS);
+        List<String[]> pairs = MasterDispatchSheetEditRules.skillsEquipmentPairs(skills);
+        Optional<MasterDispatchCombinationRowDialog.Result> ans =
+                MasterDispatchCombinationRowDialog.prompt(dialogOwner(), pairs);
+        if (ans.isEmpty()) {
+            return;
+        }
+        MasterDispatchCombinationRowDialog.Result r = ans.get();
+        if (MasterDispatchSheetEditRules.containsCombinationEquipment(combo, r.process(), r.machine())) {
+            statusLabel.setText(
+                    "同じ工程名+機械名の行が既にあります: " + r.process() + " × " + r.machine());
+            focusComboTab();
+            return;
+        }
+        List<List<String>> added =
+                MasterDispatchSheetEditRules.addCombinationRow(combo, r.process(), r.machine());
+        replaceCurrentSheetsKeepingNeedSpeed(skills, added);
+        focusComboTab();
+        statusLabel.setText(
+                "組み合わせ行を追加しました: "
+                        + r.process()
+                        + " × "
+                        + r.machine()
+                        + "。追加行は色が違います。メンバーは OP/AS 付きで選んでください。");
+    }
+
+    @FXML
+    private void onDeleteCombinationRowAction() {
+        if (comboView.getSelectionModel() == null
+                || comboView.getSelectionModel().getSelectedCells().isEmpty()) {
+            statusLabel.setText("削除する組み合わせ表の行を選んでください。");
+            return;
+        }
+        int first = SpreadsheetTabularSupport.spreadsheetFirstDataRowIndex();
+        Set<Integer> originalIndexes = new HashSet<>();
+        for (TablePosition<?, ?> pos : comboView.getSelectionModel().getSelectedCells()) {
+            int displayIndex = pos.getRow() - first;
+            if (displayIndex >= 0) {
+                originalIndexes.add(displayIndex + 1);
+            }
+        }
+        List<List<String>> combo =
+                MasterDispatchSheetGridSupport.extract(
+                        comboView, MasterDispatchSheetEditRules.SheetKind.COMBINATIONS);
+        int before = combo.size();
+        List<List<String>> after =
+                MasterDispatchSheetEditRules.deleteCombinationRows(combo, originalIndexes);
+        if (after.size() == before) {
+            statusLabel.setText("ロック中の行は削除できません。編集ロックを外してから削除してください。");
+            focusComboTab();
+            return;
+        }
+        List<List<String>> skills =
+                MasterDispatchSheetGridSupport.extract(
+                        skillsView, MasterDispatchSheetEditRules.SheetKind.SKILLS);
+        replaceCurrentSheetsKeepingNeedSpeed(skills, after);
+        focusComboTab();
+        statusLabel.setText("選択した組み合わせ行を削除しました（ロック行は残しています）。");
+    }
+
+    private void replaceCurrentSheetsKeepingNeedSpeed(
+            List<List<String>> skills, List<List<String>> combo) {
+        List<List<String>> need =
+                MasterDispatchSheetGridSupport.extract(
+                        needView, MasterDispatchSheetEditRules.SheetKind.NEED);
+        List<List<String>> speed =
+                MasterDispatchSheetGridSupport.extract(
+                        speedView, MasterDispatchSheetEditRules.SheetKind.SPEED);
+        replaceDocumentSheets(skills, need, speed, combo);
+    }
+
+    void focusComboTab() {
+        if (innerTabPane != null && innerTabPane.getTabs().size() > 3) {
+            innerTabPane.getSelectionModel().select(3);
+        }
+    }
+
     void focusSkillsTab() {
         if (innerTabPane != null && !innerTabPane.getTabs().isEmpty()) {
             innerTabPane.getSelectionModel().select(0);
@@ -478,7 +565,8 @@ public final class MasterDispatchSheetsTabController {
                 MasterDispatchSheetEditRules.SheetKind.COMBINATIONS,
                 d.sheet("teamCombinations").rows(),
                 0,
-                4);
+                4,
+                d.sheet("skills").rows());
         applyAllEquipmentVisibility();
     }
 
@@ -539,11 +627,25 @@ public final class MasterDispatchSheetsTabController {
             List<List<String>> rows,
             int frozenDataHeaderRows,
             int leadingCols) {
-        view.setGrid(MasterDispatchSheetGridSupport.buildEditable(kind, rows));
+        attachGrid(view, kind, rows, frozenDataHeaderRows, leadingCols, List.of());
+    }
+
+    private static void attachGrid(
+            SpreadsheetView view,
+            MasterDispatchSheetEditRules.SheetKind kind,
+            List<List<String>> rows,
+            int frozenDataHeaderRows,
+            int leadingCols,
+            List<List<String>> skillsRows) {
+        List<List<String>> src = rows;
+        if (kind == MasterDispatchSheetEditRules.SheetKind.COMBINATIONS) {
+            src = MasterDispatchSheetEditRules.ensureCombinationMetaColumns(rows);
+        }
+        view.setGrid(MasterDispatchSheetGridSupport.buildEditable(kind, src, skillsRows));
         int colCount = view.getGrid() != null ? view.getGrid().getColumnCount() : 1;
-        List<String> titles = MasterDispatchSheetEditRules.columnTitles(kind, rows, colCount);
+        List<String> titles = MasterDispatchSheetEditRules.columnTitles(kind, src, colCount);
         List<Double> widths =
-                MasterDispatchSheetEditRules.preferredColumnWidths(rows, colCount, titles);
+                MasterDispatchSheetEditRules.preferredColumnWidths(src, colCount, titles);
         Platform.runLater(
                 () -> applyMasterSheetChrome(view, widths, frozenDataHeaderRows, leadingCols));
     }

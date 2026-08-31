@@ -389,6 +389,15 @@ def load_need_machine_columns() -> list[dict[str, str]]:
     return columns
 
 
+def _combo_preset_member_name(raw: str) -> str:
+    """組み合わせ表メンバーセルから配台用の氏名を取る。『OP 山田』『AS1 佐藤』は氏名のみ。"""
+    s = "" if raw is None else str(raw).strip()
+    if not s:
+        return ""
+    stripped = re.sub(r"^(?:OP|AS)\s*\d*\s+", "", s, count=1, flags=re.IGNORECASE).strip()
+    return stripped or s
+
+
 def load_team_combination_presets_from_master() -> dict[
     str, list[tuple[int, int | None, tuple[str, ...], int | None]]
 ]:
@@ -492,7 +501,7 @@ def load_team_combination_presets_from_master() -> dict[
             s = _cell_at(row, mc_ix)
             if not s or s.lower() in ("nan", "none", "null"):
                 continue
-            team.append(s)
+            team.append(_combo_preset_member_name(s))
         if not team:
             continue
         buckets[key].append(

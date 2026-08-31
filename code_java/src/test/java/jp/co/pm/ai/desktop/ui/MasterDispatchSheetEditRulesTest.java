@@ -539,4 +539,110 @@ class MasterDispatchSheetEditRulesTest {
                                 MasterDispatchSheetEditRules.SheetKind.COMBINATIONS, badPrio)
                         .isEmpty());
     }
+
+    @Test
+    void combinationRowLock_blocksEditsExceptLockColumn() {
+        List<List<String>> rows =
+                List.of(
+                        List.of(
+                                "組み合わせ行ID",
+                                "工程名",
+                                "機械名",
+                                "工程+機械",
+                                "メンバー1",
+                                "編集ロック",
+                                "追加行"),
+                        List.of("1", "巻返し", "機1", "巻返し+機1", "山田", "ロック", ""),
+                        List.of("2", "巻返し", "機1", "巻返し+機1", "佐藤", "", ""));
+        assertFalse(
+                MasterDispatchSheetEditRules.isEditable(
+                        MasterDispatchSheetEditRules.SheetKind.COMBINATIONS, 1, 1, rows));
+        assertFalse(
+                MasterDispatchSheetEditRules.isEditable(
+                        MasterDispatchSheetEditRules.SheetKind.COMBINATIONS, 1, 4, rows));
+        assertTrue(
+                MasterDispatchSheetEditRules.isEditable(
+                        MasterDispatchSheetEditRules.SheetKind.COMBINATIONS, 1, 5, rows));
+        assertTrue(
+                MasterDispatchSheetEditRules.isEditable(
+                        MasterDispatchSheetEditRules.SheetKind.COMBINATIONS, 2, 1, rows));
+    }
+
+    @Test
+    void addCombinationRow_appendsMarkedRow_andSkipsDuplicateEquipment() {
+        List<List<String>> rows =
+                List.of(
+                        List.of("組み合わせ行ID", "工程名", "機械名", "工程+機械", "組み合わせ優先度", "必須人数", "メンバー1"),
+                        List.of("1", "巻返し", "機1", "巻返し+機1", "1", "2", "山田"));
+        List<List<String>> added =
+                MasterDispatchSheetEditRules.addCombinationRow(rows, "分割", "スライス機1");
+        assertEquals(3, added.size());
+        assertEquals("2", added.get(2).get(0));
+        assertEquals("分割", added.get(2).get(1));
+        assertEquals("スライス機1", added.get(2).get(2));
+        assertEquals("分割+スライス機1", added.get(2).get(3));
+        int addedCol =
+                MasterDispatchSheetEditRules.headerIndex(added.get(0), MasterDispatchSheetEditRules.COL_ADDED_ROW);
+        int lockCol =
+                MasterDispatchSheetEditRules.headerIndex(added.get(0), MasterDispatchSheetEditRules.COL_EDIT_LOCK);
+        assertTrue(addedCol >= 0);
+        assertTrue(lockCol >= 0);
+        assertEquals(MasterDispatchSheetEditRules.ADDED_FLAG, added.get(2).get(addedCol));
+        assertTrue(MasterDispatchSheetEditRules.isAddedCombinationRow(added, 2));
+        assertFalse(MasterDispatchSheetEditRules.isAddedCombinationRow(added, 1));
+        List<List<String>> again =
+                MasterDispatchSheetEditRules.addCombinationRow(added, "分割", "スライス機1");
+        assertEquals(added, again);
+        List<List<String>> skipExisting =
+                MasterDispatchSheetEditRules.addCombinationRow(rows, "巻返し", "機1");
+        assertEquals(2, skipExisting.size());
+    }
+
+    @Test
+    void deleteCombinationRows_skipsLockedAndRemovesUnlocked() {
+        List<List<String>> rows =
+                List.of(
+                        List.of("組み合わせ行ID", "工程名", "機械名", "工程+機械", "編集ロック"),
+                        List.of("1", "巻返し", "機1", "巻返し+機1", "ロック"),
+                        List.of("2", "分割", "スライス機1", "分割+スライス機1", ""));
+        List<List<String>> out =
+                MasterDispatchSheetEditRules.deleteCombinationRows(rows, java.util.Set.of(1, 2));
+        assertEquals(2, out.size());
+        assertEquals("1", out.get(1).get(0));
+    }
+
+    @Test
+    void combinationMemberChoices_onlyQualifiedSkillsMembersAsOpAsName() {
+        List<List<String>> skills =
+                List.of(
+                        List.of("工程名", "巻返し", "分割"),
+                        List.of("機械名", "機1", "スライス機1"),
+                        List.of("山田", "OP1", ""),
+                        List.of("佐藤", "AS2", "OP3"),
+                        List.of("鈴木", "", "AS1"));
+        List<String> choices =
+                MasterDispatchSheetEditRules.combinationMemberChoices(
+                        skills, "分割", "スライス機1", "");
+        assertEquals(List.of("", "OP 佐藤", "AS 鈴木"), choices);
+        List<String> withCurrent =
+                MasterDispatchSheetEditRules.combinationMemberChoices(
+                        skills, "分割", "スライス機1", "山田");
+        assertTrue(withCurrent.contains("山田"));
+        assertEquals(
+                "佐藤", MasterDispatchSheetEditRules.combinationMemberName("OP 佐藤"));
+        assertEquals(
+                "山田", MasterDispatchSheetEditRules.combinationMemberName("山田"));
+    }
+
+    @Test
+    void comboRowStyle_addedRowUsesDistinctColor() {
+        String grouped =
+                MasterDispatchSheetEditRules.combinationRowStyle("分割", "スライス機1", "", false, false);
+        String added =
+                MasterDispatchSheetEditRules.combinationRowStyle("分割", "スライス機1", "", true, false);
+        assertFalse(grouped.isEmpty());
+        assertFalse(added.isEmpty());
+        assertNotEquals(grouped, added);
+        assertTrue(added.contains("#f4c36a"));
+    }
 }
