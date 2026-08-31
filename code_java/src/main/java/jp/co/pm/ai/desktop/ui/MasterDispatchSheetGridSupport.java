@@ -140,7 +140,7 @@ public final class MasterDispatchSheetGridSupport {
                                 MasterDispatchSheetEditRules.SheetKind.COMBINATIONS, dataRow, display);
         if (comboData && MasterDispatchSheetEditRules.isCombinationLockColumn(header, col)) {
             cell =
-                    SpreadsheetCellType.LIST(lockChoices(raw))
+                    new MasterDispatchListCellType(lockChoices(raw))
                             .createCell(gridRow, col, 1, 1, raw);
         } else if (comboData && MasterDispatchSheetEditRules.isCombinationMemberColumn(header, col)) {
             int procCol = MasterDispatchSheetEditRules.headerIndex(header, "工程名");
@@ -153,7 +153,7 @@ public final class MasterDispatchSheetGridSupport {
                 cell = SpreadsheetCellType.STRING.createCell(gridRow, col, 1, 1, raw);
             } else {
                 cell =
-                        SpreadsheetCellType.LIST(
+                        new MasterDispatchListCellType(
                                         MasterDispatchSheetEditRules.combinationMemberChoices(
                                                 skills, proc, mach, raw))
                                 .createCell(gridRow, col, 1, 1, raw);
@@ -162,7 +162,7 @@ public final class MasterDispatchSheetGridSupport {
                 && MasterDispatchSheetEditRules.isSkillsSkillValueCell(
                         kind, dataRow, col, display)) {
             cell =
-                    SpreadsheetCellType.LIST(skillChoices(raw))
+                    new MasterDispatchListCellType(skillChoices(raw))
                             .createCell(
                                     gridRow,
                                     col,

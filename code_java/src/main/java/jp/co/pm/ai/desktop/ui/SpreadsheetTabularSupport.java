@@ -1004,6 +1004,23 @@ public final class SpreadsheetTabularSupport {
     }
 
     /**
+     * {@link #clearSpreadsheetRowPresentationArtifacts} が外すフィルタ行以外の固定行。
+     * 工程名・機械名など追加ピンを chrome 再適用後に戻すために使う。
+     */
+    public static List<Integer> extraFixedRowsToRestore(Iterable<Integer> pinnedBeforeClear) {
+        if (pinnedBeforeClear == null) {
+            return List.of();
+        }
+        List<Integer> out = new ArrayList<>();
+        for (Integer row : pinnedBeforeClear) {
+            if (row != null && row.intValue() != SPREADSHEET_FILTER_ROW) {
+                out.add(row);
+            }
+        }
+        return out;
+    }
+
+    /**
      * 見出し列固定・フィルタ行ピン・UNCONSTRAINED 列幅をまとめて適用する。
      * TitledPane／アコーディオン開閉後など、レイアウトでスキンが組み替わったあとに再度呼ぶこと。
      */
@@ -1011,11 +1028,15 @@ public final class SpreadsheetTabularSupport {
         if (view == null || !isSpreadsheetReadyForColumnChrome(view)) {
             return;
         }
+        List<Integer> extraPinned = extraFixedRowsToRestore(view.getFixedRows());
         clearSpreadsheetRowPresentationArtifacts(view);
         applyFixedLeadingColumns(view, headerColumnCount);
         ensureDialogColumnFiltersInstalled(view);
         // 非表示行だけクリアするため、列フィルタ／行検索の許容状態は維持したまま hidden rows を再計算する。
         SpreadsheetMultiColumnFilterCoordinator.recomputeHiddenRows(view);
+        for (Integer row : extraPinned) {
+            pinSpreadsheetRows(view, row, row);
+        }
         applyUnconstrainedColumnResizePolicyAfterSkinSettles(view);
     }
 
