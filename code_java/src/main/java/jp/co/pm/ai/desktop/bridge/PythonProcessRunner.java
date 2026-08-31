@@ -18,6 +18,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.regex.Pattern;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.function.Consumer;
@@ -45,8 +46,22 @@ public final class PythonProcessRunner {
         t.setDaemon(true);
         return t;
     });
+    private static final Set<Process> ACTIVE_ATTENDANCE_PROCESSES =
+            ConcurrentHashMap.newKeySet();
 
     private PythonProcessRunner() {}
+
+    /** 工場切替前に、旧工場の勤怠読込プロセスを停止する。 */
+    public static void cancelAttendanceProcesses() {
+        for (Process process : ACTIVE_ATTENDANCE_PROCESSES) {
+            try {
+                process.destroyForcibly();
+            } catch (Throwable ignored) {
+                // 切替中の強制停止。失敗しても続行する。
+            }
+        }
+        ACTIVE_ATTENDANCE_PROCESSES.clear();
+    }
 
     private static boolean isPmAiEnvKey(String k) {
         return k != null && k.length() >= 6 && k.regionMatches(true, 0, "PM_AI_", 0, 6);
@@ -215,8 +230,12 @@ public final class PythonProcessRunner {
                         pb.redirectErrorStream(true);
                         mergeUiEnvIntoProcess(pb, req.extraEnv, req.scriptDirectory);
                         Process p = pb.start();
+                        if ("attendance_data_io.py".equals(req.scriptFileName())) {
+                            ACTIVE_ATTENDANCE_PROCESSES.add(p);
+                        }
                         String out = readStreamFullyWithTap(p.getInputStream(), lineTap);
                         int code = p.waitFor();
+                        ACTIVE_ATTENDANCE_PROCESSES.remove(p);
                         return new CapturedResult(code, out);
                     } catch (Exception e) {
                         throw new RuntimeException(e);
