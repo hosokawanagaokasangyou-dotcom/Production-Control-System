@@ -200,6 +200,33 @@ class FactorySiteSwitchBusySupportTest {
     }
 
     @Test
+    void mainShell_selectsRunTabAfterBusyProgressCompletes() throws Exception {
+        Path java = Path.of("src/main/java/jp/co/pm/ai/desktop/MainShellController.java");
+        String text = Files.readString(java, StandardCharsets.UTF_8);
+        int finished = text.indexOf("public void onStartupBackgroundLoadFinished()");
+        assertTrue(finished >= 0);
+        int finishedEnd = text.indexOf("\n    @Override\n    public void setStartupTabBackgroundLoadActive", finished);
+        String finishedBody =
+                finishedEnd > finished
+                        ? text.substring(finished, finishedEnd)
+                        : text.substring(finished, finished + 1200);
+        assertTrue(
+                finishedBody.contains("selectRunTabAfterBusyProgressIfAllowed()"),
+                "工場切替後のタブ読込完了で実行・ログへ戻す");
+        int finishStartup = text.indexOf("private void finishStartupSequenceProgressAndPrompt()");
+        assertTrue(finishStartup >= 0);
+        int finishStartupEnd =
+                text.indexOf("\n    /** 初期化記録・起動時照合の直前に", finishStartup);
+        String finishStartupBody =
+                finishStartupEnd > finishStartup
+                        ? text.substring(finishStartup, finishStartupEnd)
+                        : text.substring(finishStartup, finishStartup + 800);
+        assertTrue(
+                finishStartupBody.contains("selectRunTabAfterBusyProgressIfAllowed()"),
+                "起動時チェック完了でも実行・ログへ戻す");
+    }
+
+    @Test
     void resolveTabLoadStatus_usesMessageOrDefault() {
         assertEquals(
                 FactorySiteSwitchBusyDialog.STATUS_BACKGROUND_LOAD,

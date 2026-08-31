@@ -5441,6 +5441,7 @@ public final class MainShellController
         appendFactorySiteSwitchTotal();
         endFactorySiteSwitchBusy();
         endEnvVarsStartupCheckBusy();
+        selectRunTabAfterBusyProgressIfAllowed();
         if (!isEnvVarsInitializationPending()
                 && !shouldSuppressStartupRequestFormOriginalDirPrompt()) {
             maybePromptRequestFormOriginalDirAtStartup();
@@ -6691,12 +6692,22 @@ public final class MainShellController
             updateFactorySiteSwitchBusy(FactorySiteSwitchBusyDialog.STATUS_DONE);
             appendFactorySiteSwitchTotal();
             endFactorySiteSwitchBusy();
+            selectRunTabAfterBusyProgressIfAllowed();
             maybePromptRequestFormOriginalDirIfUnset("[factory]", switchedFactory);
         }
         clearGlobalLongTaskProgress();
         refreshAttendanceReadiness();
         refreshStage1PipelineCheckGate();
         refreshGlobalStatusBar();
+    }
+
+    /** 工場切替／起動後読込の完了後に実行・ログへ戻す。環境変数初期化待ちのときは環境タブを優先。 */
+    private void selectRunTabAfterBusyProgressIfAllowed() {
+        if (isEnvVarsInitializationPending()) {
+            ensureMainShellEnvTabSelected();
+            return;
+        }
+        ensureMainShellRunTabSelected();
     }
 
     @Override
@@ -8957,13 +8968,18 @@ public final class MainShellController
                                 startupSequenceActive, startupTabBackgroundLoadActive)) {
                             finishTimingAfterWork = true;
                             endFactorySiteSwitchBusy();
+                            selectRunTabAfterBusyProgressIfAllowed();
                         }
                     } else {
                         finishTimingAfterWork = true;
                         endFactorySiteSwitchBusy();
+                        selectRunTabAfterBusyProgressIfAllowed();
                     }
                 }
-                default -> endFactorySiteSwitchBusy();
+                default -> {
+                    endFactorySiteSwitchBusy();
+                    selectRunTabAfterBusyProgressIfAllowed();
+                }
             }
         } finally {
             appendFactorySiteSwitchTiming(
