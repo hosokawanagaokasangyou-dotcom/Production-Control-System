@@ -1436,6 +1436,20 @@ def parse_optional_int(val):
         return int(round(float(s)))
     except (TypeError, ValueError):
         return None
+def parse_optional_float(val):
+    """空・NaN・解釈不能は None。小数を丸めない。"""
+    if val is None or (isinstance(val, float) and pd.isna(val)):
+        return None
+    s = str(val).strip().replace(",", "")
+    if not s or s.lower() in ("nan", "none", "null"):
+        return None
+    try:
+        f = float(s)
+    except (TypeError, ValueError):
+        return None
+    if f != f or abs(f) == float("inf"):
+        return None
+    return f
 def parse_optional_date(val):
     if val is None or pd.isna(val):
         return None

@@ -1776,7 +1776,7 @@ def _generate_plan_impl(
                             _combo_rank = c.get("combo_preset_priority")
                             try:
                                 _combo_rank_i = (
-                                    int(_combo_rank) if _combo_rank is not None else 10**9
+                                    float(_combo_rank) if _combo_rank is not None else 10**9
                                 )
                             except (TypeError, ValueError):
                                 _combo_rank_i = 10**9

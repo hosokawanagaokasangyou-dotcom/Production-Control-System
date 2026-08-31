@@ -1509,7 +1509,7 @@ def _assign_one_roll_trial_order_flow(
         # （開始・人数・短縮数などが同じなら、優先度が小さいプリセットを優先）
         _combo_rank = c.get("combo_preset_priority")
         try:
-            _combo_rank_i = int(_combo_rank) if _combo_rank is not None else 10**9
+            _combo_rank_i = float(_combo_rank) if _combo_rank is not None else 10**9
         except (TypeError, ValueError):
             _combo_rank_i = 10**9
         try:

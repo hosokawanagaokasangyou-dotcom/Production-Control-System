@@ -399,7 +399,7 @@ def _combo_preset_member_name(raw: str) -> str:
 
 
 def load_team_combination_presets_from_master() -> dict[
-    str, list[tuple[int, int | None, tuple[str, ...], int | None]]
+    str, list[tuple[float, int | None, tuple[str, ...], int | None]]
 ]:
     """
     master.xlsm「組み合わせ表」を読み」工程+機械キーごとに
@@ -454,7 +454,7 @@ def load_team_combination_presets_from_master() -> dict[
     )
     buckets: dict[
         str,
-        list[tuple[int, int, int | None, tuple[str, ...], int | None]],
+        list[tuple[float, int, int | None, tuple[str, ...], int | None]],
     ] = defaultdict(list)
     _cols = list(df.columns)
     _ix = {
@@ -483,7 +483,7 @@ def load_team_combination_presets_from_master() -> dict[
             key = combo_cell
         else:
             continue
-        pr = parse_optional_int(_cell_at(row, _ix["prio"])) if _ix["prio"] >= 0 else None
+        pr = parse_optional_float(_cell_at(row, _ix["prio"])) if _ix["prio"] >= 0 else None
         if pr is None:
             pr = 10**9
         sheet_req: int | None = None
@@ -509,7 +509,7 @@ def load_team_combination_presets_from_master() -> dict[
         )
 
     out: dict[
-        str, list[tuple[int, int | None, tuple[str, ...], int | None]]
+        str, list[tuple[float, int | None, tuple[str, ...], int | None]]
     ] = {}
     for key, lst in buckets.items():
         lst.sort(key=lambda x: (x[0], x[1]))
@@ -540,14 +540,14 @@ def _lookup_combo_sheet_row_id_for_preset_team(
     if not target:
         return None
     best_id: int | None = None
-    best_prio: int | None = None
+    best_prio: float | None = None
     for pr, _sheet_rs, preset_team, combo_row_id in preset_rows:
         if combo_row_id is None:
             continue
         if _mem_key(preset_team) != target:
             continue
         try:
-            prio_val = int(pr)
+            prio_val = float(pr)
         except (TypeError, ValueError):
             prio_val = 10**9
         if best_prio is None or prio_val < best_prio:

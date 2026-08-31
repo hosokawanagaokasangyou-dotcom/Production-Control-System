@@ -1170,8 +1170,8 @@ public final class MasterDispatchSheetEditRules {
         for (int r = 1; r < rows.size(); r++) {
             if (prioCol >= 0) {
                 String v = cell(rows, r, prioCol);
-                if (!v.isEmpty() && !isPositiveInteger(v)) {
-                    errors.add("組み合わせ優先度は 1 以上の整数です。行" + (r + 1) + ": " + v);
+                if (!v.isEmpty() && !isCombinationPriorityNumber(v)) {
+                    errors.add("組み合わせ優先度は 1 以上の数値です（小数可）。行" + (r + 1) + ": " + v);
                 }
             }
             if (reqCol >= 0) {
@@ -1209,7 +1209,7 @@ public final class MasterDispatchSheetEditRules {
         int prioCol = headerIndex(header, "組み合わせ優先度", "組合せ優先度");
         int reqCol = headerIndex(header, "必須人数", "必要人数");
         if (col == prioCol) {
-            return !isPositiveInteger(v);
+            return !isCombinationPriorityNumber(v);
         }
         if (col == reqCol) {
             return !isNonNegativeInteger(v);
@@ -1448,19 +1448,13 @@ public final class MasterDispatchSheetEditRules {
         }
     }
 
-    private static boolean isPositiveInteger(String s) {
-        String t = stripTrailingDotZero(s);
-        try {
-            return Integer.parseInt(t) >= 1;
-        } catch (NumberFormatException e) {
+    private static boolean isCombinationPriorityNumber(String s) {
+        if (s == null || s.isBlank()) {
             return false;
         }
-    }
-
-    private static boolean isPositiveNumber(String s) {
         try {
             double d = Double.parseDouble(s.strip().replace(",", ""));
-            return !Double.isNaN(d) && !Double.isInfinite(d);
+            return !Double.isNaN(d) && !Double.isInfinite(d) && d >= 1.0;
         } catch (NumberFormatException e) {
             return false;
         }

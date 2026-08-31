@@ -647,6 +647,18 @@ class MasterDispatchSheetEditRulesTest {
                 MasterDispatchSheetEditRules.validateForSave(
                                 MasterDispatchSheetEditRules.SheetKind.COMBINATIONS, rows)
                         .isEmpty());
+        List<List<String>> decimalPrio =
+                List.of(
+                        List.of("組み合わせ行ID", "工程名", "機械名", "工程+機械", "組み合わせ優先度", "必須人数"),
+                        List.of("1", "巻返し", "機1", "", "1.5", "2"),
+                        List.of("2", "巻返し", "機1", "", "8.6", "2"));
+        assertTrue(
+                MasterDispatchSheetEditRules.validateForSave(
+                                MasterDispatchSheetEditRules.SheetKind.COMBINATIONS, decimalPrio)
+                        .isEmpty());
+        assertFalse(
+                MasterDispatchSheetEditRules.isInvalidValue(
+                        MasterDispatchSheetEditRules.SheetKind.COMBINATIONS, 1, 4, decimalPrio));
         List<List<String>> badPrio =
                 List.of(
                         List.of("組み合わせ行ID", "工程名", "機械名", "工程+機械", "組み合わせ優先度", "必須人数"),
