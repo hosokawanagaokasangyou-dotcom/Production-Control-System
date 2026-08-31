@@ -331,3 +331,29 @@
     -fx-background-color: #d5deea;
     -fx-text-fill: #111111;
 }
+
+.pm-ai-decimal-keypad {
+    -fx-background-color: #f4f4f4;
+    -fx-border-color: #888888;
+    -fx-border-width: 1;
+    -fx-pref-width: 220px;
+}
+
+.pm-ai-decimal-keypad .text-field {
+    -fx-background-color: #ffffff;
+    -fx-text-fill: #111111;
+    -fx-font-size: 14px;
+}
+
+.pm-ai-decimal-keypad-key {
+    -fx-background-color: #ffffff;
+    -fx-text-fill: #111111;
+    -fx-font-size: 13px;
+    -fx-min-height: 32px;
+}
+
+.pm-ai-decimal-keypad-ok {
+    -fx-background-color: #5c7a9a;
+    -fx-text-fill: white;
+    -fx-font-weight: bold;
+}

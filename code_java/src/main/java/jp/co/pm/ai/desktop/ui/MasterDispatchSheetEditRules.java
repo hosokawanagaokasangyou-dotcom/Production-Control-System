@@ -1,5 +1,7 @@
 package jp.co.pm.ai.desktop.ui;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.HashMap;
@@ -145,7 +147,93 @@ public final class MasterDispatchSheetEditRules {
     }
 
     public static boolean isSkillsSkillValueCell(int dataRow, int col, List<List<String>> rows) {
-        return col >= 1 && !isColumnTitleSourceRow(SheetKind.SKILLS, dataRow, rows);
+        return isSkillsSkillValueCell(SheetKind.SKILLS, dataRow, col, rows);
+    }
+
+    public static boolean isSkillsSkillValueCell(
+            SheetKind kind, int dataRow, int col, List<List<String>> rows) {
+        return kind == SheetKind.SKILLS
+                && col >= 1
+                && !isColumnTitleSourceRow(SheetKind.SKILLS, dataRow, rows);
+    }
+
+    public static boolean isSpeedNumericCell(int dataRow, int col, List<List<String>> rows) {
+        if (col < 3) {
+            return false;
+        }
+        String a = cell(rows, dataRow, 0);
+        if (a.contains("基本速度") || a.contains("実稼働比率")) {
+            return true;
+        }
+        return findFirstRowExact(rows, "工程名") == 0 && (dataRow == 3 || dataRow == 4);
+    }
+
+    public static boolean isSpeedBaseSpeedCell(int dataRow, int col, List<List<String>> rows) {
+        return isSpeedNumericCell(dataRow, col, rows) && cell(rows, dataRow, 0).contains("基本速度");
+    }
+
+    public static boolean isSpeedBaseDecimalValid(String raw) {
+        return isDecimalInRange(raw, 0.0, 99.0, 1);
+    }
+
+    public static boolean isSpeedBaseDecimalTypingAllowed(String raw) {
+        return isDecimalTypingAllowed(raw, 0.0, 99.0, 1);
+    }
+
+    public static String formatSpeedBaseDecimal(String raw) {
+        return formatDecimal(raw, 1);
+    }
+
+    public static boolean isDecimalInRange(String raw, double min, double max, int maxFractionDigits) {
+        if (raw == null || raw.isBlank()) {
+            return false;
+        }
+        String t = raw.strip().replace(",", "");
+        BigDecimal n;
+        try {
+            n = new BigDecimal(t);
+        } catch (NumberFormatException e) {
+            return false;
+        }
+        if (n.scale() > maxFractionDigits) {
+            n = n.stripTrailingZeros();
+        }
+        if (n.scale() < 0) {
+            n = n.setScale(0, RoundingMode.UNNECESSARY);
+        }
+        if (n.scale() > maxFractionDigits) {
+            return false;
+        }
+        double d = n.doubleValue();
+        return !Double.isNaN(d) && !Double.isInfinite(d) && d >= min && d <= max;
+    }
+
+    public static boolean isDecimalTypingAllowed(String raw, double min, double max, int maxFractionDigits) {
+        if (raw == null || raw.isEmpty()) {
+            return true;
+        }
+        String t = raw.strip().replace(",", "");
+        String frac = maxFractionDigits <= 0 ? "" : ("(\\.\\d{0," + maxFractionDigits + "})?");
+        if (!t.matches("\\d{1,2}" + frac)) {
+            return false;
+        }
+        if (t.endsWith(".")) {
+            t = t.substring(0, t.length() - 1);
+        }
+        return t.isEmpty() || isDecimalInRange(t, min, max, maxFractionDigits);
+    }
+
+    public static String formatDecimal(String raw, int fractionDigits) {
+        if (raw == null || raw.isBlank()) {
+            return "";
+        }
+        String t = raw.strip().replace(",", "");
+        try {
+            BigDecimal n = new BigDecimal(t);
+            return n.setScale(Math.max(0, fractionDigits), RoundingMode.HALF_UP).toPlainString();
+        } catch (NumberFormatException e) {
+            return t;
+        }
     }
 
     /**
@@ -836,7 +924,8 @@ public final class MasterDispatchSheetEditRules {
         return switch (kind) {
             case SKILLS -> normalizeSkills(src);
             case COMBINATIONS -> normalizeCombinations(src);
-            default -> copyRows(src);
+            case SPEED -> normalizeSpeed(src);
+            case NEED -> copyRows(src);
         };
     }
 
@@ -851,7 +940,10 @@ public final class MasterDispatchSheetEditRules {
         return switch (kind) {
             case SKILLS -> isSkillsSkillValueCell(dataRow, col, rows) && parseOpAs(v) == null;
             case NEED -> isNeedValueInvalid(dataRow, col, rows, v);
-            case SPEED -> isSpeedNumericCell(dataRow, col, rows) && !isPositiveNumber(v);
+            case SPEED ->
+                    isSpeedBaseSpeedCell(dataRow, col, rows)
+                            ? !isSpeedBaseDecimalValid(v)
+                            : isSpeedNumericCell(dataRow, col, rows) && !isPositiveNumber(v);
             case COMBINATIONS -> isCombinationsNumericInvalid(dataRow, col, rows, v);
         };
     }
@@ -1028,7 +1120,14 @@ public final class MasterDispatchSheetEditRules {
                     continue;
                 }
                 String v = cell(rows, r, c);
-                if (!v.isEmpty() && !isPositiveNumber(v)) {
+                if (v.isEmpty()) {
+                    continue;
+                }
+                if (isSpeedBaseSpeedCell(r, c, rows)) {
+                    if (!isSpeedBaseDecimalValid(v)) {
+                        errors.add("speed の基本速度は 0.0〜99.0（小数第一位まで）です。行" + (r + 1) + ": " + v);
+                    }
+                } else if (!isPositiveNumber(v)) {
                     errors.add("speed の基本速度・実稼働比率は数値です。行" + (r + 1) + ": " + v);
                 }
             }
@@ -1077,17 +1176,6 @@ public final class MasterDispatchSheetEditRules {
         return base >= 0 && dataRow == base + 1;
     }
 
-    private static boolean isSpeedNumericCell(int dataRow, int col, List<List<String>> rows) {
-        if (col < 3) {
-            return false;
-        }
-        String a = cell(rows, dataRow, 0);
-        if (a.contains("基本速度") || a.contains("実稼働比率")) {
-            return true;
-        }
-        return findFirstRowExact(rows, "工程名") == 0 && (dataRow == 3 || dataRow == 4);
-    }
-
     private static boolean isCombinationsNumericInvalid(
             int dataRow, int col, List<List<String>> rows, String v) {
         if (isColumnTitleSourceRow(SheetKind.COMBINATIONS, dataRow, rows)) {
@@ -1118,6 +1206,27 @@ public final class MasterDispatchSheetEditRules {
                 OpAs parsed = parseOpAs(v);
                 if (parsed != null) {
                     row.set(c, parsed.role + parsed.prio);
+                }
+            }
+        }
+        return freeze(out);
+    }
+
+    private static List<List<String>> normalizeSpeed(List<List<String>> rows) {
+        List<List<String>> out = mutableCopy(rows);
+        int width = widthOf(out);
+        for (int r = 0; r < out.size(); r++) {
+            List<String> row = out.get(r);
+            while (row.size() < width) {
+                row.add("");
+            }
+            for (int c = 3; c < width; c++) {
+                if (!isSpeedBaseSpeedCell(r, c, out)) {
+                    continue;
+                }
+                String v = row.get(c) != null ? row.get(c) : "";
+                if (!v.isBlank() && isSpeedBaseDecimalValid(v)) {
+                    row.set(c, formatSpeedBaseDecimal(v));
                 }
             }
         }

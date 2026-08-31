@@ -333,6 +333,69 @@ class MasterDispatchSheetEditRulesTest {
     }
 
     @Test
+    void isSkillsSkillValueCell_falseOnSpeedBaseSpeedEvenIfLooksLikeData() {
+        List<List<String>> speed =
+                List.of(
+                        List.of("工程名", "", "", "分割"),
+                        List.of("機械名", "", "", "LAC/EC機"),
+                        List.of("基本速度", "", "", "20"),
+                        List.of("実稼働比率", "", "", "0.95"));
+        assertTrue(
+                MasterDispatchSheetEditRules.isSkillsSkillValueCell(2, 3, speed));
+        assertFalse(
+                MasterDispatchSheetEditRules.isSkillsSkillValueCell(
+                        MasterDispatchSheetEditRules.SheetKind.SPEED, 2, 3, speed));
+        assertTrue(
+                MasterDispatchSheetEditRules.isSpeedBaseSpeedCell(2, 3, speed));
+        assertTrue(
+                MasterDispatchSheetEditRules.isSpeedNumericCell(3, 3, speed));
+        assertFalse(
+                MasterDispatchSheetEditRules.isSpeedBaseSpeedCell(3, 3, speed));
+    }
+
+    @Test
+    void speedBaseDecimal_allowsZeroToNinetyNineWithOneFractionDigit() {
+        assertTrue(MasterDispatchSheetEditRules.isSpeedBaseDecimalValid("0.0"));
+        assertTrue(MasterDispatchSheetEditRules.isSpeedBaseDecimalValid("0"));
+        assertTrue(MasterDispatchSheetEditRules.isSpeedBaseDecimalValid("20"));
+        assertTrue(MasterDispatchSheetEditRules.isSpeedBaseDecimalValid("20.5"));
+        assertTrue(MasterDispatchSheetEditRules.isSpeedBaseDecimalValid("99.0"));
+        assertFalse(MasterDispatchSheetEditRules.isSpeedBaseDecimalValid("-0.1"));
+        assertFalse(MasterDispatchSheetEditRules.isSpeedBaseDecimalValid("99.1"));
+        assertFalse(MasterDispatchSheetEditRules.isSpeedBaseDecimalValid("100"));
+        assertFalse(MasterDispatchSheetEditRules.isSpeedBaseDecimalValid("20.55"));
+        assertFalse(MasterDispatchSheetEditRules.isSpeedBaseDecimalValid("速い"));
+        assertEquals("20.5", MasterDispatchSheetEditRules.formatSpeedBaseDecimal("20.50"));
+        assertEquals("20.0", MasterDispatchSheetEditRules.formatSpeedBaseDecimal("20"));
+        assertTrue(MasterDispatchSheetEditRules.isSpeedBaseDecimalTypingAllowed("20."));
+        assertFalse(MasterDispatchSheetEditRules.isSpeedBaseDecimalTypingAllowed("20.55"));
+    }
+
+    @Test
+    void validateSpeed_baseSpeedRejectsOutOfRangeAndTwoDecimals() {
+        List<List<String>> ok =
+                List.of(
+                        List.of("工程名", "", "", "巻返し"),
+                        List.of("機械名", "", "", "機1"),
+                        List.of("基本速度", "", "", "20.5"),
+                        List.of("実稼働比率", "", "", "0.95"));
+        assertTrue(
+                MasterDispatchSheetEditRules.validateForSave(
+                                MasterDispatchSheetEditRules.SheetKind.SPEED, ok)
+                        .isEmpty());
+        List<List<String>> bad =
+                List.of(
+                        List.of("工程名", "", "", "巻返し"),
+                        List.of("機械名", "", "", "機1"),
+                        List.of("基本速度", "", "", "20.55"),
+                        List.of("実稼働比率", "", "", "0.95"));
+        assertFalse(
+                MasterDispatchSheetEditRules.validateForSave(
+                                MasterDispatchSheetEditRules.SheetKind.SPEED, bad)
+                        .isEmpty());
+    }
+
+    @Test
     void isSkillsSkillValueCell_falseOnHeaderRows() {
         List<List<String>> rows =
                 List.of(

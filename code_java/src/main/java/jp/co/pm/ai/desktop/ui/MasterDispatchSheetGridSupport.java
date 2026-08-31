@@ -18,6 +18,11 @@ import jp.co.pm.ai.desktop.io.MasterTeamCombinationTableReader;
 /** MASTER 4 シート用の編集可能格子。 */
 public final class MasterDispatchSheetGridSupport {
 
+    private static final MasterDispatchDecimalCellType SPEED_BASE_CELL_TYPE =
+            new MasterDispatchDecimalCellType(0.0, 99.0, 1);
+    private static final MasterDispatchDecimalCellType SPEED_RATIO_CELL_TYPE =
+            new MasterDispatchDecimalCellType(0.0, 99.0, 2);
+
     private MasterDispatchSheetGridSupport() {}
 
     public static GridBase buildEditable(
@@ -151,10 +156,18 @@ public final class MasterDispatchSheetGridSupport {
                                                 skills, proc, mach, raw))
                                 .createCell(gridRow, col, 1, 1, raw);
             }
-        } else if (MasterDispatchSheetEditRules.isSkillsSkillValueCell(dataRow, col, display)) {
+        } else if (kind == MasterDispatchSheetEditRules.SheetKind.SKILLS
+                && MasterDispatchSheetEditRules.isSkillsSkillValueCell(
+                        kind, dataRow, col, display)) {
             cell =
                     SpreadsheetCellType.LIST(skillChoices(raw))
                             .createCell(gridRow, col, 1, 1, raw);
+        } else if (kind == MasterDispatchSheetEditRules.SheetKind.SPEED
+                && MasterDispatchSheetEditRules.isSpeedBaseSpeedCell(dataRow, col, display)) {
+            cell = SPEED_BASE_CELL_TYPE.createCell(gridRow, col, 1, 1, raw);
+        } else if (kind == MasterDispatchSheetEditRules.SheetKind.SPEED
+                && MasterDispatchSheetEditRules.isSpeedNumericCell(dataRow, col, display)) {
+            cell = SPEED_RATIO_CELL_TYPE.createCell(gridRow, col, 1, 1, raw);
         } else {
             cell = SpreadsheetCellType.STRING.createCell(gridRow, col, 1, 1, raw);
         }
