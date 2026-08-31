@@ -1,7 +1,10 @@
 package jp.co.pm.ai.desktop.ui;
 
+import java.util.Optional;
+
 import javafx.scene.Parent;
 import javafx.stage.Stage;
+import jp.co.pm.ai.desktop.MainShellTabId;
 
 /**
  * 工場切替プログレスの表示方針（起動シーケンス中は起動側モーダルに任せる）。
@@ -86,6 +89,51 @@ public final class FactorySiteSwitchBusySupport {
             return FactorySiteSwitchBusyDialog.STATUS_BACKGROUND_LOAD;
         }
         return startupBackgroundLoadMessage;
+    }
+
+    /**
+     * 工場切替の進捗文言に対応するメインシェルタブを返す。
+     *
+     * <p>切替本体の保存・接続確認など、特定タブに対応しない文言は空を返す。
+     */
+    public static Optional<MainShellTabId> targetTabForStatus(String status) {
+        if (status == null || status.isBlank()) {
+            return Optional.empty();
+        }
+        if (FactorySiteSwitchBusyDialog.STATUS_ENV.equals(status)
+                || FactorySiteSwitchBusyDialog.STATUS_STABILIZE.equals(status)
+                || FactorySiteSwitchBusyDialog.STATUS_MATCH.equals(status)) {
+            return Optional.of(MainShellTabId.ENV);
+        }
+        if (FactorySiteSwitchBusyDialog.STATUS_ATTENDANCE_COMPANY.equals(status)
+                || status.contains("会社カレンダー")) {
+            return Optional.of(MainShellTabId.COMPANY_CALENDAR);
+        }
+        if (FactorySiteSwitchBusyDialog.STATUS_ATTENDANCE_MEMBER.equals(status)
+                || status.contains("メンバー勤怠")) {
+            return Optional.of(MainShellTabId.MEMBER_ATTENDANCE);
+        }
+        if (FactorySiteSwitchBusyDialog.STATUS_ATTENDANCE_MACHINE.equals(status)
+                || status.contains("機械カレンダー")) {
+            return Optional.of(MainShellTabId.MACHINE_CALENDAR);
+        }
+        if (FactorySiteSwitchBusyDialog.STATUS_ATTENDANCE_MASTER.equals(status)
+                || status.contains("マスタ配台シート")) {
+            return Optional.of(MainShellTabId.MASTER_DISPATCH_SHEETS);
+        }
+        if (FactorySiteSwitchBusyDialog.STATUS_REFRESH_REQUEST_FORM.equals(status)
+                || status.contains("原本転記")) {
+            return Optional.of(MainShellTabId.REQUEST_FORM_INPUT);
+        }
+        if (FactorySiteSwitchBusyDialog.STATUS_REFRESH_PIPELINE.equals(status)
+                || status.contains("計画確認")) {
+            return Optional.of(MainShellTabId.REQUEST_FORM_PIPELINE_CHECK);
+        }
+        if (FactorySiteSwitchBusyDialog.STATUS_REFRESH_REMOTE.equals(status)
+                || status.contains("リモートデスクトップ")) {
+            return Optional.of(MainShellTabId.REMOTE_DESKTOP);
+        }
+        return Optional.empty();
     }
 
     /** 子ウィンドウをオーナー中央に置く X。 */

@@ -684,6 +684,8 @@ public final class MainShellController
     /** メンバー勤怠の未保存確認でタブ差し戻し時に選択リスナーを再入しない。 */
     private final AtomicBoolean suppressMemberAttendanceUnsavedTabGuard = new AtomicBoolean(false);
     private final AtomicBoolean suppressCompanyCalendarUnsavedTabGuard = new AtomicBoolean(false);
+    /** 工場切替の進捗表示に合わせた自動タブ遷移では未保存確認を出さない。 */
+    private final AtomicBoolean suppressFactorySiteSwitchTabNavigation = new AtomicBoolean(false);
 
     private volatile boolean memberAttendanceDirtySinceSave = false;
     private volatile boolean machineCalendarDirtySinceSave = false;
@@ -5211,6 +5213,29 @@ public final class MainShellController
         if (factorySiteSwitchBusy != null) {
             factorySiteSwitchBusy.setStatus(status);
         }
+        selectFactorySiteSwitchStatusTab(status);
+    }
+
+    private void selectFactorySiteSwitchStatusTab(String status) {
+        if (startupSequenceActive || !factorySiteSwitchInProgress || tabPane == null) {
+            return;
+        }
+        FactorySiteSwitchBusySupport.targetTabForStatus(status)
+                .ifPresent(
+                        target -> {
+                            if (!suppressFactorySiteSwitchTabNavigation.compareAndSet(false, true)) {
+                                return;
+                            }
+                            try {
+                                if (selectMainShellTabRecursive(tabPane, target)
+                                        && !suppressLazyMainShellTabContentSwap.get()) {
+                                    activateMainShellTabHeavyContentRecursive(
+                                            tabPane.getSelectionModel().getSelectedItem());
+                                }
+                            } finally {
+                                suppressFactorySiteSwitchTabNavigation.set(false);
+                            }
+                        });
     }
 
     private void endFactorySiteSwitchBusy() {
@@ -7362,7 +7387,8 @@ public final class MainShellController
     }
 
     private boolean blockCompanyCalendarUnsavedTabNavigation(Tab prevTab, Tab newTab) {
-        if (suppressCompanyCalendarUnsavedTabGuard.get()) {
+        if (suppressCompanyCalendarUnsavedTabGuard.get()
+                || suppressFactorySiteSwitchTabNavigation.get()) {
             return false;
         }
         Tab prevLeaf = resolveEffectiveLeafTab(prevTab);
@@ -7425,7 +7451,8 @@ public final class MainShellController
 
     private boolean blockCompanyCalendarUnsavedInnerTabNavigation(
             Tab prevInner, Tab newInner, TabPane innerPane) {
-        if (suppressCompanyCalendarUnsavedTabGuard.get()) {
+        if (suppressCompanyCalendarUnsavedTabGuard.get()
+                || suppressFactorySiteSwitchTabNavigation.get()) {
             return false;
         }
         MainShellTabId prevId = mainShellTabId(prevInner);
@@ -7477,7 +7504,8 @@ public final class MainShellController
     }
 
     private boolean blockMemberAttendanceUnsavedTabNavigation(Tab prevTab, Tab newTab) {
-        if (suppressMemberAttendanceUnsavedTabGuard.get()) {
+        if (suppressMemberAttendanceUnsavedTabGuard.get()
+                || suppressFactorySiteSwitchTabNavigation.get()) {
             return false;
         }
         Tab prevLeaf = resolveEffectiveLeafTab(prevTab);
@@ -7540,7 +7568,8 @@ public final class MainShellController
 
     private boolean blockMemberAttendanceUnsavedInnerTabNavigation(
             Tab prevInner, Tab newInner, TabPane innerPane) {
-        if (suppressMemberAttendanceUnsavedTabGuard.get()) {
+        if (suppressMemberAttendanceUnsavedTabGuard.get()
+                || suppressFactorySiteSwitchTabNavigation.get()) {
             return false;
         }
         MainShellTabId prevId = mainShellTabId(prevInner);

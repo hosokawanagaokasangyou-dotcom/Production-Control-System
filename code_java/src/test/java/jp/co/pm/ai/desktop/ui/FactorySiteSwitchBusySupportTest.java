@@ -9,9 +9,11 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashSet;
+import java.util.Optional;
 import java.util.Set;
 
 import org.junit.jupiter.api.Test;
+import jp.co.pm.ai.desktop.MainShellTabId;
 
 class FactorySiteSwitchBusySupportTest {
 
@@ -99,11 +101,73 @@ class FactorySiteSwitchBusySupportTest {
     }
 
     @Test
+    void targetTabForStatus_mapsProgressMessageToMainShellTab() {
+        assertEquals(
+                Optional.of(MainShellTabId.ENV),
+                FactorySiteSwitchBusySupport.targetTabForStatus(
+                        FactorySiteSwitchBusyDialog.STATUS_ENV));
+        assertEquals(
+                Optional.of(MainShellTabId.ENV),
+                FactorySiteSwitchBusySupport.targetTabForStatus(
+                        FactorySiteSwitchBusyDialog.STATUS_MATCH));
+        assertEquals(
+                Optional.of(MainShellTabId.COMPANY_CALENDAR),
+                FactorySiteSwitchBusySupport.targetTabForStatus(
+                        FactorySiteSwitchBusyDialog.STATUS_ATTENDANCE_COMPANY));
+        assertEquals(
+                Optional.of(MainShellTabId.MEMBER_ATTENDANCE),
+                FactorySiteSwitchBusySupport.targetTabForStatus(
+                        FactorySiteSwitchBusyDialog.STATUS_ATTENDANCE_MEMBER));
+        assertEquals(
+                Optional.of(MainShellTabId.MACHINE_CALENDAR),
+                FactorySiteSwitchBusySupport.targetTabForStatus(
+                        FactorySiteSwitchBusyDialog.STATUS_ATTENDANCE_MACHINE));
+        assertEquals(
+                Optional.of(MainShellTabId.MASTER_DISPATCH_SHEETS),
+                FactorySiteSwitchBusySupport.targetTabForStatus(
+                        FactorySiteSwitchBusyDialog.STATUS_ATTENDANCE_MASTER));
+        assertEquals(
+                Optional.of(MainShellTabId.REQUEST_FORM_INPUT),
+                FactorySiteSwitchBusySupport.targetTabForStatus(
+                        "起動後読込 (5/6): 原本転記…"));
+        assertEquals(
+                Optional.of(MainShellTabId.REQUEST_FORM_PIPELINE_CHECK),
+                FactorySiteSwitchBusySupport.targetTabForStatus(
+                        "起動後読込 (6/6): 計画確認…"));
+        assertEquals(
+                Optional.of(MainShellTabId.REMOTE_DESKTOP),
+                FactorySiteSwitchBusySupport.targetTabForStatus(
+                        "起動後読込 (1/6): リモートデスクトップ…"));
+        assertEquals(
+                Optional.of(MainShellTabId.REQUEST_FORM_INPUT),
+                FactorySiteSwitchBusySupport.targetTabForStatus(
+                        FactorySiteSwitchBusyDialog.STATUS_REFRESH_REQUEST_FORM));
+        assertEquals(
+                Optional.of(MainShellTabId.REQUEST_FORM_PIPELINE_CHECK),
+                FactorySiteSwitchBusySupport.targetTabForStatus(
+                        FactorySiteSwitchBusyDialog.STATUS_REFRESH_PIPELINE));
+        assertEquals(
+                Optional.of(MainShellTabId.REMOTE_DESKTOP),
+                FactorySiteSwitchBusySupport.targetTabForStatus(
+                        FactorySiteSwitchBusyDialog.STATUS_REFRESH_REMOTE));
+        assertEquals(
+                Optional.empty(),
+                FactorySiteSwitchBusySupport.targetTabForStatus(
+                        FactorySiteSwitchBusyDialog.STATUS_SAVING));
+        assertEquals(
+                Optional.empty(),
+                FactorySiteSwitchBusySupport.targetTabForStatus(null));
+    }
+
+    @Test
     void mainShell_pulsesStatusBeforeEachFactorySwitchWorkUnit() throws Exception {
         Path java = Path.of("src/main/java/jp/co/pm/ai/desktop/MainShellController.java");
         String text = Files.readString(java, StandardCharsets.UTF_8);
         assertTrue(text.contains("statusForWorkUnit"), "切替ステップの状況文言カタログを使う");
         assertTrue(text.contains("statusForPostSwitchWork"), "勤怠再読込も細かい進捗タスクにする");
+        assertTrue(
+                text.contains("selectFactorySiteSwitchStatusTab(status)"),
+                "進捗メッセージに対応するタブへ遷移する");
         assertTrue(
                 text.contains("memberAttendanceTabController.reloadAttendanceDataFromJsonIfEnabled()"),
                 "工場切替後に表示済みメンバー勤怠を再読込する");
