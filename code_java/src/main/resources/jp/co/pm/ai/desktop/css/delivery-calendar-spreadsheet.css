@@ -306,3 +306,28 @@
     -fx-background-color: #cfe8f3;
     -fx-text-fill: #111111;
 }
+
+/* 配台マスタ: 列見出しをデータ行と区別する（他タブの readable spreadsheet には付けない） */
+.pm-ai-readable-spreadsheet.pm-ai-master-dispatch-spreadsheet HorizontalHeaderColumn > TableColumnHeader.column-header.table-column,
+.pm-ai-readable-spreadsheet.pm-ai-master-dispatch-spreadsheet HorizontalHeaderColumn > TableColumnHeader.column-header.table-column.fixed {
+    -fx-background-color: #5c7a9a;
+    -fx-text-fill: white;
+}
+
+.pm-ai-readable-spreadsheet.pm-ai-master-dispatch-spreadsheet HorizontalHeaderColumn > TableColumnHeader.column-header.table-column .label,
+.pm-ai-readable-spreadsheet.pm-ai-master-dispatch-spreadsheet HorizontalHeaderColumn > TableColumnHeader.column-header.table-column.fixed .label {
+    -fx-text-fill: white;
+    -fx-font-weight: bold;
+}
+
+.pm-ai-readable-spreadsheet.pm-ai-master-dispatch-spreadsheet HorizontalHeaderColumn > TableColumnHeader.column-header.table-column.selected,
+.pm-ai-readable-spreadsheet.pm-ai-master-dispatch-spreadsheet HorizontalHeaderColumn > TableColumnHeader.column-header.table-column.selected > Label {
+    -fx-background-color: #3d5a7a;
+    -fx-text-fill: white;
+}
+
+.pm-ai-readable-spreadsheet.pm-ai-master-dispatch-spreadsheet VerticalHeader > Label,
+.pm-ai-readable-spreadsheet.pm-ai-master-dispatch-spreadsheet VerticalHeader > Label.fixed {
+    -fx-background-color: #d5deea;
+    -fx-text-fill: #111111;
+}

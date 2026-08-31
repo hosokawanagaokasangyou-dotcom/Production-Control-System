@@ -106,6 +106,18 @@ public final class SpreadsheetTabularSupport {
 
     public static final String READABLE_STYLE_DATA_YELLOW = DC_STYLE_DATA_YELLOW;
 
+    /** 配台マスタ: 工程名見出し行（青帯）。 */
+    public static final String READABLE_STYLE_PROCESS_TITLE_ROW =
+            "-fx-background-color: #b7cce4; -fx-control-inner-background: #b7cce4; -fx-text-fill: #111111; -fx-font-weight: bold;";
+
+    /** 配台マスタ: 機械名見出し行（緑帯）。 */
+    public static final String READABLE_STYLE_MACHINE_TITLE_ROW =
+            "-fx-background-color: #b7d7b7; -fx-control-inner-background: #b7d7b7; -fx-text-fill: #111111; -fx-font-weight: bold;";
+
+    /** 配台マスタ: 組み合わせ表の列見出し行、その他の固定見出し。 */
+    public static final String READABLE_STYLE_OTHER_TITLE_ROW =
+            "-fx-background-color: #d4c4e8; -fx-control-inner-background: #d4c4e8; -fx-text-fill: #111111; -fx-font-weight: bold;";
+
     /**
      * Date-column triple: lines shown as {@code (prefix)(qty)}. Lines with no value, dash placeholder, or
      * numeric zero are omitted so non-empty cells stand out when scanning.

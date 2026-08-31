@@ -270,6 +270,27 @@ class MasterDispatchSheetEditRulesTest {
     }
 
     @Test
+    void titleRowKind_processAndMachineRows() {
+        List<List<String>> skills =
+                List.of(
+                        List.of("工程名", "巻返し"),
+                        List.of("機械名", "機1"),
+                        List.of("山田", "OP1"));
+        assertEquals(
+                MasterDispatchSheetEditRules.TitleRowKind.PROCESS,
+                MasterDispatchSheetEditRules.titleRowKind(
+                        MasterDispatchSheetEditRules.SheetKind.SKILLS, 0, skills));
+        assertEquals(
+                MasterDispatchSheetEditRules.TitleRowKind.MACHINE,
+                MasterDispatchSheetEditRules.titleRowKind(
+                        MasterDispatchSheetEditRules.SheetKind.SKILLS, 1, skills));
+        assertEquals(
+                MasterDispatchSheetEditRules.TitleRowKind.NONE,
+                MasterDispatchSheetEditRules.titleRowKind(
+                        MasterDispatchSheetEditRules.SheetKind.SKILLS, 2, skills));
+    }
+
+    @Test
     void skills_locksStructureLabelsAndAllowsMemberAndSkillCells() {
         List<List<String>> rows =
                 List.of(

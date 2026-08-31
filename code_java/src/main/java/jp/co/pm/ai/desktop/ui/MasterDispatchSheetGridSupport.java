@@ -45,7 +45,7 @@ public final class MasterDispatchSheetGridSupport {
                     SpreadsheetCellType.STRING.createCell(
                             SpreadsheetTabularSupport.SPREADSHEET_FILTER_ROW, c, 1, 1, "");
             cell.setEditable(false);
-            cell.setStyle(SpreadsheetTabularSupport.READABLE_STYLE_FILTER_ROW);
+            cell.setStyle(SpreadsheetTabularSupport.READABLE_STYLE_PROCESS_TITLE_ROW);
             filterRow.add(cell);
         }
         gridRows.add(filterRow);
@@ -148,6 +148,17 @@ public final class MasterDispatchSheetGridSupport {
             String raw) {
         if (MasterDispatchSheetEditRules.isInvalidValue(kind, dataRow, col, display)) {
             return TabularCellHighlight.PLAN_INPUT_DISPATCHABLE_DATETIME_VIOLATION_STYLE;
+        }
+        MasterDispatchSheetEditRules.TitleRowKind titleKind =
+                MasterDispatchSheetEditRules.titleRowKind(kind, dataRow, display);
+        if (titleKind == MasterDispatchSheetEditRules.TitleRowKind.PROCESS) {
+            return SpreadsheetTabularSupport.READABLE_STYLE_PROCESS_TITLE_ROW;
+        }
+        if (titleKind == MasterDispatchSheetEditRules.TitleRowKind.MACHINE) {
+            return SpreadsheetTabularSupport.READABLE_STYLE_MACHINE_TITLE_ROW;
+        }
+        if (titleKind == MasterDispatchSheetEditRules.TitleRowKind.OTHER) {
+            return SpreadsheetTabularSupport.READABLE_STYLE_OTHER_TITLE_ROW;
         }
         if (kind == MasterDispatchSheetEditRules.SheetKind.COMBINATIONS) {
             List<String> header = header(original);

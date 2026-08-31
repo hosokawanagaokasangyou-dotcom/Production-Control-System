@@ -78,6 +78,9 @@ public final class MasterDispatchSheetsTabController {
     private static void install(StackPane host, SpreadsheetView view, int leadingCols) {
         SpreadsheetThemeBridge.install(view);
         SpreadsheetTabularSupport.installPmAiReadableSpreadsheetChrome(view);
+        if (!view.getStyleClass().contains("pm-ai-master-dispatch-spreadsheet")) {
+            view.getStyleClass().add("pm-ai-master-dispatch-spreadsheet");
+        }
         view.setEditable(true);
         StackPane.setMargin(view, new Insets(0));
         host.getChildren().setAll(view);

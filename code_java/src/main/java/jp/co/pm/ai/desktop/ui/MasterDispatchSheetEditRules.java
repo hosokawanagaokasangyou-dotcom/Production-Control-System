@@ -20,6 +20,14 @@ public final class MasterDispatchSheetEditRules {
         COMBINATIONS
     }
 
+    /** 工程名・機械名など、データと区別する見出し行。 */
+    public enum TitleRowKind {
+        NONE,
+        PROCESS,
+        MACHINE,
+        OTHER
+    }
+
     static final int EXTRA_ROWS = 20;
     static final int EXTRA_COLS = 4;
 
@@ -405,6 +413,20 @@ public final class MasterDispatchSheetEditRules {
             return true;
         }
         return kind == SheetKind.NEED && isNeedColumnCaptionRow(rows, dataRow);
+    }
+
+    public static TitleRowKind titleRowKind(SheetKind kind, int dataRow, List<List<String>> rows) {
+        if (!isColumnTitleSourceRow(kind, dataRow, rows)) {
+            return TitleRowKind.NONE;
+        }
+        String a = cell(rows, dataRow, 0);
+        if (a.startsWith("機械名")) {
+            return TitleRowKind.MACHINE;
+        }
+        if (a.startsWith("工程名")) {
+            return TitleRowKind.PROCESS;
+        }
+        return TitleRowKind.OTHER;
     }
 
     static boolean isProcessOrMachineHeaderLabel(String a) {
