@@ -213,6 +213,78 @@ public final class MasterDispatchSheetEditRules {
         return false;
     }
 
+    /**
+     * 表示列マスク。先頭 {@code leadingCols} は常に表示。空き設備列（見出し空）は隠す。
+     * {@code focusNormalizedKeys} が空でなければ、その工程+機械だけ表示する（データは消さない）。
+     */
+    public static boolean[] visibilityMask(
+            List<String> titles, int leadingCols, java.util.Set<String> focusNormalizedKeys) {
+        int n = titles != null ? titles.size() : 0;
+        boolean[] vis = new boolean[n];
+        boolean focusing = focusNormalizedKeys != null && !focusNormalizedKeys.isEmpty();
+        int lead = Math.max(0, leadingCols);
+        for (int i = 0; i < n; i++) {
+            if (i < lead) {
+                vis[i] = true;
+                continue;
+            }
+            String title = titles.get(i);
+            String[] pm = splitEquipmentTitle(title);
+            if (pm[0].isEmpty() && pm[1].isEmpty()) {
+                vis[i] = false;
+                continue;
+            }
+            if (!focusing) {
+                vis[i] = true;
+                continue;
+            }
+            String key = MasterTeamCombinationTableReader.normalizedComboKey(pm[0], pm[1]);
+            vis[i] = !key.isEmpty() && focusNormalizedKeys.contains(key);
+        }
+        return vis;
+    }
+
+    public static boolean[] mandatoryLeadingMask(int colCount, int leadingCols) {
+        int n = Math.max(0, colCount);
+        boolean[] m = new boolean[n];
+        int lead = Math.min(n, Math.max(0, leadingCols));
+        for (int i = 0; i < lead; i++) {
+            m[i] = true;
+        }
+        return m;
+    }
+
+    public static String dialogColumnLabel(String title) {
+        String t = title != null ? title.strip() : "";
+        if (t.isEmpty()) {
+            return "（空列）";
+        }
+        int nl = t.indexOf('\n');
+        if (nl < 0) {
+            return t;
+        }
+        String a = t.substring(0, nl).strip();
+        String b = t.substring(nl + 1).strip();
+        if (a.isEmpty()) {
+            return b;
+        }
+        if (b.isEmpty()) {
+            return a;
+        }
+        return a + " / " + b;
+    }
+
+    public static List<String> dialogColumnLabels(List<String> titles) {
+        if (titles == null || titles.isEmpty()) {
+            return List.of();
+        }
+        List<String> out = new ArrayList<>(titles.size());
+        for (String t : titles) {
+            out.add(dialogColumnLabel(t));
+        }
+        return List.copyOf(out);
+    }
+
     public static List<List<String>> restoreTitleRows(
             SheetKind kind, List<String> titles, List<List<String>> displayRows) {
         List<List<String>> body = displayRows != null ? displayRows : List.of();

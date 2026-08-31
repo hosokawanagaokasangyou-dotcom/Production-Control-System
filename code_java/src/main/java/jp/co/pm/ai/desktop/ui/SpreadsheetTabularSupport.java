@@ -149,8 +149,28 @@ public final class SpreadsheetTabularSupport {
         if (!view.getStylesheets().contains(url)) {
             view.getStylesheets().add(url);
         }
+        attachStylesheetToSceneWhenReady(view, url);
         installEnhancedSpreadsheetClipboard(view);
         TableRowHoverDimmingSupport.installOnSpreadsheet(view);
+    }
+
+    /**
+     * ComboBox のポップアップはコントロールではなく Scene のスタイルシートを参照する。
+     * {@link SpreadsheetView#getStylesheets()} だけでは OP/AS リストがテーマ色のままになる。
+     */
+    private static void attachStylesheetToSceneWhenReady(SpreadsheetView view, String url) {
+        if (view == null || url == null || url.isBlank()) {
+            return;
+        }
+        Runnable attach =
+                () -> {
+                    Scene scene = view.getScene();
+                    if (scene != null && !scene.getStylesheets().contains(url)) {
+                        scene.getStylesheets().add(url);
+                    }
+                };
+        view.sceneProperty().addListener((obs, o, n) -> attach.run());
+        attach.run();
     }
 
     /**

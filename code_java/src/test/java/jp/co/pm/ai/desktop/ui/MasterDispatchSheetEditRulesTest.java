@@ -217,6 +217,42 @@ class MasterDispatchSheetEditRulesTest {
     }
 
     @Test
+    void visibilityMask_focusKeysShowOnlyThoseEquipmentColumns() {
+        List<String> titles =
+                List.of("メンバー", "巻返し\n機1", "分割\nLAC/EC機", "分割\nスライス機1", "");
+        boolean[] vis =
+                MasterDispatchSheetEditRules.visibilityMask(
+                        titles,
+                        1,
+                        java.util.Set.of(
+                                jp.co.pm.ai.desktop.io.MasterTeamCombinationTableReader
+                                        .normalizedComboKey("分割", "LAC/EC機"),
+                                jp.co.pm.ai.desktop.io.MasterTeamCombinationTableReader
+                                        .normalizedComboKey("分割", "スライス機1")));
+        assertTrue(vis[0]);
+        assertFalse(vis[1]);
+        assertTrue(vis[2]);
+        assertTrue(vis[3]);
+        assertFalse(vis[4]);
+    }
+
+    @Test
+    void visibilityMask_withoutFocusHidesEmptyExtraColumnsOnly() {
+        List<String> titles = List.of("メンバー", "巻返し\n機1", "", "");
+        boolean[] vis = MasterDispatchSheetEditRules.visibilityMask(titles, 1, java.util.Set.of());
+        assertTrue(vis[0]);
+        assertTrue(vis[1]);
+        assertFalse(vis[2]);
+        assertFalse(vis[3]);
+    }
+
+    @Test
+    void dialogLabel_replacesNewlineWithSlash() {
+        assertEquals("分割 / LAC/EC機", MasterDispatchSheetEditRules.dialogColumnLabel("分割\nLAC/EC機"));
+        assertEquals("メンバー", MasterDispatchSheetEditRules.dialogColumnLabel("メンバー"));
+    }
+
+    @Test
     void isSkillsSkillValueCell_falseOnHeaderRows() {
         List<List<String>> rows =
                 List.of(

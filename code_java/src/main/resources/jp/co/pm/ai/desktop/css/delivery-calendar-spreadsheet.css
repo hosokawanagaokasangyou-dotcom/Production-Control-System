@@ -274,3 +274,35 @@
     -fx-border-color: #38bdf8;
     -fx-border-width: 0 0 2 0;
 }
+
+/* LIST セル（OP/AS）: セル内コンボは黒字。ポップアップは別ウィンドウのため Scene 側シートも必要 */
+.pm-ai-readable-spreadsheet .combo-box,
+.pm-ai-readable-spreadsheet .combo-box .list-cell,
+.pm-ai-readable-spreadsheet CellView > .combo-box,
+.pm-ai-readable-spreadsheet CellView > .combo-box .list-cell {
+    -fx-text-fill: #111111;
+    -fx-background-color: #ffffff;
+    -fx-control-inner-background: #ffffff;
+}
+
+.combo-box-popup .list-view {
+    -fx-background-color: #ffffff;
+    -fx-control-inner-background: #ffffff;
+}
+
+.combo-box-popup .list-view .list-cell {
+    -fx-text-fill: #111111;
+    -fx-background-color: #ffffff;
+}
+
+.combo-box-popup .list-view .list-cell:hover,
+.combo-box-popup .list-view .list-cell:filled:hover {
+    -fx-background-color: #d6eadf;
+    -fx-text-fill: #111111;
+}
+
+.combo-box-popup .list-view .list-cell:filled:selected,
+.combo-box-popup .list-view .list-cell:filled:selected:hover {
+    -fx-background-color: #cfe8f3;
+    -fx-text-fill: #111111;
+}

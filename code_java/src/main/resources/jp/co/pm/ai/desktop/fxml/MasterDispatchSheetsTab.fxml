@@ -22,6 +22,8 @@
                 <Button text="共有フォルダから再取込" onAction="#onReimportAction"/>
                 <Button text="設備列を追加" onAction="#onAddEquipmentColumnAction"/>
                 <Button text="未登録の工程+機械を追加" onAction="#onAddMissingEquipmentColumnsAction"/>
+                <Button text="表示する設備を選ぶ" onAction="#onChooseVisibleEquipmentAction"/>
+                <Button text="すべて表示" onAction="#onShowAllEquipmentColumnsAction"/>
             </HBox>
             <Label fx:id="statusLabel" wrapText="true" styleClass="pm-muted-label"/>
         </VBox>
