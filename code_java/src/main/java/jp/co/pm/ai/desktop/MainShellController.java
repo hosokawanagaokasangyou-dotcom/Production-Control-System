@@ -1096,7 +1096,10 @@ public final class MainShellController
                             }
                             if (!suppressLazyMainShellTabContentSwap.get()) {
                                 deferMainShellTabBranchHeavyContent(prevTab);
-                                activateMainShellTabHeavyContentRecursive(newTab);
+                                /* 配台マスタは Spreadsheet 4 枚が重いため、選択描画を先に通し activate は次パルスへ。 */
+                                if (newTab != mainShellTabMasterDispatchSheets) {
+                                    activateMainShellTabHeavyContentRecursive(newTab);
+                                }
                             }
                             emitShellTabNavigation();
                             refreshGlobalStatusBar();
@@ -1145,10 +1148,17 @@ public final class MainShellController
                                         machineCalendarTabController::onMainShellTabSelected);
                             }
                             if (newTab == mainShellTabMasterDispatchSheets
-                                    && masterDispatchSheetsTabController != null
-                                    && !startupTabBackgroundLoadActive) {
+                                    && masterDispatchSheetsTabController != null) {
                                 Platform.runLater(
-                                        masterDispatchSheetsTabController::onMainShellTabSelected);
+                                        () -> {
+                                            if (!suppressLazyMainShellTabContentSwap.get()) {
+                                                activateMainShellTabHeavyContentRecursive(newTab);
+                                            }
+                                            if (!startupTabBackgroundLoadActive) {
+                                                masterDispatchSheetsTabController
+                                                        .onMainShellTabSelected();
+                                            }
+                                        });
                             }
                             if (newTab == mainShellTabIdentityCheckHistory
                                     && identityCheckHistoryTabController != null) {
@@ -3216,6 +3226,10 @@ public final class MainShellController
 
     private void deferMainShellTabBranchHeavyContent(Tab tab) {
         if (tab == null) {
+            return;
+        }
+        /* 配台マスタは初回読込後もシーンに残し、再クリック時の差し戻しレイアウト待ちを避ける。 */
+        if (tab == mainShellTabMasterDispatchSheets) {
             return;
         }
         deferMainShellTabHeavyContentRecursive(tab);

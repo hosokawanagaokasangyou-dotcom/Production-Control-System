@@ -1202,6 +1202,10 @@
     -fx-background-color: rgba(0, 0, 0, 0.38);
 }
 
+.pm-master-dispatch-grid-loading-overlay {
+    -fx-background-color: rgba(0, 0, 0, 0.38);
+}
+
 .pm-attendance-grid-loading-box {
     -fx-alignment: center;
     -fx-padding: 20 28 20 28;

@@ -26,10 +26,12 @@ import javafx.scene.control.TabPane;
 import javafx.scene.control.TablePosition;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.Tooltip;
+import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.StackPane;
 import javafx.stage.Window;
 
 import org.controlsfx.control.spreadsheet.Grid;
+import org.controlsfx.control.spreadsheet.GridBase;
 import org.controlsfx.control.spreadsheet.GridChange;
 import org.controlsfx.control.spreadsheet.SpreadsheetView;
 
@@ -39,6 +41,7 @@ import jp.co.pm.ai.desktop.io.MasterDispatchSheetsDocument;
 import jp.co.pm.ai.desktop.io.MasterDispatchSheetsSaveWriter;
 import jp.co.pm.ai.desktop.io.MasterDispatchSheetsSeeder;
 import jp.co.pm.ai.desktop.io.MasterTeamCombinationTableReader;
+import jp.co.pm.ai.desktop.ui.AttendanceGridLoadingOverlay;
 import jp.co.pm.ai.desktop.ui.ButtonAttentionGlow;
 import jp.co.pm.ai.desktop.ui.ColumnVisibilityDialog;
 import jp.co.pm.ai.desktop.ui.ColumnVisibilitySupport;
@@ -84,6 +87,9 @@ public final class MasterDispatchSheetsTabController {
     private ButtonAttentionGlow missingEquipmentGlow;
     private ButtonAttentionGlow saveButtonGlow;
     private int missingGlowEpoch;
+    private int loadEpoch;
+    private final AttendanceGridLoadingOverlay loadingOverlay =
+            new AttendanceGridLoadingOverlay("pm-master-dispatch-grid-loading-overlay");
     private boolean suppressGridDirty;
     private final EventHandler<GridChange> gridDirtyHandler =
             e -> {
@@ -98,6 +104,7 @@ public final class MasterDispatchSheetsTabController {
         install(needHost, needView, 3);
         install(speedHost, speedView, 3);
         install(comboHost, comboView, 4);
+        installLoadingOverlay();
         if (innerTabPane != null) {
             innerTabPane
                     .getSelectionModel()
@@ -115,6 +122,16 @@ public final class MasterDispatchSheetsTabController {
         }
         applyDocument(document);
         applySaveDirtyState(false);
+    }
+
+    private void installLoadingOverlay() {
+        if (innerTabPane == null || !(innerTabPane.getParent() instanceof BorderPane bp)) {
+            return;
+        }
+        StackPane stack = new StackPane();
+        bp.setCenter(null);
+        stack.getChildren().addAll(innerTabPane, loadingOverlay);
+        bp.setCenter(stack);
     }
 
     private static void install(StackPane host, SpreadsheetView view, int leadingCols) {
@@ -161,16 +178,229 @@ public final class MasterDispatchSheetsTabController {
         if (reimport || factoryChanged) {
             equipmentFocusKeys.clear();
         }
-        try {
-            MasterDispatchSheetsSeeder.Result result =
-                    MasterDispatchSheetsSeeder.loadOrImport(json, source, site.name(), reimport);
-            document = result.document();
-            loadedJsonPath = json;
-            applyDocument(document);
-            statusLabel.setText(statusText(site, json, source, result));
-            applySaveDirtyState(false);
-        } catch (Exception e) {
-            statusLabel.setText("読込に失敗しました: " + e.getMessage());
+        int epoch = ++loadEpoch;
+        String loadingMessage =
+                reimport ? "共有フォルダから再取込中" : "配台マスタを読み込み中";
+        setLoadingVisible(true, loadingMessage);
+        if (statusLabel != null) {
+            statusLabel.setText(loadingMessage + "…");
+        }
+        final FactorySite siteRef = site;
+        final Path jsonRef = json;
+        final Path sourceRef = source;
+        final boolean reimportRef = reimport;
+        Thread worker =
+                new Thread(
+                        () -> {
+                            try {
+                                MasterDispatchSheetsSeeder.Result result =
+                                        MasterDispatchSheetsSeeder.loadOrImport(
+                                                jsonRef, sourceRef, (siteRef != null ? siteRef.name() : ""), reimportRef);
+                                BuiltGrids built = buildGridsOffFx(result.document());
+                                Platform.runLater(
+                                        () -> {
+                                            if (epoch != loadEpoch) {
+                                                return;
+                                            }
+                                            document = result.document();
+                                            loadedJsonPath = jsonRef;
+                                            applyBuiltGridsProgressively(
+                                                    built,
+                                                    () -> {
+                                                        if (epoch != loadEpoch) {
+                                                            return;
+                                                        }
+                                                        statusLabel.setText(
+                                                                statusText(
+                                                                        siteRef,
+                                                                        jsonRef,
+                                                                        sourceRef,
+                                                                        result));
+                                                        applySaveDirtyState(false);
+                                                        setLoadingVisible(false, null);
+                                                    });
+                                        });
+                            } catch (Exception e) {
+                                Platform.runLater(
+                                        () -> {
+                                            if (epoch != loadEpoch) {
+                                                return;
+                                            }
+                                            statusLabel.setText(
+                                                    "読込に失敗しました: " + e.getMessage());
+                                            setLoadingVisible(false, null);
+                                        });
+                            }
+                        },
+                        "master-dispatch-reload");
+        worker.setDaemon(true);
+        worker.start();
+    }
+
+    private void setLoadingVisible(boolean visible, String message) {
+        if (visible) {
+            loadingOverlay.setLoading(true, message);
+        } else {
+            loadingOverlay.setLoading(false);
+        }
+    }
+
+    private record BuiltGrids(
+            GridBase skills,
+            GridBase need,
+            GridBase speed,
+            GridBase combo,
+            List<List<String>> skillsRows,
+            List<List<String>> needRows,
+            List<List<String>> speedRows,
+            List<List<String>> comboRows) {}
+
+    private static BuiltGrids buildGridsOffFx(MasterDispatchSheetsDocument doc) {
+        MasterDispatchSheetsDocument d =
+                doc != null ? doc : MasterDispatchSheetsDocument.empty("");
+        List<List<String>> skillsRows = d.sheet("skills").rows();
+        List<List<String>> needRows = d.sheet("need").rows();
+        List<List<String>> speedRows = d.sheet("speed").rows();
+        List<List<String>> comboRows =
+                MasterDispatchSheetEditRules.ensureCombinationMetaColumns(
+                        d.sheet("teamCombinations").rows());
+        return new BuiltGrids(
+                MasterDispatchSheetGridSupport.buildEditable(
+                        MasterDispatchSheetEditRules.SheetKind.SKILLS, skillsRows),
+                MasterDispatchSheetGridSupport.buildEditable(
+                        MasterDispatchSheetEditRules.SheetKind.NEED, needRows),
+                MasterDispatchSheetGridSupport.buildEditable(
+                        MasterDispatchSheetEditRules.SheetKind.SPEED, speedRows),
+                MasterDispatchSheetGridSupport.buildEditable(
+                        MasterDispatchSheetEditRules.SheetKind.COMBINATIONS,
+                        comboRows,
+                        skillsRows),
+                skillsRows,
+                needRows,
+                speedRows,
+                comboRows);
+    }
+
+    /** 選択中の内タブを先に載せ、残りはパルスごとに 1 枚ずつ載せて UI を固まらせない。 */
+    private void applyBuiltGridsProgressively(BuiltGrids built, Runnable onComplete) {
+        if (built == null) {
+            if (onComplete != null) {
+                onComplete.run();
+            }
+            return;
+        }
+        suppressGridDirty = true;
+        int selected =
+                innerTabPane != null ? innerTabPane.getSelectionModel().getSelectedIndex() : 0;
+        if (selected < 0) {
+            selected = 0;
+        }
+        int[] order = new int[4];
+        order[0] = selected;
+        int w = 1;
+        for (int i = 0; i < 4; i++) {
+            if (i != selected) {
+                order[w++] = i;
+            }
+        }
+        attachBuiltGrid(order[0], built);
+        applyOneEquipmentVisibility(order[0], built);
+        updateToolbarForInnerTab(selected);
+        attachBuiltGridsRemaining(built, order, 1, onComplete);
+    }
+
+    private void attachBuiltGridsRemaining(
+            BuiltGrids built, int[] order, int nextIndex, Runnable onComplete) {
+        if (nextIndex >= order.length) {
+            refreshMissingEquipmentAttention();
+            Platform.runLater(
+                    () -> {
+                        suppressGridDirty = false;
+                        if (onComplete != null) {
+                            onComplete.run();
+                        }
+                    });
+            return;
+        }
+        Platform.runLater(
+                () -> {
+                    attachBuiltGrid(order[nextIndex], built);
+                    applyOneEquipmentVisibility(order[nextIndex], built);
+                    attachBuiltGridsRemaining(built, order, nextIndex + 1, onComplete);
+                });
+    }
+
+    private void applyOneEquipmentVisibility(int index, BuiltGrids built) {
+        switch (index) {
+            case 0 ->
+                    applyEquipmentColumnVisibility(
+                            skillsView,
+                            MasterDispatchSheetEditRules.SheetKind.SKILLS,
+                            built.skillsRows(),
+                            1,
+                            equipmentFocusKeys);
+            case 1 ->
+                    applyEquipmentColumnVisibility(
+                            needView,
+                            MasterDispatchSheetEditRules.SheetKind.NEED,
+                            built.needRows(),
+                            3,
+                            equipmentFocusKeys);
+            case 2 ->
+                    applyEquipmentColumnVisibility(
+                            speedView,
+                            MasterDispatchSheetEditRules.SheetKind.SPEED,
+                            built.speedRows(),
+                            3,
+                            equipmentFocusKeys);
+            case 3 -> applyCombinationRowVisibility();
+            default -> {
+                /* no-op */
+            }
+        }
+        updateFilterHint();
+    }
+
+    private void attachBuiltGrid(int index, BuiltGrids built) {
+        switch (index) {
+            case 0 ->
+                    attachPrebuiltGrid(
+                            skillsView,
+                            MasterDispatchSheetEditRules.SheetKind.SKILLS,
+                            built.skills(),
+                            built.skillsRows(),
+                            MasterDispatchSheetEditRules.frozenTitleRowCount(
+                                    MasterDispatchSheetEditRules.SheetKind.SKILLS),
+                            1);
+            case 1 ->
+                    attachPrebuiltGrid(
+                            needView,
+                            MasterDispatchSheetEditRules.SheetKind.NEED,
+                            built.need(),
+                            built.needRows(),
+                            MasterDispatchSheetEditRules.frozenTitleRowCount(
+                                    MasterDispatchSheetEditRules.SheetKind.NEED),
+                            3);
+            case 2 ->
+                    attachPrebuiltGrid(
+                            speedView,
+                            MasterDispatchSheetEditRules.SheetKind.SPEED,
+                            built.speed(),
+                            built.speedRows(),
+                            MasterDispatchSheetEditRules.frozenTitleRowCount(
+                                    MasterDispatchSheetEditRules.SheetKind.SPEED),
+                            3);
+            case 3 ->
+                    attachPrebuiltGrid(
+                            comboView,
+                            MasterDispatchSheetEditRules.SheetKind.COMBINATIONS,
+                            built.combo(),
+                            built.comboRows(),
+                            0,
+                            4);
+            default -> {
+                /* no-op */
+            }
         }
     }
 
@@ -948,19 +1178,35 @@ public final class MasterDispatchSheetsTabController {
         if (kind == MasterDispatchSheetEditRules.SheetKind.COMBINATIONS) {
             src = MasterDispatchSheetEditRules.ensureCombinationMetaColumns(rows);
         }
+        attachPrebuiltGrid(
+                view,
+                kind,
+                MasterDispatchSheetGridSupport.buildEditable(kind, src, skillsRows),
+                src,
+                frozenDataHeaderRows,
+                leadingCols);
+    }
+
+    private void attachPrebuiltGrid(
+            SpreadsheetView view,
+            MasterDispatchSheetEditRules.SheetKind kind,
+            GridBase gridBase,
+            List<List<String>> rows,
+            int frozenDataHeaderRows,
+            int leadingCols) {
         Grid previous = view.getGrid();
         if (previous != null) {
             previous.removeEventHandler(GridChange.GRID_CHANGE_EVENT, gridDirtyHandler);
         }
-        view.setGrid(MasterDispatchSheetGridSupport.buildEditable(kind, src, skillsRows));
+        view.setGrid(gridBase);
         Grid grid = view.getGrid();
         if (grid != null) {
             grid.addEventHandler(GridChange.GRID_CHANGE_EVENT, gridDirtyHandler);
         }
         int colCount = view.getGrid() != null ? view.getGrid().getColumnCount() : 1;
-        List<String> titles = MasterDispatchSheetEditRules.columnTitles(kind, src, colCount);
+        List<String> titles = MasterDispatchSheetEditRules.columnTitles(kind, rows, colCount);
         List<Double> widths =
-                MasterDispatchSheetEditRules.preferredColumnWidths(src, colCount, titles);
+                MasterDispatchSheetEditRules.preferredColumnWidths(rows, colCount, titles);
         Platform.runLater(
                 () -> applyMasterSheetChrome(view, widths, frozenDataHeaderRows, leadingCols));
     }
