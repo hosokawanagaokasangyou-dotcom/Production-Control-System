@@ -505,16 +505,29 @@ class MasterDispatchSheetEditRulesTest {
     }
 
     @Test
-    void skills_validateRejectsInvalidTokenAndDuplicatePriority() {
+    void skills_validateRejectsInvalidToken_allowsMultipleOpAsWithoutPriority() {
         List<List<String>> ok =
                 List.of(
                         List.of("工程名", "巻返し"),
                         List.of("機械名", "機1"),
-                        List.of("山田", "OP1"),
-                        List.of("佐藤", "AS2"));
-        assertTrue(MasterDispatchSheetEditRules.validateForSave(
-                        MasterDispatchSheetEditRules.SheetKind.SKILLS, ok)
-                .isEmpty());
+                        List.of("山田", "OP"),
+                        List.of("佐藤", "AS"),
+                        List.of("鈴木", "OP1"));
+        assertTrue(
+                MasterDispatchSheetEditRules.validateForSave(
+                                MasterDispatchSheetEditRules.SheetKind.SKILLS, ok)
+                        .isEmpty());
+
+        List<List<String>> twoOp =
+                List.of(
+                        List.of("工程名", "巻返し"),
+                        List.of("機械名", "機1"),
+                        List.of("山田", "OP"),
+                        List.of("佐藤", "OP"));
+        assertTrue(
+                MasterDispatchSheetEditRules.validateForSave(
+                                MasterDispatchSheetEditRules.SheetKind.SKILLS, twoOp)
+                        .isEmpty());
 
         List<List<String>> badToken =
                 List.of(
@@ -525,41 +538,32 @@ class MasterDispatchSheetEditRulesTest {
                 MasterDispatchSheetEditRules.validateForSave(
                                 MasterDispatchSheetEditRules.SheetKind.SKILLS, badToken)
                         .isEmpty());
-
-        List<List<String>> dup =
-                List.of(
-                        List.of("工程名", "巻返し"),
-                        List.of("機械名", "機1"),
-                        List.of("山田", "OP1"),
-                        List.of("佐藤", "AS1"));
-        assertFalse(
-                MasterDispatchSheetEditRules.validateForSave(
-                                MasterDispatchSheetEditRules.SheetKind.SKILLS, dup)
-                        .isEmpty());
-
-        List<List<String>> opEqualsOp1 =
-                List.of(
-                        List.of("工程名", "巻返し"),
-                        List.of("機械名", "機1"),
-                        List.of("山田", "OP"),
-                        List.of("佐藤", "AS1"));
-        assertFalse(
-                MasterDispatchSheetEditRules.validateForSave(
-                                MasterDispatchSheetEditRules.SheetKind.SKILLS, opEqualsOp1)
-                        .isEmpty());
     }
 
     @Test
-    void skills_normalizeOpToOp1() {
+    void skills_normalizeStripsUnusedPriorityDigits() {
         List<List<String>> rows =
                 List.of(
                         List.of("工程名", "巻返し"),
                         List.of("機械名", "機1"),
-                        List.of("山田", "OP"));
+                        List.of("山田", "OP4"),
+                        List.of("佐藤", "AS 3"),
+                        List.of("鈴木", "OP"));
         List<List<String>> out =
                 MasterDispatchSheetEditRules.normalizeOnExtract(
                         MasterDispatchSheetEditRules.SheetKind.SKILLS, rows);
-        assertEquals("OP1", out.get(2).get(1));
+        assertEquals("OP", out.get(2).get(1));
+        assertEquals("AS", out.get(3).get(1));
+        assertEquals("OP", out.get(4).get(1));
+    }
+
+    @Test
+    void skills_canonicalSkillToken_dropsDigits() {
+        assertEquals("OP", MasterDispatchSheetEditRules.canonicalSkillToken("OP4"));
+        assertEquals("AS", MasterDispatchSheetEditRules.canonicalSkillToken("as3"));
+        assertEquals("OP", MasterDispatchSheetEditRules.canonicalSkillToken("OP"));
+        assertEquals("", MasterDispatchSheetEditRules.canonicalSkillToken(""));
+        assertEquals("見習", MasterDispatchSheetEditRules.canonicalSkillToken("見習"));
     }
 
     @Test

@@ -698,44 +698,11 @@ def _validate_skills_op_as_priority_numbers_unique(
     skills_dict: dict, column_keys: list
 ) -> None:
     """
-    master「skills」の複数列（工程+機械キー等）についで」OP/AS の割当優先度の**数値**は
-    メンバー間で重複していないか検証れる。重複時は PlanningValidationError。
-    （OP1 と AS1 のよごにロールは異なっても同一数値なら重複とみなす）
+    以前は同一列の OP/AS 末尾数字（優先度）の重複を禁止していた。
+    数字は未使用になったため検証しない（OP / AS のみで複数人を許可する）。
     """
-    errors: list[str] = []
-    for combo in column_keys:
-        ck = str(combo or "").strip()
-        if not ck:
-            continue
-        pr_to_entries: dict[int, list[str]] = defaultdict(list)
-        for mem, row in (skills_dict or {}).items():
-            mnm = str(mem or "").strip()
-            if not mnm or not isinstance(row, dict):
-                continue
-            raw = row.get(ck)
-            if raw is None or (isinstance(raw, float) and pd.isna(raw)):
-                continue
-            sval = str(raw).strip()
-            if not sval or sval.lower() in ("nan", "none", "null"):
-                continue
-            role, pr = parse_op_as_skill_cell(sval)
-            if role not in ("OP", "AS"):
-                continue
-            pr_to_entries[int(pr)].append(f"{mnm}({role})")
-        for pr, entries in sorted(pr_to_entries.items()):
-            if len(entries) > 1:
-                errors.append(f'列「{ck}」: 優先度 {pr} は重複 → ' + "」".join(entries))
-    if errors:
-        cap = 50
-        tail = errors[:cap]
-        msg = (
-            "マスタ「skills」で」同一列の OP/AS 優先度の数値は重複していした。"
-            " 列ごとに数値は1人につし1種類にしてください。\n"
-            + "\n".join(tail)
-        )
-        if len(errors) > cap:
-            msg += f"\n…他 {len(errors) - cap} 件"
-        raise PlanningValidationError(msg)
+    return
+
 def _master_member_attendance_sheet_names(master_path: str) -> set[str]:
     """master 上のメンバー勤怠シート名（skills / need / tasks / カレンダー系を除く）。"""
     xls = _cached_master_pd_excel_file(master_path)

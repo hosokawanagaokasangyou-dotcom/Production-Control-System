@@ -4,11 +4,9 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.BitSet;
-import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -1093,30 +1091,12 @@ public final class MasterDispatchSheetEditRules {
             for (int c = 1; c < width; c++) {
                 String v = cell(rows, r, c);
                 if (!v.isEmpty() && parseOpAs(v) == null) {
-                    errors.add("資格: 交差セルは空か OP/AS+優先度のみです（例 OP1）。行"
+                    errors.add("資格: 交差セルは空か OP または AS のみです。行"
                             + (r + 1)
                             + " 列"
                             + (c + 1)
                             + ": "
                             + v);
-                }
-            }
-        }
-        for (int c = 1; c < width; c++) {
-            Map<Integer, String> seen = new HashMap<>();
-            for (int r = 2; r < rows.size(); r++) {
-                OpAs parsed = parseOpAs(cell(rows, r, c));
-                if (parsed == null) {
-                    continue;
-                }
-                String prev = seen.put(parsed.prio, cell(rows, r, 0));
-                if (prev != null) {
-                    errors.add("資格: 同一設備列の優先度が重複しています（列"
-                            + (c + 1)
-                            + " 優先度"
-                            + parsed.prio
-                            + "）。");
-                    break;
                 }
             }
         }
@@ -1249,7 +1229,7 @@ public final class MasterDispatchSheetEditRules {
                 String v = row.get(c) != null ? row.get(c) : "";
                 OpAs parsed = parseOpAs(v);
                 if (parsed != null) {
-                    row.set(c, parsed.role + parsed.prio);
+                    row.set(c, parsed.role());
                 }
             }
         }
@@ -1413,6 +1393,19 @@ public final class MasterDispatchSheetEditRules {
             }
         }
         return w;
+    }
+
+    /** 資格セルを OP / AS に正規化する。数字は捨てる。解釈できない値はそのまま返す。 */
+    public static String canonicalSkillToken(String raw) {
+        if (raw == null) {
+            return "";
+        }
+        String t = raw.strip();
+        if (t.isEmpty()) {
+            return "";
+        }
+        OpAs parsed = parseOpAs(t);
+        return parsed != null ? parsed.role() : t;
     }
 
     static OpAs parseOpAs(String raw) {

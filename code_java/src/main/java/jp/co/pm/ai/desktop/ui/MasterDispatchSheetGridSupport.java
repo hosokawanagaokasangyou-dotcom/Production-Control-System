@@ -163,7 +163,12 @@ public final class MasterDispatchSheetGridSupport {
                         kind, dataRow, col, display)) {
             cell =
                     SpreadsheetCellType.LIST(skillChoices(raw))
-                            .createCell(gridRow, col, 1, 1, raw);
+                            .createCell(
+                                    gridRow,
+                                    col,
+                                    1,
+                                    1,
+                                    MasterDispatchSheetEditRules.canonicalSkillToken(raw));
         } else if (kind == MasterDispatchSheetEditRules.SheetKind.SPEED
                 && MasterDispatchSheetEditRules.isSpeedBaseSpeedCell(dataRow, col, display)) {
             cell = SPEED_BASE_CELL_TYPE.createCell(gridRow, col, 1, 1, raw);
@@ -196,11 +201,9 @@ public final class MasterDispatchSheetGridSupport {
     private static List<String> skillChoices(String current) {
         List<String> items = new ArrayList<>();
         items.add("");
-        for (int i = 1; i <= 15; i++) {
-            items.add("OP" + i);
-            items.add("AS" + i);
-        }
-        String cur = current != null ? current.strip() : "";
+        items.add("OP");
+        items.add("AS");
+        String cur = MasterDispatchSheetEditRules.canonicalSkillToken(current);
         if (!cur.isEmpty() && !items.contains(cur)) {
             items.add(cur);
         }
