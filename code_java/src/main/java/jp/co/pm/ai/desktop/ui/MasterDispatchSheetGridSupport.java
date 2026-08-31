@@ -21,7 +21,9 @@ public final class MasterDispatchSheetGridSupport {
     private static final MasterDispatchDecimalCellType SPEED_BASE_CELL_TYPE =
             new MasterDispatchDecimalCellType(0.0, 99.0, 1);
     private static final MasterDispatchDecimalCellType SPEED_RATIO_CELL_TYPE =
-            new MasterDispatchDecimalCellType(0.0, 99.0, 2);
+            new MasterDispatchDecimalCellType(0.0, 1.0, 2);
+    private static final MasterDispatchDecimalCellType NEED_HEADCOUNT_CELL_TYPE =
+            new MasterDispatchDecimalCellType(0.0, 99.0, 0);
 
     private MasterDispatchSheetGridSupport() {}
 
@@ -166,8 +168,11 @@ public final class MasterDispatchSheetGridSupport {
                 && MasterDispatchSheetEditRules.isSpeedBaseSpeedCell(dataRow, col, display)) {
             cell = SPEED_BASE_CELL_TYPE.createCell(gridRow, col, 1, 1, raw);
         } else if (kind == MasterDispatchSheetEditRules.SheetKind.SPEED
-                && MasterDispatchSheetEditRules.isSpeedNumericCell(dataRow, col, display)) {
+                && MasterDispatchSheetEditRules.isSpeedRatioCell(dataRow, col, display)) {
             cell = SPEED_RATIO_CELL_TYPE.createCell(gridRow, col, 1, 1, raw);
+        } else if (kind == MasterDispatchSheetEditRules.SheetKind.NEED
+                && MasterDispatchSheetEditRules.isNeedHeadcountCell(dataRow, col, display)) {
+            cell = NEED_HEADCOUNT_CELL_TYPE.createCell(gridRow, col, 1, 1, raw);
         } else {
             cell = SpreadsheetCellType.STRING.createCell(gridRow, col, 1, 1, raw);
         }

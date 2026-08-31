@@ -162,10 +162,11 @@ public final class MasterDispatchSheetEditRules {
             return false;
         }
         String a = cell(rows, dataRow, 0);
-        if (a.contains("基本速度") || a.contains("実稼働比率")) {
-            return true;
-        }
-        return findFirstRowExact(rows, "工程名") == 0 && (dataRow == 3 || dataRow == 4);
+        return a.contains("基本速度") || a.contains("実稼働比率");
+    }
+
+    public static boolean isSpeedRatioCell(int dataRow, int col, List<List<String>> rows) {
+        return isSpeedNumericCell(dataRow, col, rows) && cell(rows, dataRow, 0).contains("実稼働比率");
     }
 
     public static boolean isSpeedBaseSpeedCell(int dataRow, int col, List<List<String>> rows) {
@@ -174,6 +175,10 @@ public final class MasterDispatchSheetEditRules {
 
     public static boolean isSpeedBaseDecimalValid(String raw) {
         return isDecimalInRange(raw, 0.0, 99.0, 1);
+    }
+
+    public static boolean isSpeedRatioDecimalValid(String raw) {
+        return isDecimalInRange(raw, 0.0, 1.0, 2);
     }
 
     public static boolean isSpeedBaseDecimalTypingAllowed(String raw) {
@@ -279,7 +284,27 @@ public final class MasterDispatchSheetEditRules {
         }
         setCell(out, procRow, target, p);
         setCell(out, machRow, target, m);
+        if (kind == SheetKind.NEED) {
+            fillNeedDefaultsForNewColumn(out, target);
+        }
         return freeze(out);
+    }
+
+    private static void fillNeedDefaultsForNewColumn(List<List<String>> out, int col) {
+        for (int r = 0; r < out.size(); r++) {
+            if (!isNeedHeadcountCell(r, col, out)) {
+                continue;
+            }
+            if (!cell(out, r, col).isEmpty()) {
+                continue;
+            }
+            String a = cell(out, r, 0);
+            if (a.contains("追加人数") || a.contains("余剰") || isNeedSurplusRow(r, out)) {
+                setCell(out, r, col, "0");
+            } else {
+                setCell(out, r, col, "1");
+            }
+        }
     }
 
     public static boolean containsEquipmentColumn(
@@ -317,6 +342,8 @@ public final class MasterDispatchSheetEditRules {
     public static final String LOCK_VALUE = "ロック";
     public static final String ADDED_FLAG = "1";
     public static final String ADDED_ROW_BG = "#f4c36a";
+    public static final String LOCKED_ROW_BG = "#b7c4d4";
+    public static final String LOCKED_ADDED_ROW_BG = "#c9a05a";
 
     private static final Pattern COMBO_MEMBER_ROLE_PREFIX =
             Pattern.compile("(?i)^(OP|AS)\\s*\\d*\\s+");
@@ -828,19 +855,24 @@ public final class MasterDispatchSheetEditRules {
 
     public static String combinationRowStyle(
             String process, String machine, String comboCell, boolean added, boolean locked) {
+        if (locked && added) {
+            return comboFillStyle(LOCKED_ADDED_ROW_BG);
+        }
+        if (locked) {
+            return comboFillStyle(LOCKED_ROW_BG);
+        }
         if (added) {
-            return "-fx-background-color: "
-                    + ADDED_ROW_BG
-                    + "; -fx-control-inner-background: "
-                    + ADDED_ROW_BG
-                    + "; -fx-text-fill: #111111;";
+            return comboFillStyle(ADDED_ROW_BG);
         }
         String key = MasterTeamCombinationTableReader.comboKeyFromCells(process, machine, comboCell);
         if (key.isEmpty()) {
             return "";
         }
         int idx = Math.floorMod(key.hashCode(), COMBO_BG.length);
-        String bg = COMBO_BG[idx];
+        return comboFillStyle(COMBO_BG[idx]);
+    }
+
+    private static String comboFillStyle(String bg) {
         return "-fx-background-color: "
                 + bg
                 + "; -fx-control-inner-background: "
@@ -943,7 +975,7 @@ public final class MasterDispatchSheetEditRules {
             case SPEED ->
                     isSpeedBaseSpeedCell(dataRow, col, rows)
                             ? !isSpeedBaseDecimalValid(v)
-                            : isSpeedNumericCell(dataRow, col, rows) && !isPositiveNumber(v);
+                            : isSpeedRatioCell(dataRow, col, rows) && !isSpeedRatioDecimalValid(v);
             case COMBINATIONS -> isCombinationsNumericInvalid(dataRow, col, rows, v);
         };
     }
@@ -989,10 +1021,13 @@ public final class MasterDispatchSheetEditRules {
     }
 
     private static boolean isSkillsEditable(int dataRow, int col, List<List<String>> rows) {
-        return col != 0 || !isColumnTitleSourceRow(SheetKind.SKILLS, dataRow, rows);
+        return !isColumnTitleSourceRow(SheetKind.SKILLS, dataRow, rows);
     }
 
     private static boolean isNeedEditable(int dataRow, int col, List<List<String>> rows) {
+        if (isColumnTitleSourceRow(SheetKind.NEED, dataRow, rows)) {
+            return false;
+        }
         if (col == 0 && isNeedStructureLabel(cell(rows, dataRow, 0))) {
             return false;
         }
@@ -1000,6 +1035,9 @@ public final class MasterDispatchSheetEditRules {
     }
 
     private static boolean isSpeedEditable(int dataRow, int col, List<List<String>> rows) {
+        if (isColumnTitleSourceRow(SheetKind.SPEED, dataRow, rows)) {
+            return false;
+        }
         if (col == 0 && isSpeedStructureLabel(cell(rows, dataRow, 0))) {
             return false;
         }
@@ -1055,7 +1093,7 @@ public final class MasterDispatchSheetEditRules {
             for (int c = 1; c < width; c++) {
                 String v = cell(rows, r, c);
                 if (!v.isEmpty() && parseOpAs(v) == null) {
-                    errors.add("skills 交差セルは空か OP/AS+優先度のみです（例 OP1）。行"
+                    errors.add("資格: 交差セルは空か OP/AS+優先度のみです（例 OP1）。行"
                             + (r + 1)
                             + " 列"
                             + (c + 1)
@@ -1073,7 +1111,7 @@ public final class MasterDispatchSheetEditRules {
                 }
                 String prev = seen.put(parsed.prio, cell(rows, r, 0));
                 if (prev != null) {
-                    errors.add("skills 同一列の優先度が重複しています（列"
+                    errors.add("資格: 同一設備列の優先度が重複しています（列"
                             + (c + 1)
                             + " 優先度"
                             + parsed.prio
@@ -1099,12 +1137,12 @@ public final class MasterDispatchSheetEditRules {
                 }
                 String a = cell(rows, r, 0);
                 if (a.startsWith("特別指定") && !isIntegerInRange(v, 1, 99)) {
-                    errors.add("need 特別指定の人数は 1〜99 です。行" + (r + 1) + ": " + v);
+                    errors.add("必要人数: 特別指定は 1〜99 人です。行" + (r + 1) + ": " + v);
                 } else if ((a.contains("追加人数") || a.contains("余剰") || isNeedSurplusRow(r, rows))
                         && !isIntegerInRange(v, 0, 50)) {
-                    errors.add("need 配台時追加人数は 0〜50 です。行" + (r + 1) + ": " + v);
+                    errors.add("必要人数: 配台時追加人数は 0〜50 人です。行" + (r + 1) + ": " + v);
                 } else if (!isNonNegativeInteger(v)) {
-                    errors.add("need の人数は 0 以上の整数です。行" + (r + 1) + ": " + v);
+                    errors.add("必要人数: 人数は 0 以上の整数です。行" + (r + 1) + ": " + v);
                 }
             }
         }
@@ -1125,10 +1163,16 @@ public final class MasterDispatchSheetEditRules {
                 }
                 if (isSpeedBaseSpeedCell(r, c, rows)) {
                     if (!isSpeedBaseDecimalValid(v)) {
-                        errors.add("speed の基本速度は 0.0〜99.0（小数第一位まで）です。行" + (r + 1) + ": " + v);
+                        errors.add("加工速度: 基本速度は 0.0〜99.0（小数第一位まで）です。行"
+                                + (r + 1)
+                                + ": "
+                                + v);
                     }
-                } else if (!isPositiveNumber(v)) {
-                    errors.add("speed の基本速度・実稼働比率は数値です。行" + (r + 1) + ": " + v);
+                } else if (!isSpeedRatioDecimalValid(v)) {
+                    errors.add("加工速度: 実稼働比率は 0.00〜1.00（小数第二位まで）です。行"
+                            + (r + 1)
+                            + ": "
+                            + v);
                 }
             }
         }
@@ -1160,7 +1204,7 @@ public final class MasterDispatchSheetEditRules {
         return List.copyOf(errors);
     }
 
-    private static boolean isNeedHeadcountCell(int dataRow, int col, List<List<String>> rows) {
+    public static boolean isNeedHeadcountCell(int dataRow, int col, List<List<String>> rows) {
         if (col < 3) {
             return false;
         }
@@ -1221,12 +1265,14 @@ public final class MasterDispatchSheetEditRules {
                 row.add("");
             }
             for (int c = 3; c < width; c++) {
-                if (!isSpeedBaseSpeedCell(r, c, out)) {
+                String v = row.get(c) != null ? row.get(c) : "";
+                if (v.isBlank()) {
                     continue;
                 }
-                String v = row.get(c) != null ? row.get(c) : "";
-                if (!v.isBlank() && isSpeedBaseDecimalValid(v)) {
+                if (isSpeedBaseSpeedCell(r, c, out) && isSpeedBaseDecimalValid(v)) {
                     row.set(c, formatSpeedBaseDecimal(v));
+                } else if (isSpeedRatioCell(r, c, out) && isSpeedRatioDecimalValid(v)) {
+                    row.set(c, formatDecimal(v, 2));
                 }
             }
         }

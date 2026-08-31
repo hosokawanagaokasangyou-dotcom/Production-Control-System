@@ -357,3 +357,8 @@
     -fx-text-fill: white;
     -fx-font-weight: bold;
 }
+
+.pm-ai-decimal-editor-field.pm-ai-decimal-editor-invalid {
+    -fx-background-color: #ffd6d6;
+    -fx-text-fill: #111111;
+}

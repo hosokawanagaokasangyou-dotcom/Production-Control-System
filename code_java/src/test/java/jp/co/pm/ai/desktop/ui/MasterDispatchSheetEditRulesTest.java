@@ -171,6 +171,13 @@ class MasterDispatchSheetEditRulesTest {
         assertEquals(a, b);
         assertNotEquals(a, c);
         assertEquals("", MasterDispatchSheetEditRules.comboRowStyle("", "機1"));
+        String locked =
+                MasterDispatchSheetEditRules.combinationRowStyle("巻返し", "機1", "", false, true);
+        String added =
+                MasterDispatchSheetEditRules.combinationRowStyle("巻返し", "機1", "", true, false);
+        assertTrue(locked.contains(MasterDispatchSheetEditRules.LOCKED_ROW_BG));
+        assertTrue(added.contains(MasterDispatchSheetEditRules.ADDED_ROW_BG));
+        assertNotEquals(locked, added);
     }
 
     @Test
@@ -214,6 +221,21 @@ class MasterDispatchSheetEditRulesTest {
         assertEquals("分割", needAdded.get(0).get(4));
         assertEquals("スライス機1", needAdded.get(1).get(4));
         assertEquals("2", needAdded.get(2).get(3));
+        assertEquals("1", needAdded.get(2).get(4));
+        List<List<String>> needWithSurplus =
+                List.of(
+                        List.of("工程名", "", "", "巻返し"),
+                        List.of("機械名", "", "", "機1"),
+                        List.of("必須人数", "", "", "2"),
+                        List.of("配台時追加人数", "", "", "0"));
+        List<List<String>> surplusAdded =
+                MasterDispatchSheetEditRules.addEquipmentColumn(
+                        MasterDispatchSheetEditRules.SheetKind.NEED,
+                        needWithSurplus,
+                        "分割",
+                        "スライス機1");
+        assertEquals("1", surplusAdded.get(2).get(4));
+        assertEquals("0", surplusAdded.get(3).get(4));
     }
 
     @Test
@@ -351,6 +373,17 @@ class MasterDispatchSheetEditRulesTest {
                 MasterDispatchSheetEditRules.isSpeedNumericCell(3, 3, speed));
         assertFalse(
                 MasterDispatchSheetEditRules.isSpeedBaseSpeedCell(3, 3, speed));
+        assertTrue(
+                MasterDispatchSheetEditRules.isSpeedRatioCell(3, 3, speed));
+        List<List<String>> withSpecial =
+                List.of(
+                        List.of("工程名", "", "", "分割"),
+                        List.of("機械名", "", "", "LAC/EC機"),
+                        List.of("基本速度", "", "", "20"),
+                        List.of("実稼働比率", "", "", "0.95"),
+                        List.of("特別指定1", "", "", "x"));
+        assertFalse(
+                MasterDispatchSheetEditRules.isSpeedNumericCell(4, 3, withSpecial));
     }
 
     @Test
@@ -367,8 +400,11 @@ class MasterDispatchSheetEditRulesTest {
         assertFalse(MasterDispatchSheetEditRules.isSpeedBaseDecimalValid("速い"));
         assertEquals("20.5", MasterDispatchSheetEditRules.formatSpeedBaseDecimal("20.50"));
         assertEquals("20.0", MasterDispatchSheetEditRules.formatSpeedBaseDecimal("20"));
-        assertTrue(MasterDispatchSheetEditRules.isSpeedBaseDecimalTypingAllowed("20."));
-        assertFalse(MasterDispatchSheetEditRules.isSpeedBaseDecimalTypingAllowed("20.55"));
+        assertTrue(MasterDispatchSheetEditRules.isSpeedRatioDecimalValid("0.95"));
+        assertTrue(MasterDispatchSheetEditRules.isSpeedRatioDecimalValid("0.7"));
+        assertTrue(MasterDispatchSheetEditRules.isSpeedRatioDecimalValid("1"));
+        assertFalse(MasterDispatchSheetEditRules.isSpeedRatioDecimalValid("95"));
+        assertFalse(MasterDispatchSheetEditRules.isSpeedRatioDecimalValid("1.01"));
     }
 
     @Test
@@ -393,6 +429,17 @@ class MasterDispatchSheetEditRulesTest {
                 MasterDispatchSheetEditRules.validateForSave(
                                 MasterDispatchSheetEditRules.SheetKind.SPEED, bad)
                         .isEmpty());
+        List<List<String>> badRatio =
+                List.of(
+                        List.of("工程名", "", "", "巻返し"),
+                        List.of("機械名", "", "", "機1"),
+                        List.of("基本速度", "", "", "20.5"),
+                        List.of("実稼働比率", "", "", "95"));
+        List<String> ratioErrors =
+                MasterDispatchSheetEditRules.validateForSave(
+                        MasterDispatchSheetEditRules.SheetKind.SPEED, badRatio);
+        assertFalse(ratioErrors.isEmpty());
+        assertTrue(ratioErrors.get(0).contains("加工速度"), ratioErrors.toString());
     }
 
     @Test
@@ -446,7 +493,7 @@ class MasterDispatchSheetEditRulesTest {
         assertFalse(
                 MasterDispatchSheetEditRules.isEditable(
                         MasterDispatchSheetEditRules.SheetKind.SKILLS, 1, 0, rows));
-        assertTrue(
+        assertFalse(
                 MasterDispatchSheetEditRules.isEditable(
                         MasterDispatchSheetEditRules.SheetKind.SKILLS, 0, 1, rows));
         assertTrue(
@@ -526,6 +573,9 @@ class MasterDispatchSheetEditRulesTest {
         assertFalse(
                 MasterDispatchSheetEditRules.isEditable(
                         MasterDispatchSheetEditRules.SheetKind.NEED, 0, 0, rows));
+        assertFalse(
+                MasterDispatchSheetEditRules.isEditable(
+                        MasterDispatchSheetEditRules.SheetKind.NEED, 0, 3, rows));
         assertTrue(
                 MasterDispatchSheetEditRules.isEditable(
                         MasterDispatchSheetEditRules.SheetKind.NEED, 2, 3, rows));

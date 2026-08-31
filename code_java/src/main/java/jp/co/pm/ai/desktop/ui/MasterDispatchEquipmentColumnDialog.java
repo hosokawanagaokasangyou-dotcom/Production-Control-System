@@ -24,7 +24,7 @@ public final class MasterDispatchEquipmentColumnDialog {
             dialog.initOwner(owner);
         }
         dialog.setTitle("設備列を追加");
-        dialog.setHeaderText("skills / need / speed に同じ工程名+機械名の列を追加します。");
+        dialog.setHeaderText("資格・必要人数・加工速度に、同じ工程名+機械名の列を追加します。");
 
         TextField processField = new TextField();
         processField.setPromptText("例: 分割");
@@ -43,6 +43,16 @@ public final class MasterDispatchEquipmentColumnDialog {
 
         ButtonType ok = new ButtonType("追加", ButtonBar.ButtonData.OK_DONE);
         dialog.getDialogPane().getButtonTypes().addAll(ok, ButtonType.CANCEL);
+        javafx.scene.Node addBtn = dialog.getDialogPane().lookupButton(ok);
+        addBtn.setDisable(true);
+        Runnable refreshOk =
+                () -> {
+                    String p = processField.getText() != null ? processField.getText().strip() : "";
+                    String m = machineField.getText() != null ? machineField.getText().strip() : "";
+                    addBtn.setDisable(p.isEmpty() || m.isEmpty());
+                };
+        processField.textProperty().addListener((o, a, b) -> refreshOk.run());
+        machineField.textProperty().addListener((o, a, b) -> refreshOk.run());
         dialog.setResultConverter(
                 btn -> {
                     if (btn != ok) {

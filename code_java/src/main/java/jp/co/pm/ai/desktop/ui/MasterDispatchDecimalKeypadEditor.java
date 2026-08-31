@@ -29,6 +29,7 @@ public final class MasterDispatchDecimalKeypadEditor extends SpreadsheetCellEdit
     private final TextField field = new TextField();
     private final VBox keypadBox = new VBox(6);
     private final Popup popup = new Popup();
+    private boolean editing;
 
     public MasterDispatchDecimalKeypadEditor(
             SpreadsheetView view, double min, double max, int fractionDigits) {
@@ -36,6 +37,7 @@ public final class MasterDispatchDecimalKeypadEditor extends SpreadsheetCellEdit
         this.min = min;
         this.max = max;
         this.fractionDigits = Math.max(0, fractionDigits);
+        field.getStyleClass().add("pm-ai-decimal-editor-field");
         field.setPrefColumnCount(8);
         field.setTextFormatter(
                 new TextFormatter<>(
@@ -69,9 +71,15 @@ public final class MasterDispatchDecimalKeypadEditor extends SpreadsheetCellEdit
             }
         }
         popup.getContent().add(keypadBox);
-        popup.setAutoHide(false);
-        popup.setHideOnEscape(false);
+        popup.setAutoHide(true);
+        popup.setHideOnEscape(true);
         popup.setAutoFix(true);
+        popup.setOnAutoHide(
+                e -> {
+                    if (editing) {
+                        endEdit(true);
+                    }
+                });
     }
 
     private GridPane buildPad() {
@@ -89,7 +97,7 @@ public final class MasterDispatchDecimalKeypadEditor extends SpreadsheetCellEdit
             {"7", "8", "9", "←"},
             {"4", "5", "6", "C"},
             {"1", "2", "3", "確定"},
-            {"0", ".", "", ""}
+            {"0", fractionDigits > 0 ? "." : "", "", ""}
         };
         for (int r = 0; r < keys.length; r++) {
             for (int c = 0; c < keys[r].length; c++) {
@@ -101,9 +109,7 @@ public final class MasterDispatchDecimalKeypadEditor extends SpreadsheetCellEdit
                 b.setMaxWidth(Double.MAX_VALUE);
                 b.setFocusTraversable(false);
                 b.getStyleClass().add("pm-ai-decimal-keypad-key");
-                b.addEventFilter(
-                        MouseEvent.MOUSE_PRESSED,
-                        e -> field.requestFocus());
+                b.addEventFilter(MouseEvent.MOUSE_PRESSED, e -> field.requestFocus());
                 if ("確定".equals(label)) {
                     b.getStyleClass().add("pm-ai-decimal-keypad-ok");
                     b.setMaxHeight(Double.MAX_VALUE);
@@ -133,6 +139,9 @@ public final class MasterDispatchDecimalKeypadEditor extends SpreadsheetCellEdit
                 if (MasterDispatchSheetEditRules.isDecimalTypingAllowed(
                         next, min, max, fractionDigits)) {
                     field.setText(next);
+                    markValid();
+                } else {
+                    markInvalid();
                 }
             }
         }
@@ -144,12 +153,25 @@ public final class MasterDispatchDecimalKeypadEditor extends SpreadsheetCellEdit
         String t = field.getText() != null ? field.getText().strip() : "";
         if (t.isEmpty()
                 || MasterDispatchSheetEditRules.isDecimalInRange(t, min, max, fractionDigits)) {
+            markValid();
             endEdit(true);
+            return;
+        }
+        markInvalid();
+    }
+
+    private void markInvalid() {
+        if (!field.getStyleClass().contains("pm-ai-decimal-editor-invalid")) {
+            field.getStyleClass().add("pm-ai-decimal-editor-invalid");
         }
     }
 
+    private void markValid() {
+        field.getStyleClass().remove("pm-ai-decimal-editor-invalid");
+    }
+
     private void showKeypad() {
-        if (popup.isShowing()) {
+        if (!editing || popup.isShowing()) {
             return;
         }
         Bounds b = field.localToScreen(field.getBoundsInLocal());
@@ -157,10 +179,14 @@ public final class MasterDispatchDecimalKeypadEditor extends SpreadsheetCellEdit
             return;
         }
         popup.show(field, b.getMinX(), b.getMaxY());
+        field.requestFocus();
+        field.end();
     }
 
     @Override
     public void startEdit(Object value, String format, Object... options) {
+        editing = true;
+        markValid();
         String s = value == null ? "" : value.toString();
         field.setText(s);
         field.requestFocus();
@@ -185,7 +211,9 @@ public final class MasterDispatchDecimalKeypadEditor extends SpreadsheetCellEdit
 
     @Override
     public void end() {
+        editing = false;
         popup.hide();
+        markValid();
     }
 
     @Override

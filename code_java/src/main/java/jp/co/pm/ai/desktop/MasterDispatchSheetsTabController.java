@@ -18,10 +18,12 @@ import javafx.fxml.FXML;
 import javafx.geometry.Insets;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Alert.AlertType;
+import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.Label;
 import javafx.scene.control.TabPane;
 import javafx.scene.control.TablePosition;
+import javafx.scene.control.TextArea;
 import javafx.scene.layout.StackPane;
 import javafx.stage.Window;
 
@@ -52,11 +54,16 @@ public final class MasterDispatchSheetsTabController {
     private static final ZoneId TOKYO = ZoneId.of("Asia/Tokyo");
 
     @FXML private Label statusLabel;
+    @FXML private Label filterHintLabel;
     @FXML private TabPane innerTabPane;
     @FXML private StackPane skillsHost;
     @FXML private StackPane needHost;
     @FXML private StackPane speedHost;
     @FXML private StackPane comboHost;
+    @FXML private Button addEquipmentColumnButton;
+    @FXML private Button addMissingEquipmentButton;
+    @FXML private Button addCombinationRowButton;
+    @FXML private Button deleteCombinationRowButton;
 
     private final SpreadsheetView skillsView = new SpreadsheetView();
     private final SpreadsheetView needView = new SpreadsheetView();
@@ -79,7 +86,13 @@ public final class MasterDispatchSheetsTabController {
             innerTabPane
                     .getSelectionModel()
                     .selectedIndexProperty()
-                    .addListener((obs, o, n) -> applyAllEquipmentVisibility());
+                    .addListener(
+                            (obs, o, n) -> {
+                                applyAllEquipmentVisibility();
+                                updateToolbarForInnerTab(
+                                        n == null ? 0 : n.intValue());
+                            });
+            updateToolbarForInnerTab(innerTabPane.getSelectionModel().getSelectedIndex());
         }
         applyDocument(document);
     }
@@ -105,7 +118,6 @@ public final class MasterDispatchSheetsTabController {
     }
 
     void reloadFromCurrentFactory(boolean reimport) {
-        equipmentFocusKeys.clear();
         if (shell == null) {
             return;
         }
@@ -113,6 +125,19 @@ public final class MasterDispatchSheetsTabController {
         FactorySite site = AppPaths.currentDispatchFactorySite(ui);
         Path json = AppPaths.masterDispatchSheetsJsonPath(ui);
         Path source = AppPaths.masterDispatchSheetsSourceWorkbookPath(ui);
+        boolean factoryChanged =
+                document == null
+                        || site == null
+                        || !site.name().equals(document.factorySite())
+                        || loadedJsonPath == null
+                        || !loadedJsonPath.equals(json);
+        if (!reimport && !factoryChanged && loadedJsonPath != null) {
+            updateFilterHint();
+            return;
+        }
+        if (reimport || factoryChanged) {
+            equipmentFocusKeys.clear();
+        }
         try {
             MasterDispatchSheetsSeeder.Result result =
                     MasterDispatchSheetsSeeder.loadOrImport(json, source, site.name(), reimport);
@@ -161,15 +186,28 @@ public final class MasterDispatchSheetsTabController {
                         MasterDispatchSheetEditRules.SheetKind.COMBINATIONS, comboRows));
         if (!errors.isEmpty()) {
             Alert alert = new Alert(AlertType.ERROR);
-            alert.setTitle("MASTER 保存");
-            alert.setHeaderText("入力内容を直してから保存してください。");
-            alert.setContentText(String.join("\n", errors.subList(0, Math.min(8, errors.size()))));
+            alert.setTitle("配台マスタ保存");
+            alert.setHeaderText(
+                    "入力内容を直してから保存してください（"
+                            + errors.size()
+                            + " 件）。");
+            int shown = Math.min(12, errors.size());
+            String body = String.join("\n", errors.subList(0, shown));
+            if (errors.size() > shown) {
+                body = body + "\n…ほか " + (errors.size() - shown) + " 件";
+            }
+            TextArea area = new TextArea(body);
+            area.setEditable(false);
+            area.setWrapText(true);
+            area.setPrefRowCount(Math.min(12, Math.max(4, shown)));
+            area.setPrefWidth(520);
+            alert.getDialogPane().setContent(area);
             Window w = statusLabel != null && statusLabel.getScene() != null ? statusLabel.getScene().getWindow() : null;
             if (w != null) {
                 alert.initOwner(w);
             }
             alert.showAndWait();
-            statusLabel.setText("保存を中止しました。検証エラーがあります。");
+            statusLabel.setText("保存を中止しました。検証エラーが " + errors.size() + " 件あります。");
             return;
         }
         Window owner = shell.primaryStageForDialogs();
@@ -255,10 +293,12 @@ public final class MasterDispatchSheetsTabController {
             return;
         }
         MasterDispatchEquipmentColumnDialog.Result r = ans.get();
-        equipmentFocusKeys.clear();
         int added = applyEquipmentColumn(r.process(), r.machine());
-        focusSkillsTab();
         if (added <= 0) {
+            showInfo(
+                    "設備列を追加",
+                    "既に同じ工程名+機械名の列があります。",
+                    r.process() + " × " + r.machine());
             statusLabel.setText("既に同じ工程名+機械名の列があります: " + r.process() + " × " + r.machine());
             return;
         }
@@ -267,7 +307,7 @@ public final class MasterDispatchSheetsTabController {
                         + r.process()
                         + " × "
                         + r.machine()
-                        + "。追加した列だけ表示しています。OP/AS を設定し、保存してください。「すべて表示」で全列に戻せます。");
+                        + "。資格の OP/AS と必要人数を入れてから保存してください。");
     }
 
     @FXML
@@ -390,6 +430,10 @@ public final class MasterDispatchSheetsTabController {
         }
         MasterDispatchCombinationRowDialog.Result r = ans.get();
         if (MasterDispatchSheetEditRules.containsCombinationEquipment(combo, r.process(), r.machine())) {
+            showInfo(
+                    "組み合わせ行を追加",
+                    "同じ工程名+機械名の行が既にあります。",
+                    r.process() + " × " + r.machine());
             statusLabel.setText(
                     "同じ工程名+機械名の行が既にあります: " + r.process() + " × " + r.machine());
             focusComboTab();
@@ -409,6 +453,10 @@ public final class MasterDispatchSheetsTabController {
 
     @FXML
     private void onDeleteCombinationRowAction() {
+        if (!isComboInnerTabSelected()) {
+            statusLabel.setText("組み合わせ表を開いてから、削除する行を選んでください。");
+            return;
+        }
         if (comboView.getSelectionModel() == null
                 || comboView.getSelectionModel().getSelectedCells().isEmpty()) {
             statusLabel.setText("削除する組み合わせ表の行を選んでください。");
@@ -425,6 +473,24 @@ public final class MasterDispatchSheetsTabController {
         List<List<String>> combo =
                 MasterDispatchSheetGridSupport.extract(
                         comboView, MasterDispatchSheetEditRules.SheetKind.COMBINATIONS);
+        List<String> targets = combinationDeleteLabels(combo, originalIndexes);
+        if (targets.isEmpty()) {
+            statusLabel.setText("ロック中の行は削除できません。編集ロックを外してから削除してください。");
+            focusComboTab();
+            return;
+        }
+        Alert confirm = new Alert(AlertType.CONFIRMATION);
+        confirm.setTitle("選択行を削除");
+        confirm.setHeaderText("組み合わせ表の行を削除します。ロック行は残します。");
+        confirm.setContentText(String.join("\n", targets));
+        Window owner = dialogOwner();
+        if (owner != null) {
+            confirm.initOwner(owner);
+        }
+        Optional<ButtonType> ans = confirm.showAndWait();
+        if (ans.isEmpty() || ans.get() != ButtonType.OK) {
+            return;
+        }
         int before = combo.size();
         List<List<String>> after =
                 MasterDispatchSheetEditRules.deleteCombinationRows(combo, originalIndexes);
@@ -482,7 +548,7 @@ public final class MasterDispatchSheetsTabController {
                         MasterDispatchSheetEditRules.SheetKind.SKILLS, skills, process, machine);
         if (!existed) {
             String key = MasterTeamCombinationTableReader.normalizedComboKey(process, machine);
-            if (!key.isEmpty()) {
+            if (!key.isEmpty() && !equipmentFocusKeys.isEmpty()) {
                 equipmentFocusKeys.add(key);
             }
         }
@@ -568,9 +634,9 @@ public final class MasterDispatchSheetsTabController {
                 4,
                 d.sheet("skills").rows());
         applyAllEquipmentVisibility();
+        updateToolbarForInnerTab(
+                innerTabPane != null ? innerTabPane.getSelectionModel().getSelectedIndex() : 0);
     }
-
-    private void applyAllEquipmentVisibility() {
         applyEquipmentColumnVisibility(
                 skillsView,
                 MasterDispatchSheetEditRules.SheetKind.SKILLS,
@@ -590,6 +656,97 @@ public final class MasterDispatchSheetsTabController {
                 3,
                 equipmentFocusKeys);
         applyCombinationRowVisibility();
+        updateFilterHint();
+    }
+
+    private void updateToolbarForInnerTab(int index) {
+        boolean combo = index == 3;
+        setToolbarManaged(addEquipmentColumnButton, !combo);
+        setToolbarManaged(addMissingEquipmentButton, !combo);
+        setToolbarManaged(addCombinationRowButton, combo);
+        setToolbarManaged(deleteCombinationRowButton, combo);
+        updateFilterHint();
+    }
+
+    private static void setToolbarManaged(Button button, boolean show) {
+        if (button == null) {
+            return;
+        }
+        button.setVisible(show);
+        button.setManaged(show);
+    }
+
+    private boolean isComboInnerTabSelected() {
+        return innerTabPane != null && innerTabPane.getSelectionModel().getSelectedIndex() == 3;
+    }
+
+    private void updateFilterHint() {
+        if (filterHintLabel == null) {
+            return;
+        }
+        if (equipmentFocusKeys.isEmpty()) {
+            filterHintLabel.setText("すべての設備を表示しています（空き列は隠しています）。保存しても非表示データは消えません。");
+            return;
+        }
+        boolean combo = isComboInnerTabSelected();
+        filterHintLabel.setText(
+                "設備絞り込み中（"
+                        + equipmentFocusKeys.size()
+                        + " 件）。"
+                        + (combo ? "組み合わせ表は行を隠しています。" : "資格・必要人数・加工速度は列を隠しています。")
+                        + " データは残ります。「すべて表示」で戻せます。");
+    }
+
+    private void showInfo(String title, String header, String content) {
+        Alert alert = new Alert(AlertType.INFORMATION);
+        alert.setTitle(title);
+        alert.setHeaderText(header);
+        alert.setContentText(content);
+        Window w = dialogOwner();
+        if (w != null) {
+            alert.initOwner(w);
+        }
+        alert.showAndWait();
+    }
+
+    private static List<String> combinationDeleteLabels(
+            List<List<String>> combo, Set<Integer> originalIndexes) {
+        List<String> labels = new java.util.ArrayList<>();
+        if (combo == null || combo.isEmpty() || originalIndexes == null) {
+            return labels;
+        }
+        List<String> header = combo.get(0);
+        int procCol = MasterDispatchSheetEditRules.headerIndex(header, "工程名");
+        int machCol = MasterDispatchSheetEditRules.headerIndex(header, "機械名");
+        int lockCol =
+                MasterDispatchSheetEditRules.headerIndex(
+                        header, MasterDispatchSheetEditRules.COL_EDIT_LOCK);
+        for (int idx : originalIndexes) {
+            if (idx <= 0 || idx >= combo.size()) {
+                continue;
+            }
+            List<String> row = combo.get(idx);
+            if (row == null) {
+                continue;
+            }
+            String lock =
+                    lockCol >= 0 && lockCol < row.size() && row.get(lockCol) != null
+                            ? row.get(lockCol).strip()
+                            : "";
+            if (MasterDispatchSheetEditRules.isCombinationLockValue(lock)) {
+                continue;
+            }
+            String proc =
+                    procCol >= 0 && procCol < row.size() && row.get(procCol) != null
+                            ? row.get(procCol).strip()
+                            : "";
+            String mach =
+                    machCol >= 0 && machCol < row.size() && row.get(machCol) != null
+                            ? row.get(machCol).strip()
+                            : "";
+            labels.add("・" + proc + " × " + mach);
+        }
+        return labels;
     }
 
     private void applyCombinationRowVisibility() {
