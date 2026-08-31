@@ -637,6 +637,8 @@ public final class MasterDispatchSheetsTabController {
         updateToolbarForInnerTab(
                 innerTabPane != null ? innerTabPane.getSelectionModel().getSelectedIndex() : 0);
     }
+
+    private void applyAllEquipmentVisibility() {
         applyEquipmentColumnVisibility(
                 skillsView,
                 MasterDispatchSheetEditRules.SheetKind.SKILLS,
