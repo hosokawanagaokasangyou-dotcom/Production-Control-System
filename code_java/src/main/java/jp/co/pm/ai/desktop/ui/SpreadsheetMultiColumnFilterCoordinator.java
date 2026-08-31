@@ -1,8 +1,10 @@
 package jp.co.pm.ai.desktop.ui;
 
+import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -37,6 +39,11 @@ public final class SpreadsheetMultiColumnFilterCoordinator {
      * 列フィルタ以外で隠す行（配台マスタ組み合わせ表の工程+機械絞り込みなど）。{@link #recomputeHiddenRows} と AND。
      */
     private static final WeakHashMap<SpreadsheetView, BitSet> ADDITIONAL_HIDDEN_ROWS = new WeakHashMap<>();
+
+    /**
+     * この行番号以下（フィルタ行を含む）は列フィルタ・行検索でも隠さない。配台マスタの工程名・機械名行。
+     */
+    private static final WeakHashMap<SpreadsheetView, Integer> ALWAYS_VISIBLE_THROUGH = new WeakHashMap<>();
 
     private SpreadsheetMultiColumnFilterCoordinator() {}
 
@@ -183,14 +190,16 @@ public final class SpreadsheetMultiColumnFilterCoordinator {
     public static void commitColumnSelection(SpreadsheetView spv, int column, Set<String> selectedValues) {
         Objects.requireNonNull(spv);
         Objects.requireNonNull(selectedValues);
+        Set<String> selected = new HashSet<>(selectedValues);
+        selected.addAll(lockedColumnFilterValues(spv, column));
         Set<String> universe = distinctValuesForColumnRespectingOtherFilters(spv, column);
         Map<Integer, Set<String>> map = COLUMN_ALLOWED.computeIfAbsent(spv, k -> new HashMap<>());
         if (universe.isEmpty()) {
             map.remove(column);
-        } else if (universe.equals(selectedValues)) {
+        } else if (universe.equals(selected)) {
             map.remove(column);
         } else {
-            map.put(column, new HashSet<>(selectedValues));
+            map.put(column, selected);
         }
         if (map.isEmpty()) {
             COLUMN_ALLOWED.remove(spv);
@@ -221,6 +230,9 @@ public final class SpreadsheetMultiColumnFilterCoordinator {
     }
 
     static boolean rowPassesFiltersExcept(SpreadsheetView spv, int gridRow, int exceptColumn) {
+        if (gridRow <= lastAlwaysVisibleGridRow(spv)) {
+            return true;
+        }
         if (!rowMatchesTextSearch(spv, gridRow)) {
             return false;
         }
@@ -281,13 +293,14 @@ public final class SpreadsheetMultiColumnFilterCoordinator {
         }
         Integer filtered = spv.getFilteredRow();
         int first = filtered == null ? 1 : filtered + 1;
+        int lastAlways = lastAlwaysVisibleGridRow(spv);
         int n = grid.getRowCount();
         BitSet hidden = new BitSet(Math.max(n, spv.getHiddenRows().size()));
         boolean hasColumnFilters = map != null && !map.isEmpty();
         BitSet extra = ADDITIONAL_HIDDEN_ROWS.get(spv);
         int colCount = spv.getColumns().size();
         for (int i = first; i < n; i++) {
-            boolean hide = false;
+            boolean failsColumn = false;
             if (hasColumnFilters) {
                 for (Map.Entry<Integer, Set<String>> e : map.entrySet()) {
                     int col = e.getKey();
@@ -296,23 +309,20 @@ public final class SpreadsheetMultiColumnFilterCoordinator {
                     }
                     Set<String> allowed = e.getValue();
                     if (allowed == null || allowed.isEmpty()) {
-                        hide = true;
+                        failsColumn = true;
                         break;
                     }
                     String txt = grid.getRows().get(i).get(col).getText();
                     if (!allowed.contains(txt)) {
-                        hide = true;
+                        failsColumn = true;
                         break;
                     }
                 }
             }
-            if (!hide && !rowMatchesTextSearch(spv, i)) {
-                hide = true;
-            }
-            if (!hide && extra != null && extra.get(i)) {
-                hide = true;
-            }
-            hidden.set(i, hide);
+            boolean failsSearch = !rowMatchesTextSearch(spv, i);
+            boolean extraHide = extra != null && extra.get(i);
+            hidden.set(
+                    i, shouldHideGridRow(i, lastAlways, failsColumn, failsSearch, extraHide));
         }
         spv.setHiddenRows(hidden);
     }
@@ -324,19 +334,148 @@ public final class SpreadsheetMultiColumnFilterCoordinator {
      */
     static void retainSelectionToSearchVisible(
             Set<String> copySet, Iterable<String> displayedItems, String searchQuery) {
+        retainSelectionToSearchVisible(copySet, displayedItems, searchQuery, Set.of());
+    }
+
+    /**
+     * {@link #retainSelectionToSearchVisible(Set, Iterable, String)} に加え、タイトル行由来の値は検索で一覧から
+     * 外れても選択集合に残す（常時表示行のチェックを消さない）。
+     */
+    static void retainSelectionToSearchVisible(
+            Set<String> copySet,
+            Iterable<String> displayedItems,
+            String searchQuery,
+            Set<String> lockedValues) {
         if (copySet == null || displayedItems == null) {
             return;
         }
         String q = searchQuery != null ? searchQuery.trim() : "";
-        if (q.isEmpty()) {
-            return;
+        if (!q.isEmpty()) {
+            Set<String> visible = new HashSet<>();
+            for (String item : displayedItems) {
+                if (item != null) {
+                    visible.add(item);
+                }
+            }
+            copySet.removeIf(item -> !visible.contains(item));
         }
-        Set<String> visible = new HashSet<>();
-        for (String item : displayedItems) {
-            if (item != null) {
-                visible.add(item);
+        if (lockedValues != null) {
+            copySet.addAll(lockedValues);
+        }
+    }
+
+    /**
+     * フィルタ行の直後から連続して固定されている行の末尾（フィルタ行自身を含む）。
+     * 配台マスタの工程名・機械名行はここに入る。
+     */
+    static int lastAlwaysVisibleGridRow(int filteredRow, Iterable<Integer> fixedRows) {
+        int last = filteredRow;
+        if (fixedRows == null) {
+            return last;
+        }
+        Set<Integer> set = new HashSet<>();
+        for (Integer r : fixedRows) {
+            if (r != null) {
+                set.add(r);
             }
         }
-        copySet.removeIf(item -> !visible.contains(item));
+        int expect = filteredRow + 1;
+        while (set.contains(expect)) {
+            last = expect;
+            expect++;
+        }
+        return last;
+    }
+
+    static int lastAlwaysVisibleGridRow(SpreadsheetView spv) {
+        if (spv == null) {
+            return 0;
+        }
+        Integer filtered = spv.getFilteredRow();
+        int first = filtered == null ? 0 : filtered;
+        int fromFixed = lastAlwaysVisibleGridRow(first, spv.getFixedRows());
+        Integer explicit = ALWAYS_VISIBLE_THROUGH.get(spv);
+        if (explicit == null) {
+            return fromFixed;
+        }
+        return Math.max(fromFixed, explicit);
+    }
+
+    /**
+     * フィルタ行の次から {@code lastAlwaysVisible} までの非空白セル値（チェックを外せない候補）。
+     */
+    static Set<String> lockedColumnFilterValues(
+            List<String> cellTextsByGridRow, int filteredRow, int lastAlwaysVisible) {
+        Set<String> out = new HashSet<>();
+        if (cellTextsByGridRow == null) {
+            return out;
+        }
+        int from = filteredRow + 1;
+        int to = Math.min(lastAlwaysVisible, cellTextsByGridRow.size() - 1);
+        for (int i = from; i <= to; i++) {
+            String t = cellTextsByGridRow.get(i);
+            if (t != null && !t.isBlank()) {
+                out.add(t);
+            }
+        }
+        return out;
+    }
+
+    static Set<String> lockedColumnFilterValues(SpreadsheetView spv, int column) {
+        Set<String> out = new HashSet<>();
+        if (spv == null || column < 0) {
+            return out;
+        }
+        Grid grid = spv.getGrid();
+        if (grid == null || grid.getRows() == null) {
+            return out;
+        }
+        Integer filtered = spv.getFilteredRow();
+        int first = filtered == null ? 0 : filtered;
+        int last = lastAlwaysVisibleGridRow(spv);
+        int n = grid.getRowCount();
+        int colCount = grid.getColumnCount();
+        if (column >= colCount) {
+            return out;
+        }
+        ArrayList<String> col = new ArrayList<>(n);
+        for (int i = 0; i < n; i++) {
+            var row = grid.getRows().get(i);
+            String txt = "";
+            if (row != null && column < row.size() && row.get(column) != null) {
+                String t = row.get(column).getText();
+                txt = t != null ? t : "";
+            }
+            col.add(txt);
+        }
+        out.addAll(lockedColumnFilterValues(col, first, last));
+        return out;
+    }
+
+    static boolean shouldHideGridRow(
+            int gridRow,
+            int lastAlwaysVisible,
+            boolean failsColumnFilter,
+            boolean failsTextSearch,
+            boolean extraHidden) {
+        if (gridRow <= lastAlwaysVisible) {
+            return false;
+        }
+        return failsColumnFilter || failsTextSearch || extraHidden;
+    }
+
+    /**
+     * 列フィルタでも隠さない最後のグリッド行（フィルタ行を含む）。配台マスタのタイトル行用。
+     * {@link #clear} では消さない（フィルタ再インストールと独立）。
+     */
+    public static void setAlwaysVisibleThroughGridRow(SpreadsheetView spv, int lastInclusive) {
+        if (spv == null) {
+            return;
+        }
+        if (lastInclusive < 0) {
+            ALWAYS_VISIBLE_THROUGH.remove(spv);
+            return;
+        }
+        ALWAYS_VISIBLE_THROUGH.put(spv, lastInclusive);
     }
 }

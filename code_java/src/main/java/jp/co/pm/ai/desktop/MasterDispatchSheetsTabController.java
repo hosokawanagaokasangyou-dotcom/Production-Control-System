@@ -954,6 +954,12 @@ public final class MasterDispatchSheetsTabController {
         if (frozenDataHeaderRows > 0) {
             SpreadsheetTabularSupport.pinSpreadsheetRows(view, 1, frozenDataHeaderRows);
         }
+        int lastTitle =
+                SpreadsheetTabularSupport.spreadsheetFirstDataRowIndex()
+                        + Math.max(0, frozenDataHeaderRows)
+                        - 1;
+        SpreadsheetMultiColumnFilterCoordinator.setAlwaysVisibleThroughGridRow(view, lastTitle);
+        SpreadsheetMultiColumnFilterCoordinator.recomputeHiddenRows(view);
         SpreadsheetTabularSupport.applyUnconstrainedColumnResizePolicyAfterSkinSettles(view);
         Platform.runLater(() -> SpreadsheetTabularSupport.applyColumnWidths(view, widths, 120));
     }

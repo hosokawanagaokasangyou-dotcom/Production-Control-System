@@ -51,6 +51,7 @@ public final class ExcelLikeSpreadsheetFilter implements Filter {
     private final Set<String> stringSet = new HashSet<>();
 
     private final Set<String> copySet = new HashSet<>();
+    private Set<String> lockedValues = Set.of();
 
     private MenuItem sortItem;
     private TextField searchField;
@@ -178,7 +179,8 @@ public final class ExcelLikeSpreadsheetFilter implements Filter {
                                                     displayedItems,
                                                     searchField != null
                                                             ? searchField.getText()
-                                                            : "");
+                                                            : "",
+                                                    lockedValues);
                                     SpreadsheetMultiColumnFilterCoordinator.commitColumnSelection(
                                             spv, column, new HashSet<>(copySet));
                                 }
@@ -190,6 +192,9 @@ public final class ExcelLikeSpreadsheetFilter implements Filter {
     private void prepareMenuSession() {
         rebuildUniqueValues();
         refreshCopySetFromVisibleRows();
+        lockedValues =
+                SpreadsheetMultiColumnFilterCoordinator.lockedColumnFilterValues(spv, column);
+        copySet.addAll(lockedValues);
         if (menuButton.getItems().isEmpty()) {
             buildMenuStructure();
         }
@@ -244,8 +249,9 @@ public final class ExcelLikeSpreadsheetFilter implements Filter {
         selectAllBtn.setOnAction(
                 e -> {
                     SpreadsheetMultiColumnFilterCoordinator.retainSelectionToSearchVisible(
-                            copySet, displayedItems, searchField.getText());
+                            copySet, displayedItems, searchField.getText(), lockedValues);
                     copySet.addAll(displayedItems);
+                    copySet.addAll(lockedValues);
                     if (listView != null) {
                         listView.refresh();
                     }
@@ -255,6 +261,7 @@ public final class ExcelLikeSpreadsheetFilter implements Filter {
         clearAllBtn.setOnAction(
                 e -> {
                     copySet.clear();
+                    copySet.addAll(lockedValues);
                     if (listView != null) {
                         listView.refresh();
                     }
@@ -281,13 +288,26 @@ public final class ExcelLikeSpreadsheetFilter implements Filter {
                                     return;
                                 }
                                 setText(item);
+                                boolean lock = lockedValues.contains(item);
                                 CheckBox checkBox = new CheckBox();
-                                checkBox.setSelected(copySet.contains(item));
+                                checkBox.setDisable(lock);
+                                checkBox.setSelected(lock || copySet.contains(item));
+                                if (lock) {
+                                    copySet.add(item);
+                                }
                                 checkBox
                                         .selectedProperty()
                                         .addListener(
                                                 (ChangeListener<Boolean>)
                                                         (obs, oldValue, newValue) -> {
+                                                            if (lock) {
+                                                                if (!Boolean.TRUE.equals(
+                                                                        newValue)) {
+                                                                    checkBox.setSelected(true);
+                                                                }
+                                                                copySet.add(item);
+                                                                return;
+                                                            }
                                                             if (Boolean.TRUE.equals(newValue)) {
                                                                 copySet.add(item);
                                                             } else {
@@ -297,7 +317,8 @@ public final class ExcelLikeSpreadsheetFilter implements Filter {
                                                                     .retainSelectionToSearchVisible(
                                                                             copySet,
                                                                             displayedItems,
-                                                                            searchField.getText());
+                                                                            searchField.getText(),
+                                                                            lockedValues);
                                                         });
                                 setGraphic(checkBox);
                             }

@@ -180,6 +180,9 @@ public final class DialogExcelLikeSpreadsheetFilter implements Filter {
 
         rebuildUniqueValues();
         refreshCopySetFromVisibleRows();
+        Set<String> locked =
+                SpreadsheetMultiColumnFilterCoordinator.lockedColumnFilterValues(spv, column);
+        copySet.addAll(locked);
 
         ObservableList<String> displayedItems = FXCollections.observableArrayList();
 
@@ -208,12 +211,24 @@ public final class DialogExcelLikeSpreadsheetFilter implements Filter {
                                     return;
                                 }
                                 setText(item);
+                                boolean lock = locked.contains(item);
                                 CheckBox checkBox = new CheckBox();
-                                checkBox.setSelected(copySet.contains(item));
+                                checkBox.setDisable(lock);
+                                checkBox.setSelected(lock || copySet.contains(item));
+                                if (lock) {
+                                    copySet.add(item);
+                                }
                                 checkBox
                                         .selectedProperty()
                                         .addListener(
                                                 (obs, oldValue, newValue) -> {
+                                                    if (lock) {
+                                                        if (!Boolean.TRUE.equals(newValue)) {
+                                                            checkBox.setSelected(true);
+                                                        }
+                                                        copySet.add(item);
+                                                        return;
+                                                    }
                                                     if (Boolean.TRUE.equals(newValue)) {
                                                         copySet.add(item);
                                                     } else {
@@ -223,7 +238,8 @@ public final class DialogExcelLikeSpreadsheetFilter implements Filter {
                                                             .retainSelectionToSearchVisible(
                                                                     copySet,
                                                                     displayedItems,
-                                                                    searchField.getText());
+                                                                    searchField.getText(),
+                                                                    locked);
                                                 });
                                 setGraphic(checkBox);
                             }
@@ -246,8 +262,9 @@ public final class DialogExcelLikeSpreadsheetFilter implements Filter {
         selectAllBtn.setOnAction(
                 e -> {
                     SpreadsheetMultiColumnFilterCoordinator.retainSelectionToSearchVisible(
-                            copySet, displayedItems, searchField.getText());
+                            copySet, displayedItems, searchField.getText(), locked);
                     copySet.addAll(displayedItems);
+                    copySet.addAll(locked);
                     listView.refresh();
                 });
         Button clearAllBtn = new Button(CLEAR_ALL);
@@ -255,6 +272,7 @@ public final class DialogExcelLikeSpreadsheetFilter implements Filter {
         clearAllBtn.setOnAction(
                 e -> {
                     copySet.clear();
+                    copySet.addAll(locked);
                     listView.refresh();
                 });
         HBox bulkRow = new HBox(8, selectAllBtn, clearAllBtn);
@@ -267,7 +285,7 @@ public final class DialogExcelLikeSpreadsheetFilter implements Filter {
         Runnable commit =
                 () -> {
                     SpreadsheetMultiColumnFilterCoordinator.retainSelectionToSearchVisible(
-                            copySet, displayedItems, searchField.getText());
+                            copySet, displayedItems, searchField.getText(), locked);
                     SpreadsheetMultiColumnFilterCoordinator.commitColumnSelection(
                             spv, column, new HashSet<>(copySet));
                 };
