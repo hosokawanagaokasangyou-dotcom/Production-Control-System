@@ -3,13 +3,19 @@ package jp.co.pm.ai.desktop.ui;
 import java.util.ArrayList;
 import java.util.List;
 
+import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
+import javafx.scene.Node;
+import javafx.scene.control.TableCell;
+import javafx.scene.input.MouseButton;
+import javafx.scene.input.MouseEvent;
 
 import org.controlsfx.control.spreadsheet.Grid;
 import org.controlsfx.control.spreadsheet.GridBase;
 import org.controlsfx.control.spreadsheet.SpreadsheetCell;
 import org.controlsfx.control.spreadsheet.SpreadsheetCellType;
+import org.controlsfx.control.spreadsheet.SpreadsheetColumn;
 import org.controlsfx.control.spreadsheet.SpreadsheetView;
 
 import jp.co.pm.ai.desktop.io.MasterDispatchSheetsDocument;
@@ -17,6 +23,8 @@ import jp.co.pm.ai.desktop.io.MasterTeamCombinationTableReader;
 
 /** MASTER 4 シート用の編集可能格子。 */
 public final class MasterDispatchSheetGridSupport {
+    private static final String SINGLE_CLICK_LIST_EDITING =
+            "jp.co.pm.ai.masterDispatchSingleClickListEditing";
 
     private static final MasterDispatchDecimalCellType SPEED_BASE_CELL_TYPE =
             new MasterDispatchDecimalCellType(0.0, 99.0, 1);
@@ -26,6 +34,53 @@ public final class MasterDispatchSheetGridSupport {
             new MasterDispatchDecimalCellType(0.0, 99.0, 0);
 
     private MasterDispatchSheetGridSupport() {}
+
+    public static void installSingleClickListEditing(SpreadsheetView view) {
+        if (view == null
+                || Boolean.TRUE.equals(view.getProperties().get(SINGLE_CLICK_LIST_EDITING))) {
+            return;
+        }
+        view.getProperties().put(SINGLE_CLICK_LIST_EDITING, Boolean.TRUE);
+        view.addEventFilter(
+                MouseEvent.MOUSE_CLICKED,
+                event -> {
+                    if (event.getButton() != MouseButton.PRIMARY
+                            || view.getEditingCell() != null) {
+                        return;
+                    }
+                    TableCell<?, ?> tableCell =
+                            findTableCell(
+                                    event.getPickResult() != null
+                                            ? event.getPickResult().getIntersectedNode()
+                                            : null);
+                    if (tableCell == null
+                            || tableCell.isEmpty()
+                            || !(tableCell.getItem() instanceof SpreadsheetCell cell)
+                            || !MasterDispatchListCellType.isPopupListCell(cell)
+                            || !cell.isEditable()) {
+                        return;
+                    }
+                    int columnIndex =
+                            SpreadsheetTabularSupport.viewColumnIndexFromTableCell(view, tableCell);
+                    if (columnIndex < 0 || columnIndex >= view.getColumns().size()) {
+                        return;
+                    }
+                    int rowIndex = tableCell.getIndex();
+                    SpreadsheetColumn column = view.getColumns().get(columnIndex);
+                    Platform.runLater(() -> view.edit(rowIndex, column));
+                });
+    }
+
+    private static TableCell<?, ?> findTableCell(Node node) {
+        Node current = node;
+        while (current != null) {
+            if (current instanceof TableCell<?, ?> tableCell) {
+                return tableCell;
+            }
+            current = current.getParent();
+        }
+        return null;
+    }
 
     public static GridBase buildEditable(
             MasterDispatchSheetEditRules.SheetKind kind, List<List<String>> rows) {

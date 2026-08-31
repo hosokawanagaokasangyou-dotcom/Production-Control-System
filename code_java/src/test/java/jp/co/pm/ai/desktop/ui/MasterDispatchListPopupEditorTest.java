@@ -14,6 +14,8 @@ import javafx.scene.control.ComboBox;
 import javafx.scene.control.TextField;
 
 import org.controlsfx.control.spreadsheet.SpreadsheetCellEditor;
+import org.controlsfx.control.spreadsheet.SpreadsheetCell;
+import org.controlsfx.control.spreadsheet.SpreadsheetCellType;
 import org.controlsfx.control.spreadsheet.SpreadsheetView;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -54,5 +56,34 @@ class MasterDispatchListPopupEditorTest {
         assertTrue(editor.getEditor() instanceof TextField);
         assertFalse(editor.getEditor() instanceof ComboBox);
         assertEquals("", ((TextField) editor.getEditor()).getText());
+    }
+
+    @Test
+    void popupEditorKeepsExactlyFixedHeightToAvoidRelayout() throws Exception {
+        CountDownLatch done = new CountDownLatch(1);
+        AtomicReference<TextField> fieldRef = new AtomicReference<>();
+        Platform.runLater(
+                () -> {
+                    SpreadsheetCellEditor editor =
+                            new MasterDispatchListCellType(List.of("", "OP", "AS"))
+                                    .createEditor(new SpreadsheetView());
+                    fieldRef.set((TextField) editor.getEditor());
+                    done.countDown();
+                });
+        assertTrue(done.await(5, TimeUnit.SECONDS));
+        TextField field = fieldRef.get();
+        assertEquals(field.getPrefHeight(), field.getMinHeight());
+        assertEquals(field.getPrefHeight(), field.getMaxHeight());
+    }
+
+    @Test
+    void popupListCellCanBeRecognizedForSingleClickEditing() {
+        SpreadsheetCell listCell =
+                new MasterDispatchListCellType(List.of("", "OP", "AS"))
+                        .createCell(1, 1, 1, 1, "");
+        SpreadsheetCell plainCell = SpreadsheetCellType.STRING.createCell(1, 1, 1, 1, "");
+
+        assertTrue(MasterDispatchListCellType.isPopupListCell(listCell));
+        assertFalse(MasterDispatchListCellType.isPopupListCell(plainCell));
     }
 }

@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.controlsfx.control.spreadsheet.SpreadsheetCellEditor;
+import org.controlsfx.control.spreadsheet.SpreadsheetCell;
 import org.controlsfx.control.spreadsheet.SpreadsheetCellType;
 import org.controlsfx.control.spreadsheet.SpreadsheetView;
 
@@ -15,6 +16,10 @@ public final class MasterDispatchListCellType extends SpreadsheetCellType.ListTy
 
     public MasterDispatchListCellType(List<String> items) {
         super(items);
+    }
+
+    static boolean isPopupListCell(SpreadsheetCell cell) {
+        return cell != null && cell.getCellType() instanceof MasterDispatchListCellType;
     }
 
     @Override

@@ -126,7 +126,9 @@ public final class MasterDispatchSheetsTabController {
         view.setEditable(true);
         StackPane.setMargin(view, new Insets(0));
         host.getChildren().setAll(view);
-        SpreadsheetTabularSupport.installSpreadsheetChromeRelayoutDebouncerForHost(host, () -> leadingCols);
+        MasterDispatchSheetGridSupport.installSingleClickListEditing(view);
+        SpreadsheetTabularSupport.installSpreadsheetChromeRelayoutDebouncerForHost(
+                host, () -> leadingCols, () -> view.getEditingCell() != null);
     }
 
     void bindShell(MainShellController shell) {
@@ -373,6 +375,7 @@ public final class MasterDispatchSheetsTabController {
             return 0;
         }
         equipmentFocusKeys.clear();
+        equipmentFocusKeys.addAll(focusKeysForMissingPairs(bundle.pairs()));
         int added = 0;
         for (PlanTasksMissingSkillsColumnPrompt.MissingPair pair : bundle.pairs()) {
             added += applyEquipmentColumn(pair.process(), pair.machine());
@@ -391,6 +394,7 @@ public final class MasterDispatchSheetsTabController {
             return 0;
         }
         equipmentFocusKeys.clear();
+        equipmentFocusKeys.addAll(focusKeysForMissingPairs(pairs));
         int added = 0;
         for (PlanTasksMissingSkillsColumnPrompt.MissingPair pair : pairs) {
             added += applyEquipmentColumn(pair.process(), pair.machine());
@@ -402,6 +406,26 @@ public final class MasterDispatchSheetsTabController {
                         + " 列追加しました。追加した列だけ表示しています。OP/AS を設定し、保存してください。「すべて表示」で全列に戻せます。");
         refreshMissingEquipmentAttention();
         return added;
+    }
+
+    static Set<String> focusKeysForMissingPairs(
+            List<PlanTasksMissingSkillsColumnPrompt.MissingPair> pairs) {
+        LinkedHashSet<String> keys = new LinkedHashSet<>();
+        if (pairs == null) {
+            return keys;
+        }
+        for (PlanTasksMissingSkillsColumnPrompt.MissingPair pair : pairs) {
+            if (pair == null) {
+                continue;
+            }
+            String key =
+                    MasterTeamCombinationTableReader.normalizedComboKey(
+                            pair.process(), pair.machine());
+            if (!key.isEmpty()) {
+                keys.add(key);
+            }
+        }
+        return keys;
     }
 
     @FXML

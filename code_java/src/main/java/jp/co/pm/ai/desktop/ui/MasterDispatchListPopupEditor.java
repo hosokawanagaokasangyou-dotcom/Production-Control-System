@@ -47,7 +47,7 @@ public final class MasterDispatchListPopupEditor extends SpreadsheetCellEditor {
         field.setFocusTraversable(true);
         field.setMinHeight(18);
         field.setPrefHeight(18);
-        field.setMaxHeight(20);
+        field.setMaxHeight(18);
         field.setPadding(new Insets(0, 2, 0, 2));
         field.setOnKeyPressed(
                 e -> {
