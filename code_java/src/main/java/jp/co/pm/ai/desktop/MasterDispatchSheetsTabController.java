@@ -28,6 +28,7 @@ import jp.co.pm.ai.desktop.io.MasterDispatchSheetsDocument;
 import jp.co.pm.ai.desktop.io.MasterDispatchSheetsSaveWriter;
 import jp.co.pm.ai.desktop.io.MasterDispatchSheetsSeeder;
 import jp.co.pm.ai.desktop.ui.FourDigitConfirmationDialog;
+import jp.co.pm.ai.desktop.ui.MasterDispatchEquipmentColumnDialog;
 import jp.co.pm.ai.desktop.ui.MasterDispatchSheetEditRules;
 import jp.co.pm.ai.desktop.ui.MasterDispatchSheetGridSupport;
 import jp.co.pm.ai.desktop.ui.SpreadsheetTabularSupport;
@@ -223,25 +224,188 @@ public final class MasterDispatchSheetsTabController {
         reloadFromCurrentFactory(true);
     }
 
+    @FXML
+    private void onAddEquipmentColumnAction() {
+        Window owner = dialogOwner();
+        Optional<MasterDispatchEquipmentColumnDialog.Result> ans =
+                MasterDispatchEquipmentColumnDialog.prompt(owner);
+        if (ans.isEmpty()) {
+            return;
+        }
+        MasterDispatchEquipmentColumnDialog.Result r = ans.get();
+        int added = applyEquipmentColumn(r.process(), r.machine());
+        focusSkillsTab();
+        if (added <= 0) {
+            statusLabel.setText("既に同じ工程名+機械名の列があります: " + r.process() + " × " + r.machine());
+            return;
+        }
+        statusLabel.setText(
+                "列を追加しました: "
+                        + r.process()
+                        + " × "
+                        + r.machine()
+                        + "。メンバーへ OP/AS を設定し、保存してください。");
+    }
+
+    @FXML
+    private void onAddMissingEquipmentColumnsAction() {
+        addMissingEquipmentColumnsFromPlan(true);
+    }
+
+    /**
+     * 段階1/2 の未登録ダイアログから呼ぶ。計画タスクにあって skills に無い工程+機械列を追加する。
+     *
+     * @return 新規に足した列数
+     */
+    int addMissingEquipmentColumnsFromPlan(boolean showAlerts) {
+        if (shell == null) {
+            return 0;
+        }
+        PlanTasksMissingSkillsColumnPrompt.PromptBundle bundle;
+        try {
+            bundle = PlanTasksMissingSkillsColumnPrompt.collectMissingPairs(shell.snapshotUiEnv());
+        } catch (Exception e) {
+            if (showAlerts) {
+                statusLabel.setText("未登録の工程+機械を確認できませんでした: " + e.getMessage());
+            }
+            return 0;
+        }
+        if (bundle.empty()) {
+            if (showAlerts) {
+                Alert alert = new Alert(AlertType.INFORMATION);
+                alert.setTitle("未登録の工程+機械");
+                alert.setHeaderText("追加する列はありません。");
+                alert.setContentText("計画タスクの工程+機械は、すべて skills シートに列があります。");
+                Window w = dialogOwner();
+                if (w != null) {
+                    alert.initOwner(w);
+                }
+                alert.showAndWait();
+            }
+            return 0;
+        }
+        int added = 0;
+        for (PlanTasksMissingSkillsColumnPrompt.MissingPair pair : bundle.pairs()) {
+            added += applyEquipmentColumn(pair.process(), pair.machine());
+        }
+        focusSkillsTab();
+        statusLabel.setText(
+                "未登録の工程+機械を "
+                        + added
+                        + " 列追加しました。メンバーへ OP/AS を設定し、保存してください。");
+        return added;
+    }
+
+    int addMissingEquipmentColumns(List<PlanTasksMissingSkillsColumnPrompt.MissingPair> pairs) {
+        if (pairs == null || pairs.isEmpty()) {
+            return 0;
+        }
+        int added = 0;
+        for (PlanTasksMissingSkillsColumnPrompt.MissingPair pair : pairs) {
+            added += applyEquipmentColumn(pair.process(), pair.machine());
+        }
+        focusSkillsTab();
+        statusLabel.setText(
+                "未登録の工程+機械を "
+                        + added
+                        + " 列追加しました。メンバーへ OP/AS を設定し、保存してください。");
+        return added;
+    }
+
+    void focusSkillsTab() {
+        if (innerTabPane != null && !innerTabPane.getTabs().isEmpty()) {
+            innerTabPane.getSelectionModel().select(0);
+        }
+    }
+
+    private int applyEquipmentColumn(String process, String machine) {
+        List<List<String>> skills =
+                MasterDispatchSheetGridSupport.extract(
+                        skillsView, MasterDispatchSheetEditRules.SheetKind.SKILLS);
+        List<List<String>> need =
+                MasterDispatchSheetGridSupport.extract(
+                        needView, MasterDispatchSheetEditRules.SheetKind.NEED);
+        List<List<String>> speed =
+                MasterDispatchSheetGridSupport.extract(
+                        speedView, MasterDispatchSheetEditRules.SheetKind.SPEED);
+        List<List<String>> combo =
+                MasterDispatchSheetGridSupport.extract(
+                        comboView, MasterDispatchSheetEditRules.SheetKind.COMBINATIONS);
+        boolean existed =
+                MasterDispatchSheetEditRules.containsEquipmentColumn(
+                        MasterDispatchSheetEditRules.SheetKind.SKILLS, skills, process, machine);
+        skills =
+                MasterDispatchSheetEditRules.addEquipmentColumn(
+                        MasterDispatchSheetEditRules.SheetKind.SKILLS, skills, process, machine);
+        need =
+                MasterDispatchSheetEditRules.addEquipmentColumn(
+                        MasterDispatchSheetEditRules.SheetKind.NEED, need, process, machine);
+        speed =
+                MasterDispatchSheetEditRules.addEquipmentColumn(
+                        MasterDispatchSheetEditRules.SheetKind.SPEED, speed, process, machine);
+        replaceDocumentSheets(skills, need, speed, combo);
+        return existed ? 0 : 1;
+    }
+
+    private void replaceDocumentSheets(
+            List<List<String>> skills,
+            List<List<String>> need,
+            List<List<String>> speed,
+            List<List<String>> combo) {
+        String site = document != null ? document.factorySite() : "";
+        String source = document != null ? document.sourceWorkbook() : "";
+        String imported = document != null ? document.importedAt() : "";
+        LinkedHashMap<String, MasterDispatchSheetsDocument.SheetGrid> sheets = new LinkedHashMap<>();
+        sheets.put(
+                MasterDispatchSheetsDocument.KEY_SKILLS,
+                new MasterDispatchSheetsDocument.SheetGrid("skills", skills));
+        sheets.put(
+                MasterDispatchSheetsDocument.KEY_NEED,
+                new MasterDispatchSheetsDocument.SheetGrid("need", need));
+        sheets.put(
+                MasterDispatchSheetsDocument.KEY_SPEED,
+                new MasterDispatchSheetsDocument.SheetGrid("speed", speed));
+        sheets.put(
+                MasterDispatchSheetsDocument.KEY_TEAM_COMBINATIONS,
+                new MasterDispatchSheetsDocument.SheetGrid("組み合わせ表", combo));
+        document =
+                new MasterDispatchSheetsDocument(
+                        MasterDispatchSheetsDocument.SCHEMA_VERSION, site, source, imported, sheets);
+        applyDocument(document);
+    }
+
+    private Window dialogOwner() {
+        if (shell != null && shell.primaryStageForDialogs() != null) {
+            return shell.primaryStageForDialogs();
+        }
+        if (statusLabel != null && statusLabel.getScene() != null) {
+            return statusLabel.getScene().getWindow();
+        }
+        return null;
+    }
+
     private void applyDocument(MasterDispatchSheetsDocument doc) {
         MasterDispatchSheetsDocument d = doc != null ? doc : MasterDispatchSheetsDocument.empty("");
         attachGrid(
                 skillsView,
                 MasterDispatchSheetEditRules.SheetKind.SKILLS,
                 d.sheet("skills").rows(),
-                0,
+                MasterDispatchSheetEditRules.frozenTitleRowCount(
+                        MasterDispatchSheetEditRules.SheetKind.SKILLS),
                 1);
         attachGrid(
                 needView,
                 MasterDispatchSheetEditRules.SheetKind.NEED,
                 d.sheet("need").rows(),
-                0,
+                MasterDispatchSheetEditRules.frozenTitleRowCount(
+                        MasterDispatchSheetEditRules.SheetKind.NEED),
                 3);
         attachGrid(
                 speedView,
                 MasterDispatchSheetEditRules.SheetKind.SPEED,
                 d.sheet("speed").rows(),
-                0,
+                MasterDispatchSheetEditRules.frozenTitleRowCount(
+                        MasterDispatchSheetEditRules.SheetKind.SPEED),
                 3);
         attachGrid(
                 comboView,

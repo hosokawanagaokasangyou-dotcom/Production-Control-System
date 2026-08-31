@@ -80,14 +80,14 @@ class MasterDispatchSheetEditRulesTest {
     }
 
     @Test
-    void displayRows_omitDuplicatedTitleRows_andRestoreFromColumnTitles() {
+    void displayRows_keepProcessMachineRowsForSkills_andRestoreFromColumnTitles() {
         List<List<String>> skills =
                 List.of(
                         List.of("工程名", "巻返し"),
                         List.of("機械名", "機1"),
                         List.of("山田", "OP1"));
         assertEquals(
-                List.of(List.of("山田", "OP1")),
+                skills,
                 MasterDispatchSheetEditRules.displayRows(
                         MasterDispatchSheetEditRules.SheetKind.SKILLS, skills));
         List<String> titles =
@@ -98,7 +98,7 @@ class MasterDispatchSheetEditRulesTest {
                 MasterDispatchSheetEditRules.restoreTitleRows(
                         MasterDispatchSheetEditRules.SheetKind.SKILLS,
                         titles,
-                        List.of(List.of("山田", "OP1"))));
+                        skills));
 
         List<List<String>> combo =
                 List.of(
@@ -128,6 +128,8 @@ class MasterDispatchSheetEditRulesTest {
                         List.of("", "依頼NO条件", "備考", ""));
         assertEquals(
                 List.of(
+                        List.of("工程名", "", "", "EC"),
+                        List.of("機械名", "", "", "EC機 湖南"),
                         List.of("基本必要人数", "", "", "2"),
                         List.of("余力時追加人数", "", "", "0")),
                 MasterDispatchSheetEditRules.displayRows(
@@ -140,7 +142,10 @@ class MasterDispatchSheetEditRulesTest {
                         List.of("工程名(通称)", "", "", ""),
                         List.of("基本速度", "", "", "20"));
         assertEquals(
-                List.of(List.of("基本速度", "", "", "20")),
+                List.of(
+                        List.of("工程名", "", "", "EC"),
+                        List.of("機械名", "", "", "EC機 湖南"),
+                        List.of("基本速度", "", "", "20")),
                 MasterDispatchSheetEditRules.displayRows(
                         MasterDispatchSheetEditRules.SheetKind.SPEED, speed));
         List<String> titles =
@@ -166,6 +171,66 @@ class MasterDispatchSheetEditRulesTest {
         assertEquals(a, b);
         assertNotEquals(a, c);
         assertEquals("", MasterDispatchSheetEditRules.comboRowStyle("", "機1"));
+    }
+
+    @Test
+    void addEquipmentColumn_appendsProcessAndMachine_andSkipsDuplicate() {
+        List<List<String>> skills =
+                List.of(
+                        List.of("工程名", "巻返し"),
+                        List.of("機械名", "機1"),
+                        List.of("山田", "OP1"));
+        List<List<String>> added =
+                MasterDispatchSheetEditRules.addEquipmentColumn(
+                        MasterDispatchSheetEditRules.SheetKind.SKILLS,
+                        skills,
+                        "分割",
+                        "LAC/EC機");
+        assertEquals("分割", added.get(0).get(2));
+        assertEquals("LAC/EC機", added.get(1).get(2));
+        assertEquals("", added.get(2).get(2));
+        List<List<String>> again =
+                MasterDispatchSheetEditRules.addEquipmentColumn(
+                        MasterDispatchSheetEditRules.SheetKind.SKILLS,
+                        added,
+                        "分割",
+                        "LAC/EC機");
+        assertEquals(added, again);
+        assertTrue(
+                MasterDispatchSheetEditRules.containsEquipmentColumn(
+                        MasterDispatchSheetEditRules.SheetKind.SKILLS, added, "分割", "LAC/EC機"));
+        assertFalse(
+                MasterDispatchSheetEditRules.containsEquipmentColumn(
+                        MasterDispatchSheetEditRules.SheetKind.SKILLS, skills, "分割", "LAC/EC機"));
+
+        List<List<String>> need =
+                List.of(
+                        List.of("工程名", "", "", "巻返し"),
+                        List.of("機械名", "", "", "機1"),
+                        List.of("必須人数", "", "", "2"));
+        List<List<String>> needAdded =
+                MasterDispatchSheetEditRules.addEquipmentColumn(
+                        MasterDispatchSheetEditRules.SheetKind.NEED, need, "分割", "スライス機1");
+        assertEquals("分割", needAdded.get(0).get(4));
+        assertEquals("スライス機1", needAdded.get(1).get(4));
+        assertEquals("2", needAdded.get(2).get(3));
+    }
+
+    @Test
+    void isSkillsSkillValueCell_falseOnHeaderRows() {
+        List<List<String>> rows =
+                List.of(
+                        List.of("工程名", "巻返し"),
+                        List.of("機械名", "機1"),
+                        List.of("山田", "OP1"));
+        assertFalse(
+                MasterDispatchSheetEditRules.isSkillsSkillValueCell(0, 1, rows));
+        assertFalse(
+                MasterDispatchSheetEditRules.isSkillsSkillValueCell(1, 1, rows));
+        assertTrue(
+                MasterDispatchSheetEditRules.isSkillsSkillValueCell(2, 1, rows));
+        assertFalse(
+                MasterDispatchSheetEditRules.isSkillsSkillValueCell(2, 0, rows));
     }
 
     @Test

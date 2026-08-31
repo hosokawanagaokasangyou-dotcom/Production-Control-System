@@ -112,7 +112,7 @@ public final class MasterDispatchSheetGridSupport {
             int col,
             String raw) {
         SpreadsheetCell cell;
-        if (kind == MasterDispatchSheetEditRules.SheetKind.SKILLS && col >= 1) {
+        if (MasterDispatchSheetEditRules.isSkillsSkillValueCell(dataRow, col, display)) {
             cell =
                     SpreadsheetCellType.LIST(skillChoices(raw))
                             .createCell(gridRow, col, 1, 1, raw);

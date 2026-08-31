@@ -51,11 +51,17 @@ public final class MissingSkillsSheetColumnDialog {
         }
     }
 
+    public enum Outcome {
+        DISMISSED,
+        ACKNOWLEDGED,
+        ADD_TO_MASTER
+    }
+
     /**
      * @param allowContinue {@code true} のとき「続行」ボタンを出す（段階2実行前）。{@code false} は警告のみ（段階1完了時）。
-     * @return 続行可能モードで「続行」を選んだとき {@code true}。警告のみモードでは OK で {@code true}。
+     * @return 空はダイアログを出さなかったとき。それ以外はユーザー操作。
      */
-    public static Optional<Boolean> prompt(Window owner, PromptBundle bundle, boolean allowContinue) {
+    public static Optional<Outcome> prompt(Window owner, PromptBundle bundle, boolean allowContinue) {
         if (bundle == null || bundle.empty()) {
             return Optional.empty();
         }
@@ -75,10 +81,9 @@ public final class MissingSkillsSheetColumnDialog {
         Label hint =
                 new Label(
                         allowContinue
-                                ? "master の skills シート 1 行目（工程名）・2 行目（機械名）に列を追加し、"
-                                        + "メンバー行へ OP/AS を設定してから段階2を実行してください。"
+                                ? "「配台マスタに列を追加」で資格タブへ列を足せます。メンバーへ OP/AS を入れて保存してから段階2を実行してください。"
                                         + " 「続行」は配台されない行が残る可能性があります。"
-                                : "段階2実行前に master の skills シートへ列を追加し、メンバー行へ OP/AS を設定してください。");
+                                : "「配台マスタに列を追加」で資格タブへ列を足し、メンバーへ OP/AS を設定してから保存してください。");
         hint.setWrapText(true);
         hint.setStyle("-fx-font-size: 11px; -fx-text-fill: derive(-fx-text-inner-color, 22%);");
 
@@ -108,20 +113,24 @@ public final class MissingSkillsSheetColumnDialog {
         dialog.getDialogPane().setContent(root);
         dialog.getDialogPane().setPrefWidth(720);
 
+        ButtonType addBtn = new ButtonType("配台マスタに列を追加");
         ButtonType continueBtn = new ButtonType("続行");
         if (allowContinue) {
-            dialog.getDialogPane().getButtonTypes().setAll(continueBtn, ButtonType.CANCEL);
+            dialog.getDialogPane().getButtonTypes().setAll(addBtn, continueBtn, ButtonType.CANCEL);
         } else {
-            dialog.getDialogPane().getButtonTypes().setAll(ButtonType.OK);
+            dialog.getDialogPane().getButtonTypes().setAll(addBtn, ButtonType.OK);
         }
 
         Optional<ButtonType> choice = dialog.showAndWait();
         if (choice.isEmpty()) {
-            return Optional.of(false);
+            return Optional.of(Outcome.DISMISSED);
+        }
+        if (choice.get() == addBtn) {
+            return Optional.of(Outcome.ADD_TO_MASTER);
         }
         if (allowContinue) {
-            return Optional.of(choice.get() == continueBtn);
+            return Optional.of(choice.get() == continueBtn ? Outcome.ACKNOWLEDGED : Outcome.DISMISSED);
         }
-        return Optional.of(choice.get() == ButtonType.OK);
+        return Optional.of(Outcome.ACKNOWLEDGED);
     }
 }

@@ -10385,17 +10385,22 @@ public final class MainShellController
                     "[stage2] skills シートに無い工程+機械 "
                             + bundle.pairs().size()
                             + " 件 — 配台阻害の確認ダイアログを表示します。");
-            Optional<Boolean> entered =
+            Optional<MissingSkillsSheetColumnDialog.Outcome> entered =
                     MissingSkillsSheetColumnDialog.prompt(
                             primaryStageForDialogs(), bundle, true);
-            if (entered.isEmpty() || !entered.get()) {
+            if (entered.isEmpty()
+                    || entered.get() == MissingSkillsSheetColumnDialog.Outcome.DISMISSED) {
                 appendLog(
                         "[stage2] skills シート未登録の確認をキャンセルしたため段階2を中止します。");
                 showWarningDialog(
                         "段階2 中止",
                         "skills シートに未登録の工程+機械があるため、段階2は実行しませんでした。\n\n"
                                 + bundle.summaryJa(12)
-                                + "\n\nmaster の skills シートへ列を追加してください。");
+                                + "\n\n配台マスタの資格タブで列を追加してください。");
+                return false;
+            }
+            if (entered.get() == MissingSkillsSheetColumnDialog.Outcome.ADD_TO_MASTER) {
+                openMasterDispatchAndAddMissingSkills(bundle);
                 return false;
             }
             appendLog("[stage2] skills シート未登録あり — ユーザーが続行を選択しました。");
@@ -10427,12 +10432,36 @@ public final class MainShellController
                     "[stage1] skills シートに無い工程+機械 "
                             + bundle.pairs().size()
                             + " 件 — 段階2配台阻害の警告を表示します。");
-            MissingSkillsSheetColumnDialog.prompt(primaryStageForDialogs(), bundle, false);
+            Optional<MissingSkillsSheetColumnDialog.Outcome> choice =
+                    MissingSkillsSheetColumnDialog.prompt(primaryStageForDialogs(), bundle, false);
+            if (choice.isPresent()
+                    && choice.get() == MissingSkillsSheetColumnDialog.Outcome.ADD_TO_MASTER) {
+                openMasterDispatchAndAddMissingSkills(bundle);
+            }
         } catch (IOException ex) {
             appendLog(
                     "[stage1] skills シート未登録の確認に失敗: "
                             + (ex.getMessage() != null ? ex.getMessage() : ex.toString()));
         }
+    }
+
+    private void openMasterDispatchAndAddMissingSkills(
+            PlanTasksMissingSkillsColumnPrompt.PromptBundle bundle) {
+        selectMainShellTab(MainShellTabId.MASTER_DISPATCH_SHEETS);
+        Platform.runLater(
+                () -> {
+                    if (masterDispatchSheetsTabController == null) {
+                        appendLog("[skills] 配台マスタタブが初期化されていないため列を追加できません。");
+                        return;
+                    }
+                    int added =
+                            masterDispatchSheetsTabController.addMissingEquipmentColumns(
+                                    bundle.pairs());
+                    appendLog(
+                            "[skills] 配台マスタへ未登録の工程+機械を "
+                                    + added
+                                    + " 列追加しました。保存が必要です。");
+                });
     }
 
     private void applyStage2UnknownMasterCombinationSelections(

@@ -20,6 +20,8 @@
             <HBox spacing="8.0">
                 <Button text="保存" onAction="#onSaveAction"/>
                 <Button text="共有フォルダから再取込" onAction="#onReimportAction"/>
+                <Button text="設備列を追加" onAction="#onAddEquipmentColumnAction"/>
+                <Button text="未登録の工程+機械を追加" onAction="#onAddMissingEquipmentColumnsAction"/>
             </HBox>
             <Label fx:id="statusLabel" wrapText="true" styleClass="pm-muted-label"/>
         </VBox>

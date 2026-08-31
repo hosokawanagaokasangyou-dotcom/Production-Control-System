@@ -113,12 +113,104 @@ public final class MasterDispatchSheetEditRules {
         List<List<String>> src = rows != null ? rows : List.of();
         List<List<String>> out = new ArrayList<>();
         for (int r = 0; r < src.size(); r++) {
-            if (isColumnTitleSourceRow(kind, r, src)) {
+            if (kind == SheetKind.COMBINATIONS && isColumnTitleSourceRow(kind, r, src)) {
+                continue;
+            }
+            if (kind != SheetKind.COMBINATIONS && isNeedColumnCaptionRow(src, r)) {
+                continue;
+            }
+            String a = cell(src, r, 0);
+            if (isProcessOrMachineHeaderLabel(a) && !"工程名".equals(a) && !"機械名".equals(a)) {
                 continue;
             }
             out.add(src.get(r));
         }
         return freeze(out);
+    }
+
+    /** skills / need / speed の工程名・機械名行を縦スクロール固定する件数（フィルタ行の次から）。 */
+    public static int frozenTitleRowCount(SheetKind kind) {
+        return kind == null || kind == SheetKind.COMBINATIONS ? 0 : 2;
+    }
+
+    public static boolean isSkillsSkillValueCell(int dataRow, int col, List<List<String>> rows) {
+        return col >= 1 && !isColumnTitleSourceRow(SheetKind.SKILLS, dataRow, rows);
+    }
+
+    /**
+     * 工程名+機械名の設備列を追加する。既にある組み合わせは何もしない。
+     * need / speed は先頭 3 列（項目・依頼NO条件・備考）の右へ足す。
+     */
+    public static List<List<String>> addEquipmentColumn(
+            SheetKind kind, List<List<String>> rows, String process, String machine) {
+        String p = process != null ? process.strip() : "";
+        String m = machine != null ? machine.strip() : "";
+        if (p.isEmpty() || m.isEmpty() || kind == null || kind == SheetKind.COMBINATIONS) {
+            return copyRows(rows != null ? rows : List.of());
+        }
+        List<List<String>> out = mutableCopy(rows != null ? rows : List.of());
+        ensureProcessMachineHeaderRows(kind, out);
+        int procRow = findProcessHeaderRow(out);
+        int machRow = findMachineHeaderRow(out);
+        if (procRow < 0 || machRow < 0) {
+            return freeze(out);
+        }
+        int firstEq = kind == SheetKind.NEED || kind == SheetKind.SPEED ? 3 : 1;
+        String want = MasterTeamCombinationTableReader.normalizedComboKey(p, m);
+        int width = Math.max(widthOf(out), firstEq);
+        padWidth(out, width);
+        for (int c = firstEq; c < width; c++) {
+            String have =
+                    MasterTeamCombinationTableReader.normalizedComboKey(
+                            cell(out, procRow, c), cell(out, machRow, c));
+            if (!want.isEmpty() && want.equals(have)) {
+                return freeze(out);
+            }
+        }
+        int target = -1;
+        for (int c = firstEq; c < width; c++) {
+            if (cell(out, procRow, c).isEmpty() && cell(out, machRow, c).isEmpty()) {
+                target = c;
+                break;
+            }
+        }
+        if (target < 0) {
+            target = width;
+            padWidth(out, target + 1);
+        }
+        setCell(out, procRow, target, p);
+        setCell(out, machRow, target, m);
+        return freeze(out);
+    }
+
+    public static boolean containsEquipmentColumn(
+            SheetKind kind, List<List<String>> rows, String process, String machine) {
+        String p = process != null ? process.strip() : "";
+        String m = machine != null ? machine.strip() : "";
+        if (p.isEmpty() || m.isEmpty() || kind == null || kind == SheetKind.COMBINATIONS) {
+            return false;
+        }
+        List<List<String>> src = rows != null ? rows : List.of();
+        int procRow = findProcessHeaderRow(src);
+        int machRow = findMachineHeaderRow(src);
+        if (procRow < 0 || machRow < 0) {
+            return false;
+        }
+        int firstEq = kind == SheetKind.NEED || kind == SheetKind.SPEED ? 3 : 1;
+        String want = MasterTeamCombinationTableReader.normalizedComboKey(p, m);
+        if (want.isEmpty()) {
+            return false;
+        }
+        int width = widthOf(src);
+        for (int c = firstEq; c < width; c++) {
+            String have =
+                    MasterTeamCombinationTableReader.normalizedComboKey(
+                            cell(src, procRow, c), cell(src, machRow, c));
+            if (want.equals(have)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public static List<List<String>> restoreTitleRows(
@@ -305,10 +397,7 @@ public final class MasterDispatchSheetEditRules {
             return false;
         }
         return switch (kind) {
-            case SKILLS ->
-                    col >= 1
-                            && !isColumnTitleSourceRow(kind, dataRow, rows)
-                            && parseOpAs(v) == null;
+            case SKILLS -> isSkillsSkillValueCell(dataRow, col, rows) && parseOpAs(v) == null;
             case NEED -> isNeedValueInvalid(dataRow, col, rows, v);
             case SPEED -> isSpeedNumericCell(dataRow, col, rows) && !isPositiveNumber(v);
             case COMBINATIONS -> isCombinationsNumericInvalid(dataRow, col, rows, v);
@@ -624,6 +713,49 @@ public final class MasterDispatchSheetEditRules {
 
     private static int findMachineHeaderRow(List<List<String>> rows) {
         return findHeaderRowPreferExact(rows, "機械名");
+    }
+
+    private static void ensureProcessMachineHeaderRows(SheetKind kind, List<List<String>> rows) {
+        int firstEq = kind == SheetKind.NEED || kind == SheetKind.SPEED ? 3 : 1;
+        int minWidth = Math.max(widthOf(rows), firstEq);
+        if (findProcessHeaderRow(rows) < 0) {
+            List<String> proc = new ArrayList<>();
+            proc.add("工程名");
+            while (proc.size() < minWidth) {
+                proc.add("");
+            }
+            rows.add(0, proc);
+        }
+        if (findMachineHeaderRow(rows) < 0) {
+            int procRow = findProcessHeaderRow(rows);
+            int insertAt = procRow >= 0 ? procRow + 1 : 0;
+            List<String> mach = new ArrayList<>();
+            mach.add("機械名");
+            while (mach.size() < minWidth) {
+                mach.add("");
+            }
+            rows.add(insertAt, mach);
+        }
+        padWidth(rows, minWidth);
+    }
+
+    private static void padWidth(List<List<String>> rows, int cols) {
+        for (List<String> row : rows) {
+            while (row.size() < cols) {
+                row.add("");
+            }
+        }
+    }
+
+    private static void setCell(List<List<String>> rows, int r, int c, String value) {
+        while (rows.size() <= r) {
+            rows.add(new ArrayList<>());
+        }
+        List<String> row = rows.get(r);
+        while (row.size() <= c) {
+            row.add("");
+        }
+        row.set(c, value != null ? value : "");
     }
 
     private static int findHeaderRowPreferExact(List<List<String>> rows, String exact) {
