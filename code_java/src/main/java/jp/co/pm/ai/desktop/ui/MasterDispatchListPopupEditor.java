@@ -29,6 +29,7 @@ public final class MasterDispatchListPopupEditor extends SpreadsheetCellEditor {
     static final double SELECTION_DRAG_THRESHOLD_PX = 8.0;
 
     private final List<String> items;
+    private final SpreadsheetView spreadsheetView;
     private final TextField field = new TextField();
     private final ListView<String> list = new ListView<>();
     private final VBox popupBox = new VBox();
@@ -41,6 +42,7 @@ public final class MasterDispatchListPopupEditor extends SpreadsheetCellEditor {
 
     public MasterDispatchListPopupEditor(SpreadsheetView view, List<String> items) {
         super(view);
+        this.spreadsheetView = view;
         this.items = List.copyOf(items != null ? items : List.of());
         field.getStyleClass().add("pm-ai-list-editor-field");
         field.setEditable(false);
@@ -104,6 +106,13 @@ public final class MasterDispatchListPopupEditor extends SpreadsheetCellEditor {
         return Math.hypot(x - originX, y - originY) > SELECTION_DRAG_THRESHOLD_PX;
     }
 
+    private boolean hasMultiCellSelection() {
+        if (spreadsheetView == null || spreadsheetView.getSelectionModel() == null) {
+            return false;
+        }
+        return spreadsheetView.getSelectionModel().getSelectedCells().size() > 1;
+    }
+
     private void commitSelected() {
         String selected = list.getSelectionModel().getSelectedItem();
         if (selected == null) {
@@ -160,9 +169,14 @@ public final class MasterDispatchListPopupEditor extends SpreadsheetCellEditor {
                         }
                     } else if (e.getEventType() == MouseEvent.MOUSE_RELEASED) {
                         detachSceneMouseWatch();
-                        if (editing) {
-                            Platform.runLater(this::showPicker);
+                        if (!editing) {
+                            return;
                         }
+                        if (hasMultiCellSelection()) {
+                            endEdit(false);
+                            return;
+                        }
+                        Platform.runLater(this::showPicker);
                     }
                 };
         scene.addEventFilter(MouseEvent.MOUSE_DRAGGED, sceneMouseHandler);
@@ -203,7 +217,10 @@ public final class MasterDispatchListPopupEditor extends SpreadsheetCellEditor {
                     if (!editing) {
                         return;
                     }
-                    if (ancestorIsPressed(field)) {
+                    if (ancestorIsPressed(field) || hasMultiCellSelection()) {
+                        if (hasMultiCellSelection()) {
+                            endEdit(false);
+                        }
                         return;
                     }
                     showPicker();

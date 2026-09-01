@@ -35,6 +35,13 @@ public final class MasterDispatchSheetGridSupport {
 
     private MasterDispatchSheetGridSupport() {}
 
+    /**
+     * 範囲ドラッグ後の離しでは編集しない。単一セルかつ押下からほぼ動かないときだけ編集開始。
+     */
+    static boolean shouldStartListEditOnClick(int selectedCellCount, boolean stillSincePress) {
+        return stillSincePress && selectedCellCount == 1;
+    }
+
     public static void installSingleClickListEditing(SpreadsheetView view) {
         if (view == null
                 || Boolean.TRUE.equals(view.getProperties().get(SINGLE_CLICK_LIST_EDITING))) {
@@ -46,6 +53,13 @@ public final class MasterDispatchSheetGridSupport {
                 event -> {
                     if (event.getButton() != MouseButton.PRIMARY
                             || view.getEditingCell() != null) {
+                        return;
+                    }
+                    int selected =
+                            view.getSelectionModel() != null
+                                    ? view.getSelectionModel().getSelectedCells().size()
+                                    : 0;
+                    if (!shouldStartListEditOnClick(selected, event.isStillSincePress())) {
                         return;
                     }
                     TableCell<?, ?> tableCell =
@@ -67,7 +81,19 @@ public final class MasterDispatchSheetGridSupport {
                     }
                     int rowIndex = tableCell.getIndex();
                     SpreadsheetColumn column = view.getColumns().get(columnIndex);
-                    Platform.runLater(() -> view.edit(rowIndex, column));
+                    Platform.runLater(
+                            () -> {
+                                int after =
+                                        view.getSelectionModel() != null
+                                                ? view.getSelectionModel()
+                                                        .getSelectedCells()
+                                                        .size()
+                                                : 0;
+                                if (!shouldStartListEditOnClick(after, true)) {
+                                    return;
+                                }
+                                view.edit(rowIndex, column);
+                            });
                 });
     }
 

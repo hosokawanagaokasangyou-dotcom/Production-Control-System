@@ -86,4 +86,13 @@ class MasterDispatchListPopupEditorTest {
         assertTrue(MasterDispatchListCellType.isPopupListCell(listCell));
         assertFalse(MasterDispatchListCellType.isPopupListCell(plainCell));
     }
+
+    @Test
+    void shouldStartListEditOnClick_onlyWhenSingleCellAndStillSincePress() {
+        assertTrue(MasterDispatchSheetGridSupport.shouldStartListEditOnClick(1, true));
+        assertFalse(MasterDispatchSheetGridSupport.shouldStartListEditOnClick(2, true));
+        assertFalse(MasterDispatchSheetGridSupport.shouldStartListEditOnClick(9, true));
+        assertFalse(MasterDispatchSheetGridSupport.shouldStartListEditOnClick(1, false));
+        assertFalse(MasterDispatchSheetGridSupport.shouldStartListEditOnClick(0, true));
+    }
 }
