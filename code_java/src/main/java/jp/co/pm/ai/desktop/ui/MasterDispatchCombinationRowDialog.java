@@ -6,6 +6,7 @@ import java.util.Optional;
 import javafx.geometry.Insets;
 import javafx.scene.control.ButtonBar;
 import javafx.scene.control.ButtonType;
+import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Dialog;
 import javafx.scene.control.Label;
@@ -18,7 +19,7 @@ public final class MasterDispatchCombinationRowDialog {
 
     private MasterDispatchCombinationRowDialog() {}
 
-    public record Result(String process, String machine) {}
+    public record Result(String process, String machine, boolean autoFillSkillMembers) {}
 
     public static Optional<Result> prompt(Window owner, List<String[]> equipmentPairs) {
         Dialog<Result> dialog = new Dialog<>();
@@ -51,12 +52,19 @@ public final class MasterDispatchCombinationRowDialog {
             combo.getSelectionModel().selectFirst();
         }
 
+        CheckBox autoFill =
+                new CheckBox("スキル（OP/AS）のあるメンバーを自動で入れる");
+        autoFill.setSelected(true);
+        autoFill.setWrapText(true);
+        autoFill.setMaxWidth(Double.MAX_VALUE);
+
         GridPane grid = new GridPane();
         grid.setHgap(8);
         grid.setVgap(8);
         grid.setPadding(new Insets(12, 16, 8, 16));
         grid.add(new Label("工程名 / 機械名"), 0, 0);
         grid.add(combo, 1, 0);
+        grid.add(autoFill, 0, 1, 2, 1);
         dialog.getDialogPane().setContent(grid);
 
         ButtonType ok = new ButtonType("追加", ButtonBar.ButtonData.OK_DONE);
@@ -76,7 +84,7 @@ public final class MasterDispatchCombinationRowDialog {
                     if (p.isEmpty() || m.isEmpty()) {
                         return null;
                     }
-                    return new Result(p, m);
+                    return new Result(p, m, autoFill.isSelected());
                 });
         return dialog.showAndWait();
     }

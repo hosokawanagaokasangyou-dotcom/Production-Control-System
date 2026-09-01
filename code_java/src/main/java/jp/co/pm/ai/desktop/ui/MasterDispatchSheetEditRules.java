@@ -392,6 +392,18 @@ public final class MasterDispatchSheetEditRules {
 
     public static List<List<String>> addCombinationRow(
             List<List<String>> rows, String process, String machine) {
+        return addCombinationRow(rows, process, machine, null);
+    }
+
+    /**
+     * 組み合わせ表へ行を追加する。{@code skillsForAutoMembers} が非 null のときは、
+     * 当該工程+機械のスキル（OP/AS）付きメンバーをメンバー列へ先頭から埋める（列数まで）。
+     */
+    public static List<List<String>> addCombinationRow(
+            List<List<String>> rows,
+            String process,
+            String machine,
+            List<List<String>> skillsForAutoMembers) {
         String p = process != null ? process.strip() : "";
         String m = machine != null ? machine.strip() : "";
         if (p.isEmpty() || m.isEmpty()) {
@@ -435,8 +447,54 @@ public final class MasterDispatchSheetEditRules {
         if (addedCol >= 0) {
             row.set(addedCol, ADDED_FLAG);
         }
+        if (skillsForAutoMembers != null) {
+            fillCombinationMemberColumns(row, header, skillsForAutoMembers, p, m);
+        }
         out.add(row);
         return freeze(out);
+    }
+
+    /** 資格があるメンバー表記（空以外）を、メンバー列の数だけ返す。 */
+    public static List<String> skilledMembersForEquipment(
+            List<List<String>> skillsRows, String process, String machine) {
+        List<String> out = new ArrayList<>();
+        for (String choice : combinationMemberChoices(skillsRows, process, machine, "")) {
+            if (choice != null && !choice.isBlank()) {
+                out.add(choice.strip());
+            }
+        }
+        return List.copyOf(out);
+    }
+
+    static int fillCombinationMemberColumns(
+            List<String> row,
+            List<String> header,
+            List<List<String>> skillsRows,
+            String process,
+            String machine) {
+        if (row == null || header == null) {
+            return 0;
+        }
+        List<Integer> memberCols = new ArrayList<>();
+        for (int c = 0; c < header.size(); c++) {
+            if (isCombinationMemberColumn(header, c)) {
+                memberCols.add(c);
+            }
+        }
+        if (memberCols.isEmpty()) {
+            return 0;
+        }
+        List<String> members = skilledMembersForEquipment(skillsRows, process, machine);
+        int filled = 0;
+        for (int i = 0; i < memberCols.size() && i < members.size(); i++) {
+            int col = memberCols.get(i);
+            while (row.size() <= col) {
+                row.add("");
+            }
+            row.set(col, members.get(i));
+            filled++;
+        }
+        return filled;
     }
 
     public static boolean containsCombinationEquipment(

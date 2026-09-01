@@ -773,6 +773,41 @@ class MasterDispatchSheetEditRulesTest {
     }
 
     @Test
+    void addCombinationRow_autoFillsSkillMembers_upToMemberColumnCount() {
+        List<List<String>> skills =
+                List.of(
+                        List.of("工程名", "巻返し", "分割"),
+                        List.of("機械名", "機1", "スライス機1"),
+                        List.of("山田", "OP1", ""),
+                        List.of("佐藤", "AS2", "OP3"),
+                        List.of("鈴木", "", "AS1"),
+                        List.of("高橋", "", "OP2"));
+        List<List<String>> rows =
+                List.of(
+                        List.of(
+                                "組み合わせ行ID",
+                                "工程名",
+                                "機械名",
+                                "工程+機械",
+                                "組み合わせ優先度",
+                                "必須人数",
+                                "メンバー1",
+                                "メンバー2"));
+        List<List<String>> added =
+                MasterDispatchSheetEditRules.addCombinationRow(rows, "分割", "スライス機1", skills);
+        assertEquals(2, added.size());
+        assertEquals("OP 佐藤", added.get(1).get(6));
+        assertEquals("AS 鈴木", added.get(1).get(7));
+        assertEquals(
+                List.of("OP 佐藤", "AS 鈴木", "OP 高橋"),
+                MasterDispatchSheetEditRules.skilledMembersForEquipment(skills, "分割", "スライス機1"));
+        List<List<String>> emptyMembers =
+                MasterDispatchSheetEditRules.addCombinationRow(rows, "分割", "スライス機1", null);
+        assertEquals("", emptyMembers.get(1).get(6));
+        assertEquals("", emptyMembers.get(1).get(7));
+    }
+
+    @Test
     void comboRowStyle_addedRowUsesDistinctColor() {
         String grouped =
                 MasterDispatchSheetEditRules.combinationRowStyle("分割", "スライス機1", "", false, false);

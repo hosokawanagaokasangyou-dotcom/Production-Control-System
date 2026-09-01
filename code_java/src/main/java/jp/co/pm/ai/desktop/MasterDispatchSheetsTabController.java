@@ -721,15 +721,53 @@ public final class MasterDispatchSheetsTabController {
             return;
         }
         List<List<String>> added =
-                MasterDispatchSheetEditRules.addCombinationRow(combo, r.process(), r.machine());
+                MasterDispatchSheetEditRules.addCombinationRow(
+                        combo,
+                        r.process(),
+                        r.machine(),
+                        r.autoFillSkillMembers() ? skills : null);
         replaceCurrentSheetsKeepingNeedSpeed(skills, added);
         focusComboTab();
-        statusLabel.setText(
-                "組み合わせ行を追加しました: "
-                        + r.process()
-                        + " × "
-                        + r.machine()
-                        + "。追加行は色が違います。メンバーは OP/AS 付きで選んでください。");
+        if (r.autoFillSkillMembers()) {
+            int filled =
+                    MasterDispatchSheetEditRules.skilledMembersForEquipment(
+                                    skills, r.process(), r.machine())
+                            .size();
+            int memberCols = 0;
+            if (!added.isEmpty()) {
+                List<String> header = added.get(0);
+                for (int c = 0; c < header.size(); c++) {
+                    if (MasterDispatchSheetEditRules.isCombinationMemberColumn(header, c)) {
+                        memberCols++;
+                    }
+                }
+            }
+            int placed = Math.min(filled, memberCols);
+            if (placed > 0) {
+                statusLabel.setText(
+                        "組み合わせ行を追加しました: "
+                                + r.process()
+                                + " × "
+                                + r.machine()
+                                + "。スキルメンバーを "
+                                + placed
+                                + " 人入れました。追加行は色が違います。");
+            } else {
+                statusLabel.setText(
+                        "組み合わせ行を追加しました: "
+                                + r.process()
+                                + " × "
+                                + r.machine()
+                                + "。スキル該当者がいないためメンバーは空です。追加行は色が違います。");
+            }
+        } else {
+            statusLabel.setText(
+                    "組み合わせ行を追加しました: "
+                            + r.process()
+                            + " × "
+                            + r.machine()
+                            + "。追加行は色が違います。メンバーは OP/AS 付きで選んでください。");
+        }
     }
 
     @FXML
