@@ -42,6 +42,15 @@ public final class MasterDispatchSheetGridSupport {
         return stillSincePress && selectedCellCount == 1;
     }
 
+    /** 資格の OP/AS、組み合わせのリスト、必要人数・加工速度のテンキーなど Popup 編集セル。 */
+    static boolean isSingleClickPopupCell(SpreadsheetCell cell) {
+        if (cell == null) {
+            return false;
+        }
+        return MasterDispatchListCellType.isPopupListCell(cell)
+                || cell.getCellType() instanceof MasterDispatchDecimalCellType;
+    }
+
     public static void installSingleClickListEditing(SpreadsheetView view) {
         if (view == null
                 || Boolean.TRUE.equals(view.getProperties().get(SINGLE_CLICK_LIST_EDITING))) {
@@ -70,7 +79,7 @@ public final class MasterDispatchSheetGridSupport {
                     if (tableCell == null
                             || tableCell.isEmpty()
                             || !(tableCell.getItem() instanceof SpreadsheetCell cell)
-                            || !MasterDispatchListCellType.isPopupListCell(cell)
+                            || !isSingleClickPopupCell(cell)
                             || !cell.isEditable()) {
                         return;
                     }

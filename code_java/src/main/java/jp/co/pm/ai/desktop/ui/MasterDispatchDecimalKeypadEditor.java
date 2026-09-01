@@ -1,8 +1,11 @@
 package jp.co.pm.ai.desktop.ui;
 
 import javafx.application.Platform;
+import javafx.event.EventHandler;
 import javafx.geometry.Bounds;
 import javafx.geometry.Insets;
+import javafx.scene.Node;
+import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.Control;
 import javafx.scene.control.TextField;
@@ -20,9 +23,13 @@ import org.controlsfx.control.spreadsheet.SpreadsheetView;
 
 /**
  * セル内はキーボード入力用 TextField。テンキーは Popup（セル高さにクリップされない）。
+ * 複数セルをドラッグ選択しているときはテンキーを出さない。
  */
 public final class MasterDispatchDecimalKeypadEditor extends SpreadsheetCellEditor {
 
+    static final double SELECTION_DRAG_THRESHOLD_PX = 8.0;
+
+    private final SpreadsheetView spreadsheetView;
     private final double min;
     private final double max;
     private final int fractionDigits;
@@ -30,10 +37,15 @@ public final class MasterDispatchDecimalKeypadEditor extends SpreadsheetCellEdit
     private final VBox keypadBox = new VBox(6);
     private final Popup popup = new Popup();
     private boolean editing;
+    private Scene hookedScene;
+    private EventHandler<MouseEvent> sceneMouseHandler;
+    private Double dragOriginX;
+    private Double dragOriginY;
 
     public MasterDispatchDecimalKeypadEditor(
             SpreadsheetView view, double min, double max, int fractionDigits) {
         super(view);
+        this.spreadsheetView = view;
         this.min = min;
         this.max = max;
         this.fractionDigits = Math.max(0, fractionDigits);
@@ -80,6 +92,17 @@ public final class MasterDispatchDecimalKeypadEditor extends SpreadsheetCellEdit
                         endEdit(true);
                     }
                 });
+    }
+
+    static boolean isSelectionDrag(double originX, double originY, double x, double y) {
+        return Math.hypot(x - originX, y - originY) > SELECTION_DRAG_THRESHOLD_PX;
+    }
+
+    private boolean hasMultiCellSelection() {
+        if (spreadsheetView == null || spreadsheetView.getSelectionModel() == null) {
+            return false;
+        }
+        return spreadsheetView.getSelectionModel().getSelectedCells().size() > 1;
     }
 
     private GridPane buildPad() {
@@ -183,6 +206,72 @@ public final class MasterDispatchDecimalKeypadEditor extends SpreadsheetCellEdit
         field.end();
     }
 
+    private void attachSceneMouseWatch() {
+        detachSceneMouseWatch();
+        Scene scene = field.getScene();
+        if (scene == null) {
+            Platform.runLater(
+                    () -> {
+                        if (editing) {
+                            attachSceneMouseWatch();
+                        }
+                    });
+            return;
+        }
+        hookedScene = scene;
+        sceneMouseHandler =
+                e -> {
+                    if (!editing) {
+                        return;
+                    }
+                    if (e.getEventType() == MouseEvent.MOUSE_DRAGGED && e.isPrimaryButtonDown()) {
+                        if (dragOriginX == null) {
+                            dragOriginX = e.getScreenX();
+                            dragOriginY = e.getScreenY();
+                            return;
+                        }
+                        if (isSelectionDrag(dragOriginX, dragOriginY, e.getScreenX(), e.getScreenY())) {
+                            detachSceneMouseWatch();
+                            endEdit(false);
+                        }
+                    } else if (e.getEventType() == MouseEvent.MOUSE_RELEASED) {
+                        detachSceneMouseWatch();
+                        if (!editing) {
+                            return;
+                        }
+                        if (hasMultiCellSelection()) {
+                            endEdit(false);
+                            return;
+                        }
+                        Platform.runLater(this::showKeypad);
+                    }
+                };
+        scene.addEventFilter(MouseEvent.MOUSE_DRAGGED, sceneMouseHandler);
+        scene.addEventFilter(MouseEvent.MOUSE_RELEASED, sceneMouseHandler);
+    }
+
+    private void detachSceneMouseWatch() {
+        if (hookedScene != null && sceneMouseHandler != null) {
+            hookedScene.removeEventFilter(MouseEvent.MOUSE_DRAGGED, sceneMouseHandler);
+            hookedScene.removeEventFilter(MouseEvent.MOUSE_RELEASED, sceneMouseHandler);
+        }
+        hookedScene = null;
+        sceneMouseHandler = null;
+        dragOriginX = null;
+        dragOriginY = null;
+    }
+
+    private static boolean ancestorIsPressed(Node node) {
+        Node n = node;
+        while (n != null) {
+            if (n.isPressed()) {
+                return true;
+            }
+            n = n.getParent();
+        }
+        return false;
+    }
+
     @Override
     public void startEdit(Object value, String format, Object... options) {
         editing = true;
@@ -191,7 +280,20 @@ public final class MasterDispatchDecimalKeypadEditor extends SpreadsheetCellEdit
         field.setText(s);
         field.requestFocus();
         field.end();
-        Platform.runLater(this::showKeypad);
+        attachSceneMouseWatch();
+        Platform.runLater(
+                () -> {
+                    if (!editing) {
+                        return;
+                    }
+                    if (ancestorIsPressed(field) || hasMultiCellSelection()) {
+                        if (hasMultiCellSelection()) {
+                            endEdit(false);
+                        }
+                        return;
+                    }
+                    showKeypad();
+                });
     }
 
     @Override
@@ -212,6 +314,7 @@ public final class MasterDispatchDecimalKeypadEditor extends SpreadsheetCellEdit
     @Override
     public void end() {
         editing = false;
+        detachSceneMouseWatch();
         popup.hide();
         markValid();
     }

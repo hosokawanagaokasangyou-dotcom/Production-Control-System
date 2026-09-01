@@ -95,4 +95,18 @@ class MasterDispatchListPopupEditorTest {
         assertFalse(MasterDispatchSheetGridSupport.shouldStartListEditOnClick(1, false));
         assertFalse(MasterDispatchSheetGridSupport.shouldStartListEditOnClick(0, true));
     }
+
+    @Test
+    void singleClickPopupEditing_recognizesListAndDecimalCells() {
+        SpreadsheetCell listCell =
+                new MasterDispatchListCellType(List.of("", "OP", "AS"))
+                        .createCell(1, 1, 1, 1, "");
+        SpreadsheetCell decimalCell =
+                new MasterDispatchDecimalCellType(0.0, 99.0, 0).createCell(1, 1, 1, 1, "1");
+        SpreadsheetCell plainCell = SpreadsheetCellType.STRING.createCell(1, 1, 1, 1, "");
+
+        assertTrue(MasterDispatchSheetGridSupport.isSingleClickPopupCell(listCell));
+        assertTrue(MasterDispatchSheetGridSupport.isSingleClickPopupCell(decimalCell));
+        assertFalse(MasterDispatchSheetGridSupport.isSingleClickPopupCell(plainCell));
+    }
 }
