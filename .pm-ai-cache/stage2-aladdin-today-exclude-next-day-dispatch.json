@@ -1,0 +1,14 @@
+{
+  "version" : 1,
+  "entries" : [ {
+    "task_id" : "V9-1",
+    "process" : "接続",
+    "machine_name" : "熱融着機　湖南",
+    "exclude_next_day_m" : 1000.0
+  }, {
+    "task_id" : "C9-3",
+    "process" : "SEC",
+    "machine_name" : "SEC機　湖南",
+    "exclude_next_day_m" : 1200.0
+  } ]
+}
