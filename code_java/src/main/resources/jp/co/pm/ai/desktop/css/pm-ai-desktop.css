@@ -3198,6 +3198,13 @@
     -pm-trend-bad: #b91c1c;
     -pm-trend-weekend-bg: #eef2f7;
     -pm-trend-today-bg: #fef3c7;
+    /* グラフ領域はテーマに依存せず白地。軸・目盛・グリッド・ラベルも白地前提の固定色にする */
+    -pm-trend-chart-bg: white;
+    -pm-trend-chart-border: #cbd5e1;
+    -pm-trend-axis: #9ca3af;
+    -pm-trend-grid: #d1d5db;
+    -pm-trend-chart-text: #1f2937;
+    -pm-trend-chart-text-muted: #4b5563;
 }
 
 .pm-processing-trend-tab-root .tool-bar {
@@ -3379,14 +3386,37 @@
 }
 
 /* チャート本体: 2 枚重ね。padding は Controller が相手側 Y 軸幅で調整する */
+.pm-processing-trend-chart-stack {
+    -fx-background-color: -pm-trend-chart-bg;
+    -fx-background-radius: 4;
+    -fx-border-color: -pm-trend-chart-border;
+    -fx-border-radius: 4;
+    -fx-border-width: 1;
+}
+
 .pm-trend-daily-chart,
 .pm-trend-cumulative-chart {
     -fx-padding: 0;
+    -fx-background-color: transparent;
 }
 
 .pm-trend-daily-chart .chart-content,
 .pm-trend-cumulative-chart .chart-content {
     -fx-padding: 6 8 4 8;
+}
+
+/* 白地は StackPane 側で塗る（modena の -fx-background はテーマ色なので透過にして重ねる） */
+.pm-trend-daily-chart .chart-plot-background,
+.pm-trend-cumulative-chart .chart-plot-background {
+    -fx-background-color: transparent;
+}
+
+/* 横グリッド線: modena の点線指定（0.25em 0.25em）を実質的な実線へ。CSS では空配列（実線）を書けない */
+.pm-trend-daily-chart .chart-horizontal-grid-lines,
+.pm-trend-cumulative-chart .chart-horizontal-grid-lines {
+    -fx-stroke: -pm-trend-grid;
+    -fx-stroke-width: 1px;
+    -fx-stroke-dash-array: 1000000 1000000;
 }
 
 .pm-trend-daily-chart .default-color0.chart-bar {
@@ -3404,6 +3434,8 @@
 
 .pm-trend-daily-chart .axis,
 .pm-trend-cumulative-chart .axis {
+    /* modena は AXIS_COLOR: derive(-fx-background, -20%)。白地に合わせて固定色へ */
+    AXIS_COLOR: -pm-trend-axis;
     -fx-tick-label-font-size: 11px;
 }
 
@@ -3424,14 +3456,6 @@
 .pm-trend-cumulative-chart .axis:right .axis-label,
 .pm-trend-cumulative-chart .axis:left .axis-label {
     -fx-text-fill: -pm-trend-actual-cum;
-}
-
-.pm-trend-cumulative-chart {
-    -fx-background-color: transparent;
-}
-
-.pm-trend-cumulative-chart .chart-plot-background {
-    -fx-background-color: transparent;
 }
 
 /* 複合表示のとき: X 軸は下のチャートと同じ寸法を保ちつつ描画だけ消す */
@@ -3482,7 +3506,7 @@
 /* 自前描画の X 軸ラベル（CategoryAxis の目盛ラベルは非表示） */
 .label.pm-processing-trend-x-label {
     -fx-font-size: 11px;
-    -fx-text-fill: -fx-text-base-color;
+    -fx-text-fill: -pm-trend-chart-text;
     -fx-padding: 0 1 0 1;
 }
 
@@ -3512,19 +3536,20 @@
 
 /* 空状態・読込中（ダッシュボードの見え方に揃える） */
 .pm-processing-trend-empty {
-    -fx-background-color: rgba(255, 255, 255, 0.72);
+    -fx-background-color: rgba(255, 255, 255, 0.85);
+    -fx-background-radius: 4;
     -fx-padding: 24;
 }
 
 .label.pm-processing-trend-empty-title {
     -fx-font-size: 18px;
     -fx-font-weight: bold;
-    -fx-text-fill: -fx-text-base-color;
+    -fx-text-fill: -pm-trend-chart-text;
 }
 
 .label.pm-processing-trend-empty-detail {
     -fx-font-size: 12px;
-    -fx-text-fill: -fx-mid-text-color;
+    -fx-text-fill: -pm-trend-chart-text-muted;
 }
 
 /* 日別明細 */

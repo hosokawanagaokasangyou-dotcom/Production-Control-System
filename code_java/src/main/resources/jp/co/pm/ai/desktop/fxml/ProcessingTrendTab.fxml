@@ -145,15 +145,20 @@
             <padding>
                 <Insets bottom="4.0" left="8.0" right="8.0" top="0.0"/>
             </padding>
-            <HBox alignment="CENTER_LEFT" spacing="14.0" styleClass="pm-processing-trend-legend-row">
+            <!-- グラフ領域は最大 1300x600（凡例行・明細も同じ幅に揃える） -->
+            <HBox alignment="CENTER_LEFT" maxWidth="1300.0" spacing="14.0" styleClass="pm-processing-trend-legend-row">
                 <Label fx:id="chartTitleLabel" styleClass="pm-processing-trend-chart-title" text="加工実績・予定トレンド"/>
                 <HBox fx:id="legendBox" alignment="CENTER_LEFT" spacing="12.0" styleClass="pm-processing-trend-legend"/>
                 <Pane HBox.hgrow="ALWAYS"/>
                 <Label fx:id="unitHintLabel" styleClass="pm-processing-trend-muted" text="単位: m（換算数量・工程延べ）"/>
             </HBox>
-            <StackPane fx:id="chartStack" VBox.vgrow="ALWAYS" styleClass="pm-processing-trend-chart-stack">
+            <StackPane fx:id="chartStack" VBox.vgrow="ALWAYS" maxWidth="1300.0" maxHeight="600.0"
+                       styleClass="pm-processing-trend-chart-stack">
                 <BarChart fx:id="dailyChart" animated="false" legendVisible="false" minHeight="200.0"
-                          styleClass="pm-trend-daily-chart" barGap="1.0" categoryGap="8.0">
+                          styleClass="pm-trend-daily-chart" barGap="1.0" categoryGap="8.0"
+                          horizontalGridLinesVisible="true" verticalGridLinesVisible="false"
+                          alternativeRowFillVisible="false" alternativeColumnFillVisible="false"
+                          horizontalZeroLineVisible="false" verticalZeroLineVisible="false">
                     <xAxis>
                         <CategoryAxis fx:id="dailyXAxis" animated="false" tickLabelGap="20.0" tickLabelsVisible="false"/>
                     </xAxis>
@@ -182,7 +187,7 @@
                            textAlignment="CENTER" maxWidth="560.0"/>
                 </VBox>
             </StackPane>
-            <TitledPane fx:id="detailPane" animated="false" collapsible="true" expanded="false" text="日別明細">
+            <TitledPane fx:id="detailPane" animated="false" collapsible="true" expanded="false" maxWidth="1300.0" text="日別明細">
                 <TableView fx:id="detailTable" fixedCellSize="24.0" prefHeight="220.0" maxHeight="320.0"
                            styleClass="pm-processing-trend-detail-table">
                     <columns>
