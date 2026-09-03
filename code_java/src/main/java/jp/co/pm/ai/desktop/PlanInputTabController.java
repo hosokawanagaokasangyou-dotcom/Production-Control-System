@@ -58,6 +58,7 @@ import jp.co.pm.ai.desktop.ui.ColumnVisibilitySupport;
 import jp.co.pm.ai.desktop.ui.LimitedOperatorCellEditor;
 import jp.co.pm.ai.desktop.ui.PlanInputDeprecatedOverrideColumnSupport;
 import jp.co.pm.ai.desktop.ui.PlanInputEditedCellMarks;
+import jp.co.pm.ai.desktop.ui.PlanInputExcludeToggleSupport;
 import jp.co.pm.ai.desktop.ui.PlanInputProcessSequenceRowOrder;
 import jp.co.pm.ai.desktop.ui.PlanInputEmbossClusterHighlight;
 import jp.co.pm.ai.desktop.ui.PlanInputSpreadsheetRowReorder;
@@ -365,14 +366,17 @@ public final class PlanInputTabController {
                     rows,
                     () -> {
                         markPlanInputTableDirtySinceSave();
-                        rebuildSpreadsheet();
+                        // セル編集後は IN_PLACE（列幅再適用を避け、ウィンドウ揺れを抑える）
+                        rebuildSpreadsheet(
+                                true, SpreadsheetTabularSupport.GridAttachMode.IN_PLACE);
                     },
                     col -> {
                         if (PlanInputProcessSequenceRowOrder.COL_DISPATCH_TRIAL_ORDER.equals(col)) {
                             renumberDispatchTrialOrderColumn();
                         }
                     },
-                    this::editLimitedOperators);
+                    this::editLimitedOperators,
+                    this::presentPlanInputExcludeToggle);
             planInputCellEditHooksInstalled = true;
         }
 
@@ -1422,6 +1426,35 @@ public final class PlanInputTabController {
 
     private void rebuildSpreadsheet() {
         rebuildSpreadsheet(true, SpreadsheetTabularSupport.GridAttachMode.STANDARD);
+    }
+
+    /**
+     * 「配台不要」ダブルクリックトグル: {@code setGrid} せずセル値・赤スタイルだけ更新する。
+     * 全表再構築だと列幅再適用でホスト layoutBounds が跳ね、ウィンドウ揺れ・入力失敗に見える。
+     *
+     * @return 表示を更新できたとき {@code true}（失敗時は呼び出し側が rebuild する）
+     */
+    private boolean presentPlanInputExcludeToggle(int dataIndex, int colIndex, String newValue) {
+        markPlanInputTableDirtySinceSave();
+        refreshPlanInputEditMarksInMemory();
+        if (currentGrid == null) {
+            return false;
+        }
+        int firstData = SpreadsheetTabularSupport.spreadsheetFirstDataRowIndex();
+        boolean leading = colIndex >= 0 && colIndex < headerColumnCount.get();
+        boolean ok =
+                PlanInputExcludeToggleSupport.applyToGrid(
+                        currentGrid, firstData, dataIndex, colIndex, newValue, leading);
+        if (!ok) {
+            return false;
+        }
+        // オフに戻したとき編集マーク薄黄を再適用（yes 赤は applyVisual 側が優先）
+        PlanInputEditedCellMarks.applyHighlights(
+                currentGrid, headersRef, rows, firstData, editedCellMarks);
+        PlanInputUnprocessedDispatchRemainingMismatchSupport.applyViolationHighlights(
+                currentGrid, headersRef, rows, firstData);
+        refreshEmbossClusterButtonHighlight();
+        return true;
     }
 
     /**

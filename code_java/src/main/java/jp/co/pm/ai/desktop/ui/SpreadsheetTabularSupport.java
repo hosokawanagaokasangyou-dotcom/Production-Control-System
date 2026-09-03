@@ -541,8 +541,8 @@ public final class SpreadsheetTabularSupport {
         return false;
     }
 
-    /** 貼り付け前にセル編集をキャンセルする（編集中 TextField が表示を占有し、commit で空上書きするため）。 */
-    static void cancelSpreadsheetCellEdit(SpreadsheetView view) {
+    /** 貼り付け前・配台不要トグル前にセル編集をキャンセルする（編集中 TextField が表示を占有し、commit で空上書きするため）。 */
+    public static void cancelSpreadsheetCellEdit(SpreadsheetView view) {
         if (view == null) {
             return;
         }

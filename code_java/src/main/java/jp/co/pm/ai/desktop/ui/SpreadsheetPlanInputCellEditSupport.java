@@ -33,6 +33,14 @@ public final class SpreadsheetPlanInputCellEditSupport {
                 Consumer<String> onConfirmed);
     }
 
+    /**
+     * 「配台不要」トグル後の表示更新。{@code true} を返すと全表 {@code rebuildSpreadsheet} を省略する。
+     */
+    @FunctionalInterface
+    public interface ExcludeTogglePresenter {
+        boolean present(int dataIndex, int colIndex, String newValue);
+    }
+
     private SpreadsheetPlanInputCellEditSupport() {}
 
     /**
@@ -53,6 +61,7 @@ public final class SpreadsheetPlanInputCellEditSupport {
                 headersRef,
                 rows,
                 rebuildSpreadsheet,
+                null,
                 null,
                 null);
     }
@@ -76,6 +85,7 @@ public final class SpreadsheetPlanInputCellEditSupport {
                 rows,
                 rebuildSpreadsheet,
                 afterColumnEdit,
+                null,
                 null);
     }
 
@@ -91,6 +101,31 @@ public final class SpreadsheetPlanInputCellEditSupport {
             Runnable rebuildSpreadsheet,
             Consumer<String> afterColumnEdit,
             LimitedOperatorEditor limitedOperatorEditor) {
+        install(
+                spreadsheetView,
+                owner,
+                firstDataGridRow,
+                headersRef,
+                rows,
+                rebuildSpreadsheet,
+                afterColumnEdit,
+                limitedOperatorEditor,
+                null);
+    }
+
+    /**
+     * @param excludeTogglePresenter 「配台不要」トグルのインプレース表示（{@code null} なら常に rebuild）
+     */
+    public static void install(
+            SpreadsheetView spreadsheetView,
+            Stage owner,
+            int firstDataGridRow,
+            List<String> headersRef,
+            ObservableList<ObservableList<String>> rows,
+            Runnable rebuildSpreadsheet,
+            Consumer<String> afterColumnEdit,
+            LimitedOperatorEditor limitedOperatorEditor,
+            ExcludeTogglePresenter excludeTogglePresenter) {
         if (spreadsheetView == null || owner == null || rebuildSpreadsheet == null) {
             return;
         }
@@ -135,12 +170,16 @@ public final class SpreadsheetPlanInputCellEditSupport {
                     String cur = row.get(colIndex) != null ? row.get(colIndex) : "";
 
                     if ("配台不要".equals(columnTitle)) {
-                        if (TabularCellHighlight.planInputExcludeFromAssignmentIsOn(cur)) {
-                            row.set(colIndex, "");
-                        } else {
-                            row.set(colIndex, "yes");
+                        SpreadsheetTabularSupport.cancelSpreadsheetCellEdit(spreadsheetView);
+                        String next = PlanInputExcludeToggleSupport.toggledValue(cur);
+                        row.set(colIndex, next);
+                        boolean presented =
+                                excludeTogglePresenter != null
+                                        && excludeTogglePresenter.present(
+                                                dataIndex, colIndex, next);
+                        if (!presented) {
+                            rebuildSpreadsheet.run();
                         }
-                        rebuildSpreadsheet.run();
                         e.consume();
                         return;
                     }
