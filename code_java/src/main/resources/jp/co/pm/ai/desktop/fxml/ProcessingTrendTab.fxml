@@ -1,0 +1,201 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.chart.BarChart?>
+<?import javafx.scene.chart.CategoryAxis?>
+<?import javafx.scene.chart.LineChart?>
+<?import jp.co.pm.ai.desktop.ProcessingTrendNumberAxis?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.CheckBox?>
+<?import javafx.scene.control.ComboBox?>
+<?import javafx.scene.control.DatePicker?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ProgressIndicator?>
+<?import javafx.scene.control.Separator?>
+<?import javafx.scene.control.Spinner?>
+<?import javafx.scene.control.TableColumn?>
+<?import javafx.scene.control.TableView?>
+<?import javafx.scene.control.TitledPane?>
+<?import javafx.scene.control.ToggleButton?>
+<?import javafx.scene.control.ToggleGroup?>
+<?import javafx.scene.control.ToolBar?>
+<?import javafx.scene.control.Tooltip?>
+<?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.layout.FlowPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.Pane?>
+<?import javafx.scene.layout.StackPane?>
+<?import javafx.scene.layout.VBox?>
+
+<BorderPane fx:id="tabRoot" xmlns="http://javafx.com/javafx/26" xmlns:fx="http://javafx.com/fxml/1"
+            fx:controller="jp.co.pm.ai.desktop.ProcessingTrendTabController"
+            styleClass="pm-processing-trend-tab-root">
+    <top>
+        <VBox spacing="4.0">
+            <ToolBar>
+                <Button fx:id="reloadButton" mnemonicParsing="false" onAction="#onReloadAction" text="再読込">
+                    <tooltip><Tooltip text="加工実績・アラジン加工計画・配台結果をディスクから再読込します（F5）"/></tooltip>
+                </Button>
+                <Separator orientation="VERTICAL"/>
+                <Label text="期間"/>
+                <ComboBox fx:id="periodPresetCombo" prefWidth="118.0"/>
+                <Button fx:id="prevPeriodButton" mnemonicParsing="false" onAction="#onPrevPeriodAction" text="◀">
+                    <tooltip><Tooltip text="前の期間へ（Shift+←）"/></tooltip>
+                </Button>
+                <DatePicker fx:id="fromDatePicker" prefWidth="132.0"/>
+                <Label text="〜"/>
+                <DatePicker fx:id="toDatePicker" prefWidth="132.0"/>
+                <Button fx:id="nextPeriodButton" mnemonicParsing="false" onAction="#onNextPeriodAction" text="▶">
+                    <tooltip><Tooltip text="次の期間へ（Shift+→）"/></tooltip>
+                </Button>
+                <Button fx:id="thisMonthButton" mnemonicParsing="false" onAction="#onThisMonthAction" text="今月"/>
+                <Separator orientation="VERTICAL"/>
+                <CheckBox fx:id="autoRefreshCheckBox" mnemonicParsing="false" selected="true" text="自動更新">
+                    <tooltip><Tooltip text="一定間隔でソースの更新を確認し、変わっていれば再集計します（日跨ぎでも「今日」を追従）"/></tooltip>
+                </CheckBox>
+                <Label text="間隔(秒)"/>
+                <Spinner fx:id="autoRefreshIntervalSpinner" editable="true" prefWidth="76.0"/>
+                <Label fx:id="nextRefreshLabel" styleClass="pm-processing-trend-muted" text=""/>
+            </ToolBar>
+            <VBox spacing="4.0" styleClass="pm-processing-trend-subbar">
+                <padding>
+                    <Insets bottom="4.0" left="8.0" right="8.0" top="2.0"/>
+                </padding>
+                <FlowPane hgap="14.0" vgap="4.0" styleClass="pm-processing-trend-subbar-controls">
+                    <HBox spacing="6.0" alignment="CENTER_LEFT">
+                        <Label text="機械"/>
+                        <ComboBox fx:id="machineCombo" prefWidth="168.0"/>
+                        <Label text="工程"/>
+                        <ComboBox fx:id="processCombo" prefWidth="148.0"/>
+                        <Label text="予定"/>
+                        <ComboBox fx:id="planSourceCombo" prefWidth="168.0">
+                            <tooltip><Tooltip text="予定系列の取得元。&#10;アラジン加工計画: 日付列の計画 m（未完依頼のスナップショット。完了依頼は消えるため前日までの予定は欠け得る）&#10;配台結果 JSON: 配台日×当日配台数量（本日以降の残量配台のみ。前日までの予定は持たない）"/></tooltip>
+                        </ComboBox>
+                    </HBox>
+                    <HBox spacing="4.0" alignment="CENTER_LEFT" styleClass="pm-processing-trend-view-toggle">
+                        <fx:define>
+                            <ToggleGroup fx:id="viewModeGroup"/>
+                        </fx:define>
+                        <ToggleButton fx:id="viewComboToggle" mnemonicParsing="false" selected="true"
+                                      text="複合" toggleGroup="$viewModeGroup">
+                            <tooltip><Tooltip text="日次の棒グラフに累計の折れ線を重ねて表示（左軸: 日次 m、右軸: 累計 m）"/></tooltip>
+                        </ToggleButton>
+                        <ToggleButton fx:id="viewDailyToggle" mnemonicParsing="false"
+                                      text="日次" toggleGroup="$viewModeGroup">
+                            <tooltip><Tooltip text="日次の実績・予定の棒グラフのみ"/></tooltip>
+                        </ToggleButton>
+                        <ToggleButton fx:id="viewCumulativeToggle" mnemonicParsing="false"
+                                      text="累計" toggleGroup="$viewModeGroup">
+                            <tooltip><Tooltip text="実績累計・予定累計・見込累計の折れ線のみ"/></tooltip>
+                        </ToggleButton>
+                    </HBox>
+                    <HBox spacing="8.0" alignment="CENTER_LEFT">
+                        <ProgressIndicator fx:id="loadingIndicator" managed="false" prefHeight="16.0" prefWidth="16.0"
+                                           visible="false"/>
+                        <Label fx:id="loadingStatusLabel" managed="false" styleClass="pm-processing-trend-loading-status"
+                               text="読込中…" visible="false"/>
+                        <Label fx:id="lastUpdatedLabel" styleClass="pm-processing-trend-muted" text="最終更新: —"/>
+                    </HBox>
+                </FlowPane>
+                <Label fx:id="sourceSummaryLabel" maxWidth="1.7976931348623157E308" styleClass="pm-processing-trend-source"
+                       text="" wrapText="true"/>
+            </VBox>
+            <HBox fx:id="noticeBanner" alignment="CENTER_LEFT" managed="false" spacing="10.0" visible="false"
+                  styleClass="pm-processing-trend-banner">
+                <padding>
+                    <Insets bottom="5.0" left="10.0" right="10.0" top="5.0"/>
+                </padding>
+                <Label fx:id="noticeBannerLabel" maxWidth="1.7976931348623157E308" text="" wrapText="true" HBox.hgrow="ALWAYS"/>
+                <Button fx:id="noticeReloadButton" mnemonicParsing="false" onAction="#onReloadAction" text="再読込"/>
+            </HBox>
+            <FlowPane fx:id="kpiRow" hgap="10.0" vgap="6.0" styleClass="pm-processing-trend-kpi-row">
+                <padding>
+                    <Insets bottom="6.0" left="8.0" right="8.0" top="2.0"/>
+                </padding>
+                <VBox fx:id="kpiActualCard" styleClass="pm-processing-trend-kpi-card">
+                    <Label styleClass="pm-processing-trend-kpi-caption" text="実績合計（期間内）"/>
+                    <Label fx:id="kpiActualValue" styleClass="pm-processing-trend-kpi-value" text="—"/>
+                    <Label fx:id="kpiActualSub" styleClass="pm-processing-trend-kpi-sub" text=""/>
+                </VBox>
+                <VBox fx:id="kpiPlanCard" styleClass="pm-processing-trend-kpi-card">
+                    <Label styleClass="pm-processing-trend-kpi-caption" text="予定合計（期間内）"/>
+                    <Label fx:id="kpiPlanValue" styleClass="pm-processing-trend-kpi-value" text="—"/>
+                    <Label fx:id="kpiPlanSub" styleClass="pm-processing-trend-kpi-sub" text=""/>
+                </VBox>
+                <VBox fx:id="kpiProgressCard" styleClass="pm-processing-trend-kpi-card">
+                    <Label styleClass="pm-processing-trend-kpi-caption" text="進捗率（前日まで）"/>
+                    <Label fx:id="kpiProgressValue" styleClass="pm-processing-trend-kpi-value" text="—"/>
+                    <Label fx:id="kpiProgressSub" styleClass="pm-processing-trend-kpi-sub" text=""/>
+                </VBox>
+                <VBox fx:id="kpiRemainingCard" styleClass="pm-processing-trend-kpi-card">
+                    <Label styleClass="pm-processing-trend-kpi-caption" text="残予定（当日以降）"/>
+                    <Label fx:id="kpiRemainingValue" styleClass="pm-processing-trend-kpi-value" text="—"/>
+                    <Label fx:id="kpiRemainingSub" styleClass="pm-processing-trend-kpi-sub" text=""/>
+                </VBox>
+                <VBox fx:id="kpiProjectedCard" styleClass="pm-processing-trend-kpi-card">
+                    <Label styleClass="pm-processing-trend-kpi-caption" text="見込合計（期間末着地）"/>
+                    <Label fx:id="kpiProjectedValue" styleClass="pm-processing-trend-kpi-value" text="—"/>
+                    <Label fx:id="kpiProjectedSub" styleClass="pm-processing-trend-kpi-sub, pm-processing-trend-kpi-sub-strong" text=""/>
+                </VBox>
+            </FlowPane>
+        </VBox>
+    </top>
+    <center>
+        <VBox spacing="4.0">
+            <padding>
+                <Insets bottom="4.0" left="8.0" right="8.0" top="0.0"/>
+            </padding>
+            <HBox alignment="CENTER_LEFT" spacing="14.0" styleClass="pm-processing-trend-legend-row">
+                <Label fx:id="chartTitleLabel" styleClass="pm-processing-trend-chart-title" text="加工実績・予定トレンド"/>
+                <HBox fx:id="legendBox" alignment="CENTER_LEFT" spacing="12.0" styleClass="pm-processing-trend-legend"/>
+                <Pane HBox.hgrow="ALWAYS"/>
+                <Label fx:id="unitHintLabel" styleClass="pm-processing-trend-muted" text="単位: m（換算数量・工程延べ）"/>
+            </HBox>
+            <StackPane fx:id="chartStack" VBox.vgrow="ALWAYS" styleClass="pm-processing-trend-chart-stack">
+                <BarChart fx:id="dailyChart" animated="false" legendVisible="false" minHeight="200.0"
+                          styleClass="pm-trend-daily-chart" barGap="1.0" categoryGap="8.0">
+                    <xAxis>
+                        <CategoryAxis fx:id="dailyXAxis" animated="false" tickLabelGap="20.0" tickLabelsVisible="false"/>
+                    </xAxis>
+                    <yAxis>
+                        <ProcessingTrendNumberAxis fx:id="dailyYAxis" animated="false" autoRanging="false" label="日次 (m) ─ 棒"
+                                    lowerBound="0.0" upperBound="10.0" tickUnit="2.0" minorTickVisible="false"/>
+                    </yAxis>
+                </BarChart>
+                <LineChart fx:id="cumulativeChart" animated="false" createSymbols="true" legendVisible="false"
+                           minHeight="200.0" styleClass="pm-trend-cumulative-chart"
+                           horizontalGridLinesVisible="false" verticalGridLinesVisible="false"
+                           alternativeRowFillVisible="false" alternativeColumnFillVisible="false">
+                    <xAxis>
+                        <CategoryAxis fx:id="cumulativeXAxis" animated="false" tickLabelGap="20.0" tickLabelsVisible="false"/>
+                    </xAxis>
+                    <yAxis>
+                        <ProcessingTrendNumberAxis fx:id="cumulativeYAxis" animated="false" autoRanging="false" label="累計 (m) ─ 折れ線"
+                                    lowerBound="0.0" upperBound="10.0" tickUnit="2.0" minorTickVisible="false" side="RIGHT"/>
+                    </yAxis>
+                </LineChart>
+                <Pane fx:id="markerPane" mouseTransparent="true" styleClass="pm-processing-trend-marker-pane"/>
+                <VBox fx:id="emptyStatePane" alignment="CENTER" managed="false" spacing="6.0" visible="false"
+                      styleClass="pm-processing-trend-empty">
+                    <Label fx:id="emptyStateTitle" styleClass="pm-processing-trend-empty-title" text="表示できるデータがありません"/>
+                    <Label fx:id="emptyStateDetail" styleClass="pm-processing-trend-empty-detail" text="" wrapText="true"
+                           textAlignment="CENTER" maxWidth="560.0"/>
+                </VBox>
+            </StackPane>
+            <TitledPane fx:id="detailPane" animated="false" collapsible="true" expanded="false" text="日別明細">
+                <TableView fx:id="detailTable" fixedCellSize="24.0" prefHeight="220.0" maxHeight="320.0"
+                           styleClass="pm-processing-trend-detail-table">
+                    <columns>
+                        <TableColumn fx:id="colDate" prefWidth="110.0" sortable="false" text="日付"/>
+                        <TableColumn fx:id="colActual" prefWidth="100.0" sortable="false" text="実績 (m)"/>
+                        <TableColumn fx:id="colPlan" prefWidth="100.0" sortable="false" text="予定 (m)"/>
+                        <TableColumn fx:id="colDiff" prefWidth="100.0" sortable="false" text="差異 (m)"/>
+                        <TableColumn fx:id="colActualCum" prefWidth="110.0" sortable="false" text="実績累計 (m)"/>
+                        <TableColumn fx:id="colPlanCum" prefWidth="110.0" sortable="false" text="予定累計 (m)"/>
+                        <TableColumn fx:id="colProjectedCum" prefWidth="110.0" sortable="false" text="見込累計 (m)"/>
+                    </columns>
+                </TableView>
+            </TitledPane>
+        </VBox>
+    </center>
+</BorderPane>

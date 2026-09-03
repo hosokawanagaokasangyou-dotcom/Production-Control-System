@@ -507,10 +507,16 @@ public final class MainShellController
     private EquipmentStatusDashboardTabController equipmentStatusDashboardTabController;
 
     @FXML
+    private ProcessingTrendTabController processingTrendTabController;
+
+    @FXML
     private CodeDispatchLookupTablesTabController codeDispatchLookupTablesTabController;
 
     @FXML
     private Tab mainShellTabEquipmentStatusDashboard;
+
+    @FXML
+    private Tab mainShellTabProcessingTrend;
 
     @FXML
     private Tab mainShellTabRun;
@@ -861,6 +867,9 @@ public final class MainShellController
             if (equipmentStatusDashboardTabController != null) {
                 equipmentStatusDashboardTabController.bindShell(this);
             }
+            if (processingTrendTabController != null) {
+                processingTrendTabController.bindShell(this);
+            }
             envTabController.bindShell(this);
             memorySettingsTabController.bindShell(this);
             if (globalSettingsTabController != null) {
@@ -1058,6 +1067,7 @@ public final class MainShellController
                                             () -> {
                                                 refreshMainShellTabHeaderChromeFromStoredColors();
                                                 scheduleEquipmentStatusDashboardInitialReloadIfSelected();
+                                                scheduleProcessingTrendInitialReloadIfSelected();
                                                 scheduleRequestFormPipelineCheckInitialRefreshIfSelected();
                                             }));
                 });
@@ -1113,6 +1123,10 @@ public final class MainShellController
                             if (newTab == mainShellTabEquipmentStatusDashboard
                                     && equipmentStatusDashboardTabController != null) {
                                 equipmentStatusDashboardTabController.onMainShellTabSelected();
+                            }
+                            if (newTab == mainShellTabProcessingTrend
+                                    && processingTrendTabController != null) {
+                                processingTrendTabController.onMainShellTabSelected();
                             }
                             if (newTab == mainShellTabRequestFormInput
                                     && requestFormInputTabController != null
@@ -1175,6 +1189,10 @@ public final class MainShellController
                             if (prevTab == mainShellTabEquipmentStatusDashboard
                                     && equipmentStatusDashboardTabController != null) {
                                 equipmentStatusDashboardTabController.onMainShellTabDeselected();
+                            }
+                            if (prevTab == mainShellTabProcessingTrend
+                                    && processingTrendTabController != null) {
+                                processingTrendTabController.onMainShellTabDeselected();
                             }
                             if (prevTab == mainShellTabRequestFormInput
                                     && requestFormInputTabController != null) {
@@ -2408,6 +2426,9 @@ public final class MainShellController
         if (t == mainShellTabEquipmentStatusDashboard) {
             return MainShellTabId.EQUIPMENT_STATUS_DASHBOARD;
         }
+        if (t == mainShellTabProcessingTrend) {
+            return MainShellTabId.PROCESSING_TREND;
+        }
         if (t == mainShellTabPipelineExecutionTiming) {
             return MainShellTabId.PIPELINE_EXECUTION_TIMING;
         }
@@ -2525,6 +2546,7 @@ public final class MainShellController
         }
         return switch (id) {
             case EQUIPMENT_STATUS_DASHBOARD -> mainShellTabEquipmentStatusDashboard;
+            case PROCESSING_TREND -> mainShellTabProcessingTrend;
             case RUN -> mainShellTabRun;
             case PIPELINE_EXECUTION_TIMING -> mainShellTabPipelineExecutionTiming;
             case UI_BADGE_DESIGN -> mainShellTabUiBadgeDesign;
@@ -3277,6 +3299,17 @@ public final class MainShellController
         }
         if (tabPane.getSelectionModel().getSelectedItem() == mainShellTabEquipmentStatusDashboard) {
             equipmentStatusDashboardTabController.onMainShellTabSelected();
+        }
+    }
+
+    private void scheduleProcessingTrendInitialReloadIfSelected() {
+        if (tabPane == null
+                || mainShellTabProcessingTrend == null
+                || processingTrendTabController == null) {
+            return;
+        }
+        if (tabPane.getSelectionModel().getSelectedItem() == mainShellTabProcessingTrend) {
+            processingTrendTabController.onMainShellTabSelected();
         }
     }
 
@@ -4503,6 +4536,9 @@ public final class MainShellController
         if (effective == mainShellTabEquipmentStatusDashboard
                 && equipmentStatusDashboardTabController != null) {
             equipmentStatusDashboardTabController.onMainShellTabSelected();
+        }
+        if (effective == mainShellTabProcessingTrend && processingTrendTabController != null) {
+            processingTrendTabController.onMainShellTabSelected();
         }
         if (effective == mainShellTabRequestFormInput && requestFormInputTabController != null) {
             requestFormInputTabController.onMainShellTabSelected();

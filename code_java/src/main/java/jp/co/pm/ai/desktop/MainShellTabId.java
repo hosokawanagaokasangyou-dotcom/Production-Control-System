@@ -6,6 +6,8 @@ package jp.co.pm.ai.desktop;
 public enum MainShellTabId {
     /** 加工実績・予定の機械別ダッシュボード（実行・ログの左＝先頭）。 */
     EQUIPMENT_STATUS_DASHBOARD("equipmentStatusDashboard"),
+    /** 加工実績・加工予定を日別に重ねたトレンド（日次棒 + 累計折れ線）。 */
+    PROCESSING_TREND("processingTrend"),
     RUN("run"),
     UI_BADGE_DESIGN("uiBadgeDesign"),
     PUSH_BUTTON_DESIGN("pushButtonDesign"),

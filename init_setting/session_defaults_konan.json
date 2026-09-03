@@ -18,11 +18,15 @@
   "planInputTodayDispatch" : false,
   "mainRunSkipGeminiApi" : false,
   "mainRunStage1MarkAllExcludeAfterRun" : false,
-  "mainShellTabOrder" : [ "equipmentStatusDashboard", "remoteDesktop", "requestFormInput", "requestFormPipelineCheck", "companyCalendar", "memberAttendance", "machineCalendar", "masterDispatchSheets", "planInputStage3", "run", "planInput", "equipmentGanttGraphic", "deliveryCalendarView", "operatorCard", "codeLookupTables", "uiBadgeDesign", "pushButtonDesign", "ganttPersonBadgeDesign", "requestFormPreviewBadgeDesign", "planResultViewer", "stage1Preview", "resultDispatch", "masterSummary", "excludeRules", "specialRules", "planWorkspaceHistory", "memorySettings", "apiModelBenchmark", "actualsStatus", "pipelineExecutionTiming", "cacheHistory", "env", "globalSettings", "userProfiles", "operatorUserManagement" ],
+  "mainShellTabOrder" : [ "equipmentStatusDashboard", "processingTrend", "remoteDesktop", "requestFormInput", "requestFormPipelineCheck", "companyCalendar", "memberAttendance", "machineCalendar", "masterDispatchSheets", "planInputStage3", "run", "planInput", "equipmentGanttGraphic", "deliveryCalendarView", "operatorCard", "codeLookupTables", "uiBadgeDesign", "pushButtonDesign", "ganttPersonBadgeDesign", "requestFormPreviewBadgeDesign", "planResultViewer", "stage1Preview", "resultDispatch", "masterSummary", "excludeRules", "specialRules", "planWorkspaceHistory", "memorySettings", "apiModelBenchmark", "actualsStatus", "pipelineExecutionTiming", "cacheHistory", "env", "globalSettings", "userProfiles", "operatorUserManagement" ],
   "mainShellTabLayout" : [ {
     "kind" : "tab",
     "color" : "#994d66",
     "id" : "equipmentStatusDashboard"
+  }, {
+    "kind" : "tab",
+    "color" : "#2f6fb3",
+    "id" : "processingTrend"
   }, {
     "kind" : "tab",
     "color" : "#0000ff",

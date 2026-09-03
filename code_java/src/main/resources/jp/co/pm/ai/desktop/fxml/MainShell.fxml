@@ -82,6 +82,11 @@
                         <fx:include fx:id="equipmentStatusDashboardTab" source="EquipmentStatusDashboardTab.fxml"/>
                     </content>
                 </Tab>
+                <Tab fx:id="mainShellTabProcessingTrend" closable="false" text="加工トレンド">
+                    <content>
+                        <fx:include fx:id="processingTrendTab" source="ProcessingTrendTab.fxml"/>
+                    </content>
+                </Tab>
                 <Tab fx:id="mainShellTabRun" closable="false" text="実行・ログ">
                     <content>
                         <fx:include fx:id="mainRunTab" source="MainRunTab.fxml"/>

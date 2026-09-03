@@ -3178,3 +3178,410 @@
 .table-view.pipeline-check-main-table > .virtual-flow > .scroll-bar:horizontal {
     -fx-pref-height: 14px;
 }
+
+
+/* ===== 加工トレンド タブ（ProcessingTrendTab.fxml） ===== */
+
+.pm-processing-trend-tab-root {
+    /* 実績=青系、予定=グレー系（輪郭）、見込=紫（ステータス色と無関係）、今日=ティール（赤=悪化と衝突させない） */
+    -pm-trend-actual: #2563eb;
+    -pm-trend-plan: #e8edf3;
+    -pm-trend-plan-edge: #64748b;
+    -pm-trend-actual-cum: #1e3a8a;
+    -pm-trend-plan-cum: #475569;
+    -pm-trend-projected: #7c3aed;
+    -pm-trend-today: #0f766e;
+    -pm-trend-card-bg: derive(-fx-base, 12%);
+    -pm-trend-card-border: derive(-fx-base, -18%);
+    -pm-trend-good: #15803d;
+    -pm-trend-warn: #b45309;
+    -pm-trend-bad: #b91c1c;
+    -pm-trend-weekend-bg: #eef2f7;
+    -pm-trend-today-bg: #fef3c7;
+}
+
+.pm-processing-trend-tab-root .tool-bar {
+    -fx-min-height: 36px;
+}
+
+.pm-processing-trend-subbar-controls {
+    -fx-alignment: center-left;
+    -fx-min-height: 28px;
+}
+
+.pm-processing-trend-view-toggle .toggle-button {
+    -fx-min-width: 56px;
+}
+
+.label.pm-processing-trend-muted,
+.label.pm-processing-trend-source {
+    -fx-font-size: 11px;
+    -fx-text-fill: -fx-mid-text-color;
+}
+
+.label.pm-processing-trend-loading-status {
+    -fx-font-size: 12px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -fx-accent;
+}
+
+.pm-processing-trend-banner {
+    -fx-background-radius: 6;
+    -fx-border-radius: 6;
+    -fx-border-width: 1;
+}
+
+.pm-processing-trend-banner .label {
+    -fx-font-size: 12px;
+    -fx-font-weight: bold;
+}
+
+.pm-processing-trend-banner-warn {
+    -fx-background-color: #fef3c7;
+    -fx-border-color: #f59e0b;
+}
+
+.pm-processing-trend-banner-warn .label {
+    -fx-text-fill: #92400e;
+}
+
+.pm-processing-trend-banner-error {
+    -fx-background-color: #fee2e2;
+    -fx-border-color: #dc2626;
+}
+
+.pm-processing-trend-banner-error .label {
+    -fx-text-fill: #991b1b;
+}
+
+/* KPI カード（FlowPane: 幅不足なら折り返す） */
+.pm-processing-trend-kpi-card {
+    -fx-background-color: -pm-trend-card-bg;
+    -fx-background-radius: 6;
+    -fx-border-color: -pm-trend-card-border;
+    -fx-border-radius: 6;
+    -fx-border-width: 1;
+    -fx-padding: 6 12 6 12;
+    -fx-spacing: 1;
+    -fx-min-width: 190px;
+    -fx-pref-width: 210px;
+}
+
+.label.pm-processing-trend-kpi-caption {
+    -fx-font-size: 11px;
+    -fx-text-fill: -fx-mid-text-color;
+}
+
+.label.pm-processing-trend-kpi-value {
+    -fx-font-size: 20px;
+    -fx-font-weight: bold;
+    -fx-font-family: "Segoe UI", "Yu Gothic UI", sans-serif;
+}
+
+.label.pm-processing-trend-kpi-value:good {
+    -fx-text-fill: -pm-trend-good;
+}
+
+.label.pm-processing-trend-kpi-value:warn {
+    -fx-text-fill: -pm-trend-warn;
+}
+
+.label.pm-processing-trend-kpi-value:bad {
+    -fx-text-fill: -pm-trend-bad;
+}
+
+.label.pm-processing-trend-kpi-sub {
+    -fx-font-size: 11px;
+    -fx-text-fill: -fx-mid-text-color;
+}
+
+.label.pm-processing-trend-kpi-sub-strong {
+    -fx-font-size: 13px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -fx-text-base-color;
+}
+
+.label.pm-processing-trend-kpi-sub:good {
+    -fx-text-fill: -pm-trend-good;
+    -fx-font-weight: bold;
+}
+
+.label.pm-processing-trend-kpi-sub:bad {
+    -fx-text-fill: -pm-trend-bad;
+    -fx-font-weight: bold;
+}
+
+/* チャート見出し・凡例 */
+.label.pm-processing-trend-chart-title {
+    -fx-font-size: 13px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -fx-mid-text-color;
+}
+
+.pm-legend-swatch {
+    -fx-min-width: 14px;
+    -fx-pref-width: 14px;
+    -fx-max-width: 14px;
+    -fx-min-height: 10px;
+    -fx-pref-height: 10px;
+    -fx-max-height: 10px;
+    -fx-background-radius: 2;
+}
+
+.pm-legend-swatch-bar-actual {
+    -fx-background-color: -pm-trend-actual;
+}
+
+.pm-legend-swatch-bar-plan {
+    -fx-background-color: -pm-trend-plan-edge, -pm-trend-plan;
+    -fx-background-insets: 0, 1;
+}
+
+.pm-legend-swatch-line-actual,
+.pm-legend-swatch-line-plan,
+.pm-legend-swatch-line-projected {
+    -fx-min-height: 3px;
+    -fx-pref-height: 3px;
+    -fx-max-height: 3px;
+    -fx-background-radius: 0;
+}
+
+.pm-legend-swatch-line-actual {
+    -fx-background-color: -pm-trend-actual-cum;
+}
+
+.pm-legend-swatch-line-plan {
+    -fx-background-color: -pm-trend-plan-cum;
+}
+
+.pm-legend-swatch-line-projected {
+    -fx-background-color: transparent;
+    -fx-border-color: -pm-trend-projected transparent transparent transparent;
+    -fx-border-width: 3 0 0 0;
+    -fx-border-style: segments(4, 3) line-cap butt;
+}
+
+.pm-legend-swatch-today {
+    -fx-min-width: 3px;
+    -fx-pref-width: 3px;
+    -fx-max-width: 3px;
+    -fx-min-height: 12px;
+    -fx-pref-height: 12px;
+    -fx-max-height: 12px;
+    -fx-background-color: transparent;
+    -fx-border-color: transparent transparent transparent -pm-trend-today;
+    -fx-border-width: 0 0 0 2;
+    -fx-border-style: segments(3, 2) line-cap butt;
+}
+
+.label.pm-legend-label {
+    -fx-font-size: 11px;
+}
+
+/* チャート本体: 2 枚重ね。padding は Controller が相手側 Y 軸幅で調整する */
+.pm-trend-daily-chart,
+.pm-trend-cumulative-chart {
+    -fx-padding: 0;
+}
+
+.pm-trend-daily-chart .chart-content,
+.pm-trend-cumulative-chart .chart-content {
+    -fx-padding: 6 8 4 8;
+}
+
+.pm-trend-daily-chart .default-color0.chart-bar {
+    -fx-bar-fill: -pm-trend-actual;
+    -fx-background-color: -pm-trend-actual;
+    -fx-background-insets: 0;
+}
+
+/* 予定棒は輪郭型: 本数が多くても実績（塗り）より視覚的に軽くする */
+.pm-trend-daily-chart .default-color1.chart-bar {
+    -fx-bar-fill: -pm-trend-plan;
+    -fx-background-color: -pm-trend-plan-edge, -pm-trend-plan;
+    -fx-background-insets: 0, 1;
+}
+
+.pm-trend-daily-chart .axis,
+.pm-trend-cumulative-chart .axis {
+    -fx-tick-label-font-size: 11px;
+}
+
+/* 軸と系列の対応を色で示す（左=棒、右=折れ線） */
+.pm-trend-daily-chart .axis:left {
+    -fx-tick-label-fill: -pm-trend-actual;
+}
+
+.pm-trend-daily-chart .axis:left .axis-label {
+    -fx-text-fill: -pm-trend-actual;
+}
+
+.pm-trend-cumulative-chart .axis:right,
+.pm-trend-cumulative-chart .axis:left {
+    -fx-tick-label-fill: -pm-trend-actual-cum;
+}
+
+.pm-trend-cumulative-chart .axis:right .axis-label,
+.pm-trend-cumulative-chart .axis:left .axis-label {
+    -fx-text-fill: -pm-trend-actual-cum;
+}
+
+.pm-trend-cumulative-chart {
+    -fx-background-color: transparent;
+}
+
+.pm-trend-cumulative-chart .chart-plot-background {
+    -fx-background-color: transparent;
+}
+
+/* 複合表示のとき: X 軸は下のチャートと同じ寸法を保ちつつ描画だけ消す */
+.pm-trend-cumulative-chart.pm-trend-overlay .axis:bottom {
+    -fx-opacity: 0;
+}
+
+.pm-trend-cumulative-chart .default-color0.chart-series-line {
+    -fx-stroke: -pm-trend-actual-cum;
+    -fx-stroke-width: 2.5px;
+}
+
+.pm-trend-cumulative-chart .default-color1.chart-series-line {
+    -fx-stroke: -pm-trend-plan-cum;
+    -fx-stroke-width: 2px;
+}
+
+.pm-trend-cumulative-chart .default-color2.chart-series-line {
+    -fx-stroke: -pm-trend-projected;
+    -fx-stroke-width: 2.5px;
+    -fx-stroke-dash-array: 6 4;
+}
+
+.pm-trend-cumulative-chart .chart-line-symbol {
+    -fx-background-radius: 3px;
+    -fx-padding: 3px;
+    -fx-background-insets: 0;
+}
+
+/* 複合表示では点を小さくして棒の上のノイズを抑える */
+.pm-trend-cumulative-chart.pm-trend-overlay .chart-line-symbol {
+    -fx-padding: 1.5px;
+    -fx-background-radius: 1.5px;
+}
+
+.pm-trend-cumulative-chart .default-color0.chart-line-symbol {
+    -fx-background-color: -pm-trend-actual-cum, white;
+}
+
+.pm-trend-cumulative-chart .default-color1.chart-line-symbol {
+    -fx-background-color: -pm-trend-plan-cum, white;
+}
+
+.pm-trend-cumulative-chart .default-color2.chart-line-symbol {
+    -fx-background-color: -pm-trend-projected, white;
+}
+
+/* 自前描画の X 軸ラベル（CategoryAxis の目盛ラベルは非表示） */
+.label.pm-processing-trend-x-label {
+    -fx-font-size: 11px;
+    -fx-text-fill: -fx-text-base-color;
+    -fx-padding: 0 1 0 1;
+}
+
+.label.pm-processing-trend-x-label:sat {
+    -fx-text-fill: #1d4ed8;
+}
+
+.label.pm-processing-trend-x-label:sun {
+    -fx-text-fill: #b91c1c;
+}
+
+/* 今日マーカー */
+.pm-processing-trend-today-line {
+    -fx-stroke: -pm-trend-today;
+    -fx-stroke-width: 1.5px;
+    -fx-stroke-dash-array: 5 4;
+}
+
+.label.pm-processing-trend-today-label {
+    -fx-font-size: 10px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -pm-trend-today;
+    -fx-background-color: rgba(255, 255, 255, 0.85);
+    -fx-background-radius: 3;
+    -fx-padding: 0 4 0 4;
+}
+
+/* 空状態・読込中（ダッシュボードの見え方に揃える） */
+.pm-processing-trend-empty {
+    -fx-background-color: rgba(255, 255, 255, 0.72);
+    -fx-padding: 24;
+}
+
+.label.pm-processing-trend-empty-title {
+    -fx-font-size: 18px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -fx-text-base-color;
+}
+
+.label.pm-processing-trend-empty-detail {
+    -fx-font-size: 12px;
+    -fx-text-fill: -fx-mid-text-color;
+}
+
+/* 日別明細 */
+.table-view.pm-processing-trend-detail-table .table-row-cell .table-cell {
+    -fx-font-family: "Consolas", "Cascadia Mono", monospace;
+    -fx-font-size: 12px;
+}
+
+.table-view.pm-processing-trend-detail-table .column-header .label {
+    -fx-alignment: center-right;
+}
+
+/* 行背景は -fx-background を差し替える。詳細度が modena の :selected より高いので選択時は明示的に戻す */
+.table-view.pm-processing-trend-detail-table .table-row-cell:weekend {
+    -fx-background: -pm-trend-weekend-bg;
+}
+
+.table-view.pm-processing-trend-detail-table .table-row-cell:today {
+    -fx-background: -pm-trend-today-bg;
+}
+
+.table-view.pm-processing-trend-detail-table .table-row-cell:weekend:filled:selected,
+.table-view.pm-processing-trend-detail-table .table-row-cell:today:filled:selected {
+    -fx-background: -fx-selection-bar-non-focused;
+}
+
+.table-view.pm-processing-trend-detail-table:focused .table-row-cell:weekend:filled:selected,
+.table-view.pm-processing-trend-detail-table:focused .table-row-cell:today:filled:selected {
+    -fx-background: -fx-selection-bar;
+}
+
+.table-view.pm-processing-trend-detail-table .table-row-cell .table-cell:sat {
+    -fx-text-fill: #1d4ed8;
+}
+
+.table-view.pm-processing-trend-detail-table .table-row-cell .table-cell:sun {
+    -fx-text-fill: #b91c1c;
+}
+
+.table-view.pm-processing-trend-detail-table .table-row-cell:future .table-cell {
+    -fx-text-fill: -fx-mid-text-color;
+}
+
+.table-view.pm-processing-trend-detail-table .table-row-cell .table-cell:good {
+    -fx-text-fill: -pm-trend-good;
+}
+
+.table-view.pm-processing-trend-detail-table .table-row-cell .table-cell:bad {
+    -fx-text-fill: -pm-trend-bad;
+}
+
+/* フォーカス時の選択行のみ白文字（非フォーカスの選択バーは淡色なので既定の文字色のまま） */
+.table-view.pm-processing-trend-detail-table:focused .table-row-cell:filled:selected .table-cell,
+.table-view.pm-processing-trend-detail-table:focused .table-row-cell:filled:selected .table-cell:good,
+.table-view.pm-processing-trend-detail-table:focused .table-row-cell:filled:selected .table-cell:bad,
+.table-view.pm-processing-trend-detail-table:focused .table-row-cell:filled:selected .table-cell:sat,
+.table-view.pm-processing-trend-detail-table:focused .table-row-cell:filled:selected .table-cell:sun,
+.table-view.pm-processing-trend-detail-table:focused .table-row-cell:future:filled:selected .table-cell {
+    -fx-text-fill: -fx-selection-bar-text;
+}

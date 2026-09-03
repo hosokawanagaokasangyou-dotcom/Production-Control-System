@@ -637,6 +637,7 @@
   ],
   "mainShellTabOrder": [
     "equipmentStatusDashboard",
+    "processingTrend",
     "remoteDesktop",
     "requestFormInput",
     "requestFormPipelineCheck",
@@ -677,6 +678,11 @@
       "kind": "tab",
       "color": "#994d66",
       "id": "equipmentStatusDashboard"
+    },
+    {
+      "kind": "tab",
+      "color": "#2f6fb3",
+      "id": "processingTrend"
     },
     {
       "kind": "tab",
