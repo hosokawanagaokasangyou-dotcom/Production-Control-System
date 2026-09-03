@@ -39,8 +39,19 @@ public final class ColumnVisibilitySupport {
                 hidden.set(i);
             }
         }
+        BitSet before = view.getHiddenColumns() != null ? (BitSet) view.getHiddenColumns().clone() : new BitSet();
+        /*
+         * SimpleObjectProperty は BitSet.equals で同一内容を無視する。中身が同じでもスキン再計算が必要なため、
+         * 一度別 BitSet を挟んでから本命をセットする。
+         */
+        if (before.equals(hidden)) {
+            BitSet poke = (BitSet) hidden.clone();
+            poke.flip(Math.max(cols.size(), 1));
+            view.setHiddenColumns(poke);
+        }
         view.setHiddenColumns(hidden);
         refreshSpreadsheetColumnReorderAfterVisibility(view);
+        SpreadsheetTabularSupport.refreshSpreadsheetAfterColumnVisibility(view);
         /*
          * 内側 TableColumn の可視性変更でスキンが組み替わると、既定の CONSTRAINED_RESIZE_POLICY に戻り
          * 列境界ドラッグで幅が変えられなくなる（配台計画_タスク入力の「見出し列」付近で顕在化しやすい）。

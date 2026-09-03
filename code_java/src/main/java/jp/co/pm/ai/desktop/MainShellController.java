@@ -3489,18 +3489,20 @@ public final class MainShellController
      * {@link Label}）と実タブで文字色だけずれる原因になる。
      * <p>JavaFX 26 以降、タブ見出しの {@code LabeledText} などでは {@code fill} が CSS 側でバインドされることがあり、
      * {@link Text#setFill} が例外になる。そのため {@link Text} 系はインライン {@code -fx-fill} のみで指定する。
+     * {@code fillColor} は {@code #rrggbb} のときだけ渡し、テーマトークン（{@code -fx-mid-text-color} 等）のときは
+     * {@code null} でよい。
      */
     private static void applyShellTabHeaderForegroundRecursive(
-            Node root, Color fillColor, String tfHex) {
-        if (root == null || tfHex == null || tfHex.isBlank()) {
+            Node root, Color fillColor, String tfCss) {
+        if (root == null || tfCss == null || tfCss.isBlank()) {
             return;
         }
-        String tf = tfHex.strip();
+        String tf = tfCss.strip();
         if (root instanceof Text textNode) {
             textNode.setStyle("-fx-fill: " + tf + ";");
         } else if (root instanceof Labeled labeled) {
             /* TabSkin のバインドと干渉しないよう、可能なときだけ直接指定（主に -fx-text-fill） */
-            if (!labeled.textFillProperty().isBound()) {
+            if (fillColor != null && !labeled.textFillProperty().isBound()) {
                 labeled.setTextFill(fillColor);
             }
             labeled.setStyle("-fx-text-fill: " + tf + ";");
@@ -3512,24 +3514,13 @@ public final class MainShellController
         }
     }
 
-    /** 着色解除時に {@link #applyShellTabHeaderForegroundRecursive} で付けたインラインを除去する。 */
+    /**
+     * 着色解除時はインラインを空にせずテーマ中間色へ戻す。空にすると LabeledText が Modena 既定の黒のまま残り、
+     * ホバーや再 poke まで読めない。
+     */
     private static void clearShellTabHeaderForegroundRecursive(Node root) {
-        if (root == null) {
-            return;
-        }
-        if (root instanceof Text textNode) {
-            textNode.setStyle("");
-        } else if (root instanceof Labeled labeled) {
-            labeled.setStyle("");
-            if (!labeled.textFillProperty().isBound()) {
-                labeled.setTextFill(null);
-            }
-        }
-        if (root instanceof Parent p) {
-            for (Node ch : p.getChildrenUnmodifiable()) {
-                clearShellTabHeaderForegroundRecursive(ch);
-            }
-        }
+        applyShellTabHeaderForegroundRecursive(
+                root, null, jp.co.pm.ai.desktop.ui.LabeledTextFillSupport.THEME_MID);
     }
 
     /** デバッグ計測：{@code .tab-label} サブツリー内の最初の {@link Text} の {@code fill}。 */
@@ -3580,9 +3571,10 @@ public final class MainShellController
     private static void clearShellTabHeaderCellChrome(Node tabHeaderCell) {
         tabHeaderCell.setStyle("");
         tabHeaderCell.getStyleClass().remove("pm-shell-tab-colored");
+        String mid = jp.co.pm.ai.desktop.ui.LabeledTextFillSupport.THEME_MID;
         Node lab = tabHeaderCell.lookup(".tab-label");
         if (lab != null) {
-            lab.setStyle("");
+            lab.setStyle("-fx-text-fill: " + mid + ";");
         }
         clearShellTabHeaderForegroundRecursive(tabHeaderCell);
     }

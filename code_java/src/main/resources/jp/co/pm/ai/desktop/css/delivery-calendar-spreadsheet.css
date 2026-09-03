@@ -332,6 +332,30 @@
     -fx-text-fill: #111111;
 }
 
+
+/* 配台マスタ: 行色（inline style）でも選択が分かるよう太い枠を付ける */
+.pm-ai-readable-spreadsheet.pm-ai-master-dispatch-spreadsheet .spreadsheet-cell:filled:selected,
+.pm-ai-readable-spreadsheet.pm-ai-master-dispatch-spreadsheet .spreadsheet-cell:filled:focused:selected,
+.pm-ai-readable-spreadsheet.pm-ai-master-dispatch-spreadsheet .spreadsheet-cell:filled:focused:selected:hover {
+    -fx-border-color: #0b57d0;
+    -fx-border-width: 2.5px;
+    -fx-background-color: #9ec5ea;
+    -fx-text-fill: #111111;
+}
+
+.pm-ai-readable-spreadsheet.pm-ai-master-dispatch-spreadsheet VerticalHeader > Label.selected,
+.pm-ai-readable-spreadsheet.pm-ai-master-dispatch-spreadsheet VerticalHeader > Label.fixed.selected {
+    -fx-background-color: #0b57d0;
+    -fx-text-fill: #ffffff;
+    -fx-font-weight: bold;
+}
+
+.pm-ai-readable-spreadsheet.pm-ai-master-dispatch-spreadsheet .selection-rectangle {
+    -fx-fill: transparent;
+    -fx-stroke: #0b57d0;
+    -fx-stroke-width: 2.5;
+}
+
 .pm-ai-decimal-keypad {
     -fx-background-color: #f4f4f4;
     -fx-border-color: #888888;

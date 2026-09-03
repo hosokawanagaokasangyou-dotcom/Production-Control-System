@@ -33,6 +33,18 @@ public final class MasterDispatchSheetGridSupport {
     private static final MasterDispatchDecimalCellType NEED_HEADCOUNT_CELL_TYPE =
             new MasterDispatchDecimalCellType(0.0, 99.0, 0);
 
+    /**
+     * 行高は固定（ControlsFX 既定の 24px と同値）。
+     *
+     * <p>{@link GridBase} の行高コールバック未設定時（{@code -1}）は ControlsFX {@code GridRowSkin} が
+     * セルの prefHeight に合わせて行を自動拡張し、その途中で {@code GridVirtualFlow#layoutChildren()} を
+     * レイアウト中に再入呼び出しする。JavaFX 26 の {@code VirtualFlow#cleanPile()} は pile 行を sheet の子から
+     * 取り除くため、sheet {@code Group} の {@code Parent#layout()} ループ中に子が減って
+     * {@code IndexOutOfBoundsException} となり、{@code performingLayout} が立ったまま以降の再レイアウトが
+     * 止まる（ペースト結果が描画されない）。固定行高にすると自動拡張経路自体が走らない。
+     */
+    static final double FIXED_ROW_HEIGHT_PX = 24.0;
+
     private MasterDispatchSheetGridSupport() {}
 
     /**
@@ -144,6 +156,7 @@ public final class MasterDispatchSheetGridSupport {
         int firstData = SpreadsheetTabularSupport.spreadsheetFirstDataRowIndex();
         int rc = firstData + Math.max(display.size(), 1) + MasterDispatchSheetEditRules.EXTRA_ROWS;
         GridBase grid = new GridBase(rc, cols);
+        grid.setRowHeightCallback(row -> FIXED_ROW_HEIGHT_PX);
         List<String> titles = MasterDispatchSheetEditRules.columnTitles(sheet, original, cols);
         grid.getColumnHeaders().clear();
         grid.getColumnHeaders().addAll(titles);

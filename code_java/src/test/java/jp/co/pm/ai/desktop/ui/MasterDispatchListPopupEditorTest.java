@@ -10,7 +10,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 import javafx.application.Platform;
+import javafx.collections.FXCollections;
 import javafx.scene.control.ComboBox;
+import javafx.scene.control.ListView;
 import javafx.scene.control.TextField;
 
 import org.controlsfx.control.spreadsheet.SpreadsheetCellEditor;
@@ -29,6 +31,22 @@ class MasterDispatchListPopupEditorTest {
         } catch (IllegalStateException ignored) {
             // already started
         }
+    }
+
+    @Test
+    void resolvePickedListValue_fallsBackToSelectionModel() throws Exception {
+        CountDownLatch done = new CountDownLatch(1);
+        AtomicReference<String> pickedRef = new AtomicReference<>();
+        Platform.runLater(
+                () -> {
+                    ListView<String> listView =
+                            new ListView<>(FXCollections.observableArrayList("", "OP", "AS"));
+                    listView.getSelectionModel().select("AS");
+                    pickedRef.set(MasterDispatchListPopupEditor.resolvePickedListValue(listView, null));
+                    done.countDown();
+                });
+        assertTrue(done.await(5, TimeUnit.SECONDS));
+        assertEquals("AS", pickedRef.get());
     }
 
     @Test

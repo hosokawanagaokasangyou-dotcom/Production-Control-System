@@ -10,13 +10,17 @@ import javafx.geometry.Insets;
 import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.control.Control;
+import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
+import javafx.scene.control.TablePosition;
 import javafx.scene.control.TextField;
 import javafx.scene.input.KeyCode;
+import javafx.scene.input.MouseButton;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.VBox;
 import javafx.stage.Popup;
 
+import org.controlsfx.control.spreadsheet.SpreadsheetCell;
 import org.controlsfx.control.spreadsheet.SpreadsheetCellEditor;
 import org.controlsfx.control.spreadsheet.SpreadsheetView;
 
@@ -35,6 +39,7 @@ public final class MasterDispatchListPopupEditor extends SpreadsheetCellEditor {
     private final VBox popupBox = new VBox();
     private final Popup popup = new Popup();
     private boolean editing;
+    private boolean suppressAutoHideCancel;
     private Scene hookedScene;
     private EventHandler<MouseEvent> sceneMouseHandler;
     private Double dragOriginX;
@@ -63,16 +68,18 @@ public final class MasterDispatchListPopupEditor extends SpreadsheetCellEditor {
                 });
         list.setItems(FXCollections.observableArrayList(this.items));
         list.setFocusTraversable(true);
-        list.setOnMouseClicked(
+        list.addEventHandler(
+                MouseEvent.MOUSE_RELEASED,
                 e -> {
-                    if (e.getClickCount() >= 1 && list.getSelectionModel().getSelectedItem() != null) {
-                        commitSelected();
+                    if (e.getButton() != MouseButton.PRIMARY || !editing) {
+                        return;
                     }
+                    commitPickedValue(e);
                 });
         list.setOnKeyPressed(
                 e -> {
                     if (e.getCode() == KeyCode.ENTER) {
-                        commitSelected();
+                        commitPickedValue(null);
                         e.consume();
                     } else if (e.getCode() == KeyCode.ESCAPE) {
                         endEdit(false);
@@ -96,14 +103,42 @@ public final class MasterDispatchListPopupEditor extends SpreadsheetCellEditor {
         popup.setAutoFix(true);
         popup.setOnAutoHide(
                 e -> {
-                    if (editing) {
-                        endEdit(false);
+                    if (suppressAutoHideCancel || !editing) {
+                        return;
                     }
+                    endEdit(false);
                 });
     }
 
     static boolean isSelectionDrag(double originX, double originY, double x, double y) {
         return Math.hypot(x - originX, y - originY) > SELECTION_DRAG_THRESHOLD_PX;
+    }
+
+    /** ListView のクリック位置から候補文字列を解決する（MOUSE_CLICKED 時の selection 未更新対策）。 */
+    static String resolvePickedListValue(ListView<String> listView, MouseEvent event) {
+        if (listView == null) {
+            return null;
+        }
+        Node node =
+                event != null && event.getPickResult() != null
+                        ? event.getPickResult().getIntersectedNode()
+                        : null;
+        while (node != null) {
+            if (node instanceof ListCell<?> cell && !cell.isEmpty()) {
+                Object item = cell.getItem();
+                return item != null ? item.toString() : "";
+            }
+            node = node.getParent();
+        }
+        String selected = listView.getSelectionModel().getSelectedItem();
+        if (selected != null) {
+            return selected;
+        }
+        int idx = listView.getSelectionModel().getSelectedIndex();
+        if (idx >= 0 && idx < listView.getItems().size()) {
+            return listView.getItems().get(idx);
+        }
+        return null;
     }
 
     private boolean hasMultiCellSelection() {
@@ -113,13 +148,51 @@ public final class MasterDispatchListPopupEditor extends SpreadsheetCellEditor {
         return spreadsheetView.getSelectionModel().getSelectedCells().size() > 1;
     }
 
-    private void commitSelected() {
-        String selected = list.getSelectionModel().getSelectedItem();
-        if (selected == null) {
+    private void commitPickedValue(MouseEvent event) {
+        String picked = resolvePickedListValue(list, event);
+        if (picked == null) {
             return;
         }
-        field.setText(selected);
-        endEdit(true);
+        TablePosition<?, ?> editingCell = spreadsheetView != null ? spreadsheetView.getEditingCell() : null;
+        field.setText(picked);
+        suppressAutoHideCancel = true;
+        try {
+            endEdit(true);
+        } finally {
+            suppressAutoHideCancel = false;
+        }
+        if (spreadsheetView != null && editingCell != null) {
+            SpreadsheetTabularSupport.refreshSpreadsheetCellAfterListEdit(spreadsheetView, editingCell);
+        }
+    }
+
+    private String readEditingModelText(TablePosition<?, ?> editingCell) {
+        if (spreadsheetView == null
+                || spreadsheetView.getGrid() == null
+                || editingCell == null
+                || editingCell.getRow() < 0) {
+            return "";
+        }
+        int modelRow = spreadsheetView.getModelRow(editingCell.getRow());
+        int modelCol = SpreadsheetTabularSupport.modelColumnIndexFromTablePosition(spreadsheetView, editingCell);
+        if (modelRow < 0
+                || modelCol < 0
+                || modelRow >= spreadsheetView.getGrid().getRowCount()) {
+            return "";
+        }
+        var row = spreadsheetView.getGrid().getRows().get(modelRow);
+        if (row == null || modelCol >= row.size()) {
+            return "";
+        }
+        SpreadsheetCell cell = row.get(modelCol);
+        if (cell == null) {
+            return "";
+        }
+        Object item = cell.getItem();
+        if (item != null) {
+            return String.valueOf(item);
+        }
+        return cell.getText() != null ? cell.getText() : "";
     }
 
     private void showPicker() {
@@ -235,6 +308,7 @@ public final class MasterDispatchListPopupEditor extends SpreadsheetCellEditor {
     @Override
     public void end() {
         editing = false;
+        suppressAutoHideCancel = false;
         detachSceneMouseWatch();
         popup.hide();
     }
@@ -243,4 +317,5 @@ public final class MasterDispatchListPopupEditor extends SpreadsheetCellEditor {
     public Control getEditor() {
         return field;
     }
+
 }

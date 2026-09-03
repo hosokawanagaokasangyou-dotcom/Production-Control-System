@@ -28,6 +28,7 @@ import javafx.collections.WeakListChangeListener;
 import javafx.geometry.Insets;
 import javafx.scene.Node;
 import javafx.scene.Parent;
+import javafx.scene.control.ContentDisplay;
 import javafx.scene.control.ContextMenu;
 import javafx.scene.control.Label;
 import javafx.scene.control.MenuItem;
@@ -46,6 +47,8 @@ import javafx.scene.control.TableColumn;
 import javafx.scene.control.TablePosition;
 import javafx.scene.control.TablePositionBase;
 import javafx.scene.control.TableView;
+import javafx.scene.control.TextField;
+import javafx.scene.control.TextInputControl;
 import javafx.scene.control.Tooltip;
 import javafx.scene.control.Skin;
 import javafx.scene.layout.StackPane;
@@ -226,13 +229,25 @@ public final class SpreadsheetTabularSupport {
 
     private static final String SPREADSHEET_CLIPBOARD_HOOK = "pmAiSpreadsheetClipboardHook";
     private static final Object SPREADSHEET_COPY_MENU_PATCHED = new Object();
+    private static final Object SPREADSHEET_PASTE_MENU_PATCHED = new Object();
     private static final KeyCombination SPREADSHEET_COPY_SHORTCUT =
             new KeyCodeCombination(KeyCode.C, KeyCombination.SHORTCUT_DOWN);
+    private static final KeyCombination SPREADSHEET_PASTE_SHORTCUT =
+            new KeyCodeCombination(KeyCode.V, KeyCombination.SHORTCUT_DOWN);
+
+    /** ControlsFX {@link SpreadsheetView} が {@code checkFormat()} で使う MIME。 */
+    static final String SPREADSHEET_NATIVE_CLIPBOARD_MIME = "SpreadsheetView";
+
+    /** システムクリップボードが固有形式を落とす環境向けのアプリ内 TSV 退避。 */
+    private static String lastSpreadsheetPlainTsv = "";
 
     /**
      * ControlsFX {@link SpreadsheetView#copyClipboard()} は独自 DataFormat のみで、Graphic 表示セルは item が空のままのことがある。
-     * Ctrl+C とコンテキストメニュー Copy から、スプレッドシート形式に加えてプレーンテキスト（TSV）も載せる。
+     * Ctrl+C/V とコンテキストメニューから、スプレッドシート形式に加えてプレーンテキスト（TSV）も載せる。
+     * paste は固有形式が無いとき TSV フォールバックする（ControlsFX 本体の hasString 分岐は no-op）。
      */
+
+
     public static void installEnhancedSpreadsheetClipboard(SpreadsheetView view) {
         if (view == null) {
             return;
@@ -243,23 +258,36 @@ public final class SpreadsheetTabularSupport {
         view.addEventFilter(
                 KeyEvent.KEY_PRESSED,
                 e -> {
-                    if (!SPREADSHEET_COPY_SHORTCUT.match(e)) {
+                    if (isSpreadsheetClipboardTextInputTarget(e)) {
                         return;
                     }
-                    if (view.getSelectionModel().getSelectedCells().isEmpty()) {
+                    if (SPREADSHEET_COPY_SHORTCUT.match(e)) {
+                        if (view.getSelectionModel().getSelectedCells().isEmpty()) {
+                            return;
+                        }
+                        e.consume();
+                        copySpreadsheetSelectionToClipboard(view);
                         return;
                     }
-                    e.consume();
-                    copySpreadsheetSelectionToClipboard(view);
+                    if (SPREADSHEET_PASTE_SHORTCUT.match(e)) {
+                        if (view.getSelectionModel().getSelectedCells().isEmpty()) {
+                            return;
+                        }
+                        e.consume();
+                        pasteSpreadsheetClipboard(view);
+                    }
                 });
         view.addEventFilter(
                 ContextMenuEvent.CONTEXT_MENU_REQUESTED,
-                e -> Platform.runLater(() -> patchSpreadsheetContextMenuCopy(view)));
+                e -> {
+                    alignSpreadsheetSelectionFromContextMenuEvent(view, e);
+                    Platform.runLater(() -> patchSpreadsheetContextMenuClipboard(view));
+                });
         view.contextMenuProperty()
                 .addListener(
                         (obs, oldMenu, newMenu) -> {
                             if (newMenu != null) {
-                                Platform.runLater(() -> patchSpreadsheetContextMenuCopy(view));
+                                Platform.runLater(() -> patchSpreadsheetContextMenuClipboard(view));
                             }
                         });
     }
@@ -272,40 +300,290 @@ public final class SpreadsheetTabularSupport {
         if (view.getSelectionModel().getSelectedCells().isEmpty()) {
             return;
         }
+        String plain = buildPlainTextFromSpreadsheetSelection(view);
+        if (plain == null) {
+            plain = "";
+        }
+        lastSpreadsheetPlainTsv = plain;
         view.copyClipboard();
-        ClipboardContent content = new ClipboardContent();
         DataFormat nativeFormat = spreadsheetNativeDataFormat(view);
         Clipboard system = Clipboard.getSystemClipboard();
-        if (nativeFormat != null) {
-            Object nativePayload = system.getContent(nativeFormat);
-            if (nativePayload != null) {
-                content.put(nativeFormat, nativePayload);
-            }
+        Object nativePayload =
+                nativeFormat != null ? system.getContent(nativeFormat) : null;
+        ClipboardContent content = new ClipboardContent();
+        if (nativeFormat != null && nativePayload != null) {
+            content.put(nativeFormat, nativePayload);
         }
-        String plain = buildPlainTextFromSpreadsheetSelection(view);
-        if (plain != null && !plain.isEmpty()) {
+        if (!plain.isEmpty()) {
             content.putString(plain);
         }
-        if (!content.isEmpty()) {
+        if (nativePayload != null) {
+            // 固有形式を再取得できたときだけ差し替え（プレーンテキストを併記）。
             system.setContent(content);
+        } else if (!plain.isEmpty() && (nativeFormat == null || !system.hasContent(nativeFormat))) {
+            // 固有形式が無いときだけ TSV を載せる。読めないだけで残っている固有形式は壊さない。
+            system.setContent(content);
+        }
+        // いずれの場合も lastSpreadsheetPlainTsv に退避済みなので、アプリ内ペーストは可能。
+    }
+
+    /** ControlsFX 固有形式、なければ TSV（システム or 直前コピー）を貼り付ける。 */
+    public static void pasteSpreadsheetClipboard(SpreadsheetView view) {
+        boolean wasEditing = view != null && view.getEditingCell() != null;
+        if (wasEditing) {
+            cancelSpreadsheetCellEdit(view);
+        }
+        if (view == null || view.getGrid() == null || !view.isEditable()) {
+            return;
+        }
+        if (view.getSelectionModel() == null
+                || view.getSelectionModel().getSelectedCells().isEmpty()) {
+            return;
+        }
+        Clipboard system = Clipboard.getSystemClipboard();
+        DataFormat nativeFormat = spreadsheetNativeDataFormat(view);
+        Object nativePayload =
+                nativeFormat != null ? system.getContent(nativeFormat) : null;
+        String plain = system.hasString() ? system.getString() : null;
+        if (plain == null || plain.isEmpty()) {
+            plain = lastSpreadsheetPlainTsv;
+        }
+        // ControlsFX pasteClipboard は固有形式があっても List / 列非表示で無言失敗することがある。
+        // メモ帳で確認できるプレーンテキストがあるときは TSV を優先する。
+        if (plain != null && !plain.isEmpty()) {
+            int applied;
+            try {
+                applied = pastePlainTextIntoSpreadsheetSelection(view, plain);
+            } catch (RuntimeException ex) {
+                // TSV 経路が失敗しても固有形式のフォールバックに進む
+                applied = 0;
+            }
+            if (applied > 0) {
+                return;
+            }
+        }
+        if (nativePayload != null) {
+            view.pasteClipboard();
         }
     }
 
-    private static void patchSpreadsheetContextMenuCopy(SpreadsheetView view) {
+    static List<List<String>> parseSpreadsheetTsv(String tsv) {
+        if (tsv == null || tsv.isEmpty()) {
+            return List.of();
+        }
+        String normalized = tsv.replace("\r\n", "\n").replace('\r', '\n');
+        if (normalized.endsWith("\n")) {
+            normalized = normalized.substring(0, normalized.length() - 1);
+        }
+        String[] lines = normalized.split("\n", -1);
+        List<List<String>> out = new ArrayList<>(lines.length);
+        for (String line : lines) {
+            String[] cols = line.split("\t", -1);
+            List<String> row = new ArrayList<>(cols.length);
+            for (String col : cols) {
+                row.add(col != null ? col : "");
+            }
+            out.add(List.copyOf(row));
+        }
+        return List.copyOf(out);
+    }
+
+    static int pastePlainTextIntoSpreadsheetSelection(SpreadsheetView view, String tsv) {
+        List<List<String>> table = parseSpreadsheetTsv(tsv);
+        if (view == null || view.getGrid() == null || table.isEmpty()) {
+            return 0;
+        }
+        TablePosition<?, ?> origin = resolveSpreadsheetPasteOrigin(view);
+        if (origin == null || origin.getRow() < 0 || origin.getColumn() < 0) {
+            return 0;
+        }
+        int originModelRow = view.getModelRow(origin.getRow());
+        int originModelCol = modelColumnIndexFromTablePosition(view, origin);
+        Grid grid = view.getGrid();
+        int applied = 0;
+        for (int r = 0; r < table.size(); r++) {
+            List<String> line = table.get(r);
+            int modelRow = originModelRow + r;
+            if (line == null || modelRow < 0 || modelRow >= grid.getRowCount()) {
+                continue;
+            }
+            ObservableList<SpreadsheetCell> rowCells = grid.getRows().get(modelRow);
+            if (rowCells == null) {
+                continue;
+            }
+            for (int c = 0; c < line.size(); c++) {
+                int modelCol = originModelCol + c;
+                if (modelCol < 0 || modelCol >= grid.getColumnCount() || modelCol >= rowCells.size()) {
+                    continue;
+                }
+                SpreadsheetCell cell = rowCells.get(modelCol);
+                if (cell == null || !cell.isEditable()) {
+                    continue;
+                }
+                String raw = line.get(c) != null ? line.get(c) : "";
+                SpreadsheetCellType type = cell.getCellType();
+                if (type == null || !type.match(raw)) {
+                    continue;
+                }
+                // CellView は SpreadsheetCell.textProperty にバインド済みなので、同一実体の item 更新で表示が追従する。
+                grid.setCellValue(modelRow, modelCol, type.convertValue(raw));
+                applied++;
+            }
+        }
+        return applied;
+    }
+
+    /**
+     * Popup 編集の startEdit は ContentDisplay.GRAPHIC_ONLY にする。
+     * cancel が不完全だと graphic=null のまま残り、textProperty に値があっても画面上は空に見える。
+     */
+    private static void restoreStuckGraphicOnlySpreadsheetCells(SpreadsheetView view) {
+        if (view == null) {
+            return;
+        }
+        for (Node n : view.lookupAll(".spreadsheet-cell")) {
+            if (!(n instanceof TableCell<?, ?> tc) || tc.isEditing()) {
+                continue;
+            }
+            if (tc.getContentDisplay() == ContentDisplay.GRAPHIC_ONLY && tc.getGraphic() == null) {
+                tc.setContentDisplay(ContentDisplay.LEFT);
+                Object item = tc.getItem();
+                if (item instanceof SpreadsheetCell sc) {
+                    try {
+                        tc.textProperty().unbind();
+                    } catch (RuntimeException ignored) {
+                        // may not be bound
+                    }
+                    tc.textProperty().bind(sc.textProperty());
+                }
+            }
+        }
+    }
+
+    /** リスト Popup 編集の commit 後に CellView 表示を追従させる。 */
+    public static void refreshSpreadsheetCellAfterListEdit(
+            SpreadsheetView view, TablePosition<?, ?> editedCell) {
+        if (view == null || editedCell == null || editedCell.getRow() < 0 || editedCell.getColumn() < 0) {
+            return;
+        }
+        Platform.runLater(
+                () -> {
+                    try {
+                        cancelSpreadsheetCellEdit(view);
+                        restoreStuckGraphicOnlySpreadsheetCells(view);
+                    } catch (RuntimeException ignored) {
+                        // best-effort
+                    }
+                });
+    }
+
+    /**
+     * 選択セルの grid 列 index。列非表示時は {@link SpreadsheetView#getModelColumn(int)} ではなく
+     * {@link TablePosition#getTableColumn()} から {@link SpreadsheetView#getColumns()} 上の位置を取る。
+     */
+    static int modelColumnIndexFromTablePosition(SpreadsheetView view, TablePosition<?, ?> pos) {
+        if (view == null || pos == null) {
+            return -1;
+        }
+        TableColumn<?, ?> tc = pos.getTableColumn();
+        if (tc != null) {
+            ObservableList<SpreadsheetColumn> cols = view.getColumns();
+            for (int i = 0; i < cols.size(); i++) {
+                if (tc == innerTableColumnOf(cols.get(i))) {
+                    return i;
+                }
+            }
+        }
+        int viewCol = pos.getColumn();
+        if (viewCol < 0) {
+            return -1;
+        }
+        try {
+            return view.getModelColumn(viewCol);
+        } catch (RuntimeException ex) {
+            return viewCol;
+        }
+    }
+
+    private static TablePosition<?, ?> resolveSpreadsheetPasteOrigin(SpreadsheetView view) {
+        var sm = view.getSelectionModel();
+        TablePosition<?, ?> focus = sm.getFocusedCell();
+        if (focus != null && focus.getRow() >= 0 && focus.getColumn() >= 0) {
+            return focus;
+        }
+        TablePosition<?, ?> min = null;
+        for (TablePosition<?, ?> pos : sm.getSelectedCells()) {
+            if (pos == null || pos.getRow() < 0 || pos.getColumn() < 0) {
+                continue;
+            }
+            if (min == null
+                    || pos.getRow() < min.getRow()
+                    || (pos.getRow() == min.getRow() && pos.getColumn() < min.getColumn())) {
+                min = pos;
+            }
+        }
+        return min;
+    }
+
+    private static boolean isSpreadsheetClipboardTextInputTarget(KeyEvent e) {
+        Object target = e.getTarget();
+        Node n = target instanceof Node node ? node : null;
+        while (n != null) {
+            if (n instanceof TextInputControl tic) {
+                // OP/AS ポップアップ編集の TextField は非編集。ここで true にすると Ctrl+V が握りつぶされる。
+                if (!tic.isEditable()) {
+                    return false;
+                }
+                return true;
+            }
+            n = n.getParent();
+        }
+        return false;
+    }
+
+    /** 貼り付け前にセル編集をキャンセルする（編集中 TextField が表示を占有し、commit で空上書きするため）。 */
+    static void cancelSpreadsheetCellEdit(SpreadsheetView view) {
+        if (view == null) {
+            return;
+        }
+        cancelEditOnEmbeddedTableViews(view, 0);
+    }
+
+    private static void cancelEditOnEmbeddedTableViews(Node n, int depth) {
+        if (n == null || depth > 24) {
+            return;
+        }
+        if (n instanceof TableView<?> tv && tv.getEditingCell() != null) {
+            tv.edit(-1, null);
+        }
+        if (n instanceof Parent p) {
+            for (Node c : p.getChildrenUnmodifiable()) {
+                cancelEditOnEmbeddedTableViews(c, depth + 1);
+            }
+        }
+    }
+
+    private static void patchSpreadsheetContextMenuClipboard(SpreadsheetView view) {
         ContextMenu menu = view.getContextMenu();
         if (menu == null) {
             return;
         }
         for (MenuItem item : menu.getItems()) {
-            if (item == null || item.getUserData() == SPREADSHEET_COPY_MENU_PATCHED) {
+            if (item == null) {
                 continue;
             }
-            if (!isSpreadsheetCopyMenuItem(item)) {
-                continue;
+            if (item.getUserData() != SPREADSHEET_COPY_MENU_PATCHED
+                    && isSpreadsheetCopyMenuItem(item)) {
+                item.setOnAction(ev -> copySpreadsheetSelectionToClipboard(view));
+                item.setUserData(SPREADSHEET_COPY_MENU_PATCHED);
+            } else if (item.getUserData() != SPREADSHEET_PASTE_MENU_PATCHED
+                    && isSpreadsheetPasteMenuItem(item)) {
+                item.setOnAction(
+                        ev -> {
+                            pasteSpreadsheetClipboard(view);
+                        });
+                item.setUserData(SPREADSHEET_PASTE_MENU_PATCHED);
             }
-            item.setOnAction(ev -> copySpreadsheetSelectionToClipboard(view));
-            item.setUserData(SPREADSHEET_COPY_MENU_PATCHED);
-            return;
         }
     }
 
@@ -321,14 +599,39 @@ public final class SpreadsheetTabularSupport {
         return "Copy".equalsIgnoreCase(text) || text.contains("コピー");
     }
 
+    private static boolean isSpreadsheetPasteMenuItem(MenuItem item) {
+        KeyCombination acc = item.getAccelerator();
+        if (acc != null && acc.equals(SPREADSHEET_PASTE_SHORTCUT)) {
+            return true;
+        }
+        String text = item.getText();
+        if (text == null || text.isBlank()) {
+            return false;
+        }
+        return "Paste".equalsIgnoreCase(text)
+                || text.contains("貼り付け")
+                || text.contains("ペースト");
+    }
+
     private static DataFormat spreadsheetNativeDataFormat(SpreadsheetView view) {
+        DataFormat looked = DataFormat.lookupMimeType(SPREADSHEET_NATIVE_CLIPBOARD_MIME);
+        if (looked != null) {
+            return looked;
+        }
+        if (view == null) {
+            return null;
+        }
         try {
             Field fmtField = SpreadsheetView.class.getDeclaredField("fmt");
             fmtField.setAccessible(true);
-            return (DataFormat) fmtField.get(view);
-        } catch (ReflectiveOperationException ex) {
-            return null;
+            Object fmt = fmtField.get(view);
+            if (fmt instanceof DataFormat df) {
+                return df;
+            }
+        } catch (ReflectiveOperationException ignored) {
+            // fall through
         }
+        return new DataFormat(SPREADSHEET_NATIVE_CLIPBOARD_MIME);
     }
 
     private static String buildPlainTextFromSpreadsheetSelection(SpreadsheetView view) {
@@ -339,7 +642,12 @@ public final class SpreadsheetTabularSupport {
         selected.sort(
                 (a, b) -> {
                     int rowCmp = Integer.compare(a.getRow(), b.getRow());
-                    return rowCmp != 0 ? rowCmp : Integer.compare(a.getColumn(), b.getColumn());
+                    if (rowCmp != 0) {
+                        return rowCmp;
+                    }
+                    return Integer.compare(
+                            modelColumnIndexFromTablePosition(view, a),
+                            modelColumnIndexFromTablePosition(view, b));
                 });
         int firstData = spreadsheetFirstDataRowIndex();
         StringBuilder sb = new StringBuilder();
@@ -356,7 +664,8 @@ public final class SpreadsheetTabularSupport {
                     sb.append('\t');
                 }
             }
-            sb.append(spreadsheetCellPlainText(view, row, pos.getColumn()));
+            int modelCol = modelColumnIndexFromTablePosition(view, pos);
+            sb.append(spreadsheetCellPlainTextByModel(view, view.getModelRow(row), modelCol));
             prevRow = row;
         }
         return sb.toString();
@@ -455,13 +764,33 @@ public final class SpreadsheetTabularSupport {
     }
 
     private static void alignSpreadsheetSelectionFromMouseEvent(SpreadsheetView view, MouseEvent e) {
-        if (e.getButton() != MouseButton.PRIMARY) {
+        if (e.getButton() != MouseButton.PRIMARY && e.getButton() != MouseButton.SECONDARY) {
             return;
         }
-        TableCell<?, ?> tc =
-                findTableCellUnderNode(
-                        e.getPickResult() != null ? e.getPickResult().getIntersectedNode() : null);
+        // 右クリックが選択済みセル上なら範囲選択を維持する（JavaFX TableCellBehavior と同じ振る舞い）。
+        alignSpreadsheetSelectionFromPickNode(
+                view,
+                e.getPickResult() != null ? e.getPickResult().getIntersectedNode() : null,
+                e.getButton() == MouseButton.SECONDARY);
+    }
+
+    private static void alignSpreadsheetSelectionFromContextMenuEvent(
+            SpreadsheetView view, ContextMenuEvent e) {
+        alignSpreadsheetSelectionFromPickNode(
+                view, e.getPickResult() != null ? e.getPickResult().getIntersectedNode() : null, true);
+    }
+
+    /**
+     * @param keepIfAlreadySelected {@code true} のとき、対象セルが既に選択済みなら現在の選択（範囲）を維持して何もしない。
+     *     右クリック・コンテキストメニュー用。{@code false}（左クリック）は従来どおり必ず単一選択へ合わせる。
+     */
+    private static void alignSpreadsheetSelectionFromPickNode(
+            SpreadsheetView view, Node pickNode, boolean keepIfAlreadySelected) {
+        TableCell<?, ?> tc = findTableCellUnderNode(pickNode);
         if (tc == null || !isNodeUnderSpreadsheetView(view, tc)) {
+            return;
+        }
+        if (keepIfAlreadySelected && tc.isSelected()) {
             return;
         }
         alignSpreadsheetSelectionToClickedCell(view, tc);
@@ -533,12 +862,16 @@ public final class SpreadsheetTabularSupport {
     }
 
     private static String spreadsheetCellPlainText(SpreadsheetView view, int viewRow, int viewCol) {
+        return spreadsheetCellPlainTextByModel(
+                view, view.getModelRow(viewRow), view.getModelColumn(viewCol));
+    }
+
+    private static String spreadsheetCellPlainTextByModel(
+            SpreadsheetView view, int modelRow, int modelCol) {
         Grid grid = view.getGrid();
         if (grid == null) {
             return "";
         }
-        int modelRow = view.getModelRow(viewRow);
-        int modelCol = view.getModelColumn(viewCol);
         ObservableList<ObservableList<SpreadsheetCell>> rows = grid.getRows();
         if (modelRow < 0 || modelRow >= rows.size()) {
             return "";
@@ -2355,9 +2688,18 @@ public final class SpreadsheetTabularSupport {
             return;
         }
         var cols = view.getColumns();
+        double fallback = defaultWidth > 0 ? defaultWidth : 120;
         for (int i = 0; i < cols.size(); i++) {
-            double w = i < widths.size() ? widths.get(i) : defaultWidth;
-            cols.get(i).setPrefWidth(w);
+            double w = i < widths.size() ? widths.get(i) : fallback;
+            if (w < 1.0) {
+                w = fallback;
+            }
+            SpreadsheetColumn col = cols.get(i);
+            // 非表示解除後に幅0のまま残ると「すべて表示」しても列が見えない。
+            if (col.getMinWidth() < 24.0) {
+                col.setMinWidth(24.0);
+            }
+            col.setPrefWidth(w);
         }
     }
 
@@ -2531,6 +2873,22 @@ public final class SpreadsheetTabularSupport {
          * 納期管理「アラ・実績・シス比較」は本メソッドを rebuild 後に呼ぶため、ここでも UNCONSTRAINED を再適用する。
          */
         applyUnconstrainedColumnResizePolicyAfterSkinSettles(view);
+    }
+
+    /**
+     * 列の表示/非表示変更後に内側 TableView を再描画する。ControlsFX は BitSet 同一内容の
+     * {@code setHiddenColumns} を無視し、スキンが古い列集合のまま残ることがある。
+     */
+    public static void refreshSpreadsheetAfterColumnVisibility(SpreadsheetView view) {
+        if (view == null) {
+            return;
+        }
+        view.requestLayout();
+        try {
+            refreshEmbeddedTableViewsRecursive(view, 0);
+        } catch (RuntimeException ignored) {
+            // large grids / mid-layout: best-effort
+        }
     }
 
     private static void refreshEmbeddedTableViewsRecursive(Node n, int depth) {

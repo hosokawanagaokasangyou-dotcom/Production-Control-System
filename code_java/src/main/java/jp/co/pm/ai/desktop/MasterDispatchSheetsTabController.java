@@ -5,7 +5,6 @@ import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.BitSet;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -17,6 +16,8 @@ import javafx.application.Platform;
 import javafx.event.EventHandler;
 import javafx.fxml.FXML;
 import javafx.geometry.Insets;
+import javafx.scene.Node;
+import javafx.scene.Parent;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Alert.AlertType;
 import javafx.scene.control.Button;
@@ -46,6 +47,7 @@ import jp.co.pm.ai.desktop.ui.ButtonAttentionGlow;
 import jp.co.pm.ai.desktop.ui.ColumnVisibilityDialog;
 import jp.co.pm.ai.desktop.ui.ColumnVisibilitySupport;
 import jp.co.pm.ai.desktop.ui.FourDigitConfirmationDialog;
+import jp.co.pm.ai.desktop.ui.LabeledTextFillSupport;
 import jp.co.pm.ai.desktop.ui.MasterDispatchCombinationRowDialog;
 import jp.co.pm.ai.desktop.ui.MasterDispatchEquipmentColumnDialog;
 import jp.co.pm.ai.desktop.ui.MasterDispatchSheetEditRules;
@@ -122,6 +124,7 @@ public final class MasterDispatchSheetsTabController {
         }
         applyDocument(document);
         applySaveDirtyState(false);
+        scheduleEnsureReadableChromeTextColors();
     }
 
     private void installLoadingOverlay() {
@@ -144,6 +147,7 @@ public final class MasterDispatchSheetsTabController {
         StackPane.setMargin(view, new Insets(0));
         host.getChildren().setAll(view);
         MasterDispatchSheetGridSupport.installSingleClickListEditing(view);
+        SpreadsheetTabularSupport.installSpreadsheetClickSelectionAlign(view);
         SpreadsheetTabularSupport.installSpreadsheetChromeRelayoutDebouncerForHost(
                 host, () -> leadingCols, () -> view.getEditingCell() != null);
     }
@@ -154,6 +158,54 @@ public final class MasterDispatchSheetsTabController {
 
     void onMainShellTabSelected() {
         reloadFromCurrentFactory(false);
+        scheduleEnsureReadableChromeTextColors();
+        if (shell != null) {
+            Platform.runLater(
+                    () -> {
+                        shell.refreshMainShellTabHeaderChromeFromStoredColors();
+                        ensureReadableChromeTextColors();
+                    });
+        }
+    }
+
+    /**
+     * ミッドナイトブルー等で LabeledText が黒のまま残るのを、インライン {@code -fx-fill} で潰す。
+     * Skin 未準備時の取りこぼし対策で runLater を重ねる。
+     */
+    private void scheduleEnsureReadableChromeTextColors() {
+        ensureReadableChromeTextColors();
+        Platform.runLater(this::ensureReadableChromeTextColors);
+        Platform.runLater(
+                () -> Platform.runLater(this::ensureReadableChromeTextColors));
+    }
+
+    private void ensureReadableChromeTextColors() {
+        String mid = LabeledTextFillSupport.THEME_MID;
+        LabeledTextFillSupport.applyToTabPaneHeaders(innerTabPane, mid);
+        Parent root = findMasterDispatchRoot();
+        if (root == null) {
+            return;
+        }
+        for (Node node : root.lookupAll(".button")) {
+            if (!(node instanceof Button button)) {
+                continue;
+            }
+            boolean attention =
+                    button.getStyleClass().contains("pm-aladdin-entry-export-attention");
+            LabeledTextFillSupport.applyToButton(button, attention ? "#e0f2fe" : mid);
+        }
+    }
+
+    private Parent findMasterDispatchRoot() {
+        Node n = innerTabPane != null ? innerTabPane : saveButton;
+        while (n != null) {
+            if (n.getStyleClass().contains("pm-master-dispatch-sheets-tab")
+                    && n instanceof Parent parent) {
+                return parent;
+            }
+            n = n.getParent();
+        }
+        return null;
     }
 
     void reloadFromCurrentFactory(boolean reimport) {
@@ -173,6 +225,7 @@ public final class MasterDispatchSheetsTabController {
         if (!reimport && !factoryChanged && loadedJsonPath != null) {
             updateFilterHint();
             refreshMissingEquipmentAttention();
+            scheduleEnsureReadableChromeTextColors();
             return;
         }
         if (reimport || factoryChanged) {
@@ -218,6 +271,7 @@ public final class MasterDispatchSheetsTabController {
                                                                         result));
                                                         applySaveDirtyState(false);
                                                         setLoadingVisible(false, null);
+                                                        scheduleEnsureReadableChromeTextColors();
                                                     });
                                         });
                             } catch (Exception e) {
@@ -782,13 +836,15 @@ public final class MasterDispatchSheetsTabController {
             return;
         }
         int first = SpreadsheetTabularSupport.spreadsheetFirstDataRowIndex();
-        Set<Integer> originalIndexes = new HashSet<>();
+        Set<Integer> modelRows = new LinkedHashSet<>();
         for (TablePosition<?, ?> pos : comboView.getSelectionModel().getSelectedCells()) {
-            int displayIndex = pos.getRow() - first;
-            if (displayIndex >= 0) {
-                originalIndexes.add(displayIndex + 1);
+            int viewRow = pos.getRow();
+            if (viewRow < 0) {
+                continue;
             }
+            modelRows.add(comboView.getModelRow(viewRow));
         }
+        Set<Integer> originalIndexes = combinationDocumentIndexesFromModelRows(modelRows, first);
         List<List<String>> combo =
                 MasterDispatchSheetGridSupport.extract(
                         comboView, MasterDispatchSheetEditRules.SheetKind.COMBINATIONS);
@@ -994,6 +1050,7 @@ public final class MasterDispatchSheetsTabController {
         setToolbarManaged(addCombinationRowButton, combo);
         setToolbarManaged(deleteCombinationRowButton, combo);
         updateFilterHint();
+        ensureReadableChromeTextColors();
     }
 
     private static void setToolbarManaged(Button button, boolean show) {
@@ -1113,6 +1170,7 @@ public final class MasterDispatchSheetsTabController {
             addMissingEquipmentButton.setTooltip(
                     new Tooltip("計画タスクの工程+機械で、資格シートに無い列を追加します。"));
         }
+        scheduleEnsureReadableChromeTextColors();
     }
 
     private void showInfo(String title, String header, String content) {
@@ -1127,7 +1185,26 @@ public final class MasterDispatchSheetsTabController {
         alert.showAndWait();
     }
 
-    private static List<String> combinationDeleteLabels(
+    /** SpreadsheetView の model 行（非表示行を含む格子行）から組み合わせ文書の行インデックスへ。 */
+    static Set<Integer> combinationDocumentIndexesFromModelRows(
+            Iterable<Integer> modelGridRows, int firstDataGridRow) {
+        Set<Integer> out = new LinkedHashSet<>();
+        if (modelGridRows == null) {
+            return out;
+        }
+        for (Integer modelRow : modelGridRows) {
+            if (modelRow == null) {
+                continue;
+            }
+            int displayIndex = modelRow - firstDataGridRow;
+            if (displayIndex >= 0) {
+                out.add(displayIndex + 1);
+            }
+        }
+        return out;
+    }
+
+    static List<String> combinationDeleteLabels(
             List<List<String>> combo, Set<Integer> originalIndexes) {
         List<String> labels = new java.util.ArrayList<>();
         if (combo == null || combo.isEmpty() || originalIndexes == null) {
@@ -1193,7 +1270,16 @@ public final class MasterDispatchSheetsTabController {
         List<String> titles = MasterDispatchSheetEditRules.columnTitles(kind, rows, colCount);
         boolean[] vis = MasterDispatchSheetEditRules.visibilityMask(titles, leadingCols, focusKeys);
         ColumnVisibilitySupport.applyColumnVisibilityToSpreadsheetWhenReady(
-                view, () -> titles, () -> vis);
+                view,
+                () -> titles,
+                () -> vis,
+                () -> {
+                    List<Double> widths =
+                            MasterDispatchSheetEditRules.preferredColumnWidths(
+                                    rows, colCount, titles);
+                    SpreadsheetTabularSupport.applyColumnWidths(view, widths, 120);
+                    SpreadsheetTabularSupport.applyFixedLeadingColumns(view, leadingCols);
+                });
     }
 
     private void attachGrid(

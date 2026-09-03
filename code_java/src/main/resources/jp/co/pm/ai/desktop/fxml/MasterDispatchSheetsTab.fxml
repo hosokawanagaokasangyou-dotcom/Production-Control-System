@@ -11,13 +11,14 @@
 <?import javafx.scene.layout.VBox?>
 
 <BorderPane xmlns="http://javafx.com/javafx/26" xmlns:fx="http://javafx.com/fxml/1"
-            fx:controller="jp.co.pm.ai.desktop.MasterDispatchSheetsTabController">
+            fx:controller="jp.co.pm.ai.desktop.MasterDispatchSheetsTabController"
+            styleClass="pm-master-dispatch-sheets-tab">
     <top>
         <VBox spacing="8.0">
             <padding>
                 <Insets bottom="8.0" left="12.0" right="12.0" top="12.0"/>
             </padding>
-            <FlowPane hgap="8.0" vgap="8.0">
+            <FlowPane hgap="8.0" vgap="8.0" styleClass="pm-master-dispatch-toolbar">
                 <Button fx:id="saveButton" text="保存" onAction="#onSaveAction"/>
                 <Button fx:id="reimportButton" text="共有フォルダから再取込" onAction="#onReimportAction"/>
                 <Button fx:id="addEquipmentColumnButton" text="設備列を追加" onAction="#onAddEquipmentColumnAction"/>

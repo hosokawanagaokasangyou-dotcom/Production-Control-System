@@ -1981,30 +1981,56 @@
 
 /*
  * Tab 見出しラベル：ダーク系テーマで Modena の LabeledText が黒のまま残り、ホバーするまで見えないことがある。
- * メインシェル最上段・入れ子は下記 pm-main-shell-tab-pane を優先。pokeShellTabHeaderBackground は着色タブ向け。
+ * JavaFX 26 以降は .tab-label の -fx-text-fill と子 Text（.text）の -fx-fill が一致しないことがあるため、
+ * 両方を同じ色で指定する。メインシェル最上段・入れ子は下記 pm-main-shell-tab-pane を優先。
+ * pokeShellTabHeaderBackground は着色タブ向け。
  */
 .tab-pane > .tab-header-area > .headers-region > .tab .tab-label {
     -fx-text-fill: -fx-mid-text-color;
+}
+
+.tab-pane > .tab-header-area > .headers-region > .tab .tab-label .text {
+    -fx-fill: -fx-mid-text-color;
 }
 
 .tab-pane > .tab-header-area > .headers-region > .tab:hover .tab-label {
     -fx-text-fill: -fx-mid-text-color;
 }
 
+.tab-pane > .tab-header-area > .headers-region > .tab:hover .tab-label .text {
+    -fx-fill: -fx-mid-text-color;
+}
+
 .tab-pane > .tab-header-area > .headers-region > .tab:selected .tab-label {
     -fx-text-fill: -fx-dark-text-color;
+}
+
+.tab-pane > .tab-header-area > .headers-region > .tab:selected .tab-label .text {
+    -fx-fill: -fx-dark-text-color;
 }
 
 .tab-pane.pm-main-shell-tab-pane > .tab-header-area > .headers-region > .tab .tab-label {
     -fx-text-fill: -fx-mid-text-color;
 }
 
+.tab-pane.pm-main-shell-tab-pane > .tab-header-area > .headers-region > .tab .tab-label .text {
+    -fx-fill: -fx-mid-text-color;
+}
+
 .tab-pane.pm-main-shell-tab-pane > .tab-header-area > .headers-region > .tab:hover .tab-label {
     -fx-text-fill: -fx-light-text-color;
 }
 
+.tab-pane.pm-main-shell-tab-pane > .tab-header-area > .headers-region > .tab:hover .tab-label .text {
+    -fx-fill: -fx-light-text-color;
+}
+
 .tab-pane.pm-main-shell-tab-pane > .tab-header-area > .headers-region > .tab:selected .tab-label {
     -fx-text-fill: -fx-light-text-color;
+}
+
+.tab-pane.pm-main-shell-tab-pane > .tab-header-area > .headers-region > .tab:selected .tab-label .text {
+    -fx-fill: -fx-light-text-color;
 }
 
 .tab-pane.pm-main-shell-tab-pane > .tab-header-area > .headers-region > .tab.pm-shell-tab-colored .tab-label {
@@ -2041,12 +2067,51 @@
     -fx-text-fill: -fx-mid-text-color;
 }
 
+.tab-pane.pm-main-shell-inner-tab-pane > .tab-header-area > .headers-region > .tab .tab-label .text {
+    -fx-fill: -fx-mid-text-color;
+}
+
 .tab-pane.pm-main-shell-inner-tab-pane > .tab-header-area > .headers-region > .tab:hover .tab-label {
     -fx-text-fill: -fx-light-text-color;
 }
 
+.tab-pane.pm-main-shell-inner-tab-pane > .tab-header-area > .headers-region > .tab:hover .tab-label .text {
+    -fx-fill: -fx-light-text-color;
+}
+
 .tab-pane.pm-main-shell-inner-tab-pane > .tab-header-area > .headers-region > .tab:selected .tab-label {
     -fx-text-fill: -fx-light-text-color;
+}
+
+.tab-pane.pm-main-shell-inner-tab-pane > .tab-header-area > .headers-region > .tab:selected .tab-label .text {
+    -fx-fill: -fx-light-text-color;
+}
+
+/*
+ * 配台マスタツールバー: Button の LabeledText も同様に黒のまま残ることがある。
+ * -fx-text-base-color は背景ラダーで黒に落ちることがあるため、テーマ中間色を明示する
+ * （ダークテーマでは mid が明るい色に再定義される）。全体 .button には付けない。
+ */
+.pm-master-dispatch-sheets-tab .button {
+    -fx-text-fill: -fx-mid-text-color;
+}
+
+.pm-master-dispatch-sheets-tab .button .text {
+    -fx-fill: -fx-mid-text-color;
+}
+
+.pm-master-dispatch-sheets-tab .button:hover .text,
+.pm-master-dispatch-sheets-tab .button:focused .text,
+.pm-master-dispatch-sheets-tab .button:armed .text {
+    -fx-fill: -fx-mid-text-color;
+}
+
+.pm-master-dispatch-sheets-tab .button.pm-aladdin-entry-export-attention {
+    -fx-text-fill: #e0f2fe;
+}
+
+.pm-master-dispatch-sheets-tab .button.pm-aladdin-entry-export-attention .text {
+    -fx-fill: #e0f2fe;
 }
 
 /* ツールバー右上：JVM ヒープ・メタスペース表示（FxJvmMemoryStatusBar）— 旧ツールバー配置。現行は下部グローバルステータスバー。 */
