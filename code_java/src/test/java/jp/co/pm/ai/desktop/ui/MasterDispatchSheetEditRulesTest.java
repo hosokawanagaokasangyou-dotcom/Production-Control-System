@@ -773,7 +773,7 @@ class MasterDispatchSheetEditRulesTest {
     }
 
     @Test
-    void addCombinationRow_autoFillsSkillMembers_upToMemberColumnCount() {
+    void addCombinationRow_autoFillsSkillMemberCombinations_byNeedHeadcount() {
         List<List<String>> skills =
                 List.of(
                         List.of("工程名", "巻返し", "分割"),
@@ -782,6 +782,11 @@ class MasterDispatchSheetEditRulesTest {
                         List.of("佐藤", "AS2", "OP3"),
                         List.of("鈴木", "", "AS1"),
                         List.of("高橋", "", "OP2"));
+        List<List<String>> needK1 =
+                List.of(
+                        List.of("工程名", "", "", "巻返し", "分割"),
+                        List.of("機械名", "", "", "機1", "スライス機1"),
+                        List.of("基本必要人数", "", "", "2", "1"));
         List<List<String>> rows =
                 List.of(
                         List.of(
@@ -792,19 +797,80 @@ class MasterDispatchSheetEditRulesTest {
                                 "組み合わせ優先度",
                                 "必須人数",
                                 "メンバー1",
-                                "メンバー2"));
-        List<List<String>> added =
-                MasterDispatchSheetEditRules.addCombinationRow(rows, "分割", "スライス機1", skills);
-        assertEquals(2, added.size());
-        assertEquals("OP 佐藤", added.get(1).get(6));
-        assertEquals("AS 鈴木", added.get(1).get(7));
+                                "メンバー2",
+                                "メンバー3"));
         assertEquals(
                 List.of("OP 佐藤", "AS 鈴木", "OP 高橋"),
                 MasterDispatchSheetEditRules.skilledMembersForEquipment(skills, "分割", "スライス機1"));
+        assertEquals(
+                1, MasterDispatchSheetEditRules.baseRequiredHeadcount(needK1, "分割", "スライス機1"));
+
+        List<List<String>> addedK1 =
+                MasterDispatchSheetEditRules.addCombinationRow(
+                        rows, "分割", "スライス機1", skills, needK1);
+        assertEquals(4, addedK1.size());
+        assertEquals("1", addedK1.get(1).get(5));
+        assertEquals("OP 佐藤", addedK1.get(1).get(6));
+        assertEquals("", addedK1.get(1).get(7));
+        assertEquals("AS 鈴木", addedK1.get(2).get(6));
+        assertEquals("OP 高橋", addedK1.get(3).get(6));
+
+        List<List<String>> needK2 =
+                List.of(
+                        List.of("工程名", "", "", "分割"),
+                        List.of("機械名", "", "", "スライス機1"),
+                        List.of("必須人数", "", "", "2"));
+        List<List<String>> addedK2 =
+                MasterDispatchSheetEditRules.addCombinationRow(
+                        rows, "分割", "スライス機1", skills, needK2);
+        assertEquals(4, addedK2.size());
+        assertEquals("2", addedK2.get(1).get(5));
+        assertEquals("OP 佐藤", addedK2.get(1).get(6));
+        assertEquals("AS 鈴木", addedK2.get(1).get(7));
+        assertEquals("OP 佐藤", addedK2.get(2).get(6));
+        assertEquals("OP 高橋", addedK2.get(2).get(7));
+        assertEquals("AS 鈴木", addedK2.get(3).get(6));
+        assertEquals("OP 高橋", addedK2.get(3).get(7));
+
         List<List<String>> emptyMembers =
                 MasterDispatchSheetEditRules.addCombinationRow(rows, "分割", "スライス機1", null);
+        assertEquals(2, emptyMembers.size());
         assertEquals("", emptyMembers.get(1).get(6));
         assertEquals("", emptyMembers.get(1).get(7));
+    }
+
+    @Test
+    void addCombinationRow_whenNeedExceedsSkilledMembers_addsEmptyMemberRow() {
+        List<List<String>> skills =
+                List.of(
+                        List.of("工程名", "分割"),
+                        List.of("機械名", "スライス機1"),
+                        List.of("佐藤", "OP1"));
+        List<List<String>> need =
+                List.of(
+                        List.of("工程名", "", "", "分割"),
+                        List.of("機械名", "", "", "スライス機1"),
+                        List.of("必須人数", "", "", "3"));
+        List<List<String>> rows =
+                List.of(
+                        List.of(
+                                "組み合わせ行ID",
+                                "工程名",
+                                "機械名",
+                                "工程+機械",
+                                "組み合わせ優先度",
+                                "必須人数",
+                                "メンバー1",
+                                "メンバー2",
+                                "メンバー3"));
+        List<List<String>> added =
+                MasterDispatchSheetEditRules.addCombinationRow(
+                        rows, "分割", "スライス機1", skills, need);
+        assertEquals(2, added.size());
+        assertEquals("3", added.get(1).get(5));
+        assertEquals("", added.get(1).get(6));
+        assertEquals("", added.get(1).get(7));
+        assertEquals("", added.get(1).get(8));
     }
 
     @Test

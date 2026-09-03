@@ -27,7 +27,10 @@ public final class MasterDispatchCombinationRowDialog {
             dialog.initOwner(owner);
         }
         dialog.setTitle("組み合わせ行を追加");
-        dialog.setHeaderText("skills にある工程名+機械名で、組み合わせ表に行を追加します。既存の工程+機械は重複追加しません。");
+        dialog.setHeaderText(
+                "skills にある工程名+機械名で、組み合わせ表に行を追加します。"
+                        + "スキル自動入れ時は need の必要人数ぶんの組合せを行ごとに追加します。"
+                        + "既存の工程+機械は重複追加しません。");
 
         List<String[]> pairs = equipmentPairs != null ? equipmentPairs : List.of();
         ComboBox<String[]> combo = new ComboBox<>();
@@ -53,7 +56,7 @@ public final class MasterDispatchCombinationRowDialog {
         }
 
         CheckBox autoFill =
-                new CheckBox("スキル（OP/AS）のあるメンバーを自動で入れる");
+                new CheckBox("スキル保持者の組合せを必要人数ごとに自動追加");
         autoFill.setSelected(true);
         autoFill.setWrapText(true);
         autoFill.setMaxWidth(Double.MAX_VALUE);

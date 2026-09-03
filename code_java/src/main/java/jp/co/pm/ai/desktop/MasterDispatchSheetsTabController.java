@@ -754,6 +754,9 @@ public final class MasterDispatchSheetsTabController {
         List<List<String>> skills =
                 MasterDispatchSheetGridSupport.extract(
                         skillsView, MasterDispatchSheetEditRules.SheetKind.SKILLS);
+        List<List<String>> need =
+                MasterDispatchSheetGridSupport.extract(
+                        needView, MasterDispatchSheetEditRules.SheetKind.NEED);
         List<List<String>> combo =
                 MasterDispatchSheetGridSupport.extract(
                         comboView, MasterDispatchSheetEditRules.SheetKind.COMBINATIONS);
@@ -774,45 +777,48 @@ public final class MasterDispatchSheetsTabController {
             focusComboTab();
             return;
         }
+        int beforeRows =
+                MasterDispatchSheetEditRules.ensureCombinationMetaColumns(combo).size();
         List<List<String>> added =
                 MasterDispatchSheetEditRules.addCombinationRow(
                         combo,
                         r.process(),
                         r.machine(),
-                        r.autoFillSkillMembers() ? skills : null);
+                        r.autoFillSkillMembers() ? skills : null,
+                        need);
+        int newRowCount = Math.max(0, added.size() - beforeRows);
         replaceCurrentSheetsKeepingNeedSpeed(skills, added);
         focusComboTab();
         if (r.autoFillSkillMembers()) {
-            int filled =
+            int k =
+                    MasterDispatchSheetEditRules.baseRequiredHeadcount(
+                            need, r.process(), r.machine());
+            int skilled =
                     MasterDispatchSheetEditRules.skilledMembersForEquipment(
                                     skills, r.process(), r.machine())
                             .size();
-            int memberCols = 0;
-            if (!added.isEmpty()) {
-                List<String> header = added.get(0);
-                for (int c = 0; c < header.size(); c++) {
-                    if (MasterDispatchSheetEditRules.isCombinationMemberColumn(header, c)) {
-                        memberCols++;
-                    }
-                }
-            }
-            int placed = Math.min(filled, memberCols);
-            if (placed > 0) {
+            if (skilled >= k && newRowCount > 0) {
                 statusLabel.setText(
-                        "組み合わせ行を追加しました: "
+                        "組み合わせ行を "
+                                + newRowCount
+                                + " 行追加しました: "
                                 + r.process()
                                 + " × "
                                 + r.machine()
-                                + "。スキルメンバーを "
-                                + placed
-                                + " 人入れました。追加行は色が違います。");
+                                + "。必要人数 "
+                                + k
+                                + " のスキル組合せです。追加行は色が違います。");
             } else {
                 statusLabel.setText(
                         "組み合わせ行を追加しました: "
                                 + r.process()
                                 + " × "
                                 + r.machine()
-                                + "。スキル該当者がいないためメンバーは空です。追加行は色が違います。");
+                                + "。必要人数 "
+                                + k
+                                + " に対しスキル該当が "
+                                + skilled
+                                + " 人のためメンバーは空です。追加行は色が違います。");
             }
         } else {
             statusLabel.setText(

@@ -392,18 +392,32 @@ public final class MasterDispatchSheetEditRules {
 
     public static List<List<String>> addCombinationRow(
             List<List<String>> rows, String process, String machine) {
-        return addCombinationRow(rows, process, machine, null);
+        return addCombinationRow(rows, process, machine, null, null);
     }
 
     /**
      * 組み合わせ表へ行を追加する。{@code skillsForAutoMembers} が非 null のときは、
-     * 当該工程+機械のスキル（OP/AS）付きメンバーをメンバー列へ先頭から埋める（列数まで）。
+     * need の基本必要人数 k 人分のスキル保持者組合せを行ごとに追加する。
      */
     public static List<List<String>> addCombinationRow(
             List<List<String>> rows,
             String process,
             String machine,
             List<List<String>> skillsForAutoMembers) {
+        return addCombinationRow(rows, process, machine, skillsForAutoMembers, null);
+    }
+
+    /**
+     * 組み合わせ表へ行を追加する。{@code skillsForAutoMembers} が非 null のときは、
+     * {@code needRows} の基本必要人数 k（欠落・無効時は 1）人のスキル組合せを全行追加する。
+     * k 人に満たない場合はメンバー空の 1 行のみ。
+     */
+    public static List<List<String>> addCombinationRow(
+            List<List<String>> rows,
+            String process,
+            String machine,
+            List<List<String>> skillsForAutoMembers,
+            List<List<String>> needRows) {
         String p = process != null ? process.strip() : "";
         String m = machine != null ? machine.strip() : "";
         if (p.isEmpty() || m.isEmpty()) {
@@ -418,43 +432,61 @@ public final class MasterDispatchSheetEditRules {
         }
         List<List<String>> out = mutableCopy(ensureCombinationMetaColumns(rows));
         List<String> header = out.get(0);
-        int width = header.size();
-        List<String> row = new ArrayList<>();
-        while (row.size() < width) {
-            row.add("");
-        }
-        int idCol = headerIndex(header, "組み合わせ行ID", "組合せ行ID", "インデックス");
-        int procCol = headerIndex(header, "工程名");
-        int machCol = headerIndex(header, "機械名");
-        int comboCol = headerIndex(header, "工程+機械", "工程＋機械");
-        int prioCol = headerIndex(header, "組み合わせ優先度", "組合せ優先度");
-        int addedCol = headerIndex(header, COL_ADDED_ROW);
-        if (idCol >= 0) {
-            row.set(idCol, String.valueOf(nextCombinationRowId(out)));
-        }
-        if (procCol >= 0) {
-            row.set(procCol, p);
-        }
-        if (machCol >= 0) {
-            row.set(machCol, m);
-        }
-        if (comboCol >= 0) {
-            row.set(comboCol, p + "+" + m);
-        }
-        if (prioCol >= 0) {
-            row.set(prioCol, "1");
-        }
-        if (addedCol >= 0) {
-            row.set(addedCol, ADDED_FLAG);
-        }
+        int k = baseRequiredHeadcount(needRows, p, m);
+        List<List<String>> memberCombos;
         if (skillsForAutoMembers != null) {
-            fillCombinationMemberColumns(row, header, skillsForAutoMembers, p, m);
+            List<String> members = skilledMembersForEquipment(skillsForAutoMembers, p, m);
+            memberCombos = chooseMemberCombinations(members, k);
+            if (memberCombos.isEmpty()) {
+                memberCombos = List.of(List.of());
+            }
+        } else {
+            memberCombos = List.of(List.of());
         }
-        out.add(row);
+        for (List<String> members : memberCombos) {
+            out.add(buildCombinationDataRow(out, header, p, m, k, members));
+        }
         return freeze(out);
     }
 
-    /** 資格があるメンバー表記（空以外）を、メンバー列の数だけ返す。 */
+    /**
+     * need シートの当該工程+機械の基本必要人数。欠落・0 未満・非数は 1。
+     */
+    public static int baseRequiredHeadcount(
+            List<List<String>> needRows, String process, String machine) {
+        List<List<String>> need = needRows != null ? needRows : List.of();
+        int procRow = findProcessHeaderRow(need);
+        int machRow = findMachineHeaderRow(need);
+        int baseRow = findFirstRowContaining(need, "必須人数", "必要人数");
+        if (procRow < 0 || machRow < 0 || baseRow < 0) {
+            return 1;
+        }
+        String want =
+                MasterTeamCombinationTableReader.normalizedComboKey(
+                        process != null ? process : "", machine != null ? machine : "");
+        if (want.isEmpty()) {
+            return 1;
+        }
+        int width = widthOf(need);
+        for (int c = 3; c < width; c++) {
+            String have =
+                    MasterTeamCombinationTableReader.normalizedComboKey(
+                            cell(need, procRow, c), cell(need, machRow, c));
+            if (!want.equals(have)) {
+                continue;
+            }
+            String raw = cell(need, baseRow, c);
+            try {
+                int n = Integer.parseInt(stripTrailingDotZero(raw));
+                return n >= 1 ? n : 1;
+            } catch (NumberFormatException e) {
+                return 1;
+            }
+        }
+        return 1;
+    }
+
+    /** 資格があるメンバー表記（空以外）を返す。 */
     public static List<String> skilledMembersForEquipment(
             List<List<String>> skillsRows, String process, String machine) {
         List<String> out = new ArrayList<>();
@@ -466,14 +498,77 @@ public final class MasterDispatchSheetEditRules {
         return List.copyOf(out);
     }
 
-    static int fillCombinationMemberColumns(
-            List<String> row,
+    /** メンバーリストから k 人の組合せ（順序固定・辞書順）を返す。不足時は空。 */
+    static List<List<String>> chooseMemberCombinations(List<String> members, int k) {
+        if (members == null || k < 1 || members.size() < k) {
+            return List.of();
+        }
+        List<List<String>> out = new ArrayList<>();
+        int n = members.size();
+        int[] idx = new int[k];
+        for (int i = 0; i < k; i++) {
+            idx[i] = i;
+        }
+        while (true) {
+            List<String> combo = new ArrayList<>(k);
+            for (int i = 0; i < k; i++) {
+                combo.add(members.get(idx[i]));
+            }
+            out.add(List.copyOf(combo));
+            int t = k - 1;
+            while (t >= 0 && idx[t] == n - k + t) {
+                t--;
+            }
+            if (t < 0) {
+                break;
+            }
+            idx[t]++;
+            for (int i = t + 1; i < k; i++) {
+                idx[i] = idx[i - 1] + 1;
+            }
+        }
+        return List.copyOf(out);
+    }
+
+    private static List<String> buildCombinationDataRow(
+            List<List<String>> currentRows,
             List<String> header,
-            List<List<String>> skillsRows,
             String process,
-            String machine) {
-        if (row == null || header == null) {
-            return 0;
+            String machine,
+            int requiredHeadcount,
+            List<String> members) {
+        int width = header.size();
+        List<String> row = new ArrayList<>();
+        while (row.size() < width) {
+            row.add("");
+        }
+        int idCol = headerIndex(header, "組み合わせ行ID", "組合せ行ID", "インデックス");
+        int procCol = headerIndex(header, "工程名");
+        int machCol = headerIndex(header, "機械名");
+        int comboCol = headerIndex(header, "工程+機械", "工程＋機械");
+        int prioCol = headerIndex(header, "組み合わせ優先度", "組合せ優先度");
+        int reqCol = headerIndex(header, "必須人数", "必要人数");
+        int addedCol = headerIndex(header, COL_ADDED_ROW);
+        if (idCol >= 0) {
+            row.set(idCol, String.valueOf(nextCombinationRowId(currentRows)));
+        }
+        if (procCol >= 0) {
+            row.set(procCol, process);
+        }
+        if (machCol >= 0) {
+            row.set(machCol, machine);
+        }
+        if (comboCol >= 0) {
+            row.set(comboCol, process + "+" + machine);
+        }
+        if (prioCol >= 0) {
+            row.set(prioCol, "1");
+        }
+        if (reqCol >= 0) {
+            row.set(reqCol, String.valueOf(Math.max(1, requiredHeadcount)));
+        }
+        if (addedCol >= 0) {
+            row.set(addedCol, ADDED_FLAG);
         }
         List<Integer> memberCols = new ArrayList<>();
         for (int c = 0; c < header.size(); c++) {
@@ -481,20 +576,16 @@ public final class MasterDispatchSheetEditRules {
                 memberCols.add(c);
             }
         }
-        if (memberCols.isEmpty()) {
-            return 0;
-        }
-        List<String> members = skilledMembersForEquipment(skillsRows, process, machine);
-        int filled = 0;
-        for (int i = 0; i < memberCols.size() && i < members.size(); i++) {
-            int col = memberCols.get(i);
-            while (row.size() <= col) {
-                row.add("");
+        if (members != null) {
+            for (int i = 0; i < members.size() && i < memberCols.size(); i++) {
+                int col = memberCols.get(i);
+                while (row.size() <= col) {
+                    row.add("");
+                }
+                row.set(col, members.get(i) != null ? members.get(i) : "");
             }
-            row.set(col, members.get(i));
-            filled++;
         }
-        return filled;
+        return row;
     }
 
     public static boolean containsCombinationEquipment(
