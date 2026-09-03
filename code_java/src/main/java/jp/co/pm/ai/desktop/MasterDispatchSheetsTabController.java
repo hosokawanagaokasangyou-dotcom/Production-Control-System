@@ -50,6 +50,7 @@ import jp.co.pm.ai.desktop.ui.FourDigitConfirmationDialog;
 import jp.co.pm.ai.desktop.ui.LabeledTextFillSupport;
 import jp.co.pm.ai.desktop.ui.MasterDispatchCombinationRowDialog;
 import jp.co.pm.ai.desktop.ui.MasterDispatchEquipmentColumnDialog;
+import jp.co.pm.ai.desktop.ui.MasterDispatchSetupWizardDialog;
 import jp.co.pm.ai.desktop.ui.MasterDispatchSheetEditRules;
 import jp.co.pm.ai.desktop.ui.MasterDispatchSheetGridSupport;
 import jp.co.pm.ai.desktop.ui.SpreadsheetMultiColumnFilterCoordinator;
@@ -460,8 +461,17 @@ public final class MasterDispatchSheetsTabController {
 
     @FXML
     private void onSaveAction() {
+        saveCurrentGridsToDisk();
+    }
+
+    /**
+     * 現在の格子を JSON / master へ保存する。
+     *
+     * @return 保存成功時 true（検証失敗・キャンセル・例外は false）
+     */
+    boolean saveCurrentGridsToDisk() {
         if (shell == null) {
-            return;
+            return false;
         }
         Map<String, String> ui = shell.snapshotUiEnv();
         FactorySite site = AppPaths.currentDispatchFactorySite(ui);
@@ -516,7 +526,7 @@ public final class MasterDispatchSheetsTabController {
             }
             alert.showAndWait();
             statusLabel.setText("保存を中止しました。検証エラーが " + errors.size() + " 件あります。");
-            return;
+            return false;
         }
         Window owner = shell.primaryStageForDialogs();
         if (owner == null && statusLabel != null && statusLabel.getScene() != null) {
@@ -530,7 +540,7 @@ public final class MasterDispatchSheetsTabController {
                         + "誤操作防止のため、表示されるランダムな4桁の数字を入力してください。",
                 "保存")) {
             statusLabel.setText("保存を中止しました。");
-            return;
+            return false;
         }
         LinkedHashMap<String, MasterDispatchSheetsDocument.SheetGrid> sheets = new LinkedHashMap<>();
         sheets.put(
@@ -573,8 +583,10 @@ public final class MasterDispatchSheetsTabController {
                             + xlsmBackup);
             refreshMissingEquipmentAttention();
             applySaveDirtyState(false);
+            return true;
         } catch (Exception e) {
             statusLabel.setText("保存に失敗しました: " + e.getMessage());
+            return false;
         }
     }
 
@@ -1024,6 +1036,58 @@ public final class MasterDispatchSheetsTabController {
         updateToolbarForInnerTab(
                 innerTabPane != null ? innerTabPane.getSelectionModel().getSelectedIndex() : 0);
         refreshMissingEquipmentAttention();
+    }
+
+    /** ウィザード用: 現在の格子をスナップショット。 */
+    MasterDispatchSetupWizardDialog.Session snapshotWizardSession() {
+        return new MasterDispatchSetupWizardDialog.Session(
+                MasterDispatchSheetGridSupport.extract(
+                        skillsView, MasterDispatchSheetEditRules.SheetKind.SKILLS),
+                MasterDispatchSheetGridSupport.extract(
+                        needView, MasterDispatchSheetEditRules.SheetKind.NEED),
+                MasterDispatchSheetGridSupport.extract(
+                        comboView, MasterDispatchSheetEditRules.SheetKind.COMBINATIONS),
+                MasterDispatchSheetGridSupport.extract(
+                        speedView, MasterDispatchSheetEditRules.SheetKind.SPEED));
+    }
+
+    /** ウィザード結果を格子へ反映し、未保存状態にする。 */
+    void applyWizardSession(MasterDispatchSetupWizardDialog.Session session) {
+        if (session == null) {
+            return;
+        }
+        String site = document != null ? document.factorySite() : "";
+        String source = document != null ? document.sourceWorkbook() : "";
+        String imported = document != null ? document.importedAt() : "";
+        LinkedHashMap<String, MasterDispatchSheetsDocument.SheetGrid> sheets = new LinkedHashMap<>();
+        sheets.put(
+                MasterDispatchSheetsDocument.KEY_SKILLS,
+                new MasterDispatchSheetsDocument.SheetGrid("skills", session.skills()));
+        sheets.put(
+                MasterDispatchSheetsDocument.KEY_NEED,
+                new MasterDispatchSheetsDocument.SheetGrid("need", session.need()));
+        sheets.put(
+                MasterDispatchSheetsDocument.KEY_SPEED,
+                new MasterDispatchSheetsDocument.SheetGrid("speed", session.speed()));
+        sheets.put(
+                MasterDispatchSheetsDocument.KEY_TEAM_COMBINATIONS,
+                new MasterDispatchSheetsDocument.SheetGrid("組み合わせ表", session.combinations()));
+        applyDocument(
+                new MasterDispatchSheetsDocument(
+                        MasterDispatchSheetsDocument.SCHEMA_VERSION,
+                        site,
+                        source,
+                        imported,
+                        sheets));
+        applySaveDirtyState(true);
+        if (statusLabel != null) {
+            statusLabel.setText("配台マスタ設定ウィザードの結果を反映しました。保存してください。");
+        }
+    }
+
+    /** 保存ダイアログを開く（ウィザード完了後）。成功時 true。 */
+    boolean requestSaveAfterWizard() {
+        return saveCurrentGridsToDisk();
     }
 
     private void applyAllEquipmentVisibility() {

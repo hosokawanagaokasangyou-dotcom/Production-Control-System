@@ -498,6 +498,242 @@ public final class MasterDispatchSheetEditRules {
         return List.copyOf(out);
     }
 
+    /**
+     * skills のメンバー行（A列氏名）へ、当該工程+機械列の資格を設定する。
+     * {@code role} は {@code OP} / {@code AS} / 空（クリア）。
+     */
+    public static List<List<String>> setSkillRoleForMember(
+            List<List<String>> skillsRows,
+            String process,
+            String machine,
+            String memberName,
+            String role) {
+        String name = memberName != null ? memberName.strip() : "";
+        if (name.isEmpty()) {
+            return copyRows(skillsRows != null ? skillsRows : List.of());
+        }
+        List<List<String>> out =
+                mutableCopy(
+                        addEquipmentColumn(
+                                SheetKind.SKILLS, skillsRows != null ? skillsRows : List.of(), process, machine));
+        int procRow = findProcessHeaderRow(out);
+        int machRow = findMachineHeaderRow(out);
+        if (procRow < 0 || machRow < 0) {
+            return freeze(out);
+        }
+        String want = MasterTeamCombinationTableReader.normalizedComboKey(process, machine);
+        int eqCol = -1;
+        int width = widthOf(out);
+        for (int c = 1; c < width; c++) {
+            String have =
+                    MasterTeamCombinationTableReader.normalizedComboKey(
+                            cell(out, procRow, c), cell(out, machRow, c));
+            if (want.equals(have)) {
+                eqCol = c;
+                break;
+            }
+        }
+        if (eqCol < 0) {
+            return freeze(out);
+        }
+        String token = "";
+        if (role != null && !role.isBlank()) {
+            OpAs parsed = parseOpAs(role.strip());
+            token = parsed != null ? parsed.role() : role.strip();
+        }
+        boolean found = false;
+        for (int r = 0; r < out.size(); r++) {
+            if (isColumnTitleSourceRow(SheetKind.SKILLS, r, out)) {
+                continue;
+            }
+            if (isProcessOrMachineHeaderLabel(cell(out, r, 0))) {
+                continue;
+            }
+            if (name.equals(cell(out, r, 0))) {
+                setCell(out, r, eqCol, token);
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            List<String> row = new ArrayList<>();
+            while (row.size() < width) {
+                row.add("");
+            }
+            row.set(0, name);
+            while (row.size() <= eqCol) {
+                row.add("");
+            }
+            row.set(eqCol, token);
+            out.add(row);
+        }
+        return freeze(out);
+    }
+
+    /** need の基本必要人数を設定（列が無ければ追加）。 */
+    public static List<List<String>> setBaseRequiredHeadcount(
+            List<List<String>> needRows, String process, String machine, int headcount) {
+        int k = Math.max(1, headcount);
+        List<List<String>> out =
+                mutableCopy(
+                        addEquipmentColumn(
+                                SheetKind.NEED, needRows != null ? needRows : List.of(), process, machine));
+        int procRow = findProcessHeaderRow(out);
+        int machRow = findMachineHeaderRow(out);
+        int baseRow = findFirstRowContaining(out, "必須人数", "必要人数");
+        if (procRow < 0 || machRow < 0) {
+            return freeze(out);
+        }
+        if (baseRow < 0) {
+            baseRow = out.size();
+            List<String> row = new ArrayList<>();
+            row.add("基本必要人数");
+            out.add(row);
+        }
+        String want = MasterTeamCombinationTableReader.normalizedComboKey(process, machine);
+        int width = widthOf(out);
+        for (int c = 3; c < width; c++) {
+            String have =
+                    MasterTeamCombinationTableReader.normalizedComboKey(
+                            cell(out, procRow, c), cell(out, machRow, c));
+            if (want.equals(have)) {
+                setCell(out, baseRow, c, String.valueOf(k));
+                break;
+            }
+        }
+        return freeze(out);
+    }
+
+    /** speed の基本速度を設定（列が無ければ追加）。 */
+    public static List<List<String>> setBaseSpeed(
+            List<List<String>> speedRows, String process, String machine, String speedValue) {
+        List<List<String>> out =
+                mutableCopy(
+                        addEquipmentColumn(
+                                SheetKind.SPEED, speedRows != null ? speedRows : List.of(), process, machine));
+        int procRow = findProcessHeaderRow(out);
+        int machRow = findMachineHeaderRow(out);
+        int baseRow = -1;
+        for (int r = 0; r < out.size(); r++) {
+            if (cell(out, r, 0).contains("基本速度")) {
+                baseRow = r;
+                break;
+            }
+        }
+        if (procRow < 0 || machRow < 0) {
+            return freeze(out);
+        }
+        if (baseRow < 0) {
+            baseRow = out.size();
+            List<String> row = new ArrayList<>();
+            row.add("基本速度");
+            out.add(row);
+        }
+        String want = MasterTeamCombinationTableReader.normalizedComboKey(process, machine);
+        int width = widthOf(out);
+        for (int c = 3; c < width; c++) {
+            String have =
+                    MasterTeamCombinationTableReader.normalizedComboKey(
+                            cell(out, procRow, c), cell(out, machRow, c));
+            if (want.equals(have)) {
+                setCell(out, baseRow, c, speedValue != null ? speedValue.strip() : "");
+                break;
+            }
+        }
+        return freeze(out);
+    }
+
+    /**
+     * 組み合わせ表: 当該工程+機械の未完了行（メンバー不足）を除き、スキル組合せを再生成して追加する。
+     * 既にメンバー充足行がある場合は触らない。
+     */
+    public static List<List<String>> ensureSkillCombinations(
+            List<List<String>> comboRows,
+            String process,
+            String machine,
+            List<List<String>> skillsRows,
+            List<List<String>> needRows) {
+        String p = process != null ? process.strip() : "";
+        String m = machine != null ? machine.strip() : "";
+        if (p.isEmpty() || m.isEmpty()) {
+            return copyRows(comboRows != null ? comboRows : List.of());
+        }
+        int k = baseRequiredHeadcount(needRows, p, m);
+        if (MasterDispatchSetupCompleteness.combinationsComplete(comboRows, p, m, k)) {
+            return copyRows(comboRows != null ? comboRows : List.of());
+        }
+        List<List<String>> out = mutableCopy(ensureCombinationMetaColumns(comboRows));
+        List<String> header = out.get(0);
+        int procCol = headerIndex(header, "工程名");
+        int machCol = headerIndex(header, "機械名");
+        int comboCol = headerIndex(header, "工程+機械", "工程＋機械");
+        List<Integer> memberCols = new ArrayList<>();
+        for (int c = 0; c < header.size(); c++) {
+            if (isCombinationMemberColumn(header, c)) {
+                memberCols.add(c);
+            }
+        }
+        String want = MasterTeamCombinationTableReader.normalizedComboKey(p, m);
+        List<List<String>> kept = new ArrayList<>();
+        kept.add(out.get(0));
+        for (int r = 1; r < out.size(); r++) {
+            if (isColumnTitleSourceRow(SheetKind.COMBINATIONS, r, out)) {
+                kept.add(out.get(r));
+                continue;
+            }
+            String proc = procCol >= 0 ? cell(out, r, procCol) : "";
+            String mach = machCol >= 0 ? cell(out, r, machCol) : "";
+            String combo = comboCol >= 0 ? cell(out, r, comboCol) : "";
+            String have = MasterTeamCombinationTableReader.comboKeyFromCells(proc, mach, combo);
+            if (!want.equals(have)) {
+                kept.add(out.get(r));
+                continue;
+            }
+            int filled = 0;
+            for (int i = 0; i < k && i < memberCols.size(); i++) {
+                if (!cell(out, r, memberCols.get(i)).isBlank()) {
+                    filled++;
+                }
+            }
+            if (filled >= k) {
+                kept.add(out.get(r));
+            }
+        }
+        out = kept;
+        if (MasterDispatchSetupCompleteness.combinationsComplete(out, p, m, k)) {
+            return freeze(out);
+        }
+        List<String> members = skilledMembersForEquipment(skillsRows, p, m);
+        List<List<String>> combos = chooseMemberCombinations(members, k);
+        if (combos.isEmpty()) {
+            out.add(buildCombinationDataRow(out, header, p, m, k, List.of()));
+            return freeze(out);
+        }
+        for (List<String> mem : combos) {
+            out.add(buildCombinationDataRow(out, header, p, m, k, mem));
+        }
+        return freeze(out);
+    }
+
+    /** skills シートのメンバー氏名一覧（見出し行除く）。 */
+    public static List<String> skillsMemberNames(List<List<String>> skillsRows) {
+        List<List<String>> skills = skillsRows != null ? skillsRows : List.of();
+        List<String> out = new ArrayList<>();
+        for (int r = 0; r < skills.size(); r++) {
+            if (isColumnTitleSourceRow(SheetKind.SKILLS, r, skills)) {
+                continue;
+            }
+            if (isProcessOrMachineHeaderLabel(cell(skills, r, 0))) {
+                continue;
+            }
+            String name = cell(skills, r, 0);
+            if (!name.isEmpty()) {
+                out.add(name);
+            }
+        }
+        return List.copyOf(out);
+    }
+
     /** メンバーリストから k 人の組合せ（順序固定・辞書順）を返す。不足時は空。 */
     static List<List<String>> chooseMemberCombinations(List<String> members, int k) {
         if (members == null || k < 1 || members.size() < k) {
@@ -1156,7 +1392,7 @@ public final class MasterDispatchSheetEditRules {
         return -1;
     }
 
-    static String cell(List<List<String>> rows, int r, int c) {
+    public static String cell(List<List<String>> rows, int r, int c) {
         if (rows == null || r < 0 || r >= rows.size()) {
             return "";
         }

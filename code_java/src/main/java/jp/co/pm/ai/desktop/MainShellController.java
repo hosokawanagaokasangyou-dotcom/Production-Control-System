@@ -175,7 +175,8 @@ import jp.co.pm.ai.desktop.ui.StageRunLogProgressParser;
 import jp.co.pm.ai.desktop.ui.Stage1NewMaterialLookupDialog;
 import jp.co.pm.ai.desktop.ui.Stage1EcSideUnknownDialog;
 import jp.co.pm.ai.desktop.ui.Stage1EcSideUnknownDialogResult;
-import jp.co.pm.ai.desktop.ui.MissingSkillsSheetColumnDialog;
+import jp.co.pm.ai.desktop.ui.MasterDispatchSetupCompleteness;
+import jp.co.pm.ai.desktop.ui.MasterDispatchSetupWizardDialog;
 import jp.co.pm.ai.desktop.ui.Stage2UnknownMasterCombinationDialog;
 import jp.co.pm.ai.desktop.ui.Stage2UnknownMasterCombinationDialogResult;
 import jp.co.pm.ai.desktop.ui.ButtonPressFeedback;
@@ -5903,10 +5904,10 @@ public final class MainShellController
         if (STAGE2_1.equals(script) && !confirmStage2UnknownMasterCombinationsBeforeRun()) {
             return;
         }
-        if (STAGE2.equals(script) && !confirmStage2MissingSkillsColumnsBeforeRun()) {
+        if (STAGE2.equals(script) && !ensureMasterDispatchSetupBeforeStage2("段階2")) {
             return;
         }
-        if (STAGE2_1.equals(script) && !confirmStage2MissingSkillsColumnsBeforeRun()) {
+        if (STAGE2_1.equals(script) && !ensureMasterDispatchSetupBeforeStage2("段階2.1")) {
             return;
         }
         if (!runLock.compareAndSet(false, true)) {
@@ -10521,79 +10522,190 @@ public final class MainShellController
     }
 
     /**
-     * 段階2実行前: 計画タスクの工程+機械が skills シートに列として無ければ確認ダイアログを出す。
+     * 段階2実行前: 配台マスタ（skills→need→組合せ→speed）が未完了ならウィザードを出し、完了するまで実行不可。
      *
-     * @return {@code false} のとき段階2実行を中止（キャンセル）
+     * @return {@code false} のとき段階2実行を中止
      */
-    private boolean confirmStage2MissingSkillsColumnsBeforeRun() {
+    private boolean ensureMasterDispatchSetupBeforeStage2(String stageLabelJa) {
         try {
-            PlanTasksMissingSkillsColumnPrompt.PromptBundle bundle =
-                    PlanTasksMissingSkillsColumnPrompt.collectMissingPairs(collectUiEnv());
-            if (bundle.empty()) {
+            MasterDispatchSetupWizardDialog.Session session = resolveMasterDispatchWizardSession();
+            List<MasterDispatchSetupCompleteness.EquipmentRef> equipment =
+                    MasterDispatchSetupPrompt.collectPlanEquipment(collectUiEnv());
+            MasterDispatchSetupCompleteness.Evaluation eval =
+                    MasterDispatchSetupPrompt.evaluate(
+                            equipment,
+                            new MasterDispatchSetupPrompt.SheetBundle(
+                                    session.skills(),
+                                    session.need(),
+                                    session.combinations(),
+                                    session.speed()));
+            if (eval.allComplete()) {
                 return true;
             }
             appendLog(
-                    "[stage2] skills シートに無い工程+機械 "
-                            + bundle.pairs().size()
-                            + " 件 — 配台阻害の確認ダイアログを表示します。");
-            Optional<MissingSkillsSheetColumnDialog.Outcome> entered =
-                    MissingSkillsSheetColumnDialog.prompt(
-                            primaryStageForDialogs(), bundle, true);
-            if (entered.isEmpty()
-                    || entered.get() == MissingSkillsSheetColumnDialog.Outcome.DISMISSED) {
-                appendLog(
-                        "[stage2] skills シート未登録の確認をキャンセルしたため段階2を中止します。");
+                    "[stage2] 配台マスタ未設定 "
+                            + eval.incomplete().size()
+                            + " 件 — ウィザードを表示し "
+                            + stageLabelJa
+                            + " を中断します。");
+            Optional<MasterDispatchSetupWizardDialog.Result> result =
+                    MasterDispatchSetupWizardDialog.run(
+                            primaryStageForDialogs(),
+                            MasterDispatchSetupWizardDialog.Mode.BEFORE_STAGE2,
+                            equipment,
+                            session);
+            if (result.isEmpty()
+                    || result.get().outcome() != MasterDispatchSetupWizardDialog.Outcome.COMPLETED) {
                 showWarningDialog(
-                        "段階2 中止",
-                        "skills シートに未登録の工程+機械があるため、段階2は実行しませんでした。\n\n"
-                                + bundle.summaryJa(12)
-                                + "\n\n配台マスタの資格タブで列を追加してください。");
+                        stageLabelJa + " 中止",
+                        stageLabelJa
+                                + " は実行できません。\n配台マスタの設定（資格→必要人数→組み合わせ表→加工速度）を完了してください。\n\n"
+                                + eval.summaryJa(12));
                 return false;
             }
-            if (entered.get() == MissingSkillsSheetColumnDialog.Outcome.ADD_TO_MASTER) {
-                openMasterDispatchAndAddMissingSkills(bundle);
+            applyMasterDispatchWizardResult(result.get());
+            if (masterDispatchSheetsTabController == null
+                    || !masterDispatchSheetsTabController.requestSaveAfterWizard()) {
+                showWarningDialog(
+                        stageLabelJa + " 中止",
+                        "配台マスタの保存が完了していないため "
+                                + stageLabelJa
+                                + " は実行できません。");
                 return false;
             }
-            appendLog("[stage2] skills シート未登録あり — ユーザーが続行を選択しました。");
+            MasterDispatchSetupCompleteness.Evaluation after =
+                    MasterDispatchSetupPrompt.evaluate(
+                            equipment,
+                            MasterDispatchSetupWizardDialog.toSheetBundle(result.get().session()));
+            if (!after.allComplete()) {
+                showWarningDialog(
+                        stageLabelJa + " 中止",
+                        "配台マスタ設定が未完了のため "
+                                + stageLabelJa
+                                + " は実行できません。\n\n"
+                                + after.summaryJa(12));
+                return false;
+            }
+            appendLog("[stage2] 配台マスタ設定ウィザード完了 — " + stageLabelJa + " を続行します。");
             return true;
         } catch (IOException ex) {
             appendLog(
-                    "[stage2] skills シート未登録の確認に失敗: "
+                    "[stage2] 配台マスタ完了判定に失敗: "
                             + (ex.getMessage() != null ? ex.getMessage() : ex.toString()));
             showWarningDialog(
-                    "段階2 確認失敗",
-                    "skills シート未登録の工程+機械を確認できませんでした。\n"
+                    stageLabelJa + " 確認失敗",
+                    "配台マスタの完了判定に失敗しました。\n"
                             + (ex.getMessage() != null ? ex.getMessage() : ex.toString())
-                            + "\n\n段階2を続行します。");
-            return true;
+                            + "\n\n"
+                            + stageLabelJa
+                            + " は実行しません。");
+            return false;
         }
     }
 
     /**
-     * 段階1正常終了後: 計画タスクの工程+機械が skills シートに無ければ警告ダイアログを出す。
+     * 段階2実行前: 計画タスクの工程+機械が skills シートに列として無ければ確認ダイアログを出す。
+     *
+     * @deprecated {@link #ensureMasterDispatchSetupBeforeStage2(String)} に置き換え
+     * @return {@code false} のとき段階2実行を中止（キャンセル）
+     */
+    @Deprecated
+    private boolean confirmStage2MissingSkillsColumnsBeforeRun() {
+        return ensureMasterDispatchSetupBeforeStage2("段階2");
+    }
+
+    /**
+     * 段階1正常終了後: 配台マスタ未設定があればウィザードを案内（スキップ可）。
      */
     private void warnStage1MissingSkillsColumnsAfterSuccess() {
         try {
-            PlanTasksMissingSkillsColumnPrompt.PromptBundle bundle =
-                    PlanTasksMissingSkillsColumnPrompt.collectMissingPairs(collectUiEnv());
-            if (bundle.empty()) {
+            MasterDispatchSetupWizardDialog.Session session = resolveMasterDispatchWizardSession();
+            List<MasterDispatchSetupCompleteness.EquipmentRef> equipment =
+                    MasterDispatchSetupPrompt.collectPlanEquipment(collectUiEnv());
+            MasterDispatchSetupCompleteness.Evaluation eval =
+                    MasterDispatchSetupPrompt.evaluate(
+                            equipment,
+                            new MasterDispatchSetupPrompt.SheetBundle(
+                                    session.skills(),
+                                    session.need(),
+                                    session.combinations(),
+                                    session.speed()));
+            if (eval.allComplete()) {
                 return;
             }
             appendLog(
-                    "[stage1] skills シートに無い工程+機械 "
-                            + bundle.pairs().size()
-                            + " 件 — 段階2配台阻害の警告を表示します。");
-            Optional<MissingSkillsSheetColumnDialog.Outcome> choice =
-                    MissingSkillsSheetColumnDialog.prompt(primaryStageForDialogs(), bundle, false);
-            if (choice.isPresent()
-                    && choice.get() == MissingSkillsSheetColumnDialog.Outcome.ADD_TO_MASTER) {
-                openMasterDispatchAndAddMissingSkills(bundle);
+                    "[stage1] 配台マスタ未設定 "
+                            + eval.incomplete().size()
+                            + " 件 — 設定ウィザードを案内します。");
+            Optional<MasterDispatchSetupWizardDialog.Result> result =
+                    MasterDispatchSetupWizardDialog.run(
+                            primaryStageForDialogs(),
+                            MasterDispatchSetupWizardDialog.Mode.AFTER_STAGE1,
+                            equipment,
+                            session);
+            if (result.isEmpty()
+                    || result.get().outcome() == MasterDispatchSetupWizardDialog.Outcome.SKIPPED
+                    || result.get().outcome() == MasterDispatchSetupWizardDialog.Outcome.CANCELLED) {
+                appendLog("[stage1] 配台マスタ設定ウィザードをスキップ／キャンセルしました。");
+                return;
+            }
+            if (result.get().outcome() == MasterDispatchSetupWizardDialog.Outcome.COMPLETED) {
+                applyMasterDispatchWizardResult(result.get());
+                if (masterDispatchSheetsTabController != null) {
+                    boolean saved = masterDispatchSheetsTabController.requestSaveAfterWizard();
+                    appendLog(
+                            saved
+                                    ? "[stage1] 配台マスタ設定ウィザードを完了し保存しました。"
+                                    : "[stage1] 配台マスタ設定は反映しましたが保存が完了していません。");
+                } else {
+                    appendLog("[stage1] 配台マスタ設定ウィザードを完了しました。");
+                }
             }
         } catch (IOException ex) {
             appendLog(
-                    "[stage1] skills シート未登録の確認に失敗: "
+                    "[stage1] 配台マスタ未設定の確認に失敗: "
                             + (ex.getMessage() != null ? ex.getMessage() : ex.toString()));
         }
+    }
+
+    private MasterDispatchSetupWizardDialog.Session resolveMasterDispatchWizardSession()
+            throws IOException {
+        MasterDispatchSetupPrompt.SheetBundle fromDisk =
+                MasterDispatchSetupPrompt.loadSheetBundle(collectUiEnv());
+        if (masterDispatchSheetsTabController == null) {
+            return new MasterDispatchSetupWizardDialog.Session(
+                    fromDisk.skills(),
+                    fromDisk.need(),
+                    fromDisk.combinations(),
+                    fromDisk.speed());
+        }
+        MasterDispatchSetupWizardDialog.Session live =
+                masterDispatchSheetsTabController.snapshotWizardSession();
+        boolean liveEmpty =
+                (live.skills() == null || live.skills().isEmpty())
+                        && (live.need() == null || live.need().isEmpty());
+        if (liveEmpty
+                && ((fromDisk.skills() != null && !fromDisk.skills().isEmpty())
+                        || (fromDisk.need() != null && !fromDisk.need().isEmpty()))) {
+            return new MasterDispatchSetupWizardDialog.Session(
+                    fromDisk.skills(),
+                    fromDisk.need(),
+                    fromDisk.combinations(),
+                    fromDisk.speed());
+        }
+        return live;
+    }
+
+    private void applyMasterDispatchWizardResult(MasterDispatchSetupWizardDialog.Result result) {
+        if (result == null || result.session() == null) {
+            return;
+        }
+        selectMainShellTab(MainShellTabId.MASTER_DISPATCH_SHEETS);
+        if (masterDispatchSheetsTabController == null) {
+            appendLog("[master] 配台マスタタブが初期化されていないためウィザード結果を反映できません。");
+            return;
+        }
+        masterDispatchSheetsTabController.applyWizardSession(result.session());
     }
 
     private void openMasterDispatchAndAddMissingSkills(
@@ -10930,9 +11042,9 @@ public final class MainShellController
                     PlanTasksMissingSkillsColumnPrompt.collectMissingPairs(collectUiEnv());
             if (!skillsBundle.empty()) {
                 skillsNote =
-                        "\n\nmaster「skills」シートに未登録の工程+機械が "
+                        "\n\n配台マスタ未設定の工程+機械が "
                                 + skillsBundle.pairs().size()
-                                + " 件あります（段階2で配台されません）。\n"
+                                + " 件あります（段階2実行前に設定ウィザードが必要です）。\n"
                                 + skillsBundle.summaryJa(8);
             }
         } catch (IOException ignored) {
