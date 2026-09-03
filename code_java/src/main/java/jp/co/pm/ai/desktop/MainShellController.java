@@ -773,6 +773,9 @@ public final class MainShellController
     /** 起動 BG 読込完了後に進捗モーダルを閉じる。 */
     private volatile boolean startupAwaitingBackgroundLoadBeforeModalClose;
 
+    /** 起動時チェックをユーザーがキャンセルした（以後の起動時案内は出さない）。 */
+    private volatile boolean startupCheckCancelledByUser;
+
     /** 工場切替中の進捗モーダル（表示中のみ非 null）。 */
     private FactorySiteSwitchBusyDialog factorySiteSwitchBusy;
 
@@ -5109,8 +5112,12 @@ public final class MainShellController
         if (primaryStage == null) {
             return;
         }
-        envVarsStartupCheckBusy = EnvVarsStartupCheckBusyDialog.show(primaryStage, status);
+        envVarsStartupCheckBusy =
+                EnvVarsStartupCheckBusyDialog.show(
+                        primaryStage, status, this::cancelStartupCheckByUser);
         envVarsStartupCheckBusy.setStep(resolveStartupCheckDialogStep(status));
+        envVarsStartupCheckBusy.setCancelEnabled(
+                EnvVarsStartupCheckBusyDialog.isTabLoadStatus(status));
     }
 
     private void updateEnvVarsStartupCheckBusy(String status) {
@@ -5122,6 +5129,8 @@ public final class MainShellController
                     envVarsStartupCheckBusy.setHeader(resolveStartupCheckDialogHeader(status));
                     envVarsStartupCheckBusy.setStep(resolveStartupCheckDialogStep(status));
                     envVarsStartupCheckBusy.setStatus(status);
+                    envVarsStartupCheckBusy.setCancelEnabled(
+                            EnvVarsStartupCheckBusyDialog.isTabLoadStatus(status));
                 };
         if (Platform.isFxApplicationThread()) {
             update.run();
@@ -5134,8 +5143,7 @@ public final class MainShellController
         if (status == null || status.isBlank()) {
             return EnvVarsStartupCheckBusyDialog.HEADER;
         }
-        if (EnvVarsStartupCheckBusyDialog.STATUS_BACKGROUND_LOAD.equals(status)
-                || status.startsWith("起動後読込")) {
+        if (EnvVarsStartupCheckBusyDialog.isTabLoadStatus(status)) {
             return EnvVarsStartupCheckBusyDialog.HEADER_BACKGROUND_LOAD;
         }
         return EnvVarsStartupCheckBusyDialog.HEADER;
@@ -5154,8 +5162,7 @@ public final class MainShellController
                 || EnvVarsStartupCheckBusyDialog.STATUS_DONE.equals(status)) {
             return EnvVarsStartupCheckBusyDialog.STEP_ENV_MATCH;
         }
-        if (EnvVarsStartupCheckBusyDialog.STATUS_BACKGROUND_LOAD.equals(status)
-                || status.startsWith("起動後読込")) {
+        if (EnvVarsStartupCheckBusyDialog.isTabLoadStatus(status)) {
             return EnvVarsStartupCheckBusyDialog.STEP_TAB_LOAD;
         }
         return "";
@@ -5165,6 +5172,36 @@ public final class MainShellController
         if (envVarsStartupCheckBusy != null) {
             envVarsStartupCheckBusy.close();
             envVarsStartupCheckBusy = null;
+        }
+    }
+
+    /**
+     * 起動時チェックの「読込をキャンセル」。タブ読込段階のみ有効。
+     *
+     * <p>起動後バックグラウンド読込・勤怠系 Python・依頼書照合読込を打ち切り、進捗モーダルを閉じて
+     * 工場切替などの操作ができる状態にする。
+     */
+    private void cancelStartupCheckByUser() {
+        if (!startupAwaitingBackgroundLoadBeforeModalClose
+                && !factorySwitchAwaitingBackgroundLoadBeforeModalClose
+                && !startupTabBackgroundLoadActive) {
+            return;
+        }
+        startupCheckCancelledByUser = true;
+        appendLog("[startup] 起動時チェックの読込をキャンセルしました（工場切替などの操作が可能）");
+        if (startupTabBackgroundLoad != null) {
+            startupTabBackgroundLoad.cancelByUser();
+        }
+        PythonProcessRunner.cancelAttendanceProcesses();
+        if (requestFormInputTabController != null) {
+            requestFormInputTabController.cancelBackgroundDataReload();
+        }
+        onStartupBackgroundLoadFinished();
+        if (isEnvVarsStartupCheckBusyShowing()) {
+            finishStartupSequenceProgressAndPrompt();
+        }
+        if (!factorySiteSwitchInProgress) {
+            setFactorySiteCombosDisabled(false);
         }
     }
 
@@ -5434,7 +5471,8 @@ public final class MainShellController
         endFactorySiteSwitchBusy();
         endEnvVarsStartupCheckBusy();
         selectRunTabAfterBusyProgressIfAllowed();
-        if (!isEnvVarsInitializationPending()
+        if (!startupCheckCancelledByUser
+                && !isEnvVarsInitializationPending()
                 && !shouldSuppressStartupRequestFormOriginalDirPrompt()) {
             maybePromptRequestFormOriginalDirAtStartup();
         }

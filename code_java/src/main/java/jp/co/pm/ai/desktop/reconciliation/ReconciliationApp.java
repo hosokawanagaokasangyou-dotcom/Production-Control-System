@@ -4011,6 +4011,40 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         return generation != dataReloadGeneration.get();
     }
 
+    /**
+     * 進行中の照合読込を外部から打ち切る（起動時チェックのキャンセルなど）。
+     *
+     * <p>世代を進めるため実行中スレッドは次のチェックポイントで抜ける。読込表示は消し、一覧は
+     * 途中状態のまま残すので「データを再読込」で読み直す。
+     *
+     * @return 進行中の読込を打ち切ったとき {@code true}
+     */
+    public boolean cancelDataReload() {
+        if (!dataReloadInProgress) {
+            return false;
+        }
+        dataReloadGeneration.incrementAndGet();
+        dataReloadInProgress = false;
+        stopReloadProgressHeartbeat();
+        latestReloadProgressText = "";
+        lastReloadProgressUiAt = 0L;
+        setPreviewReloadOverlay(false, "");
+        Runnable ui =
+                () -> {
+                    updateTransferButtonState();
+                    if (statusLabel != null) {
+                        statusLabel.setText(
+                                "読込をキャンセルしました。「データを再読込」で読み直してください。");
+                    }
+                };
+        if (Platform.isFxApplicationThread()) {
+            ui.run();
+        } else {
+            Platform.runLater(ui);
+        }
+        return true;
+    }
+
     private void finishDataReload(
             long generation,
             boolean success,

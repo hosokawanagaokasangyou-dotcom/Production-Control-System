@@ -101,6 +101,20 @@ public final class RequestFormInputTabController {
         scheduleEmbeddedMount();
     }
 
+    /**
+     * 起動後バックグラウンド読込のキャンセル。進行中の照合読込を打ち切り、起動進捗の通知も止める。
+     *
+     * @return 進行中の読込を打ち切ったとき {@code true}
+     */
+    boolean cancelBackgroundDataReload() {
+        pendingPreloadComplete = null;
+        if (reconciliationApp == null) {
+            return false;
+        }
+        reconciliationApp.setReloadProgressReporter(null);
+        return reconciliationApp.cancelDataReload();
+    }
+
     private void reportStartupProgressIfActive(String detail) {
         if (shell != null && shell.isStartupTabBackgroundLoadActive()) {
             shell.reportStartupRequestFormReloadProgress(detail);

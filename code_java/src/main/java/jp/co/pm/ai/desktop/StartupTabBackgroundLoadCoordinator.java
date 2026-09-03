@@ -65,14 +65,29 @@ final class StartupTabBackgroundLoadCoordinator {
      * 工場切替開始時に呼ぶ。進行中の起動後バックグラウンド読込チェーンを中断し、工場切替を優先する。
      */
     void cancelForFactorySwitch() {
+        cancel("[startup-bg] 工場切替のためバックグラウンド読込を中断");
+    }
+
+    /**
+     * 起動時チェックのキャンセル操作で呼ぶ。進行中の読込チェーンを中断し、工場切替などの操作を可能にする。
+     *
+     * @return 進行中の読込を中断したとき {@code true}
+     */
+    boolean cancelByUser() {
+        return cancel("[startup-bg] キャンセル操作でバックグラウンド読込を中断");
+    }
+
+    private boolean cancel(String logLine) {
         loadGeneration.incrementAndGet();
         runScheduled.set(false);
         activeRunGeneration = -1L;
-        if (host.isStartupTabBackgroundLoadActive()) {
-            host.setStartupTabBackgroundLoadActive(false);
-            host.setStartupBackgroundLoadStatus("");
-            host.appendStartupBackgroundLog("[startup-bg] 工場切替のためバックグラウンド読込を中断");
+        if (!host.isStartupTabBackgroundLoadActive()) {
+            return false;
         }
+        host.setStartupTabBackgroundLoadActive(false);
+        host.setStartupBackgroundLoadStatus("");
+        host.appendStartupBackgroundLog(logLine);
+        return true;
     }
 
     private boolean isRunObsolete() {

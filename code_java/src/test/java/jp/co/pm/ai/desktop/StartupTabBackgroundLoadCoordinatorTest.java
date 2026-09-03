@@ -71,6 +71,23 @@ class StartupTabBackgroundLoadCoordinatorTest {
         assertTrue(active.get(), "工場切替後に再スケジュール可能");
     }
 
+    @Test
+    void cancelByUser_stopsChainAndReportsCancelled() {
+        AtomicBoolean canStartup = new AtomicBoolean(true);
+        AtomicBoolean canFactorySwitch = new AtomicBoolean(true);
+        AtomicBoolean active = new AtomicBoolean(false);
+        StartupTabBackgroundLoadCoordinator coordinator =
+                new StartupTabBackgroundLoadCoordinator(
+                        new StubHost(canStartup, canFactorySwitch, active));
+
+        coordinator.scheduleIfIdle();
+        assertTrue(active.get(), "読込チェーン開始で active になる");
+
+        assertTrue(coordinator.cancelByUser(), "進行中の読込を中断したら true");
+        assertFalse(active.get(), "キャンセル後は active が false");
+        assertFalse(coordinator.cancelByUser(), "既に停止しているときは false");
+    }
+
     private static final class StubHost implements StartupTabBackgroundLoadCoordinator.Host {
         private final AtomicBoolean canStartup;
         private final AtomicBoolean canFactorySwitch;
