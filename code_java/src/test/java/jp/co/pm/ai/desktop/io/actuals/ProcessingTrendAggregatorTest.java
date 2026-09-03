@@ -215,6 +215,25 @@ class ProcessingTrendAggregatorTest {
     }
 
     @Test
+    void aggregate_actualDateHeadersToleratePaddingAndFallBackToKakouDate() {
+        ActualsSnapshot padded =
+                new ActualsSnapshot(
+                        List.of("機械名 ", "工程名", " 加工日", "加工開始日時 ", "実加工数 "),
+                        List.of(
+                                // 加工開始日時が空 → 加工日にフォールバック
+                                List.of("W9-1", "スリット", "2026/09/01", "", "100"),
+                                // 加工開始日時（時刻付き）を優先
+                                List.of("W9-1", "スリット", "2026/09/09", "2026/09/02 08:00", "50")));
+        Result r =
+                ProcessingTrendAggregator.aggregate(
+                        padded, aladdin(), dispatch(),
+                        new Filter(FROM, TO, PlanSource.ALADDIN, "W9-1", null), TODAY);
+        Assertions.assertEquals(100, r.days().get(0).actualM(), 1e-9);
+        Assertions.assertEquals(50, r.days().get(1).actualM(), 1e-9);
+        Assertions.assertEquals(2, r.actualRowsCounted());
+    }
+
+    @Test
     void aggregate_zeroActualRowsAreNotCounted() {
         ActualsSnapshot act =
                 new ActualsSnapshot(

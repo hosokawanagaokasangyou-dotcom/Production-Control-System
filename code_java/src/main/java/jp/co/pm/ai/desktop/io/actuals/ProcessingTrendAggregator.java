@@ -200,6 +200,8 @@ public final class ProcessingTrendAggregator {
     private static final String COL_MACHINE = "機械名";
     private static final String COL_PROCESS = "工程名";
     private static final String COL_ACTUAL_QTY = "実加工数";
+    private static final String COL_ACTUAL_DATE = "加工日";
+    private static final String COL_ACTUAL_START_DT = "加工開始日時";
     private static final String COL_WAREHOUSE = "倉庫";
     private static final String COL_TASK_ID = "依頼NO";
     private static final String COL_CONVERSION_QTY = "換算数量";
@@ -338,6 +340,8 @@ public final class ProcessingTrendAggregator {
         }
         int iMachine = colIdx(headers, COL_MACHINE);
         int iProcess = colIdx(headers, COL_PROCESS);
+        int iStartDt = colIdx(headers, COL_ACTUAL_START_DT);
+        int iKakouDate = colIdx(headers, COL_ACTUAL_DATE);
         String mk = normKey(f.machine());
         String pk = normKey(f.process());
         for (List<String> row : actuals.rows()) {
@@ -347,7 +351,7 @@ public final class ProcessingTrendAggregator {
             if (!matches(mk, cellAt(row, iMachine)) || !matches(pk, cellAt(row, iProcess))) {
                 continue;
             }
-            LocalDate d = EquipmentStatusDashboardBuilder.rowActualDate(headers, row);
+            LocalDate d = rowActualDate(row, iStartDt, iKakouDate);
             if (d == null) {
                 continue;
             }
@@ -364,6 +368,20 @@ public final class ProcessingTrendAggregator {
             acc.rowsCounted++;
         }
         return acc;
+    }
+
+    /**
+     * 実績行の加工日: {@code 加工開始日時} の日付部を優先し、無ければ {@code 加工日}。
+     * ヘッダ照合は本クラスの {@link #colIdx}（strip 比較）に統一する（Builder 側は strip しないため混在させない）。
+     */
+    private static LocalDate rowActualDate(List<String> row, int iStartDt, int iKakouDate) {
+        if (iStartDt >= 0) {
+            LocalDate d = parseDate(cellAt(row, iStartDt));
+            if (d != null) {
+                return d;
+            }
+        }
+        return iKakouDate >= 0 ? parseDate(cellAt(row, iKakouDate)) : null;
     }
 
     // ---- 予定: アラジン（日付列グリッド） ------------------------------------------------
