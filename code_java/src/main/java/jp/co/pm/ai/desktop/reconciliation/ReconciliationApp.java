@@ -3103,6 +3103,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         } else {
             writeJuchuAoTextsSplitSumArrayFormula(targetRow, targetRowIndex);
         }
+        repairJuchuAoFormulasMissingXlfnPrefix(sheet, juchuFirstDataRowIndex0(), lastDataRowIndex);
 
         setJuchuSheetReqNoIfIncluded(wb, sheet, targetRow, reqNo);
 
@@ -3515,6 +3516,8 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                 int destRowIdx = insertNewJuchuDataRowPreservingFormulas(sheet, lastDataRowIndex, null);
                 Row targetRow = sheet.getRow(destRowIdx);
                 applyDefaultJuchuFormulasIfMissing(targetRow, colMap, destRowIdx + 1);
+                repairJuchuAoFormulasMissingXlfnPrefix(
+                        sheet, juchuFirstDataRowIndex0(), lastDataRowIndex);
 
                 setJuchuSheetReqNoIfIncluded(wb, sheet, targetRow, reqNo);
 
@@ -5832,6 +5835,8 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
             } else {
                 writeJuchuAoTextsSplitSumArrayFormula(targetRow, targetRowIndex);
             }
+            repairJuchuAoFormulasMissingXlfnPrefix(
+                    sheet, juchuFirstDataRowIndex0(), lastDataRowIndex);
 
             progress.accept(
                     "受注ファイルへ転記しています…\n(3/5) セルへ転記しています…\n依頼No: "
@@ -6378,23 +6383,83 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
     }
 
     /**
+     * OOXML 上の TEXTSPLIT 関数名。Excel 2007 以降に追加された関数は {@code _xlfn.} 接頭辞付きで
+     * 保存しないと、Excel が未知の名前として扱い {@code #NAME?} になる（数式バーでは接頭辞は表示されない）。
+     */
+    static final String JUCHU_AO_TEXTSPLIT_FUNCTION = "_xlfn.TEXTSPLIT";
+
+    /**
      * AO 列向け: AH 列と AM 列の改行区切り値を対応ペアで掛け合わせて合計する数式。
      *
      * <p>通常数式として書くと Excel 365 が {@code @TEXTSPLIT}（暗黙の交差）を挿入し結果が 0 になる。
      * 配列数式（{@code t="array"}）として書き、シート修飾付き参照を使う。
      *
-     * <p>例: {@code =SUM(IFERROR(VALUE(TEXTSPLIT(受注ﾌｧｲﾙ!$AH373,CHAR(10))),0)*IFERROR(VALUE(TEXTSPLIT(受注ﾌｧｲﾙ!$AM373,CHAR(10))),0))}
+     * <p>TEXTSPLIT は {@link #JUCHU_AO_TEXTSPLIT_FUNCTION}（{@code _xlfn.} 付き）で書く。接頭辞無しだと
+     * Excel は {@code #NAME?} を返し、IFERROR がそれを 0 に潰すため AO 列が常に 0 になる。
+     *
+     * <p>Excel の数式バー表示例:
+     * {@code =SUM(IFERROR(VALUE(TEXTSPLIT(受注ﾌｧｲﾙ!$AH373,CHAR(10))),0)*IFERROR(VALUE(TEXTSPLIT(受注ﾌｧｲﾙ!$AM373,CHAR(10))),0))}
      */
     static String buildJuchuAoTextsSplitSumFormula(int excelRow1Based) {
-        return "SUM(IFERROR(VALUE(TEXTSPLIT("
+        return "SUM(IFERROR(VALUE("
+                + JUCHU_AO_TEXTSPLIT_FUNCTION
+                + "("
                 + JUCHU_SHEET_NAME
                 + "!$AH"
                 + excelRow1Based
-                + ",CHAR(10))),0)*IFERROR(VALUE(TEXTSPLIT("
+                + ",CHAR(10))),0)*IFERROR(VALUE("
+                + JUCHU_AO_TEXTSPLIT_FUNCTION
+                + "("
                 + JUCHU_SHEET_NAME
                 + "!$AM"
                 + excelRow1Based
                 + ",CHAR(10))),0))";
+    }
+
+    /**
+     * 旧版が {@code _xlfn.} 無しで書いた AO 列数式か（Excel では TEXTSPLIT が未知名となり結果 0）。
+     * Excel が保存し直した {@code _xludf.TEXTSPLIT} も対象。
+     */
+    static boolean isJuchuAoFormulaMissingXlfnPrefix(Cell cell) {
+        if (cell == null || cell.getCellType() != CellType.FORMULA) {
+            return false;
+        }
+        String formula;
+        try {
+            formula = cell.getCellFormula();
+        } catch (RuntimeException e) {
+            return false;
+        }
+        if (formula == null) {
+            return false;
+        }
+        String upper = formula.toUpperCase(Locale.ROOT);
+        return upper.contains("TEXTSPLIT(")
+                && !upper.contains(JUCHU_AO_TEXTSPLIT_FUNCTION.toUpperCase(Locale.ROOT) + "(");
+    }
+
+    /**
+     * データ行の AO 列を走査し、{@link #isJuchuAoFormulaMissingXlfnPrefix(Cell)} に該当する数式を
+     * 正しい配列数式で書き直す。戻り値は書き直した行数。
+     */
+    static int repairJuchuAoFormulasMissingXlfnPrefix(
+            Sheet sheet, int firstDataRowIndex0, int lastDataRowIndex0) {
+        if (sheet == null || lastDataRowIndex0 < firstDataRowIndex0) {
+            return 0;
+        }
+        int repaired = 0;
+        for (int r = Math.max(0, firstDataRowIndex0); r <= lastDataRowIndex0; r++) {
+            Row row = sheet.getRow(r);
+            if (row == null) {
+                continue;
+            }
+            if (!isJuchuAoFormulaMissingXlfnPrefix(row.getCell(JUCHU_AO_COLUMN_INDEX))) {
+                continue;
+            }
+            writeJuchuAoTextsSplitSumArrayFormula(row, r + 1);
+            repaired++;
+        }
+        return repaired;
     }
 
     /**
