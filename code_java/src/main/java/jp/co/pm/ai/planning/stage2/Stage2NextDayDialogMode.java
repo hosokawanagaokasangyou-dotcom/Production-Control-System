@@ -19,6 +19,21 @@ public enum Stage2NextDayDialogMode {
         return this == ALADDIN_TODAY_EXCLUDE || this == BOTH;
     }
 
+    /**
+     * 当日配台（{@code skipTodayDispatch=false}）のときは翌日配台ダイアログ①②③をすべて省略する。
+     *
+     * @param requested タスク入力タブのラジオ選択
+     * @param skipTodayDispatch {@code PM_AI_STAGE2_SKIP_TODAY_DISPATCH} 相当（true=当日は配台しない）
+     */
+    public static Stage2NextDayDialogMode effectiveForTodayDispatch(
+            Stage2NextDayDialogMode requested, boolean skipTodayDispatch) {
+        Stage2NextDayDialogMode mode = requested != null ? requested : defaultMode();
+        if (skipTodayDispatch) {
+            return mode;
+        }
+        return NONE;
+    }
+
     public static Stage2NextDayDialogMode parse(String raw) {
         if (raw == null || raw.isBlank()) {
             return defaultMode();

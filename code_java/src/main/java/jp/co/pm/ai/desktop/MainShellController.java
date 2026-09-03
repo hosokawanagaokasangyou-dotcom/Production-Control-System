@@ -10123,22 +10123,15 @@ public final class MainShellController
     }
 
     /**
-     * 当日配台（skip_today OFF）のとき加工途中ダイアログ ①/③ を実質省略する。
+     * 当日配台（skip_today OFF）のとき翌日配台ダイアログ①②③をすべて省略する。
      */
     private jp.co.pm.ai.planning.stage2.Stage2NextDayDialogMode effectiveStage2NextDayDialogMode() {
-        if (planInputTabController == null) {
-            return jp.co.pm.ai.planning.stage2.Stage2NextDayDialogMode.defaultMode();
-        }
-        jp.co.pm.ai.planning.stage2.Stage2NextDayDialogMode mode =
-                planInputTabController.snapshotStage2NextDayDialogMode();
-        if (snapshotStage2SkipTodayDispatch()) {
-            return mode;
-        }
-        return switch (mode) {
-            case IN_PROGRESS -> jp.co.pm.ai.planning.stage2.Stage2NextDayDialogMode.NONE;
-            case BOTH -> jp.co.pm.ai.planning.stage2.Stage2NextDayDialogMode.ALADDIN_TODAY_EXCLUDE;
-            default -> mode;
-        };
+        jp.co.pm.ai.planning.stage2.Stage2NextDayDialogMode requested =
+                planInputTabController != null
+                        ? planInputTabController.snapshotStage2NextDayDialogMode()
+                        : jp.co.pm.ai.planning.stage2.Stage2NextDayDialogMode.defaultMode();
+        return jp.co.pm.ai.planning.stage2.Stage2NextDayDialogMode.effectiveForTodayDispatch(
+                requested, snapshotStage2SkipTodayDispatch());
     }
 
     /**
@@ -10156,9 +10149,9 @@ public final class MainShellController
         if (snapshotTodayDispatch()
                 && !snapshotStage2SkipTodayDispatch()
                 && mode != requestedMode
-                && requestedMode.runsInProgressDialog()) {
+                && requestedMode != jp.co.pm.ai.planning.stage2.Stage2NextDayDialogMode.NONE) {
             appendLog(
-                    "[stage2] 当日配台する のため加工途中の翌日配台ダイアログ(①)を省略します。"
+                    "[stage2] 当日配台する のため翌日配台ダイアログ(①②)を省略します。"
                             + " 設定する場合は「当日は配台しない」を選んでください。");
         }
         pendingStage2InProgressNextDayJsonPath = null;

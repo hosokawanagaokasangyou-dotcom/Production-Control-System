@@ -85,7 +85,8 @@ import jp.co.pm.ai.planning.stage2.Stage2PlanRunDateResolver;
 /**
  * 配台計画_タスク入力タブ。レイアウトは {@code PlanInputTab.fxml}。
  *
- * <p>段階2の加工途中の翌日配台量設定は本タブに配置する。当日配台モード（排他2択）は実行・ログの段階1ボタン横。
+ * <p>段階2の翌日配台ダイアログ設定は本タブに配置する。当日配台モード（排他2択）は実行・ログの段階1ボタン横。
+ * 当日配台かつ skip_today OFF のときは翌日配台ダイアログをすべて省略する。
  *
  * <p>ControlsFX {@link SpreadsheetView} で先頭固定列をネイティブに扱う。
  */
@@ -573,7 +574,7 @@ public final class PlanInputTabController {
     }
 
     /**
-     * 当日配台かつ skip_today OFF のとき、加工途中ダイアログ(①/③)用ラジオを無効化する。
+     * 当日配台かつ skip_today OFF のとき、翌日配台ダイアログ用ラジオを無効化し「表示しない」へ寄せる。
      * 当日配台モードは実行・ログ（段階1ボタン横）の排他2択を参照する。
      */
     void refreshNextDayDialogRadioCoupling() {
@@ -587,20 +588,11 @@ public final class PlanInputTabController {
         if (stage2NextDayDialogBothRadio != null) {
             stage2NextDayDialogBothRadio.setDisable(coupleOff);
         }
-        if (coupleOff) {
-            if (stage2NextDayDialogInProgressRadio != null
-                    && stage2NextDayDialogInProgressRadio.isSelected()) {
-                if (stage2NextDayDialogNoneRadio != null) {
-                    stage2NextDayDialogNoneRadio.setSelected(true);
-                }
-            }
-            if (stage2NextDayDialogBothRadio != null && stage2NextDayDialogBothRadio.isSelected()) {
-                if (stage2NextDayDialogAladdinExcludeRadio != null) {
-                    stage2NextDayDialogAladdinExcludeRadio.setSelected(true);
-                } else if (stage2NextDayDialogNoneRadio != null) {
-                    stage2NextDayDialogNoneRadio.setSelected(true);
-                }
-            }
+        if (stage2NextDayDialogAladdinExcludeRadio != null) {
+            stage2NextDayDialogAladdinExcludeRadio.setDisable(coupleOff);
+        }
+        if (coupleOff && stage2NextDayDialogNoneRadio != null) {
+            stage2NextDayDialogNoneRadio.setSelected(true);
         }
     }
 
@@ -633,6 +625,10 @@ public final class PlanInputTabController {
         if (stage2NextDayDialogInProgressRadio != null
                 && stage2NextDayDialogInProgressRadio.isSelected()) {
             return Stage2NextDayDialogMode.IN_PROGRESS;
+        }
+        if (stage2NextDayDialogAladdinExcludeRadio != null
+                && stage2NextDayDialogAladdinExcludeRadio.isSelected()) {
+            return Stage2NextDayDialogMode.ALADDIN_TODAY_EXCLUDE;
         }
         if (stage2NextDayDialogBothRadio != null && stage2NextDayDialogBothRadio.isSelected()) {
             return Stage2NextDayDialogMode.BOTH;
