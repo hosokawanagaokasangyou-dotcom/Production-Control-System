@@ -3220,10 +3220,15 @@
     -fx-min-width: 56px;
 }
 
-.label.pm-processing-trend-muted,
-.label.pm-processing-trend-source {
+.label.pm-processing-trend-muted {
     -fx-font-size: 11px;
     -fx-text-fill: -fx-mid-text-color;
+}
+
+.label.pm-processing-trend-source {
+    -fx-font-size: 12px;
+    -fx-text-fill: -fx-mid-text-color;
+    -fx-padding: 2 0 4 0;
 }
 
 .label.pm-processing-trend-loading-status {
@@ -3325,13 +3330,22 @@
     -fx-text-fill: -fx-mid-text-color;
 }
 
+.pm-processing-trend-legend {
+    -fx-background-color: white;
+    -fx-background-radius: 4;
+    -fx-padding: 6 12 6 12;
+    -fx-border-color: -pm-trend-chart-border;
+    -fx-border-radius: 4;
+    -fx-border-width: 1;
+}
+
 .pm-legend-swatch {
-    -fx-min-width: 14px;
-    -fx-pref-width: 14px;
-    -fx-max-width: 14px;
-    -fx-min-height: 10px;
-    -fx-pref-height: 10px;
-    -fx-max-height: 10px;
+    -fx-min-width: 18px;
+    -fx-pref-width: 18px;
+    -fx-max-width: 18px;
+    -fx-min-height: 12px;
+    -fx-pref-height: 12px;
+    -fx-max-height: 12px;
     -fx-background-radius: 2;
 }
 
@@ -3347,9 +3361,9 @@
 .pm-legend-swatch-line-actual,
 .pm-legend-swatch-line-plan,
 .pm-legend-swatch-line-projected {
-    -fx-min-height: 3px;
-    -fx-pref-height: 3px;
-    -fx-max-height: 3px;
+    -fx-min-height: 4px;
+    -fx-pref-height: 4px;
+    -fx-max-height: 4px;
     -fx-background-radius: 0;
 }
 
@@ -3369,12 +3383,12 @@
 }
 
 .pm-legend-swatch-today {
-    -fx-min-width: 3px;
-    -fx-pref-width: 3px;
-    -fx-max-width: 3px;
-    -fx-min-height: 12px;
-    -fx-pref-height: 12px;
-    -fx-max-height: 12px;
+    -fx-min-width: 4px;
+    -fx-pref-width: 4px;
+    -fx-max-width: 4px;
+    -fx-min-height: 16px;
+    -fx-pref-height: 16px;
+    -fx-max-height: 16px;
     -fx-background-color: transparent;
     -fx-border-color: transparent transparent transparent -pm-trend-today;
     -fx-border-width: 0 0 0 2;
@@ -3382,7 +3396,8 @@
 }
 
 .label.pm-legend-label {
-    -fx-font-size: 11px;
+    -fx-font-size: 15px;
+    -fx-text-fill: #1f2937;
 }
 
 /* チャート本体: 2 枚重ね。padding は Controller が相手側 Y 軸幅で調整する */

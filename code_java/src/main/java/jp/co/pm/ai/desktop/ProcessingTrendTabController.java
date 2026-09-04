@@ -1525,6 +1525,8 @@ public class ProcessingTrendTabController {
     private void updateSourceSummary() {
         if (cachedSources == null) {
             sourceSummaryLabel.setText("");
+            sourceSummaryLabel.setVisible(false);
+            sourceSummaryLabel.setManaged(false);
             return;
         }
         StringBuilder sb = new StringBuilder();
@@ -1552,6 +1554,9 @@ public class ProcessingTrendTabController {
             sb.append("  ※ ").append(cachedSources.loadNotice());
         }
         sourceSummaryLabel.setText(sb.toString());
+        boolean show = !sb.isEmpty();
+        sourceSummaryLabel.setVisible(show);
+        sourceSummaryLabel.setManaged(show);
     }
 
     private void showNotice(String text, NoticeKind kind) {

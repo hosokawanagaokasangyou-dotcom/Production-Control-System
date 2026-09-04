@@ -97,8 +97,6 @@
                         <Label fx:id="lastUpdatedLabel" styleClass="pm-processing-trend-muted" text="最終更新: —"/>
                     </HBox>
                 </FlowPane>
-                <Label fx:id="sourceSummaryLabel" maxWidth="1.7976931348623157E308" styleClass="pm-processing-trend-source"
-                       text="" wrapText="true"/>
             </VBox>
             <HBox fx:id="noticeBanner" alignment="CENTER_LEFT" managed="false" spacing="10.0" visible="false"
                   styleClass="pm-processing-trend-banner">
@@ -148,7 +146,7 @@
             <!-- グラフ領域は最大 1300x600（凡例行・明細も同じ幅に揃える） -->
             <HBox alignment="CENTER_LEFT" maxWidth="1300.0" spacing="14.0" styleClass="pm-processing-trend-legend-row">
                 <Label fx:id="chartTitleLabel" styleClass="pm-processing-trend-chart-title" text="加工実績・予定トレンド"/>
-                <HBox fx:id="legendBox" alignment="CENTER_LEFT" spacing="12.0" styleClass="pm-processing-trend-legend"/>
+                <HBox fx:id="legendBox" alignment="CENTER_LEFT" spacing="16.0" styleClass="pm-processing-trend-legend"/>
                 <Pane HBox.hgrow="ALWAYS"/>
                 <Label fx:id="unitHintLabel" styleClass="pm-processing-trend-muted" text="単位: m（換算数量・工程延べ）"/>
             </HBox>
@@ -187,6 +185,8 @@
                            textAlignment="CENTER" maxWidth="560.0"/>
                 </VBox>
             </StackPane>
+            <Label fx:id="sourceSummaryLabel" maxWidth="1300.0" managed="false" styleClass="pm-processing-trend-source"
+                   text="" visible="false" wrapText="true"/>
             <TitledPane fx:id="detailPane" animated="false" collapsible="true" expanded="false" maxWidth="1300.0" text="日別明細">
                 <TableView fx:id="detailTable" fixedCellSize="24.0" prefHeight="220.0" maxHeight="320.0"
                            styleClass="pm-processing-trend-detail-table">
