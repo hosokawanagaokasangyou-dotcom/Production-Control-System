@@ -165,4 +165,142 @@ class Stage2NextDayDispatchDialogTest {
         ComboBox<?> combo = comboRef.get();
         assertFalse(combo.isEditable());
     }
+
+    @Test
+    void clipboardHtmlIncludesTitleHeaderHintTableAndCurrentRollCount() {
+        var row =
+                new Stage2InProgressNextDayDispatchDialog.Row(
+                        "W9-1",
+                        "検査",
+                        "熱融着機 湖南",
+                        3900,
+                        4500,
+                        4500,
+                        0,
+                        600,
+                        new Stage2PlanRowDispatchQtyMetrics.DispatchSimulatorUnitM(
+                                300, 300, 300, true));
+        row.rollCountProperty().set("2");
+
+        String html =
+                Stage2NextDayRollDispatchDialogSupport.toClipboardHtml(
+                        Stage2NextDayDispatchDialog.THEME, List.of(row));
+
+        assertTrue(html.contains("<h2>"), html);
+        assertTrue(html.contains("段階2 — 翌日の配台量"), html);
+        assertTrue(html.contains("対象行について、翌日に配台するロール数を指定してください。"), html);
+        assertTrue(html.contains("ロール数はコンボボックスから選びます。"), html);
+        assertTrue(html.contains("<table"), html);
+        assertTrue(html.contains("依頼NO"), html);
+        assertTrue(html.contains("機械名"), html);
+        assertTrue(html.contains("工程名"), html);
+        assertTrue(html.contains("対象理由"), html);
+        assertTrue(html.contains("実加工"), html);
+        assertTrue(html.contains("換算数量"), html);
+        assertTrue(html.contains("配台数量"), html);
+        assertTrue(html.contains("アラジン当日"), html);
+        assertTrue(html.contains("残量"), html);
+        assertTrue(html.contains("1ロール"), html);
+        assertTrue(html.contains("翌日配台(ロール)"), html);
+        assertTrue(html.contains("換算(m)"), html);
+        assertTrue(html.contains("W9-1"), html);
+        assertTrue(html.contains("熱融着機 湖南"), html);
+        assertTrue(html.contains("検査"), html);
+        assertTrue(html.contains("加工途中"), html);
+        assertTrue(html.contains(">2<") || html.contains(">2</td>"), html);
+        assertTrue(html.contains("600 m"), html);
+    }
+
+    @Test
+    void clipboardHtmlUsesTheRollCountCurrentlySelectedInTheCombo() {
+        var row =
+                new Stage2InProgressNextDayDispatchDialog.Row(
+                        "W9-2",
+                        "EC",
+                        "EC機 湖南",
+                        2100,
+                        4500,
+                        4500,
+                        0,
+                        2400,
+                        new Stage2PlanRowDispatchQtyMetrics.DispatchSimulatorUnitM(
+                                300, 300, 300, true));
+        row.rollCountProperty().set("8");
+
+        String html =
+                Stage2NextDayRollDispatchDialogSupport.toClipboardHtml(
+                        Stage2NextDayDispatchDialog.THEME, List.of(row));
+
+        assertTrue(html.contains(">8</td>"), html);
+        assertTrue(html.contains("2400 m"), html);
+    }
+
+    @Test
+    void clipboardHtmlEscapesSpecialCharacters() {
+        var row =
+                new Stage2InProgressNextDayDispatchDialog.Row(
+                        "A&B<C>",
+                        "検査",
+                        "機\"械",
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        UNIT_3045);
+
+        String html =
+                Stage2NextDayRollDispatchDialogSupport.toClipboardHtml(
+                        Stage2NextDayDispatchDialog.THEME, List.of(row));
+
+        assertTrue(html.contains("A&amp;B&lt;C&gt;"), html);
+        assertTrue(html.contains("機&quot;械"), html);
+        assertFalse(html.contains("A&B<C>"), html);
+    }
+
+    @Test
+    void clipboardHtmlOmitsOptionalColumnsWhenThemeHidesThem() {
+        var row =
+                new Stage2AladdinTodayExcludeNextDayDispatchDialog.Row(
+                        "T9-1",
+                        "エンボス",
+                        "エンボス 湖南",
+                        2800,
+                        2000,
+                        new Stage2PlanRowDispatchQtyMetrics.DispatchSimulatorUnitM(
+                                400, 400, 400, true));
+        row.rollCountProperty().set("5");
+
+        var theme =
+                new Stage2NextDayRollDispatchDialogSupport.Theme(
+                        "アラジン当日配台 — 翌日の配台量",
+                        "ヘッダ",
+                        "ヒント",
+                        "実加工",
+                        "翌日配台(ロール)",
+                        "",
+                        "",
+                        true,
+                        false);
+
+        String html =
+                Stage2NextDayRollDispatchDialogSupport.toClipboardHtml(theme, List.of(row));
+
+        assertTrue(html.contains("アラジン当日"), html);
+        assertTrue(html.contains("対象理由"), html);
+        assertFalse(html.contains("換算数量"), html);
+        assertFalse(html.contains("配台数量"), html);
+        assertTrue(html.contains(">5</td>"), html);
+    }
+
+    @Test
+    void copyHtmlButtonTypeDoesNotCloseTheDialogAsOk() {
+        assertEquals("HTMLコピー", Stage2NextDayRollDispatchDialogSupport.COPY_HTML.getText());
+        assertTrue(
+                Stage2NextDayRollDispatchDialogSupport.COPY_HTML.getButtonData().isCancelButton()
+                        == false);
+        assertTrue(
+                Stage2NextDayRollDispatchDialogSupport.COPY_HTML.getButtonData().isDefaultButton()
+                        == false);
+    }
 }

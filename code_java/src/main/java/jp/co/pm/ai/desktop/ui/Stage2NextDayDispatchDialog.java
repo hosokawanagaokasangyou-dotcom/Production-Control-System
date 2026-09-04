@@ -13,7 +13,7 @@ import jp.co.pm.ai.planning.stage2.Stage2InProgressNextDayDispatchIo;
 /** 段階2直前: 加工途中とアラジン当日対象を同じ「翌日配台量」で一括入力する。 */
 public final class Stage2NextDayDispatchDialog {
 
-    private static final Stage2NextDayRollDispatchDialogSupport.Theme THEME =
+    static final Stage2NextDayRollDispatchDialogSupport.Theme THEME =
             new Stage2NextDayRollDispatchDialogSupport.Theme(
                     "段階2 — 翌日の配台量",
                     "対象行について、翌日に配台するロール数を指定してください。"

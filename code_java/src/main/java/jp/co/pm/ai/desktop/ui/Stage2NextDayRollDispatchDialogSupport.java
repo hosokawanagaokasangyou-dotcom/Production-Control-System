@@ -10,6 +10,7 @@ import javafx.collections.FXCollections;
 import javafx.geometry.Insets;
 import javafx.scene.Node;
 import javafx.scene.Parent;
+import javafx.scene.control.ButtonBar;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.ContentDisplay;
@@ -33,6 +34,9 @@ import jp.co.pm.ai.planning.stage2.core.Stage2PlanRowDispatchQtyMetrics;
 
 /** 段階2直前の翌日ロール入力ダイアログ（①加工途中 / ②アラジン除外）共通 UI。 */
 final class Stage2NextDayRollDispatchDialogSupport {
+
+    static final ButtonType COPY_HTML =
+            new ButtonType("HTMLコピー", ButtonBar.ButtonData.LEFT);
 
     private Stage2NextDayRollDispatchDialogSupport() {}
 
@@ -328,7 +332,23 @@ final class Stage2NextDayRollDispatchDialogSupport {
         if (theme.dialogPaneStyle() != null && !theme.dialogPaneStyle().isBlank()) {
             dialog.getDialogPane().setStyle(theme.dialogPaneStyle());
         }
-        dialog.getDialogPane().getButtonTypes().setAll(ButtonType.OK, ButtonType.CANCEL);
+        dialog.getDialogPane().getButtonTypes().setAll(COPY_HTML, ButtonType.OK, ButtonType.CANCEL);
+        Node copyHtmlButton = dialog.getDialogPane().lookupButton(COPY_HTML);
+        if (copyHtmlButton instanceof javafx.scene.control.Button copyBtn) {
+            copyBtn.setDefaultButton(false);
+            copyBtn.setCancelButton(false);
+            copyBtn.addEventFilter(
+                    javafx.event.ActionEvent.ACTION,
+                    ev -> {
+                        ev.consume();
+                        commitPendingTableCellEdit(table);
+                        ClipboardTableSupport.copyHtmlTableOnly(toClipboardHtml(theme, rows));
+                    });
+        }
+        Node okButton = dialog.getDialogPane().lookupButton(ButtonType.OK);
+        if (okButton instanceof javafx.scene.control.Button okBtn) {
+            okBtn.setDefaultButton(true);
+        }
         dialog.setOnShown(
                 ev -> Platform.runLater(() -> repositionRollColumnOverlay(table, cRolls, rollColumnOverlay)));
         dialog.getDialogPane()
@@ -356,6 +376,147 @@ final class Stage2NextDayRollDispatchDialogSupport {
             out.add(toEntry.apply(r));
         }
         return Optional.of(out);
+    }
+
+    static String toClipboardHtml(Theme theme, List<? extends RowModel> rows) {
+        Theme t = theme != null ? theme : emptyTheme();
+        List<? extends RowModel> safe = rows != null ? rows : List.of();
+        boolean includeReason =
+                safe.stream().anyMatch(r -> r != null && !r.targetReason().isBlank());
+        List<HtmlColumn> columns = clipboardColumns(t, includeReason);
+        StringBuilder sb = new StringBuilder();
+        appendEscapedBlock(sb, "h2", t.title());
+        appendEscapedBlock(sb, "p", t.headerText());
+        appendEscapedBlock(sb, "p", t.hintText());
+        sb.append(
+                "<table border=\"1\" cellspacing=\"0\" cellpadding=\"4\""
+                        + " style=\"border-collapse:collapse;font-family:'Meiryo UI',sans-serif;font-size:11pt;\">");
+        sb.append("<thead><tr>");
+        for (HtmlColumn col : columns) {
+            sb.append("<th style=\"background:#D9E1F2;padding:4px 8px;text-align:left;\">")
+                    .append(ClipboardTableSupport.escapeHtml(col.header()))
+                    .append("</th>");
+        }
+        sb.append("</tr></thead><tbody>");
+        for (RowModel row : safe) {
+            if (row == null) {
+                continue;
+            }
+            sb.append("<tr>");
+            for (HtmlColumn col : columns) {
+                String align = col.alignCss();
+                sb.append("<td style=\"padding:4px 8px;")
+                        .append(align)
+                        .append("\">")
+                        .append(ClipboardTableSupport.escapeHtml(col.cell(row)))
+                        .append("</td>");
+            }
+            sb.append("</tr>");
+        }
+        sb.append("</tbody></table>");
+        return sb.toString();
+    }
+
+    private static Theme emptyTheme() {
+        return new Theme("", "", "", "実加工", "翌日配台(ロール)", "", "");
+    }
+
+    private static void appendEscapedBlock(StringBuilder sb, String tag, String text) {
+        if (text == null || text.isBlank()) {
+            return;
+        }
+        sb.append('<')
+                .append(tag)
+                .append('>')
+                .append(ClipboardTableSupport.escapeHtml(text))
+                .append("</")
+                .append(tag)
+                .append('>');
+    }
+
+    private record HtmlColumn(
+            String header, String alignCss, java.util.function.Function<RowModel, String> cellFn) {
+        String cell(RowModel row) {
+            return cellFn.apply(row);
+        }
+    }
+
+    private static List<HtmlColumn> clipboardColumns(Theme theme, boolean includeTargetReason) {
+        Theme t = theme != null ? theme : emptyTheme();
+        List<HtmlColumn> cols = new java.util.ArrayList<>();
+        String left = "text-align:left;";
+        String right = "text-align:right;";
+        String center = "text-align:center;";
+        cols.add(new HtmlColumn("依頼NO", left, RowModel::taskId));
+        cols.add(new HtmlColumn("機械名", left, RowModel::machineName));
+        cols.add(new HtmlColumn("工程名", left, RowModel::process));
+        if (includeTargetReason) {
+            cols.add(new HtmlColumn("対象理由", left, RowModel::targetReason));
+        }
+        cols.add(
+                new HtmlColumn(
+                        t.referenceColumnLabel(),
+                        right,
+                        r -> formatM(r.referenceM()) + " m"));
+        if (t.showPlanQtyColumns()) {
+            cols.add(
+                    new HtmlColumn(
+                            "換算数量", right, r -> formatM(r.convertedQtyM()) + " m"));
+            cols.add(
+                    new HtmlColumn(
+                            "配台数量", right, r -> formatM(r.dispatchQtyM()) + " m"));
+        }
+        if (t.showAladdinTodayPlanColumn()) {
+            cols.add(
+                    new HtmlColumn(
+                            "アラジン当日",
+                            right,
+                            r -> {
+                                double m = r.aladdinTodayPlanM();
+                                if (m <= 1e-12) {
+                                    return "—";
+                                }
+                                return formatM(m) + " m";
+                            }));
+        }
+        cols.add(new HtmlColumn("残量", right, r -> formatM(r.remainingM()) + " m"));
+        cols.add(
+                new HtmlColumn(
+                        "1ロール",
+                        right,
+                        r -> {
+                            if (r.unitM() <= 1e-9) {
+                                return "—";
+                            }
+                            return ResultDispatchNormalizer.formatQty(r.unitM()) + " m";
+                        }));
+        cols.add(
+                new HtmlColumn(
+                        t.rollsColumnLabel(),
+                        center,
+                        r ->
+                                clampRollCountChoice(
+                                        r.rollCountProperty() != null
+                                                ? r.rollCountProperty().get()
+                                                : "0",
+                                        r.maxRolls())));
+        cols.add(
+                new HtmlColumn(
+                        "換算(m)",
+                        right,
+                        r -> {
+                            String rollsRaw =
+                                    r.rollCountProperty() != null
+                                            ? r.rollCountProperty().get()
+                                            : "0";
+                            int n =
+                                    Stage2InProgressNextDayRollInput.parseNonNegativeRollCount(
+                                                    clampRollCountChoice(rollsRaw, r.maxRolls()))
+                                            .orElse(0);
+                            return Stage2InProgressNextDayRollInput.formatConvertedMetersPreview(
+                                    n, r.unitM());
+                        }));
+        return List.copyOf(cols);
     }
 
     static TableColumn<RowModel, String> createProcessColumn() {
