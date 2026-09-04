@@ -3,11 +3,15 @@ package jp.co.pm.ai.desktop.ui;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
+import java.util.stream.Collectors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -16,8 +20,15 @@ import javafx.scene.control.ComboBox;
 import javafx.scene.control.TableCell;
 import javafx.scene.control.TableColumn;
 
+import org.apache.poi.xwpf.usermodel.XWPFDocument;
+import org.apache.poi.xwpf.usermodel.XWPFParagraph;
+import org.apache.poi.xwpf.usermodel.XWPFTable;
+import org.apache.poi.xwpf.usermodel.XWPFTableCell;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTPageSz;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTSectPr;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.STPageOrientation;
 
 import jp.co.pm.ai.planning.stage2.core.Stage2PlanRowDispatchQtyMetrics;
 
@@ -301,6 +312,82 @@ class Stage2NextDayDispatchDialogTest {
                         == false);
         assertTrue(
                 Stage2NextDayRollDispatchDialogSupport.COPY_HTML.getButtonData().isDefaultButton()
+                        == false);
+    }
+
+    @Test
+    void writeA4LandscapeDocx_usesA4LandscapePageAndCurrentRollCount() throws Exception {
+        var row =
+                new Stage2InProgressNextDayDispatchDialog.Row(
+                        "W9-1",
+                        "検査",
+                        "熱融着機 湖南",
+                        3900,
+                        4500,
+                        4500,
+                        0,
+                        600,
+                        new Stage2PlanRowDispatchQtyMetrics.DispatchSimulatorUnitM(
+                                300, 300, 300, true));
+        row.rollCountProperty().set("2");
+
+        Path dest = Files.createTempFile("stage2-next-day-", ".docx");
+        try {
+            Stage2NextDayRollDispatchDialogSupport.writeA4LandscapeDocx(
+                    Stage2NextDayDispatchDialog.THEME, List.of(row), dest);
+
+            try (XWPFDocument doc = new XWPFDocument(Files.newInputStream(dest))) {
+                CTSectPr sectPr = doc.getDocument().getBody().getSectPr();
+                assertNotNull(sectPr);
+                CTPageSz pageSz = sectPr.getPgSz();
+                assertNotNull(pageSz);
+                assertEquals(STPageOrientation.LANDSCAPE, pageSz.getOrient());
+                assertEquals(
+                        Stage2NextDayRollDispatchDialogSupport.A4_LANDSCAPE_WIDTH_TWIPS,
+                        Long.parseLong(String.valueOf(pageSz.getW())));
+                assertEquals(
+                        Stage2NextDayRollDispatchDialogSupport.A4_LANDSCAPE_HEIGHT_TWIPS,
+                        Long.parseLong(String.valueOf(pageSz.getH())));
+
+                String paras =
+                        doc.getParagraphs().stream()
+                                .map(XWPFParagraph::getText)
+                                .collect(Collectors.joining("\n"));
+                assertTrue(paras.contains("段階2 — 翌日の配台量"), paras);
+                assertTrue(paras.contains("対象行について、翌日に配台するロール数を指定してください。"), paras);
+
+                assertEquals(1, doc.getTables().size());
+                XWPFTable table = doc.getTables().get(0);
+                List<String> headers =
+                        table.getRow(0).getTableCells().stream()
+                                .map(XWPFTableCell::getText)
+                                .toList();
+                assertTrue(headers.contains("依頼NO"), headers.toString());
+                assertTrue(headers.contains("翌日配台(ロール)"), headers.toString());
+                assertTrue(headers.contains("換算(m)"), headers.toString());
+
+                assertEquals(2, table.getNumberOfRows());
+                List<String> cells =
+                        table.getRow(1).getTableCells().stream()
+                                .map(XWPFTableCell::getText)
+                                .toList();
+                assertEquals("W9-1", cells.get(headers.indexOf("依頼NO")));
+                assertEquals("2", cells.get(headers.indexOf("翌日配台(ロール)")));
+                assertEquals("600 m", cells.get(headers.indexOf("換算(m)")));
+            }
+        } finally {
+            Files.deleteIfExists(dest);
+        }
+    }
+
+    @Test
+    void exportWordButtonTypeDoesNotCloseTheDialogAsOk() {
+        assertEquals("Word出力", Stage2NextDayRollDispatchDialogSupport.EXPORT_WORD.getText());
+        assertTrue(
+                Stage2NextDayRollDispatchDialogSupport.EXPORT_WORD.getButtonData().isCancelButton()
+                        == false);
+        assertTrue(
+                Stage2NextDayRollDispatchDialogSupport.EXPORT_WORD.getButtonData().isDefaultButton()
                         == false);
     }
 }

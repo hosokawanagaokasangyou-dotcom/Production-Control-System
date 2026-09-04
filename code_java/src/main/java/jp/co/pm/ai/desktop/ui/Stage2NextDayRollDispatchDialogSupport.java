@@ -1,6 +1,13 @@
 package jp.co.pm.ai.desktop.ui;
 
+import java.awt.Desktop;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.math.BigInteger;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.function.Function;
 
@@ -24,8 +31,22 @@ import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
+import javafx.stage.FileChooser;
 import javafx.stage.Modality;
 import javafx.stage.Window;
+
+import org.apache.poi.xwpf.usermodel.ParagraphAlignment;
+import org.apache.poi.xwpf.usermodel.XWPFDocument;
+import org.apache.poi.xwpf.usermodel.XWPFParagraph;
+import org.apache.poi.xwpf.usermodel.XWPFRun;
+import org.apache.poi.xwpf.usermodel.XWPFTable;
+import org.apache.poi.xwpf.usermodel.XWPFTableCell;
+import org.apache.poi.xwpf.usermodel.XWPFTableRow;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTBody;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTPageMar;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTPageSz;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTSectPr;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.STPageOrientation;
 
 import jp.co.pm.ai.desktop.dispatch.DispatchInteractiveRollUnitSupport;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchNormalizer;
@@ -37,6 +58,15 @@ final class Stage2NextDayRollDispatchDialogSupport {
 
     static final ButtonType COPY_HTML =
             new ButtonType("HTMLコピー", ButtonBar.ButtonData.LEFT);
+
+    static final ButtonType EXPORT_WORD =
+            new ButtonType("Word出力", ButtonBar.ButtonData.LEFT);
+
+    /** A4 横向きの幅 (twips)。297 mm。 */
+    static final long A4_LANDSCAPE_WIDTH_TWIPS = 16838L;
+
+    /** A4 横向きの高さ (twips)。210 mm。 */
+    static final long A4_LANDSCAPE_HEIGHT_TWIPS = 11906L;
 
     private Stage2NextDayRollDispatchDialogSupport() {}
 
@@ -332,19 +362,23 @@ final class Stage2NextDayRollDispatchDialogSupport {
         if (theme.dialogPaneStyle() != null && !theme.dialogPaneStyle().isBlank()) {
             dialog.getDialogPane().setStyle(theme.dialogPaneStyle());
         }
-        dialog.getDialogPane().getButtonTypes().setAll(COPY_HTML, ButtonType.OK, ButtonType.CANCEL);
-        Node copyHtmlButton = dialog.getDialogPane().lookupButton(COPY_HTML);
-        if (copyHtmlButton instanceof javafx.scene.control.Button copyBtn) {
-            copyBtn.setDefaultButton(false);
-            copyBtn.setCancelButton(false);
-            copyBtn.addEventFilter(
-                    javafx.event.ActionEvent.ACTION,
-                    ev -> {
-                        ev.consume();
-                        commitPendingTableCellEdit(table);
-                        ClipboardTableSupport.copyHtmlTableOnly(toClipboardHtml(theme, rows));
-                    });
-        }
+        dialog.getDialogPane()
+                .getButtonTypes()
+                .setAll(COPY_HTML, EXPORT_WORD, ButtonType.OK, ButtonType.CANCEL);
+        wireNonClosingButton(
+                dialog,
+                COPY_HTML,
+                () -> {
+                    commitPendingTableCellEdit(table);
+                    ClipboardTableSupport.copyHtmlTableOnly(toClipboardHtml(theme, rows));
+                });
+        wireNonClosingButton(
+                dialog,
+                EXPORT_WORD,
+                () -> {
+                    commitPendingTableCellEdit(table);
+                    exportWordDocument(dialog, theme, rows);
+                });
         Node okButton = dialog.getDialogPane().lookupButton(ButtonType.OK);
         if (okButton instanceof javafx.scene.control.Button okBtn) {
             okBtn.setDefaultButton(true);
@@ -376,6 +410,180 @@ final class Stage2NextDayRollDispatchDialogSupport {
             out.add(toEntry.apply(r));
         }
         return Optional.of(out);
+    }
+
+    private static void wireNonClosingButton(Dialog<?> dialog, ButtonType type, Runnable action) {
+        Node node = dialog.getDialogPane().lookupButton(type);
+        if (node instanceof javafx.scene.control.Button btn) {
+            btn.setDefaultButton(false);
+            btn.setCancelButton(false);
+            btn.addEventFilter(
+                    javafx.event.ActionEvent.ACTION,
+                    ev -> {
+                        ev.consume();
+                        action.run();
+                    });
+        }
+    }
+
+    private static void exportWordDocument(
+            Dialog<?> dialog, Theme theme, List<? extends RowModel> rows) {
+        FileChooser chooser = new FileChooser();
+        chooser.setTitle("Word文書として保存");
+        chooser.getExtensionFilters()
+                .add(new FileChooser.ExtensionFilter("Word 文書 (*.docx)", "*.docx"));
+        chooser.setInitialFileName(defaultWordFileName(theme));
+        Window owner =
+                dialog.getDialogPane().getScene() != null
+                        ? dialog.getDialogPane().getScene().getWindow()
+                        : null;
+        java.io.File chosen = chooser.showSaveDialog(owner);
+        if (chosen == null) {
+            return;
+        }
+        Path dest = chosen.toPath();
+        String name = dest.getFileName() != null ? dest.getFileName().toString() : "";
+        if (!name.toLowerCase(Locale.ROOT).endsWith(".docx")) {
+            dest = dest.resolveSibling(name + ".docx");
+        }
+        try {
+            writeA4LandscapeDocx(theme, rows, dest);
+            if (Desktop.isDesktopSupported()) {
+                Desktop.getDesktop().open(dest.toFile());
+            }
+        } catch (Exception ex) {
+            showValidationError(
+                    dialog,
+                    "出力エラー",
+                    "Word文書を保存できませんでした。",
+                    ex.getMessage() != null ? ex.getMessage() : ex.getClass().getSimpleName());
+        }
+    }
+
+    static String defaultWordFileName(Theme theme) {
+        String title = theme != null && theme.title() != null ? theme.title() : "翌日の配台量";
+        String cleaned = title.replaceAll("[\\\\/:*?\"<>|]", "_").strip();
+        if (cleaned.isBlank()) {
+            cleaned = "翌日の配台量";
+        }
+        return cleaned + ".docx";
+    }
+
+    static void writeA4LandscapeDocx(Theme theme, List<? extends RowModel> rows, Path dest)
+            throws IOException {
+        if (dest == null) {
+            throw new IOException("保存先が指定されていません。");
+        }
+        Path parent = dest.toAbsolutePath().getParent();
+        if (parent != null) {
+            Files.createDirectories(parent);
+        }
+        Theme t = theme != null ? theme : emptyTheme();
+        List<? extends RowModel> safe = rows != null ? rows : List.of();
+        boolean includeReason =
+                safe.stream().anyMatch(r -> r != null && !r.targetReason().isBlank());
+        List<HtmlColumn> columns = clipboardColumns(t, includeReason);
+        int dataRows = 0;
+        for (RowModel row : safe) {
+            if (row != null) {
+                dataRows++;
+            }
+        }
+        try (XWPFDocument doc = new XWPFDocument()) {
+            applyA4LandscapeSection(doc);
+            addWordParagraph(doc, t.title(), 16, true, false);
+            addWordParagraph(doc, t.headerText(), 11, false, false);
+            addWordParagraph(doc, t.hintText(), 10, false, true);
+            int colCount = Math.max(1, columns.size());
+            XWPFTable table = doc.createTable(Math.max(1, 1 + dataRows), colCount);
+            styleWordTable(table);
+            XWPFTableRow headerRow = table.getRow(0);
+            for (int c = 0; c < columns.size(); c++) {
+                setWordCell(headerRow.getCell(c), columns.get(c).header(), true, columns.get(c).alignCss());
+            }
+            int r = 1;
+            for (RowModel row : safe) {
+                if (row == null) {
+                    continue;
+                }
+                XWPFTableRow dataRow = table.getRow(r++);
+                for (int c = 0; c < columns.size(); c++) {
+                    setWordCell(
+                            dataRow.getCell(c),
+                            columns.get(c).cell(row),
+                            false,
+                            columns.get(c).alignCss());
+                }
+            }
+            try (OutputStream out = Files.newOutputStream(dest)) {
+                doc.write(out);
+            }
+        }
+    }
+
+    private static void applyA4LandscapeSection(XWPFDocument doc) {
+        CTBody body = doc.getDocument().getBody();
+        CTSectPr sectPr = body.isSetSectPr() ? body.getSectPr() : body.addNewSectPr();
+        CTPageSz pageSz = sectPr.isSetPgSz() ? sectPr.getPgSz() : sectPr.addNewPgSz();
+        pageSz.setOrient(STPageOrientation.LANDSCAPE);
+        pageSz.setW(BigInteger.valueOf(A4_LANDSCAPE_WIDTH_TWIPS));
+        pageSz.setH(BigInteger.valueOf(A4_LANDSCAPE_HEIGHT_TWIPS));
+        CTPageMar margin = sectPr.isSetPgMar() ? sectPr.getPgMar() : sectPr.addNewPgMar();
+        BigInteger narrow = BigInteger.valueOf(720);
+        margin.setLeft(narrow);
+        margin.setRight(narrow);
+        margin.setTop(narrow);
+        margin.setBottom(narrow);
+    }
+
+    private static void addWordParagraph(
+            XWPFDocument doc, String text, int fontPt, boolean bold, boolean gray) {
+        if (text == null || text.isBlank()) {
+            return;
+        }
+        XWPFParagraph p = doc.createParagraph();
+        XWPFRun run = p.createRun();
+        run.setFontFamily("Meiryo UI");
+        run.setFontSize(fontPt);
+        run.setBold(bold);
+        if (gray) {
+            run.setColor("666666");
+        }
+        run.setText(text);
+    }
+
+    private static void styleWordTable(XWPFTable table) {
+        table.setWidth("100%");
+        table.setTopBorder(XWPFTable.XWPFBorderType.SINGLE, 4, 0, "000000");
+        table.setBottomBorder(XWPFTable.XWPFBorderType.SINGLE, 4, 0, "000000");
+        table.setLeftBorder(XWPFTable.XWPFBorderType.SINGLE, 4, 0, "000000");
+        table.setRightBorder(XWPFTable.XWPFBorderType.SINGLE, 4, 0, "000000");
+        table.setInsideHBorder(XWPFTable.XWPFBorderType.SINGLE, 4, 0, "000000");
+        table.setInsideVBorder(XWPFTable.XWPFBorderType.SINGLE, 4, 0, "000000");
+    }
+
+    private static void setWordCell(
+            XWPFTableCell cell, String text, boolean header, String alignCss) {
+        if (cell == null) {
+            return;
+        }
+        for (int i = cell.getParagraphs().size() - 1; i >= 0; i--) {
+            cell.removeParagraph(i);
+        }
+        XWPFParagraph p = cell.addParagraph();
+        if (alignCss != null && alignCss.contains("right")) {
+            p.setAlignment(ParagraphAlignment.RIGHT);
+        } else if (alignCss != null && alignCss.contains("center")) {
+            p.setAlignment(ParagraphAlignment.CENTER);
+        }
+        XWPFRun run = p.createRun();
+        run.setFontFamily("Meiryo UI");
+        run.setFontSize(9);
+        run.setBold(header);
+        run.setText(text != null ? text : "");
+        if (header) {
+            cell.setColor("D9E1F2");
+        }
     }
 
     static String toClipboardHtml(Theme theme, List<? extends RowModel> rows) {
