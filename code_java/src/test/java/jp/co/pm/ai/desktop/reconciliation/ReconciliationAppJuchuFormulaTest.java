@@ -8,6 +8,7 @@ import java.io.ByteArrayOutputStream;
 import java.lang.reflect.Method;
 import java.util.Map;
 import org.apache.poi.ss.usermodel.CellCopyPolicy;
+import org.apache.poi.ss.usermodel.CellStyle;
 import org.apache.poi.ss.usermodel.CellType;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.util.CellRangeAddress;
@@ -17,6 +18,7 @@ import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.Test;
 import org.openxmlformats.schemas.spreadsheetml.x2006.main.STCellFormulaType;
+import org.openxmlformats.schemas.spreadsheetml.x2006.main.STCellType;
 
 class ReconciliationAppJuchuFormulaTest {
 
@@ -189,6 +191,82 @@ class ReconciliationAppJuchuFormulaTest {
         }
     }
 
+    /**
+     * Excel が「数式を文字列として表示」する典型: 先行する {@code t="s"} のまま {@code <f>} だけ足す。
+     * 書き込み後は配列数式であり、共有文字列型が残ってはならない。
+     */
+    @Test
+    void writeJuchuAoFormula_convertsStringStoredFormulaToArrayFormula() throws Exception {
+        int ao = JuchuSheetColumnLayout.columnLetterToIndex("AO");
+        byte[] bytes;
+        try (XSSFWorkbook wb = new XSSFWorkbook()) {
+            XSSFSheet sheet = wb.createSheet("受注ﾌｧｲﾙ");
+            XSSFRow row = sheet.createRow(453);
+            XSSFCell asText = row.createCell(ao);
+            asText.setCellValue(
+                    "=SUM(IFERROR(VALUE(TEXTSPLIT(INDEX(H:H,$AI454),CHAR(10))),0)"
+                            + "*IFERROR(VALUE(TEXTSPLIT(INDEX(L:L,$AM454),CHAR(10))),0))");
+
+            ReconciliationApp.writeJuchuAoTextsSplitSumArrayFormula(row, 454);
+
+            XSSFCell written = row.getCell(ao);
+            assertAoArrayFormula(written, 454);
+            assertAoFormulaNotStoredAsSharedString(written);
+            try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+                wb.write(out);
+                bytes = out.toByteArray();
+            }
+        }
+        try (XSSFWorkbook reloaded = new XSSFWorkbook(new ByteArrayInputStream(bytes))) {
+            XSSFCell reloadedCell = reloaded.getSheet("受注ﾌｧｲﾙ").getRow(453).getCell(ao);
+            assertAoArrayFormula(reloadedCell, 454);
+            assertAoFormulaNotStoredAsSharedString(reloadedCell);
+        }
+    }
+
+    /** テキスト書式 {@code @} のセルへ数式を書くと、Excel は計算せず数式文字列を表示する。 */
+    @Test
+    void writeJuchuAoFormula_replacesExcelTextNumberFormat() throws Exception {
+        int ao = JuchuSheetColumnLayout.columnLetterToIndex("AO");
+        try (XSSFWorkbook wb = new XSSFWorkbook()) {
+            XSSFSheet sheet = wb.createSheet("受注ﾌｧｲﾙ");
+            CellStyle textStyle = wb.createCellStyle();
+            textStyle.setDataFormat((short) 49);
+            XSSFRow row = sheet.createRow(453);
+            XSSFCell cell = row.createCell(ao);
+            cell.setCellStyle(textStyle);
+            cell.setCellValue("=SUM(TEXTSPLIT(A1,CHAR(10)))");
+
+            ReconciliationApp.writeJuchuAoTextsSplitSumArrayFormula(row, 454);
+
+            XSSFCell written = row.getCell(ao);
+            assertAoArrayFormula(written, 454);
+            assertAoFormulaNotStoredAsSharedString(written);
+            String format = written.getCellStyle().getDataFormatString();
+            assertTrue(!isExcelTextNumberFormat(format), format);
+        }
+    }
+
+    @Test
+    void repairJuchuAoFormulasMissingXlfnPrefix_rewritesStringStoredFormulaRows() throws Exception {
+        int ao = JuchuSheetColumnLayout.columnLetterToIndex("AO");
+        try (XSSFWorkbook wb = new XSSFWorkbook()) {
+            XSSFSheet sheet = wb.createSheet("受注ﾌｧｲﾙ");
+            XSSFRow row = sheet.createRow(453);
+            row.createCell(ao)
+                    .setCellValue(
+                            "=SUM(IFERROR(VALUE(TEXTSPLIT(受注ﾌｧｲﾙ!$AH454,CHAR(10))),0)"
+                                    + "*IFERROR(VALUE(TEXTSPLIT(受注ﾌｧｲﾙ!$AM454,CHAR(10))),0))");
+
+            int repaired =
+                    ReconciliationApp.repairJuchuAoFormulasMissingXlfnPrefix(sheet, 3, 453);
+
+            assertEquals(1, repaired);
+            assertAoArrayFormula(row.getCell(ao), 454);
+            assertAoFormulaNotStoredAsSharedString(row.getCell(ao));
+        }
+    }
+
     @Test
     void applyDefaultJuchuFormula_overwritesImplicitIntersectionFormula() throws Exception {
         int ao = JuchuSheetColumnLayout.columnLetterToIndex("AO");
@@ -225,5 +303,31 @@ class ReconciliationAppJuchuFormulaTest {
         assertEquals(ReconciliationApp.buildJuchuAoTextsSplitSumFormula(excelRow), formula);
         assertTrue(!formula.contains("@TEXTSPLIT"), formula);
         assertEquals(STCellFormulaType.ARRAY, cell.getCTCell().getF().getT());
+    }
+
+    private static void assertAoFormulaNotStoredAsSharedString(XSSFCell cell) {
+        assertTrue(cell.getCTCell().isSetF());
+        if (cell.getCTCell().isSetT()) {
+            assertTrue(
+                    cell.getCTCell().getT() != STCellType.S
+                            && cell.getCTCell().getT() != STCellType.STR
+                            && cell.getCTCell().getT() != STCellType.INLINE_STR,
+                    String.valueOf(cell.getCTCell().getT()));
+        }
+        assertEquals(CellType.FORMULA, cell.getCellType());
+        if (cell.getCachedFormulaResultType() == CellType.STRING) {
+            String cached = cell.getStringCellValue();
+            assertTrue(
+                    cached == null || cached.isBlank() || !cached.contains("TEXTSPLIT"),
+                    cached);
+        }
+    }
+
+    private static boolean isExcelTextNumberFormat(String format) {
+        if (format == null) {
+            return false;
+        }
+        String trimmed = format.trim();
+        return "@".equals(trimmed) || "text".equalsIgnoreCase(trimmed);
     }
 }

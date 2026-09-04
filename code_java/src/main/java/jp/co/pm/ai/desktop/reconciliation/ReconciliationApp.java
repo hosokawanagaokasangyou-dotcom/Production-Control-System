@@ -25,6 +25,7 @@ import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.ss.usermodel.Cell;
+import org.openxmlformats.schemas.spreadsheetml.x2006.main.STCellType;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -6439,8 +6440,49 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
     }
 
     /**
-     * データ行の AO 列を走査し、{@link #isJuchuAoFormulaMissingXlfnPrefix(Cell)} に該当する数式を
-     * 正しい配列数式で書き直す。戻り値は書き直した行数。
+     * AO 列の値が TEXTSPLIT 積和の数式テキストか（先頭 {@code =} の有無は問わない）。
+     * 文字列セルへ書き込まれた場合、Excel は計算せず数式をそのまま表示する。
+     */
+    static boolean looksLikeJuchuAoTextsSplitFormula(String text) {
+        if (text == null || text.isBlank()) {
+            return false;
+        }
+        String body = text.strip();
+        if (body.startsWith("=")) {
+            body = body.substring(1);
+        }
+        String upper = body.toUpperCase(Locale.ROOT);
+        return upper.contains("TEXTSPLIT(") && upper.contains("SUM(");
+    }
+
+    /**
+     * AO 列が数式ではなく文字列として TEXTSPLIT 積和を持っているか。
+     * 数式セルでもキャッシュ結果が数式テキストの共有文字列なら同様に修復対象。
+     */
+    static boolean isJuchuAoFormulaStoredAsText(Cell cell) {
+        if (cell == null) {
+            return false;
+        }
+        if (cell.getCellType() == CellType.STRING) {
+            return looksLikeJuchuAoTextsSplitFormula(cell.getStringCellValue());
+        }
+        if (cell.getCellType() != CellType.FORMULA) {
+            return false;
+        }
+        try {
+            if (cell.getCachedFormulaResultType() != CellType.STRING) {
+                return false;
+            }
+            return looksLikeJuchuAoTextsSplitFormula(cell.getStringCellValue());
+        } catch (RuntimeException e) {
+            return false;
+        }
+    }
+
+    /**
+     * データ行の AO 列を走査し、{@link #isJuchuAoFormulaMissingXlfnPrefix(Cell)} または
+     * {@link #isJuchuAoFormulaStoredAsText(Cell)} に該当するセルを正しい配列数式で書き直す。
+     * 戻り値は書き直した行数。
      */
     static int repairJuchuAoFormulasMissingXlfnPrefix(
             Sheet sheet, int firstDataRowIndex0, int lastDataRowIndex0) {
@@ -6453,7 +6495,8 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
             if (row == null) {
                 continue;
             }
-            if (!isJuchuAoFormulaMissingXlfnPrefix(row.getCell(JUCHU_AO_COLUMN_INDEX))) {
+            Cell aoCell = row.getCell(JUCHU_AO_COLUMN_INDEX);
+            if (!isJuchuAoFormulaMissingXlfnPrefix(aoCell) && !isJuchuAoFormulaStoredAsText(aoCell)) {
                 continue;
             }
             writeJuchuAoTextsSplitSumArrayFormula(row, r + 1);
@@ -6463,7 +6506,8 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
     }
 
     /**
-     * AO 列へ TEXTSPLIT 積和を配列数式として書き込む。テンプレート複製の通常数式や {@code @TEXTSPLIT} を上書きする。
+     * AO 列へ TEXTSPLIT 積和を配列数式として書き込む。テンプレート複製の通常数式や {@code @TEXTSPLIT}、
+     * 文字列として入った数式テキストを上書きする。
      */
     static void writeJuchuAoTextsSplitSumArrayFormula(Row row, int excelRow1Based) {
         if (row == null || excelRow1Based < 1) {
@@ -6475,14 +6519,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         }
         String formula = buildJuchuAoTextsSplitSumFormula(excelRow1Based);
         int col = JUCHU_AO_COLUMN_INDEX;
-        Cell cell = row.getCell(col);
-        if (cell != null && cell.getCellType() == CellType.FORMULA) {
-            try {
-                sheet.removeArrayFormula(cell);
-            } catch (IllegalArgumentException | IllegalStateException ignored) {
-                cell.setBlank();
-            }
-        }
+        clearJuchuAoCellForFormulaWrite(row, col, sheet);
         if (row.getCell(col) == null) {
             row.createCell(col);
         }
@@ -6490,11 +6527,77 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                 new CellRangeAddress(row.getRowNum(), row.getRowNum(), col, col);
         sheet.setArrayFormula(formula, range);
         Cell written = row.getCell(col);
-        if (written instanceof XSSFCell xssfCell
-                && xssfCell.getCTCell() != null
-                && xssfCell.getCTCell().getF() != null) {
-            xssfCell.getCTCell().getF().setAca(true);
+        if (written instanceof XSSFCell xssfCell && xssfCell.getCTCell() != null) {
+            stripSharedStringTypeFromFormulaCell(xssfCell);
+            if (xssfCell.getCTCell().getF() != null) {
+                xssfCell.getCTCell().getF().setAca(true);
+            }
         }
+        replaceExcelTextNumberFormatIfNeeded(written);
+    }
+
+    /**
+     * {@code setArrayFormula} は既存の {@code t="s"} を消さない。文字列セルの上に {@code <f>} だけ足すと
+     * Excel はキャッシュされた数式テキストを表示する。書き込み前にセルを空にする。
+     */
+    private static void clearJuchuAoCellForFormulaWrite(Row row, int col, Sheet sheet) {
+        Cell cell = row.getCell(col);
+        if (cell == null) {
+            return;
+        }
+        if (cell.getCellType() == CellType.FORMULA) {
+            try {
+                sheet.removeArrayFormula(cell);
+            } catch (IllegalArgumentException | IllegalStateException ignored) {
+                cell.setBlank();
+            }
+            return;
+        }
+        cell.setBlank();
+    }
+
+    private static void stripSharedStringTypeFromFormulaCell(XSSFCell cell) {
+        if (cell == null || cell.getCTCell() == null || !cell.getCTCell().isSetT()) {
+            return;
+        }
+        STCellType.Enum t = cell.getCTCell().getT();
+        if (t == STCellType.S || t == STCellType.STR || t == STCellType.INLINE_STR) {
+            cell.getCTCell().unsetT();
+            if (cell.getCTCell().isSetV()) {
+                cell.getCTCell().unsetV();
+            }
+        }
+    }
+
+    /** Excel の表示形式 {@code @}（文字列）だと、数式セルでも計算せず数式テキストを表示する。 */
+    private static void replaceExcelTextNumberFormatIfNeeded(Cell cell) {
+        if (cell == null) {
+            return;
+        }
+        CellStyle style = cell.getCellStyle();
+        if (!isExcelTextNumberFormat(style)) {
+            return;
+        }
+        Workbook wb = cell.getSheet().getWorkbook();
+        CellStyle numeric = wb.createCellStyle();
+        numeric.cloneStyleFrom(style);
+        numeric.setDataFormat(wb.createDataFormat().getFormat("#,##0"));
+        cell.setCellStyle(numeric);
+    }
+
+    private static boolean isExcelTextNumberFormat(CellStyle style) {
+        if (style == null) {
+            return false;
+        }
+        if (style.getDataFormat() == 49) {
+            return true;
+        }
+        String fmt = style.getDataFormatString();
+        if (fmt == null) {
+            return false;
+        }
+        String trimmed = fmt.trim();
+        return "@".equals(trimmed) || "text".equalsIgnoreCase(trimmed);
     }
 
     private static void setJuchuFormulaIfMissing(
