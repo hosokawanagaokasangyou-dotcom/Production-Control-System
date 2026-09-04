@@ -7,7 +7,6 @@ import java.math.BigInteger;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
-import java.util.Locale;
 import java.util.Optional;
 import java.util.function.Function;
 
@@ -31,7 +30,6 @@ import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
-import javafx.stage.FileChooser;
 import javafx.stage.Modality;
 import javafx.stage.Window;
 
@@ -48,6 +46,7 @@ import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTPageSz;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTSectPr;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.STPageOrientation;
 
+import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.dispatch.DispatchInteractiveRollUnitSupport;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchNormalizer;
 import jp.co.pm.ai.desktop.dispatch.Stage2InProgressNextDayRollInput;
@@ -428,24 +427,7 @@ final class Stage2NextDayRollDispatchDialogSupport {
 
     private static void exportWordDocument(
             Dialog<?> dialog, Theme theme, List<? extends RowModel> rows) {
-        FileChooser chooser = new FileChooser();
-        chooser.setTitle("Word文書として保存");
-        chooser.getExtensionFilters()
-                .add(new FileChooser.ExtensionFilter("Word 文書 (*.docx)", "*.docx"));
-        chooser.setInitialFileName(defaultWordFileName(theme));
-        Window owner =
-                dialog.getDialogPane().getScene() != null
-                        ? dialog.getDialogPane().getScene().getWindow()
-                        : null;
-        java.io.File chosen = chooser.showSaveDialog(owner);
-        if (chosen == null) {
-            return;
-        }
-        Path dest = chosen.toPath();
-        String name = dest.getFileName() != null ? dest.getFileName().toString() : "";
-        if (!name.toLowerCase(Locale.ROOT).endsWith(".docx")) {
-            dest = dest.resolveSibling(name + ".docx");
-        }
+        Path dest = resolveExportWordPath(theme);
         try {
             writeA4LandscapeDocx(theme, rows, dest);
             if (Desktop.isDesktopSupported()) {
@@ -458,6 +440,10 @@ final class Stage2NextDayRollDispatchDialogSupport {
                     "Word文書を保存できませんでした。",
                     ex.getMessage() != null ? ex.getMessage() : ex.getClass().getSimpleName());
         }
+    }
+
+    static Path resolveExportWordPath(Theme theme) {
+        return AppPaths.resolveTempWordDocumentPath(defaultWordFileName(theme));
     }
 
     static String defaultWordFileName(Theme theme) {

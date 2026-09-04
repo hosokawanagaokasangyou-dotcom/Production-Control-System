@@ -37,6 +37,9 @@ public final class AppPaths {
     /** リモートデスクトップ配布用アプリ専用の PC ローカル設定ルート。 */
     public static final String REMOTE_DESKTOP_APP_HOME_DIR_NAME = ".pm-ai-desktop-rdp";
 
+    /** 一時 Word 文書のサブフォルダ（{@link #resolveDesktopAppHomeDir} 配下）。 */
+    public static final String TEMP_WORD_DIR = "temp-word";
+
     private static volatile String desktopAppHomeDirName = DEFAULT_DESKTOP_APP_HOME_DIR_NAME;
 
     public static final String KEY_PM_AI_PYTHON = "PM_AI_PYTHON";
@@ -2448,6 +2451,20 @@ public final class AppPaths {
     /** セッション永続化 JSON（{@code session-state.json}）。 */
     public static Path resolveSessionStateStorePath() {
         return resolveDesktopAppHomeDir().resolve("session-state.json");
+    }
+
+    /** 一時 Word 文書フォルダ（設定 JSON と同じ {@link #resolveDesktopAppHomeDir} のサブフォルダ）。 */
+    public static Path resolveTempWordDir() {
+        return resolveDesktopAppHomeDir().resolve(TEMP_WORD_DIR).toAbsolutePath().normalize();
+    }
+
+    /** {@link #resolveTempWordDir} 配下の一時 Word ファイル。 */
+    public static Path resolveTempWordDocumentPath(String fileName) {
+        String name = fileName != null ? fileName.strip() : "";
+        if (name.isEmpty()) {
+            name = "document.docx";
+        }
+        return resolveTempWordDir().resolve(name).toAbsolutePath().normalize();
     }
 
     /** ユーザー管理者タブ解錠の PC ローカル資格情報（{@code admin-tab-unlock.json}）。 */

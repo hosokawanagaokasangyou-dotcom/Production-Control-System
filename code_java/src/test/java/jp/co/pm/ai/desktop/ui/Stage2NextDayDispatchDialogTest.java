@@ -30,6 +30,7 @@ import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTPageSz;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTSectPr;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.STPageOrientation;
 
+import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.planning.stage2.core.Stage2PlanRowDispatchQtyMetrics;
 
 class Stage2NextDayDispatchDialogTest {
@@ -389,5 +390,19 @@ class Stage2NextDayDispatchDialogTest {
         assertTrue(
                 Stage2NextDayRollDispatchDialogSupport.EXPORT_WORD.getButtonData().isDefaultButton()
                         == false);
+    }
+
+    @Test
+    void resolveExportWordPath_isUnderDesktopAppHomeTempWordSubfolder() {
+        Path dest =
+                Stage2NextDayRollDispatchDialogSupport.resolveExportWordPath(
+                        Stage2NextDayDispatchDialog.THEME);
+        Path home = AppPaths.resolveDesktopAppHomeDir();
+        Path expectedDir = home.resolve(AppPaths.TEMP_WORD_DIR);
+        assertEquals(expectedDir, dest.getParent());
+        assertEquals(
+                AppPaths.resolveSessionStateStorePath().getParent(),
+                dest.getParent().getParent());
+        assertEquals("段階2 — 翌日の配台量.docx", dest.getFileName().toString());
     }
 }
