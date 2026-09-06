@@ -72,7 +72,7 @@ class StartupTabBackgroundLoadCoordinatorTest {
     }
 
     @Test
-    void cancelByUser_stopsChainAndReportsCancelled() {
+    void deferToBackgroundByUser_keepsChainActiveAndMarksLowPriority() {
         AtomicBoolean canStartup = new AtomicBoolean(true);
         AtomicBoolean canFactorySwitch = new AtomicBoolean(true);
         AtomicBoolean active = new AtomicBoolean(false);
@@ -83,9 +83,28 @@ class StartupTabBackgroundLoadCoordinatorTest {
         coordinator.scheduleIfIdle();
         assertTrue(active.get(), "読込チェーン開始で active になる");
 
-        assertTrue(coordinator.cancelByUser(), "進行中の読込を中断したら true");
-        assertFalse(active.get(), "キャンセル後は active が false");
-        assertFalse(coordinator.cancelByUser(), "既に停止しているときは false");
+        assertTrue(coordinator.deferToBackgroundByUser(), "進行中の読込を BG 継続へ切り替えたら true");
+        assertTrue(active.get(), "BG 継続後も active のまま");
+        assertTrue(coordinator.isDeferredLowPriority(), "低優先度フラグが立つ");
+        assertFalse(coordinator.deferToBackgroundByUser(), "既に BG 継続中なら false");
+    }
+
+    @Test
+    void deferToBackgroundByUser_clearedWhenCancelledForFactorySwitch() {
+        AtomicBoolean canStartup = new AtomicBoolean(true);
+        AtomicBoolean canFactorySwitch = new AtomicBoolean(true);
+        AtomicBoolean active = new AtomicBoolean(false);
+        StartupTabBackgroundLoadCoordinator coordinator =
+                new StartupTabBackgroundLoadCoordinator(
+                        new StubHost(canStartup, canFactorySwitch, active));
+
+        coordinator.scheduleIfIdle();
+        assertTrue(coordinator.deferToBackgroundByUser());
+        assertTrue(coordinator.isDeferredLowPriority());
+
+        coordinator.cancelForFactorySwitch();
+        assertFalse(active.get(), "工場切替では中断する");
+        assertFalse(coordinator.isDeferredLowPriority(), "中断で低優先度フラグも消える");
     }
 
     private static final class StubHost implements StartupTabBackgroundLoadCoordinator.Host {

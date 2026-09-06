@@ -16,8 +16,8 @@ import javafx.stage.Window;
  * 起動時の工場ワークスペース復元・環境変数照合中に表示する進捗モーダル。
  *
  * <p>ワークスペース復元・環境変数照合は必須処理のためキャンセル不可。タブ読込段階（起動後読込）だけは
- * キャンセルボタンが有効になり、読込を打ち切って工場切替などの操作へ進める。呼び出し側で必ず
- * {@link #close()} する。
+ * 「バックグラウンドで続行」が有効になり、ダイアログを閉じて読込を低優先度で継続しつつ工場切替などの
+ * 操作へ進める。呼び出し側で必ず {@link #close()} する。
  */
 public final class EnvVarsStartupCheckBusyDialog {
 
@@ -25,8 +25,9 @@ public final class EnvVarsStartupCheckBusyDialog {
     public static final String HEADER = "環境変数を確認しています";
     public static final String HEADER_BACKGROUND_LOAD = "タブデータを読み込んでいます";
 
-    public static final String CANCEL_TEXT = "読込をキャンセル";
-    public static final String CANCEL_HINT = "キャンセルすると読込を中断し、工場切替などの操作ができます";
+    public static final String CANCEL_TEXT = "バックグラウンドで続行";
+    public static final String CANCEL_HINT =
+            "ダイアログを閉じ、読込は優先度を下げてバックグラウンドで継続します。工場切替などの操作ができます";
     public static final String CANCEL_HINT_BLOCKED = "必須チェック中はキャンセルできません";
 
     public static final String STATUS_RESTORE_WORKSPACE = "工場ワークスペースを復元しています…";

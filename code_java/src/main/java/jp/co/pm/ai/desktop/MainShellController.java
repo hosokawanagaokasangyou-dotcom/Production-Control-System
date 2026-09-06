@@ -780,7 +780,7 @@ public final class MainShellController
     /** 起動 BG 読込完了後に進捗モーダルを閉じる。 */
     private volatile boolean startupAwaitingBackgroundLoadBeforeModalClose;
 
-    /** 起動時チェックをユーザーがキャンセルした（以後の起動時案内は出さない）。 */
+    /** 起動時チェックをユーザーが閉じた（以後の起動時案内は出さない）。読込自体は BG 継続しうる。 */
     private volatile boolean startupCheckCancelledByUser;
 
     /** 工場切替中の進捗モーダル（表示中のみ非 null）。 */
@@ -5213,10 +5213,10 @@ public final class MainShellController
     }
 
     /**
-     * 起動時チェックの「読込をキャンセル」。タブ読込段階のみ有効。
+     * 起動時チェックの「バックグラウンドで続行」。タブ読込段階のみ有効。
      *
-     * <p>起動後バックグラウンド読込・勤怠系 Python・依頼書照合読込を打ち切り、進捗モーダルを閉じて
-     * 工場切替などの操作ができる状態にする。
+     * <p>進捗モーダルを閉じて工場切替などの操作を可能にする。読込チェーン自体は止めず、優先度を下げて
+     * バックグラウンドで継続する。工場切替開始時は別途 {@code cancelForFactorySwitch} で中断する。
      */
     private void cancelStartupCheckByUser() {
         if (!startupAwaitingBackgroundLoadBeforeModalClose
@@ -5225,21 +5225,24 @@ public final class MainShellController
             return;
         }
         startupCheckCancelledByUser = true;
-        appendLog("[startup] 起動時チェックの読込をキャンセルしました（工場切替などの操作が可能）");
+        appendLog(
+                "[startup] 起動時チェックを閉じ、読込を優先度を下げてバックグラウンド継続します"
+                        + "（工場切替などの操作が可能）");
         if (startupTabBackgroundLoad != null) {
-            startupTabBackgroundLoad.cancelByUser();
+            startupTabBackgroundLoad.deferToBackgroundByUser();
         }
-        PythonProcessRunner.cancelAttendanceProcesses();
-        if (requestFormInputTabController != null) {
-            requestFormInputTabController.cancelBackgroundDataReload();
-        }
-        onStartupBackgroundLoadFinished();
-        if (isEnvVarsStartupCheckBusyShowing()) {
+        if (isEnvVarsStartupCheckBusyShowing() || startupAwaitingBackgroundLoadBeforeModalClose) {
             finishStartupSequenceProgressAndPrompt();
+        }
+        if (factorySwitchAwaitingBackgroundLoadBeforeModalClose) {
+            factorySwitchAwaitingBackgroundLoadBeforeModalClose = false;
+            endFactorySiteSwitchBusy();
+            selectRunTabAfterBusyProgressIfAllowed();
         }
         if (!factorySiteSwitchInProgress) {
             setFactorySiteCombosDisabled(false);
         }
+        refreshGlobalStatusBar();
     }
 
     private boolean isFactorySiteSwitchBusyShowing() {

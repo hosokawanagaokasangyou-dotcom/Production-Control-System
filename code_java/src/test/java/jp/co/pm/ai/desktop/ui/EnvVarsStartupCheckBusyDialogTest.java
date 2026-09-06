@@ -79,6 +79,17 @@ class EnvVarsStartupCheckBusyDialogTest {
     }
 
     @Test
+    void cancelCopy_describesBackgroundContinue() {
+        assertEquals("バックグラウンドで続行", EnvVarsStartupCheckBusyDialog.CANCEL_TEXT);
+        assertTrue(
+                EnvVarsStartupCheckBusyDialog.CANCEL_HINT.contains("バックグラウンド"),
+                "ヒントは BG 継続を説明する");
+        assertFalse(
+                EnvVarsStartupCheckBusyDialog.CANCEL_HINT.contains("中断"),
+                "ヒントは読込中断を約束しない");
+    }
+
+    @Test
     void cancel_isEnabledOnlyDuringTabLoad_andRunsHandler() throws Exception {
         AtomicReference<EnvVarsStartupCheckBusyDialog> ref = new AtomicReference<>();
         AtomicInteger cancelled = new AtomicInteger();

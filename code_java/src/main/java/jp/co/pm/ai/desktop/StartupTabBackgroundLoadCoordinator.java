@@ -51,11 +51,16 @@ final class StartupTabBackgroundLoadCoordinator {
     private static final int STEP_PIPELINE_CHECK = 6;
     private static final int STEP_COUNT = 6;
 
+    /** ユーザーがモーダルを閉じたあとのステップ間待機（UI 操作を優先）。 */
+    static final long DEFERRED_STEP_YIELD_MS = 150L;
+
     private final Host host;
     private final AtomicBoolean runScheduled = new AtomicBoolean(false);
     /** {@link #cancelForFactorySwitch()} で増加。実行中チェーンが無効になったら後続ステップを進めない。 */
     private final AtomicLong loadGeneration = new AtomicLong(0);
     private volatile long activeRunGeneration = -1L;
+    /** 起動時チェックを閉じ、低優先度で読込を継続中。 */
+    private final AtomicBoolean deferredLowPriority = new AtomicBoolean(false);
 
     StartupTabBackgroundLoadCoordinator(Host host) {
         this.host = host;
@@ -69,18 +74,31 @@ final class StartupTabBackgroundLoadCoordinator {
     }
 
     /**
-     * 起動時チェックのキャンセル操作で呼ぶ。進行中の読込チェーンを中断し、工場切替などの操作を可能にする。
+     * 起動時チェックの「バックグラウンドで続行」。読込チェーンは止めず、優先度を下げて継続する。
      *
-     * @return 進行中の読込を中断したとき {@code true}
+     * @return 進行中の読込を初めて BG 継続へ切り替えたとき {@code true}
      */
-    boolean cancelByUser() {
-        return cancel("[startup-bg] キャンセル操作でバックグラウンド読込を中断");
+    boolean deferToBackgroundByUser() {
+        if (!host.isStartupTabBackgroundLoadActive()) {
+            return false;
+        }
+        if (!deferredLowPriority.compareAndSet(false, true)) {
+            return false;
+        }
+        host.appendStartupBackgroundLog(
+                "[startup-bg] ユーザー操作により優先度を下げてバックグラウンド読込を継続");
+        return true;
+    }
+
+    boolean isDeferredLowPriority() {
+        return deferredLowPriority.get();
     }
 
     private boolean cancel(String logLine) {
         loadGeneration.incrementAndGet();
         runScheduled.set(false);
         activeRunGeneration = -1L;
+        deferredLowPriority.set(false);
         if (!host.isStartupTabBackgroundLoadActive()) {
             return false;
         }
@@ -106,6 +124,7 @@ final class StartupTabBackgroundLoadCoordinator {
         if (!runScheduled.compareAndSet(false, true)) {
             return;
         }
+        deferredLowPriority.set(false);
         activeRunGeneration = loadGeneration.get();
         host.setStartupTabBackgroundLoadActive(true);
         Platform.runLater(this::beginRemoteDesktop);
@@ -131,10 +150,10 @@ final class StartupTabBackgroundLoadCoordinator {
         host.appendStartupBackgroundLog("[startup-bg] リモートデスクトップを読込中…");
         RemoteDesktopTabController rdp = host.remoteDesktopTab();
         if (rdp == null) {
-            beginCompanyCalendar();
+            runNextStep(this::beginCompanyCalendar);
             return;
         }
-        rdp.scheduleBackgroundPreload(this::beginCompanyCalendar);
+        rdp.scheduleBackgroundPreload(() -> runNextStep(this::beginCompanyCalendar));
     }
 
     private void beginCompanyCalendar() {
@@ -145,11 +164,12 @@ final class StartupTabBackgroundLoadCoordinator {
         host.appendStartupBackgroundLog("[startup-bg] 会社カレンダーを読込中…");
         CompanyCalendarTabController tab = host.companyCalendarTab();
         if (tab == null) {
-            beginMemberAttendance();
+            runNextStep(this::beginMemberAttendance);
             return;
         }
         tab.preloadInBackground(
-                ok -> Platform.runLater(() -> finishStep("会社カレンダー", ok, this::beginMemberAttendance)));
+                ok -> Platform.runLater(
+                        () -> finishStep("会社カレンダー", ok, this::beginMemberAttendance)));
     }
 
     private void beginMemberAttendance() {
@@ -160,11 +180,12 @@ final class StartupTabBackgroundLoadCoordinator {
         host.appendStartupBackgroundLog("[startup-bg] メンバー勤怠を読込中…");
         MemberAttendanceTabController tab = host.memberAttendanceTab();
         if (tab == null) {
-            beginMachineCalendar();
+            runNextStep(this::beginMachineCalendar);
             return;
         }
         tab.preloadInBackground(
-                ok -> Platform.runLater(() -> finishStep("メンバー勤怠", ok, this::beginMachineCalendar)));
+                ok -> Platform.runLater(
+                        () -> finishStep("メンバー勤怠", ok, this::beginMachineCalendar)));
     }
 
     private void beginMachineCalendar() {
@@ -175,11 +196,12 @@ final class StartupTabBackgroundLoadCoordinator {
         host.appendStartupBackgroundLog("[startup-bg] 機械カレンダーを読込中…");
         MachineCalendarTabController tab = host.machineCalendarTab();
         if (tab == null) {
-            beginRequestFormInput();
+            runNextStep(this::beginRequestFormInput);
             return;
         }
         tab.preloadInBackground(
-                ok -> Platform.runLater(() -> finishStep("機械カレンダー", ok, this::beginRequestFormInput)));
+                ok -> Platform.runLater(
+                        () -> finishStep("機械カレンダー", ok, this::beginRequestFormInput)));
     }
 
     private void beginRequestFormInput() {
@@ -190,11 +212,12 @@ final class StartupTabBackgroundLoadCoordinator {
         host.appendStartupBackgroundLog("[startup-bg] 原本転記を読込中…");
         RequestFormInputTabController tab = host.requestFormInputTab();
         if (tab == null) {
-            beginPipelineCheck();
+            runNextStep(this::beginPipelineCheck);
             return;
         }
         tab.preloadInBackground(
-                ok -> Platform.runLater(() -> finishStep("原本転記", ok, this::beginPipelineCheck)));
+                ok -> Platform.runLater(
+                        () -> finishStep("原本転記", ok, this::beginPipelineCheck)));
     }
 
     private void beginPipelineCheck() {
@@ -218,13 +241,47 @@ final class StartupTabBackgroundLoadCoordinator {
         }
         host.appendStartupBackgroundLog(
                 "[startup-bg] " + label + (ok ? " 読込完了" : " 読込失敗（続行）"));
-        next.run();
+        runNextStep(next);
+    }
+
+    /**
+     * 次ステップへ進む。ユーザーが BG 継続へ切り替えたあとは短い yield を入れて UI を優先する。
+     */
+    private void runNextStep(Runnable next) {
+        if (next == null) {
+            return;
+        }
+        if (!deferredLowPriority.get()) {
+            next.run();
+            return;
+        }
+        Thread yielder =
+                new Thread(
+                        () -> {
+                            try {
+                                Thread.sleep(DEFERRED_STEP_YIELD_MS);
+                            } catch (InterruptedException e) {
+                                Thread.currentThread().interrupt();
+                                return;
+                            }
+                            Platform.runLater(
+                                    () -> {
+                                        if (!isRunObsolete()) {
+                                            next.run();
+                                        }
+                                    });
+                        },
+                        "startup-bg-deferred-yield");
+        yielder.setDaemon(true);
+        yielder.setPriority(Thread.MIN_PRIORITY);
+        yielder.start();
     }
 
     private void completeAll() {
         if (isRunObsolete()) {
             return;
         }
+        deferredLowPriority.set(false);
         host.setStartupTabBackgroundLoadActive(false);
         host.setStartupBackgroundLoadStatus("");
         host.appendStartupBackgroundLog("[startup-bg] 起動後バックグラウンド読込完了");
