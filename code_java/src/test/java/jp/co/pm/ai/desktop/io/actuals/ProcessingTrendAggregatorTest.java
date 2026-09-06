@@ -396,4 +396,71 @@ class ProcessingTrendAggregatorTest {
                 ProcessingTrendAggregator.normKey("SEC機 湖南"), ProcessingTrendAggregator.normKey("SEC機\u3000\u3000湖南"));
         Assertions.assertEquals("", ProcessingTrendAggregator.normKey("  "));
     }
+
+    @Test
+    void rollUpMonthly_aggregatesDaysIntoMonthsAcrossYears() {
+        LocalDate start = LocalDate.of(2025, 12, 15);
+        LocalDate end = LocalDate.of(2026, 2, 10);
+        Filter f = new Filter(start, end, PlanSource.ALADDIN, null, null);
+        LocalDate today = LocalDate.of(2026, 1, 10);
+
+        // ダミー日次データ: 12月(17日), 1月(31日), 2月(10日)
+        List<DayPoint> days = new java.util.ArrayList<>();
+        double actualCum = 0;
+        double planCum = 0;
+        double projCum = 0;
+        for (LocalDate d = start; !d.isAfter(end); d = d.plusDays(1)) {
+            double act = d.getMonthValue() == 12 ? 10.0 : (d.getMonthValue() == 1 ? 20.0 : 5.0);
+            double pl = 15.0;
+            actualCum += act;
+            planCum += pl;
+            boolean usePlan = !d.isBefore(today);
+            projCum += (d.isBefore(today) ? act : (d.equals(today) ? Math.max(act, pl) : pl));
+            days.add(new DayPoint(d, act, pl, actualCum, planCum, projCum, usePlan));
+        }
+
+        Result daily =
+                new Result(
+                        days, actualCum, planCum, 500.0, 400.0, 300.0, actualCum + 100.0,
+                        today, 10, 10, start, end, List.of("テスト注意"));
+
+        ProcessingTrendAggregator.MonthlyResult mr =
+                ProcessingTrendAggregator.rollUpMonthly(daily, f, today);
+
+        Assertions.assertEquals(3, mr.months().size());
+
+        ProcessingTrendAggregator.MonthPoint m1 = mr.months().get(0); // 2025-12
+        Assertions.assertEquals(java.time.YearMonth.of(2025, 12), m1.month());
+        Assertions.assertEquals(17, m1.daysInBucket());
+        Assertions.assertTrue(m1.incomplete());
+        Assertions.assertFalse(m1.isCurrentMonth());
+        Assertions.assertFalse(m1.usesPlanForProjection());
+        Assertions.assertEquals(170.0, m1.actualM(), 1e-9);
+        Assertions.assertEquals(17 * 15.0, m1.planM(), 1e-9);
+        Assertions.assertEquals(170.0 - (17 * 15.0), m1.diffM(), 1e-9);
+
+        ProcessingTrendAggregator.MonthPoint m2 = mr.months().get(1); // 2026-01
+        Assertions.assertEquals(java.time.YearMonth.of(2026, 1), m2.month());
+        Assertions.assertEquals(31, m2.daysInBucket());
+        Assertions.assertFalse(m2.incomplete());
+        Assertions.assertTrue(m2.isCurrentMonth());
+        Assertions.assertTrue(m2.usesPlanForProjection());
+        Assertions.assertEquals(31 * 20.0, m2.actualM(), 1e-9);
+
+        ProcessingTrendAggregator.MonthPoint m3 = mr.months().get(2); // 2026-02
+        Assertions.assertEquals(java.time.YearMonth.of(2026, 2), m3.month());
+        Assertions.assertEquals(10, m3.daysInBucket());
+        Assertions.assertTrue(m3.incomplete());
+        Assertions.assertFalse(m3.isCurrentMonth());
+        Assertions.assertTrue(m3.usesPlanForProjection());
+
+        // 累計が最終月で日次Resultと一致
+        Assertions.assertEquals(daily.actualCumAtEnd(), m3.actualCumM(), 1e-9);
+        Assertions.assertEquals(daily.planTotalM(), m3.planCumM(), 1e-9);
+        Assertions.assertEquals(daily.actualTotalM(), mr.actualTotalM(), 1e-9);
+        Assertions.assertEquals(daily.planTotalM(), mr.planTotalM(), 1e-9);
+        Assertions.assertEquals(daily.projectedTotalM(), mr.projectedTotalM(), 1e-9);
+        Assertions.assertEquals(start, mr.periodFrom());
+        Assertions.assertEquals(end, mr.periodTo());
+    }
 }

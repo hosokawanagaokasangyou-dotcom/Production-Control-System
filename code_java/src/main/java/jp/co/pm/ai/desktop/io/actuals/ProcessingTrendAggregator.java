@@ -4,6 +4,7 @@ import java.text.Collator;
 import java.text.Normalizer;
 import java.time.DateTimeException;
 import java.time.LocalDate;
+import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -189,6 +190,117 @@ public final class ProcessingTrendAggregator {
         public boolean isEmpty() {
             return actualRowsCounted == 0 && planRowsCounted == 0;
         }
+
+        /** 期間末日時点の実績累計。日数0のときは 0。 */
+        public double actualCumAtEnd() {
+            return days.isEmpty() ? 0.0 : days.get(days.size() - 1).actualCumM();
+        }
+
+        /** 期間末日時点の予定累計。日数0のときは 0。 */
+        public double planCumAtEnd() {
+            return days.isEmpty() ? 0.0 : days.get(days.size() - 1).planCumM();
+        }
+    }
+
+    /**
+     * 月別 1 点。単位は日次と同じ工程延べ m。
+     *
+     * @param month 年月
+     * @param fromInclusive 月内の集計開始日
+     * @param toInclusive 月内の集計終了日
+     * @param daysInBucket 期間に含まれる日数
+     * @param calendarDaysInMonth その月の暦日数
+     * @param actualM 月内実績合計
+     * @param planM 月内予定合計
+     * @param actualCumM 期間開始からの実績累計（月末時点）
+     * @param planCumM 期間開始からの予定累計（月末時点）
+     * @param projectedCumM 期間開始からの見込累計（月末時点）
+     * @param projectedM 月内の見込寄与
+     * @param usesPlanForProjection 当月以降かどうか
+     * @param incomplete 月の一部のみ期間に含まれるか
+     * @param isCurrentMonth 当月かどうか
+     */
+    public record MonthPoint(
+            YearMonth month,
+            LocalDate fromInclusive,
+            LocalDate toInclusive,
+            int daysInBucket,
+            int calendarDaysInMonth,
+            double actualM,
+            double planM,
+            double actualCumM,
+            double planCumM,
+            double projectedCumM,
+            double projectedM,
+            boolean usesPlanForProjection,
+            boolean incomplete,
+            boolean isCurrentMonth) {
+
+        /** 当月差異 = 実績 − 予定。 */
+        public double diffM() {
+            return actualM - planM;
+        }
+
+        /** 過去月（完了月）の参考進捗率 (%)。当月・未来・予定0は {@code NaN}。 */
+        public double monthProgressPct() {
+            if (isCurrentMonth || usesPlanForProjection || planM <= EPS) {
+                return Double.NaN;
+            }
+            return actualM / planM * 100.0;
+        }
+    }
+
+    /**
+     * 月別集計結果。
+     */
+    public record MonthlyResult(
+            List<MonthPoint> months,
+            double actualTotalM,
+            double planTotalM,
+            double actualToDateM,
+            double planToDateM,
+            double remainingPlanM,
+            double projectedTotalM,
+            LocalDate today,
+            LocalDate periodFrom,
+            LocalDate periodTo,
+            int actualRowsCounted,
+            int planRowsCounted,
+            LocalDate actualMinDate,
+            LocalDate actualMaxDate,
+            List<String> warnings) {
+
+        public MonthlyResult {
+            months = months != null ? List.copyOf(months) : List.of();
+            warnings = warnings != null ? List.copyOf(warnings) : List.of();
+        }
+
+        public static MonthlyResult empty(LocalDate today, LocalDate from, LocalDate to) {
+            return new MonthlyResult(
+                    List.of(), 0, 0, 0, 0, 0, 0, today, from, to, 0, 0, null, null, List.of());
+        }
+
+        public double progressPct() {
+            if (planToDateM <= EPS) {
+                return Double.NaN;
+            }
+            return actualToDateM / planToDateM * 100.0;
+        }
+
+        public boolean progressDenominatorSufficient() {
+            if (planToDateM <= EPS || planTotalM <= EPS) {
+                return false;
+            }
+            return planToDateM / planTotalM >= PROGRESS_DENOMINATOR_MIN_RATIO;
+        }
+
+        public double projectedDiffM() {
+            return projectedTotalM - planTotalM;
+        }
+
+        public boolean isEmpty() {
+            return actualRowsCounted == 0 && planRowsCounted == 0;
+        }
     }
 
     private static final double EPS = 1e-9;
@@ -220,6 +332,118 @@ public final class ProcessingTrendAggregator {
 
     static {
         JA.setStrength(Collator.PRIMARY);
+    }
+
+    /**
+     * 日別集計結果を月別にロールアップする。
+     *
+     * <p>期間内の月を連続で列挙し、月内の実績・予定の合算と月末時点の累計を保持する。
+     * 期間全体の合計・進捗率・見込指標は日次集計と完全一致する。
+     */
+    public static MonthlyResult rollUpMonthly(Result daily, Filter filter, LocalDate today) {
+        Objects.requireNonNull(daily, "daily");
+        Objects.requireNonNull(filter, "filter");
+        LocalDate t = today != null ? today : LocalDate.now();
+        YearMonth currentYm = YearMonth.from(t);
+
+        LocalDate from = filter.from();
+        LocalDate to = filter.to();
+        if (to.isBefore(from)) {
+            LocalDate tmp = from;
+            from = to;
+            to = tmp;
+        }
+
+        YearMonth startYm = YearMonth.from(from);
+        YearMonth endYm = YearMonth.from(to);
+
+        Map<YearMonth, List<DayPoint>> daysByMonth = new LinkedHashMap<>();
+        for (DayPoint dp : daily.days()) {
+            YearMonth ym = YearMonth.from(dp.date());
+            daysByMonth.computeIfAbsent(ym, k -> new ArrayList<>()).add(dp);
+        }
+
+        List<MonthPoint> monthPoints = new ArrayList<>();
+        double runningActualCum = 0.0;
+        double runningPlanCum = 0.0;
+        double runningProjectedCum = 0.0;
+
+        for (YearMonth ym = startYm; !ym.isAfter(endYm); ym = ym.plusMonths(1)) {
+            List<DayPoint> monthDays = daysByMonth.getOrDefault(ym, List.of());
+            int calDays = ym.lengthOfMonth();
+            LocalDate ymStart = ym.atDay(1);
+            LocalDate ymEnd = ym.atEndOfMonth();
+
+            LocalDate bStart = ymStart.isBefore(from) ? from : ymStart;
+            LocalDate bEnd = ymEnd.isAfter(to) ? to : ymEnd;
+            int daysInBucket = monthDays.size();
+            boolean incomplete = daysInBucket < calDays;
+            boolean isCurrent = ym.equals(currentYm);
+            boolean usesPlan = !ym.isBefore(currentYm);
+
+            double actSum = 0.0;
+            double planSum = 0.0;
+            double projContrib = 0.0;
+
+            for (DayPoint dp : monthDays) {
+                actSum += dp.actualM();
+                planSum += dp.planM();
+                if (dp.date().isBefore(t)) {
+                    projContrib += dp.actualM();
+                } else if (dp.date().equals(t)) {
+                    projContrib += Math.max(dp.actualM(), dp.planM());
+                } else {
+                    projContrib += dp.planM();
+                }
+            }
+
+            runningActualCum += actSum;
+            runningPlanCum += planSum;
+            runningProjectedCum += projContrib;
+
+            double lastActualCum =
+                    monthDays.isEmpty() ? runningActualCum : monthDays.get(monthDays.size() - 1).actualCumM();
+            double lastPlanCum =
+                    monthDays.isEmpty() ? runningPlanCum : monthDays.get(monthDays.size() - 1).planCumM();
+            double lastProjCum =
+                    monthDays.isEmpty()
+                            ? runningProjectedCum
+                            : monthDays.get(monthDays.size() - 1).projectedCumM();
+
+            monthPoints.add(
+                    new MonthPoint(
+                            ym,
+                            bStart,
+                            bEnd,
+                            daysInBucket,
+                            calDays,
+                            actSum,
+                            planSum,
+                            lastActualCum,
+                            lastPlanCum,
+                            lastProjCum,
+                            projContrib,
+                            usesPlan,
+                            incomplete,
+                            isCurrent));
+        }
+
+        return new MonthlyResult(
+                monthPoints,
+                daily.actualTotalM(),
+                daily.planTotalM(),
+                daily.actualToDateM(),
+                daily.planToDateM(),
+                daily.remainingPlanM(),
+                daily.projectedTotalM(),
+                t,
+                from,
+                to,
+                daily.actualRowsCounted(),
+                daily.planRowsCounted(),
+                daily.actualMinDate(),
+                daily.actualMaxDate(),
+                daily.warnings());
     }
 
     private ProcessingTrendAggregator() {}

@@ -1,8 +1,13 @@
 package jp.co.pm.ai.desktop;
 
+import java.io.File;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
 import java.time.format.TextStyle;
 import java.time.temporal.ChronoUnit;
@@ -37,7 +42,10 @@ import javafx.scene.chart.BarChart;
 import javafx.scene.chart.CategoryAxis;
 import javafx.scene.chart.LineChart;
 import javafx.scene.chart.XYChart;
+import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
+import javafx.scene.control.ButtonBar;
+import javafx.scene.control.ButtonType;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.DatePicker;
@@ -50,6 +58,7 @@ import javafx.scene.control.TableCell;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableRow;
 import javafx.scene.control.TableView;
+import javafx.scene.control.TitledPane;
 import javafx.scene.control.ToggleButton;
 import javafx.scene.control.ToggleGroup;
 import javafx.scene.control.Tooltip;
@@ -61,10 +70,13 @@ import javafx.scene.layout.Pane;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import javafx.scene.shape.Line;
+import javafx.stage.FileChooser;
 import javafx.util.Duration;
 import javafx.util.StringConverter;
 
 import jp.co.pm.ai.desktop.ProcessingTrendChartSupport.NiceRange;
+import jp.co.pm.ai.desktop.config.AppPaths;
+import jp.co.pm.ai.desktop.io.DesktopFileOpener;
 import jp.co.pm.ai.desktop.io.actuals.DashboardLoadErrorFormatter;
 import jp.co.pm.ai.desktop.io.actuals.EquipmentStatusDashboardSourceLoader;
 import jp.co.pm.ai.desktop.io.actuals.EquipmentStatusDashboardSourceLoader.LoadedSources;
@@ -73,8 +85,13 @@ import jp.co.pm.ai.desktop.io.actuals.EquipmentStatusDashboardSourceLoader.Sourc
 import jp.co.pm.ai.desktop.io.actuals.ProcessingTrendAggregator;
 import jp.co.pm.ai.desktop.io.actuals.ProcessingTrendAggregator.DayPoint;
 import jp.co.pm.ai.desktop.io.actuals.ProcessingTrendAggregator.Filter;
+import jp.co.pm.ai.desktop.io.actuals.ProcessingTrendAggregator.MonthPoint;
+import jp.co.pm.ai.desktop.io.actuals.ProcessingTrendAggregator.MonthlyResult;
 import jp.co.pm.ai.desktop.io.actuals.ProcessingTrendAggregator.PlanSource;
 import jp.co.pm.ai.desktop.io.actuals.ProcessingTrendAggregator.Result;
+import jp.co.pm.ai.desktop.io.actuals.ProcessingTrendWorkbookExporter;
+import jp.co.pm.ai.desktop.io.actuals.ProcessingTrendWorkbookExporter.ProcessingTrendExportRequest;
+import jp.co.pm.ai.desktop.io.actuals.ProcessingTrendWorkbookExporter.ProcessingTrendExportResult;
 
 /**
  * 「加工トレンド」タブ: 加工実績と加工予定を日別に重ねた複合グラフ（日次棒 + 累計折れ線）。
@@ -114,6 +131,9 @@ public class ProcessingTrendTabController {
         THIS_MONTH("今月"),
         LAST_MONTH("先月"),
         NEXT_MONTH("来月"),
+        PAST_6_MONTHS("直近6ヶ月"),
+        THIS_YEAR("今年"),
+        PAST_12_MONTHS("過去12ヶ月"),
         AROUND_2_WEEKS("前後2週"),
         PAST_4_WEEKS("過去4週"),
         CUSTOM("任意");
@@ -128,6 +148,11 @@ public class ProcessingTrendTabController {
         public String toString() {
             return label;
         }
+    }
+
+    enum Granularity {
+        DAILY,
+        MONTHLY
     }
 
     enum ViewMode {
@@ -148,15 +173,20 @@ public class ProcessingTrendTabController {
 
     @FXML private BorderPane tabRoot;
     @FXML private Button reloadButton;
+    @FXML private Button exportExcelButton;
     @FXML private ComboBox<PeriodPreset> periodPresetCombo;
     @FXML private DatePicker fromDatePicker;
     @FXML private DatePicker toDatePicker;
+    @FXML private Button thisMonthButton;
     @FXML private CheckBox autoRefreshCheckBox;
     @FXML private Spinner<Integer> autoRefreshIntervalSpinner;
     @FXML private Label nextRefreshLabel;
     @FXML private ComboBox<PlanSource> planSourceCombo;
     @FXML private ComboBox<String> machineCombo;
     @FXML private ComboBox<String> processCombo;
+    @FXML private ToggleGroup granularityGroup;
+    @FXML private ToggleButton granularityDailyToggle;
+    @FXML private ToggleButton granularityMonthlyToggle;
     @FXML private ToggleGroup viewModeGroup;
     @FXML private ToggleButton viewComboToggle;
     @FXML private ToggleButton viewDailyToggle;
@@ -193,6 +223,7 @@ public class ProcessingTrendTabController {
     @FXML private Label emptyStateTitle;
     @FXML private Label emptyStateDetail;
     @FXML private TableView<DayPoint> detailTable;
+    @FXML private TitledPane detailPane;
     @FXML private TableColumn<DayPoint, DayPoint> colDate;
     @FXML private TableColumn<DayPoint, Number> colPlan;
     @FXML private TableColumn<DayPoint, Number> colActual;
@@ -244,6 +275,8 @@ public class ProcessingTrendTabController {
     private LoadedSources cachedSources;
     private SourceFingerprint loadedFingerprint;
     private Result currentResult;
+    private MonthlyResult currentMonthlyResult;
+    private static Path lastExportDir;
     private List<String> currentCategoryLabels = List.of();
     private String lastLoadErrorDetail = "";
     private NoticeKind noticeKind = NoticeKind.NONE;
@@ -261,6 +294,7 @@ public class ProcessingTrendTabController {
         initPeriodControls();
         initAutoRefreshControls();
         initFilterCombos();
+        initGranularityToggles();
         initViewModeToggles();
         initCharts();
         initDetailTable();
@@ -500,10 +534,17 @@ public class ProcessingTrendTabController {
                                     pseudoClassStateChanged(PC_SUN, false);
                                     return;
                                 }
-                                setText(formatDayWithWeekday(item.date()));
-                                DayOfWeek dow = item.date().getDayOfWeek();
-                                pseudoClassStateChanged(PC_SAT, dow == DayOfWeek.SATURDAY);
-                                pseudoClassStateChanged(PC_SUN, dow == DayOfWeek.SUNDAY);
+                                if (currentGranularity() == Granularity.MONTHLY) {
+                                    YearMonth ym = YearMonth.from(item.date());
+                                    setText(ym.format(MONTH_FMT));
+                                    pseudoClassStateChanged(PC_SAT, false);
+                                    pseudoClassStateChanged(PC_SUN, false);
+                                } else {
+                                    setText(formatDayWithWeekday(item.date()));
+                                    DayOfWeek dow = item.date().getDayOfWeek();
+                                    pseudoClassStateChanged(PC_SAT, dow == DayOfWeek.SATURDAY);
+                                    pseudoClassStateChanged(PC_SUN, dow == DayOfWeek.SUNDAY);
+                                }
                             }
                         });
         colPlan.setCellValueFactory(cd -> new ReadOnlyObjectWrapper<>(cd.getValue().planM()));
@@ -533,13 +574,26 @@ public class ProcessingTrendTabController {
                                 super.updateItem(item, empty);
                                 LocalDate today = currentResult != null ? currentResult.today() : LocalDate.now();
                                 boolean has = !empty && item != null;
-                                boolean weekend =
-                                        has
-                                                && (item.date().getDayOfWeek() == DayOfWeek.SATURDAY
-                                                        || item.date().getDayOfWeek() == DayOfWeek.SUNDAY);
-                                pseudoClassStateChanged(PC_WEEKEND, weekend);
-                                pseudoClassStateChanged(PC_TODAY, has && item.date().equals(today));
-                                pseudoClassStateChanged(PC_FUTURE, has && item.date().isAfter(today));
+                                if (!has) {
+                                    pseudoClassStateChanged(PC_WEEKEND, false);
+                                    pseudoClassStateChanged(PC_TODAY, false);
+                                    pseudoClassStateChanged(PC_FUTURE, false);
+                                    return;
+                                }
+                                if (currentGranularity() == Granularity.MONTHLY) {
+                                    YearMonth ym = YearMonth.from(item.date());
+                                    YearMonth curYm = YearMonth.from(today);
+                                    pseudoClassStateChanged(PC_WEEKEND, false);
+                                    pseudoClassStateChanged(PC_TODAY, ym.equals(curYm));
+                                    pseudoClassStateChanged(PC_FUTURE, ym.isAfter(curYm));
+                                } else {
+                                    boolean weekend =
+                                            item.date().getDayOfWeek() == DayOfWeek.SATURDAY
+                                                    || item.date().getDayOfWeek() == DayOfWeek.SUNDAY;
+                                    pseudoClassStateChanged(PC_WEEKEND, weekend);
+                                    pseudoClassStateChanged(PC_TODAY, item.date().equals(today));
+                                    pseudoClassStateChanged(PC_FUTURE, item.date().isAfter(today));
+                                }
                             }
                         });
         detailTable.setPlaceholder(new Label("期間内のデータがありません"));
@@ -573,15 +627,25 @@ public class ProcessingTrendTabController {
 
     private void initLegend() {
         legendBox.getChildren().clear();
+        boolean monthly = currentGranularity() == Granularity.MONTHLY;
+        String barAct = monthly ? "実績（月合計）" : "実績（日次）";
+        String barPlan = monthly ? "予定（月合計）" : "予定（日次）";
+        String todayLbl = monthly ? "今月（前月まで実績／当月以降予定）" : "今日（前日まで実績／当日以降予定）";
+
         legendBox
                 .getChildren()
                 .addAll(
-                        legendItem("pm-legend-swatch-bar-actual", "実績（日次）", ViewMode.CUMULATIVE),
-                        legendItem("pm-legend-swatch-bar-plan", "予定（日次）", ViewMode.CUMULATIVE),
+                        legendItem("pm-legend-swatch-bar-actual", barAct, ViewMode.CUMULATIVE),
+                        legendItem("pm-legend-swatch-bar-plan", barPlan, ViewMode.CUMULATIVE),
                         legendItem("pm-legend-swatch-line-actual", "実績累計", ViewMode.DAILY),
                         legendItem("pm-legend-swatch-line-plan", "予定累計", ViewMode.DAILY),
                         legendItem("pm-legend-swatch-line-projected", "見込累計", ViewMode.DAILY),
-                        legendItem("pm-legend-swatch-today", "今日（前日まで実績／当日以降予定）", null));
+                        legendItem("pm-legend-swatch-today", todayLbl, null));
+    }
+
+    private void updateLegend() {
+        initLegend();
+        applyViewMode(currentViewMode());
     }
 
     /** @param hiddenIn このモードでは非表示にする（{@code null} なら常に表示） */
@@ -598,6 +662,55 @@ public class ProcessingTrendTabController {
         return box;
     }
 
+    private void initGranularityToggles() {
+        if (granularityDailyToggle != null && granularityMonthlyToggle != null) {
+            granularityDailyToggle.setOnAction(e -> applyGranularity(Granularity.DAILY));
+            granularityMonthlyToggle.setOnAction(e -> applyGranularity(Granularity.MONTHLY));
+        }
+    }
+
+    private Granularity currentGranularity() {
+        if (granularityMonthlyToggle != null && granularityMonthlyToggle.isSelected()) {
+            return Granularity.MONTHLY;
+        }
+        return Granularity.DAILY;
+    }
+
+    private void applyGranularity(Granularity g) {
+        if (g == Granularity.MONTHLY) {
+            if (granularityMonthlyToggle != null) {
+                granularityMonthlyToggle.setSelected(true);
+            }
+            snapPeriodToMonthBoundaries();
+        } else {
+            if (granularityDailyToggle != null) {
+                granularityDailyToggle.setSelected(true);
+            }
+        }
+        updateLegend();
+        updateChartTitle();
+        if (currentResult != null) {
+            render(currentResult, currentFilter());
+        }
+    }
+
+    private void snapPeriodToMonthBoundaries() {
+        LocalDate from = fromDatePicker.getValue();
+        LocalDate to = toDatePicker.getValue();
+        if (from == null || to == null) {
+            applyPreset(PeriodPreset.PAST_6_MONTHS);
+            return;
+        }
+        LocalDate snappedFrom = from.withDayOfMonth(1);
+        LocalDate snappedTo = to.with(TemporalAdjusters.lastDayOfMonth());
+        if (ChronoUnit.MONTHS.between(YearMonth.from(snappedFrom), YearMonth.from(snappedTo)) < 1) {
+            applyPreset(PeriodPreset.PAST_6_MONTHS);
+            return;
+        }
+        setPeriodSilently(snappedFrom, snappedTo, presetMatching(snappedFrom, snappedTo));
+        scheduleRecompute();
+    }
+
     private void initKeyboard() {
         tabRoot.setFocusTraversable(true);
         tabRoot.addEventFilter(KeyEvent.KEY_PRESSED, this::onKeyPressed);
@@ -606,6 +719,11 @@ public class ProcessingTrendTabController {
     private void onKeyPressed(KeyEvent e) {
         if (e.getCode() == KeyCode.F5 && !e.isControlDown() && !e.isAltDown() && !e.isMetaDown()) {
             reloadFromSources(true);
+            e.consume();
+            return;
+        }
+        if (e.isControlDown() && e.getCode() == KeyCode.E && !e.isShiftDown() && !e.isAltDown() && !e.isMetaDown()) {
+            exportToExcel();
             e.consume();
             return;
         }
@@ -640,6 +758,18 @@ public class ProcessingTrendTabController {
             case NEXT_MONTH -> {
                 LocalDate from = today.plusMonths(1).withDayOfMonth(1);
                 yield new LocalDate[] {from, from.with(TemporalAdjusters.lastDayOfMonth())};
+            }
+            case PAST_6_MONTHS -> {
+                LocalDate from = today.minusMonths(5).withDayOfMonth(1);
+                yield new LocalDate[] {from, today.with(TemporalAdjusters.lastDayOfMonth())};
+            }
+            case THIS_YEAR -> {
+                LocalDate from = LocalDate.of(today.getYear(), 1, 1);
+                yield new LocalDate[] {from, LocalDate.of(today.getYear(), 12, 31)};
+            }
+            case PAST_12_MONTHS -> {
+                LocalDate from = today.minusMonths(11).withDayOfMonth(1);
+                yield new LocalDate[] {from, today.with(TemporalAdjusters.lastDayOfMonth())};
             }
             case AROUND_2_WEEKS -> new LocalDate[] {today.minusDays(13), today.plusDays(14)};
             case PAST_4_WEEKS -> new LocalDate[] {today.minusDays(27), today};
@@ -730,7 +860,8 @@ public class ProcessingTrendTabController {
         LocalDate nf;
         LocalDate nt;
         boolean wholeMonths =
-                from.getDayOfMonth() == 1 && to.equals(to.with(TemporalAdjusters.lastDayOfMonth()));
+                (from.getDayOfMonth() == 1 && to.equals(to.with(TemporalAdjusters.lastDayOfMonth())))
+                        || currentGranularity() == Granularity.MONTHLY;
         if (wholeMonths) {
             long months = Math.max(1, ChronoUnit.MONTHS.between(from, to.plusDays(1)));
             nf = from.plusMonths(direction * months);
@@ -813,7 +944,25 @@ public class ProcessingTrendTabController {
             n.setVisible(visible);
             n.setManaged(visible);
         }
-        if (chartTitleLabel != null) {
+        updateChartTitle();
+        syncChartPadding();
+        requestMarkerLayout();
+    }
+
+    private void updateChartTitle() {
+        if (chartTitleLabel == null) {
+            return;
+        }
+        ViewMode mode = currentViewMode();
+        boolean monthly = currentGranularity() == Granularity.MONTHLY;
+        if (monthly) {
+            chartTitleLabel.setText(
+                    switch (mode) {
+                        case DAILY -> "月別 実績・予定";
+                        case CUMULATIVE -> "月別累計 実績・予定・見込";
+                        default -> "加工実績・予定トレンド（月別）";
+                    });
+        } else {
             chartTitleLabel.setText(
                     switch (mode) {
                         case DAILY -> "日次 実績・予定";
@@ -821,8 +970,6 @@ public class ProcessingTrendTabController {
                         default -> "加工実績・予定トレンド";
                     });
         }
-        syncChartPadding();
-        requestMarkerLayout();
     }
 
     private void syncChartPadding() {
@@ -1105,8 +1252,33 @@ public class ProcessingTrendTabController {
             hideNotice();
         }
         renderKpis(r, filter);
-        renderChart(r);
-        detailTable.getItems().setAll(r.days());
+
+        boolean monthly = currentGranularity() == Granularity.MONTHLY;
+        if (monthly) {
+            currentMonthlyResult = ProcessingTrendAggregator.rollUpMonthly(r, filter, r.today());
+            renderMonthlyChart(r, currentMonthlyResult);
+            List<DayPoint> monthDayPoints = new ArrayList<>();
+            for (MonthPoint mp : currentMonthlyResult.months()) {
+                monthDayPoints.add(
+                        new DayPoint(
+                                mp.fromInclusive(),
+                                mp.actualM(),
+                                mp.planM(),
+                                mp.actualCumM(),
+                                mp.planCumM(),
+                                mp.projectedCumM(),
+                                mp.usesPlanForProjection()));
+            }
+            colDate.setText("年月");
+            detailPane.setText("月別明細");
+            detailTable.getItems().setAll(monthDayPoints);
+        } else {
+            currentMonthlyResult = null;
+            renderChart(r);
+            colDate.setText("日付");
+            detailPane.setText("日別明細");
+            detailTable.getItems().setAll(r.days());
+        }
         detailTable.refresh();
         renderDataWarnings(r);
         boolean empty = r.isEmpty();
@@ -1130,6 +1302,7 @@ public class ProcessingTrendTabController {
         dailyChart.setOpacity(empty ? 0.25 : 1.0);
         cumulativeChart.setOpacity(empty ? 0.25 : 1.0);
         updateSourceSummary();
+        updateChartTitle();
     }
 
     private void renderEmpty(String title, String detail) {
@@ -1364,6 +1537,138 @@ public class ProcessingTrendTabController {
         Tooltip.install(node, sharedChartTooltip);
     }
 
+    private void renderMonthlyChart(Result r, MonthlyResult mr) {
+        List<MonthPoint> months = mr.months();
+        int n = months.size();
+        boolean singleYear =
+                n > 0 && months.get(0).month().getYear() == months.get(n - 1).month().getYear();
+        List<String> labels = new ArrayList<>(n);
+        List<LocalDate> dates = new ArrayList<>(n);
+        for (MonthPoint m : months) {
+            labels.add(
+                    singleYear
+                            ? m.month().getMonthValue() + "月"
+                            : m.month().format(DateTimeFormatter.ofPattern("yy/MM")));
+            dates.add(m.fromInclusive());
+        }
+        currentCategoryLabels = labels;
+        currentDates = dates;
+
+        Set<Integer> allIdx = new HashSet<>();
+        for (int i = 0; i < n; i++) {
+            allIdx.add(i);
+        }
+        labelledCategoryIdx = allIdx;
+
+        String axisLabel =
+                n == 0
+                        ? ""
+                        : singleYear
+                                ? months.get(0).month().getYear() + "年"
+                                : months.get(0).month().format(DateTimeFormatter.ofPattern("yyyy/MM"))
+                                        + " 〜 "
+                                        + months.get(n - 1).month().format(DateTimeFormatter.ofPattern("yyyy/MM"));
+        dailyXAxis.setLabel(axisLabel);
+        cumulativeXAxis.setLabel(axisLabel);
+        dailyXAxis.setCategories(FXCollections.observableArrayList(labels));
+        cumulativeXAxis.setCategories(FXCollections.observableArrayList(labels));
+        dailyChart.setCategoryGap(Math.max(16.0, ProcessingTrendChartSupport.categoryGapFor(n)));
+        dailyChart.setBarGap(ProcessingTrendChartSupport.barGapFor(n));
+
+        List<XYChart.Data<String, Number>> actDaily = new ArrayList<>(n);
+        List<XYChart.Data<String, Number>> planDaily = new ArrayList<>(n);
+        List<XYChart.Data<String, Number>> actCum = new ArrayList<>(n);
+        List<XYChart.Data<String, Number>> planCum = new ArrayList<>(n);
+        List<XYChart.Data<String, Number>> projCum = new ArrayList<>(n);
+        double dailyMax = 0;
+        double cumMax = 0;
+        YearMonth currentYm = YearMonth.from(r.today());
+        YearMonth projStartYm = currentYm.minusMonths(1);
+
+        for (int i = 0; i < n; i++) {
+            MonthPoint m = months.get(i);
+            String cat = labels.get(i);
+            actDaily.add(new XYChart.Data<>(cat, m.actualM()));
+            planDaily.add(new XYChart.Data<>(cat, m.planM()));
+            dailyMax = Math.max(dailyMax, Math.max(m.actualM(), m.planM()));
+            if (!m.month().isAfter(currentYm)) {
+                actCum.add(new XYChart.Data<>(cat, m.actualCumM()));
+            }
+            planCum.add(new XYChart.Data<>(cat, m.planCumM()));
+            if (!m.month().isBefore(projStartYm)) {
+                projCum.add(new XYChart.Data<>(cat, m.projectedCumM()));
+            }
+            cumMax =
+                    Math.max(
+                            cumMax,
+                            Math.max(m.actualCumM(), Math.max(m.planCumM(), m.projectedCumM())));
+        }
+
+        applyNiceRange(dailyYAxis, dailyMax);
+        applyNiceRange(cumulativeYAxis, cumMax);
+        actualDailySeries.getData().setAll(actDaily);
+        planDailySeries.getData().setAll(planDaily);
+        actualCumSeries.getData().setAll(actCum);
+        planCumSeries.getData().setAll(planCum);
+        projectedCumSeries.getData().setAll(projCum);
+
+        int projOffset = n - projCum.size();
+        for (int i = 0; i < n; i++) {
+            MonthPoint m = months.get(i);
+            installMonthBarTooltip(actDaily.get(i).getNode(), m, true);
+            installMonthBarTooltip(planDaily.get(i).getNode(), m, false);
+            if (i < actCum.size()) {
+                installMonthLineTooltip(actCum.get(i).getNode(), m, "実績累計", m.actualCumM());
+            }
+            installMonthLineTooltip(planCum.get(i).getNode(), m, "予定累計", m.planCumM());
+            if (i >= projOffset && i - projOffset < projCum.size()) {
+                installMonthLineTooltip(
+                        projCum.get(i - projOffset).getNode(), m, "見込累計", m.projectedCumM());
+            }
+        }
+        requestMarkerLayout();
+    }
+
+    private void installMonthBarTooltip(Node node, MonthPoint m, boolean actual) {
+        if (node == null) {
+            return;
+        }
+        node.setOnMouseEntered(
+                e -> {
+                    sharedChartTooltip.setText(
+                            m.month().format(MONTH_FMT)
+                                    + "\n"
+                                    + (actual
+                                            ? "実績 (月合計): " + formatM(m.actualM())
+                                            : "予定 (月合計): " + formatM(m.planM()))
+                                    + " m\n差異: "
+                                    + formatSigned(m.diffM())
+                                    + " m"
+                                    + (m.incomplete() ? "\n※ 期間内 " + m.daysInBucket() + " 日間" : ""));
+                    Point2D p = node.localToScreen(node.getBoundsInLocal().getWidth() / 2.0, 0);
+                    if (p != null) {
+                        sharedChartTooltip.show(node, p.getX(), p.getY() - 10);
+                    }
+                });
+        node.setOnMouseExited(e -> sharedChartTooltip.hide());
+    }
+
+    private void installMonthLineTooltip(Node node, MonthPoint m, String seriesName, double value) {
+        if (node == null) {
+            return;
+        }
+        node.setOnMouseEntered(
+                e -> {
+                    sharedChartTooltip.setText(
+                            m.month().format(MONTH_FMT) + "\n" + seriesName + ": " + formatM(value) + " m");
+                    Point2D p = node.localToScreen(node.getBoundsInLocal().getWidth() / 2.0, 0);
+                    if (p != null) {
+                        sharedChartTooltip.show(node, p.getX(), p.getY() - 10);
+                    }
+                });
+        node.setOnMouseExited(e -> sharedChartTooltip.hide());
+    }
+
     // ---- オーバーレイ（X 軸ラベル・今日マーカー） --------------------------------------------
 
     private void requestMarkerLayout() {
@@ -1453,25 +1758,61 @@ public class ProcessingTrendTabController {
         LocalDate today = r.today();
         LocalDate first = r.days().get(0).date();
         LocalDate last = r.days().get(r.days().size() - 1).date();
-        if (today.isBefore(first) || today.isAfter(last.plusDays(1))) {
-            todayLine.setVisible(false);
-            todayMarkerLabel.setVisible(false);
-            return;
-        }
+        boolean monthly = currentGranularity() == Granularity.MONTHLY;
+
+        todayMarkerLabel.setText(monthly ? "今月" : "今日");
+
         double x;
-        if (today.isAfter(last)) {
-            // 期間の翌日 = 期間全体が実績側。右端に線を置く
-            int idx = currentCategoryLabels.size() - 1;
-            x = xAxis.getDisplayPosition(currentCategoryLabels.get(idx)) + xAxis.getCategorySpacing() / 2.0;
-        } else {
-            int idx = (int) ChronoUnit.DAYS.between(first, today);
-            if (idx < 0 || idx >= currentCategoryLabels.size()) {
+        if (monthly) {
+            YearMonth todayYm = YearMonth.from(today);
+            YearMonth firstYm = YearMonth.from(first);
+            YearMonth lastYm = YearMonth.from(last);
+            if (todayYm.isBefore(firstYm) || todayYm.isAfter(lastYm.plusMonths(1))) {
                 todayLine.setVisible(false);
                 todayMarkerLabel.setVisible(false);
                 return;
             }
-            x = xAxis.getDisplayPosition(currentCategoryLabels.get(idx)) - xAxis.getCategorySpacing() / 2.0;
+            if (todayYm.isAfter(lastYm)) {
+                int idx = currentCategoryLabels.size() - 1;
+                x =
+                        xAxis.getDisplayPosition(currentCategoryLabels.get(idx))
+                                + xAxis.getCategorySpacing() / 2.0;
+            } else {
+                int idx = (int) ChronoUnit.MONTHS.between(firstYm, todayYm);
+                if (idx < 0 || idx >= currentCategoryLabels.size()) {
+                    todayLine.setVisible(false);
+                    todayMarkerLabel.setVisible(false);
+                    return;
+                }
+                x =
+                        xAxis.getDisplayPosition(currentCategoryLabels.get(idx))
+                                - xAxis.getCategorySpacing() / 2.0;
+            }
+        } else {
+            if (today.isBefore(first) || today.isAfter(last.plusDays(1))) {
+                todayLine.setVisible(false);
+                todayMarkerLabel.setVisible(false);
+                return;
+            }
+            if (today.isAfter(last)) {
+                // 期間の翌日 = 期間全体が実績側。右端に線を置く
+                int idx = currentCategoryLabels.size() - 1;
+                x =
+                        xAxis.getDisplayPosition(currentCategoryLabels.get(idx))
+                                + xAxis.getCategorySpacing() / 2.0;
+            } else {
+                int idx = (int) ChronoUnit.DAYS.between(first, today);
+                if (idx < 0 || idx >= currentCategoryLabels.size()) {
+                    todayLine.setVisible(false);
+                    todayMarkerLabel.setVisible(false);
+                    return;
+                }
+                x =
+                        xAxis.getDisplayPosition(currentCategoryLabels.get(idx))
+                                - xAxis.getCategorySpacing() / 2.0;
+            }
         }
+
         Point2D top = markerPane.sceneToLocal(xAxis.localToScene(x, 0));
         var plotBounds = markerPane.sceneToLocal(plotBg.localToScene(plotBg.getBoundsInLocal()));
         if (Double.isNaN(top.getX()) || plotBounds == null) {
@@ -1651,5 +1992,151 @@ public class ProcessingTrendTabController {
                 + "("
                 + d.getDayOfWeek().getDisplayName(TextStyle.SHORT, Locale.JAPAN)
                 + ")";
+    }
+
+    // ---- Excel 出力 -------------------------------------------------------------------------
+
+    @FXML
+    private void onExportExcelAction() {
+        exportToExcel();
+    }
+
+    private void exportToExcel() {
+        if (currentResult == null || currentResult.isEmpty()) {
+            showNotice("出力対象のデータがありません。先にデータを読み込んでください。", NoticeKind.DATA_WARN);
+            return;
+        }
+        Filter filter = currentFilter();
+        boolean isMonthly = currentGranularity() == Granularity.MONTHLY;
+        String defaultName =
+                ProcessingTrendWorkbookExporter.suggestFileName(filter, isMonthly, LocalDateTime.now());
+
+        FileChooser chooser = new FileChooser();
+        chooser.setTitle("加工トレンド集計の Excel 出力");
+        chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Excel ワークブック (*.xlsx)", "*.xlsx"));
+        chooser.setInitialFileName(defaultName);
+
+        Path initialDir =
+                lastExportDir != null && Files.isDirectory(lastExportDir)
+                        ? lastExportDir
+                        : defaultExportDirectory();
+        if (initialDir != null && Files.exists(initialDir)) {
+            chooser.setInitialDirectory(initialDir.toFile());
+        }
+
+        File target =
+                chooser.showSaveDialog(
+                        tabRoot.getScene() != null ? tabRoot.getScene().getWindow() : null);
+        if (target == null) {
+            return;
+        }
+        lastExportDir = target.toPath().getParent();
+
+        MonthlyResult monthly =
+                currentMonthlyResult != null
+                        ? currentMonthlyResult
+                        : ProcessingTrendAggregator.rollUpMonthly(currentResult, filter, currentResult.today());
+
+        ProcessingTrendExportRequest req =
+                new ProcessingTrendExportRequest(
+                        currentResult,
+                        monthly,
+                        filter,
+                        LocalDateTime.now(),
+                        cachedSources != null ? cachedSources.actualSourceLabel() : "",
+                        filter.planSource().label(),
+                        cachedSources != null ? cachedSources.aladdinSourceLabel() : "",
+                        cachedSources != null ? cachedSources.dispatchSourceLabel() : "",
+                        cachedSources != null
+                                ? EquipmentStatusDashboardSourceLoader.formatLoadStatsSummary(
+                                        cachedSources.loadStats())
+                                : "",
+                        cachedSources != null && cachedSources.loadNotice() != null
+                                ? List.of(cachedSources.loadNotice())
+                                : List.of());
+
+        Map<String, String> ui = shell != null ? shell.snapshotUiEnv() : Map.of();
+        if (exportExcelButton != null) {
+            exportExcelButton.setDisable(true);
+        }
+        applyLoadingPresentation(true);
+        loadingStatusLabel.setText("Excel 出力中…");
+
+        Task<ProcessingTrendExportResult> task =
+                new Task<>() {
+                    @Override
+                    protected ProcessingTrendExportResult call() throws Exception {
+                        return ProcessingTrendWorkbookExporter.writeTo(target.toPath(), req, ui);
+                    }
+                };
+
+        task.setOnSucceeded(
+                e -> {
+                    if (exportExcelButton != null) {
+                        exportExcelButton.setDisable(false);
+                    }
+                    applyLoadingPresentation(false);
+                    ProcessingTrendExportResult res = task.getValue();
+                    promptExportSuccess(res.path());
+                });
+
+        task.setOnFailed(
+                e -> {
+                    if (exportExcelButton != null) {
+                        exportExcelButton.setDisable(false);
+                    }
+                    applyLoadingPresentation(false);
+                    Throwable ex = task.getException();
+                    showNotice(
+                            "Excel 出力に失敗しました: " + (ex != null ? ex.getMessage() : "不明なエラー"),
+                            NoticeKind.COMPUTE_ERROR);
+                });
+
+        Thread th = new Thread(task, "processing-trend-excel-export");
+        th.setDaemon(true);
+        th.start();
+    }
+
+    private void promptExportSuccess(Path path) {
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.setTitle("Excel 出力完了");
+        alert.setHeaderText("加工トレンド集計を Excel に出力しました。");
+        alert.setContentText(path.toAbsolutePath().toString());
+
+        ButtonType openBtn = new ButtonType("Excel で開く", ButtonBar.ButtonData.YES);
+        ButtonType closeBtn = new ButtonType("閉じる", ButtonBar.ButtonData.CANCEL_CLOSE);
+        alert.getButtonTypes().setAll(openBtn, closeBtn);
+
+        if (tabRoot.getScene() != null
+                && tabRoot.getScene().getWindow() instanceof javafx.stage.Stage stage) {
+            alert.initOwner(stage);
+        }
+
+        alert.showAndWait()
+                .ifPresent(
+                        bt -> {
+                            if (bt == openBtn) {
+                                try {
+                                    DesktopFileOpener.openFile(path);
+                                } catch (Exception ex) {
+                                    showNotice("ファイルを開けませんでした: " + ex.getMessage(), NoticeKind.COMPUTE_ERROR);
+                                }
+                            }
+                        });
+    }
+
+    private Path defaultExportDirectory() {
+        if (shell != null) {
+            Map<String, String> ui = shell.snapshotUiEnv();
+            Path root = AppPaths.resolveRepoRoot(ui);
+            Path exp = root.resolve(".pm-ai-cache").resolve("exports").resolve("processing-trend");
+            try {
+                Files.createDirectories(exp);
+                return exp;
+            } catch (Exception ignored) {
+                return root;
+            }
+        }
+        return Path.of(System.getProperty("user.home", "."));
     }
 }

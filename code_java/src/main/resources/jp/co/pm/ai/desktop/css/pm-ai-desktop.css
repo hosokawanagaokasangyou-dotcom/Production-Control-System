@@ -3216,6 +3216,11 @@
     -fx-min-height: 28px;
 }
 
+.pm-processing-trend-granularity-toggle .toggle-button {
+    -fx-min-width: 52px;
+    -fx-font-weight: bold;
+}
+
 .pm-processing-trend-view-toggle .toggle-button {
     -fx-min-width: 56px;
 }

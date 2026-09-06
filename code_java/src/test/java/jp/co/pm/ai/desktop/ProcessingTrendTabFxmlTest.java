@@ -61,6 +61,35 @@ class ProcessingTrendTabFxmlTest {
                 "白背景に対する凡例文字色が未指定: " + labelBlock);
     }
 
+    @Test
+    void exportExcelButtonExistsInToolBar() throws Exception {
+        Element exportBtn = elementByFxId("exportExcelButton");
+        assertNotNull(exportBtn, "exportExcelButton が無い");
+        assertEquals("Excel出力", exportBtn.getAttribute("text"));
+        assertEquals("#onExportExcelAction", exportBtn.getAttribute("onAction"));
+    }
+
+    @Test
+    void granularityTogglesExistInSubbar() throws Exception {
+        Element daily = elementByFxId("granularityDailyToggle");
+        Element monthly = elementByFxId("granularityMonthlyToggle");
+        assertNotNull(daily, "granularityDailyToggle が無い");
+        assertNotNull(monthly, "granularityMonthlyToggle が無い");
+        assertEquals("日別", daily.getAttribute("text"));
+        assertEquals("月別", monthly.getAttribute("text"));
+
+        String css;
+        try (InputStream in =
+                ProcessingTrendTabFxmlTest.class.getResourceAsStream(
+                        "/jp/co/pm/ai/desktop/css/pm-ai-desktop.css")) {
+            assertNotNull(in, "pm-ai-desktop.css が無い");
+            css = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+        }
+        assertTrue(
+                css.contains(".pm-processing-trend-granularity-toggle .toggle-button"),
+                "粒度トグルの CSS スタイルが無い");
+    }
+
     private static Element elementByFxId(String fxId) throws Exception {
         try (InputStream in =
                 ProcessingTrendTabFxmlTest.class.getResourceAsStream(

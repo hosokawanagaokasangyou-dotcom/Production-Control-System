@@ -50,6 +50,10 @@
                 </Button>
                 <Button fx:id="thisMonthButton" mnemonicParsing="false" onAction="#onThisMonthAction" text="今月"/>
                 <Separator orientation="VERTICAL"/>
+                <Button fx:id="exportExcelButton" mnemonicParsing="false" onAction="#onExportExcelAction" text="Excel出力">
+                    <tooltip><Tooltip text="表示中の期間・条件の集計結果を Excel に出力します（Ctrl+E）"/></tooltip>
+                </Button>
+                <Separator orientation="VERTICAL"/>
                 <CheckBox fx:id="autoRefreshCheckBox" mnemonicParsing="false" selected="true" text="自動更新">
                     <tooltip><Tooltip text="一定間隔でソースの更新を確認し、変わっていれば再集計します（日跨ぎでも「今日」を追従）"/></tooltip>
                 </CheckBox>
@@ -71,6 +75,19 @@
                         <ComboBox fx:id="planSourceCombo" prefWidth="168.0">
                             <tooltip><Tooltip text="予定系列の取得元。&#10;アラジン加工計画: 日付列の計画 m（未完依頼のスナップショット。完了依頼は消えるため前日までの予定は欠け得る）&#10;配台結果 JSON: 配台日×当日配台数量（本日以降の残量配台のみ。前日までの予定は持たない）"/></tooltip>
                         </ComboBox>
+                    </HBox>
+                    <HBox spacing="4.0" alignment="CENTER_LEFT" styleClass="pm-processing-trend-granularity-toggle">
+                        <fx:define>
+                            <ToggleGroup fx:id="granularityGroup"/>
+                        </fx:define>
+                        <ToggleButton fx:id="granularityDailyToggle" mnemonicParsing="false" selected="true"
+                                      text="日別" toggleGroup="$granularityGroup">
+                            <tooltip><Tooltip text="日付ごとの実績・予定および累計を表示します"/></tooltip>
+                        </ToggleButton>
+                        <ToggleButton fx:id="granularityMonthlyToggle" mnemonicParsing="false"
+                                      text="月別" toggleGroup="$granularityGroup">
+                            <tooltip><Tooltip text="月単位の合計とトレンドを表示します（期間を月単位に揃えます）"/></tooltip>
+                        </ToggleButton>
                     </HBox>
                     <HBox spacing="4.0" alignment="CENTER_LEFT" styleClass="pm-processing-trend-view-toggle">
                         <fx:define>
