@@ -250,6 +250,31 @@ public final class TaskInputSourceRawGridIo {
         }
     }
 
+    /**
+     * Fast 0-based column index from an Excel cell reference like "A1", "B2", "AA10", "$C$5".
+     * Avoids regex and object allocation of {@link CellReference}.
+     */
+    static int parseCellReferenceColumn0Based(String cellReference) {
+        if (cellReference == null || cellReference.isEmpty()) {
+            return 0;
+        }
+        int col = 0;
+        int len = cellReference.length();
+        int i = cellReference.charAt(0) == '$' ? 1 : 0;
+        while (i < len) {
+            char ch = cellReference.charAt(i);
+            if (ch >= 'A' && ch <= 'Z') {
+                col = col * 26 + (ch - 'A' + 1);
+            } else if (ch >= 'a' && ch <= 'z') {
+                col = col * 26 + (ch - 'a' + 1);
+            } else {
+                break;
+            }
+            i++;
+        }
+        return Math.max(0, col - 1);
+    }
+
     private static PlanInputTabularIo.TabularSheet parseOoxmlSheetXml(
             InputStream sheetInputStream,
             StylesTable styles,
@@ -258,7 +283,8 @@ public final class TaskInputSourceRawGridIo {
             int dimensionLastRow0BasedOrMinus1)
             throws IOException {
         DataFormatter formatter = new DataFormatter();
-        TreeMap<Integer, List<String>> rowMap = new TreeMap<>();
+        List<List<String>> rowsByIndex =
+                new ArrayList<>(dimensionLastRow0BasedOrMinus1 >= 0 ? dimensionLastRow0BasedOrMinus1 + 1 : 1024);
         final int[] maxCol = {0};
         final AtomicInteger sparseRows = new AtomicInteger(0);
 
@@ -268,13 +294,16 @@ public final class TaskInputSourceRawGridIo {
 
                     @Override
                     public void startRow(int rowNum) {
-                        rowCells = new ArrayList<>();
+                        rowCells = new ArrayList<>(Math.max(35, maxCol[0]));
                     }
 
                     @Override
                     public void endRow(int rowNum) {
                         List<String> line = rowCells != null ? rowCells : new ArrayList<>();
-                        rowMap.put(rowNum, line);
+                        while (rowsByIndex.size() <= rowNum) {
+                            rowsByIndex.add(null);
+                        }
+                        rowsByIndex.set(rowNum, line);
                         rowCells = null;
                         if (progress != null) {
                             double frac;
@@ -293,10 +322,9 @@ public final class TaskInputSourceRawGridIo {
                     @Override
                     public void cell(String cellReference, String formattedValue, XSSFComment comment) {
                         if (rowCells == null) {
-                            rowCells = new ArrayList<>();
+                            rowCells = new ArrayList<>(Math.max(35, maxCol[0]));
                         }
-                        CellReference ref = new CellReference(cellReference);
-                        int col = ref.getCol();
+                        int col = parseCellReferenceColumn0Based(cellReference);
                         String v =
                                 formattedValue != null
                                         ? ExcelCellReadSupport.normalizeCommaDigitArtifacts(formattedValue)
@@ -324,17 +352,12 @@ public final class TaskInputSourceRawGridIo {
         }
 
         int mc = Math.max(0, maxCol[0]);
-        List<String> headers = new ArrayList<>();
+        List<String> headers = new ArrayList<>(mc);
         for (int c = 0; c < mc; c++) {
             headers.add("\u5217" + (c + 1));
         }
-        List<List<String>> rows = new ArrayList<>();
-        if (rowMap.isEmpty()) {
-            return new PlanInputTabularIo.TabularSheet(headers, rows);
-        }
-        int lastRow = rowMap.lastKey();
-        for (int r = 0; r <= lastRow; r++) {
-            List<String> line = rowMap.get(r);
+        List<List<String>> rows = new ArrayList<>(rowsByIndex.size());
+        for (List<String> line : rowsByIndex) {
             if (line == null) {
                 rows.add(padBlankRow(mc));
             } else {

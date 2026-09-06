@@ -3,6 +3,7 @@ package jp.co.pm.ai.desktop.io.actuals;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import org.junit.jupiter.api.Assertions;
@@ -10,6 +11,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
+import jp.co.pm.ai.desktop.config.NetworkSourceDirResolver;
+import jp.co.pm.ai.desktop.io.NetworkSourceFileReloadCache;
+import jp.co.pm.ai.desktop.io.PlanInputTabularIo;
 import jp.co.pm.ai.desktop.io.actuals.EquipmentStatusDashboardSourceLoader.LoadedSources;
 import jp.co.pm.ai.desktop.io.actuals.EquipmentStatusDashboardSourceLoader.ReloadDecision;
 import jp.co.pm.ai.desktop.io.actuals.EquipmentStatusDashboardSourceLoader.SourceFingerprint;
@@ -151,5 +155,63 @@ class EquipmentStatusDashboardSourceLoaderTest {
         LoadedSources loaded = EquipmentStatusDashboardSourceLoader.load(ui);
         Assertions.assertEquals(1, loaded.actuals().rows().size());
         Assertions.assertTrue(loaded.loadNotice().isBlank());
+    }
+
+    @Test
+    void projectShapedForCache_filtersToEssentialHeaders() {
+        List<String> headers = List.of("倉庫名", "機械名", "工程名", "依頼NO", "不要列1", "実加工数", "加工日");
+        List<List<String>> rows = List.of(List.of("W1", "M1", "P1", "R1", "X", "100", "2026/08/01"));
+        PlanInputTabularIo.TabularSheet in = new PlanInputTabularIo.TabularSheet(headers, rows);
+
+        PlanInputTabularIo.TabularSheet projected =
+                EquipmentStatusDashboardSourceLoader.projectShapedForCache(in);
+
+        Assertions.assertEquals(
+                List.of("機械名", "工程名", "依頼NO", "実加工数", "加工日"),
+                projected.headers());
+        Assertions.assertEquals(1, projected.rows().size());
+        Assertions.assertEquals(
+                List.of("M1", "P1", "R1", "100", "2026/08/01"),
+                projected.rows().getFirst());
+    }
+
+    @Test
+    void load_savesShapedActualsJsonAndPopulatesMemoryCache(@TempDir Path dir) throws Exception {
+        NetworkSourceFileReloadCache.clearAll();
+        Path actualDir = dir.resolve("actual");
+        Files.createDirectories(actualDir);
+        // CSV formatted actual detail (readRaw supports CSV as well as Excel)
+        Path actualCsv = actualDir.resolve("actual.csv");
+        Files.writeString(
+                actualCsv,
+                "工程名,機械名,依頼NO,加工日,実加工数\n"
+                        + "P1,M1,R1,2026/08/01,500\n");
+        Files.writeString(
+                dir.resolve(AppPaths.RESULT_DISPATCH_TABLE_JSON_BASENAME),
+                "{\"columns\":[],\"rows\":[]}");
+
+        Map<String, String> ui = new HashMap<>();
+        ui.put(AppPaths.KEY_PM_AI_REPO_ROOT, dir.toString());
+        ui.put(AppPaths.KEY_PM_AI_RESULT_DISPATCH_TABLE_DIR, dir.toString());
+        ui.put(AppPaths.KEY_PM_AI_ACTUAL_DETAIL_WORKBOOK, actualCsv.toString());
+
+        LoadedSources loaded = EquipmentStatusDashboardSourceLoader.load(ui);
+        Assertions.assertNotNull(loaded);
+        Assertions.assertEquals(1, loaded.actuals().rows().size());
+
+        // Verify memory cache hit (NetworkSourceDirResolver copies live file to actual-detail-newest.*)
+        NetworkSourceDirResolver.Result r = NetworkSourceDirResolver.resolve(ui);
+        Assertions.assertTrue(
+                NetworkSourceFileReloadCache.matchActuals(r.actualDetailPath().orElseThrow()).isPresent(),
+                "Memory cache should be populated for resolved actual detail path");
+
+        // Verify shaped JSON file was saved to disk
+        Path shapedJson = AppPaths.resolveShapedProcessingActualsJsonPath(ui);
+        Assertions.assertTrue(
+                Files.isRegularFile(shapedJson),
+                "shaped_processing_actuals.json should be saved");
+        String jsonContent = Files.readString(shapedJson);
+        Assertions.assertTrue(jsonContent.contains("実加工数"));
+        Assertions.assertTrue(jsonContent.contains("500"));
     }
 }

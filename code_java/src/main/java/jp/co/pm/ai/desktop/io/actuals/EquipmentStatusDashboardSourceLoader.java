@@ -4,10 +4,12 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.text.NumberFormat;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.config.NetworkSourceDirResolver;
@@ -291,7 +293,14 @@ public final class EquipmentStatusDashboardSourceLoader {
             long poiMax = dashboardActualsPoiMaxBytes(ui);
             long size = fileSize(file);
             if (shaped.isPresent() && (size > poiMax || isShapedActualsJsonFresh(file, ui))) {
-                return shaped.get();
+                ActualsSnapshot snap = shaped.get();
+                NetworkSourceFileReloadCache.storeActuals(
+                        file,
+                        isExcelPath(file),
+                        List.of(),
+                        0,
+                        new PlanInputTabularIo.TabularSheet(snap.headers(), snap.rows()));
+                return snap;
             }
             if (size > poiMax) {
                 appendNotice(
@@ -441,8 +450,9 @@ public final class EquipmentStatusDashboardSourceLoader {
             return new ActualsSnapshot(List.of(), List.of());
         }
         int sheetIdx = 0;
+        List<String> names = List.of();
         if (isExcelPath(file)) {
-            List<String> names = TaskInputSourceRawGridIo.listExcelSheetNames(file);
+            names = TaskInputSourceRawGridIo.listExcelSheetNames(file);
             if (names.isEmpty()) {
                 return new ActualsSnapshot(List.of(), List.of());
             }
@@ -454,6 +464,8 @@ public final class EquipmentStatusDashboardSourceLoader {
                 TaskInputSourceRawGridIo.applyProcessingActualsDisplaySteps(raw);
         PlanInputTabularIo.TabularSheet shaped =
                 TaskInputSourceRawGridIo.applyProcessingActualsDateTimeColumns(stepped);
+        NetworkSourceFileReloadCache.storeActuals(file, isExcelPath(file), names, sheetIdx, shaped);
+        saveShapedActualsJsonCache(ui, shaped);
         return EquipmentStatusDashboardBuilder.actualsFrom(shaped);
     }
 
@@ -471,6 +483,8 @@ public final class EquipmentStatusDashboardSourceLoader {
         PlanInputTabularIo.TabularSheet raw = TaskInputSourceRawGridIo.readRaw(normalized, 0, null);
         PlanInputTabularIo.TabularSheet shaped =
                 TaskInputSourceRawGridIo.applyAladdinProcessingPlanDisplaySteps(raw);
+        NetworkSourceFileReloadCache.storeAladdin(
+                normalized, isExcelPath(normalized), List.of(), 0, shaped);
         return EquipmentStatusDashboardBuilder.aladdinFrom(shaped);
     }
 
@@ -489,7 +503,16 @@ public final class EquipmentStatusDashboardSourceLoader {
 
     private static String actualsLabel(Map<String, String> ui) {
         NetworkSourceDirResolver.Result r = NetworkSourceDirResolver.resolve(ui);
-        return r.actualDetailPath().map(p -> p.getFileName().toString()).orElse("(未設定)");
+        return r.actualDetailPath()
+                .map(p -> p.getFileName().toString())
+                .orElseGet(
+                        () -> {
+                            Path shaped = AppPaths.resolveShapedProcessingActualsJsonPath(ui);
+                            if (Files.isRegularFile(shaped)) {
+                                return shaped.getFileName().toString() + " (キャッシュJSON)";
+                            }
+                            return "(未設定)";
+                        });
     }
 
     private static String aladdinLabel(Map<String, String> ui) {
@@ -565,5 +588,73 @@ public final class EquipmentStatusDashboardSourceLoader {
         }
         int ix = names.indexOf(want);
         return ix >= 0 ? ix : 0;
+    }
+
+    /**
+     * キャッシュ用 JSON に含める実績の主要見出し。
+     * 加工実績DATAタブ・設備稼働ダッシュボード・加工トレンド・納期管理ビューで参照される全列を包含する。
+     */
+    public static final Set<String> ESSENTIAL_ACTUALS_HEADERS = Set.of(
+            "工程名",
+            "機械名",
+            "依頼NO",
+            "依頼ＮＯ",
+            "加工日",
+            "実加工数",
+            "製造条件(内訳)",
+            "加工開始日時",
+            "加工終了日時",
+            "換算数量",
+            "累積実績",
+            "累積完了率",
+            "メンバー名");
+
+    /**
+     * 整形済み表から {@link #ESSENTIAL_ACTUALS_HEADERS} に合致する列を射影したキャッシュ用シートを生成する。
+     */
+    static PlanInputTabularIo.TabularSheet projectShapedForCache(PlanInputTabularIo.TabularSheet shaped) {
+        if (shaped == null || shaped.headers().isEmpty()) {
+            return shaped;
+        }
+        List<String> shHeaders = shaped.headers();
+        List<Integer> keptIndices = new ArrayList<>();
+        List<String> outHeaders = new ArrayList<>();
+        for (int i = 0; i < shHeaders.size(); i++) {
+            String title = shHeaders.get(i) != null ? shHeaders.get(i).strip() : "";
+            if (ESSENTIAL_ACTUALS_HEADERS.contains(title)) {
+                keptIndices.add(i);
+                outHeaders.add(shHeaders.get(i));
+            }
+        }
+        if (outHeaders.isEmpty()) {
+            return shaped;
+        }
+        List<List<String>> outRows = new ArrayList<>(shaped.rows().size());
+        for (List<String> row : shaped.rows()) {
+            List<String> line = new ArrayList<>(keptIndices.size());
+            for (int ix : keptIndices) {
+                line.add(ix < row.size() && row.get(ix) != null ? row.get(ix) : "");
+            }
+            outRows.add(line);
+        }
+        return new PlanInputTabularIo.TabularSheet(outHeaders, outRows);
+    }
+
+    private static void saveShapedActualsJsonCache(
+            Map<String, String> ui, PlanInputTabularIo.TabularSheet shaped) {
+        if (shaped == null || shaped.headers().isEmpty() || shaped.rows().isEmpty()) {
+            return;
+        }
+        try {
+            Path savePath = AppPaths.resolveShapedProcessingActualsJsonPath(ui);
+            PlanInputTabularIo.TabularSheet projected = projectShapedForCache(shaped);
+            JsonTableIo.saveArrayTable(
+                    savePath,
+                    projected.headers(),
+                    projected.rows(),
+                    shaped.headers());
+        } catch (Exception ex) {
+            // キャッシュ保存失敗時も主フローを阻害しない
+        }
     }
 }
