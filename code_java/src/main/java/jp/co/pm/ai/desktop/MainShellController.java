@@ -6668,7 +6668,7 @@ public final class MainShellController
         refreshGlobalStatusBar();
     }
 
-    private static final int STARTUP_BACKGROUND_LOAD_STEP_COUNT = 7;
+    private static final int STARTUP_BACKGROUND_LOAD_STEP_COUNT = 6;
     private static final int STARTUP_BACKGROUND_LOAD_STEP_REQUEST_FORM = 5;
 
     @Override

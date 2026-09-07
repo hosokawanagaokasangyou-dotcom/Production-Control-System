@@ -68,7 +68,7 @@ class EnvVarsStartupCheckBusyDialogTest {
         assertTrue(
                 EnvVarsStartupCheckBusyDialog.isTabLoadStatus(
                         EnvVarsStartupCheckBusyDialog.STATUS_BACKGROUND_LOAD));
-        assertTrue(EnvVarsStartupCheckBusyDialog.isTabLoadStatus("起動後読込 (5/7): 原本転記…"));
+        assertTrue(EnvVarsStartupCheckBusyDialog.isTabLoadStatus("起動後読込 (5/6): 原本転記…"));
         assertFalse(
                 EnvVarsStartupCheckBusyDialog.isTabLoadStatus(
                         EnvVarsStartupCheckBusyDialog.STATUS_RESTORE_WORKSPACE));

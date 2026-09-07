@@ -9,8 +9,10 @@ import javafx.application.Platform;
 /**
  * 起動・環境確定後にタブデータを順次バックグラウンド読込する。
  *
- * <p>順序: リモートデスクトップ → 会社カレンダー → メンバー勤怠 → 機械カレンダー → 原本転記 → 計画確認 →
- * 加工トレンド。
+ * <p>順序（起動チェックモーダル対象）: リモートデスクトップ → 会社カレンダー → メンバー勤怠 →
+ * 機械カレンダー → 原本転記 → 計画確認。
+ *
+ * <p>加工トレンドはモーダル進捗に載せず、チェーン開始と同時に低優先度で並列読込する。
  */
 final class StartupTabBackgroundLoadCoordinator {
 
@@ -52,8 +54,7 @@ final class StartupTabBackgroundLoadCoordinator {
     private static final int STEP_MACHINE = 4;
     private static final int STEP_REQUEST_FORM = 5;
     private static final int STEP_PIPELINE_CHECK = 6;
-    private static final int STEP_PROCESSING_TREND = 7;
-    private static final int STEP_COUNT = 7;
+    private static final int STEP_COUNT = 6;
 
     /** ユーザーがモーダルを閉じたあとのステップ間待機（UI 操作を優先）。 */
     static final long DEFERRED_STEP_YIELD_MS = 150L;
@@ -65,6 +66,7 @@ final class StartupTabBackgroundLoadCoordinator {
     private volatile long activeRunGeneration = -1L;
     /** 起動時チェックを閉じ、低優先度で読込を継続中。 */
     private final AtomicBoolean deferredLowPriority = new AtomicBoolean(false);
+    private final AtomicBoolean processingTrendPreloadStarted = new AtomicBoolean(false);
 
     StartupTabBackgroundLoadCoordinator(Host host) {
         this.host = host;
@@ -103,6 +105,7 @@ final class StartupTabBackgroundLoadCoordinator {
         runScheduled.set(false);
         activeRunGeneration = -1L;
         deferredLowPriority.set(false);
+        processingTrendPreloadStarted.set(false);
         if (!host.isStartupTabBackgroundLoadActive()) {
             return false;
         }
@@ -129,9 +132,14 @@ final class StartupTabBackgroundLoadCoordinator {
             return;
         }
         deferredLowPriority.set(false);
+        processingTrendPreloadStarted.set(false);
         activeRunGeneration = loadGeneration.get();
         host.setStartupTabBackgroundLoadActive(true);
-        Platform.runLater(this::beginRemoteDesktop);
+        Platform.runLater(
+                () -> {
+                    scheduleProcessingTrendQuietly();
+                    beginRemoteDesktop();
+                });
     }
 
     /** 工場切替・ワークスペース復元後に再読込する。 */
@@ -144,6 +152,42 @@ final class StartupTabBackgroundLoadCoordinator {
     void resetAndScheduleAfterFactorySwitch() {
         runScheduled.set(false);
         scheduleIfIdle(host::canScheduleFactorySwitchBackgroundLoad);
+    }
+
+    /**
+     * 加工トレンドは起動チェックの進捗（N/6）に含めず、並列・低優先で読む。
+     * モーダルを閉じる条件にもしない。
+     */
+    private void scheduleProcessingTrendQuietly() {
+        if (isRunObsolete()) {
+            return;
+        }
+        if (!processingTrendPreloadStarted.compareAndSet(false, true)) {
+            return;
+        }
+        ProcessingTrendTabController tab = host.processingTrendTab();
+        if (tab == null) {
+            return;
+        }
+        host.appendStartupBackgroundLog("[startup-bg] 加工トレンドをバックグラウンド読込開始（進捗外）");
+        Thread worker =
+                new Thread(
+                        () ->
+                                Platform.runLater(
+                                        () ->
+                                                tab.preloadInBackground(
+                                                        ok ->
+                                                                Platform.runLater(
+                                                                        () ->
+                                                                                host.appendStartupBackgroundLog(
+                                                                                        "[startup-bg] 加工トレンド"
+                                                                                                + (ok
+                                                                                                        ? " 読込完了（進捗外）"
+                                                                                                        : " 読込失敗（進捗外）"))))),
+                        "startup-bg-processing-trend");
+        worker.setDaemon(true);
+        worker.setPriority(Thread.MIN_PRIORITY);
+        worker.start();
     }
 
     private void beginRemoteDesktop() {
@@ -232,27 +276,11 @@ final class StartupTabBackgroundLoadCoordinator {
         host.appendStartupBackgroundLog("[startup-bg] 計画確認を走査中…");
         RequestFormPipelineCheckTabController tab = host.requestFormPipelineCheckTab();
         if (tab == null) {
-            runNextStep(this::beginProcessingTrend);
-            return;
-        }
-        tab.preloadInBackground(
-                ok -> Platform.runLater(
-                        () -> finishStep("計画確認", ok, this::beginProcessingTrend)));
-    }
-
-    private void beginProcessingTrend() {
-        if (isRunObsolete()) {
-            return;
-        }
-        setStatus(STEP_PROCESSING_TREND, "加工トレンド");
-        host.appendStartupBackgroundLog("[startup-bg] 加工トレンドを読込中…");
-        ProcessingTrendTabController tab = host.processingTrendTab();
-        if (tab == null) {
             completeAll();
             return;
         }
         tab.preloadInBackground(
-                ok -> Platform.runLater(() -> finishStep("加工トレンド", ok, this::completeAll)));
+                ok -> Platform.runLater(() -> finishStep("計画確認", ok, this::completeAll)));
     }
 
     private void finishStep(String label, boolean ok, Runnable next) {

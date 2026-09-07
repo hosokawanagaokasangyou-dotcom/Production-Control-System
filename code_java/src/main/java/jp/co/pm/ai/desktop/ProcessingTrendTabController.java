@@ -353,7 +353,7 @@ public class ProcessingTrendTabController {
                                 + String.format(Locale.ROOT, "%.0f%% 以上=緑、%.0f%% 以上=橙、未満=赤", PROGRESS_GOOD_PCT, PROGRESS_WARN_PCT)));
         renderEmpty(
                 "データ未読込",
-                "起動後にバックグラウンドで読み込みます。完了前に開いた場合は表示までお待ちください。"
+                "起動後にバックグラウンドで読み込みます（初期チェックの進捗には含めません）。"
                         + " 読み込まれないときは「再読込」を押してください。");
     }
 
