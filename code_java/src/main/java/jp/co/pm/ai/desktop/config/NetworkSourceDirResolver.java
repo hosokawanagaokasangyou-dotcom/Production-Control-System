@@ -288,13 +288,55 @@ public final class NetworkSourceDirResolver {
             String name = liveFile.getFileName() != null ? liveFile.getFileName().toString() : "file";
             String ext = extensionOf(name);
             Path dest = root.resolve(stem + ext);
+            if (cacheAlreadyMatchesLive(ui, stem, liveFile, dest)) {
+                return Optional.of(dest);
+            }
             copyLiveFileToCache(liveFile, dest, logs);
             pruneSiblingCacheFiles(root, stem, dest.getFileName().toString());
-            writeMeta(ui, stem + ext, liveFile.toString());
+            writeMeta(ui, stem + ext, liveFile, dest);
             return Optional.of(dest);
         } catch (IOException ex) {
             logs.add("[network-source] キャッシュ更新に失敗（無視して続行）: " + ex.getMessage());
             return Optional.empty();
+        }
+    }
+
+    /**
+     * ライブ元の mtime/size が前回キャッシュ時と同一なら再コピーしない。
+     * （毎回コピーするとキャッシュ mtime が変わり、指紋判定が常に「更新あり」になる）
+     */
+    private static boolean cacheAlreadyMatchesLive(
+            Map<String, String> ui, String stem, Path liveFile, Path dest) {
+        if (!Files.isRegularFile(dest) || !Files.isRegularFile(liveFile)) {
+            return false;
+        }
+        try {
+            long liveMod = Files.getLastModifiedTime(liveFile).toMillis();
+            long liveSize = Files.size(liveFile);
+            Path metaPath = cacheRoot(ui).resolve(META_JSON);
+            if (!Files.isRegularFile(metaPath)) {
+                return false;
+            }
+            com.fasterxml.jackson.databind.ObjectMapper om =
+                    new com.fasterxml.jackson.databind.ObjectMapper();
+            com.fasterxml.jackson.databind.JsonNode root = om.readTree(metaPath.toFile());
+            if (root == null || !root.isObject()) {
+                return false;
+            }
+            com.fasterxml.jackson.databind.JsonNode slot = root.get(stem);
+            if (slot == null || !slot.isObject()) {
+                return false;
+            }
+            String cachedSource = text(slot, "sourcePath");
+            String liveAbs = liveFile.toAbsolutePath().normalize().toString();
+            if (!liveAbs.equals(cachedSource)) {
+                return false;
+            }
+            long metaMod = slot.path("sourceLastModifiedMillis").asLong(-1L);
+            long metaSize = slot.path("sourceSize").asLong(-1L);
+            return metaMod == liveMod && metaSize == liveSize;
+        } catch (IOException ex) {
+            return false;
         }
     }
 
@@ -411,7 +453,7 @@ public final class NetworkSourceDirResolver {
         }
     }
 
-    private static void writeMeta(Map<String, String> ui, String cacheFileName, String sourceHint)
+    private static void writeMeta(Map<String, String> ui, String cacheFileName, Path liveFile, Path dest)
             throws IOException {
         Path root = cacheRoot(ui);
         Files.createDirectories(root);
@@ -431,8 +473,18 @@ public final class NetworkSourceDirResolver {
         String stem = cacheFileStemFromCacheFileName(cacheFileName);
         com.fasterxml.jackson.databind.node.ObjectNode slot = om.createObjectNode();
         slot.put("cacheFile", cacheFileName);
-        slot.put("sourcePath", sourceHint != null ? sourceHint : "");
+        slot.put(
+                "sourcePath",
+                liveFile != null ? liveFile.toAbsolutePath().normalize().toString() : "");
         slot.put("updatedMillis", System.currentTimeMillis());
+        if (liveFile != null && Files.isRegularFile(liveFile)) {
+            slot.put("sourceLastModifiedMillis", Files.getLastModifiedTime(liveFile).toMillis());
+            slot.put("sourceSize", Files.size(liveFile));
+        }
+        if (dest != null && Files.isRegularFile(dest)) {
+            slot.put("cacheLastModifiedMillis", Files.getLastModifiedTime(dest).toMillis());
+            slot.put("cacheSize", Files.size(dest));
+        }
         rootNode.set(stem, slot);
         om.writerWithDefaultPrettyPrinter().writeValue(metaPath.toFile(), rootNode);
     }

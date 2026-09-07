@@ -113,6 +113,73 @@ class NetworkSourceDirResolverTest {
     }
 
     @Test
+    void resolve_skipsRecopyWhenLiveUnchanged(@TempDir Path fakeRepo) throws Exception {
+        Path src = fakeRepo.resolve("in").resolve("src");
+        Files.createDirectories(src);
+        Path live = src.resolve("plan.xlsx");
+        try (OutputStream out = Files.newOutputStream(live);
+                ZipOutputStream zout = new ZipOutputStream(out)) {
+            zout.putNextEntry(new ZipEntry("[Content_Types].xml"));
+            zout.write("<Types/>".getBytes(StandardCharsets.UTF_8));
+            zout.closeEntry();
+            zout.putNextEntry(new ZipEntry("xl/workbook.xml"));
+            zout.write("<workbook/>".getBytes(StandardCharsets.UTF_8));
+            zout.closeEntry();
+        }
+        Map<String, String> ui =
+                Map.of(
+                        AppPaths.KEY_PM_AI_REPO_ROOT,
+                        fakeRepo.toString(),
+                        AppPaths.KEY_PM_AI_TASK_INPUT_SOURCE_DIR,
+                        src.toString());
+
+        NetworkSourceDirResolver.Result first = NetworkSourceDirResolver.resolve(ui);
+        assertTrue(first.taskInputPath().isPresent());
+        Path cached = first.taskInputPath().get();
+        long mtime1 = Files.getLastModifiedTime(cached).toMillis();
+        long size1 = Files.size(cached);
+        Path metaPath =
+                fakeRepo.resolve(".pm-ai-cache").resolve("network-source").resolve("network-source-cache-meta.json");
+        assertTrue(Files.isRegularFile(metaPath));
+        String meta1 = Files.readString(metaPath, StandardCharsets.UTF_8);
+
+        Thread.sleep(50);
+        NetworkSourceDirResolver.Result second = NetworkSourceDirResolver.resolve(ui);
+        assertTrue(second.taskInputPath().isPresent());
+        assertEquals(cached, second.taskInputPath().get());
+        assertEquals(mtime1, Files.getLastModifiedTime(cached).toMillis());
+        assertEquals(size1, Files.size(cached));
+        String meta2 = Files.readString(metaPath, StandardCharsets.UTF_8);
+        assertEquals(meta1, meta2, "未変更ならメタも書き換えない");
+    }
+
+    @Test
+    void resolve_recopiesWhenLiveChanges(@TempDir Path fakeRepo) throws Exception {
+        Path src = fakeRepo.resolve("in").resolve("src");
+        Files.createDirectories(src);
+        Path live = src.resolve("plan.xlsx");
+        Files.writeString(live, "v1");
+        Map<String, String> ui =
+                Map.of(
+                        AppPaths.KEY_PM_AI_REPO_ROOT,
+                        fakeRepo.toString(),
+                        AppPaths.KEY_PM_AI_TASK_INPUT_SOURCE_DIR,
+                        src.toString());
+
+        NetworkSourceDirResolver.Result first = NetworkSourceDirResolver.resolve(ui);
+        Path cached = first.taskInputPath().orElseThrow();
+        long mtime1 = Files.getLastModifiedTime(cached).toMillis();
+
+        Thread.sleep(50);
+        Files.writeString(live, "v2-changed-content");
+        NetworkSourceDirResolver.Result second = NetworkSourceDirResolver.resolve(ui);
+        Path cached2 = second.taskInputPath().orElseThrow();
+        assertTrue(Files.getLastModifiedTime(cached2).toMillis() >= mtime1);
+        assertTrue(Files.size(cached2) != Files.size(cached) || !Files.readString(cached2).equals("v1"));
+        assertEquals("v2-changed-content", Files.readString(cached2));
+    }
+
+    @Test
     void pruneSiblingCacheFiles_removesOldExtension(@TempDir Path root) throws Exception {
         Files.createDirectories(root);
         Path staleCsv = root.resolve("task-input-newest.csv");

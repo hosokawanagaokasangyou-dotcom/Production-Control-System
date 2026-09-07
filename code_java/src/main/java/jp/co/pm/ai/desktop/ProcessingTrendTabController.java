@@ -1262,9 +1262,13 @@ public class ProcessingTrendTabController {
             return;
         }
         reloadInFlight = true;
-        setReloading(true);
         final SourceFingerprint previous = loadedFingerprint;
         final boolean haveCache = cachedSources != null;
+        // 自動更新でソース未変更のときは「読込中…」を出さない（指紋確認のみ）
+        final boolean showBusy = userInitiated || !haveCache;
+        if (showBusy) {
+            setReloading(true);
+        }
         final Map<String, String> ui = shell.snapshotUiEnv();
         Task<ReloadOutcome> task =
                 new Task<>() {
@@ -1306,7 +1310,9 @@ public class ProcessingTrendTabController {
                         updateLastUpdatedLabel();
                         boolean dayRolled =
                                 currentResult != null && !currentResult.today().equals(LocalDate.now());
-                        setReloading(false);
+                        if (showBusy) {
+                            setReloading(false);
+                        }
                         if (currentResult == null || dayRolled || periodMoved) {
                             armPreloadAfterCompute();
                             recomputeNow();
@@ -1314,6 +1320,9 @@ public class ProcessingTrendTabController {
                             completePreload(true);
                         }
                         return;
+                    }
+                    if (!showBusy) {
+                        setReloading(true);
                     }
                     lastDataChangedAt = lastSuccessAt;
                     loadedFingerprint = decision.fingerprint();
@@ -1332,7 +1341,9 @@ public class ProcessingTrendTabController {
         task.setOnFailed(
                 e -> {
                     reloadInFlight = false;
-                    setReloading(false);
+                    if (showBusy || reloadingFlag) {
+                        setReloading(false);
+                    }
                     Throwable ex = task.getException();
                     String sourceContext = EquipmentStatusDashboardSourceLoader.formatSourceContext(ui);
                     lastLoadErrorDetail = DashboardLoadErrorFormatter.formatDetail(ex);
