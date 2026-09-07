@@ -51,7 +51,10 @@
                 <Button fx:id="thisMonthButton" mnemonicParsing="false" onAction="#onThisMonthAction" text="今月"/>
                 <Separator orientation="VERTICAL"/>
                 <Button fx:id="exportExcelButton" mnemonicParsing="false" onAction="#onExportExcelAction" text="Excel出力">
-                    <tooltip><Tooltip text="表示中の期間で、全機械・全工程の一括 Excel を出力します（機械/工程の絞込は反映しません）。数値は整数 m。トレンドグラフ付き。"/></tooltip>
+                    <tooltip><Tooltip text="表示中の期間で、全機械・全工程の一括 Excel を固定フォルダへ出力します（機械/工程の絞込は反映しません）。旧ファイルは削除し最新1件のみ残します。数値は整数 m。"/></tooltip>
+                </Button>
+                <Button fx:id="openExcelButton" mnemonicParsing="false" onAction="#onOpenExcelAction" text="Excelを開く" disable="true">
+                    <tooltip><Tooltip text="出力フォルダ内の最新の加工トレンド Excel を開きます。"/></tooltip>
                 </Button>
                 <Separator orientation="VERTICAL"/>
                 <CheckBox fx:id="autoRefreshCheckBox" mnemonicParsing="false" selected="true" text="自動更新">

@@ -45,6 +45,8 @@ stage1_task_input_table.xlsx
 # 生成物の実行出力（段階1/2/3 の xlsx・json）。再生成可能なためコミットしない
 /output/
 
+# 加工トレンド等のローカル Excel 出力（再生成可能）
+.pm-ai-cache/exports/
 
 .pm-ai-cache/stage2-in-progress-next-day-dispatch.json
 .pm-ai-cache/network-source/actual-detail-newest.xlsx

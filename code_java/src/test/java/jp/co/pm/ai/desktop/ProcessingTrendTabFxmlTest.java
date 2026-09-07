@@ -71,6 +71,14 @@ class ProcessingTrendTabFxmlTest {
     }
 
     @Test
+    void openExcelButtonExistsInToolBar() throws Exception {
+        Element openBtn = elementByFxId("openExcelButton");
+        assertNotNull(openBtn, "openExcelButton が無い");
+        assertEquals("Excelを開く", openBtn.getAttribute("text"));
+        assertEquals("#onOpenExcelAction", openBtn.getAttribute("onAction"));
+    }
+
+    @Test
     void granularityTogglesExistInSubbar() throws Exception {
         Element daily = elementByFxId("granularityDailyToggle");
         Element monthly = elementByFxId("granularityMonthlyToggle");

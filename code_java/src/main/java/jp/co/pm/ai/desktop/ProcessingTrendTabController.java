@@ -1,7 +1,5 @@
 package jp.co.pm.ai.desktop;
 
-import java.io.File;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
@@ -43,10 +41,7 @@ import javafx.scene.chart.BarChart;
 import javafx.scene.chart.CategoryAxis;
 import javafx.scene.chart.LineChart;
 import javafx.scene.chart.XYChart;
-import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
-import javafx.scene.control.ButtonBar;
-import javafx.scene.control.ButtonType;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.DatePicker;
@@ -71,12 +66,10 @@ import javafx.scene.layout.Pane;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import javafx.scene.shape.Line;
-import javafx.stage.FileChooser;
 import javafx.util.Duration;
 import javafx.util.StringConverter;
 
 import jp.co.pm.ai.desktop.ProcessingTrendChartSupport.NiceRange;
-import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.io.DesktopFileOpener;
 import jp.co.pm.ai.desktop.io.actuals.DashboardLoadErrorFormatter;
 import jp.co.pm.ai.desktop.io.actuals.EquipmentStatusDashboardSourceLoader;
@@ -84,6 +77,7 @@ import jp.co.pm.ai.desktop.io.actuals.EquipmentStatusDashboardSourceLoader.Loade
 import jp.co.pm.ai.desktop.io.actuals.EquipmentStatusDashboardSourceLoader.ReloadDecision;
 import jp.co.pm.ai.desktop.io.actuals.EquipmentStatusDashboardSourceLoader.SourceFingerprint;
 import jp.co.pm.ai.desktop.io.actuals.ProcessingTrendAggregator;
+import jp.co.pm.ai.desktop.io.actuals.ProcessingTrendExcelExportStore;
 import jp.co.pm.ai.desktop.io.actuals.ProcessingTrendStableDayCache;
 import jp.co.pm.ai.desktop.io.actuals.ProcessingTrendAggregator.DayPoint;
 import jp.co.pm.ai.desktop.io.actuals.ProcessingTrendAggregator.Filter;
@@ -174,6 +168,7 @@ public class ProcessingTrendTabController {
     @FXML private BorderPane tabRoot;
     @FXML private Button reloadButton;
     @FXML private Button exportExcelButton;
+    @FXML private Button openExcelButton;
     @FXML private ComboBox<PeriodPreset> periodPresetCombo;
     @FXML private DatePicker fromDatePicker;
     @FXML private DatePicker toDatePicker;
@@ -287,7 +282,6 @@ public class ProcessingTrendTabController {
     private SourceFingerprint loadedFingerprint;
     private Result currentResult;
     private MonthlyResult currentMonthlyResult;
-    private static Path lastExportDir;
     private List<String> currentCategoryLabels = List.of();
     private String lastLoadErrorDetail = "";
     private NoticeKind noticeKind = NoticeKind.NONE;
@@ -342,6 +336,7 @@ public class ProcessingTrendTabController {
                 "データ未読込",
                 "起動後にバックグラウンドで読み込みます（初期チェックの進捗には含めません）。"
                         + " 読み込まれないときは「再読込」を押してください。");
+        refreshOpenExcelButtonEnabled();
     }
 
     public void bindShell(MainShellController shell) {
@@ -2282,6 +2277,21 @@ public class ProcessingTrendTabController {
         exportToExcel();
     }
 
+    @FXML
+    private void onOpenExcelAction() {
+        Path newest = findExportWorkbook().orElse(null);
+        if (newest == null) {
+            showNotice("開く Excel がありません。先に「Excel出力」してください。", NoticeKind.DATA_WARN);
+            refreshOpenExcelButtonEnabled();
+            return;
+        }
+        try {
+            DesktopFileOpener.openFile(newest);
+        } catch (Exception ex) {
+            showNotice("ファイルを開けませんでした: " + ex.getMessage(), NoticeKind.COMPUTE_ERROR);
+        }
+    }
+
     private void exportToExcel() {
         if (cachedSources == null) {
             showNotice("出力対象のデータがありません。先にデータを読み込んでください。", NoticeKind.DATA_WARN);
@@ -2302,32 +2312,26 @@ public class ProcessingTrendTabController {
         String defaultName =
                 ProcessingTrendWorkbookExporter.suggestFileName(exportFilter, isMonthly, LocalDateTime.now());
 
-        FileChooser chooser = new FileChooser();
-        chooser.setTitle("加工トレンド集計の Excel 出力（期間一括・全機械全工程）");
-        chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Excel ワークブック (*.xlsx)", "*.xlsx"));
-        chooser.setInitialFileName(defaultName);
-
-        Path initialDir =
-                lastExportDir != null && Files.isDirectory(lastExportDir)
-                        ? lastExportDir
-                        : defaultExportDirectory();
-        if (initialDir != null && Files.exists(initialDir)) {
-            chooser.setInitialDirectory(initialDir.toFile());
-        }
-
-        File target =
-                chooser.showSaveDialog(
-                        tabRoot.getScene() != null ? tabRoot.getScene().getWindow() : null);
-        if (target == null) {
+        Map<String, String> uiEnv = shell != null ? shell.snapshotUiEnv() : Map.of();
+        final Path exportDir = ProcessingTrendExcelExportStore.resolveDirectory(uiEnv);
+        final Path target;
+        try {
+            target = ProcessingTrendExcelExportStore.prepareTarget(exportDir, defaultName);
+        } catch (Exception ex) {
+            showNotice(
+                    "Excel 出力先の準備に失敗しました: "
+                            + (ex.getMessage() != null ? ex.getMessage() : "不明なエラー"),
+                    NoticeKind.COMPUTE_ERROR);
             return;
         }
-        lastExportDir = target.toPath().getParent();
 
         final LoadedSources src = cachedSources;
         final LocalDate today = LocalDate.now();
-        Map<String, String> uiEnv = shell != null ? shell.snapshotUiEnv() : Map.of();
         if (exportExcelButton != null) {
             exportExcelButton.setDisable(true);
+        }
+        if (openExcelButton != null) {
+            openExcelButton.setDisable(true);
         }
         applyLoadingPresentation(true);
         loadingStatusLabel.setText("Excel 出力中（全機械・全工程を集計）…");
@@ -2451,7 +2455,7 @@ public class ProcessingTrendTabController {
                                         src.dailyReportSourceLabel(),
                                         bundles,
                                         mpRows);
-                        return ProcessingTrendWorkbookExporter.writeTo(target.toPath(), req, uiEnv);
+                        return ProcessingTrendWorkbookExporter.writeTo(target, req, uiEnv);
                     }
                 };
 
@@ -2462,7 +2466,13 @@ public class ProcessingTrendTabController {
                     }
                     applyLoadingPresentation(false);
                     ProcessingTrendExportResult res = task.getValue();
-                    promptExportSuccess(res.path(), res.machineSheets());
+                    refreshOpenExcelButtonEnabled();
+                    showNotice(
+                            "Excel を出力しました（機械別日別 "
+                                    + res.machineSheets()
+                                    + " 枚）: "
+                                    + res.path().toAbsolutePath(),
+                            NoticeKind.INFO);
                 });
 
         task.setOnFailed(
@@ -2471,6 +2481,7 @@ public class ProcessingTrendTabController {
                         exportExcelButton.setDisable(false);
                     }
                     applyLoadingPresentation(false);
+                    refreshOpenExcelButtonEnabled();
                     Throwable ex = task.getException();
                     showNotice(
                             "Excel 出力に失敗しました: "
@@ -2485,51 +2496,16 @@ public class ProcessingTrendTabController {
         th.start();
     }
 
-    private void promptExportSuccess(Path path, int machineSheets) {
-        Alert alert = new Alert(Alert.AlertType.INFORMATION);
-        alert.setTitle("Excel 出力完了");
-        alert.setHeaderText("加工トレンド集計を Excel に出力しました。");
-        alert.setContentText(
-                "画面の機械・工程選択は含まれていません。全機械・全工程の期間一括です。\n"
-                        + "機械別日別シート: "
-                        + machineSheets
-                        + " 枚\n"
-                        + path.toAbsolutePath());
-
-        ButtonType openBtn = new ButtonType("Excel で開く", ButtonBar.ButtonData.YES);
-        ButtonType closeBtn = new ButtonType("閉じる", ButtonBar.ButtonData.CANCEL_CLOSE);
-        alert.getButtonTypes().setAll(openBtn, closeBtn);
-
-        if (tabRoot.getScene() != null
-                && tabRoot.getScene().getWindow() instanceof javafx.stage.Stage stage) {
-            alert.initOwner(stage);
+    private void refreshOpenExcelButtonEnabled() {
+        if (openExcelButton == null) {
+            return;
         }
-
-        alert.showAndWait()
-                .ifPresent(
-                        bt -> {
-                            if (bt == openBtn) {
-                                try {
-                                    DesktopFileOpener.openFile(path);
-                                } catch (Exception ex) {
-                                    showNotice("ファイルを開けませんでした: " + ex.getMessage(), NoticeKind.COMPUTE_ERROR);
-                                }
-                            }
-                        });
+        openExcelButton.setDisable(findExportWorkbook().isEmpty());
     }
 
-    private Path defaultExportDirectory() {
-        if (shell != null) {
-            Map<String, String> ui = shell.snapshotUiEnv();
-            Path root = AppPaths.resolveRepoRoot(ui);
-            Path exp = root.resolve(".pm-ai-cache").resolve("exports").resolve("processing-trend");
-            try {
-                Files.createDirectories(exp);
-                return exp;
-            } catch (Exception ignored) {
-                return root;
-            }
-        }
-        return Path.of(System.getProperty("user.home", "."));
+    private java.util.Optional<Path> findExportWorkbook() {
+        Map<String, String> ui = shell != null ? shell.snapshotUiEnv() : Map.of();
+        return ProcessingTrendExcelExportStore.findNewestXlsx(
+                ProcessingTrendExcelExportStore.resolveDirectory(ui));
     }
 }
