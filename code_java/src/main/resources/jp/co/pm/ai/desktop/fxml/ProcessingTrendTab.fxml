@@ -110,6 +110,24 @@
                             <tooltip><Tooltip text="実績累計・予定累計・見込累計の折れ線のみ"/></tooltip>
                         </ToggleButton>
                     </HBox>
+                    <HBox spacing="4.0" alignment="CENTER_LEFT" styleClass="pm-processing-trend-ma-toggle">
+                        <fx:define>
+                            <ToggleGroup fx:id="movingAverageGroup"/>
+                        </fx:define>
+                        <Label text="移動平均"/>
+                        <ToggleButton fx:id="ma7Toggle" mnemonicParsing="false" text="7日"
+                                      toggleGroup="$movingAverageGroup">
+                            <tooltip><Tooltip text="直近7日間の実績移動平均を折れ線で表示します"/></tooltip>
+                        </ToggleButton>
+                        <ToggleButton fx:id="ma14Toggle" mnemonicParsing="false" text="14日"
+                                      toggleGroup="$movingAverageGroup">
+                            <tooltip><Tooltip text="直近14日間の実績移動平均を折れ線で表示します"/></tooltip>
+                        </ToggleButton>
+                        <ToggleButton fx:id="ma30Toggle" mnemonicParsing="false" selected="true" text="30日"
+                                      toggleGroup="$movingAverageGroup">
+                            <tooltip><Tooltip text="直近30日間の実績移動平均を折れ線で表示します（既定）"/></tooltip>
+                        </ToggleButton>
+                    </HBox>
                     <HBox spacing="8.0" alignment="CENTER_LEFT">
                         <ProgressIndicator fx:id="loadingIndicator" managed="false" prefHeight="16.0" prefWidth="16.0"
                                            visible="false"/>
@@ -226,7 +244,7 @@
                     <columns>
                         <TableColumn fx:id="colDate" prefWidth="105.0" sortable="false" text="日付"/>
                         <TableColumn fx:id="colActual" prefWidth="100.0" sortable="false" text="日報実績 (m)"/>
-                        <TableColumn fx:id="colActual7dMa" prefWidth="105.0" sortable="false" text="7日移動平均 (m)"/>
+                        <TableColumn fx:id="colActualMa" prefWidth="110.0" sortable="false" text="30日移動平均 (m)"/>
                         <TableColumn fx:id="colCompareActual" prefWidth="100.0" sortable="false" text="実績明細 (m)"/>
                         <TableColumn fx:id="colActualCompareDiff" prefWidth="95.0" sortable="false" text="差異 (m)"/>
                         <TableColumn fx:id="colPlan" prefWidth="95.0" sortable="false" text="予定 (m)"/>

@@ -192,6 +192,10 @@ public class ProcessingTrendTabController {
     @FXML private ToggleButton viewComboToggle;
     @FXML private ToggleButton viewDailyToggle;
     @FXML private ToggleButton viewCumulativeToggle;
+    @FXML private ToggleGroup movingAverageGroup;
+    @FXML private ToggleButton ma7Toggle;
+    @FXML private ToggleButton ma14Toggle;
+    @FXML private ToggleButton ma30Toggle;
     @FXML private ProgressIndicator loadingIndicator;
     @FXML private Label loadingStatusLabel;
     @FXML private Label lastUpdatedLabel;
@@ -230,7 +234,7 @@ public class ProcessingTrendTabController {
     @FXML private TitledPane detailPane;
     @FXML private TableColumn<DayPoint, DayPoint> colDate;
     @FXML private TableColumn<DayPoint, Number> colActual;
-    @FXML private TableColumn<DayPoint, Number> colActual7dMa;
+    @FXML private TableColumn<DayPoint, Number> colActualMa;
     @FXML private TableColumn<DayPoint, Number> colCompareActual;
     @FXML private TableColumn<DayPoint, Number> colActualCompareDiff;
     @FXML private TableColumn<DayPoint, Number> colPlan;
@@ -248,7 +252,7 @@ public class ProcessingTrendTabController {
                     });
 
     private final XYChart.Series<String, Number> actualDailySeries = new XYChart.Series<>();
-    private final XYChart.Series<String, Number> actual7dMaSeries = new XYChart.Series<>();
+    private final XYChart.Series<String, Number> actualMaSeries = new XYChart.Series<>();
     private final XYChart.Series<String, Number> planDailySeries = new XYChart.Series<>();
     private final XYChart.Series<String, Number> actualCumSeries = new XYChart.Series<>();
     private final XYChart.Series<String, Number> planCumSeries = new XYChart.Series<>();
@@ -304,6 +308,7 @@ public class ProcessingTrendTabController {
         initFilterCombos();
         initGranularityToggles();
         initViewModeToggles();
+        initMovingAverageToggles();
         initCharts();
         initDetailTable();
         initLegend();
@@ -484,9 +489,50 @@ public class ProcessingTrendTabController {
                         });
     }
 
+    private void initMovingAverageToggles() {
+        if (movingAverageGroup == null) {
+            return;
+        }
+        movingAverageGroup
+                .selectedToggleProperty()
+                .addListener(
+                        (obs, o, n) -> {
+                            if (n == null && o != null) {
+                                o.setSelected(true);
+                                return;
+                            }
+                            refreshMovingAverageLabels();
+                            scheduleRecompute();
+                        });
+        refreshMovingAverageLabels();
+    }
+
+    private int currentMovingAverageDays() {
+        if (ma7Toggle != null && ma7Toggle.isSelected()) {
+            return 7;
+        }
+        if (ma14Toggle != null && ma14Toggle.isSelected()) {
+            return 14;
+        }
+        return Filter.DEFAULT_MOVING_AVERAGE_DAYS;
+    }
+
+    private String movingAverageLabel() {
+        return currentMovingAverageDays() + "日移動平均";
+    }
+
+    private void refreshMovingAverageLabels() {
+        String label = movingAverageLabel();
+        actualMaSeries.setName(label);
+        if (colActualMa != null) {
+            colActualMa.setText(label + " (m)");
+        }
+        initLegend();
+    }
+
     private void initCharts() {
         actualDailySeries.setName("実績");
-        actual7dMaSeries.setName("7日移動平均");
+        actualMaSeries.setName(movingAverageLabel());
         planDailySeries.setName("予定");
         actualCumSeries.setName("実績累計");
         planCumSeries.setName("予定累計");
@@ -494,7 +540,7 @@ public class ProcessingTrendTabController {
         dailyChart.getData().add(actualDailySeries);
         dailyChart.getData().add(planDailySeries);
         if (dailyLineChart != null) {
-            dailyLineChart.getData().add(actual7dMaSeries);
+            dailyLineChart.getData().add(actualMaSeries);
             dailyLineChart.setHorizontalZeroLineVisible(false);
             dailyLineChart.setVerticalZeroLineVisible(false);
             dailyLineChart.setPickOnBounds(false);
@@ -587,13 +633,13 @@ public class ProcessingTrendTabController {
                         });
         colPlan.setCellValueFactory(cd -> new ReadOnlyObjectWrapper<>(cd.getValue().planM()));
         colActual.setCellValueFactory(cd -> new ReadOnlyObjectWrapper<>(cd.getValue().actualM()));
-        if (colActual7dMa != null) {
-            colActual7dMa.setCellValueFactory(
+        if (colActualMa != null) {
+            colActualMa.setCellValueFactory(
                     cd ->
                             new ReadOnlyObjectWrapper<>(
-                                    cd.getValue().actual7dMaM() > 0 ? cd.getValue().actual7dMaM() : null));
-            colActual7dMa.setCellFactory(col -> numberCell(false));
-            colActual7dMa.setStyle("-fx-alignment: CENTER-RIGHT;");
+                                    cd.getValue().actualMaM() > 0 ? cd.getValue().actualMaM() : null));
+            colActualMa.setCellFactory(col -> numberCell(false));
+            colActualMa.setStyle("-fx-alignment: CENTER-RIGHT;");
         }
         if (colCompareActual != null) {
             colCompareActual.setCellValueFactory(
@@ -689,9 +735,9 @@ public class ProcessingTrendTabController {
         boolean monthly = granularity == Granularity.MONTHLY;
         colDate.setText(monthly ? "年月" : "日付");
         detailPane.setText(monthly ? "月別明細" : "日別明細");
-        if (colActual7dMa != null) {
-            colActual7dMa.setText("7日移動平均 (m)");
-            colActual7dMa.setVisible(!monthly);
+        if (colActualMa != null) {
+            colActualMa.setText(movingAverageLabel() + " (m)");
+            colActualMa.setVisible(!monthly);
         }
         if (colActualCompareDiff != null) {
             colActualCompareDiff.setText("差異 (m)");
@@ -736,7 +782,7 @@ public class ProcessingTrendTabController {
         List<Node> items = new ArrayList<>();
         items.add(legendItem("pm-legend-swatch-bar-actual", barAct, ViewMode.CUMULATIVE));
         if (!monthly) {
-            items.add(legendItem("pm-legend-swatch-line-ma7", "7日移動平均", ViewMode.CUMULATIVE));
+            items.add(legendItem("pm-legend-swatch-line-ma7", movingAverageLabel(), ViewMode.CUMULATIVE));
         }
         items.add(legendItem("pm-legend-swatch-bar-plan", barPlan, ViewMode.CUMULATIVE));
         items.add(legendItem("pm-legend-swatch-line-actual", actPrefix + "累計", ViewMode.DAILY));
@@ -1305,7 +1351,8 @@ public class ProcessingTrendTabController {
                 actualSrc,
                 src,
                 ALL_ITEM.equals(machine) ? null : machine,
-                ALL_ITEM.equals(process) ? null : process);
+                ALL_ITEM.equals(process) ? null : process,
+                currentMovingAverageDays());
     }
 
     /** UI 操作由来の再集計（デバウンスあり）。 */
@@ -1439,7 +1486,7 @@ public class ProcessingTrendTabController {
     private void renderEmpty(String title, String detail) {
         currentResult = null;
         actualDailySeries.getData().clear();
-        actual7dMaSeries.getData().clear();
+        actualMaSeries.getData().clear();
         planDailySeries.getData().clear();
         actualCumSeries.getData().clear();
         planCumSeries.getData().clear();
@@ -1585,7 +1632,7 @@ public class ProcessingTrendTabController {
         dailyChart.setBarGap(ProcessingTrendChartSupport.barGapFor(n));
 
         List<XYChart.Data<String, Number>> actDaily = new ArrayList<>(n);
-        List<XYChart.Data<String, Number>> act7dMa = new ArrayList<>(n);
+        List<XYChart.Data<String, Number>> actMa = new ArrayList<>(n);
         List<XYChart.Data<String, Number>> planDaily = new ArrayList<>(n);
         List<XYChart.Data<String, Number>> actCum = new ArrayList<>(n);
         List<XYChart.Data<String, Number>> planCum = new ArrayList<>(n);
@@ -1598,10 +1645,10 @@ public class ProcessingTrendTabController {
             String cat = labels.get(i);
             actDaily.add(new XYChart.Data<>(cat, d.actualM()));
             planDaily.add(new XYChart.Data<>(cat, d.planM()));
-            dailyMax = Math.max(dailyMax, Math.max(d.actualM(), Math.max(d.planM(), d.actual7dMaM())));
-            // 7日移動平均は実績がある当日までプロット（未来にはプロットしない）
+            dailyMax = Math.max(dailyMax, Math.max(d.actualM(), Math.max(d.planM(), d.actualMaM())));
+            // 移動平均は実績がある当日までプロット（未来にはプロットしない）
             if (!d.date().isAfter(r.today())) {
-                act7dMa.add(new XYChart.Data<>(cat, d.actual7dMaM()));
+                actMa.add(new XYChart.Data<>(cat, d.actualMaM()));
             }
             // 実績累計は当日までで線を止める（未来に水平線を伸ばさない）
             if (!d.date().isAfter(r.today())) {
@@ -1623,7 +1670,7 @@ public class ProcessingTrendTabController {
             dailyLineXAxis.setCategories(FXCollections.observableArrayList(labels));
         }
         actualDailySeries.getData().setAll(actDaily);
-        actual7dMaSeries.getData().setAll(act7dMa);
+        actualMaSeries.getData().setAll(actMa);
         planDailySeries.getData().setAll(planDaily);
         actualCumSeries.getData().setAll(actCum);
         planCumSeries.getData().setAll(planCum);
@@ -1633,8 +1680,8 @@ public class ProcessingTrendTabController {
         for (int i = 0; i < n; i++) {
             String tip = tooltipText(days.get(i), r.today(), r.compareSourceLabel());
             installSharedTooltip(actDaily.get(i), tip);
-            if (i < act7dMa.size()) {
-                installSharedTooltip(act7dMa.get(i), tip);
+            if (i < actMa.size()) {
+                installSharedTooltip(actMa.get(i), tip);
             }
             installSharedTooltip(planDaily.get(i), tip);
             if (i < actCum.size()) {
@@ -1664,7 +1711,7 @@ public class ProcessingTrendTabController {
         sb.append('\n');
         sb.append("実績 ").append(formatM(d.actualM())).append(" m");
         if (!d.date().isAfter(today)) {
-            sb.append("  7日移動平均 ").append(formatM(d.actual7dMaM())).append(" m");
+            sb.append("  ").append(movingAverageLabel()).append(' ').append(formatM(d.actualMaM())).append(" m");
         }
         if (compareLabel != null && !compareLabel.isEmpty()) {
             double cDiff = d.actualCompareDiffM();
@@ -1707,7 +1754,7 @@ public class ProcessingTrendTabController {
     }
 
     private void renderMonthlyChart(Result r, MonthlyResult mr) {
-        actual7dMaSeries.getData().clear();
+        actualMaSeries.getData().clear();
         if (dailyLineChart != null) {
             dailyLineChart.setVisible(false);
             dailyLineChart.setManaged(false);

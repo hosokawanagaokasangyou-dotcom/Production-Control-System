@@ -8,6 +8,7 @@ import java.util.List;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
+import jp.co.pm.ai.desktop.io.actuals.ProcessingTrendAggregator.ActualSource;
 import jp.co.pm.ai.desktop.io.actuals.ProcessingTrendAggregator.DayPoint;
 import jp.co.pm.ai.desktop.io.actuals.ProcessingTrendAggregator.Filter;
 import jp.co.pm.ai.desktop.io.actuals.ProcessingTrendAggregator.PlanSource;
@@ -540,18 +541,97 @@ class ProcessingTrendAggregatorTest {
 
         LocalDate from = LocalDate.of(2026, 9, 1);
         LocalDate to = LocalDate.of(2026, 9, 5);
-        Filter filter = new Filter(from, to, PlanSource.ALADDIN, "W9-1", null);
+        Filter filter =
+                new Filter(
+                        from,
+                        to,
+                        ActualSource.DAILY_REPORT,
+                        PlanSource.ALADDIN,
+                        "W9-1",
+                        null,
+                        7);
 
         Result r = ProcessingTrendAggregator.aggregate(
                 daily, null, null, null, filter, LocalDate.of(2026, 9, 3));
 
         // 期間内の初日（9/1）: 8/26〜9/1 の 7 日間（すべて 70m）の平均 = 70.0m
-        Assertions.assertEquals(70.0, r.days().get(0).actual7dMaM(), 1e-9);
+        Assertions.assertEquals(70.0, r.days().get(0).actualMaM(), 1e-9);
         // 9/2: 8/27〜9/2 の 7 日間の平均 = 70.0m
-        Assertions.assertEquals(70.0, r.days().get(1).actual7dMaM(), 1e-9);
+        Assertions.assertEquals(70.0, r.days().get(1).actualMaM(), 1e-9);
         // 9/3: 8/28〜9/3 の 7 日間の平均 = 70.0m
-        Assertions.assertEquals(70.0, r.days().get(2).actual7dMaM(), 1e-9);
+        Assertions.assertEquals(70.0, r.days().get(2).actualMaM(), 1e-9);
         // 9/4: 8/29〜9/4（9/4 は実績 0 なので 6 日分 420m / 7 = 60.0m）
-        Assertions.assertEquals(60.0, r.days().get(3).actual7dMaM(), 1e-9);
+        Assertions.assertEquals(60.0, r.days().get(3).actualMaM(), 1e-9);
+    }
+
+    @Test
+    void aggregate_defaultMovingAverageWindowIs30Days() {
+        List<List<String>> rows = new ArrayList<>();
+        // 8/3 〜 9/3: 各日 100m（期間 9/1〜9/5、窓 30 の初日は 8/3〜9/1）
+        LocalDate dataStart = LocalDate.of(2026, 8, 3);
+        for (int i = 0; i < 32; i++) {
+            LocalDate d = dataStart.plusDays(i);
+            rows.add(
+                    List.of(
+                            "W9-1",
+                            "R" + i,
+                            "スリット",
+                            d.format(DateTimeFormatter.ofPattern("yyyy/MM/dd")),
+                            "100"));
+        }
+        ActualsSnapshot daily =
+                new ActualsSnapshot(
+                        List.of("機械名", "依頼NO", "工程名", "加工日", "実加工量"), rows);
+
+        LocalDate from = LocalDate.of(2026, 9, 1);
+        LocalDate to = LocalDate.of(2026, 9, 5);
+        // 窓幅未指定 → 既定 30
+        Filter filter = new Filter(from, to, PlanSource.ALADDIN, "W9-1", null);
+        Assertions.assertEquals(30, filter.movingAverageDays());
+
+        Result r =
+                ProcessingTrendAggregator.aggregate(
+                        daily, null, null, null, filter, LocalDate.of(2026, 9, 3));
+
+        // 9/1: 8/3〜9/1 の 30 日すべて 100m → 平均 100
+        Assertions.assertEquals(100.0, r.days().get(0).actualMaM(), 1e-9);
+        // 9/4: 8/6〜9/4（9/4 は実績 0）→ 29*100/30
+        Assertions.assertEquals(100.0 * 29 / 30.0, r.days().get(3).actualMaM(), 1e-9);
+    }
+
+    @Test
+    void aggregate_calculates14DayMovingAverage() {
+        List<List<String>> rows = new ArrayList<>();
+        LocalDate start = LocalDate.of(2026, 8, 19);
+        for (int i = 0; i < 17; i++) {
+            LocalDate d = start.plusDays(i);
+            rows.add(
+                    List.of(
+                            "W9-1",
+                            "R" + i,
+                            "スリット",
+                            d.format(DateTimeFormatter.ofPattern("yyyy/MM/dd")),
+                            "50"));
+        }
+        ActualsSnapshot daily =
+                new ActualsSnapshot(
+                        List.of("機械名", "依頼NO", "工程名", "加工日", "実加工量"), rows);
+
+        Filter filter =
+                new Filter(
+                        LocalDate.of(2026, 9, 1),
+                        LocalDate.of(2026, 9, 3),
+                        ActualSource.DAILY_REPORT,
+                        PlanSource.ALADDIN,
+                        "W9-1",
+                        null,
+                        14);
+
+        Result r =
+                ProcessingTrendAggregator.aggregate(
+                        daily, null, null, null, filter, LocalDate.of(2026, 9, 3));
+
+        // 9/1: 8/19〜9/1 の 14 日すべて 50m
+        Assertions.assertEquals(50.0, r.days().get(0).actualMaM(), 1e-9);
     }
 }

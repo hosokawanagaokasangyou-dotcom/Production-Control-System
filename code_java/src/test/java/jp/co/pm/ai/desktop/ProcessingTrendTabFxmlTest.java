@@ -113,8 +113,24 @@ class ProcessingTrendTabFxmlTest {
     void dailyLineChartAndMovingAverageColumnExist() throws Exception {
         Element lineChart = elementByFxId("dailyLineChart");
         assertNotNull(lineChart, "dailyLineChart が無い");
-        Element colMa7 = elementByFxId("colActual7dMa");
-        assertNotNull(colMa7, "colActual7dMa が無い");
+        Element colMa = elementByFxId("colActualMa");
+        assertNotNull(colMa, "colActualMa が無い");
+        assertEquals("30日移動平均 (m)", colMa.getAttribute("text"));
+        assertNull(elementByFxId("colActual7dMa"), "旧 colActual7dMa は廃止されていること");
+    }
+
+    @Test
+    void movingAverageTogglesExistWith30DayDefault() throws Exception {
+        Element ma7 = elementByFxId("ma7Toggle");
+        Element ma14 = elementByFxId("ma14Toggle");
+        Element ma30 = elementByFxId("ma30Toggle");
+        assertNotNull(ma7, "ma7Toggle が無い");
+        assertNotNull(ma14, "ma14Toggle が無い");
+        assertNotNull(ma30, "ma30Toggle が無い");
+        assertEquals("7日", ma7.getAttribute("text"));
+        assertEquals("14日", ma14.getAttribute("text"));
+        assertEquals("30日", ma30.getAttribute("text"));
+        assertEquals("true", ma30.getAttribute("selected"), "既定は 30 日であること");
     }
 
     private static Element elementByFxId(String fxId) throws Exception {

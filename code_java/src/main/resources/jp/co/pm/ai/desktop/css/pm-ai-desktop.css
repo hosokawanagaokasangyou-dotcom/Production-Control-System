@@ -3222,6 +3222,11 @@
     -fx-font-weight: bold;
 }
 
+.pm-processing-trend-ma-toggle .toggle-button {
+    -fx-min-width: 48px;
+    -fx-font-weight: bold;
+}
+
 .pm-processing-trend-view-toggle .toggle-button {
     -fx-min-width: 56px;
 }
@@ -3489,7 +3494,7 @@
     -fx-opacity: 0;
 }
 
-/* 日次折れ線（7日移動平均）: 背景と軸は透過し、棒グラフの直上に重ねる */
+/* 日次折れ線（移動平均）: 背景と軸は透過し、棒グラフの直上に重ねる */
 .pm-trend-daily-line-chart {
     -fx-background-color: transparent;
 }

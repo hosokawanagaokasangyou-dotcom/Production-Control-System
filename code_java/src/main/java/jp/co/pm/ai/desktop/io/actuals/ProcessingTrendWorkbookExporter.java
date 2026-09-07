@@ -469,6 +469,7 @@ public final class ProcessingTrendWorkbookExporter {
                         && !req.result().compareSourceLabel().isEmpty();
         boolean isDailyReport =
                 req.filter().actualSource() == ProcessingTrendAggregator.ActualSource.DAILY_REPORT;
+        String maCol = req.filter().movingAverageDays() + "日移動平均 (m)";
 
         Row head = sheet.createRow(0);
         head.setHeightInPoints(22);
@@ -483,7 +484,7 @@ public final class ProcessingTrendWorkbookExporter {
                         "日付",
                         "曜日",
                         actCol,
-                        "7日移動平均 (m)",
+                        maCol,
                         compCol,
                         "差異 (m)",
                         "予定 (m)",
@@ -496,7 +497,7 @@ public final class ProcessingTrendWorkbookExporter {
         } else {
             headers =
                     new String[] {
-                        "日付", "曜日", "実績 (m)", "7日移動平均 (m)", "予定 (m)",
+                        "日付", "曜日", "実績 (m)", maCol, "予定 (m)",
                         "実績累計 (m)", "予定累計 (m)", "見込累計 (m)", "備考"
                     };
         }
@@ -551,10 +552,10 @@ public final class ProcessingTrendWorkbookExporter {
             cAct.setCellStyle(numStyle);
             sumAct += dp.actualM();
 
-            // 7日移動平均
-            Cell cMa7 = row.createCell(col++);
-            cMa7.setCellValue(dp.actual7dMaM());
-            cMa7.setCellStyle(numStyle);
+            // 移動平均
+            Cell cMa = row.createCell(col++);
+            cMa.setCellValue(dp.actualMaM());
+            cMa.setCellStyle(numStyle);
 
             if (hasCompare) {
                 // 比較実績

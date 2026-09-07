@@ -88,6 +88,7 @@ public final class ProcessingTrendAggregator {
      * @param planSource 予定の取得元
      * @param machine 機械名（{@code null} / 空 = 全機械）
      * @param process 工程名（{@code null} / 空 = 全工程）
+     * @param movingAverageDays 移動平均の窓幅（日）。許可値は 7 / 14 / 30。既定 30
      */
     public record Filter(
             LocalDate from,
@@ -95,7 +96,11 @@ public final class ProcessingTrendAggregator {
             ActualSource actualSource,
             PlanSource planSource,
             String machine,
-            String process) {
+            String process,
+            int movingAverageDays) {
+
+        /** 移動平均窓幅の既定値（日）。 */
+        public static final int DEFAULT_MOVING_AVERAGE_DAYS = 30;
 
         public Filter {
             Objects.requireNonNull(from, "from");
@@ -109,11 +114,23 @@ public final class ProcessingTrendAggregator {
             planSource = planSource != null ? planSource : PlanSource.ALADDIN;
             machine = blankToNull(machine);
             process = blankToNull(process);
+            movingAverageDays = normalizeMovingAverageDays(movingAverageDays);
         }
 
-        /** 従来互換コンストラクタ（実績ソースは日報）。 */
+        /** 従来互換コンストラクタ（移動平均は既定 30 日）。 */
+        public Filter(
+                LocalDate from,
+                LocalDate to,
+                ActualSource actualSource,
+                PlanSource planSource,
+                String machine,
+                String process) {
+            this(from, to, actualSource, planSource, machine, process, DEFAULT_MOVING_AVERAGE_DAYS);
+        }
+
+        /** 従来互換コンストラクタ（実績ソースは日報、移動平均は既定 30 日）。 */
         public Filter(LocalDate from, LocalDate to, PlanSource planSource, String machine, String process) {
-            this(from, to, ActualSource.DAILY_REPORT, planSource, machine, process);
+            this(from, to, ActualSource.DAILY_REPORT, planSource, machine, process, DEFAULT_MOVING_AVERAGE_DAYS);
         }
 
         public boolean hasMachine() {
@@ -122,6 +139,13 @@ public final class ProcessingTrendAggregator {
 
         public boolean hasProcess() {
             return process != null;
+        }
+
+        static int normalizeMovingAverageDays(int days) {
+            if (days == 7 || days == 14 || days == 30) {
+                return days;
+            }
+            return DEFAULT_MOVING_AVERAGE_DAYS;
         }
     }
 
@@ -137,7 +161,7 @@ public final class ProcessingTrendAggregator {
      * @param usesPlanForProjection 見込の当日値が予定側かどうか（{@code date >= today}）
      * @param compareActualM 比較対象実績 (m)（日報選択時は実績明細、明細選択時は日報）
      * @param compareActualCumM 比較対象実績の累計 (m)
-     * @param actual7dMaM 当日を含む直近7日間の実績移動平均 (m)
+     * @param actualMaM 当日を含む直近 N 日間の実績移動平均 (m)。N は {@link Filter#movingAverageDays()}
      */
     public record DayPoint(
             LocalDate date,
@@ -149,9 +173,9 @@ public final class ProcessingTrendAggregator {
             boolean usesPlanForProjection,
             double compareActualM,
             double compareActualCumM,
-            double actual7dMaM) {
+            double actualMaM) {
 
-        /** 従来互換コンストラクタ（7日移動平均は 0.0）。 */
+        /** 従来互換コンストラクタ（移動平均は 0.0）。 */
         public DayPoint(
                 LocalDate date,
                 double actualM,
@@ -175,7 +199,7 @@ public final class ProcessingTrendAggregator {
                     0.0);
         }
 
-        /** 従来互換コンストラクタ（比較実績および7日移動平均は 0）。 */
+        /** 従来互換コンストラクタ（比較実績および移動平均は 0）。 */
         public DayPoint(
                 LocalDate date,
                 double actualM,
@@ -185,6 +209,12 @@ public final class ProcessingTrendAggregator {
                 double projectedCumM,
                 boolean usesPlanForProjection) {
             this(date, actualM, planM, actualCumM, planCumM, projectedCumM, usesPlanForProjection, 0.0, 0.0, 0.0);
+        }
+
+        /** @deprecated 互換用。{@link #actualMaM()} を使うこと。 */
+        @Deprecated
+        public double actual7dMaM() {
+            return actualMaM;
         }
 
         /** 当日差異 = 実績 − 予定。 */
@@ -705,9 +735,10 @@ public final class ProcessingTrendAggregator {
         ActualsSnapshot compareActuals = isDailyPrimary ? detailActuals : dailyReport;
         String compareLabel = isDailyPrimary ? "実績明細" : "日報";
 
-        // 7日間移動平均のため、期間初日の直前6日間の主実績も集計
+        // 移動平均のため、期間初日の直前 (窓幅-1) 日間の主実績も集計
+        int maDays = filter.movingAverageDays();
         Map<LocalDate, double[]> priorActuals = new HashMap<>();
-        for (int i = 1; i <= 6; i++) {
+        for (int i = 1; i < maDays; i++) {
             priorActuals.put(from.minusDays(i), new double[1]);
         }
 
@@ -747,24 +778,24 @@ public final class ProcessingTrendAggregator {
                 planToDate += plan;
             }
 
-            // 7日間移動平均 (当日を含む直近7日間の主実績平均)
-            double sum7d = 0.0;
-            int count7d = 0;
-            for (int k = 0; k < 7; k++) {
+            // N 日間移動平均 (当日を含む直近 N 日間の主実績平均)
+            double sumMa = 0.0;
+            int countMa = 0;
+            for (int k = 0; k < maDays; k++) {
                 LocalDate past = d.minusDays(k);
                 double[] s = byDay.get(past);
                 if (s != null) {
-                    sum7d += s[0];
-                    count7d++;
+                    sumMa += s[0];
+                    countMa++;
                 } else {
                     double[] ps = priorActuals.get(past);
                     if (ps != null) {
-                        sum7d += ps[0];
-                        count7d++;
+                        sumMa += ps[0];
+                        countMa++;
                     }
                 }
             }
-            double actual7dMa = count7d > 0 ? (sum7d / count7d) : actual;
+            double actualMa = countMa > 0 ? (sumMa / countMa) : actual;
 
             days.add(
                     new DayPoint(
@@ -777,7 +808,7 @@ public final class ProcessingTrendAggregator {
                             usesPlan,
                             compareActual,
                             compareActCum,
-                            actual7dMa));
+                            actualMa));
         }
         return new Result(
                 days,
@@ -824,7 +855,8 @@ public final class ProcessingTrendAggregator {
                 effSource,
                 filter.planSource(),
                 filter.machine(),
-                filter.process());
+                filter.process(),
+                filter.movingAverageDays());
         ActualsSnapshot daily = effSource == ActualSource.DAILY_REPORT ? actuals : null;
         ActualsSnapshot detail = effSource == ActualSource.DETAIL ? actuals : null;
         return aggregate(daily, detail, aladdin, dispatch, effFilter, today);
