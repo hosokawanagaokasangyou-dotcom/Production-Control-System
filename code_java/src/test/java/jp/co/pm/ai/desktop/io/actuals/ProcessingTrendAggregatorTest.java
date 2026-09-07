@@ -1,6 +1,8 @@
 package jp.co.pm.ai.desktop.io.actuals;
 
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
 
 import org.junit.jupiter.api.Assertions;
@@ -520,5 +522,36 @@ class ProcessingTrendAggregatorTest {
         Assertions.assertEquals(-20.0, rDetail.days().get(0).actualCompareDiffM(), 1e-9);
         Assertions.assertEquals(-40.0, rDetail.actualCompareDiffTotalM(), 1e-9);
         Assertions.assertEquals("日報", rDetail.compareSourceLabel());
+    }
+
+    @Test
+    void aggregate_calculates7DayMovingAverageWithPriorDays() {
+        // 8/26 〜 9/03 の日次実績（各日 70m）
+        List<List<String>> rows = new ArrayList<>();
+        LocalDate start = LocalDate.of(2026, 8, 26);
+        for (int i = 0; i < 9; i++) {
+            LocalDate d = start.plusDays(i);
+            rows.add(List.of("W9-1", "R" + i, "スリット", d.format(DateTimeFormatter.ofPattern("yyyy/MM/dd")), "70"));
+        }
+        ActualsSnapshot daily =
+                new ActualsSnapshot(
+                        List.of("機械名", "依頼NO", "工程名", "加工日", "実加工量"),
+                        rows);
+
+        LocalDate from = LocalDate.of(2026, 9, 1);
+        LocalDate to = LocalDate.of(2026, 9, 5);
+        Filter filter = new Filter(from, to, PlanSource.ALADDIN, "W9-1", null);
+
+        Result r = ProcessingTrendAggregator.aggregate(
+                daily, null, null, null, filter, LocalDate.of(2026, 9, 3));
+
+        // 期間内の初日（9/1）: 8/26〜9/1 の 7 日間（すべて 70m）の平均 = 70.0m
+        Assertions.assertEquals(70.0, r.days().get(0).actual7dMaM(), 1e-9);
+        // 9/2: 8/27〜9/2 の 7 日間の平均 = 70.0m
+        Assertions.assertEquals(70.0, r.days().get(1).actual7dMaM(), 1e-9);
+        // 9/3: 8/28〜9/3 の 7 日間の平均 = 70.0m
+        Assertions.assertEquals(70.0, r.days().get(2).actual7dMaM(), 1e-9);
+        // 9/4: 8/29〜9/4（9/4 は実績 0 なので 6 日分 420m / 7 = 60.0m）
+        Assertions.assertEquals(60.0, r.days().get(3).actual7dMaM(), 1e-9);
     }
 }

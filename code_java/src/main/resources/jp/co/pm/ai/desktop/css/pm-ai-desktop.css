@@ -3188,6 +3188,7 @@
     -pm-trend-plan: #e8edf3;
     -pm-trend-plan-edge: #64748b;
     -pm-trend-actual-cum: #1e3a8a;
+    -pm-trend-actual-ma7: #d97706;
     -pm-trend-plan-cum: #475569;
     -pm-trend-projected: #7c3aed;
     -pm-trend-today: #0f766e;
@@ -3364,6 +3365,7 @@
 }
 
 .pm-legend-swatch-line-actual,
+.pm-legend-swatch-line-ma7,
 .pm-legend-swatch-line-plan,
 .pm-legend-swatch-line-projected {
     -fx-min-height: 4px;
@@ -3374,6 +3376,10 @@
 
 .pm-legend-swatch-line-actual {
     -fx-background-color: -pm-trend-actual-cum;
+}
+
+.pm-legend-swatch-line-ma7 {
+    -fx-background-color: -pm-trend-actual-ma7;
 }
 
 .pm-legend-swatch-line-plan {
@@ -3481,6 +3487,30 @@
 /* 複合表示のとき: X 軸は下のチャートと同じ寸法を保ちつつ描画だけ消す */
 .pm-trend-cumulative-chart.pm-trend-overlay .axis:bottom {
     -fx-opacity: 0;
+}
+
+/* 日次折れ線（7日移動平均）: 背景と軸は透過し、棒グラフの直上に重ねる */
+.pm-trend-daily-line-chart {
+    -fx-background-color: transparent;
+}
+.pm-trend-daily-line-chart .chart-plot-background {
+    -fx-background-color: transparent;
+}
+.pm-trend-daily-line-chart .axis:bottom {
+    -fx-opacity: 0;
+}
+.pm-trend-daily-line-chart .axis:left {
+    -fx-opacity: 0;
+}
+.pm-trend-daily-line-chart .default-color0.chart-series-line {
+    -fx-stroke: -pm-trend-actual-ma7;
+    -fx-stroke-width: 2.2px;
+}
+.pm-trend-daily-line-chart .default-color0.chart-line-symbol {
+    -fx-background-color: -pm-trend-actual-ma7, white;
+    -fx-background-radius: 2.5px;
+    -fx-padding: 2.5px;
+    -fx-background-insets: 0;
 }
 
 .pm-trend-cumulative-chart .default-color0.chart-series-line {

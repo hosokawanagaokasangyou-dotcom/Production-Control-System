@@ -100,15 +100,16 @@ class ProcessingTrendWorkbookExporterTest {
             assertEquals("日付", sDaily.getRow(0).getCell(0).getStringCellValue());
             assertEquals("曜日", sDaily.getRow(0).getCell(1).getStringCellValue());
             assertEquals("実績 (m)", sDaily.getRow(0).getCell(2).getStringCellValue());
-            assertEquals("予定 (m)", sDaily.getRow(0).getCell(3).getStringCellValue());
-            assertEquals("差異 (m)", sDaily.getRow(0).getCell(4).getStringCellValue());
+            assertEquals("7日移動平均 (m)", sDaily.getRow(0).getCell(3).getStringCellValue());
+            assertEquals("予定 (m)", sDaily.getRow(0).getCell(4).getStringCellValue());
+            assertEquals("差異 (m)", sDaily.getRow(0).getCell(5).getStringCellValue());
 
             // データ行3日分 + 合計行1行
             // 行0: ヘッダー, 行1: 9/1, 行2: 9/2, 行3: 9/3, 行4: 合計
             assertNotNull(sDaily.getRow(4), "合計行が存在すること");
             assertEquals("合計", sDaily.getRow(4).getCell(0).getStringCellValue());
             assertEquals(250.0, sDaily.getRow(4).getCell(2).getNumericCellValue(), 1e-9);
-            assertEquals(400.0, sDaily.getRow(4).getCell(3).getNumericCellValue(), 1e-9);
+            assertEquals(400.0, sDaily.getRow(4).getCell(4).getNumericCellValue(), 1e-9);
         }
 
         Path target = tempDir.resolve("export_test.xlsx");
@@ -185,25 +186,26 @@ class ProcessingTrendWorkbookExporterTest {
             Sheet sDaily = wb.getSheet(ProcessingTrendWorkbookExporter.SHEET_DAILY);
             assertNotNull(sDaily);
 
-            // 日報実績 (m), 実績明細 (m), 明細差 (m)
+            // 日報実績 (m), 7日移動平均 (m), 実績明細 (m), 明細差 (m)
             assertEquals("日付", sDaily.getRow(0).getCell(0).getStringCellValue());
             assertEquals("曜日", sDaily.getRow(0).getCell(1).getStringCellValue());
             assertEquals("日報実績 (m)", sDaily.getRow(0).getCell(2).getStringCellValue());
-            assertEquals("実績明細 (m)", sDaily.getRow(0).getCell(3).getStringCellValue());
-            assertEquals("明細差 (m)", sDaily.getRow(0).getCell(4).getStringCellValue());
-            assertEquals("予定 (m)", sDaily.getRow(0).getCell(5).getStringCellValue());
+            assertEquals("7日移動平均 (m)", sDaily.getRow(0).getCell(3).getStringCellValue());
+            assertEquals("実績明細 (m)", sDaily.getRow(0).getCell(4).getStringCellValue());
+            assertEquals("明細差 (m)", sDaily.getRow(0).getCell(5).getStringCellValue());
+            assertEquals("予定 (m)", sDaily.getRow(0).getCell(6).getStringCellValue());
 
             // 9/1 データ行
             assertEquals(120.0, sDaily.getRow(1).getCell(2).getNumericCellValue(), 1e-9);
-            assertEquals(100.0, sDaily.getRow(1).getCell(3).getNumericCellValue(), 1e-9);
-            assertEquals(20.0, sDaily.getRow(1).getCell(4).getNumericCellValue(), 1e-9);
+            assertEquals(100.0, sDaily.getRow(1).getCell(4).getNumericCellValue(), 1e-9);
+            assertEquals(20.0, sDaily.getRow(1).getCell(5).getNumericCellValue(), 1e-9);
 
             // 合計行
             // 行0: ヘッダー, 行1: 9/1, 行2: 9/2, 行3: 合計
             assertEquals("合計", sDaily.getRow(3).getCell(0).getStringCellValue());
             assertEquals(270.0, sDaily.getRow(3).getCell(2).getNumericCellValue(), 1e-9);
-            assertEquals(230.0, sDaily.getRow(3).getCell(3).getNumericCellValue(), 1e-9);
-            assertEquals(40.0, sDaily.getRow(3).getCell(4).getNumericCellValue(), 1e-9);
+            assertEquals(230.0, sDaily.getRow(3).getCell(4).getNumericCellValue(), 1e-9);
+            assertEquals(40.0, sDaily.getRow(3).getCell(5).getNumericCellValue(), 1e-9);
         }
     }
 }

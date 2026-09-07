@@ -106,6 +106,14 @@ class ProcessingTrendTabFxmlTest {
         assertNotNull(colCompareCum, "colCompareActualCum が無い");
     }
 
+    @Test
+    void dailyLineChartAndMovingAverageColumnExist() throws Exception {
+        Element lineChart = elementByFxId("dailyLineChart");
+        assertNotNull(lineChart, "dailyLineChart が無い");
+        Element colMa7 = elementByFxId("colActual7dMa");
+        assertNotNull(colMa7, "colActual7dMa が無い");
+    }
+
     private static Element elementByFxId(String fxId) throws Exception {
         try (InputStream in =
                 ProcessingTrendTabFxmlTest.class.getResourceAsStream(

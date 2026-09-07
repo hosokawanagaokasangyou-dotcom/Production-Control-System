@@ -186,6 +186,18 @@
                                     lowerBound="0.0" upperBound="10.0" tickUnit="2.0" minorTickVisible="false"/>
                     </yAxis>
                 </BarChart>
+                <LineChart fx:id="dailyLineChart" animated="false" createSymbols="true" legendVisible="false"
+                           minHeight="200.0" styleClass="pm-trend-daily-line-chart" mouseTransparent="true"
+                           horizontalGridLinesVisible="false" verticalGridLinesVisible="false"
+                           alternativeRowFillVisible="false" alternativeColumnFillVisible="false">
+                    <xAxis>
+                        <CategoryAxis fx:id="dailyLineXAxis" animated="false" tickLabelGap="20.0" tickLabelsVisible="false" opacity="0.0"/>
+                    </xAxis>
+                    <yAxis>
+                        <ProcessingTrendNumberAxis fx:id="dailyLineYAxis" animated="false" autoRanging="false"
+                                    lowerBound="0.0" upperBound="10.0" tickUnit="2.0" minorTickVisible="false" opacity="0.0"/>
+                    </yAxis>
+                </LineChart>
                 <LineChart fx:id="cumulativeChart" animated="false" createSymbols="true" legendVisible="false"
                            minHeight="200.0" styleClass="pm-trend-cumulative-chart"
                            horizontalGridLinesVisible="false" verticalGridLinesVisible="false"
@@ -214,6 +226,7 @@
                     <columns>
                         <TableColumn fx:id="colDate" prefWidth="105.0" sortable="false" text="日付"/>
                         <TableColumn fx:id="colActual" prefWidth="100.0" sortable="false" text="日報実績 (m)"/>
+                        <TableColumn fx:id="colActual7dMa" prefWidth="105.0" sortable="false" text="7日移動平均 (m)"/>
                         <TableColumn fx:id="colCompareActual" prefWidth="100.0" sortable="false" text="実績明細 (m)"/>
                         <TableColumn fx:id="colActualCompareDiff" prefWidth="95.0" sortable="false" text="明細差 (m)"/>
                         <TableColumn fx:id="colPlan" prefWidth="95.0" sortable="false" text="予定 (m)"/>

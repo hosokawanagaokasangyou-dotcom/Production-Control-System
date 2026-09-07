@@ -216,6 +216,9 @@ public class ProcessingTrendTabController {
     @FXML private BarChart<String, Number> dailyChart;
     @FXML private CategoryAxis dailyXAxis;
     @FXML private ProcessingTrendNumberAxis dailyYAxis;
+    @FXML private LineChart<String, Number> dailyLineChart;
+    @FXML private CategoryAxis dailyLineXAxis;
+    @FXML private ProcessingTrendNumberAxis dailyLineYAxis;
     @FXML private LineChart<String, Number> cumulativeChart;
     @FXML private CategoryAxis cumulativeXAxis;
     @FXML private ProcessingTrendNumberAxis cumulativeYAxis;
@@ -227,6 +230,7 @@ public class ProcessingTrendTabController {
     @FXML private TitledPane detailPane;
     @FXML private TableColumn<DayPoint, DayPoint> colDate;
     @FXML private TableColumn<DayPoint, Number> colActual;
+    @FXML private TableColumn<DayPoint, Number> colActual7dMa;
     @FXML private TableColumn<DayPoint, Number> colCompareActual;
     @FXML private TableColumn<DayPoint, Number> colActualCompareDiff;
     @FXML private TableColumn<DayPoint, Number> colPlan;
@@ -245,6 +249,7 @@ public class ProcessingTrendTabController {
                     });
 
     private final XYChart.Series<String, Number> actualDailySeries = new XYChart.Series<>();
+    private final XYChart.Series<String, Number> actual7dMaSeries = new XYChart.Series<>();
     private final XYChart.Series<String, Number> planDailySeries = new XYChart.Series<>();
     private final XYChart.Series<String, Number> actualCumSeries = new XYChart.Series<>();
     private final XYChart.Series<String, Number> planCumSeries = new XYChart.Series<>();
@@ -482,12 +487,19 @@ public class ProcessingTrendTabController {
 
     private void initCharts() {
         actualDailySeries.setName("実績");
+        actual7dMaSeries.setName("7日移動平均");
         planDailySeries.setName("予定");
         actualCumSeries.setName("実績累計");
         planCumSeries.setName("予定累計");
         projectedCumSeries.setName("見込累計");
         dailyChart.getData().add(actualDailySeries);
         dailyChart.getData().add(planDailySeries);
+        if (dailyLineChart != null) {
+            dailyLineChart.getData().add(actual7dMaSeries);
+            dailyLineChart.setHorizontalZeroLineVisible(false);
+            dailyLineChart.setVerticalZeroLineVisible(false);
+            dailyLineChart.setPickOnBounds(false);
+        }
         cumulativeChart.getData().add(actualCumSeries);
         cumulativeChart.getData().add(planCumSeries);
         cumulativeChart.getData().add(projectedCumSeries);
@@ -510,12 +522,18 @@ public class ProcessingTrendTabController {
                     }
                 };
         dailyYAxis.setTickLabelFormatter(tickFmt);
+        if (dailyLineYAxis != null) {
+            dailyLineYAxis.setTickLabelFormatter(tickFmt);
+        }
         cumulativeYAxis.setTickLabelFormatter(tickFmt);
 
         // 2 つのチャートのプロット領域を一致させる: 相手側 Y 軸の幅を自分の padding に載せる
         dailyYAxis.widthProperty().addListener((obs, o, n) -> syncChartPadding());
         cumulativeYAxis.widthProperty().addListener((obs, o, n) -> syncChartPadding());
         dailyChart.layoutBoundsProperty().addListener((obs, o, n) -> requestMarkerLayout());
+        if (dailyLineChart != null) {
+            dailyLineChart.layoutBoundsProperty().addListener((obs, o, n) -> requestMarkerLayout());
+        }
         cumulativeChart.layoutBoundsProperty().addListener((obs, o, n) -> requestMarkerLayout());
         dailyXAxis.layoutBoundsProperty().addListener((obs, o, n) -> requestMarkerLayout());
         cumulativeXAxis.layoutBoundsProperty().addListener((obs, o, n) -> requestMarkerLayout());
@@ -570,6 +588,14 @@ public class ProcessingTrendTabController {
                         });
         colPlan.setCellValueFactory(cd -> new ReadOnlyObjectWrapper<>(cd.getValue().planM()));
         colActual.setCellValueFactory(cd -> new ReadOnlyObjectWrapper<>(cd.getValue().actualM()));
+        if (colActual7dMa != null) {
+            colActual7dMa.setCellValueFactory(
+                    cd ->
+                            new ReadOnlyObjectWrapper<>(
+                                    cd.getValue().actual7dMaM() > 0 ? cd.getValue().actual7dMaM() : null));
+            colActual7dMa.setCellFactory(col -> numberCell(false));
+            colActual7dMa.setStyle("-fx-alignment: CENTER-RIGHT;");
+        }
         if (colCompareActual != null) {
             colCompareActual.setCellValueFactory(
                     cd -> new ReadOnlyObjectWrapper<>(cd.getValue().compareActualM()));
@@ -671,6 +697,10 @@ public class ProcessingTrendTabController {
         boolean monthly = granularity == Granularity.MONTHLY;
         colDate.setText(monthly ? "年月" : "日付");
         detailPane.setText(monthly ? "月別明細" : "日別明細");
+        if (colActual7dMa != null) {
+            colActual7dMa.setText("7日移動平均 (m)");
+            colActual7dMa.setVisible(!monthly);
+        }
         if (isDailyReport) {
             colActual.setText(monthly ? "日報実績 (m)" : "日報実績 (m)");
             if (colCompareActual != null) {
@@ -715,15 +745,18 @@ public class ProcessingTrendTabController {
         String barPlan = monthly ? "予定（月合計）" : "予定（日次）";
         String todayLbl = monthly ? "今月（前月まで実績／当月以降予定）" : "今日（前日まで実績／当日以降予定）";
 
-        legendBox
-                .getChildren()
-                .addAll(
-                        legendItem("pm-legend-swatch-bar-actual", barAct, ViewMode.CUMULATIVE),
-                        legendItem("pm-legend-swatch-bar-plan", barPlan, ViewMode.CUMULATIVE),
-                        legendItem("pm-legend-swatch-line-actual", actPrefix + "累計", ViewMode.DAILY),
-                        legendItem("pm-legend-swatch-line-plan", "予定累計", ViewMode.DAILY),
-                        legendItem("pm-legend-swatch-line-projected", "見込累計", ViewMode.DAILY),
-                        legendItem("pm-legend-swatch-today", todayLbl, null));
+        List<Node> items = new ArrayList<>();
+        items.add(legendItem("pm-legend-swatch-bar-actual", barAct, ViewMode.CUMULATIVE));
+        if (!monthly) {
+            items.add(legendItem("pm-legend-swatch-line-ma7", "7日移動平均", ViewMode.CUMULATIVE));
+        }
+        items.add(legendItem("pm-legend-swatch-bar-plan", barPlan, ViewMode.CUMULATIVE));
+        items.add(legendItem("pm-legend-swatch-line-actual", actPrefix + "累計", ViewMode.DAILY));
+        items.add(legendItem("pm-legend-swatch-line-plan", "予定累計", ViewMode.DAILY));
+        items.add(legendItem("pm-legend-swatch-line-projected", "見込累計", ViewMode.DAILY));
+        items.add(legendItem("pm-legend-swatch-today", todayLbl, null));
+
+        legendBox.getChildren().addAll(items);
     }
 
     private void updateLegend() {
@@ -1012,8 +1045,14 @@ public class ProcessingTrendTabController {
     private void applyViewMode(ViewMode mode) {
         boolean showDaily = mode != ViewMode.CUMULATIVE;
         boolean showCum = mode != ViewMode.DAILY;
+        boolean isDailyGranularity = currentGranularity() != Granularity.MONTHLY;
         dailyChart.setVisible(showDaily);
         dailyChart.setManaged(showDaily);
+        if (dailyLineChart != null) {
+            boolean showDailyLine = showDaily && isDailyGranularity;
+            dailyLineChart.setVisible(showDailyLine);
+            dailyLineChart.setManaged(showDailyLine);
+        }
         cumulativeChart.setVisible(showCum);
         cumulativeChart.setManaged(showCum);
         boolean overlay = mode == ViewMode.COMBO;
@@ -1061,9 +1100,15 @@ public class ProcessingTrendTabController {
         double right = cumulativeYAxis.getWidth();
         if (mode == ViewMode.COMBO) {
             dailyChart.setPadding(new Insets(CHART_TOP_PADDING, right, 0, 0));
+            if (dailyLineChart != null) {
+                dailyLineChart.setPadding(new Insets(CHART_TOP_PADDING, right, 0, 0));
+            }
             cumulativeChart.setPadding(new Insets(CHART_TOP_PADDING, 0, 0, left));
         } else {
             dailyChart.setPadding(new Insets(CHART_TOP_PADDING, 0, 0, 0));
+            if (dailyLineChart != null) {
+                dailyLineChart.setPadding(new Insets(CHART_TOP_PADDING, 0, 0, 0));
+            }
             cumulativeChart.setPadding(new Insets(CHART_TOP_PADDING, 0, 0, 0));
         }
     }
@@ -1395,6 +1440,9 @@ public class ProcessingTrendTabController {
                             + " に実績・予定の行がありません。期間や絞込を見直してください。");
         }
         dailyChart.setOpacity(empty ? 0.25 : 1.0);
+        if (dailyLineChart != null) {
+            dailyLineChart.setOpacity(empty ? 0.25 : 1.0);
+        }
         cumulativeChart.setOpacity(empty ? 0.25 : 1.0);
         updateSourceSummary();
         updateChartTitle();
@@ -1403,6 +1451,7 @@ public class ProcessingTrendTabController {
     private void renderEmpty(String title, String detail) {
         currentResult = null;
         actualDailySeries.getData().clear();
+        actual7dMaSeries.getData().clear();
         planDailySeries.getData().clear();
         actualCumSeries.getData().clear();
         planCumSeries.getData().clear();
@@ -1422,6 +1471,9 @@ public class ProcessingTrendTabController {
         emptyStatePane.setVisible(true);
         emptyStatePane.setManaged(true);
         dailyChart.setOpacity(0.25);
+        if (dailyLineChart != null) {
+            dailyLineChart.setOpacity(0.25);
+        }
         cumulativeChart.setOpacity(0.25);
         hideXAxisLabels();
         todayLine.setVisible(false);
@@ -1545,6 +1597,7 @@ public class ProcessingTrendTabController {
         dailyChart.setBarGap(ProcessingTrendChartSupport.barGapFor(n));
 
         List<XYChart.Data<String, Number>> actDaily = new ArrayList<>(n);
+        List<XYChart.Data<String, Number>> act7dMa = new ArrayList<>(n);
         List<XYChart.Data<String, Number>> planDaily = new ArrayList<>(n);
         List<XYChart.Data<String, Number>> actCum = new ArrayList<>(n);
         List<XYChart.Data<String, Number>> planCum = new ArrayList<>(n);
@@ -1557,7 +1610,11 @@ public class ProcessingTrendTabController {
             String cat = labels.get(i);
             actDaily.add(new XYChart.Data<>(cat, d.actualM()));
             planDaily.add(new XYChart.Data<>(cat, d.planM()));
-            dailyMax = Math.max(dailyMax, Math.max(d.actualM(), d.planM()));
+            dailyMax = Math.max(dailyMax, Math.max(d.actualM(), Math.max(d.planM(), d.actual7dMaM())));
+            // 7日移動平均は実績がある当日までプロット（未来にはプロットしない）
+            if (!d.date().isAfter(r.today())) {
+                act7dMa.add(new XYChart.Data<>(cat, d.actual7dMaM()));
+            }
             // 実績累計は当日までで線を止める（未来に水平線を伸ばさない）
             if (!d.date().isAfter(r.today())) {
                 actCum.add(new XYChart.Data<>(cat, d.actualCumM()));
@@ -1570,8 +1627,15 @@ public class ProcessingTrendTabController {
             cumMax = Math.max(cumMax, Math.max(d.actualCumM(), Math.max(d.planCumM(), d.projectedCumM())));
         }
         applyNiceRange(dailyYAxis, dailyMax);
+        if (dailyLineYAxis != null) {
+            applyNiceRange(dailyLineYAxis, dailyMax);
+        }
         applyNiceRange(cumulativeYAxis, cumMax);
+        if (dailyLineXAxis != null) {
+            dailyLineXAxis.setCategories(FXCollections.observableArrayList(labels));
+        }
         actualDailySeries.getData().setAll(actDaily);
+        actual7dMaSeries.getData().setAll(act7dMa);
         planDailySeries.getData().setAll(planDaily);
         actualCumSeries.getData().setAll(actCum);
         planCumSeries.getData().setAll(planCum);
@@ -1581,6 +1645,9 @@ public class ProcessingTrendTabController {
         for (int i = 0; i < n; i++) {
             String tip = tooltipText(days.get(i), r.today(), r.compareSourceLabel());
             installSharedTooltip(actDaily.get(i), tip);
+            if (i < act7dMa.size()) {
+                installSharedTooltip(act7dMa.get(i), tip);
+            }
             installSharedTooltip(planDaily.get(i), tip);
             if (i < actCum.size()) {
                 installSharedTooltip(actCum.get(i), tip);
@@ -1608,6 +1675,9 @@ public class ProcessingTrendTabController {
         }
         sb.append('\n');
         sb.append("実績 ").append(formatM(d.actualM())).append(" m");
+        if (!d.date().isAfter(today)) {
+            sb.append("  7日移動平均 ").append(formatM(d.actual7dMaM())).append(" m");
+        }
         if (compareLabel != null && !compareLabel.isEmpty()) {
             double cDiff = d.actualCompareDiffM();
             String sign = cDiff > 0.05 ? "+" : "";
@@ -1653,6 +1723,11 @@ public class ProcessingTrendTabController {
     }
 
     private void renderMonthlyChart(Result r, MonthlyResult mr) {
+        actual7dMaSeries.getData().clear();
+        if (dailyLineChart != null) {
+            dailyLineChart.setVisible(false);
+            dailyLineChart.setManaged(false);
+        }
         List<MonthPoint> months = mr.months();
         int n = months.size();
         boolean singleYear =

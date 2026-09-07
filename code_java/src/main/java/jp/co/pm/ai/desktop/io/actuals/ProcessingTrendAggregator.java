@@ -6,6 +6,7 @@ import java.time.DateTimeException;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -136,6 +137,7 @@ public final class ProcessingTrendAggregator {
      * @param usesPlanForProjection 見込の当日値が予定側かどうか（{@code date >= today}）
      * @param compareActualM 比較対象実績 (m)（日報選択時は実績明細、明細選択時は日報）
      * @param compareActualCumM 比較対象実績の累計 (m)
+     * @param actual7dMaM 当日を含む直近7日間の実績移動平均 (m)
      */
     public record DayPoint(
             LocalDate date,
@@ -146,9 +148,34 @@ public final class ProcessingTrendAggregator {
             double projectedCumM,
             boolean usesPlanForProjection,
             double compareActualM,
-            double compareActualCumM) {
+            double compareActualCumM,
+            double actual7dMaM) {
 
-        /** 従来互換コンストラクタ（比較実績は 0）。 */
+        /** 従来互換コンストラクタ（7日移動平均は 0.0）。 */
+        public DayPoint(
+                LocalDate date,
+                double actualM,
+                double planM,
+                double actualCumM,
+                double planCumM,
+                double projectedCumM,
+                boolean usesPlanForProjection,
+                double compareActualM,
+                double compareActualCumM) {
+            this(
+                    date,
+                    actualM,
+                    planM,
+                    actualCumM,
+                    planCumM,
+                    projectedCumM,
+                    usesPlanForProjection,
+                    compareActualM,
+                    compareActualCumM,
+                    0.0);
+        }
+
+        /** 従来互換コンストラクタ（比較実績および7日移動平均は 0）。 */
         public DayPoint(
                 LocalDate date,
                 double actualM,
@@ -157,7 +184,7 @@ public final class ProcessingTrendAggregator {
                 double planCumM,
                 double projectedCumM,
                 boolean usesPlanForProjection) {
-            this(date, actualM, planM, actualCumM, planCumM, projectedCumM, usesPlanForProjection, 0.0, 0.0);
+            this(date, actualM, planM, actualCumM, planCumM, projectedCumM, usesPlanForProjection, 0.0, 0.0, 0.0);
         }
 
         /** 当日差異 = 実績 − 予定。 */
@@ -678,8 +705,14 @@ public final class ProcessingTrendAggregator {
         ActualsSnapshot compareActuals = isDailyPrimary ? detailActuals : dailyReport;
         String compareLabel = isDailyPrimary ? "実績明細" : "日報";
 
+        // 7日間移動平均のため、期間初日の直前6日間の主実績も集計
+        Map<LocalDate, double[]> priorActuals = new HashMap<>();
+        for (int i = 1; i <= 6; i++) {
+            priorActuals.put(from.minusDays(i), new double[1]);
+        }
+
         ActualsAccumulation act =
-                accumulateActuals(primaryActuals, filter, byDay, warnings, 0, isDailyPrimary);
+                accumulateActuals(primaryActuals, filter, byDay, priorActuals, warnings, 0, isDailyPrimary);
         accumulateActuals(compareActuals, filter, byDay, warnings, 2, !isDailyPrimary);
 
         int planRows =
@@ -713,6 +746,26 @@ public final class ProcessingTrendAggregator {
                 actualToDate += actual;
                 planToDate += plan;
             }
+
+            // 7日間移動平均 (当日を含む直近7日間の主実績平均)
+            double sum7d = 0.0;
+            int count7d = 0;
+            for (int k = 0; k < 7; k++) {
+                LocalDate past = d.minusDays(k);
+                double[] s = byDay.get(past);
+                if (s != null) {
+                    sum7d += s[0];
+                    count7d++;
+                } else {
+                    double[] ps = priorActuals.get(past);
+                    if (ps != null) {
+                        sum7d += ps[0];
+                        count7d++;
+                    }
+                }
+            }
+            double actual7dMa = count7d > 0 ? (sum7d / count7d) : actual;
+
             days.add(
                     new DayPoint(
                             d,
@@ -723,7 +776,8 @@ public final class ProcessingTrendAggregator {
                             projCum,
                             usesPlan,
                             compareActual,
-                            compareActCum));
+                            compareActCum,
+                            actual7dMa));
         }
         return new Result(
                 days,
@@ -830,6 +884,7 @@ public final class ProcessingTrendAggregator {
             ActualsSnapshot actuals,
             Filter f,
             TreeMap<LocalDate, double[]> byDay,
+            Map<LocalDate, double[]> priorActuals,
             List<String> warnings,
             int slotIndex,
             boolean isDailyReport) {
@@ -867,6 +922,10 @@ public final class ProcessingTrendAggregator {
             }
             acc.observe(d);
             double[] slot = byDay.get(d);
+            boolean inPeriod = slot != null;
+            if (slot == null && priorActuals != null && slotIndex == 0) {
+                slot = priorActuals.get(d);
+            }
             if (slot == null) {
                 continue;
             }
@@ -875,9 +934,21 @@ public final class ProcessingTrendAggregator {
                 continue;
             }
             slot[slotIndex] += qty;
-            acc.rowsCounted++;
+            if (inPeriod) {
+                acc.rowsCounted++;
+            }
         }
         return acc;
+    }
+
+    private static ActualsAccumulation accumulateActuals(
+            ActualsSnapshot actuals,
+            Filter f,
+            TreeMap<LocalDate, double[]> byDay,
+            List<String> warnings,
+            int slotIndex,
+            boolean isDailyReport) {
+        return accumulateActuals(actuals, f, byDay, null, warnings, slotIndex, isDailyReport);
     }
 
     private static int resolveActualQtyCol(List<String> headers, boolean preferDailyReport) {
