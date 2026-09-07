@@ -90,7 +90,7 @@ class ProcessingTrendAggregatorTest {
         Assertions.assertEquals(160, r.planToDateM(), 1e-9);
         Assertions.assertEquals(680, r.remainingPlanM(), 1e-9);
         Assertions.assertEquals(860, r.projectedTotalM(), 1e-9);
-        Assertions.assertEquals(112.5, r.progressPct(), 1e-9);
+        Assertions.assertEquals(100.0, r.progressPct(), 1e-9);
         Assertions.assertEquals(20, r.projectedDiffM(), 1e-9);
         Assertions.assertEquals(4, r.actualRowsCounted());
         Assertions.assertEquals(2, r.planRowsCounted());
@@ -379,13 +379,17 @@ class ProcessingTrendAggregatorTest {
                 "(原反4mm→1mm3mmスライス),東レ株式会社,自動車材料事業部,2026/06/08,2026/06/08,1:完了";
         String junk2 =
                 "【他ユーザー向け製品は要確認】,東レ株式会社,自動車材料事業部,2026/03/31,1:完了,宮島 剛";
+        String junk3 = "欠点数合計:接続点数含まず";
+        String junk4 = "難燃品種(FR4)";
         AladdinSnapshot al =
                 new AladdinSnapshot(
                         List.of("機械名", "依頼NO", "工程名", "2026/09/01"),
                         List.of(
                                 List.of("エンボス 湖南", "A-1", "エンボス", "100"),
                                 List.of(junk, "B-1", "スライス", "50"),
-                                List.of(junk2, "C-1", "スリット", "10")));
+                                List.of(junk2, "C-1", "スリット", "10"),
+                                List.of(junk3, "D-1", "EC", "1"),
+                                List.of(junk4, "E-1", "SEC", "1")));
         List<String> machines = ProcessingTrendAggregator.machineNames(null, null, al, null);
         Assertions.assertEquals(List.of("エンボス 湖南"), machines);
     }
@@ -395,11 +399,43 @@ class ProcessingTrendAggregatorTest {
         Assertions.assertTrue(ProcessingTrendAggregator.isPlausibleMachineLabel("EC機 湖南"));
         Assertions.assertTrue(ProcessingTrendAggregator.isPlausibleMachineLabel("スライス機1 湘南"));
         Assertions.assertTrue(ProcessingTrendAggregator.isPlausibleMachineLabel("SEC機\u3000湖南"));
+        Assertions.assertTrue(ProcessingTrendAggregator.isPlausibleMachineLabel("エンボス 湖南"));
+        Assertions.assertTrue(ProcessingTrendAggregator.isPlausibleMachineLabel("W9-1"));
         Assertions.assertFalse(
                 ProcessingTrendAggregator.isPlausibleMachineLabel(
                         "(原反4mm→1mm3mmスライス),東レ株式会社,自動車材料事業部,2026/06/08"));
         Assertions.assertFalse(ProcessingTrendAggregator.isPlausibleMachineLabel("東レ株式会社"));
         Assertions.assertFalse(ProcessingTrendAggregator.isPlausibleMachineLabel("2026/06/08"));
+        Assertions.assertFalse(ProcessingTrendAggregator.isPlausibleMachineLabel("欠点数合計:接続点数含まず"));
+        Assertions.assertFalse(ProcessingTrendAggregator.isPlausibleMachineLabel("難燃品種(FR4)"));
+    }
+
+    @Test
+    void progressPct_isCappedAt100() {
+        ActualsSnapshot act =
+                new ActualsSnapshot(
+                        ACT_HEADERS,
+                        List.of(
+                                List.of("W9-1", "R1", "スリット", "2026/09/01", "", "100", "500"),
+                                List.of("W9-1", "R2", "スリット", "2026/09/02", "", "100", "500")));
+        AladdinSnapshot al =
+                new AladdinSnapshot(
+                        List.of("機械名", "依頼NO", "工程名", "2026/09/01", "2026/09/02", "2026/09/03"),
+                        List.of(List.of("W9-1", "R1", "スリット", "100", "50", "200")));
+        Result r =
+                ProcessingTrendAggregator.aggregate(
+                        act,
+                        al,
+                        null,
+                        new Filter(
+                                LocalDate.of(2026, 9, 1),
+                                LocalDate.of(2026, 9, 3),
+                                PlanSource.ALADDIN,
+                                null,
+                                null),
+                        LocalDate.of(2026, 9, 3));
+        Assertions.assertTrue(r.actualToDateM() > r.planToDateM());
+        Assertions.assertEquals(100.0, r.progressPct(), 1e-9);
     }
 
     @Test

@@ -312,17 +312,20 @@ public final class ProcessingTrendAggregator {
             return actualTotalM - compareActualTotalM;
         }
 
-        /** 進捗率 (%) = 当日より前の実績 ÷ 当日より前の予定。分母 0 のとき {@code NaN}。 */
+        /**
+         * 進捗率 (%) = 当日より前の実績 ÷ 当日より前の予定。分母 0 のとき {@code NaN}。
+         * 予定が構造的に欠けると生値が 100% を超え得るが、進捗率としては 100% を上限とする。
+         */
         public double progressPct() {
             if (planToDateM <= EPS) {
                 return Double.NaN;
             }
-            return actualToDateM / planToDateM * 100.0;
+            return Math.min(100.0, actualToDateM / planToDateM * 100.0);
         }
 
         /**
          * 進捗率の分母（前日までの予定）が期間予定合計に対して十分か。
-         * アラジン予定は完了依頼が抽出から消えるため、月初などで分母が極端に小さいと数百 % になる。
+         * アラジン予定は完了依頼が抽出から消えるため、月初などで分母が極端に小さいと参考にならない。
          */
         public boolean progressDenominatorSufficient() {
             if (planToDateM <= EPS || planTotalM <= EPS) {
@@ -439,12 +442,12 @@ public final class ProcessingTrendAggregator {
             return actualM - compareActualM;
         }
 
-        /** 過去月（完了月）の参考進捗率 (%)。当月・未来・予定0は {@code NaN}。 */
+        /** 過去月（完了月）の参考進捗率 (%)。当月・未来・予定0は {@code NaN}。上限 100%。 */
         public double monthProgressPct() {
             if (isCurrentMonth || usesPlanForProjection || planM <= EPS) {
                 return Double.NaN;
             }
-            return actualM / planM * 100.0;
+            return Math.min(100.0, actualM / planM * 100.0);
         }
     }
 
@@ -522,7 +525,7 @@ public final class ProcessingTrendAggregator {
             if (planToDateM <= EPS) {
                 return Double.NaN;
             }
-            return actualToDateM / planToDateM * 100.0;
+            return Math.min(100.0, actualToDateM / planToDateM * 100.0);
         }
 
         public boolean progressDenominatorSufficient() {
@@ -571,6 +574,9 @@ public final class ProcessingTrendAggregator {
     /** 機械名セルに行の他列が結合された不正値を弾く（yyyy/M/d または yyyy-M-d）。 */
     private static final Pattern EMBEDDED_CALENDAR_DATE =
             Pattern.compile("\\d{4}[/\\-]\\d{1,2}[/\\-]\\d{1,2}");
+    /** 短い設備コード（例: {@code W9-1}, {@code EC-2}, {@code Z-9}）。 */
+    private static final Pattern EQUIPMENT_CODE =
+            Pattern.compile("(?i)^[A-Z]{1,6}\\d{0,3}(-\\d{1,4})?$");
     private static final Pattern ZERO_WIDTH = Pattern.compile("[\u200b\u200c\u200d\ufeff]");
     private static final Pattern DASH_LIKE = Pattern.compile("[\u2010-\u2015\u2212\u30fc\uff0d]");
     private static final Pattern WHITESPACE = Pattern.compile("\\s+");
@@ -1367,8 +1373,8 @@ public final class ProcessingTrendAggregator {
     }
 
     /**
-     * 機械コンボ用: ソースの「機械名」列に、加工内容・得意先・完了区分などが結合された不正値が
-     * 混入することがあるため、明らかに機械名でないものは除外する。
+     * 機械コンボ用: ソースの「機械名」列に、加工内容・品種・集計見出しなどが混入することがあるため、
+     * 工場の機械名として妥当なものだけ残す。
      */
     static boolean isPlausibleMachineLabel(String raw) {
         if (raw == null) {
@@ -1378,7 +1384,10 @@ public final class ProcessingTrendAggregator {
         if (s.isEmpty() || s.length() > MAX_PLAUSIBLE_MACHINE_LABEL_LEN) {
             return false;
         }
-        if (s.indexOf(',') >= 0) {
+        if (s.indexOf(',') >= 0 || s.indexOf(':') >= 0 || s.indexOf('：') >= 0) {
+            return false;
+        }
+        if (s.indexOf('(') >= 0 || s.indexOf('（') >= 0 || s.indexOf(')') >= 0 || s.indexOf('）') >= 0) {
             return false;
         }
         if (s.contains("株式会社") || s.contains("（株）") || s.contains("(株)")) {
@@ -1387,10 +1396,24 @@ public final class ProcessingTrendAggregator {
         if (s.contains("1:完了") || s.contains("0:未完") || s.contains(":完了") || s.contains(":未完")) {
             return false;
         }
+        if (s.contains("合計") || s.contains("品種") || s.contains("欠点数") || s.contains("接続点")) {
+            return false;
+        }
         if (EMBEDDED_CALENDAR_DATE.matcher(s).find()) {
             return false;
         }
-        return true;
+        String key = normKey(s);
+        if (key.isEmpty()) {
+            return false;
+        }
+        // 実機名: サイト接尾・「機」を含む・短い設備コード（W9-1 / EC-2 等）
+        if (key.endsWith("湖南") || key.endsWith("湘南") || key.endsWith("国分")) {
+            return true;
+        }
+        if (key.contains("機")) {
+            return true;
+        }
+        return EQUIPMENT_CODE.matcher(key).matches();
     }
 
     private static boolean matches(String wantedKey, String cell) {
