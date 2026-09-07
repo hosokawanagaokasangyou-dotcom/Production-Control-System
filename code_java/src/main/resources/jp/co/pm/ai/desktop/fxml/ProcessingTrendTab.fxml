@@ -107,7 +107,7 @@
                         </ToggleButton>
                         <ToggleButton fx:id="viewCumulativeToggle" mnemonicParsing="false"
                                       text="累計" toggleGroup="$viewModeGroup">
-                            <tooltip><Tooltip text="実績累計・予定累計・見込累計の折れ線のみ"/></tooltip>
+                            <tooltip><Tooltip text="実績累計・見込累計の折れ線のみ"/></tooltip>
                         </ToggleButton>
                     </HBox>
                     <HBox spacing="4.0" alignment="CENTER_LEFT" styleClass="pm-processing-trend-ma-toggle">

@@ -3524,11 +3524,6 @@
 }
 
 .pm-trend-cumulative-chart .default-color1.chart-series-line {
-    -fx-stroke: -pm-trend-plan-cum;
-    -fx-stroke-width: 2px;
-}
-
-.pm-trend-cumulative-chart .default-color2.chart-series-line {
     -fx-stroke: -pm-trend-projected;
     -fx-stroke-width: 2.5px;
     -fx-stroke-dash-array: 6 4;
@@ -3551,10 +3546,6 @@
 }
 
 .pm-trend-cumulative-chart .default-color1.chart-line-symbol {
-    -fx-background-color: -pm-trend-plan-cum, white;
-}
-
-.pm-trend-cumulative-chart .default-color2.chart-line-symbol {
     -fx-background-color: -pm-trend-projected, white;
 }
 

@@ -255,7 +255,6 @@ public class ProcessingTrendTabController {
     private final XYChart.Series<String, Number> actualMaSeries = new XYChart.Series<>();
     private final XYChart.Series<String, Number> planDailySeries = new XYChart.Series<>();
     private final XYChart.Series<String, Number> actualCumSeries = new XYChart.Series<>();
-    private final XYChart.Series<String, Number> planCumSeries = new XYChart.Series<>();
     private final XYChart.Series<String, Number> projectedCumSeries = new XYChart.Series<>();
     private final Line todayLine = new Line();
     private final Label todayMarkerLabel = new Label("今日");
@@ -535,7 +534,6 @@ public class ProcessingTrendTabController {
         actualMaSeries.setName(movingAverageLabel());
         planDailySeries.setName("予定");
         actualCumSeries.setName("実績累計");
-        planCumSeries.setName("予定累計");
         projectedCumSeries.setName("見込累計");
         dailyChart.getData().add(actualDailySeries);
         dailyChart.getData().add(planDailySeries);
@@ -546,7 +544,6 @@ public class ProcessingTrendTabController {
             dailyLineChart.setPickOnBounds(false);
         }
         cumulativeChart.getData().add(actualCumSeries);
-        cumulativeChart.getData().add(planCumSeries);
         cumulativeChart.getData().add(projectedCumSeries);
         cumulativeChart.setHorizontalZeroLineVisible(false);
         cumulativeChart.setVerticalZeroLineVisible(false);
@@ -786,7 +783,6 @@ public class ProcessingTrendTabController {
         }
         items.add(legendItem("pm-legend-swatch-bar-plan", barPlan, ViewMode.CUMULATIVE));
         items.add(legendItem("pm-legend-swatch-line-actual", actPrefix + "累計", ViewMode.DAILY));
-        items.add(legendItem("pm-legend-swatch-line-plan", "予定累計", ViewMode.DAILY));
         items.add(legendItem("pm-legend-swatch-line-projected", "見込累計", ViewMode.DAILY));
         items.add(legendItem("pm-legend-swatch-today", todayLbl, null));
 
@@ -1489,7 +1485,6 @@ public class ProcessingTrendTabController {
         actualMaSeries.getData().clear();
         planDailySeries.getData().clear();
         actualCumSeries.getData().clear();
-        planCumSeries.getData().clear();
         projectedCumSeries.getData().clear();
         detailTable.getItems().clear();
         for (Label l :
@@ -1635,7 +1630,6 @@ public class ProcessingTrendTabController {
         List<XYChart.Data<String, Number>> actMa = new ArrayList<>(n);
         List<XYChart.Data<String, Number>> planDaily = new ArrayList<>(n);
         List<XYChart.Data<String, Number>> actCum = new ArrayList<>(n);
-        List<XYChart.Data<String, Number>> planCum = new ArrayList<>(n);
         List<XYChart.Data<String, Number>> projCum = new ArrayList<>(n);
         double dailyMax = 0;
         double cumMax = 0;
@@ -1654,12 +1648,11 @@ public class ProcessingTrendTabController {
             if (!d.date().isAfter(r.today())) {
                 actCum.add(new XYChart.Data<>(cat, d.actualCumM()));
             }
-            planCum.add(new XYChart.Data<>(cat, d.planCumM()));
             // 見込は実績の最終点（前日）から分岐させる。前日より前は実績累計と同一なので描かない
             if (!d.date().isBefore(projectedStart)) {
                 projCum.add(new XYChart.Data<>(cat, d.projectedCumM()));
             }
-            cumMax = Math.max(cumMax, Math.max(d.actualCumM(), Math.max(d.planCumM(), d.projectedCumM())));
+            cumMax = Math.max(cumMax, Math.max(d.actualCumM(), d.projectedCumM()));
         }
         applyNiceRange(dailyYAxis, dailyMax);
         if (dailyLineYAxis != null) {
@@ -1673,7 +1666,6 @@ public class ProcessingTrendTabController {
         actualMaSeries.getData().setAll(actMa);
         planDailySeries.getData().setAll(planDaily);
         actualCumSeries.getData().setAll(actCum);
-        planCumSeries.getData().setAll(planCum);
         projectedCumSeries.getData().setAll(projCum);
 
         int projOffset = n - projCum.size();
@@ -1687,7 +1679,6 @@ public class ProcessingTrendTabController {
             if (i < actCum.size()) {
                 installSharedTooltip(actCum.get(i), tip);
             }
-            installSharedTooltip(planCum.get(i), tip);
             if (i >= projOffset) {
                 installSharedTooltip(projCum.get(i - projOffset), tip);
             }
@@ -1720,8 +1711,7 @@ public class ProcessingTrendTabController {
                     .append(" m / 差異: ").append(sign).append(formatM(cDiff)).append(" m]");
         }
         sb.append("  予定 ").append(formatM(d.planM())).append(" m\n");
-        sb.append("実績累計 ").append(formatM(d.actualCumM())).append(" m");
-        sb.append("  予定累計 ").append(formatM(d.planCumM())).append(" m\n");
+        sb.append("実績累計 ").append(formatM(d.actualCumM())).append(" m\n");
         String basis;
         if (!d.usesPlanForProjection()) {
             basis = "実績を採用";
@@ -1799,7 +1789,6 @@ public class ProcessingTrendTabController {
         List<XYChart.Data<String, Number>> actDaily = new ArrayList<>(n);
         List<XYChart.Data<String, Number>> planDaily = new ArrayList<>(n);
         List<XYChart.Data<String, Number>> actCum = new ArrayList<>(n);
-        List<XYChart.Data<String, Number>> planCum = new ArrayList<>(n);
         List<XYChart.Data<String, Number>> projCum = new ArrayList<>(n);
         double dailyMax = 0;
         double cumMax = 0;
@@ -1815,14 +1804,10 @@ public class ProcessingTrendTabController {
             if (!m.month().isAfter(currentYm)) {
                 actCum.add(new XYChart.Data<>(cat, m.actualCumM()));
             }
-            planCum.add(new XYChart.Data<>(cat, m.planCumM()));
             if (!m.month().isBefore(projStartYm)) {
                 projCum.add(new XYChart.Data<>(cat, m.projectedCumM()));
             }
-            cumMax =
-                    Math.max(
-                            cumMax,
-                            Math.max(m.actualCumM(), Math.max(m.planCumM(), m.projectedCumM())));
+            cumMax = Math.max(cumMax, Math.max(m.actualCumM(), m.projectedCumM()));
         }
 
         applyNiceRange(dailyYAxis, dailyMax);
@@ -1830,7 +1815,6 @@ public class ProcessingTrendTabController {
         actualDailySeries.getData().setAll(actDaily);
         planDailySeries.getData().setAll(planDaily);
         actualCumSeries.getData().setAll(actCum);
-        planCumSeries.getData().setAll(planCum);
         projectedCumSeries.getData().setAll(projCum);
 
         int projOffset = n - projCum.size();
@@ -1841,7 +1825,6 @@ public class ProcessingTrendTabController {
             if (i < actCum.size()) {
                 installMonthLineTooltip(actCum.get(i).getNode(), m, "実績累計", m.actualCumM());
             }
-            installMonthLineTooltip(planCum.get(i).getNode(), m, "予定累計", m.planCumM());
             if (i >= projOffset && i - projOffset < projCum.size()) {
                 installMonthLineTooltip(
                         projCum.get(i - projOffset).getNode(), m, "見込累計", m.projectedCumM());
