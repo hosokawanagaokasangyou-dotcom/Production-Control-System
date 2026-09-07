@@ -577,6 +577,9 @@ public final class ProcessingTrendAggregator {
     /** 短い設備コード（例: {@code W9-1}, {@code EC-2}, {@code Z-9}）。 */
     private static final Pattern EQUIPMENT_CODE =
             Pattern.compile("(?i)^[A-Z]{1,6}\\d{0,3}(-\\d{1,4})?$");
+    /** 工程名に混入する数値・寸法コード（例: {@code 000,2}, {@code 750,1}）。 */
+    private static final Pattern NUMERIC_PROCESS_JUNK =
+            Pattern.compile("^\\d+([.,]\\d+)*$");
     private static final Pattern ZERO_WIDTH = Pattern.compile("[\u200b\u200c\u200d\ufeff]");
     private static final Pattern DASH_LIKE = Pattern.compile("[\u2010-\u2015\u2212\u30fc\uff0d]");
     private static final Pattern WHITESPACE = Pattern.compile("\\s+");
@@ -586,6 +589,8 @@ public final class ProcessingTrendAggregator {
      * 加工内容・得意先・完了日がカンマ結合された不正値は超える。
      */
     static final int MAX_PLAUSIBLE_MACHINE_LABEL_LEN = 48;
+    /** 工程コンボに載せるラベルの上限（{@code 欠点表示} 等より十分長い）。 */
+    static final int MAX_PLAUSIBLE_PROCESS_LABEL_LEN = 24;
 
     static final String WARN_ACTUAL_QTY_COLUMN_MISSING =
             "実績ソースに「" + COL_ACTUAL_QTY_DETAIL + "」列が無いため、実績は集計していません（累積値からの推定は行いません）。";
@@ -1360,9 +1365,13 @@ public final class ProcessingTrendAggregator {
             return;
         }
         boolean machineCol = COL_MACHINE.equals(col);
+        boolean processCol = COL_PROCESS.equals(col);
         for (List<String> row : rows) {
             String raw = cellAt(row, idx);
             if (machineCol && !isPlausibleMachineLabel(raw)) {
+                continue;
+            }
+            if (processCol && !isPlausibleProcessLabel(raw)) {
                 continue;
             }
             String key = normKey(raw);
@@ -1414,6 +1423,49 @@ public final class ProcessingTrendAggregator {
             return true;
         }
         return EQUIPMENT_CODE.matcher(key).matches();
+    }
+
+    /**
+     * 工程コンボ用: 「工程名」列に寸法・数量コード（{@code 000,2} 等）や他列の結合値が混入することがあるため除外する。
+     */
+    static boolean isPlausibleProcessLabel(String raw) {
+        if (raw == null) {
+            return false;
+        }
+        String s = raw.strip();
+        if (s.isEmpty() || s.length() > MAX_PLAUSIBLE_PROCESS_LABEL_LEN) {
+            return false;
+        }
+        if (s.indexOf(',') >= 0 || s.indexOf(':') >= 0 || s.indexOf('：') >= 0) {
+            return false;
+        }
+        if (s.indexOf('(') >= 0 || s.indexOf('（') >= 0 || s.indexOf(')') >= 0 || s.indexOf('）') >= 0) {
+            return false;
+        }
+        if (s.contains("株式会社") || s.contains("（株）") || s.contains("(株)")) {
+            return false;
+        }
+        if (s.contains("1:完了") || s.contains("0:未完") || s.contains(":完了") || s.contains(":未完")) {
+            return false;
+        }
+        if (s.contains("合計") || s.contains("品種") || s.contains("欠点数")) {
+            return false;
+        }
+        if (EMBEDDED_CALENDAR_DATE.matcher(s).find()) {
+            return false;
+        }
+        String key = normKey(s);
+        if (key.isEmpty()) {
+            return false;
+        }
+        // 工場サイト付き機械名が工程列に入っているケース
+        if (key.endsWith("湖南") || key.endsWith("湘南") || key.endsWith("国分") || key.contains("機")) {
+            return false;
+        }
+        if (NUMERIC_PROCESS_JUNK.matcher(key).matches()) {
+            return false;
+        }
+        return true;
     }
 
     private static boolean matches(String wantedKey, String cell) {

@@ -411,6 +411,38 @@ class ProcessingTrendAggregatorTest {
     }
 
     @Test
+    void processNames_skipsNumericAndNonProcessLabels() {
+        AladdinSnapshot al =
+                new AladdinSnapshot(
+                        List.of("機械名", "依頼NO", "工程名", "2026/09/01"),
+                        List.of(
+                                List.of("EC機 湖南", "A-1", "エンボス", "100"),
+                                List.of("SEC機 湖南", "B-1", "000,2", "50"),
+                                List.of("スライス機1 湖南", "C-1", "750,1", "10"),
+                                List.of("スリット機1 湖南", "D-1", "EC", "1"),
+                                List.of("熱融着機 湖南", "E-1", "接続", "1"),
+                                List.of("エンボス 湖南", "F-1", "難燃品種(FR4)", "1")));
+        List<String> processes = ProcessingTrendAggregator.processNames(null, null, al, null);
+        Assertions.assertEquals(List.of("EC", "エンボス", "接続"), processes);
+    }
+
+    @Test
+    void isPlausibleProcessLabel_acceptsFactoryProcessNames() {
+        Assertions.assertTrue(ProcessingTrendAggregator.isPlausibleProcessLabel("EC"));
+        Assertions.assertTrue(ProcessingTrendAggregator.isPlausibleProcessLabel("SEC"));
+        Assertions.assertTrue(ProcessingTrendAggregator.isPlausibleProcessLabel("エンボス"));
+        Assertions.assertTrue(ProcessingTrendAggregator.isPlausibleProcessLabel("スライス"));
+        Assertions.assertTrue(ProcessingTrendAggregator.isPlausibleProcessLabel("接続"));
+        Assertions.assertTrue(ProcessingTrendAggregator.isPlausibleProcessLabel("欠点表示"));
+        Assertions.assertFalse(ProcessingTrendAggregator.isPlausibleProcessLabel("000,2"));
+        Assertions.assertFalse(ProcessingTrendAggregator.isPlausibleProcessLabel("250,1"));
+        Assertions.assertFalse(ProcessingTrendAggregator.isPlausibleProcessLabel("600,1"));
+        Assertions.assertFalse(ProcessingTrendAggregator.isPlausibleProcessLabel("750,1"));
+        Assertions.assertFalse(ProcessingTrendAggregator.isPlausibleProcessLabel("難燃品種(FR4)"));
+        Assertions.assertFalse(ProcessingTrendAggregator.isPlausibleProcessLabel("EC機 湖南"));
+    }
+
+    @Test
     void progressPct_isCappedAt100() {
         ActualsSnapshot act =
                 new ActualsSnapshot(
