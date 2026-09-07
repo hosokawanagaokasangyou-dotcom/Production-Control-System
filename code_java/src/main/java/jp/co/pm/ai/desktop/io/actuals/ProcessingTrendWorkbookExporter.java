@@ -238,10 +238,9 @@ public final class ProcessingTrendWorkbookExporter {
         if (hasCompare) {
             String actLbl = isDailyReport ? "日報実績合計" : "明細実績合計";
             String compLbl = isDailyReport ? "実績明細合計" : "日報実績合計";
-            String diffLbl = isDailyReport ? "明細差合計" : "日報差合計";
             kpiHeaders =
                     new String[] {
-                        actLbl, compLbl, diffLbl, "予定合計", "期間進捗率", "残予定(当日以降)", "見込合計", "見込差異"
+                        actLbl, compLbl, "差異合計", "予定合計", "期間進捗率", "残予定(当日以降)", "見込合計", "見込差異"
                     };
         } else {
             kpiHeaders =
@@ -322,7 +321,6 @@ public final class ProcessingTrendWorkbookExporter {
             if (hasCompare) {
                 String actM = isDailyReport ? "日報実績 (m)" : "明細実績 (m)";
                 String compM = isDailyReport ? "実績明細 (m)" : "日報実績 (m)";
-                String diffM = isDailyReport ? "明細差 (m)" : "日報差 (m)";
                 String actCumM = isDailyReport ? "日報累計 (m)" : "明細累計 (m)";
                 String compCumM = isDailyReport ? "明細累計 (m)" : "日報累計 (m)";
                 mCols =
@@ -331,9 +329,8 @@ public final class ProcessingTrendWorkbookExporter {
                             "期間日数",
                             actM,
                             compM,
-                            diffM,
-                            "予定 (m)",
                             "差異 (m)",
+                            "予定 (m)",
                             actCumM,
                             compCumM,
                             "予定累計 (m)",
@@ -342,7 +339,7 @@ public final class ProcessingTrendWorkbookExporter {
             } else {
                 mCols =
                         new String[] {
-                            "年月", "期間日数", "実績 (m)", "予定 (m)", "差異 (m)", "実績累計 (m)", "予定累計 (m)", "見込累計 (m)"
+                            "年月", "期間日数", "実績 (m)", "予定 (m)", "実績累計 (m)", "予定累計 (m)", "見込累計 (m)"
                         };
             }
             for (int i = 0; i < mCols.length; i++) {
@@ -385,10 +382,6 @@ public final class ProcessingTrendWorkbookExporter {
                 cMPlan.setCellValue(mp.planM());
                 cMPlan.setCellStyle(s.numberCellStyle);
 
-                Cell cMDiff = row.createCell(mCol++);
-                cMDiff.setCellValue(mp.diffM());
-                cMDiff.setCellStyle(mp.diffM() >= 0 ? s.diffPositiveStyle : s.diffNegativeStyle);
-
                 Cell cMCumAct = row.createCell(mCol++);
                 cMCumAct.setCellValue(mp.actualCumM());
                 cMCumAct.setCellStyle(s.numberCellStyle);
@@ -423,14 +416,14 @@ public final class ProcessingTrendWorkbookExporter {
                 Cell c = row.createCell(0);
                 c.setCellValue("・ " + note);
                 c.setCellStyle(s.warnTextStyle);
-                sheet.addMergedRegion(new CellRangeAddress(r - 1, r - 1, 0, hasCompare ? 10 : 7));
+                sheet.addMergedRegion(new CellRangeAddress(r - 1, r - 1, 0, hasCompare ? 9 : 6));
             }
             for (String warn : req.result().warnings()) {
                 Row row = sheet.createRow(r++);
                 Cell c = row.createCell(0);
                 c.setCellValue("・ " + warn);
                 c.setCellStyle(s.warnTextStyle);
-                sheet.addMergedRegion(new CellRangeAddress(r - 1, r - 1, 0, hasCompare ? 10 : 7));
+                sheet.addMergedRegion(new CellRangeAddress(r - 1, r - 1, 0, hasCompare ? 9 : 6));
             }
         }
 
@@ -483,7 +476,6 @@ public final class ProcessingTrendWorkbookExporter {
         if (hasCompare) {
             String actCol = isDailyReport ? "日報実績 (m)" : "明細実績 (m)";
             String compCol = isDailyReport ? "実績明細 (m)" : "日報実績 (m)";
-            String diffCol = isDailyReport ? "明細差 (m)" : "日報差 (m)";
             String actCumCol = isDailyReport ? "日報累計 (m)" : "明細累計 (m)";
             String compCumCol = isDailyReport ? "明細累計 (m)" : "日報累計 (m)";
             headers =
@@ -493,9 +485,8 @@ public final class ProcessingTrendWorkbookExporter {
                         actCol,
                         "7日移動平均 (m)",
                         compCol,
-                        diffCol,
-                        "予定 (m)",
                         "差異 (m)",
+                        "予定 (m)",
                         actCumCol,
                         compCumCol,
                         "予定累計 (m)",
@@ -505,7 +496,7 @@ public final class ProcessingTrendWorkbookExporter {
         } else {
             headers =
                     new String[] {
-                        "日付", "曜日", "実績 (m)", "7日移動平均 (m)", "予定 (m)", "差異 (m)",
+                        "日付", "曜日", "実績 (m)", "7日移動平均 (m)", "予定 (m)",
                         "実績累計 (m)", "予定累計 (m)", "見込累計 (m)", "備考"
                     };
         }
@@ -521,7 +512,6 @@ public final class ProcessingTrendWorkbookExporter {
         double sumCompAct = 0.0;
         double sumCompDiff = 0.0;
         double sumPlan = 0.0;
-        double sumDiff = 0.0;
 
         for (ProcessingTrendAggregator.DayPoint dp : req.result().days()) {
             Row row = sheet.createRow(r++);
@@ -573,7 +563,7 @@ public final class ProcessingTrendWorkbookExporter {
                 cCompAct.setCellStyle(numStyle);
                 sumCompAct += dp.compareActualM();
 
-                // 明細差
+                // 差異 (日報 − 実績明細)
                 Cell cDiffComp = row.createCell(col++);
                 double actCompDiff = dp.actualCompareDiffM();
                 cDiffComp.setCellValue(actCompDiff);
@@ -587,12 +577,6 @@ public final class ProcessingTrendWorkbookExporter {
             cPlan.setCellValue(dp.planM());
             cPlan.setCellStyle(numStyle);
             sumPlan += dp.planM();
-
-            // 差異
-            Cell cDiff = row.createCell(col++);
-            cDiff.setCellValue(dp.diffM());
-            cDiff.setCellStyle(dp.diffM() >= 0 ? s.diffPositiveStyle : s.diffNegativeStyle);
-            sumDiff += dp.diffM();
 
             // 実績累計
             Cell cCumAct = row.createCell(col++);
@@ -667,10 +651,6 @@ public final class ProcessingTrendWorkbookExporter {
         Cell cTotPlan = totalRow.createCell(tCol++);
         cTotPlan.setCellValue(sumPlan);
         cTotPlan.setCellStyle(s.totalNumberStyle);
-
-        Cell cTotDiff = totalRow.createCell(tCol++);
-        cTotDiff.setCellValue(sumDiff);
-        cTotDiff.setCellStyle(sumDiff >= 0 ? s.totalPositiveDiffStyle : s.totalNegativeDiffStyle);
 
         for (int c = tCol; c < headers.length; c++) {
             Cell cEmpty = totalRow.createCell(c);

@@ -2,6 +2,7 @@ package jp.co.pm.ai.desktop;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.InputStream;
@@ -102,8 +103,10 @@ class ProcessingTrendTabFxmlTest {
         assertNotNull(colCompare, "colCompareActual が無い");
         Element colDiff = elementByFxId("colActualCompareDiff");
         assertNotNull(colDiff, "colActualCompareDiff が無い");
+        assertEquals("差異 (m)", colDiff.getAttribute("text"), "差異列の初期表示は『差異 (m)』であること");
         Element colCompareCum = elementByFxId("colCompareActualCum");
         assertNotNull(colCompareCum, "colCompareActualCum が無い");
+        assertNull(elementByFxId("colDiff"), "予定との差異列 colDiff は削除されていること");
     }
 
     @Test

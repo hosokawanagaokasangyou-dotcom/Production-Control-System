@@ -234,7 +234,6 @@ public class ProcessingTrendTabController {
     @FXML private TableColumn<DayPoint, Number> colCompareActual;
     @FXML private TableColumn<DayPoint, Number> colActualCompareDiff;
     @FXML private TableColumn<DayPoint, Number> colPlan;
-    @FXML private TableColumn<DayPoint, Number> colDiff;
     @FXML private TableColumn<DayPoint, Number> colActualCum;
     @FXML private TableColumn<DayPoint, Number> colCompareActualCum;
     @FXML private TableColumn<DayPoint, Number> colPlanCum;
@@ -608,11 +607,6 @@ public class ProcessingTrendTabController {
             colActualCompareDiff.setCellFactory(col -> numberCell(true));
             colActualCompareDiff.setStyle("-fx-alignment: CENTER-RIGHT;");
         }
-        // 当日以降は実績が揃っていないので差異を値として持たせない（セル側で「—」表示）
-        colDiff.setCellValueFactory(
-                cd ->
-                        new ReadOnlyObjectWrapper<>(
-                                cd.getValue().usesPlanForProjection() ? null : cd.getValue().diffM()));
         colPlanCum.setCellValueFactory(cd -> new ReadOnlyObjectWrapper<>(cd.getValue().planCumM()));
         colActualCum.setCellValueFactory(cd -> new ReadOnlyObjectWrapper<>(cd.getValue().actualCumM()));
         if (colCompareActualCum != null) {
@@ -628,11 +622,9 @@ public class ProcessingTrendTabController {
             c.setCellFactory(col -> numberCell(false));
             c.setStyle("-fx-alignment: CENTER-RIGHT;");
         }
-        colDiff.setCellFactory(col -> numberCell(true));
-        colDiff.setStyle("-fx-alignment: CENTER-RIGHT;");
         Tooltip.install(
                 detailTable,
-                new Tooltip("差異 = 実績 − 予定（当日以降は「—」）。明細差 = 主実績 − 比較実績。見込累計 = 前日まで実績、当日以降は予定を採用"));
+                new Tooltip("差異 = 日報実績と実績明細の差（日報 − 明細）。見込累計 = 前日まで実績、当日以降は予定を採用"));
         detailTable.setRowFactory(
                 tv ->
                         new TableRow<>() {
@@ -701,13 +693,13 @@ public class ProcessingTrendTabController {
             colActual7dMa.setText("7日移動平均 (m)");
             colActual7dMa.setVisible(!monthly);
         }
+        if (colActualCompareDiff != null) {
+            colActualCompareDiff.setText("差異 (m)");
+        }
         if (isDailyReport) {
             colActual.setText(monthly ? "日報実績 (m)" : "日報実績 (m)");
             if (colCompareActual != null) {
                 colCompareActual.setText(monthly ? "実績明細 (m)" : "実績明細 (m)");
-            }
-            if (colActualCompareDiff != null) {
-                colActualCompareDiff.setText("明細差 (m)");
             }
             colActualCum.setText(monthly ? "日報累計 (m)" : "日報累計 (m)");
             if (colCompareActualCum != null) {
@@ -718,16 +710,12 @@ public class ProcessingTrendTabController {
             if (colCompareActual != null) {
                 colCompareActual.setText(monthly ? "日報実績 (m)" : "日報実績 (m)");
             }
-            if (colActualCompareDiff != null) {
-                colActualCompareDiff.setText("日報差 (m)");
-            }
             colActualCum.setText(monthly ? "明細累計 (m)" : "明細累計 (m)");
             if (colCompareActualCum != null) {
                 colCompareActualCum.setText(monthly ? "日報累計 (m)" : "日報累計 (m)");
             }
         }
         colPlan.setText(monthly ? "予定 (m)" : "予定 (m)");
-        colDiff.setText("差異 (m)");
         colPlanCum.setText("予定累計 (m)");
         colProjectedCum.setText("見込累計 (m)");
     }
@@ -1682,13 +1670,9 @@ public class ProcessingTrendTabController {
             double cDiff = d.actualCompareDiffM();
             String sign = cDiff > 0.05 ? "+" : "";
             sb.append("  [対").append(compareLabel).append(" ").append(formatM(d.compareActualM()))
-                    .append(" m / 差: ").append(sign).append(formatM(cDiff)).append(" m]");
+                    .append(" m / 差異: ").append(sign).append(formatM(cDiff)).append(" m]");
         }
-        sb.append("  予定 ").append(formatM(d.planM())).append(" m");
-        if (!d.usesPlanForProjection()) {
-            sb.append("  差異 ").append(formatSigned(d.diffM())).append(" m");
-        }
-        sb.append('\n');
+        sb.append("  予定 ").append(formatM(d.planM())).append(" m\n");
         sb.append("実績累計 ").append(formatM(d.actualCumM())).append(" m");
         sb.append("  予定累計 ").append(formatM(d.planCumM())).append(" m\n");
         String basis;
@@ -1832,7 +1816,7 @@ public class ProcessingTrendTabController {
                             double cDiff = m.actualCompareDiffM();
                             String sign = cDiff > 0.05 ? "+" : "";
                             actLine += "\n  [対" + compareLabel + " " + formatM(m.compareActualM())
-                                    + " m / 差: " + sign + formatM(cDiff) + " m]";
+                                    + " m / 差異: " + sign + formatM(cDiff) + " m]";
                         }
                     } else {
                         actLine = "予定 (月合計): " + formatM(m.planM()) + " m";
@@ -1841,9 +1825,6 @@ public class ProcessingTrendTabController {
                             m.month().format(MONTH_FMT)
                                     + "\n"
                                     + actLine
-                                    + "\n差異: "
-                                    + formatSigned(m.diffM())
-                                    + " m"
                                     + (m.incomplete() ? "\n※ 期間内 " + m.daysInBucket() + " 日間" : ""));
                     Point2D p = node.localToScreen(node.getBoundsInLocal().getWidth() / 2.0, 0);
                     if (p != null) {

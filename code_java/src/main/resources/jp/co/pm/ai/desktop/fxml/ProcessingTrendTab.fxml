@@ -228,9 +228,8 @@
                         <TableColumn fx:id="colActual" prefWidth="100.0" sortable="false" text="日報実績 (m)"/>
                         <TableColumn fx:id="colActual7dMa" prefWidth="105.0" sortable="false" text="7日移動平均 (m)"/>
                         <TableColumn fx:id="colCompareActual" prefWidth="100.0" sortable="false" text="実績明細 (m)"/>
-                        <TableColumn fx:id="colActualCompareDiff" prefWidth="95.0" sortable="false" text="明細差 (m)"/>
+                        <TableColumn fx:id="colActualCompareDiff" prefWidth="95.0" sortable="false" text="差異 (m)"/>
                         <TableColumn fx:id="colPlan" prefWidth="95.0" sortable="false" text="予定 (m)"/>
-                        <TableColumn fx:id="colDiff" prefWidth="90.0" sortable="false" text="差異 (m)"/>
                         <TableColumn fx:id="colActualCum" prefWidth="105.0" sortable="false" text="日報累計 (m)"/>
                         <TableColumn fx:id="colCompareActualCum" prefWidth="105.0" sortable="false" text="明細累計 (m)"/>
                         <TableColumn fx:id="colPlanCum" prefWidth="105.0" sortable="false" text="予定累計 (m)"/>

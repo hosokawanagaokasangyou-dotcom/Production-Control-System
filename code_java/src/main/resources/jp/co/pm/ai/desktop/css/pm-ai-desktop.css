@@ -3197,8 +3197,8 @@
     -pm-trend-good: #15803d;
     -pm-trend-warn: #b45309;
     -pm-trend-bad: #b91c1c;
-    -pm-trend-weekend-bg: #eef2f7;
-    -pm-trend-today-bg: #fef3c7;
+    -pm-trend-weekend-bg: derive(-fx-base, 8%);
+    -pm-trend-today-bg: derive(-fx-base, 22%);
     /* グラフ領域はテーマに依存せず白地。軸・目盛・グリッド・ラベルも白地前提の固定色にする */
     -pm-trend-chart-bg: white;
     -pm-trend-chart-border: #cbd5e1;
@@ -3632,11 +3632,11 @@
 }
 
 .table-view.pm-processing-trend-detail-table .table-row-cell .table-cell:sat {
-    -fx-text-fill: #1d4ed8;
+    -fx-text-fill: #60a5fa;
 }
 
 .table-view.pm-processing-trend-detail-table .table-row-cell .table-cell:sun {
-    -fx-text-fill: #b91c1c;
+    -fx-text-fill: #f87171;
 }
 
 .table-view.pm-processing-trend-detail-table .table-row-cell:future .table-cell {

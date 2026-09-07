@@ -102,7 +102,7 @@ class ProcessingTrendWorkbookExporterTest {
             assertEquals("実績 (m)", sDaily.getRow(0).getCell(2).getStringCellValue());
             assertEquals("7日移動平均 (m)", sDaily.getRow(0).getCell(3).getStringCellValue());
             assertEquals("予定 (m)", sDaily.getRow(0).getCell(4).getStringCellValue());
-            assertEquals("差異 (m)", sDaily.getRow(0).getCell(5).getStringCellValue());
+            assertEquals("実績累計 (m)", sDaily.getRow(0).getCell(5).getStringCellValue());
 
             // データ行3日分 + 合計行1行
             // 行0: ヘッダー, 行1: 9/1, 行2: 9/2, 行3: 9/3, 行4: 合計
@@ -186,14 +186,15 @@ class ProcessingTrendWorkbookExporterTest {
             Sheet sDaily = wb.getSheet(ProcessingTrendWorkbookExporter.SHEET_DAILY);
             assertNotNull(sDaily);
 
-            // 日報実績 (m), 7日移動平均 (m), 実績明細 (m), 明細差 (m)
+            // 日報実績 (m), 7日移動平均 (m), 実績明細 (m), 差異 (m), 予定 (m)
             assertEquals("日付", sDaily.getRow(0).getCell(0).getStringCellValue());
             assertEquals("曜日", sDaily.getRow(0).getCell(1).getStringCellValue());
             assertEquals("日報実績 (m)", sDaily.getRow(0).getCell(2).getStringCellValue());
             assertEquals("7日移動平均 (m)", sDaily.getRow(0).getCell(3).getStringCellValue());
             assertEquals("実績明細 (m)", sDaily.getRow(0).getCell(4).getStringCellValue());
-            assertEquals("明細差 (m)", sDaily.getRow(0).getCell(5).getStringCellValue());
+            assertEquals("差異 (m)", sDaily.getRow(0).getCell(5).getStringCellValue());
             assertEquals("予定 (m)", sDaily.getRow(0).getCell(6).getStringCellValue());
+            assertEquals("日報累計 (m)", sDaily.getRow(0).getCell(7).getStringCellValue());
 
             // 9/1 データ行
             assertEquals(120.0, sDaily.getRow(1).getCell(2).getNumericCellValue(), 1e-9);
