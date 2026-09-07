@@ -1,19 +1,32 @@
 package jp.co.pm.ai.desktop.reconciliation;
 
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 public final class JuchuOrderSearch {
 
     private JuchuOrderSearch() {}
 
     public static List<OrderRecord> filter(
-            List<OrderRecord> records, JuchuOrderSearchCriteria criteria) {
+            Collection<OrderRecord> records, JuchuOrderSearchCriteria criteria) {
+        Objects.requireNonNull(criteria, "criteria");
+        var validationError = criteria.validationError();
+        if (validationError.isPresent()) {
+            throw new IllegalArgumentException(validationError.get());
+        }
+        if (records == null) {
+            return List.of();
+        }
         return records.stream().filter(record -> matches(record, criteria)).toList();
     }
 
     public static boolean matches(OrderRecord record, JuchuOrderSearchCriteria criteria) {
+        if (record == null || criteria == null) {
+            return false;
+        }
         if (!deliveryInRange(record, criteria.from(), criteria.to())) {
             return false;
         }
@@ -34,6 +47,9 @@ public final class JuchuOrderSearch {
 
     private static boolean deliveryInRange(OrderRecord record, LocalDate from, LocalDate to) {
         Map<String, String> db = record.getDbValues();
+        if (db == null) {
+            return false;
+        }
         return dateInRange(db.get("希望納期"), from, to)
                 || dateInRange(db.get("調整納期"), from, to);
     }
@@ -48,6 +64,9 @@ public final class JuchuOrderSearch {
 
     private static boolean keywordMatches(OrderRecord record, JuchuOrderSearchCriteria criteria) {
         Map<String, String> db = record.getDbValues();
+        if (db == null) {
+            return false;
+        }
         String productKeyword = normalizedKeyword(criteria.productKeyword());
         String rawMaterialKeyword = normalizedKeyword(criteria.rawMaterialKeyword());
 

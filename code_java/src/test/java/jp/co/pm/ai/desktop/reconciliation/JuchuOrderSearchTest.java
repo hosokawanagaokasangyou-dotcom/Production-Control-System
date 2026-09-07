@@ -2,6 +2,7 @@ package jp.co.pm.ai.desktop.reconciliation;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.LocalDate;
@@ -103,6 +104,18 @@ class JuchuOrderSearchTest {
         assertFalse(
                 JuchuOrderSearch.matches(
                         rec("1", Map.of("希望納期", "不明", "調整納期", "", "製品", "ABC")), c));
+    }
+
+    @Test
+    void filter_rejectsInvalidCriteria() {
+        var invalid =
+                new JuchuOrderSearchCriteria(
+                        LocalDate.of(2026, 6, 1), LocalDate.of(2026, 6, 30), "", "");
+        IllegalArgumentException ex =
+                assertThrows(
+                        IllegalArgumentException.class,
+                        () -> JuchuOrderSearch.filter(List.of(), invalid));
+        assertEquals("製品名または投入原反を入力してください", ex.getMessage());
     }
 
     @Test
