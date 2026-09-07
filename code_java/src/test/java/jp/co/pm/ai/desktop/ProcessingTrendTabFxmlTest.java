@@ -120,6 +120,33 @@ class ProcessingTrendTabFxmlTest {
     }
 
     @Test
+    void loadingChipIsLargeAndStyled() throws Exception {
+        Element chip = elementByFxId("loadingChip");
+        assertNotNull(chip, "loadingChip が無い");
+        assertTrue(
+                chip.getAttribute("styleClass").contains("pm-processing-trend-loading-chip"),
+                chip.getAttribute("styleClass"));
+        Element indicator = elementByFxId("loadingIndicator");
+        assertNotNull(indicator, "loadingIndicator が無い");
+        assertEquals("28.0", indicator.getAttribute("prefHeight"));
+        assertEquals("28.0", indicator.getAttribute("prefWidth"));
+
+        String css;
+        try (InputStream in =
+                ProcessingTrendTabFxmlTest.class.getResourceAsStream(
+                        "/jp/co/pm/ai/desktop/css/pm-ai-desktop.css")) {
+            assertNotNull(in, "pm-ai-desktop.css が無い");
+            css = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+        }
+        String statusBlock = cssRuleBlock(css, ".label.pm-processing-trend-loading-status");
+        Matcher size = Pattern.compile("-fx-font-size:\\s*(\\d+)px").matcher(statusBlock);
+        assertTrue(size.find(), "読込ステータスの font-size が無い: " + statusBlock);
+        int px = Integer.parseInt(size.group(1));
+        assertTrue(px >= 14, "読込ステータスが小さすぎる: " + px + "px");
+        assertTrue(css.contains(".pm-processing-trend-loading-chip"), "読込チップの CSS が無い");
+    }
+
+    @Test
     void movingAverageTogglesExistWith30DayDefault() throws Exception {
         Element ma7 = elementByFxId("ma7Toggle");
         Element ma14 = elementByFxId("ma14Toggle");

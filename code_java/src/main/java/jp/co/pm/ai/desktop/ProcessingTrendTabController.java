@@ -201,6 +201,7 @@ public class ProcessingTrendTabController {
     @FXML private ToggleButton ma30Toggle;
     @FXML private ProgressIndicator loadingIndicator;
     @FXML private Label loadingStatusLabel;
+    @FXML private HBox loadingChip;
     @FXML private Label lastUpdatedLabel;
     @FXML private Label sourceSummaryLabel;
     @FXML private HBox noticeBanner;
@@ -2143,10 +2144,16 @@ public class ProcessingTrendTabController {
     // ---- 表示補助 --------------------------------------------------------------------------
 
     private void applyLoadingPresentation(boolean isLoading) {
-        loadingIndicator.setVisible(isLoading);
-        loadingIndicator.setManaged(isLoading);
-        loadingStatusLabel.setVisible(isLoading);
-        loadingStatusLabel.setManaged(isLoading);
+        if (loadingChip != null) {
+            loadingChip.setVisible(isLoading);
+            loadingChip.setManaged(isLoading);
+        }
+        if (loadingIndicator != null) {
+            loadingIndicator.setVisible(isLoading);
+        }
+        if (loadingStatusLabel != null) {
+            loadingStatusLabel.setVisible(isLoading);
+        }
         reloadButton.setDisable(isLoading);
         if (noticeReloadButton != null) {
             noticeReloadButton.setDisable(isLoading);
