@@ -36,6 +36,27 @@ import jp.co.pm.ai.desktop.dispatch.ResultDispatchSchema;
  */
 public final class ProcessingTrendAggregator {
 
+    /** 実績系列の取得元。 */
+    public enum ActualSource {
+        DAILY_REPORT("日報（実加工量）"),
+        DETAIL("実績明細（実加工数）");
+
+        private final String label;
+
+        ActualSource(String label) {
+            this.label = label;
+        }
+
+        public String label() {
+            return label;
+        }
+
+        @Override
+        public String toString() {
+            return label;
+        }
+    }
+
     /** 予定系列の取得元。 */
     public enum PlanSource {
         ALADDIN("アラジン加工計画"),
@@ -62,12 +83,18 @@ public final class ProcessingTrendAggregator {
      *
      * @param from 期間開始（含む）
      * @param to 期間終了（含む）
+     * @param actualSource 実績の取得元（デフォルト: 日報）
      * @param planSource 予定の取得元
      * @param machine 機械名（{@code null} / 空 = 全機械）
      * @param process 工程名（{@code null} / 空 = 全工程）
      */
     public record Filter(
-            LocalDate from, LocalDate to, PlanSource planSource, String machine, String process) {
+            LocalDate from,
+            LocalDate to,
+            ActualSource actualSource,
+            PlanSource planSource,
+            String machine,
+            String process) {
 
         public Filter {
             Objects.requireNonNull(from, "from");
@@ -77,9 +104,15 @@ public final class ProcessingTrendAggregator {
                 from = to;
                 to = t;
             }
+            actualSource = actualSource != null ? actualSource : ActualSource.DAILY_REPORT;
             planSource = planSource != null ? planSource : PlanSource.ALADDIN;
             machine = blankToNull(machine);
             process = blankToNull(process);
+        }
+
+        /** 従来互換コンストラクタ（実績ソースは日報）。 */
+        public Filter(LocalDate from, LocalDate to, PlanSource planSource, String machine, String process) {
+            this(from, to, ActualSource.DAILY_REPORT, planSource, machine, process);
         }
 
         public boolean hasMachine() {
@@ -101,6 +134,8 @@ public final class ProcessingTrendAggregator {
      * @param planCumM 期間開始からの予定累計 (m)
      * @param projectedCumM 見込累計 (m)。当日より前は実績、当日以降は予定を積む
      * @param usesPlanForProjection 見込の当日値が予定側かどうか（{@code date >= today}）
+     * @param compareActualM 比較対象実績 (m)（日報選択時は実績明細、明細選択時は日報）
+     * @param compareActualCumM 比較対象実績の累計 (m)
      */
     public record DayPoint(
             LocalDate date,
@@ -109,11 +144,30 @@ public final class ProcessingTrendAggregator {
             double actualCumM,
             double planCumM,
             double projectedCumM,
-            boolean usesPlanForProjection) {
+            boolean usesPlanForProjection,
+            double compareActualM,
+            double compareActualCumM) {
+
+        /** 従来互換コンストラクタ（比較実績は 0）。 */
+        public DayPoint(
+                LocalDate date,
+                double actualM,
+                double planM,
+                double actualCumM,
+                double planCumM,
+                double projectedCumM,
+                boolean usesPlanForProjection) {
+            this(date, actualM, planM, actualCumM, planCumM, projectedCumM, usesPlanForProjection, 0.0, 0.0);
+        }
 
         /** 当日差異 = 実績 − 予定。 */
         public double diffM() {
             return actualM - planM;
+        }
+
+        /** 比較対象実績との差異 = 主実績 − 比較実績（日報選択時は 日報 − 実績明細）。 */
+        public double actualCompareDiffM() {
+            return actualM - compareActualM;
         }
     }
 
@@ -133,6 +187,8 @@ public final class ProcessingTrendAggregator {
      * @param actualMinDate 実績ソース（機械・工程フィルタ後）に含まれる最小加工日。無ければ {@code null}
      * @param actualMaxDate 実績ソース（機械・工程フィルタ後）に含まれる最大加工日。無ければ {@code null}
      * @param warnings 集計上の注意（列欠落など）。UI へそのまま表示できる日本語
+     * @param compareActualTotalM 比較対象実績の期間合計 (m)
+     * @param compareSourceLabel 比較対象実績のラベル（例: "実績明細" または "日報"）
      */
     public record Result(
             List<DayPoint> days,
@@ -147,15 +203,56 @@ public final class ProcessingTrendAggregator {
             int planRowsCounted,
             LocalDate actualMinDate,
             LocalDate actualMaxDate,
-            List<String> warnings) {
+            List<String> warnings,
+            double compareActualTotalM,
+            String compareSourceLabel) {
 
         public Result {
             days = days != null ? List.copyOf(days) : List.of();
             warnings = warnings != null ? List.copyOf(warnings) : List.of();
+            compareSourceLabel = compareSourceLabel != null ? compareSourceLabel : "";
+        }
+
+        /** 従来互換コンストラクタ（比較実績なし）。 */
+        public Result(
+                List<DayPoint> days,
+                double actualTotalM,
+                double planTotalM,
+                double actualToDateM,
+                double planToDateM,
+                double remainingPlanM,
+                double projectedTotalM,
+                LocalDate today,
+                int actualRowsCounted,
+                int planRowsCounted,
+                LocalDate actualMinDate,
+                LocalDate actualMaxDate,
+                List<String> warnings) {
+            this(
+                    days,
+                    actualTotalM,
+                    planTotalM,
+                    actualToDateM,
+                    planToDateM,
+                    remainingPlanM,
+                    projectedTotalM,
+                    today,
+                    actualRowsCounted,
+                    planRowsCounted,
+                    actualMinDate,
+                    actualMaxDate,
+                    warnings,
+                    0.0,
+                    "");
         }
 
         public static Result empty(LocalDate today) {
-            return new Result(List.of(), 0, 0, 0, 0, 0, 0, today, 0, 0, null, null, List.of());
+            return new Result(List.of(), 0, 0, 0, 0, 0, 0, today, 0, 0, null, null, List.of(), 0.0, "");
+        }
+
+        /** 比較対象実績との合計差異 = 主実績合計 − 比較実績合計。 */
+        public double actualCompareDiffTotalM() {
+            return actualTotalM - compareActualTotalM;
         }
 
         /** 進捗率 (%) = 当日より前の実績 ÷ 当日より前の予定。分母 0 のとき {@code NaN}。 */
@@ -219,6 +316,8 @@ public final class ProcessingTrendAggregator {
      * @param usesPlanForProjection 当月以降かどうか
      * @param incomplete 月の一部のみ期間に含まれるか
      * @param isCurrentMonth 当月かどうか
+     * @param compareActualM 比較対象実績の月内合計 (m)
+     * @param compareActualCumM 比較対象実績の累計 (m)
      */
     public record MonthPoint(
             YearMonth month,
@@ -234,11 +333,53 @@ public final class ProcessingTrendAggregator {
             double projectedM,
             boolean usesPlanForProjection,
             boolean incomplete,
-            boolean isCurrentMonth) {
+            boolean isCurrentMonth,
+            double compareActualM,
+            double compareActualCumM) {
+
+        /** 従来互換コンストラクタ（比較実績なし）。 */
+        public MonthPoint(
+                YearMonth month,
+                LocalDate fromInclusive,
+                LocalDate toInclusive,
+                int daysInBucket,
+                int calendarDaysInMonth,
+                double actualM,
+                double planM,
+                double actualCumM,
+                double planCumM,
+                double projectedCumM,
+                double projectedM,
+                boolean usesPlanForProjection,
+                boolean incomplete,
+                boolean isCurrentMonth) {
+            this(
+                    month,
+                    fromInclusive,
+                    toInclusive,
+                    daysInBucket,
+                    calendarDaysInMonth,
+                    actualM,
+                    planM,
+                    actualCumM,
+                    planCumM,
+                    projectedCumM,
+                    projectedM,
+                    usesPlanForProjection,
+                    incomplete,
+                    isCurrentMonth,
+                    0.0,
+                    0.0);
+        }
 
         /** 当月差異 = 実績 − 予定。 */
         public double diffM() {
             return actualM - planM;
+        }
+
+        /** 比較対象実績との差異 = 主実績 − 比較実績。 */
+        public double actualCompareDiffM() {
+            return actualM - compareActualM;
         }
 
         /** 過去月（完了月）の参考進捗率 (%)。当月・未来・予定0は {@code NaN}。 */
@@ -268,16 +409,56 @@ public final class ProcessingTrendAggregator {
             int planRowsCounted,
             LocalDate actualMinDate,
             LocalDate actualMaxDate,
-            List<String> warnings) {
+            List<String> warnings,
+            double compareActualTotalM,
+            String compareSourceLabel) {
 
         public MonthlyResult {
             months = months != null ? List.copyOf(months) : List.of();
             warnings = warnings != null ? List.copyOf(warnings) : List.of();
+            compareSourceLabel = compareSourceLabel != null ? compareSourceLabel : "";
+        }
+
+        /** 従来互換コンストラクタ（比較実績なし）。 */
+        public MonthlyResult(
+                List<MonthPoint> months,
+                double actualTotalM,
+                double planTotalM,
+                double actualToDateM,
+                double planToDateM,
+                double remainingPlanM,
+                double projectedTotalM,
+                LocalDate today,
+                LocalDate periodFrom,
+                LocalDate periodTo,
+                int actualRowsCounted,
+                int planRowsCounted,
+                LocalDate actualMinDate,
+                LocalDate actualMaxDate,
+                List<String> warnings) {
+            this(
+                    months,
+                    actualTotalM,
+                    planTotalM,
+                    actualToDateM,
+                    planToDateM,
+                    remainingPlanM,
+                    projectedTotalM,
+                    today,
+                    periodFrom,
+                    periodTo,
+                    actualRowsCounted,
+                    planRowsCounted,
+                    actualMinDate,
+                    actualMaxDate,
+                    warnings,
+                    0.0,
+                    "");
         }
 
         public static MonthlyResult empty(LocalDate today, LocalDate from, LocalDate to) {
             return new MonthlyResult(
-                    List.of(), 0, 0, 0, 0, 0, 0, today, from, to, 0, 0, null, null, List.of());
+                    List.of(), 0, 0, 0, 0, 0, 0, today, from, to, 0, 0, null, null, List.of(), 0.0, "");
         }
 
         public double progressPct() {
@@ -298,6 +479,11 @@ public final class ProcessingTrendAggregator {
             return projectedTotalM - planTotalM;
         }
 
+        /** 比較対象実績との合計差異 = 主実績合計 − 比較実績合計。 */
+        public double actualCompareDiffTotalM() {
+            return actualTotalM - compareActualTotalM;
+        }
+
         public boolean isEmpty() {
             return actualRowsCounted == 0 && planRowsCounted == 0;
         }
@@ -311,7 +497,10 @@ public final class ProcessingTrendAggregator {
 
     private static final String COL_MACHINE = "機械名";
     private static final String COL_PROCESS = "工程名";
-    private static final String COL_ACTUAL_QTY = "実加工数";
+    private static final String COL_ACTUAL_QTY_DETAIL = "実加工数";
+    private static final String COL_ACTUAL_QTY = COL_ACTUAL_QTY_DETAIL;
+    private static final String COL_ACTUAL_QTY_DAILY = "実加工量";
+    private static final String COL_ACTUAL_DATE_DAILY = "加工日付";
     private static final String COL_ACTUAL_DATE = "加工日";
     private static final String COL_ACTUAL_START_DT = "加工開始日時";
     private static final String COL_WAREHOUSE = "倉庫";
@@ -328,7 +517,7 @@ public final class ProcessingTrendAggregator {
     private static final Collator JA = Collator.getInstance(Locale.JAPAN);
 
     static final String WARN_ACTUAL_QTY_COLUMN_MISSING =
-            "実績ソースに「" + COL_ACTUAL_QTY + "」列が無いため、実績は集計していません（累積値からの推定は行いません）。";
+            "実績ソースに「" + COL_ACTUAL_QTY_DETAIL + "」列が無いため、実績は集計していません（累積値からの推定は行いません）。";
 
     static {
         JA.setStrength(Collator.PRIMARY);
@@ -367,6 +556,7 @@ public final class ProcessingTrendAggregator {
         double runningActualCum = 0.0;
         double runningPlanCum = 0.0;
         double runningProjectedCum = 0.0;
+        double runningCompareActualCum = 0.0;
 
         for (YearMonth ym = startYm; !ym.isAfter(endYm); ym = ym.plusMonths(1)) {
             List<DayPoint> monthDays = daysByMonth.getOrDefault(ym, List.of());
@@ -384,10 +574,12 @@ public final class ProcessingTrendAggregator {
             double actSum = 0.0;
             double planSum = 0.0;
             double projContrib = 0.0;
+            double compareActSum = 0.0;
 
             for (DayPoint dp : monthDays) {
                 actSum += dp.actualM();
                 planSum += dp.planM();
+                compareActSum += dp.compareActualM();
                 if (dp.date().isBefore(t)) {
                     projContrib += dp.actualM();
                 } else if (dp.date().equals(t)) {
@@ -400,6 +592,7 @@ public final class ProcessingTrendAggregator {
             runningActualCum += actSum;
             runningPlanCum += planSum;
             runningProjectedCum += projContrib;
+            runningCompareActualCum += compareActSum;
 
             double lastActualCum =
                     monthDays.isEmpty() ? runningActualCum : monthDays.get(monthDays.size() - 1).actualCumM();
@@ -409,6 +602,10 @@ public final class ProcessingTrendAggregator {
                     monthDays.isEmpty()
                             ? runningProjectedCum
                             : monthDays.get(monthDays.size() - 1).projectedCumM();
+            double lastCompareActualCum =
+                    monthDays.isEmpty()
+                            ? runningCompareActualCum
+                            : monthDays.get(monthDays.size() - 1).compareActualCumM();
 
             monthPoints.add(
                     new MonthPoint(
@@ -425,7 +622,9 @@ public final class ProcessingTrendAggregator {
                             projContrib,
                             usesPlan,
                             incomplete,
-                            isCurrent));
+                            isCurrent,
+                            compareActSum,
+                            lastCompareActualCum));
         }
 
         return new MonthlyResult(
@@ -443,13 +642,19 @@ public final class ProcessingTrendAggregator {
                 daily.planRowsCounted(),
                 daily.actualMinDate(),
                 daily.actualMaxDate(),
-                daily.warnings());
+                daily.warnings(),
+                daily.compareActualTotalM(),
+                daily.compareSourceLabel());
     }
 
     private ProcessingTrendAggregator() {}
 
+    /**
+     * 日報実績と実績明細を同時に受けて集計し、選択された実績と他方との差分を計算する。
+     */
     public static Result aggregate(
-            ActualsSnapshot actuals,
+            ActualsSnapshot dailyReport,
+            ActualsSnapshot detailActuals,
             AladdinSnapshot aladdin,
             DispatchSnapshot dispatch,
             Filter filter,
@@ -464,11 +669,19 @@ public final class ProcessingTrendAggregator {
 
         TreeMap<LocalDate, double[]> byDay = new TreeMap<>();
         for (LocalDate d = from; !d.isAfter(to); d = d.plusDays(1)) {
-            byDay.put(d, new double[2]);
+            byDay.put(d, new double[3]); // [0]=主実績, [1]=予定, [2]=比較対象実績
         }
 
         List<String> warnings = new ArrayList<>();
-        ActualsAccumulation act = accumulateActuals(actuals, filter, byDay, warnings);
+        boolean isDailyPrimary = filter.actualSource() == ActualSource.DAILY_REPORT;
+        ActualsSnapshot primaryActuals = isDailyPrimary ? dailyReport : detailActuals;
+        ActualsSnapshot compareActuals = isDailyPrimary ? detailActuals : dailyReport;
+        String compareLabel = isDailyPrimary ? "実績明細" : "日報";
+
+        ActualsAccumulation act =
+                accumulateActuals(primaryActuals, filter, byDay, warnings, 0, isDailyPrimary);
+        accumulateActuals(compareActuals, filter, byDay, warnings, 2, !isDailyPrimary);
+
         int planRows =
                 filter.planSource() == PlanSource.DISPATCH
                         ? accumulateDispatch(dispatch, filter, byDay)
@@ -478,6 +691,7 @@ public final class ProcessingTrendAggregator {
         double actCum = 0;
         double planCum = 0;
         double projCum = 0;
+        double compareActCum = 0;
         double actualToDate = 0;
         double planToDate = 0;
         double remainingPlan = 0;
@@ -485,19 +699,31 @@ public final class ProcessingTrendAggregator {
             LocalDate d = e.getKey();
             double actual = e.getValue()[0];
             double plan = e.getValue()[1];
+            double compareActual = e.getValue()[2];
             boolean usesPlan = !d.isBefore(t);
             // 当日のみ: 実績が予定を上回っていれば（終業後など）実績を見込に採用する
             double projected = !usesPlan ? actual : d.equals(t) ? Math.max(actual, plan) : plan;
             actCum += actual;
             planCum += plan;
             projCum += projected;
+            compareActCum += compareActual;
             if (usesPlan) {
                 remainingPlan += projected;
             } else {
                 actualToDate += actual;
                 planToDate += plan;
             }
-            days.add(new DayPoint(d, actual, plan, actCum, planCum, projCum, usesPlan));
+            days.add(
+                    new DayPoint(
+                            d,
+                            actual,
+                            plan,
+                            actCum,
+                            planCum,
+                            projCum,
+                            usesPlan,
+                            compareActual,
+                            compareActCum));
         }
         return new Result(
                 days,
@@ -512,19 +738,72 @@ public final class ProcessingTrendAggregator {
                 planRows,
                 act.minDate,
                 act.maxDate,
-                warnings);
+                warnings,
+                compareActCum,
+                compareLabel);
     }
 
-    /** 3 ソースに現れる機械名の和集合（日本語照合順）。 */
+    /**
+     * 従来互換オーバーロード（単一の実績スナップショットを集計）。
+     * ヘッダ内容から日報／明細を自動判別して委譲する。
+     */
+    public static Result aggregate(
+            ActualsSnapshot actuals,
+            AladdinSnapshot aladdin,
+            DispatchSnapshot dispatch,
+            Filter filter,
+            LocalDate today) {
+        boolean hasDailyQty = actuals != null && colIdx(actuals.headers(), COL_ACTUAL_QTY_DAILY) >= 0;
+        boolean hasDetailQty = actuals != null && colIdx(actuals.headers(), COL_ACTUAL_QTY_DETAIL) >= 0;
+        ActualSource effSource = filter.actualSource();
+        if (hasDailyQty && !hasDetailQty) {
+            effSource = ActualSource.DAILY_REPORT;
+        } else if (hasDetailQty && !hasDailyQty) {
+            effSource = ActualSource.DETAIL;
+        } else if (!hasDailyQty && !hasDetailQty) {
+            boolean hasDailyDate = actuals != null && colIdx(actuals.headers(), COL_ACTUAL_DATE_DAILY) >= 0;
+            effSource = hasDailyDate ? ActualSource.DAILY_REPORT : ActualSource.DETAIL;
+        }
+        Filter effFilter = new Filter(
+                filter.from(),
+                filter.to(),
+                effSource,
+                filter.planSource(),
+                filter.machine(),
+                filter.process());
+        ActualsSnapshot daily = effSource == ActualSource.DAILY_REPORT ? actuals : null;
+        ActualsSnapshot detail = effSource == ActualSource.DETAIL ? actuals : null;
+        return aggregate(daily, detail, aladdin, dispatch, effFilter, today);
+    }
+
+    /** 4 ソースに現れる機械名の和集合（日本語照合順）。 */
+    public static List<String> machineNames(
+            ActualsSnapshot dailyReport,
+            ActualsSnapshot detailActuals,
+            AladdinSnapshot aladdin,
+            DispatchSnapshot dispatch) {
+        return distinctColumnValues(dailyReport, detailActuals, aladdin, dispatch, COL_MACHINE);
+    }
+
+    /** 3 ソースに現れる機械名の和集合（従来互換）。 */
     public static List<String> machineNames(
             ActualsSnapshot actuals, AladdinSnapshot aladdin, DispatchSnapshot dispatch) {
-        return distinctColumnValues(actuals, aladdin, dispatch, COL_MACHINE);
+        return machineNames(actuals, null, aladdin, dispatch);
     }
 
-    /** 3 ソースに現れる工程名の和集合（日本語照合順）。 */
+    /** 4 ソースに現れる工程名の和集合（日本語照合順）。 */
+    public static List<String> processNames(
+            ActualsSnapshot dailyReport,
+            ActualsSnapshot detailActuals,
+            AladdinSnapshot aladdin,
+            DispatchSnapshot dispatch) {
+        return distinctColumnValues(dailyReport, detailActuals, aladdin, dispatch, COL_PROCESS);
+    }
+
+    /** 3 ソースに現れる工程名の和集合（従来互換）。 */
     public static List<String> processNames(
             ActualsSnapshot actuals, AladdinSnapshot aladdin, DispatchSnapshot dispatch) {
-        return distinctColumnValues(actuals, aladdin, dispatch, COL_PROCESS);
+        return processNames(actuals, null, aladdin, dispatch);
     }
 
     // ---- 実績 ----------------------------------------------------------------------------
@@ -545,26 +824,33 @@ public final class ProcessingTrendAggregator {
     }
 
     /**
-     * 実績は「{@code 実加工数}」列（日別値）だけを採用する。列が無いときは集計せず警告を返す。
-     * {@code 累積実績} や {@code 換算数量×完了率} は累計値なので日別に足すと多重計上になる。
+     * 実績は日別値（日報の「{@code 実加工量}」または明細の「{@code 実加工数}」）を採用する。
      */
     private static ActualsAccumulation accumulateActuals(
-            ActualsSnapshot actuals, Filter f, TreeMap<LocalDate, double[]> byDay, List<String> warnings) {
+            ActualsSnapshot actuals,
+            Filter f,
+            TreeMap<LocalDate, double[]> byDay,
+            List<String> warnings,
+            int slotIndex,
+            boolean isDailyReport) {
         ActualsAccumulation acc = new ActualsAccumulation();
         if (actuals == null || actuals.headers() == null || actuals.rows() == null) {
             return acc;
         }
         List<String> headers = actuals.headers();
-        int iQty = colIdx(headers, COL_ACTUAL_QTY);
+        int iQty = resolveActualQtyCol(headers, isDailyReport);
         if (iQty < 0) {
-            if (!actuals.rows().isEmpty()) {
-                warnings.add(WARN_ACTUAL_QTY_COLUMN_MISSING);
+            if (!actuals.rows().isEmpty() && slotIndex == 0) {
+                warnings.add(isDailyReport
+                        ? "日報ソースに「" + COL_ACTUAL_QTY_DAILY + "」列が無いため、実績は集計していません。"
+                        : WARN_ACTUAL_QTY_COLUMN_MISSING);
             }
             return acc;
         }
         int iMachine = colIdx(headers, COL_MACHINE);
         int iProcess = colIdx(headers, COL_PROCESS);
         int iStartDt = colIdx(headers, COL_ACTUAL_START_DT);
+        int iDailyDate = colIdx(headers, COL_ACTUAL_DATE_DAILY);
         int iKakouDate = colIdx(headers, COL_ACTUAL_DATE);
         String mk = normKey(f.machine());
         String pk = normKey(f.process());
@@ -575,7 +861,7 @@ public final class ProcessingTrendAggregator {
             if (!matches(mk, cellAt(row, iMachine)) || !matches(pk, cellAt(row, iProcess))) {
                 continue;
             }
-            LocalDate d = rowActualDate(row, iStartDt, iKakouDate);
+            LocalDate d = rowActualDate(row, iStartDt, iDailyDate, iKakouDate);
             if (d == null) {
                 continue;
             }
@@ -588,19 +874,36 @@ public final class ProcessingTrendAggregator {
             if (Math.abs(qty) <= EPS) {
                 continue;
             }
-            slot[0] += qty;
+            slot[slotIndex] += qty;
             acc.rowsCounted++;
         }
         return acc;
     }
 
+    private static int resolveActualQtyCol(List<String> headers, boolean preferDailyReport) {
+        if (preferDailyReport) {
+            int i = colIdx(headers, COL_ACTUAL_QTY_DAILY);
+            if (i >= 0) return i;
+            return colIdx(headers, COL_ACTUAL_QTY_DETAIL);
+        } else {
+            int i = colIdx(headers, COL_ACTUAL_QTY_DETAIL);
+            if (i >= 0) return i;
+            return colIdx(headers, COL_ACTUAL_QTY_DAILY);
+        }
+    }
+
     /**
-     * 実績行の加工日: {@code 加工開始日時} の日付部を優先し、無ければ {@code 加工日}。
-     * ヘッダ照合は本クラスの {@link #colIdx}（strip 比較）に統一する（Builder 側は strip しないため混在させない）。
+     * 実績行の加工日: {@code 加工開始日時} の日付部、{@code 加工日付}、{@code 加工日} の順で解決。
      */
-    private static LocalDate rowActualDate(List<String> row, int iStartDt, int iKakouDate) {
+    private static LocalDate rowActualDate(List<String> row, int iStartDt, int iDailyDate, int iKakouDate) {
         if (iStartDt >= 0) {
             LocalDate d = parseDate(cellAt(row, iStartDt));
+            if (d != null) {
+                return d;
+            }
+        }
+        if (iDailyDate >= 0) {
+            LocalDate d = parseDate(cellAt(row, iDailyDate));
             if (d != null) {
                 return d;
             }
@@ -830,10 +1133,17 @@ public final class ProcessingTrendAggregator {
     // ---- 共通 ------------------------------------------------------------------------------
 
     private static List<String> distinctColumnValues(
-            ActualsSnapshot actuals, AladdinSnapshot aladdin, DispatchSnapshot dispatch, String col) {
+            ActualsSnapshot dailyReport,
+            ActualsSnapshot detailActuals,
+            AladdinSnapshot aladdin,
+            DispatchSnapshot dispatch,
+            String col) {
         Map<String, String> byKey = new LinkedHashMap<>();
-        if (actuals != null) {
-            collectColumn(actuals.headers(), actuals.rows(), col, byKey);
+        if (dailyReport != null) {
+            collectColumn(dailyReport.headers(), dailyReport.rows(), col, byKey);
+        }
+        if (detailActuals != null) {
+            collectColumn(detailActuals.headers(), detailActuals.rows(), col, byKey);
         }
         if (aladdin != null) {
             collectColumn(aladdin.headers(), aladdin.rows(), col, byKey);

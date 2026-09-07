@@ -214,4 +214,37 @@ class EquipmentStatusDashboardSourceLoaderTest {
         Assertions.assertTrue(jsonContent.contains("実加工数"));
         Assertions.assertTrue(jsonContent.contains("500"));
     }
+
+    @Test
+    void load_readsDailyReportCsvWhenPresent(@TempDir Path dir) throws Exception {
+        Path dailyReportDir = dir.resolve("daily-report");
+        Files.createDirectories(dailyReportDir);
+        // KonanDailyReportLookup: 加工日報発行問合せ_*.csv
+        // skips 3 lines of metadata, then header row
+        Path dailyCsv = dailyReportDir.resolve("加工日報発行問合せ_20260904.csv");
+        Files.writeString(
+                dailyCsv,
+                "meta1\n"
+                        + "meta2\n"
+                        + "meta3\n"
+                        + "加工工程,加工機械,依頼No,加工日付,実加工量\n"
+                        + "スリット,W9-1,R1,2026/09/01,150\n");
+
+        Files.writeString(
+                dir.resolve(AppPaths.RESULT_DISPATCH_TABLE_JSON_BASENAME),
+                "{\"columns\":[],\"rows\":[]}");
+
+        Map<String, String> ui = uiForDir(dir);
+        ui.put(AppPaths.KEY_PM_AI_DAILY_REPORT_SOURCE_DIR, dailyReportDir.toString());
+
+        LoadedSources loaded = EquipmentStatusDashboardSourceLoader.load(ui);
+        Assertions.assertNotNull(loaded);
+        Assertions.assertNotNull(loaded.dailyReportActuals());
+        Assertions.assertEquals(1, loaded.dailyReportActuals().rows().size());
+        Assertions.assertEquals("加工日報発行問合せ_20260904.csv", loaded.dailyReportSourceLabel());
+
+        SourceFingerprint fp = EquipmentStatusDashboardSourceLoader.fingerprint(ui);
+        Assertions.assertNotNull(fp.dailyReportKey());
+        Assertions.assertTrue(fp.dailyReportKey().contains("加工日報発行問合せ_20260904.csv"));
+    }
 }

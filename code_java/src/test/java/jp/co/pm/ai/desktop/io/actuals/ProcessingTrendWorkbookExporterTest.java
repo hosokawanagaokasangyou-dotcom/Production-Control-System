@@ -118,4 +118,92 @@ class ProcessingTrendWorkbookExporterTest {
         assertTrue(Files.size(target) > 0);
         assertEquals(3, expResult.dayRows());
     }
+
+    @Test
+    void buildWorkbook_withComparison_outputsDailyReportAndDetailColumns(@TempDir Path tempDir) throws Exception {
+        LocalDate start = LocalDate.of(2026, 9, 1);
+        LocalDate end = LocalDate.of(2026, 9, 2);
+        LocalDate today = LocalDate.of(2026, 9, 2);
+        Filter f =
+                new Filter(
+                        start,
+                        end,
+                        ProcessingTrendAggregator.ActualSource.DAILY_REPORT,
+                        PlanSource.ALADDIN,
+                        "W9-1",
+                        "スリット");
+
+        List<DayPoint> days = new ArrayList<>();
+        // 日報 120, 明細 100 -> 差 20
+        days.add(
+                new DayPoint(
+                        LocalDate.of(2026, 9, 1),
+                        120.0,
+                        100.0,
+                        120.0,
+                        100.0,
+                        120.0,
+                        false,
+                        100.0,
+                        100.0));
+        // 日報 150, 明細 130 -> 差 20
+        days.add(
+                new DayPoint(
+                        LocalDate.of(2026, 9, 2),
+                        150.0,
+                        80.0,
+                        270.0,
+                        180.0,
+                        270.0,
+                        true,
+                        130.0,
+                        230.0));
+
+        Result result =
+                new Result(
+                        days, 270.0, 180.0, 120.0, 100.0, 0.0, 270.0,
+                        today, 2, 2, start, end, List.of(), 230.0, "実績明細");
+
+        ProcessingTrendAggregator.MonthlyResult mr =
+                ProcessingTrendAggregator.rollUpMonthly(result, f, today);
+
+        ProcessingTrendExportRequest req =
+                new ProcessingTrendExportRequest(
+                        result,
+                        mr,
+                        f,
+                        LocalDateTime.of(2026, 9, 7, 12, 0, 0),
+                        "actual-detail-newest.xlsx",
+                        "アラジン加工計画",
+                        "task-input-newest.xlsx",
+                        "結果_配台表.json",
+                        "",
+                        List.of(),
+                        "加工日報発行問合せ_20260904.csv");
+
+        try (XSSFWorkbook wb = ProcessingTrendWorkbookExporter.buildWorkbook(req)) {
+            Sheet sDaily = wb.getSheet(ProcessingTrendWorkbookExporter.SHEET_DAILY);
+            assertNotNull(sDaily);
+
+            // 日報実績 (m), 実績明細 (m), 明細差 (m)
+            assertEquals("日付", sDaily.getRow(0).getCell(0).getStringCellValue());
+            assertEquals("曜日", sDaily.getRow(0).getCell(1).getStringCellValue());
+            assertEquals("日報実績 (m)", sDaily.getRow(0).getCell(2).getStringCellValue());
+            assertEquals("実績明細 (m)", sDaily.getRow(0).getCell(3).getStringCellValue());
+            assertEquals("明細差 (m)", sDaily.getRow(0).getCell(4).getStringCellValue());
+            assertEquals("予定 (m)", sDaily.getRow(0).getCell(5).getStringCellValue());
+
+            // 9/1 データ行
+            assertEquals(120.0, sDaily.getRow(1).getCell(2).getNumericCellValue(), 1e-9);
+            assertEquals(100.0, sDaily.getRow(1).getCell(3).getNumericCellValue(), 1e-9);
+            assertEquals(20.0, sDaily.getRow(1).getCell(4).getNumericCellValue(), 1e-9);
+
+            // 合計行
+            // 行0: ヘッダー, 行1: 9/1, 行2: 9/2, 行3: 合計
+            assertEquals("合計", sDaily.getRow(3).getCell(0).getStringCellValue());
+            assertEquals(270.0, sDaily.getRow(3).getCell(2).getNumericCellValue(), 1e-9);
+            assertEquals(230.0, sDaily.getRow(3).getCell(3).getNumericCellValue(), 1e-9);
+            assertEquals(40.0, sDaily.getRow(3).getCell(4).getNumericCellValue(), 1e-9);
+        }
+    }
 }

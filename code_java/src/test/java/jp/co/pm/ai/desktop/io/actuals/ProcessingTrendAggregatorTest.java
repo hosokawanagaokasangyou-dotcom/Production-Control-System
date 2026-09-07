@@ -463,4 +463,62 @@ class ProcessingTrendAggregatorTest {
         Assertions.assertEquals(start, mr.periodFrom());
         Assertions.assertEquals(end, mr.periodTo());
     }
+
+    @Test
+    void aggregate_switchesBetweenDailyReportAndDetailWithComparison() {
+        ActualsSnapshot daily =
+                new ActualsSnapshot(
+                        List.of("機械名", "依頼NO", "工程名", "加工日", "実加工量"),
+                        List.of(
+                                List.of("W9-1", "R1", "スリット", "2026/09/01", "120"),
+                                List.of("W9-1", "R2", "スリット", "2026/09/02", "150")));
+        ActualsSnapshot detail =
+                new ActualsSnapshot(
+                        List.of("機械名", "依頼NO", "工程名", "加工開始日時", "実加工数"),
+                        List.of(
+                                List.of("W9-1", "R1", "スリット", "2026/09/01 08:00:00", "100"),
+                                List.of("W9-1", "R2", "スリット", "2026/09/02 08:00:00", "130")));
+
+        Filter fDaily =
+                new Filter(
+                        FROM,
+                        TO,
+                        ProcessingTrendAggregator.ActualSource.DAILY_REPORT,
+                        PlanSource.ALADDIN,
+                        "W9-1",
+                        null);
+        Result rDaily =
+                ProcessingTrendAggregator.aggregate(
+                        daily, detail, aladdin(), dispatch(), fDaily, TODAY);
+
+        // 主実績 = 日報 (120, 150 -> 270)
+        Assertions.assertEquals(270.0, rDaily.actualTotalM(), 1e-9);
+        Assertions.assertEquals(120.0, rDaily.days().get(0).actualM(), 1e-9);
+        // 比較実績 = 実績明細 (100, 130 -> 230)
+        Assertions.assertEquals(230.0, rDaily.compareActualTotalM(), 1e-9);
+        Assertions.assertEquals(100.0, rDaily.days().get(0).compareActualM(), 1e-9);
+        // 明細差 = 120 - 100 = 20, 150 - 130 = 20 -> 40
+        Assertions.assertEquals(20.0, rDaily.days().get(0).actualCompareDiffM(), 1e-9);
+        Assertions.assertEquals(40.0, rDaily.actualCompareDiffTotalM(), 1e-9);
+        Assertions.assertEquals("実績明細", rDaily.compareSourceLabel());
+
+        // 逆に DETAIL を主実績にした場合
+        Filter fDetail =
+                new Filter(
+                        FROM,
+                        TO,
+                        ProcessingTrendAggregator.ActualSource.DETAIL,
+                        PlanSource.ALADDIN,
+                        "W9-1",
+                        null);
+        Result rDetail =
+                ProcessingTrendAggregator.aggregate(
+                        daily, detail, aladdin(), dispatch(), fDetail, TODAY);
+
+        Assertions.assertEquals(230.0, rDetail.actualTotalM(), 1e-9);
+        Assertions.assertEquals(270.0, rDetail.compareActualTotalM(), 1e-9);
+        Assertions.assertEquals(-20.0, rDetail.days().get(0).actualCompareDiffM(), 1e-9);
+        Assertions.assertEquals(-40.0, rDetail.actualCompareDiffTotalM(), 1e-9);
+        Assertions.assertEquals("日報", rDetail.compareSourceLabel());
+    }
 }

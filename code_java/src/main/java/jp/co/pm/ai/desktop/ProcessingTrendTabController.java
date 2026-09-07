@@ -181,6 +181,7 @@ public class ProcessingTrendTabController {
     @FXML private CheckBox autoRefreshCheckBox;
     @FXML private Spinner<Integer> autoRefreshIntervalSpinner;
     @FXML private Label nextRefreshLabel;
+    @FXML private ComboBox<ProcessingTrendAggregator.ActualSource> actualSourceCombo;
     @FXML private ComboBox<PlanSource> planSourceCombo;
     @FXML private ComboBox<String> machineCombo;
     @FXML private ComboBox<String> processCombo;
@@ -225,11 +226,14 @@ public class ProcessingTrendTabController {
     @FXML private TableView<DayPoint> detailTable;
     @FXML private TitledPane detailPane;
     @FXML private TableColumn<DayPoint, DayPoint> colDate;
-    @FXML private TableColumn<DayPoint, Number> colPlan;
     @FXML private TableColumn<DayPoint, Number> colActual;
+    @FXML private TableColumn<DayPoint, Number> colCompareActual;
+    @FXML private TableColumn<DayPoint, Number> colActualCompareDiff;
+    @FXML private TableColumn<DayPoint, Number> colPlan;
     @FXML private TableColumn<DayPoint, Number> colDiff;
-    @FXML private TableColumn<DayPoint, Number> colPlanCum;
     @FXML private TableColumn<DayPoint, Number> colActualCum;
+    @FXML private TableColumn<DayPoint, Number> colCompareActualCum;
+    @FXML private TableColumn<DayPoint, Number> colPlanCum;
     @FXML private TableColumn<DayPoint, Number> colProjectedCum;
 
     private final ExecutorService pool =
@@ -429,6 +433,23 @@ public class ProcessingTrendTabController {
     }
 
     private void initFilterCombos() {
+        if (actualSourceCombo != null) {
+            actualSourceCombo.setItems(
+                    FXCollections.observableArrayList(ProcessingTrendAggregator.ActualSource.values()));
+            actualSourceCombo.getSelectionModel().select(ProcessingTrendAggregator.ActualSource.DAILY_REPORT);
+            actualSourceCombo
+                    .getSelectionModel()
+                    .selectedItemProperty()
+                    .addListener(
+                            (obs, o, n) -> {
+                                updateLegend();
+                                onFilterChanged();
+                            });
+            Tooltip.install(
+                    actualSourceCombo,
+                    new Tooltip(
+                            "実績系列の取得元。日報（加工日報CSVの実加工量）または実績明細（問合せExcelの実加工数）。デフォルトは日報"));
+        }
         planSourceCombo.setItems(FXCollections.observableArrayList(PlanSource.values()));
         planSourceCombo.getSelectionModel().select(PlanSource.ALADDIN);
         planSourceCombo
@@ -549,6 +570,18 @@ public class ProcessingTrendTabController {
                         });
         colPlan.setCellValueFactory(cd -> new ReadOnlyObjectWrapper<>(cd.getValue().planM()));
         colActual.setCellValueFactory(cd -> new ReadOnlyObjectWrapper<>(cd.getValue().actualM()));
+        if (colCompareActual != null) {
+            colCompareActual.setCellValueFactory(
+                    cd -> new ReadOnlyObjectWrapper<>(cd.getValue().compareActualM()));
+            colCompareActual.setCellFactory(col -> numberCell(false));
+            colCompareActual.setStyle("-fx-alignment: CENTER-RIGHT;");
+        }
+        if (colActualCompareDiff != null) {
+            colActualCompareDiff.setCellValueFactory(
+                    cd -> new ReadOnlyObjectWrapper<>(cd.getValue().actualCompareDiffM()));
+            colActualCompareDiff.setCellFactory(col -> numberCell(true));
+            colActualCompareDiff.setStyle("-fx-alignment: CENTER-RIGHT;");
+        }
         // 当日以降は実績が揃っていないので差異を値として持たせない（セル側で「—」表示）
         colDiff.setCellValueFactory(
                 cd ->
@@ -556,6 +589,12 @@ public class ProcessingTrendTabController {
                                 cd.getValue().usesPlanForProjection() ? null : cd.getValue().diffM()));
         colPlanCum.setCellValueFactory(cd -> new ReadOnlyObjectWrapper<>(cd.getValue().planCumM()));
         colActualCum.setCellValueFactory(cd -> new ReadOnlyObjectWrapper<>(cd.getValue().actualCumM()));
+        if (colCompareActualCum != null) {
+            colCompareActualCum.setCellValueFactory(
+                    cd -> new ReadOnlyObjectWrapper<>(cd.getValue().compareActualCumM()));
+            colCompareActualCum.setCellFactory(col -> numberCell(false));
+            colCompareActualCum.setStyle("-fx-alignment: CENTER-RIGHT;");
+        }
         colProjectedCum.setCellValueFactory(
                 cd -> new ReadOnlyObjectWrapper<>(cd.getValue().projectedCumM()));
         for (TableColumn<DayPoint, Number> c :
@@ -565,7 +604,9 @@ public class ProcessingTrendTabController {
         }
         colDiff.setCellFactory(col -> numberCell(true));
         colDiff.setStyle("-fx-alignment: CENTER-RIGHT;");
-        Tooltip.install(detailTable, new Tooltip("差異 = 実績 − 予定（当日以降は「—」）。見込累計 = 前日まで実績、当日以降は予定を採用"));
+        Tooltip.install(
+                detailTable,
+                new Tooltip("差異 = 実績 − 予定（当日以降は「—」）。明細差 = 主実績 − 比較実績。見込累計 = 前日まで実績、当日以降は予定を採用"));
         detailTable.setRowFactory(
                 tv ->
                         new TableRow<>() {
@@ -625,10 +666,52 @@ public class ProcessingTrendTabController {
         };
     }
 
+    private void updateDetailTableHeaders(ProcessingTrendAggregator.ActualSource source, Granularity granularity) {
+        boolean isDailyReport = source == ProcessingTrendAggregator.ActualSource.DAILY_REPORT;
+        boolean monthly = granularity == Granularity.MONTHLY;
+        colDate.setText(monthly ? "年月" : "日付");
+        detailPane.setText(monthly ? "月別明細" : "日別明細");
+        if (isDailyReport) {
+            colActual.setText(monthly ? "日報実績 (m)" : "日報実績 (m)");
+            if (colCompareActual != null) {
+                colCompareActual.setText(monthly ? "実績明細 (m)" : "実績明細 (m)");
+            }
+            if (colActualCompareDiff != null) {
+                colActualCompareDiff.setText("明細差 (m)");
+            }
+            colActualCum.setText(monthly ? "日報累計 (m)" : "日報累計 (m)");
+            if (colCompareActualCum != null) {
+                colCompareActualCum.setText(monthly ? "明細累計 (m)" : "明細累計 (m)");
+            }
+        } else {
+            colActual.setText(monthly ? "明細実績 (m)" : "明細実績 (m)");
+            if (colCompareActual != null) {
+                colCompareActual.setText(monthly ? "日報実績 (m)" : "日報実績 (m)");
+            }
+            if (colActualCompareDiff != null) {
+                colActualCompareDiff.setText("日報差 (m)");
+            }
+            colActualCum.setText(monthly ? "明細累計 (m)" : "明細累計 (m)");
+            if (colCompareActualCum != null) {
+                colCompareActualCum.setText(monthly ? "日報累計 (m)" : "日報累計 (m)");
+            }
+        }
+        colPlan.setText(monthly ? "予定 (m)" : "予定 (m)");
+        colDiff.setText("差異 (m)");
+        colPlanCum.setText("予定累計 (m)");
+        colProjectedCum.setText("見込累計 (m)");
+    }
+
     private void initLegend() {
         legendBox.getChildren().clear();
         boolean monthly = currentGranularity() == Granularity.MONTHLY;
-        String barAct = monthly ? "実績（月合計）" : "実績（日次）";
+        ProcessingTrendAggregator.ActualSource actSrc =
+                actualSourceCombo != null && actualSourceCombo.getValue() != null
+                        ? actualSourceCombo.getValue()
+                        : ProcessingTrendAggregator.ActualSource.DAILY_REPORT;
+        boolean isDailyReport = actSrc == ProcessingTrendAggregator.ActualSource.DAILY_REPORT;
+        String actPrefix = isDailyReport ? "日報" : "明細";
+        String barAct = monthly ? actPrefix + "実績（月合計）" : actPrefix + "実績（日次）";
         String barPlan = monthly ? "予定（月合計）" : "予定（日次）";
         String todayLbl = monthly ? "今月（前月まで実績／当月以降予定）" : "今日（前日まで実績／当日以降予定）";
 
@@ -637,7 +720,7 @@ public class ProcessingTrendTabController {
                 .addAll(
                         legendItem("pm-legend-swatch-bar-actual", barAct, ViewMode.CUMULATIVE),
                         legendItem("pm-legend-swatch-bar-plan", barPlan, ViewMode.CUMULATIVE),
-                        legendItem("pm-legend-swatch-line-actual", "実績累計", ViewMode.DAILY),
+                        legendItem("pm-legend-swatch-line-actual", actPrefix + "累計", ViewMode.DAILY),
                         legendItem("pm-legend-swatch-line-plan", "予定累計", ViewMode.DAILY),
                         legendItem("pm-legend-swatch-line-projected", "見込累計", ViewMode.DAILY),
                         legendItem("pm-legend-swatch-today", todayLbl, null));
@@ -1057,8 +1140,10 @@ public class ProcessingTrendTabController {
                         LoadedSources s = decision.sources();
                         return new ReloadOutcome(
                                 decision,
-                                ProcessingTrendAggregator.machineNames(s.actuals(), s.aladdin(), s.dispatch()),
-                                ProcessingTrendAggregator.processNames(s.actuals(), s.aladdin(), s.dispatch()));
+                                ProcessingTrendAggregator.machineNames(
+                                        s.dailyReportActuals(), s.actuals(), s.aladdin(), s.dispatch()),
+                                ProcessingTrendAggregator.processNames(
+                                        s.dailyReportActuals(), s.actuals(), s.aladdin(), s.dispatch()));
                     }
                 };
         task.setOnSucceeded(
@@ -1173,12 +1258,18 @@ public class ProcessingTrendTabController {
             from = today.withDayOfMonth(1);
             to = from.with(TemporalAdjusters.lastDayOfMonth());
         }
+        ProcessingTrendAggregator.ActualSource actualSrc =
+                actualSourceCombo != null ? actualSourceCombo.getSelectionModel().getSelectedItem() : null;
+        if (actualSrc == null) {
+            actualSrc = ProcessingTrendAggregator.ActualSource.DAILY_REPORT;
+        }
         PlanSource src = planSourceCombo.getSelectionModel().getSelectedItem();
         String machine = machineCombo.getSelectionModel().getSelectedItem();
         String process = processCombo.getSelectionModel().getSelectedItem();
         return new Filter(
                 from,
                 to,
+                actualSrc,
                 src,
                 ALL_ITEM.equals(machine) ? null : machine,
                 ALL_ITEM.equals(process) ? null : process);
@@ -1213,7 +1304,12 @@ public class ProcessingTrendTabController {
                     @Override
                     protected Result call() {
                         return ProcessingTrendAggregator.aggregate(
-                                src.actuals(), src.aladdin(), src.dispatch(), filter, today);
+                                src.dailyReportActuals(),
+                                src.actuals(),
+                                src.aladdin(),
+                                src.dispatch(),
+                                filter,
+                                today);
                     }
                 };
         task.setOnSucceeded(
@@ -1254,6 +1350,7 @@ public class ProcessingTrendTabController {
         renderKpis(r, filter);
 
         boolean monthly = currentGranularity() == Granularity.MONTHLY;
+        updateDetailTableHeaders(filter.actualSource(), currentGranularity());
         if (monthly) {
             currentMonthlyResult = ProcessingTrendAggregator.rollUpMonthly(r, filter, r.today());
             renderMonthlyChart(r, currentMonthlyResult);
@@ -1267,16 +1364,14 @@ public class ProcessingTrendTabController {
                                 mp.actualCumM(),
                                 mp.planCumM(),
                                 mp.projectedCumM(),
-                                mp.usesPlanForProjection()));
+                                mp.usesPlanForProjection(),
+                                mp.compareActualM(),
+                                mp.compareActualCumM()));
             }
-            colDate.setText("年月");
-            detailPane.setText("月別明細");
             detailTable.getItems().setAll(monthDayPoints);
         } else {
             currentMonthlyResult = null;
             renderChart(r);
-            colDate.setText("日付");
-            detailPane.setText("日別明細");
             detailTable.getItems().setAll(r.days());
         }
         detailTable.refresh();
@@ -1348,10 +1443,24 @@ public class ProcessingTrendTabController {
         boolean dispatchSource = filter.planSource() == PlanSource.DISPATCH;
 
         kpiActualValue.setText(formatM(r.actualTotalM()) + " m");
-        kpiActualSub.setText(
+        String todaySub =
                 todayPoint != null
                         ? "うち当日 " + formatM(todayPoint.actualM()) + " m（前日まで " + formatM(r.actualToDateM()) + " m）"
-                        : "");
+                        : "";
+        String compareSub = "";
+        if (r.compareSourceLabel() != null && !r.compareSourceLabel().isEmpty()) {
+            double cTotal = r.compareActualTotalM();
+            double cDiff = r.actualCompareDiffTotalM();
+            String sign = cDiff > 0.05 ? "+" : "";
+            compareSub = r.compareSourceLabel() + " " + formatM(cTotal) + " m（差 " + sign + formatM(cDiff) + " m）";
+        }
+        if (!compareSub.isEmpty() && !todaySub.isEmpty()) {
+            kpiActualSub.setText(compareSub + " ／ " + todaySub);
+        } else if (!compareSub.isEmpty()) {
+            kpiActualSub.setText(compareSub);
+        } else {
+            kpiActualSub.setText(todaySub);
+        }
 
         kpiPlanValue.setText(formatM(r.planTotalM()) + " m");
         if (dispatchSource) {
@@ -1470,7 +1579,7 @@ public class ProcessingTrendTabController {
 
         int projOffset = n - projCum.size();
         for (int i = 0; i < n; i++) {
-            String tip = tooltipText(days.get(i), r.today());
+            String tip = tooltipText(days.get(i), r.today(), r.compareSourceLabel());
             installSharedTooltip(actDaily.get(i), tip);
             installSharedTooltip(planDaily.get(i), tip);
             if (i < actCum.size()) {
@@ -1491,7 +1600,7 @@ public class ProcessingTrendTabController {
         axis.setTickUnit(nr.tickUnit());
     }
 
-    private String tooltipText(DayPoint d, LocalDate today) {
+    private String tooltipText(DayPoint d, LocalDate today, String compareLabel) {
         StringBuilder sb = new StringBuilder();
         sb.append(formatDayWithWeekday(d.date()));
         if (d.date().equals(today)) {
@@ -1499,6 +1608,12 @@ public class ProcessingTrendTabController {
         }
         sb.append('\n');
         sb.append("実績 ").append(formatM(d.actualM())).append(" m");
+        if (compareLabel != null && !compareLabel.isEmpty()) {
+            double cDiff = d.actualCompareDiffM();
+            String sign = cDiff > 0.05 ? "+" : "";
+            sb.append("  [対").append(compareLabel).append(" ").append(formatM(d.compareActualM()))
+                    .append(" m / 差: ").append(sign).append(formatM(cDiff)).append(" m]");
+        }
         sb.append("  予定 ").append(formatM(d.planM())).append(" m");
         if (!d.usesPlanForProjection()) {
             sb.append("  差異 ").append(formatSigned(d.diffM())).append(" m");
@@ -1615,8 +1730,8 @@ public class ProcessingTrendTabController {
         int projOffset = n - projCum.size();
         for (int i = 0; i < n; i++) {
             MonthPoint m = months.get(i);
-            installMonthBarTooltip(actDaily.get(i).getNode(), m, true);
-            installMonthBarTooltip(planDaily.get(i).getNode(), m, false);
+            installMonthBarTooltip(actDaily.get(i).getNode(), m, true, mr.compareSourceLabel());
+            installMonthBarTooltip(planDaily.get(i).getNode(), m, false, "");
             if (i < actCum.size()) {
                 installMonthLineTooltip(actCum.get(i).getNode(), m, "実績累計", m.actualCumM());
             }
@@ -1629,19 +1744,29 @@ public class ProcessingTrendTabController {
         requestMarkerLayout();
     }
 
-    private void installMonthBarTooltip(Node node, MonthPoint m, boolean actual) {
+    private void installMonthBarTooltip(Node node, MonthPoint m, boolean actual, String compareLabel) {
         if (node == null) {
             return;
         }
         node.setOnMouseEntered(
                 e -> {
+                    String actLine;
+                    if (actual) {
+                        actLine = "実績 (月合計): " + formatM(m.actualM()) + " m";
+                        if (compareLabel != null && !compareLabel.isEmpty()) {
+                            double cDiff = m.actualCompareDiffM();
+                            String sign = cDiff > 0.05 ? "+" : "";
+                            actLine += "\n  [対" + compareLabel + " " + formatM(m.compareActualM())
+                                    + " m / 差: " + sign + formatM(cDiff) + " m]";
+                        }
+                    } else {
+                        actLine = "予定 (月合計): " + formatM(m.planM()) + " m";
+                    }
                     sharedChartTooltip.setText(
                             m.month().format(MONTH_FMT)
                                     + "\n"
-                                    + (actual
-                                            ? "実績 (月合計): " + formatM(m.actualM())
-                                            : "予定 (月合計): " + formatM(m.planM()))
-                                    + " m\n差異: "
+                                    + actLine
+                                    + "\n差異: "
                                     + formatSigned(m.diffM())
                                     + " m"
                                     + (m.incomplete() ? "\n※ 期間内 " + m.daysInBucket() + " 日間" : ""));
@@ -1871,7 +1996,8 @@ public class ProcessingTrendTabController {
             return;
         }
         StringBuilder sb = new StringBuilder();
-        sb.append("実績=").append(cachedSources.actualSourceLabel());
+        sb.append("日報=").append(cachedSources.dailyReportSourceLabel());
+        sb.append("  実績明細=").append(cachedSources.actualSourceLabel());
         sb.append("  アラジン=").append(cachedSources.aladdinSourceLabel());
         sb.append("  配台=").append(cachedSources.dispatchSourceLabel());
         String stats = EquipmentStatusDashboardSourceLoader.formatLoadStatsSummary(cachedSources.loadStats());
@@ -2053,7 +2179,8 @@ public class ProcessingTrendTabController {
                                 : "",
                         cachedSources != null && cachedSources.loadNotice() != null
                                 ? List.of(cachedSources.loadNotice())
-                                : List.of());
+                                : List.of(),
+                        cachedSources != null ? cachedSources.dailyReportSourceLabel() : "");
 
         Map<String, String> ui = shell != null ? shell.snapshotUiEnv() : Map.of();
         if (exportExcelButton != null) {

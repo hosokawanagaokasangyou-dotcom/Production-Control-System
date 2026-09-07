@@ -90,6 +90,22 @@ class ProcessingTrendTabFxmlTest {
                 "粒度トグルの CSS スタイルが無い");
     }
 
+    @Test
+    void actualSourceComboExistsInFilterBar() throws Exception {
+        Element combo = elementByFxId("actualSourceCombo");
+        assertNotNull(combo, "actualSourceCombo が無い");
+    }
+
+    @Test
+    void comparisonColumnsExistInDetailTable() throws Exception {
+        Element colCompare = elementByFxId("colCompareActual");
+        assertNotNull(colCompare, "colCompareActual が無い");
+        Element colDiff = elementByFxId("colActualCompareDiff");
+        assertNotNull(colDiff, "colActualCompareDiff が無い");
+        Element colCompareCum = elementByFxId("colCompareActualCum");
+        assertNotNull(colCompareCum, "colCompareActualCum が無い");
+    }
+
     private static Element elementByFxId(String fxId) throws Exception {
         try (InputStream in =
                 ProcessingTrendTabFxmlTest.class.getResourceAsStream(

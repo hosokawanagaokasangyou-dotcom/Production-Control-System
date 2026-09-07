@@ -17,15 +17,21 @@ import jp.co.pm.ai.desktop.io.JsonTableIo;
 import jp.co.pm.ai.desktop.io.NetworkSourceFileReloadCache;
 import jp.co.pm.ai.desktop.io.PlanInputTabularIo;
 import jp.co.pm.ai.desktop.io.TaskInputSourceRawGridIo;
+import jp.co.pm.ai.desktop.reconciliation.KonanDailyReportLookup;
 
-/** ダッシュボード用3系統データのディスク読込。 */
+/** ダッシュボード・加工トレンド用ソースデータのディスク読込。 */
 public final class EquipmentStatusDashboardSourceLoader {
 
-    /** 実績・アラジン・配台のソースファイル指紋（変更検知用）。 */
-    public record SourceFingerprint(String actualKey, String aladdinKey, String dispatchKey) {
+    /** 実績（明細・日報）・アラジン・配台のソースファイル指紋（変更検知用）。 */
+    public record SourceFingerprint(
+            String actualKey, String aladdinKey, String dispatchKey, String dailyReportKey) {
+
+        public SourceFingerprint(String actualKey, String aladdinKey, String dispatchKey) {
+            this(actualKey, aladdinKey, dispatchKey, "");
+        }
 
         public static SourceFingerprint empty() {
-            return new SourceFingerprint("", "", "");
+            return new SourceFingerprint("", "", "", "");
         }
     }
 
@@ -59,12 +65,36 @@ public final class EquipmentStatusDashboardSourceLoader {
             ActualsSnapshot actuals,
             AladdinSnapshot aladdin,
             DispatchSnapshot dispatch,
+            ActualsSnapshot dailyReportActuals,
             String actualSourceLabel,
             String aladdinSourceLabel,
             String dispatchSourceLabel,
+            String dailyReportSourceLabel,
             /** 読込時の警告（フォールバック・部分失敗など）。空なら問題なし。 */
             String loadNotice,
             LoadStats loadStats) {
+
+        public LoadedSources(
+                ActualsSnapshot actuals,
+                AladdinSnapshot aladdin,
+                DispatchSnapshot dispatch,
+                String actualSourceLabel,
+                String aladdinSourceLabel,
+                String dispatchSourceLabel,
+                String loadNotice,
+                LoadStats loadStats) {
+            this(
+                    actuals,
+                    aladdin,
+                    dispatch,
+                    new ActualsSnapshot(List.of(), List.of()),
+                    actualSourceLabel,
+                    aladdinSourceLabel,
+                    dispatchSourceLabel,
+                    "",
+                    loadNotice,
+                    loadStats);
+        }
 
         public LoadedSources(
                 ActualsSnapshot actuals,
@@ -108,9 +138,10 @@ public final class EquipmentStatusDashboardSourceLoader {
         long actualBytes;
         long aladdinBytes;
         long dispatchBytes;
+        long dailyReportBytes;
 
         long total() {
-            return actualBytes + aladdinBytes + dispatchBytes;
+            return actualBytes + aladdinBytes + dispatchBytes + dailyReportBytes;
         }
     }
 
@@ -136,7 +167,7 @@ public final class EquipmentStatusDashboardSourceLoader {
         return ReloadDecision.loaded(loadSources(ui), fp);
     }
 
-    /** 3系統のソースファイル指紋（解決パス + {@code lastModified} + サイズ + シート名）。 */
+    /** 4系統のソースファイル指紋（解決パス + {@code lastModified} + サイズ + シート名）。 */
     public static SourceFingerprint fingerprint(Map<String, String> ui) {
         Map<String, String> env = ui != null ? ui : Map.of();
         String sheet = env.getOrDefault(AppPaths.KEY_PM_AI_ACTUAL_DETAIL_SHEET, "").strip();
@@ -146,7 +177,8 @@ public final class EquipmentStatusDashboardSourceLoader {
         return new SourceFingerprint(
                 actualKey,
                 aladdinFingerprintKey(env),
-                fileKey(AppPaths.resolveResultDispatchTableJsonPath(env), ""));
+                fileKey(AppPaths.resolveResultDispatchTableJsonPath(env), ""),
+                fileKey(KonanDailyReportLookup.resolveNewestCsvPath(env).orElse(null), "daily-report"));
     }
 
     private static String aladdinFingerprintKey(Map<String, String> env) {
@@ -176,6 +208,7 @@ public final class EquipmentStatusDashboardSourceLoader {
         SourceFileSizes sizes = resolveSourceFileSizes(env);
         StringBuilder notice = new StringBuilder();
         ActualsSnapshot actuals = loadActualsResilient(env, notice);
+        ActualsSnapshot dailyReport = loadDailyReportResilient(env, notice);
         AladdinSnapshot aladdin = loadAladdinResilient(env, notice);
         DispatchSnapshot dispatch = loadDispatch(env);
         long loadMs = Math.max(0L, (System.nanoTime() - t0) / 1_000_000L);
@@ -190,9 +223,11 @@ public final class EquipmentStatusDashboardSourceLoader {
                 actuals,
                 aladdin,
                 dispatch,
+                dailyReport,
                 actualsLabel(env),
                 aladdinLabel(env),
                 dispatchLabel(env),
+                dailyReportLabel(env),
                 notice.toString().strip(),
                 stats);
     }
@@ -251,6 +286,7 @@ public final class EquipmentStatusDashboardSourceLoader {
         SourceFileSizes sizes = new SourceFileSizes();
         NetworkSourceDirResolver.Result r = NetworkSourceDirResolver.resolve(env);
         r.actualDetailPath().ifPresent(p -> sizes.actualBytes = fileSize(p));
+        KonanDailyReportLookup.resolveNewestCsvPath(env).ifPresent(p -> sizes.dailyReportBytes = fileSize(p));
         Optional<Path> taskInput = r.taskInputPath();
         if (taskInput.isPresent()) {
             sizes.aladdinBytes = fileSize(taskInput.get());
@@ -534,6 +570,39 @@ public final class EquipmentStatusDashboardSourceLoader {
         return Files.isRegularFile(p) ? p.getFileName().toString() : "(なし)";
     }
 
+    private static String dailyReportLabel(Map<String, String> ui) {
+        return KonanDailyReportLookup.resolveNewestCsvPath(ui)
+                .map(p -> p.getFileName().toString())
+                .orElse("(未設定)");
+    }
+
+    private static ActualsSnapshot loadDailyReportResilient(Map<String, String> ui, StringBuilder notice) {
+        try {
+            Optional<Path> csvPath = KonanDailyReportLookup.resolveNewestCsvPath(ui);
+            if (csvPath.isEmpty() || !Files.isRegularFile(csvPath.get())) {
+                return new ActualsSnapshot(List.of(), List.of());
+            }
+            KonanDailyReportLookup.DailyReportCsvTable table =
+                    KonanDailyReportLookup.readTableFromPath(csvPath.get());
+            if (table.headers().isEmpty() || table.rows().isEmpty()) {
+                return new ActualsSnapshot(List.of(), List.of());
+            }
+            List<String> headers = table.headers();
+            List<List<String>> rows = new ArrayList<>(table.rows().size());
+            for (Map<String, String> map : table.rows()) {
+                List<String> line = new ArrayList<>(headers.size());
+                for (String h : headers) {
+                    line.add(map.getOrDefault(h, ""));
+                }
+                rows.add(line);
+            }
+            return new ActualsSnapshot(headers, rows);
+        } catch (Throwable ex) {
+            appendNotice(notice, "日報: " + shortError(ex));
+            return new ActualsSnapshot(List.of(), List.of());
+        }
+    }
+
     /** 読込エラー表示・ログ向けに、解決済みソースパスを1ブロックで返す。 */
     public static String formatSourceContext(Map<String, String> ui) {
         Map<String, String> env = ui != null ? ui : Map.of();
@@ -559,12 +628,17 @@ public final class EquipmentStatusDashboardSourceLoader {
                 Files.isRegularFile(dispatch)
                         ? dispatch.toAbsolutePath().normalize().toString()
                         : "(なし — 結果_配台表.json を確認)";
+        String dailyReport =
+                KonanDailyReportLookup.resolveNewestCsvPath(env)
+                        .map(p -> p.toAbsolutePath().normalize().toString())
+                        .orElse("(なし — PM_AI_DAILY_REPORT_SOURCE_DIR 等を確認)");
         String sheet = env.getOrDefault(AppPaths.KEY_PM_AI_ACTUAL_DETAIL_SHEET, "").strip();
         StringBuilder sb = new StringBuilder();
-        sb.append("実績: ").append(actual);
+        sb.append("実績(明細): ").append(actual);
         if (!sheet.isEmpty()) {
             sb.append("\n実績シート: ").append(sheet);
         }
+        sb.append("\n実績(日報): ").append(dailyReport);
         sb.append("\nアラジン: ").append(aladdin);
         sb.append("\n配台: ").append(dispatchPath);
         return sb.toString();

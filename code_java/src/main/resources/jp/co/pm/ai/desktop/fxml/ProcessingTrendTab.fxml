@@ -67,6 +67,10 @@
                 </padding>
                 <FlowPane hgap="14.0" vgap="4.0" styleClass="pm-processing-trend-subbar-controls">
                     <HBox spacing="6.0" alignment="CENTER_LEFT">
+                        <Label text="実績"/>
+                        <ComboBox fx:id="actualSourceCombo" prefWidth="160.0">
+                            <tooltip><Tooltip text="実績系列の取得元。&#10;日報（実加工量）: 加工日報CSVの「実加工量」から取得（高速・高精度。デフォルト）&#10;実績明細（実加工数）: 加工実績明細問合せExcelの「実加工数」から取得"/></tooltip>
+                        </ComboBox>
                         <Label text="機械"/>
                         <ComboBox fx:id="machineCombo" prefWidth="168.0"/>
                         <Label text="工程"/>
@@ -208,13 +212,16 @@
                 <TableView fx:id="detailTable" fixedCellSize="24.0" prefHeight="220.0" maxHeight="320.0"
                            styleClass="pm-processing-trend-detail-table">
                     <columns>
-                        <TableColumn fx:id="colDate" prefWidth="110.0" sortable="false" text="日付"/>
-                        <TableColumn fx:id="colActual" prefWidth="100.0" sortable="false" text="実績 (m)"/>
-                        <TableColumn fx:id="colPlan" prefWidth="100.0" sortable="false" text="予定 (m)"/>
-                        <TableColumn fx:id="colDiff" prefWidth="100.0" sortable="false" text="差異 (m)"/>
-                        <TableColumn fx:id="colActualCum" prefWidth="110.0" sortable="false" text="実績累計 (m)"/>
-                        <TableColumn fx:id="colPlanCum" prefWidth="110.0" sortable="false" text="予定累計 (m)"/>
-                        <TableColumn fx:id="colProjectedCum" prefWidth="110.0" sortable="false" text="見込累計 (m)"/>
+                        <TableColumn fx:id="colDate" prefWidth="105.0" sortable="false" text="日付"/>
+                        <TableColumn fx:id="colActual" prefWidth="100.0" sortable="false" text="日報実績 (m)"/>
+                        <TableColumn fx:id="colCompareActual" prefWidth="100.0" sortable="false" text="実績明細 (m)"/>
+                        <TableColumn fx:id="colActualCompareDiff" prefWidth="95.0" sortable="false" text="明細差 (m)"/>
+                        <TableColumn fx:id="colPlan" prefWidth="95.0" sortable="false" text="予定 (m)"/>
+                        <TableColumn fx:id="colDiff" prefWidth="90.0" sortable="false" text="差異 (m)"/>
+                        <TableColumn fx:id="colActualCum" prefWidth="105.0" sortable="false" text="日報累計 (m)"/>
+                        <TableColumn fx:id="colCompareActualCum" prefWidth="105.0" sortable="false" text="明細累計 (m)"/>
+                        <TableColumn fx:id="colPlanCum" prefWidth="105.0" sortable="false" text="予定累計 (m)"/>
+                        <TableColumn fx:id="colProjectedCum" prefWidth="105.0" sortable="false" text="見込累計 (m)"/>
                     </columns>
                 </TableView>
             </TitledPane>
