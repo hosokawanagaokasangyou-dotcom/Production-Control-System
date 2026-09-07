@@ -4336,28 +4336,25 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         if (text == null || text.isBlank()) {
             return;
         }
-        if (statusLabel != null) {
-            statusLabel.setText(text);
+        Runnable apply =
+                () -> {
+                    if (statusLabel != null) {
+                        statusLabel.setText(text);
+                    }
+                    if (previewReloadOverlay != null) {
+                        if (previewReloadOverlayLabel != null) {
+                            previewReloadOverlayLabel.setText(text);
+                        }
+                        previewReloadOverlay.setVisible(true);
+                        previewReloadOverlay.setManaged(true);
+                    }
+                    notifyReloadProgressReporter(text);
+                };
+        if (Platform.isFxApplicationThread()) {
+            apply.run();
+        } else {
+            Platform.runLater(apply);
         }
-        if (previewReloadOverlay != null) {
-            if (Platform.isFxApplicationThread()) {
-                if (previewReloadOverlayLabel != null) {
-                    previewReloadOverlayLabel.setText(text);
-                }
-                previewReloadOverlay.setVisible(true);
-                previewReloadOverlay.setManaged(true);
-            } else {
-                Platform.runLater(
-                        () -> {
-                            if (previewReloadOverlayLabel != null) {
-                                previewReloadOverlayLabel.setText(text);
-                            }
-                            previewReloadOverlay.setVisible(true);
-                            previewReloadOverlay.setManaged(true);
-                        });
-            }
-        }
-        notifyReloadProgressReporter(text);
     }
 
     private void notifyReloadProgressReporter(String text) {
