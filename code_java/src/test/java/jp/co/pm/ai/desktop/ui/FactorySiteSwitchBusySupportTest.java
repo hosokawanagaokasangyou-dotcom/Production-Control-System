@@ -129,15 +129,19 @@ class FactorySiteSwitchBusySupportTest {
         assertEquals(
                 Optional.of(MainShellTabId.REQUEST_FORM_INPUT),
                 FactorySiteSwitchBusySupport.targetTabForStatus(
-                        "起動後読込 (5/6): 原本転記…"));
+                        "起動後読込 (5/7): 原本転記…"));
         assertEquals(
                 Optional.of(MainShellTabId.REQUEST_FORM_PIPELINE_CHECK),
                 FactorySiteSwitchBusySupport.targetTabForStatus(
-                        "起動後読込 (6/6): 計画確認…"));
+                        "起動後読込 (6/7): 計画確認…"));
+        assertEquals(
+                Optional.of(MainShellTabId.PROCESSING_TREND),
+                FactorySiteSwitchBusySupport.targetTabForStatus(
+                        "起動後読込 (7/7): 加工トレンド…"));
         assertEquals(
                 Optional.of(MainShellTabId.REMOTE_DESKTOP),
                 FactorySiteSwitchBusySupport.targetTabForStatus(
-                        "起動後読込 (1/6): リモートデスクトップ…"));
+                        "起動後読込 (1/7): リモートデスクトップ…"));
         assertEquals(
                 Optional.of(MainShellTabId.REQUEST_FORM_INPUT),
                 FactorySiteSwitchBusySupport.targetTabForStatus(
@@ -235,8 +239,8 @@ class FactorySiteSwitchBusySupportTest {
                 FactorySiteSwitchBusyDialog.STATUS_BACKGROUND_LOAD,
                 FactorySiteSwitchBusySupport.resolveTabLoadStatus(null));
         assertEquals(
-                "起動後読込 (1/6): リモートデスクトップ…",
-                FactorySiteSwitchBusySupport.resolveTabLoadStatus("起動後読込 (1/6): リモートデスクトップ…"));
+                "起動後読込 (1/7): リモートデスクトップ…",
+                FactorySiteSwitchBusySupport.resolveTabLoadStatus("起動後読込 (1/7): リモートデスクトップ…"));
     }
 
     @Test

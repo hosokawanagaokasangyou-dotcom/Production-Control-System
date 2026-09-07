@@ -9,7 +9,8 @@ import javafx.application.Platform;
 /**
  * 起動・環境確定後にタブデータを順次バックグラウンド読込する。
  *
- * <p>順序: リモートデスクトップ → 会社カレンダー → メンバー勤怠 → 機械カレンダー → 原本転記 → 計画確認。
+ * <p>順序: リモートデスクトップ → 会社カレンダー → メンバー勤怠 → 機械カレンダー → 原本転記 → 計画確認 →
+ * 加工トレンド。
  */
 final class StartupTabBackgroundLoadCoordinator {
 
@@ -30,6 +31,8 @@ final class StartupTabBackgroundLoadCoordinator {
 
         RequestFormPipelineCheckTabController requestFormPipelineCheckTab();
 
+        ProcessingTrendTabController processingTrendTab();
+
         void onStartupBackgroundLoadFinished();
 
         void setStartupTabBackgroundLoadActive(boolean active);
@@ -49,7 +52,8 @@ final class StartupTabBackgroundLoadCoordinator {
     private static final int STEP_MACHINE = 4;
     private static final int STEP_REQUEST_FORM = 5;
     private static final int STEP_PIPELINE_CHECK = 6;
-    private static final int STEP_COUNT = 6;
+    private static final int STEP_PROCESSING_TREND = 7;
+    private static final int STEP_COUNT = 7;
 
     /** ユーザーがモーダルを閉じたあとのステップ間待機（UI 操作を優先）。 */
     static final long DEFERRED_STEP_YIELD_MS = 150L;
@@ -228,11 +232,27 @@ final class StartupTabBackgroundLoadCoordinator {
         host.appendStartupBackgroundLog("[startup-bg] 計画確認を走査中…");
         RequestFormPipelineCheckTabController tab = host.requestFormPipelineCheckTab();
         if (tab == null) {
+            runNextStep(this::beginProcessingTrend);
+            return;
+        }
+        tab.preloadInBackground(
+                ok -> Platform.runLater(
+                        () -> finishStep("計画確認", ok, this::beginProcessingTrend)));
+    }
+
+    private void beginProcessingTrend() {
+        if (isRunObsolete()) {
+            return;
+        }
+        setStatus(STEP_PROCESSING_TREND, "加工トレンド");
+        host.appendStartupBackgroundLog("[startup-bg] 加工トレンドを読込中…");
+        ProcessingTrendTabController tab = host.processingTrendTab();
+        if (tab == null) {
             completeAll();
             return;
         }
         tab.preloadInBackground(
-                ok -> Platform.runLater(() -> finishStep("計画確認", ok, this::completeAll)));
+                ok -> Platform.runLater(() -> finishStep("加工トレンド", ok, this::completeAll)));
     }
 
     private void finishStep(String label, boolean ok, Runnable next) {

@@ -129,6 +129,9 @@ public final class FactorySiteSwitchBusySupport {
                 || status.contains("計画確認")) {
             return Optional.of(MainShellTabId.REQUEST_FORM_PIPELINE_CHECK);
         }
+        if (status.contains("加工トレンド")) {
+            return Optional.of(MainShellTabId.PROCESSING_TREND);
+        }
         if (FactorySiteSwitchBusyDialog.STATUS_REFRESH_REMOTE.equals(status)
                 || status.contains("リモートデスクトップ")) {
             return Optional.of(MainShellTabId.REMOTE_DESKTOP);

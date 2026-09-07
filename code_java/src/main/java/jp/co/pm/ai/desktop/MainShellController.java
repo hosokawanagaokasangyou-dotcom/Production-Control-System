@@ -6668,7 +6668,7 @@ public final class MainShellController
         refreshGlobalStatusBar();
     }
 
-    private static final int STARTUP_BACKGROUND_LOAD_STEP_COUNT = 6;
+    private static final int STARTUP_BACKGROUND_LOAD_STEP_COUNT = 7;
     private static final int STARTUP_BACKGROUND_LOAD_STEP_REQUEST_FORM = 5;
 
     @Override
@@ -6747,6 +6747,11 @@ public final class MainShellController
     @Override
     public RequestFormPipelineCheckTabController requestFormPipelineCheckTab() {
         return requestFormPipelineCheckTabController;
+    }
+
+    @Override
+    public ProcessingTrendTabController processingTrendTab() {
+        return processingTrendTabController;
     }
 
     @Override
@@ -7113,9 +7118,11 @@ public final class MainShellController
         if (outcome != null && outcome.succeeded()) {
             Path latest = outcome.result().latestPath();
             String detail =
-                    latest != null && latest.getFileName() != null
-                            ? latest.getFileName().toString()
-                            : "";
+                    outcome.emptyDispatchResults()
+                            ? "配台結果が空"
+                            : (latest != null && latest.getFileName() != null
+                                    ? latest.getFileName().toString()
+                                    : "");
             mainRunTabController.updateStage2Progress(
                     MainRunStage2Progress.State.COMPLETED, detail);
             return;
@@ -7125,21 +7132,48 @@ public final class MainShellController
                 error != null && error.getMessage() != null
                         ? error.getMessage()
                         : "原因不明";
+        if (detail.contains("結果_配台表.json が見つかりません")) {
+            mainRunTabController.updateStage2Progress(
+                    MainRunStage2Progress.State.COMPLETED, "配台結果が空");
+            return;
+        }
         mainRunTabController.updateStage2Progress(
                 MainRunStage2Progress.State.FAILED, detail);
     }
 
     static String stage2CompletionHeader(
             ResultDispatchTableTabController.AladdinEntryExportOutcome outcome) {
-        return outcome != null && outcome.succeeded()
-                ? "アラジン入力用Excelを生成しました"
-                : "Excel自動生成に失敗しました";
+        if (outcome != null && outcome.succeeded()) {
+            if (outcome.emptyDispatchResults()) {
+                return "配台結果が空です";
+            }
+            return "アラジン入力用Excelを生成しました";
+        }
+        Exception error = outcome != null ? outcome.error() : null;
+        String reason =
+                error != null && error.getMessage() != null ? error.getMessage() : "";
+        if (reason.contains("結果_配台表.json が見つかりません")) {
+            return "配台結果が空です";
+        }
+        return "Excel自動生成に失敗しました";
     }
 
     static String stage2CompletionContent(
             ResultDispatchTableTabController.AladdinEntryExportOutcome outcome) {
         StringBuilder text = new StringBuilder("段階2 の処理自体は正常終了しました。");
         if (outcome != null && outcome.succeeded()) {
+            if (outcome.emptyDispatchResults()) {
+                text.append(
+                        "\n\n配台対象が無いため、結果_配台表は 0 行です。"
+                                + "（例: アラジン翌日配台 0 ロールで全量除外）");
+                if (outcome.result() != null && outcome.result().latestPath() != null) {
+                    text.append("\n\n空のアラジン入力用Excel: ").append(outcome.result().latestPath());
+                }
+                if (outcome.warnings() != null && !outcome.warnings().isEmpty()) {
+                    text.append("\n\n警告:\n").append(String.join("\n", outcome.warnings()));
+                }
+                return text.toString();
+            }
             text.append("\n\n最新: ").append(outcome.result().latestPath());
             if (outcome.warnings() != null && !outcome.warnings().isEmpty()) {
                 text.append("\n\n警告:\n").append(String.join("\n", outcome.warnings()));
@@ -7153,6 +7187,11 @@ public final class MainShellController
                         : error.getMessage() != null && !error.getMessage().isBlank()
                                 ? error.getMessage()
                                 : error.toString();
+        // 空結果で JSON 未出力だった旧経路の文言は失敗ではなく空結果として案内する
+        if (reason != null && reason.contains("結果_配台表.json が見つかりません")) {
+            return "段階2 の処理自体は正常終了しました。\n\n配台結果が空です（結果_配台表.json がありません）。"
+                    + "\n翌日配台 0 ロール等で配台行が無い場合は正常です。";
+        }
         return text.append("\n\nExcel自動生成の原因: ").append(reason).toString();
     }
 

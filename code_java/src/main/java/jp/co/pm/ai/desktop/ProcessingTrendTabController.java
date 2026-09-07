@@ -22,6 +22,7 @@ import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Consumer;
 
 import javafx.animation.KeyFrame;
 import javafx.animation.PauseTransition;
@@ -98,8 +99,9 @@ import jp.co.pm.ai.desktop.io.actuals.ProcessingTrendWorkbookExporter.Processing
  *
  * <p>ソース読込はダッシュボードと同じ {@link EquipmentStatusDashboardSourceLoader} を使い、
  * 集計は {@link ProcessingTrendAggregator} に委ねる。読込・集計はいずれもバックグラウンドで行い、
- * FX スレッドでは描画のみ行う。常時表示を想定し、自動更新（指紋比較のみなので安価）と
- * 日跨ぎでの「今日」追従を持つ。
+ * FX スレッドでは描画のみ行う。起動後は {@link StartupTabBackgroundLoadCoordinator} から
+ * {@link #preloadInBackground} でソース読込を継続する。常時表示を想定し、自動更新
+ * （指紋比較のみなので安価）と日跨ぎでの「今日」追従を持つ。
  */
 public class ProcessingTrendTabController {
 
@@ -299,6 +301,9 @@ public class ProcessingTrendTabController {
     private boolean tabActive;
     private Timeline autoRefreshTimeline;
     private int autoRefreshRemainingSec;
+    /** 起動後 BG 読込の完了通知。集計まで終わってから呼ぶ。 */
+    private Consumer<Boolean> pendingPreloadComplete;
+    private boolean completePreloadAfterCompute;
 
     @FXML
     private void initialize() {
@@ -342,7 +347,10 @@ public class ProcessingTrendTabController {
                                 + "アラジン加工計画は完了した依頼が抽出から消えるため、前日までの予定は実際より少なく出ることがあります。\n"
                                 + "前日までの予定が期間予定合計の 10% 未満のときは「—」にします。配台結果では算出しません。\n"
                                 + String.format(Locale.ROOT, "%.0f%% 以上=緑、%.0f%% 以上=橙、未満=赤", PROGRESS_GOOD_PCT, PROGRESS_WARN_PCT)));
-        renderEmpty("データ未読込", "タブを表示すると自動で読み込みます。読み込まれないときは「再読込」を押してください。");
+        renderEmpty(
+                "データ未読込",
+                "起動後にバックグラウンドで読み込みます。完了前に開いた場合は表示までお待ちください。"
+                        + " 読み込まれないときは「再読込」を押してください。");
     }
 
     public void bindShell(MainShellController shell) {
@@ -353,13 +361,69 @@ public class ProcessingTrendTabController {
     public void onMainShellTabSelected() {
         tabActive = true;
         updateAutoRefreshTimer();
+        // 起動後 BG 読込チェーンに任せる（途中で二重起動しない）
+        if (shell != null && shell.isStartupTabBackgroundLoadActive()) {
+            return;
+        }
         reloadFromSources(false);
     }
 
-    /** 別タブへ移ったとき。自動更新を止める（再選択時に再開）。 */
+    /** 別タブへ移ったとき。自動更新を止める（再選択時に再開）。進行中の読込・集計は打ち切らない。 */
     public void onMainShellTabDeselected() {
         tabActive = false;
         updateAutoRefreshTimer();
+    }
+
+    /** 起動後バックグラウンド読込（MainShell コーディネータから呼ぶ）。 */
+    void preloadInBackground(Consumer<Boolean> onComplete) {
+        if (shell == null) {
+            if (onComplete != null) {
+                if (Platform.isFxApplicationThread()) {
+                    onComplete.accept(false);
+                } else {
+                    Platform.runLater(() -> onComplete.accept(false));
+                }
+            }
+            return;
+        }
+        if (onComplete != null) {
+            Consumer<Boolean> prev = pendingPreloadComplete;
+            pendingPreloadComplete =
+                    prev == null
+                            ? onComplete
+                            : ok -> {
+                                prev.accept(ok);
+                                onComplete.accept(ok);
+                            };
+        }
+        if (reloadInFlight) {
+            return;
+        }
+        if (computeInFlight) {
+            completePreloadAfterCompute = pendingPreloadComplete != null;
+            return;
+        }
+        reloadFromSources(false);
+    }
+
+    private void completePreload(boolean ok) {
+        completePreloadAfterCompute = false;
+        Consumer<Boolean> pending = pendingPreloadComplete;
+        pendingPreloadComplete = null;
+        if (pending == null) {
+            return;
+        }
+        if (Platform.isFxApplicationThread()) {
+            pending.accept(ok);
+        } else {
+            Platform.runLater(() -> pending.accept(ok));
+        }
+    }
+
+    private void armPreloadAfterCompute() {
+        if (pendingPreloadComplete != null) {
+            completePreloadAfterCompute = true;
+        }
     }
 
     // ---- 初期化 ----------------------------------------------------------------------------
@@ -1195,7 +1259,11 @@ public class ProcessingTrendTabController {
     private record ReloadOutcome(ReloadDecision decision, List<String> machines, List<String> processes) {}
 
     private void reloadFromSources(boolean userInitiated) {
-        if (shell == null || reloadInFlight) {
+        if (shell == null) {
+            completePreload(false);
+            return;
+        }
+        if (reloadInFlight) {
             return;
         }
         reloadInFlight = true;
@@ -1240,7 +1308,10 @@ public class ProcessingTrendTabController {
                                 currentResult != null && !currentResult.today().equals(LocalDate.now());
                         setReloading(false);
                         if (currentResult == null || dayRolled || periodMoved) {
+                            armPreloadAfterCompute();
                             recomputeNow();
+                        } else {
+                            completePreload(true);
                         }
                         return;
                     }
@@ -1254,6 +1325,7 @@ public class ProcessingTrendTabController {
                     } finally {
                         setReloading(false);
                     }
+                    armPreloadAfterCompute();
                     recomputeNow();
                 });
         task.setOnFailed(
@@ -1285,6 +1357,7 @@ public class ProcessingTrendTabController {
                                 "加工トレンド 読込エラー",
                                 sourceContext + "\n\n" + lastLoadErrorDetail);
                     }
+                    completePreload(false);
                 });
         pool.execute(task);
     }
@@ -1364,6 +1437,9 @@ public class ProcessingTrendTabController {
         recomputeDebounce.stop();
         if (cachedSources == null) {
             setComputing(false);
+            if (completePreloadAfterCompute) {
+                completePreload(false);
+            }
             return;
         }
         // 未開始のまま溜まっている旧集計は実行しない（世代チェックだけだと単一スレッド上でフル実行される）
@@ -1397,6 +1473,9 @@ public class ProcessingTrendTabController {
                     setComputing(false);
                     currentResult = task.getValue();
                     render(currentResult, filter);
+                    if (completePreloadAfterCompute) {
+                        completePreload(true);
+                    }
                 });
         task.setOnFailed(
                 e -> {
@@ -1410,6 +1489,9 @@ public class ProcessingTrendTabController {
                     showNotice("集計に失敗しました — " + detail.replace('\n', ' '), NoticeKind.COMPUTE_ERROR);
                     if (shell != null) {
                         shell.appendLog("[trend] 集計エラー: " + detail.replace('\n', ' '));
+                    }
+                    if (completePreloadAfterCompute) {
+                        completePreload(false);
                     }
                 });
         activeComputeTask = task;

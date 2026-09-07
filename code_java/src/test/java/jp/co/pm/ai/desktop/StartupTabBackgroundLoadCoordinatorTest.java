@@ -158,6 +158,11 @@ class StartupTabBackgroundLoadCoordinatorTest {
         }
 
         @Override
+        public ProcessingTrendTabController processingTrendTab() {
+            return null;
+        }
+
+        @Override
         public void onStartupBackgroundLoadFinished() {}
 
         @Override
