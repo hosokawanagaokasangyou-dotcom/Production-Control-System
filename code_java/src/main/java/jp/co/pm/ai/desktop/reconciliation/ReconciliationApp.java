@@ -939,8 +939,9 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         tabVerification.setContent(verificationLayout);
         
         // Tab 2: Settings - edit ComboBox option lists
-        Tab tabSettings = createSettingsTab();
         Tab tabIndexSheet = createIndexSheetCatalogTab();
+        Tab tabJuchuSearch = createJuchuOrderSearchTab();
+        Tab tabSettings = createSettingsTab();
         // Tab 3: Post-processing product master editor (right of settings)
         Tab tabPostProcMaster = createPostProcessingProductMasterTab();
         Tab tabMasterList = createMasterListTab();
@@ -949,6 +950,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                 .addAll(
                         tabVerification,
                         tabIndexSheet,
+                        tabJuchuSearch,
                         tabSettings,
                         tabPostProcMaster,
                         tabMasterList);
@@ -1515,6 +1517,13 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                 () ->
                         RequestFormOriginalIndexSheetCatalogPane.build(
                                 () -> uiEnvSnapshot, msg -> System.out.println(msg)));
+    }
+
+    private Tab createJuchuOrderSearchTab() {
+        Tab tab = new Tab("受注検索");
+        tab.setClosable(false);
+        tab.setContent(JuchuOrderSearchPane.build(() -> List.copyOf(orderRecords)));
+        return tab;
     }
 
     private Tab createMasterListTab() {
