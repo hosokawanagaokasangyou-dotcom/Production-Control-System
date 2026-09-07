@@ -134,6 +134,7 @@ public class ProcessingTrendTabController {
         THIS_MONTH("今月"),
         LAST_MONTH("先月"),
         NEXT_MONTH("来月"),
+        PAST_3_MONTHS("直近3ヶ月"),
         PAST_6_MONTHS("直近6ヶ月"),
         THIS_YEAR("今年"),
         PAST_12_MONTHS("過去12ヶ月"),
@@ -973,6 +974,10 @@ public class ProcessingTrendTabController {
             case NEXT_MONTH -> {
                 LocalDate from = today.plusMonths(1).withDayOfMonth(1);
                 yield new LocalDate[] {from, from.with(TemporalAdjusters.lastDayOfMonth())};
+            }
+            case PAST_3_MONTHS -> {
+                LocalDate from = today.minusMonths(2).withDayOfMonth(1);
+                yield new LocalDate[] {from, today.with(TemporalAdjusters.lastDayOfMonth())};
             }
             case PAST_6_MONTHS -> {
                 LocalDate from = today.minusMonths(5).withDayOfMonth(1);
