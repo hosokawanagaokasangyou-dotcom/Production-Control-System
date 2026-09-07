@@ -1,6 +1,7 @@
 package jp.co.pm.ai.desktop.io.actuals;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -86,7 +87,7 @@ class ProcessingTrendWorkbookExporterTest {
                         List.of("テスト注意文"));
 
         try (XSSFWorkbook wb = ProcessingTrendWorkbookExporter.buildWorkbook(req)) {
-            assertEquals(2, wb.getNumberOfSheets());
+            assertTrue(wb.getNumberOfSheets() >= 4, "サマリ・日別・機械別・機械工程別があること");
             Sheet sSummary = wb.getSheet(ProcessingTrendWorkbookExporter.SHEET_SUMMARY);
             Sheet sDaily = wb.getSheet(ProcessingTrendWorkbookExporter.SHEET_DAILY);
             assertNotNull(sSummary, "サマリシートが存在すること");
@@ -103,6 +104,25 @@ class ProcessingTrendWorkbookExporterTest {
             assertEquals("30日移動平均 (m)", sDaily.getRow(0).getCell(3).getStringCellValue());
             assertEquals("予定 (m)", sDaily.getRow(0).getCell(4).getStringCellValue());
             assertEquals("実績累計 (m)", sDaily.getRow(0).getCell(5).getStringCellValue());
+
+            // 整数書式 (#,##0" m")
+            String fmt =
+                    wb.createDataFormat()
+                            .getFormat(sDaily.getRow(1).getCell(2).getCellStyle().getDataFormat());
+            assertTrue(fmt.contains("#,##0"), "整数書式であること: " + fmt);
+            assertTrue(!fmt.contains(".0"), "小数書式ではないこと: " + fmt);
+
+            // トレンドチャートが日別シートにある
+            assertNotNull(((org.apache.poi.xssf.usermodel.XSSFSheet) sDaily).getDrawingPatriarch());
+            assertFalse(
+                    ((org.apache.poi.xssf.usermodel.XSSFSheet) sDaily)
+                            .getDrawingPatriarch()
+                            .getCharts()
+                            .isEmpty());
+
+            assertNotNull(wb.getSheet(ProcessingTrendWorkbookExporter.SHEET_BY_MACHINE));
+            assertNotNull(wb.getSheet(ProcessingTrendWorkbookExporter.SHEET_BY_MACHINE_PROCESS));
+
 
             // データ行3日分 + 合計行1行
             // 行0: ヘッダー, 行1: 9/1, 行2: 9/2, 行3: 9/3, 行4: 合計

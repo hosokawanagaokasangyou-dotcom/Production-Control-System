@@ -51,7 +51,7 @@
                 <Button fx:id="thisMonthButton" mnemonicParsing="false" onAction="#onThisMonthAction" text="今月"/>
                 <Separator orientation="VERTICAL"/>
                 <Button fx:id="exportExcelButton" mnemonicParsing="false" onAction="#onExportExcelAction" text="Excel出力">
-                    <tooltip><Tooltip text="表示中の期間・条件の集計結果を Excel に出力します（Ctrl+E）"/></tooltip>
+                    <tooltip><Tooltip text="表示中の期間で、全機械・全工程の一括 Excel を出力します（機械/工程の絞込は反映しません）。数値は整数 m。トレンドグラフ付き。"/></tooltip>
                 </Button>
                 <Separator orientation="VERTICAL"/>
                 <CheckBox fx:id="autoRefreshCheckBox" mnemonicParsing="false" selected="true" text="自動更新">

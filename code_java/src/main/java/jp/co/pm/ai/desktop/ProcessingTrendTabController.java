@@ -2214,17 +2214,27 @@ public class ProcessingTrendTabController {
     }
 
     private void exportToExcel() {
-        if (currentResult == null || currentResult.isEmpty()) {
+        if (cachedSources == null) {
             showNotice("出力対象のデータがありません。先にデータを読み込んでください。", NoticeKind.DATA_WARN);
             return;
         }
-        Filter filter = currentFilter();
+        // 期間・実績/予定ソース・移動平均のみ採用。機械/工程の画面絞込は無視して一括出力する。
+        Filter uiFilter = currentFilter();
+        Filter exportFilter =
+                new Filter(
+                        uiFilter.from(),
+                        uiFilter.to(),
+                        uiFilter.actualSource(),
+                        uiFilter.planSource(),
+                        null,
+                        null,
+                        uiFilter.movingAverageDays());
         boolean isMonthly = currentGranularity() == Granularity.MONTHLY;
         String defaultName =
-                ProcessingTrendWorkbookExporter.suggestFileName(filter, isMonthly, LocalDateTime.now());
+                ProcessingTrendWorkbookExporter.suggestFileName(exportFilter, isMonthly, LocalDateTime.now());
 
         FileChooser chooser = new FileChooser();
-        chooser.setTitle("加工トレンド集計の Excel 出力");
+        chooser.setTitle("加工トレンド集計の Excel 出力（期間一括・全機械全工程）");
         chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Excel ワークブック (*.xlsx)", "*.xlsx"));
         chooser.setInitialFileName(defaultName);
 
@@ -2244,42 +2254,129 @@ public class ProcessingTrendTabController {
         }
         lastExportDir = target.toPath().getParent();
 
-        MonthlyResult monthly =
-                currentMonthlyResult != null
-                        ? currentMonthlyResult
-                        : ProcessingTrendAggregator.rollUpMonthly(currentResult, filter, currentResult.today());
-
-        ProcessingTrendExportRequest req =
-                new ProcessingTrendExportRequest(
-                        currentResult,
-                        monthly,
-                        filter,
-                        LocalDateTime.now(),
-                        cachedSources != null ? cachedSources.actualSourceLabel() : "",
-                        filter.planSource().label(),
-                        cachedSources != null ? cachedSources.aladdinSourceLabel() : "",
-                        cachedSources != null ? cachedSources.dispatchSourceLabel() : "",
-                        cachedSources != null
-                                ? EquipmentStatusDashboardSourceLoader.formatLoadStatsSummary(
-                                        cachedSources.loadStats())
-                                : "",
-                        cachedSources != null && cachedSources.loadNotice() != null
-                                ? List.of(cachedSources.loadNotice())
-                                : List.of(),
-                        cachedSources != null ? cachedSources.dailyReportSourceLabel() : "");
-
-        Map<String, String> ui = shell != null ? shell.snapshotUiEnv() : Map.of();
+        final LoadedSources src = cachedSources;
+        final LocalDate today = LocalDate.now();
+        Map<String, String> uiEnv = shell != null ? shell.snapshotUiEnv() : Map.of();
         if (exportExcelButton != null) {
             exportExcelButton.setDisable(true);
         }
         applyLoadingPresentation(true);
-        loadingStatusLabel.setText("Excel 出力中…");
+        loadingStatusLabel.setText("Excel 出力中（全機械・全工程を集計）…");
 
         Task<ProcessingTrendExportResult> task =
                 new Task<>() {
                     @Override
                     protected ProcessingTrendExportResult call() throws Exception {
-                        return ProcessingTrendWorkbookExporter.writeTo(target.toPath(), req, ui);
+                        Result overall =
+                                ProcessingTrendAggregator.aggregate(
+                                        src.dailyReportActuals(),
+                                        src.actuals(),
+                                        src.aladdin(),
+                                        src.dispatch(),
+                                        exportFilter,
+                                        today);
+                        if (overall.isEmpty()) {
+                            throw new IllegalStateException("期間内に出力できるデータがありません。");
+                        }
+                        MonthlyResult monthly =
+                                ProcessingTrendAggregator.rollUpMonthly(overall, exportFilter, today);
+
+                        List<String> machines =
+                                ProcessingTrendAggregator.machineNames(
+                                        src.dailyReportActuals(),
+                                        src.actuals(),
+                                        src.aladdin(),
+                                        src.dispatch());
+                        List<String> processes =
+                                ProcessingTrendAggregator.processNames(
+                                        src.dailyReportActuals(),
+                                        src.actuals(),
+                                        src.aladdin(),
+                                        src.dispatch());
+
+                        List<ProcessingTrendWorkbookExporter.MachineBundle> bundles = new ArrayList<>();
+                        List<ProcessingTrendWorkbookExporter.MachineProcessRow> mpRows = new ArrayList<>();
+                        for (String machine : machines) {
+                            Filter mf =
+                                    new Filter(
+                                            exportFilter.from(),
+                                            exportFilter.to(),
+                                            exportFilter.actualSource(),
+                                            exportFilter.planSource(),
+                                            machine,
+                                            null,
+                                            exportFilter.movingAverageDays());
+                            Result mr =
+                                    ProcessingTrendAggregator.aggregate(
+                                            src.dailyReportActuals(),
+                                            src.actuals(),
+                                            src.aladdin(),
+                                            src.dispatch(),
+                                            mf,
+                                            today);
+                            if (mr.actualTotalM() <= 0 && mr.planTotalM() <= 0) {
+                                continue;
+                            }
+                            bundles.add(
+                                    new ProcessingTrendWorkbookExporter.MachineBundle(
+                                            machine,
+                                            mr,
+                                            ProcessingTrendAggregator.rollUpMonthly(mr, mf, today)));
+
+                            for (String process : processes) {
+                                Filter mpf =
+                                        new Filter(
+                                                exportFilter.from(),
+                                                exportFilter.to(),
+                                                exportFilter.actualSource(),
+                                                exportFilter.planSource(),
+                                                machine,
+                                                process,
+                                                exportFilter.movingAverageDays());
+                                Result pr =
+                                        ProcessingTrendAggregator.aggregate(
+                                                src.dailyReportActuals(),
+                                                src.actuals(),
+                                                src.aladdin(),
+                                                src.dispatch(),
+                                                mpf,
+                                                today);
+                                if (pr.actualTotalM() <= 0 && pr.planTotalM() <= 0) {
+                                    continue;
+                                }
+                                mpRows.add(
+                                        new ProcessingTrendWorkbookExporter.MachineProcessRow(
+                                                machine,
+                                                process,
+                                                pr.actualTotalM(),
+                                                pr.planTotalM(),
+                                                pr.compareActualTotalM()));
+                            }
+                        }
+
+                        List<String> notices = new ArrayList<>();
+                        if (src.loadNotice() != null && !src.loadNotice().isBlank()) {
+                            notices.add(src.loadNotice());
+                        }
+                        notices.add("画面の機械/工程絞込は反映していません（期間・実績/予定ソースのみ採用）。");
+
+                        ProcessingTrendExportRequest req =
+                                new ProcessingTrendExportRequest(
+                                        overall,
+                                        monthly,
+                                        exportFilter,
+                                        LocalDateTime.now(),
+                                        src.actualSourceLabel(),
+                                        exportFilter.planSource().label(),
+                                        src.aladdinSourceLabel(),
+                                        src.dispatchSourceLabel(),
+                                        EquipmentStatusDashboardSourceLoader.formatLoadStatsSummary(
+                                                src.loadStats()),
+                                        notices,
+                                        src.dailyReportSourceLabel(),
+                                        bundles,
+                                        mpRows);
+                        return ProcessingTrendWorkbookExporter.writeTo(target.toPath(), req, uiEnv);
                     }
                 };
 
@@ -2290,7 +2387,7 @@ public class ProcessingTrendTabController {
                     }
                     applyLoadingPresentation(false);
                     ProcessingTrendExportResult res = task.getValue();
-                    promptExportSuccess(res.path());
+                    promptExportSuccess(res.path(), res.machineSheets());
                 });
 
         task.setOnFailed(
@@ -2301,7 +2398,10 @@ public class ProcessingTrendTabController {
                     applyLoadingPresentation(false);
                     Throwable ex = task.getException();
                     showNotice(
-                            "Excel 出力に失敗しました: " + (ex != null ? ex.getMessage() : "不明なエラー"),
+                            "Excel 出力に失敗しました: "
+                                    + (ex != null && ex.getMessage() != null
+                                            ? ex.getMessage()
+                                            : "不明なエラー"),
                             NoticeKind.COMPUTE_ERROR);
                 });
 
@@ -2310,11 +2410,16 @@ public class ProcessingTrendTabController {
         th.start();
     }
 
-    private void promptExportSuccess(Path path) {
+    private void promptExportSuccess(Path path, int machineSheets) {
         Alert alert = new Alert(Alert.AlertType.INFORMATION);
         alert.setTitle("Excel 出力完了");
         alert.setHeaderText("加工トレンド集計を Excel に出力しました。");
-        alert.setContentText(path.toAbsolutePath().toString());
+        alert.setContentText(
+                "画面の機械・工程選択は含まれていません。全機械・全工程の期間一括です。\n"
+                        + "機械別日別シート: "
+                        + machineSheets
+                        + " 枚\n"
+                        + path.toAbsolutePath());
 
         ButtonType openBtn = new ButtonType("Excel で開く", ButtonBar.ButtonData.YES);
         ButtonType closeBtn = new ButtonType("閉じる", ButtonBar.ButtonData.CANCEL_CLOSE);

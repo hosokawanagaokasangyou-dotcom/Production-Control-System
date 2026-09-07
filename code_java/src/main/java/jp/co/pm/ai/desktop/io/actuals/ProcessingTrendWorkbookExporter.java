@@ -7,7 +7,10 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.Map;
 import java.util.Objects;
 
@@ -23,9 +26,11 @@ import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.VerticalAlignment;
 import org.apache.poi.ss.util.CellRangeAddress;
+import org.apache.poi.ss.util.WorkbookUtil;
 import org.apache.poi.xssf.usermodel.XSSFCellStyle;
 import org.apache.poi.xssf.usermodel.XSSFColor;
 import org.apache.poi.xssf.usermodel.XSSFFont;
+import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
 import jp.co.pm.ai.desktop.io.DispatchAladdinEntryWorkbookExporter;
@@ -40,6 +45,11 @@ public final class ProcessingTrendWorkbookExporter {
 
     public static final String SHEET_SUMMARY = "加工トレンドサマリ";
     public static final String SHEET_DAILY = "日別明細";
+    public static final String SHEET_BY_MACHINE = "機械別サマリ";
+    public static final String SHEET_BY_MACHINE_PROCESS = "機械工程別サマリ";
+
+    /** 機械別日別シートの上限（空でない機械のみ作成）。 */
+    public static final int MAX_MACHINE_DETAIL_SHEETS = 40;
 
     public static final String FONT_FAMILY =
             DispatchAladdinEntryWorkbookExporter.DEFAULT_WORKBOOK_FONT_FAMILY; // BIZ UDPゴシック
@@ -74,7 +84,9 @@ public final class ProcessingTrendWorkbookExporter {
             String dispatchSourceLabel,
             String loadStatsSummary,
             List<String> notices,
-            String dailyReportSourceLabel) {
+            String dailyReportSourceLabel,
+            List<MachineBundle> machineBundles,
+            List<MachineProcessRow> machineProcessRows) {
 
         public ProcessingTrendExportRequest {
             Objects.requireNonNull(result, "result");
@@ -82,6 +94,8 @@ public final class ProcessingTrendWorkbookExporter {
             exportedAt = exportedAt != null ? exportedAt : LocalDateTime.now();
             notices = notices != null ? List.copyOf(notices) : List.of();
             dailyReportSourceLabel = dailyReportSourceLabel != null ? dailyReportSourceLabel : "";
+            machineBundles = machineBundles != null ? List.copyOf(machineBundles) : List.of();
+            machineProcessRows = machineProcessRows != null ? List.copyOf(machineProcessRows) : List.of();
         }
 
         public ProcessingTrendExportRequest(
@@ -106,11 +120,65 @@ public final class ProcessingTrendWorkbookExporter {
                     dispatchSourceLabel,
                     loadStatsSummary,
                     notices,
-                    "");
+                    "",
+                    List.of(),
+                    List.of());
+        }
+
+        public ProcessingTrendExportRequest(
+                ProcessingTrendAggregator.Result result,
+                ProcessingTrendAggregator.MonthlyResult monthlyResult,
+                ProcessingTrendAggregator.Filter filter,
+                LocalDateTime exportedAt,
+                String actualSourceLabel,
+                String planSourceLabel,
+                String aladdinSourceLabel,
+                String dispatchSourceLabel,
+                String loadStatsSummary,
+                List<String> notices,
+                String dailyReportSourceLabel) {
+            this(
+                    result,
+                    monthlyResult,
+                    filter,
+                    exportedAt,
+                    actualSourceLabel,
+                    planSourceLabel,
+                    aladdinSourceLabel,
+                    dispatchSourceLabel,
+                    loadStatsSummary,
+                    notices,
+                    dailyReportSourceLabel,
+                    List.of(),
+                    List.of());
         }
     }
 
-    public record ProcessingTrendExportResult(Path path, int dayRows, boolean empty) {}
+    public record ProcessingTrendExportResult(Path path, int dayRows, boolean empty, int machineSheets) {
+        public ProcessingTrendExportResult(Path path, int dayRows, boolean empty) {
+            this(path, dayRows, empty, 0);
+        }
+    }
+
+    /** 機械単位の集計バンドル（日別シート用）。 */
+    public record MachineBundle(
+            String machineName,
+            ProcessingTrendAggregator.Result result,
+            ProcessingTrendAggregator.MonthlyResult monthlyResult) {
+        public MachineBundle {
+            Objects.requireNonNull(machineName, "machineName");
+            Objects.requireNonNull(result, "result");
+        }
+    }
+
+    /** 機械×工程の期間合計行。 */
+    public record MachineProcessRow(
+            String machineName, String processName, double actualM, double planM, double compareActualM) {
+        public MachineProcessRow {
+            Objects.requireNonNull(machineName, "machineName");
+            Objects.requireNonNull(processName, "processName");
+        }
+    }
 
     private ProcessingTrendWorkbookExporter() {}
 
@@ -129,6 +197,12 @@ public final class ProcessingTrendWorkbookExporter {
         String proc = safeToken(filter.hasProcess() ? filter.process() : "全工程");
         String pStart = filter.from().format(DateTimeFormatter.ofPattern("yyyyMMdd"));
         String pEnd = filter.to().format(DateTimeFormatter.ofPattern("yyyyMMdd"));
+        boolean bulk = !filter.hasMachine() && !filter.hasProcess();
+        if (bulk) {
+            return String.format(
+                    "加工トレンド_%s-%s_%s_%s_一括_%s.xlsx",
+                    pStart, pEnd, gran, actToken, ts.format(TS_COMPACT));
+        }
         return String.format(
                 "加工トレンド_%s-%s_%s_%s_%s_%s_%s.xlsx",
                 pStart, pEnd, gran, actToken, mach, proc, ts.format(TS_COMPACT));
@@ -151,6 +225,9 @@ public final class ProcessingTrendWorkbookExporter {
 
         buildSummarySheet(wb, s, req);
         buildDailySheet(wb, s, req);
+        buildMachineSummarySheet(wb, s, req);
+        buildMachineProcessSummarySheet(wb, s, req);
+        buildMachineDetailSheets(wb, s, req);
 
         return wb;
     }
@@ -163,10 +240,12 @@ public final class ProcessingTrendWorkbookExporter {
         try (XSSFWorkbook wb = buildWorkbook(req)) {
             PoiWorkbookFileWriter.writeReplacing(target, wb, ui);
         }
+        int machineSheets = Math.min(req.machineBundles().size(), MAX_MACHINE_DETAIL_SHEETS);
         return new ProcessingTrendExportResult(
                 target.toAbsolutePath().normalize(),
                 req.result().days().size(),
-                req.result().isEmpty());
+                req.result().isEmpty(),
+                machineSheets);
     }
 
     // ---- サマリシート構築 --------------------------------------------------------------------
@@ -202,6 +281,12 @@ public final class ProcessingTrendWorkbookExporter {
 
         String fromTo = req.filter().from().format(DATE_FMT) + " 〜 " + req.filter().to().format(DATE_FMT);
         addLabelValueRow(sheet, s, r++, "集計期間", fromTo);
+        addLabelValueRow(
+                sheet,
+                s,
+                r++,
+                "対象範囲",
+                "全機械・全工程（画面の機械/工程絞込は反映しません）");
         addLabelValueRow(sheet, s, r++, "対象機械", req.filter().hasMachine() ? req.filter().machine() : "（すべて）");
         addLabelValueRow(sheet, s, r++, "対象工程", req.filter().hasProcess() ? req.filter().process() : "（すべて）");
         addLabelValueRow(sheet, s, r++, "実績ソース", req.filter().actualSource().label());
@@ -307,6 +392,10 @@ public final class ProcessingTrendWorkbookExporter {
         r++; // 空行
 
         // セクション: 月別サマリ表
+        int monthHeadRow = -1;
+        int monthLastDataRow = -1;
+        int monthActCol = -1;
+        int monthPlanCol = -1;
         if (req.monthlyResult() != null && !req.monthlyResult().months().isEmpty()) {
             Row monthSec = sheet.createRow(r++);
             monthSec.setHeightInPoints(20);
@@ -315,6 +404,7 @@ public final class ProcessingTrendWorkbookExporter {
             monthSecCell.setCellStyle(s.sectionHeaderStyle);
             sheet.addMergedRegion(new CellRangeAddress(r - 1, r - 1, 0, hasCompare ? 10 : 7));
 
+            monthHeadRow = r;
             Row mHead = sheet.createRow(r++);
             mHead.setHeightInPoints(20);
             String[] mCols;
@@ -336,11 +426,15 @@ public final class ProcessingTrendWorkbookExporter {
                             "予定累計 (m)",
                             "見込累計 (m)"
                         };
+                monthActCol = 2;
+                monthPlanCol = 5;
             } else {
                 mCols =
                         new String[] {
                             "年月", "期間日数", "実績 (m)", "予定 (m)", "実績累計 (m)", "予定累計 (m)", "見込累計 (m)"
                         };
+                monthActCol = 2;
+                monthPlanCol = 3;
             }
             for (int i = 0; i < mCols.length; i++) {
                 Cell c = mHead.createCell(i);
@@ -400,8 +494,25 @@ public final class ProcessingTrendWorkbookExporter {
                 cMCumProj.setCellValue(mp.projectedCumM());
                 cMCumProj.setCellStyle(s.numberCellStyle);
             }
+            monthLastDataRow = r - 1;
 
             r++; // 空行
+
+            if (monthHeadRow >= 0 && monthLastDataRow > monthHeadRow) {
+                ProcessingTrendWorkbookCharts.addLineChart(
+                        (XSSFSheet) sheet,
+                        "月別トレンド（実績・予定）",
+                        0,
+                        r,
+                        10,
+                        r + 14,
+                        0,
+                        new int[] {monthActCol, monthPlanCol},
+                        new String[] {"実績 (m)", "予定 (m)"},
+                        monthHeadRow + 1,
+                        monthLastDataRow);
+                r += 16;
+            }
         }
 
         // 注意事項・備考
@@ -669,6 +780,346 @@ public final class ProcessingTrendWorkbookExporter {
                 sheet.setColumnWidth(i, 15 * 256);
             }
         }
+
+        int dailyFirst = 1;
+        int dailyLast = r - 1; // 合計行の直前
+        if (dailyLast >= dailyFirst) {
+            int actCol = 2;
+            int planCol = hasCompare ? 6 : 4;
+            ProcessingTrendWorkbookCharts.addLineChart(
+                    (XSSFSheet) sheet,
+                    "日次トレンド（実績・予定）",
+                    headers.length + 1,
+                    0,
+                    headers.length + 12,
+                    18,
+                    0,
+                    new int[] {actCol, planCol},
+                    new String[] {"実績 (m)", "予定 (m)"},
+                    dailyFirst,
+                    dailyLast);
+        }
+    }
+
+    private static void buildMachineSummarySheet(XSSFWorkbook wb, Styles s, ProcessingTrendExportRequest req) {
+        Sheet sheet = wb.createSheet(SHEET_BY_MACHINE);
+        configurePrint(sheet);
+        int r = 0;
+        Row title = sheet.createRow(r++);
+        Cell tc = title.createCell(0);
+        tc.setCellValue("機械別サマリ（期間合計）");
+        tc.setCellStyle(s.titleStyle);
+
+        Row hint = sheet.createRow(r++);
+        Cell hc = hint.createCell(0);
+        hc.setCellValue("画面の機械絞込は反映していません。期間内に実績または予定がある機械のみ掲載。");
+        hc.setCellStyle(s.mutedStyle);
+
+        boolean hasCompare =
+                req.result().compareSourceLabel() != null
+                        && !req.result().compareSourceLabel().isEmpty();
+        Row head = sheet.createRow(r++);
+        String[] headers =
+                hasCompare
+                        ? new String[] {"機械", "実績 (m)", "比較実績 (m)", "差異 (m)", "予定 (m)", "見込 (m)"}
+                        : new String[] {"機械", "実績 (m)", "予定 (m)", "見込 (m)"};
+        for (int i = 0; i < headers.length; i++) {
+            Cell c = head.createCell(i);
+            c.setCellValue(headers[i]);
+            c.setCellStyle(s.tableHeaderStyle);
+        }
+        int firstData = r;
+        for (MachineBundle mb : req.machineBundles()) {
+            Row row = sheet.createRow(r++);
+            int c = 0;
+            Cell cName = row.createCell(c++);
+            cName.setCellValue(mb.machineName());
+            cName.setCellStyle(s.textCellStyle);
+            Cell cAct = row.createCell(c++);
+            cAct.setCellValue(mb.result().actualTotalM());
+            cAct.setCellStyle(s.numberCellStyle);
+            if (hasCompare) {
+                Cell cCmp = row.createCell(c++);
+                cCmp.setCellValue(mb.result().compareActualTotalM());
+                cCmp.setCellStyle(s.numberCellStyle);
+                double d = mb.result().actualCompareDiffTotalM();
+                Cell cDiff = row.createCell(c++);
+                cDiff.setCellValue(d);
+                cDiff.setCellStyle(d >= 0 ? s.diffPositiveStyle : s.diffNegativeStyle);
+            }
+            Cell cPlan = row.createCell(c++);
+            cPlan.setCellValue(mb.result().planTotalM());
+            cPlan.setCellStyle(s.numberCellStyle);
+            Cell cProj = row.createCell(c++);
+            cProj.setCellValue(mb.result().projectedTotalM());
+            cProj.setCellStyle(s.numberCellStyle);
+        }
+        int lastData = r - 1;
+        for (int i = 0; i < headers.length; i++) {
+            sheet.setColumnWidth(i, 16 * 256);
+        }
+        if (lastData >= firstData) {
+            ProcessingTrendWorkbookCharts.addLineChart(
+                    (XSSFSheet) sheet,
+                    "機械別実績",
+                    headers.length + 1,
+                    0,
+                    headers.length + 10,
+                    16,
+                    0,
+                    new int[] {1},
+                    new String[] {"実績 (m)"},
+                    firstData,
+                    lastData);
+        }
+    }
+
+    private static void buildMachineProcessSummarySheet(
+            XSSFWorkbook wb, Styles s, ProcessingTrendExportRequest req) {
+        Sheet sheet = wb.createSheet(SHEET_BY_MACHINE_PROCESS);
+        configurePrint(sheet);
+        int r = 0;
+        Row title = sheet.createRow(r++);
+        Cell tc = title.createCell(0);
+        tc.setCellValue("機械×工程別サマリ（期間合計）");
+        tc.setCellStyle(s.titleStyle);
+
+        Row hint = sheet.createRow(r++);
+        Cell hc = hint.createCell(0);
+        hc.setCellValue("画面の機械/工程絞込は反映していません。実績または予定が 0 より大きい組合せのみ掲載。");
+        hc.setCellStyle(s.mutedStyle);
+
+        boolean hasCompare =
+                req.result().compareSourceLabel() != null
+                        && !req.result().compareSourceLabel().isEmpty();
+        Row head = sheet.createRow(r++);
+        String[] headers =
+                hasCompare
+                        ? new String[] {"機械", "工程", "実績 (m)", "比較実績 (m)", "差異 (m)", "予定 (m)"}
+                        : new String[] {"機械", "工程", "実績 (m)", "予定 (m)"};
+        for (int i = 0; i < headers.length; i++) {
+            Cell c = head.createCell(i);
+            c.setCellValue(headers[i]);
+            c.setCellStyle(s.tableHeaderStyle);
+        }
+        for (MachineProcessRow rowData : req.machineProcessRows()) {
+            Row row = sheet.createRow(r++);
+            int c = 0;
+            Cell cM = row.createCell(c++);
+            cM.setCellValue(rowData.machineName());
+            cM.setCellStyle(s.textCellStyle);
+            Cell cP = row.createCell(c++);
+            cP.setCellValue(rowData.processName());
+            cP.setCellStyle(s.textCellStyle);
+            Cell cAct = row.createCell(c++);
+            cAct.setCellValue(rowData.actualM());
+            cAct.setCellStyle(s.numberCellStyle);
+            if (hasCompare) {
+                Cell cCmp = row.createCell(c++);
+                cCmp.setCellValue(rowData.compareActualM());
+                cCmp.setCellStyle(s.numberCellStyle);
+                double d = rowData.actualM() - rowData.compareActualM();
+                Cell cDiff = row.createCell(c++);
+                cDiff.setCellValue(d);
+                cDiff.setCellStyle(d >= 0 ? s.diffPositiveStyle : s.diffNegativeStyle);
+            }
+            Cell cPlan = row.createCell(c++);
+            cPlan.setCellValue(rowData.planM());
+            cPlan.setCellStyle(s.numberCellStyle);
+        }
+        for (int i = 0; i < headers.length; i++) {
+            sheet.setColumnWidth(i, 16 * 256);
+        }
+    }
+
+    private static void buildMachineDetailSheets(XSSFWorkbook wb, Styles s, ProcessingTrendExportRequest req) {
+        Set<String> usedNames = new LinkedHashSet<>();
+        usedNames.add(SHEET_SUMMARY);
+        usedNames.add(SHEET_DAILY);
+        usedNames.add(SHEET_BY_MACHINE);
+        usedNames.add(SHEET_BY_MACHINE_PROCESS);
+
+        int created = 0;
+        for (MachineBundle mb : req.machineBundles()) {
+            if (created >= MAX_MACHINE_DETAIL_SHEETS) {
+                break;
+            }
+            if (mb.result().isEmpty()
+                    && mb.result().actualTotalM() <= 0
+                    && mb.result().planTotalM() <= 0) {
+                continue;
+            }
+            String base = WorkbookUtil.createSafeSheetName(mb.machineName());
+            String name = base;
+            int n = 2;
+            while (usedNames.contains(name)) {
+                name = WorkbookUtil.createSafeSheetName(base + " (" + n + ")");
+                n++;
+            }
+            usedNames.add(name);
+
+            ProcessingTrendExportRequest one =
+                    new ProcessingTrendExportRequest(
+                            mb.result(),
+                            mb.monthlyResult(),
+                            new ProcessingTrendAggregator.Filter(
+                                    req.filter().from(),
+                                    req.filter().to(),
+                                    req.filter().actualSource(),
+                                    req.filter().planSource(),
+                                    mb.machineName(),
+                                    null,
+                                    req.filter().movingAverageDays()),
+                            req.exportedAt(),
+                            req.actualSourceLabel(),
+                            req.planSourceLabel(),
+                            req.aladdinSourceLabel(),
+                            req.dispatchSourceLabel(),
+                            req.loadStatsSummary(),
+                            req.notices(),
+                            req.dailyReportSourceLabel(),
+                            List.of(),
+                            List.of());
+            // 日別シート相当を機械名で作成（チャート付き）
+            buildNamedDailySheet(wb, s, one, name);
+            created++;
+        }
+    }
+
+    /** 指定名で日別明細＋トレンドチャートを作成する。 */
+    private static void buildNamedDailySheet(
+            XSSFWorkbook wb, Styles s, ProcessingTrendExportRequest req, String sheetName) {
+        // buildDailySheet は固定名のため、一時的に同等処理をシート名指定で行う
+        Sheet sheet = wb.createSheet(sheetName);
+        sheet.setDisplayGridlines(true);
+        sheet.createFreezePane(0, 1);
+        configurePrint(sheet);
+
+        boolean hasCompare =
+                req.result().compareSourceLabel() != null
+                        && !req.result().compareSourceLabel().isEmpty();
+        boolean isDailyReport =
+                req.filter().actualSource() == ProcessingTrendAggregator.ActualSource.DAILY_REPORT;
+        String maCol = req.filter().movingAverageDays() + "日移動平均 (m)";
+
+        Row head = sheet.createRow(0);
+        head.setHeightInPoints(22);
+        String[] headers;
+        if (hasCompare) {
+            String actCol = isDailyReport ? "日報実績 (m)" : "明細実績 (m)";
+            String compCol = isDailyReport ? "実績明細 (m)" : "日報実績 (m)";
+            String actCumCol = isDailyReport ? "日報累計 (m)" : "明細累計 (m)";
+            String compCumCol = isDailyReport ? "明細累計 (m)" : "日報累計 (m)";
+            headers =
+                    new String[] {
+                        "日付",
+                        "曜日",
+                        actCol,
+                        maCol,
+                        compCol,
+                        "差異 (m)",
+                        "予定 (m)",
+                        actCumCol,
+                        compCumCol,
+                        "予定累計 (m)",
+                        "見込累計 (m)",
+                        "備考"
+                    };
+        } else {
+            headers =
+                    new String[] {
+                        "日付", "曜日", "実績 (m)", maCol, "予定 (m)",
+                        "実績累計 (m)", "予定累計 (m)", "見込累計 (m)", "備考"
+                    };
+        }
+        for (int i = 0; i < headers.length; i++) {
+            Cell c = head.createCell(i);
+            c.setCellValue(headers[i]);
+            c.setCellStyle(s.tableHeaderStyle);
+        }
+
+        int r = 1;
+        LocalDate today = req.result().today();
+        for (ProcessingTrendAggregator.DayPoint dp : req.result().days()) {
+            Row row = sheet.createRow(r++);
+            row.setHeightInPoints(18);
+            LocalDate date = dp.date();
+            DayOfWeek dow = date.getDayOfWeek();
+            boolean isToday = date.equals(today);
+            boolean isSat = dow == DayOfWeek.SATURDAY;
+            boolean isSun = dow == DayOfWeek.SUNDAY;
+            CellStyle dateStyle =
+                    isToday
+                            ? s.todayDateCellStyle
+                            : (isSun ? s.sunDateCellStyle : (isSat ? s.satDateCellStyle : s.dateCellStyle));
+            CellStyle textStyle =
+                    isToday
+                            ? s.todayTextCellStyle
+                            : (isSun ? s.sunTextCellStyle : (isSat ? s.satTextCellStyle : s.textCellStyle));
+            CellStyle numStyle = isToday ? s.todayNumberCellStyle : s.numberCellStyle;
+            int col = 0;
+            Cell cDate = row.createCell(col++);
+            cDate.setCellValue(date.format(DATE_FMT));
+            cDate.setCellStyle(dateStyle);
+            Cell cDow = row.createCell(col++);
+            cDow.setCellValue(WEEKDAY_JA[dow.getValue() - 1]);
+            cDow.setCellStyle(textStyle);
+            Cell cAct = row.createCell(col++);
+            cAct.setCellValue(dp.actualM());
+            cAct.setCellStyle(numStyle);
+            Cell cMa = row.createCell(col++);
+            cMa.setCellValue(dp.actualMaM());
+            cMa.setCellStyle(numStyle);
+            if (hasCompare) {
+                Cell cCompAct = row.createCell(col++);
+                cCompAct.setCellValue(dp.compareActualM());
+                cCompAct.setCellStyle(numStyle);
+                Cell cDiffComp = row.createCell(col++);
+                double actCompDiff = dp.actualCompareDiffM();
+                cDiffComp.setCellValue(actCompDiff);
+                cDiffComp.setCellStyle(actCompDiff >= 0 ? s.diffPositiveStyle : s.diffNegativeStyle);
+            }
+            Cell cPlan = row.createCell(col++);
+            cPlan.setCellValue(dp.planM());
+            cPlan.setCellStyle(numStyle);
+            Cell cCumAct = row.createCell(col++);
+            cCumAct.setCellValue(dp.actualCumM());
+            cCumAct.setCellStyle(numStyle);
+            if (hasCompare) {
+                Cell cCumCompAct = row.createCell(col++);
+                cCumCompAct.setCellValue(dp.compareActualCumM());
+                cCumCompAct.setCellStyle(numStyle);
+            }
+            Cell cCumPlan = row.createCell(col++);
+            cCumPlan.setCellValue(dp.planCumM());
+            cCumPlan.setCellStyle(numStyle);
+            Cell cCumProj = row.createCell(col++);
+            cCumProj.setCellValue(dp.projectedCumM());
+            cCumProj.setCellStyle(numStyle);
+            Cell cRemark = row.createCell(col++);
+            cRemark.setCellValue("");
+            cRemark.setCellStyle(textStyle);
+        }
+        int dailyLast = r - 1;
+        for (int i = 0; i < headers.length; i++) {
+            sheet.setColumnWidth(i, i == 1 ? 8 * 256 : 14 * 256);
+        }
+        if (dailyLast >= 1) {
+            int actCol = 2;
+            int planCol = hasCompare ? 6 : 4;
+            ProcessingTrendWorkbookCharts.addLineChart(
+                    (XSSFSheet) sheet,
+                    sheetName + " 日次トレンド",
+                    headers.length + 1,
+                    0,
+                    headers.length + 12,
+                    18,
+                    0,
+                    new int[] {actCol, planCol},
+                    new String[] {"実績 (m)", "予定 (m)"},
+                    1,
+                    dailyLast);
+        }
     }
 
     private static void configurePrint(Sheet sheet) {
@@ -719,7 +1170,7 @@ public final class ProcessingTrendWorkbookExporter {
 
         Styles(XSSFWorkbook wb) {
             DataFormat df = wb.createDataFormat();
-            short numFmt = df.getFormat("#,##0.0 \"m\"");
+            short numFmt = df.getFormat("#,##0\" m\"");
 
             XSSFFont baseFont = wb.createFont();
             baseFont.setFontName(FONT_FAMILY);
