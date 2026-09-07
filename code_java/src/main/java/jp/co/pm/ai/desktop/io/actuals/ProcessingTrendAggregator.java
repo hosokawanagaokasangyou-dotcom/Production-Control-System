@@ -568,10 +568,18 @@ public final class ProcessingTrendAggregator {
     private static final String COL_COMPLETION_FLAG = "加工完了区分";
     private static final String TOTAL_ROW_PREFIX = "[合計]";
     private static final Pattern DATE_HEADER = Pattern.compile("\\d{4}/\\d{2}/\\d{2}");
+    /** 機械名セルに行の他列が結合された不正値を弾く（yyyy/M/d または yyyy-M-d）。 */
+    private static final Pattern EMBEDDED_CALENDAR_DATE =
+            Pattern.compile("\\d{4}[/\\-]\\d{1,2}[/\\-]\\d{1,2}");
     private static final Pattern ZERO_WIDTH = Pattern.compile("[\u200b\u200c\u200d\ufeff]");
     private static final Pattern DASH_LIKE = Pattern.compile("[\u2010-\u2015\u2212\u30fc\uff0d]");
     private static final Pattern WHITESPACE = Pattern.compile("\\s+");
     private static final Collator JA = Collator.getInstance(Locale.JAPAN);
+    /**
+     * 機械コンボに載せるラベルの上限。実機名（例: {@code スライス機1 湖南}）より十分長く、
+     * 加工内容・得意先・完了日がカンマ結合された不正値は超える。
+     */
+    static final int MAX_PLAUSIBLE_MACHINE_LABEL_LEN = 48;
 
     static final String WARN_ACTUAL_QTY_COLUMN_MISSING =
             "実績ソースに「" + COL_ACTUAL_QTY_DETAIL + "」列が無いため、実績は集計していません（累積値からの推定は行いません）。";
@@ -1345,13 +1353,44 @@ public final class ProcessingTrendAggregator {
         if (idx < 0 || rows == null) {
             return;
         }
+        boolean machineCol = COL_MACHINE.equals(col);
         for (List<String> row : rows) {
             String raw = cellAt(row, idx);
+            if (machineCol && !isPlausibleMachineLabel(raw)) {
+                continue;
+            }
             String key = normKey(raw);
             if (!key.isEmpty()) {
                 out.putIfAbsent(key, raw.strip());
             }
         }
+    }
+
+    /**
+     * 機械コンボ用: ソースの「機械名」列に、加工内容・得意先・完了区分などが結合された不正値が
+     * 混入することがあるため、明らかに機械名でないものは除外する。
+     */
+    static boolean isPlausibleMachineLabel(String raw) {
+        if (raw == null) {
+            return false;
+        }
+        String s = raw.strip();
+        if (s.isEmpty() || s.length() > MAX_PLAUSIBLE_MACHINE_LABEL_LEN) {
+            return false;
+        }
+        if (s.indexOf(',') >= 0) {
+            return false;
+        }
+        if (s.contains("株式会社") || s.contains("（株）") || s.contains("(株)")) {
+            return false;
+        }
+        if (s.contains("1:完了") || s.contains("0:未完") || s.contains(":完了") || s.contains(":未完")) {
+            return false;
+        }
+        if (EMBEDDED_CALENDAR_DATE.matcher(s).find()) {
+            return false;
+        }
+        return true;
     }
 
     private static boolean matches(String wantedKey, String cell) {

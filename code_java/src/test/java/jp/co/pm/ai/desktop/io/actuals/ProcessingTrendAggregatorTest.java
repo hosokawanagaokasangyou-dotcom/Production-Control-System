@@ -374,6 +374,35 @@ class ProcessingTrendAggregatorTest {
     }
 
     @Test
+    void machineNames_skipsJoinedNonMachineLabels() {
+        String junk =
+                "(原反4mm→1mm3mmスライス),東レ株式会社,自動車材料事業部,2026/06/08,2026/06/08,1:完了";
+        String junk2 =
+                "【他ユーザー向け製品は要確認】,東レ株式会社,自動車材料事業部,2026/03/31,1:完了,宮島 剛";
+        AladdinSnapshot al =
+                new AladdinSnapshot(
+                        List.of("機械名", "依頼NO", "工程名", "2026/09/01"),
+                        List.of(
+                                List.of("エンボス 湖南", "A-1", "エンボス", "100"),
+                                List.of(junk, "B-1", "スライス", "50"),
+                                List.of(junk2, "C-1", "スリット", "10")));
+        List<String> machines = ProcessingTrendAggregator.machineNames(null, null, al, null);
+        Assertions.assertEquals(List.of("エンボス 湖南"), machines);
+    }
+
+    @Test
+    void isPlausibleMachineLabel_acceptsFactoryMachineNames() {
+        Assertions.assertTrue(ProcessingTrendAggregator.isPlausibleMachineLabel("EC機 湖南"));
+        Assertions.assertTrue(ProcessingTrendAggregator.isPlausibleMachineLabel("スライス機1 湘南"));
+        Assertions.assertTrue(ProcessingTrendAggregator.isPlausibleMachineLabel("SEC機\u3000湖南"));
+        Assertions.assertFalse(
+                ProcessingTrendAggregator.isPlausibleMachineLabel(
+                        "(原反4mm→1mm3mmスライス),東レ株式会社,自動車材料事業部,2026/06/08"));
+        Assertions.assertFalse(ProcessingTrendAggregator.isPlausibleMachineLabel("東レ株式会社"));
+        Assertions.assertFalse(ProcessingTrendAggregator.isPlausibleMachineLabel("2026/06/08"));
+    }
+
+    @Test
     void parseDate_variants() {
         Assertions.assertEquals(LocalDate.of(2026, 9, 3), ProcessingTrendAggregator.parseDate("2026/09/03"));
         Assertions.assertEquals(LocalDate.of(2026, 9, 3), ProcessingTrendAggregator.parseDate("2026-9-3"));
