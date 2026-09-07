@@ -118,11 +118,7 @@ public class ProcessingTrendTabController {
     static final int AUTO_REFRESH_DEFAULT_SEC = 300;
     static final int AUTO_REFRESH_MIN_SEC = 30;
     static final int AUTO_REFRESH_MAX_SEC = 3600;
-    /** 進捗率の色分け閾値（%）。 */
-    static final double PROGRESS_GOOD_PCT = 100.0;
-    static final double PROGRESS_WARN_PCT = 90.0;
     private static final PseudoClass PC_GOOD = PseudoClass.getPseudoClass("good");
-    private static final PseudoClass PC_WARN = PseudoClass.getPseudoClass("warn");
     private static final PseudoClass PC_BAD = PseudoClass.getPseudoClass("bad");
     private static final PseudoClass PC_WEEKEND = PseudoClass.getPseudoClass("weekend");
     private static final PseudoClass PC_TODAY = PseudoClass.getPseudoClass("today");
@@ -210,10 +206,6 @@ public class ProcessingTrendTabController {
     @FXML private Button noticeReloadButton;
     @FXML private Label kpiActualValue;
     @FXML private Label kpiActualSub;
-    @FXML private Label kpiPlanValue;
-    @FXML private Label kpiPlanSub;
-    @FXML private Label kpiProgressValue;
-    @FXML private Label kpiProgressSub;
     @FXML private Label kpiRemainingValue;
     @FXML private Label kpiRemainingSub;
     @FXML private VBox kpiProjectedCard;
@@ -346,13 +338,6 @@ public class ProcessingTrendTabController {
         Tooltip.install(
                 kpiRemainingSub,
                 new Tooltip("要 X m/日 = 予定合計に到達するために当日以降 1 日あたり必要な加工量\n= （予定合計 − 前日まで実績）÷ 残日数"));
-        Tooltip.install(
-                kpiProgressValue,
-                new Tooltip(
-                        "前日までの実績 ÷ 前日までの予定（参考値）。\n"
-                                + "アラジン加工計画は完了した依頼が抽出から消えるため、前日までの予定は実際より少なく出ることがあります。\n"
-                                + "前日までの予定が期間予定合計の 10% 未満のときは「—」にします。配台結果では算出しません。\n"
-                                + String.format(Locale.ROOT, "%.0f%% 以上=緑、%.0f%% 以上=橙、未満=赤", PROGRESS_GOOD_PCT, PROGRESS_WARN_PCT)));
         renderEmpty(
                 "データ未読込",
                 "起動後にバックグラウンドで読み込みます（初期チェックの進捗には含めません）。"
@@ -1523,7 +1508,7 @@ public class ProcessingTrendTabController {
                 || (noticeKind == NoticeKind.LOAD_ERROR && lastLoadErrorDetail.isBlank())) {
             hideNotice();
         }
-        renderKpis(r, filter);
+        renderKpis(r);
 
         boolean monthly = currentGranularity() == Granularity.MONTHLY;
         updateDetailTableHeaders(filter.actualSource(), currentGranularity());
@@ -1587,14 +1572,12 @@ public class ProcessingTrendTabController {
         actualCumSeries.getData().clear();
         projectedCumSeries.getData().clear();
         detailTable.getItems().clear();
-        for (Label l :
-                List.of(kpiActualValue, kpiPlanValue, kpiProgressValue, kpiRemainingValue, kpiProjectedValue)) {
+        for (Label l : List.of(kpiActualValue, kpiRemainingValue, kpiProjectedValue)) {
             l.setText("—");
         }
-        for (Label l : List.of(kpiActualSub, kpiPlanSub, kpiProgressSub, kpiRemainingSub, kpiProjectedSub)) {
+        for (Label l : List.of(kpiActualSub, kpiRemainingSub, kpiProjectedSub)) {
             l.setText("");
         }
-        setProgressTone(kpiProgressValue, Double.NaN);
         setDiffTone(kpiProjectedSub, 0);
         emptyStateTitle.setText(title);
         emptyStateDetail.setText(detail);
@@ -1610,7 +1593,7 @@ public class ProcessingTrendTabController {
         todayMarkerLabel.setVisible(false);
     }
 
-    private void renderKpis(Result r, Filter filter) {
+    private void renderKpis(Result r) {
         LocalDate today = r.today();
         DayPoint todayPoint = null;
         int remainingDays = 0;
@@ -1622,8 +1605,6 @@ public class ProcessingTrendTabController {
                 remainingDays++;
             }
         }
-        boolean dispatchSource = filter.planSource() == PlanSource.DISPATCH;
-
         kpiActualValue.setText(formatM(r.actualTotalM()) + " m");
         String todaySub =
                 todayPoint != null
@@ -1642,28 +1623,6 @@ public class ProcessingTrendTabController {
             kpiActualSub.setText(compareSub);
         } else {
             kpiActualSub.setText(todaySub);
-        }
-
-        kpiPlanValue.setText(formatM(r.planTotalM()) + " m");
-        if (dispatchSource) {
-            // 配台結果は残量の先行き配台のみで、前日までの予定は構造的に持たない
-            kpiPlanSub.setText("配台結果は当日以降の残量配台のみ");
-        } else {
-            kpiPlanSub.setText(todayPoint != null ? "前日まで " + formatM(r.planToDateM()) + " m" : "");
-        }
-
-        double pct = r.progressPct();
-        boolean showPct = !Double.isNaN(pct) && !dispatchSource && r.progressDenominatorSufficient();
-        kpiProgressValue.setText(showPct ? String.format(Locale.ROOT, "%.1f%%", pct) : "—");
-        setProgressTone(kpiProgressValue, showPct ? pct : Double.NaN);
-        if (dispatchSource) {
-            kpiProgressSub.setText("配台結果では算出できません");
-        } else if (Double.isNaN(pct)) {
-            kpiProgressSub.setText("前日までの予定がありません");
-        } else if (!showPct) {
-            kpiProgressSub.setText("算出不可: 前日まで予定 " + formatM(r.planToDateM()) + " m のみ");
-        } else {
-            kpiProgressSub.setText(formatM(r.actualToDateM()) + " ÷ " + formatM(r.planToDateM()) + " m（参考値）");
         }
 
         kpiRemainingValue.setText(formatM(r.remainingPlanM()) + " m");
@@ -2263,13 +2222,6 @@ public class ProcessingTrendTabController {
         if (noticeKind == NoticeKind.INFO) {
             hideNotice();
         }
-    }
-
-    private static void setProgressTone(Label label, double pct) {
-        boolean has = !Double.isNaN(pct);
-        label.pseudoClassStateChanged(PC_GOOD, has && pct >= PROGRESS_GOOD_PCT);
-        label.pseudoClassStateChanged(PC_WARN, has && pct >= PROGRESS_WARN_PCT && pct < PROGRESS_GOOD_PCT);
-        label.pseudoClassStateChanged(PC_BAD, has && pct < PROGRESS_WARN_PCT);
     }
 
     private static void setDiffTone(Label label, double diff) {

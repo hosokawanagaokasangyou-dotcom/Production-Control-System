@@ -157,16 +157,6 @@
                     <Label fx:id="kpiActualValue" styleClass="pm-processing-trend-kpi-value" text="—"/>
                     <Label fx:id="kpiActualSub" styleClass="pm-processing-trend-kpi-sub" text=""/>
                 </VBox>
-                <VBox fx:id="kpiPlanCard" styleClass="pm-processing-trend-kpi-card">
-                    <Label styleClass="pm-processing-trend-kpi-caption" text="予定合計（期間内）"/>
-                    <Label fx:id="kpiPlanValue" styleClass="pm-processing-trend-kpi-value" text="—"/>
-                    <Label fx:id="kpiPlanSub" styleClass="pm-processing-trend-kpi-sub" text=""/>
-                </VBox>
-                <VBox fx:id="kpiProgressCard" styleClass="pm-processing-trend-kpi-card">
-                    <Label styleClass="pm-processing-trend-kpi-caption" text="進捗率（前日まで）"/>
-                    <Label fx:id="kpiProgressValue" styleClass="pm-processing-trend-kpi-value" text="—"/>
-                    <Label fx:id="kpiProgressSub" styleClass="pm-processing-trend-kpi-sub" text=""/>
-                </VBox>
                 <VBox fx:id="kpiRemainingCard" styleClass="pm-processing-trend-kpi-card">
                     <Label styleClass="pm-processing-trend-kpi-caption" text="残予定（当日以降）"/>
                     <Label fx:id="kpiRemainingValue" styleClass="pm-processing-trend-kpi-value" text="—"/>
