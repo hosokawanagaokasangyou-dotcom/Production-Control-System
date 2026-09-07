@@ -716,6 +716,22 @@ public final class ProcessingTrendAggregator {
             DispatchSnapshot dispatch,
             Filter filter,
             LocalDate today) {
+        return aggregate(dailyReport, detailActuals, aladdin, dispatch, filter, today, null, null);
+    }
+
+    /**
+     * 安定日キャッシュ付き集計。{@code cache}/{@code pathIdentity} が揃うとき、
+     * {@code today - 30} 日以前はソース再走査を省略する。
+     */
+    public static Result aggregate(
+            ActualsSnapshot dailyReport,
+            ActualsSnapshot detailActuals,
+            AladdinSnapshot aladdin,
+            DispatchSnapshot dispatch,
+            Filter filter,
+            LocalDate today,
+            ProcessingTrendStableDayCache cache,
+            String pathIdentity) {
         Objects.requireNonNull(filter, "filter");
         LocalDate t = today != null ? today : LocalDate.now();
         LocalDate from = filter.from();
@@ -742,14 +758,55 @@ public final class ProcessingTrendAggregator {
             priorActuals.put(from.minusDays(i), new double[1]);
         }
 
+        ProcessingTrendStableDayCache.SeriesKey seriesKey = null;
+        boolean skipStable = false;
+        if (cache != null && pathIdentity != null && !pathIdentity.isBlank()) {
+            seriesKey =
+                    new ProcessingTrendStableDayCache.SeriesKey(
+                            pathIdentity,
+                            filter.actualSource(),
+                            filter.planSource(),
+                            normKey(filter.machine()),
+                            normKey(filter.process()));
+            skipStable = cache.tryFillStableDays(seriesKey, from, to, t, byDay);
+            if (skipStable) {
+                cache.fillPriorActuals(seriesKey, priorActuals, t);
+            }
+        }
+
+        LocalDate stableEnd = ProcessingTrendStableDayCache.stableEndInclusive(t);
         ActualsAccumulation act =
-                accumulateActuals(primaryActuals, filter, byDay, priorActuals, warnings, 0, isDailyPrimary);
-        accumulateActuals(compareActuals, filter, byDay, warnings, 2, !isDailyPrimary);
+                accumulateActuals(
+                        primaryActuals,
+                        filter,
+                        byDay,
+                        priorActuals,
+                        warnings,
+                        0,
+                        isDailyPrimary,
+                        skipStable ? stableEnd : null);
+        accumulateActuals(
+                compareActuals,
+                filter,
+                byDay,
+                warnings,
+                2,
+                !isDailyPrimary,
+                skipStable ? stableEnd : null);
 
         int planRows =
                 filter.planSource() == PlanSource.DISPATCH
-                        ? accumulateDispatch(dispatch, filter, byDay)
-                        : accumulateAladdin(aladdin, filter, byDay, t);
+                        ? accumulateDispatch(dispatch, filter, byDay, skipStable ? stableEnd : null)
+                        : accumulateAladdin(aladdin, filter, byDay, t, skipStable ? stableEnd : null);
+        if (skipStable) {
+            LocalDate observeEnd = to.isBefore(stableEnd) ? to : stableEnd;
+            for (LocalDate d = from; !d.isAfter(observeEnd); d = d.plusDays(1)) {
+                double[] slot = byDay.get(d);
+                if (slot != null && Math.abs(slot[0]) > EPS) {
+                    act.observe(d);
+                }
+            }
+        }
 
         List<DayPoint> days = new ArrayList<>(byDay.size());
         double actCum = 0;
@@ -809,6 +866,9 @@ public final class ProcessingTrendAggregator {
                             compareActual,
                             compareActCum,
                             actualMa));
+        }
+        if (seriesKey != null && cache != null) {
+            cache.putStableDays(seriesKey, byDay, t);
         }
         return new Result(
                 days,
@@ -919,7 +979,8 @@ public final class ProcessingTrendAggregator {
             Map<LocalDate, double[]> priorActuals,
             List<String> warnings,
             int slotIndex,
-            boolean isDailyReport) {
+            boolean isDailyReport,
+            LocalDate skipOnOrBefore) {
         ActualsAccumulation acc = new ActualsAccumulation();
         if (actuals == null || actuals.headers() == null || actuals.rows() == null) {
             return acc;
@@ -952,6 +1013,9 @@ public final class ProcessingTrendAggregator {
             if (d == null) {
                 continue;
             }
+            if (skipOnOrBefore != null && !d.isAfter(skipOnOrBefore)) {
+                continue;
+            }
             acc.observe(d);
             double[] slot = byDay.get(d);
             boolean inPeriod = slot != null;
@@ -979,8 +1043,10 @@ public final class ProcessingTrendAggregator {
             TreeMap<LocalDate, double[]> byDay,
             List<String> warnings,
             int slotIndex,
-            boolean isDailyReport) {
-        return accumulateActuals(actuals, f, byDay, null, warnings, slotIndex, isDailyReport);
+            boolean isDailyReport,
+            LocalDate skipOnOrBefore) {
+        return accumulateActuals(
+                actuals, f, byDay, null, warnings, slotIndex, isDailyReport, skipOnOrBefore);
     }
 
     private static int resolveActualQtyCol(List<String> headers, boolean preferDailyReport) {
@@ -1017,7 +1083,11 @@ public final class ProcessingTrendAggregator {
     // ---- 予定: アラジン（日付列グリッド） ------------------------------------------------
 
     private static int accumulateAladdin(
-            AladdinSnapshot aladdin, Filter f, TreeMap<LocalDate, double[]> byDay, LocalDate today) {
+            AladdinSnapshot aladdin,
+            Filter f,
+            TreeMap<LocalDate, double[]> byDay,
+            LocalDate today,
+            LocalDate skipOnOrBefore) {
         if (aladdin == null || aladdin.headers() == null || aladdin.rows() == null) {
             return 0;
         }
@@ -1078,7 +1148,11 @@ public final class ProcessingTrendAggregator {
             capRemainingPlan(row, rowValues, futureDates, iConv, iDone, iUnprocessed, iCompletion);
             boolean any = false;
             for (Map.Entry<LocalDate, Double> e : rowValues.entrySet()) {
-                double[] slot = byDay.get(e.getKey());
+                LocalDate day = e.getKey();
+                if (skipOnOrBefore != null && day != null && !day.isAfter(skipOnOrBefore)) {
+                    continue;
+                }
+                double[] slot = byDay.get(day);
                 if (slot == null || Math.abs(e.getValue()) <= EPS) {
                     continue;
                 }
@@ -1158,7 +1232,10 @@ public final class ProcessingTrendAggregator {
     // ---- 予定: 配台結果（配台日 × 当日配台数量） -----------------------------------------
 
     private static int accumulateDispatch(
-            DispatchSnapshot dispatch, Filter f, TreeMap<LocalDate, double[]> byDay) {
+            DispatchSnapshot dispatch,
+            Filter f,
+            TreeMap<LocalDate, double[]> byDay,
+            LocalDate skipOnOrBefore) {
         if (dispatch == null || dispatch.headers() == null || dispatch.rows() == null) {
             return 0;
         }
@@ -1183,6 +1260,9 @@ public final class ProcessingTrendAggregator {
             }
             LocalDate d = parseDate(cellAt(row, iDate));
             if (d == null) {
+                continue;
+            }
+            if (skipOnOrBefore != null && !d.isAfter(skipOnOrBefore)) {
                 continue;
             }
             double[] slot = byDay.get(d);

@@ -19,6 +19,7 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import jp.co.pm.ai.desktop.io.NetworkSourceFileReloadCache;
+import jp.co.pm.ai.desktop.io.actuals.ProcessingTrendStableDayCache;
 
 /**
  * 段階1キャッシュクリア前の退避と、履歴からの復元。
@@ -253,6 +254,7 @@ public final class WorkspaceCacheArchiveStore {
             logs.add("[cache-archive] 復元: " + target);
         }
         NetworkSourceFileReloadCache.clearAll();
+        ProcessingTrendStableDayCache.shared().clearAll();
         logs.add("[cache-archive] メモリ上の再読込キャッシュを破棄しました。");
         return logs;
     }

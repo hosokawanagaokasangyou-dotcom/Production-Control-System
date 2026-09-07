@@ -11,6 +11,8 @@ import java.util.Map;
 import java.util.Set;
 
 import jp.co.pm.ai.desktop.io.NetworkSourceFileReloadCache;
+import jp.co.pm.ai.desktop.io.actuals.ProcessingTrendStableDayCache;
+import jp.co.pm.ai.desktop.ui.PlanInputEditedCellMarks;
 
 /**
  * 段階1実行前に削除するワークスペースキャッシュ。
@@ -19,8 +21,10 @@ import jp.co.pm.ai.desktop.io.NetworkSourceFileReloadCache;
  *   <li>AI 備考: {@value #AI_REMARKS_CACHE_FILENAME}（Excel マクロの AI 解析キャッシュ削除と同趣旨）
  *   <li>配台・納期: {@link AppPaths#RESULT_DISPATCH_TABLE_JSON_BASENAME}、{@link
  *       AppPaths#SHAPED_ALADDIN_PLAN_JSON_BASENAME}、{@link AppPaths#SHAPED_PROCESSING_ACTUALS_JSON_BASENAME}
- *   <li>タスク入力: {@link AppPaths#STAGE1_PLAN_TASKS_FILENAME}（段階1出力 xlsx）
+ *   <li>タスク入力: {@link AppPaths#STAGE1_PLAN_TASKS_FILENAME}（段階1出力 xlsx）と
+ *       隣接する編集マーク sidecar（{@code *.xlsx.editmarks.json}）
  *   <li>メモリ: {@link NetworkSourceFileReloadCache}（アラジン計画／実績明細の同一ファイル名再読込省略）
+ *   <li>メモリ: {@link ProcessingTrendStableDayCache}（加工トレンドの 30 日超安定日次バケット）
  * </ul>
  */
 public final class Stage1AiCacheClearer {
@@ -64,7 +68,7 @@ public final class Stage1AiCacheClearer {
 
     public static boolean hasExistingWorkspaceShapedCache(Map<String, String> ui) {
         for (Map.Entry<String, Path> e : roleToActivePathMap(ui).entrySet()) {
-            if (e.getKey().startsWith("ai_remarks_") || "plan_input_tasks".equals(e.getKey())) {
+            if (e.getKey().startsWith("ai_remarks_") || e.getKey().startsWith("plan_input_")) {
                 continue;
             }
             if (Files.isRegularFile(e.getValue())) {
@@ -76,7 +80,11 @@ public final class Stage1AiCacheClearer {
 
     public static boolean hasExistingPlanInputTasksFile(Map<String, String> ui) {
         Path path = AppPaths.defaultStage1PlanTasksPath(ui);
-        return Files.isRegularFile(path);
+        if (Files.isRegularFile(path)) {
+            return true;
+        }
+        Path sidecar = PlanInputEditedCellMarks.sidecarPath(path);
+        return sidecar != null && Files.isRegularFile(sidecar);
     }
 
     /** 「キャッシュを使用します」用: 存在するキャッシュ種別の短い説明（空ならディスクキャッシュ無し）。 */
@@ -119,7 +127,19 @@ public final class Stage1AiCacheClearer {
         map.put(
                 "shaped_processing_actuals",
                 AppPaths.resolveShapedProcessingActualsJsonPath(u));
-        map.put("plan_input_tasks", AppPaths.defaultStage1PlanTasksPath(u));
+        Path planTasks = AppPaths.defaultStage1PlanTasksPath(u);
+        map.put("plan_input_tasks", planTasks);
+        Path editMarks = PlanInputEditedCellMarks.sidecarPath(planTasks);
+        if (editMarks != null) {
+            map.put("plan_input_editmarks", editMarks);
+        }
+        String envPlan = u.get(AppPaths.KEY_PM_AI_PLAN_INPUT_PATH);
+        if (envPlan != null && !envPlan.isBlank()) {
+            Path envSidecar = PlanInputEditedCellMarks.sidecarPath(Path.of(envPlan.trim()));
+            if (envSidecar != null && !envSidecar.equals(editMarks)) {
+                map.put("plan_input_editmarks_env", envSidecar);
+            }
+        }
         return Map.copyOf(map);
     }
 
@@ -177,7 +197,9 @@ public final class Stage1AiCacheClearer {
             }
         }
         NetworkSourceFileReloadCache.clearAll();
+        ProcessingTrendStableDayCache.shared().clearAll();
         logs.add("[stage1-cache] メモリ上の再読込キャッシュ（アラジン計画／実績明細）を破棄しました。");
+        logs.add("[stage1-cache] 加工トレンド安定日キャッシュを破棄しました。");
         return new ClearResult(deleted, missing, failed, List.copyOf(logs));
     }
 

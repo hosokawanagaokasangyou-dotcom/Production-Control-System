@@ -181,6 +181,47 @@ public final class EquipmentStatusDashboardSourceLoader {
                 fileKey(KonanDailyReportLookup.resolveNewestCsvPath(env).orElse(null), "daily-report"));
     }
 
+    /**
+     * 安定日キャッシュ用のパス同一性（mtime / size を含めない）。
+     *
+     * <p>ファイル内容が更新されても「30 日以上前の値は不変」前提でキーを維持する。
+     */
+    public static String pathIdentity(Map<String, String> ui) {
+        Map<String, String> env = ui != null ? ui : Map.of();
+        String sheet = env.getOrDefault(AppPaths.KEY_PM_AI_ACTUAL_DETAIL_SHEET, "").strip();
+        NetworkSourceDirResolver.Result r = NetworkSourceDirResolver.resolve(env);
+        String actual =
+                pathIdentityKey(r.actualDetailPath().orElse(null), sheet.isEmpty() ? "0" : sheet);
+        String aladdin = aladdinPathIdentityKey(env);
+        String dispatch =
+                pathIdentityKey(AppPaths.resolveResultDispatchTableJsonPath(env), "");
+        String daily =
+                pathIdentityKey(
+                        KonanDailyReportLookup.resolveNewestCsvPath(env).orElse(null), "daily-report");
+        return actual + "\n" + aladdin + "\n" + dispatch + "\n" + daily;
+    }
+
+    private static String aladdinPathIdentityKey(Map<String, String> env) {
+        NetworkSourceDirResolver.Result r = NetworkSourceDirResolver.resolve(env);
+        Optional<Path> taskInput = r.taskInputPath();
+        if (taskInput.isPresent()) {
+            return pathIdentityKey(taskInput.get(), "task-input|0");
+        }
+        Path shaped = AppPaths.resolveShapedAladdinPlanJsonPath(env);
+        if (Files.isRegularFile(shaped) && shapedHasRows(shaped)) {
+            return pathIdentityKey(shaped, "shaped");
+        }
+        return pathIdentityKey(shaped, "missing");
+    }
+
+    private static String pathIdentityKey(Path path, String suffix) {
+        if (path == null) {
+            return "|missing|" + nz(suffix);
+        }
+        Path abs = path.toAbsolutePath().normalize();
+        return abs + "|" + nz(suffix);
+    }
+
     private static String aladdinFingerprintKey(Map<String, String> env) {
         NetworkSourceDirResolver.Result r = NetworkSourceDirResolver.resolve(env);
         Optional<Path> taskInput = r.taskInputPath();

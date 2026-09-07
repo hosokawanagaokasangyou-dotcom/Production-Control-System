@@ -84,6 +84,7 @@ import jp.co.pm.ai.desktop.io.actuals.EquipmentStatusDashboardSourceLoader.Loade
 import jp.co.pm.ai.desktop.io.actuals.EquipmentStatusDashboardSourceLoader.ReloadDecision;
 import jp.co.pm.ai.desktop.io.actuals.EquipmentStatusDashboardSourceLoader.SourceFingerprint;
 import jp.co.pm.ai.desktop.io.actuals.ProcessingTrendAggregator;
+import jp.co.pm.ai.desktop.io.actuals.ProcessingTrendStableDayCache;
 import jp.co.pm.ai.desktop.io.actuals.ProcessingTrendAggregator.DayPoint;
 import jp.co.pm.ai.desktop.io.actuals.ProcessingTrendAggregator.Filter;
 import jp.co.pm.ai.desktop.io.actuals.ProcessingTrendAggregator.MonthPoint;
@@ -106,7 +107,7 @@ import jp.co.pm.ai.desktop.io.actuals.ProcessingTrendWorkbookExporter.Processing
 public class ProcessingTrendTabController {
 
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyy/MM/dd");
-    private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("HH:mm:ss");
+    private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss");
     private static final DateTimeFormatter MONTH_FMT = DateTimeFormatter.ofPattern("yyyy年M月");
     private static final String ALL_ITEM = "（すべて）";
     private static final double CHART_TOP_PADDING = 6.0;
@@ -286,6 +287,9 @@ public class ProcessingTrendTabController {
     private boolean computeInFlight;
     private Task<Result> activeComputeTask;
     private LoadedSources cachedSources;
+    private String sourcePathIdentity = "";
+    private final ProcessingTrendStableDayCache stableDayCache =
+            ProcessingTrendStableDayCache.shared();
     private SourceFingerprint loadedFingerprint;
     private Result currentResult;
     private MonthlyResult currentMonthlyResult;
@@ -293,9 +297,9 @@ public class ProcessingTrendTabController {
     private List<String> currentCategoryLabels = List.of();
     private String lastLoadErrorDetail = "";
     private NoticeKind noticeKind = NoticeKind.NONE;
-    private LocalTime lastSuccessAt;
-    private LocalTime lastDataChangedAt;
-    private LocalTime lastCheckedAt;
+    private LocalDateTime lastSuccessAt;
+    private LocalDateTime lastDataChangedAt;
+    private LocalDateTime lastCheckedAt;
     private boolean suppressFilterEvents;
     private boolean markerLayoutScheduled;
     private boolean tabActive;
@@ -1294,7 +1298,7 @@ public class ProcessingTrendTabController {
                     reloadInFlight = false;
                     ReloadOutcome outcome = task.getValue();
                     ReloadDecision decision = outcome.decision();
-                    lastSuccessAt = LocalTime.now();
+                    lastSuccessAt = LocalDateTime.now();
                     lastCheckedAt = lastSuccessAt;
                     // 読込は成功したので、以前の読込エラーは指紋が変わっていなくても解消済み
                     lastLoadErrorDetail = "";
@@ -1303,6 +1307,11 @@ public class ProcessingTrendTabController {
                     }
                     boolean periodMoved = rolloverPeriodIfNeeded();
                     if (decision == null || decision.sourcesUnchanged()) {
+                        if ((sourcePathIdentity == null || sourcePathIdentity.isBlank())
+                                && cachedSources != null) {
+                            sourcePathIdentity =
+                                    EquipmentStatusDashboardSourceLoader.pathIdentity(ui);
+                        }
                         updateLastUpdatedLabel();
                         boolean dayRolled =
                                 currentResult != null && !currentResult.today().equals(LocalDate.now());
@@ -1318,6 +1327,7 @@ public class ProcessingTrendTabController {
                     lastDataChangedAt = lastSuccessAt;
                     loadedFingerprint = decision.fingerprint();
                     cachedSources = decision.sources();
+                    sourcePathIdentity = EquipmentStatusDashboardSourceLoader.pathIdentity(ui);
                     updateLastUpdatedLabel();
                     updateSourceSummary();
                     try {
@@ -1461,7 +1471,9 @@ public class ProcessingTrendTabController {
                                 src.aladdin(),
                                 src.dispatch(),
                                 filter,
-                                today);
+                                today,
+                                stableDayCache,
+                                sourcePathIdentity);
                     }
                 };
         task.setOnSucceeded(
@@ -2351,12 +2363,14 @@ public class ProcessingTrendTabController {
                     protected ProcessingTrendExportResult call() throws Exception {
                         Result overall =
                                 ProcessingTrendAggregator.aggregate(
-                                        src.dailyReportActuals(),
-                                        src.actuals(),
-                                        src.aladdin(),
-                                        src.dispatch(),
-                                        exportFilter,
-                                        today);
+                                src.dailyReportActuals(),
+                                src.actuals(),
+                                src.aladdin(),
+                                src.dispatch(),
+                                exportFilter,
+                                today,
+                                stableDayCache,
+                                sourcePathIdentity);
                         if (overall.isEmpty()) {
                             throw new IllegalStateException("期間内に出力できるデータがありません。");
                         }
@@ -2390,12 +2404,14 @@ public class ProcessingTrendTabController {
                                             exportFilter.movingAverageDays());
                             Result mr =
                                     ProcessingTrendAggregator.aggregate(
-                                            src.dailyReportActuals(),
-                                            src.actuals(),
-                                            src.aladdin(),
-                                            src.dispatch(),
-                                            mf,
-                                            today);
+                                src.dailyReportActuals(),
+                                src.actuals(),
+                                src.aladdin(),
+                                src.dispatch(),
+                                mf,
+                                today,
+                                stableDayCache,
+                                sourcePathIdentity);
                             if (mr.actualTotalM() <= 0 && mr.planTotalM() <= 0) {
                                 continue;
                             }
@@ -2417,12 +2433,14 @@ public class ProcessingTrendTabController {
                                                 exportFilter.movingAverageDays());
                                 Result pr =
                                         ProcessingTrendAggregator.aggregate(
-                                                src.dailyReportActuals(),
-                                                src.actuals(),
-                                                src.aladdin(),
-                                                src.dispatch(),
-                                                mpf,
-                                                today);
+                                src.dailyReportActuals(),
+                                src.actuals(),
+                                src.aladdin(),
+                                src.dispatch(),
+                                mpf,
+                                today,
+                                stableDayCache,
+                                sourcePathIdentity);
                                 if (pr.actualTotalM() <= 0 && pr.planTotalM() <= 0) {
                                     continue;
                                 }
