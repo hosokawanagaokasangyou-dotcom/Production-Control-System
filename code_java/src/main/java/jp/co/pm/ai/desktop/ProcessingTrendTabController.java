@@ -598,6 +598,16 @@ public class ProcessingTrendTabController {
         cumulativeChart.setHorizontalZeroLineVisible(false);
         cumulativeChart.setVerticalZeroLineVisible(false);
         cumulativeChart.setPickOnBounds(false);
+        // カテゴリ文字列の辞書順ソートで折れ線の接続順が日付順から崩れるのを防ぐ
+        cumulativeChart.setAxisSortingPolicy(LineChart.SortingPolicy.NONE);
+        if (dailyLineChart != null) {
+            dailyLineChart.setAxisSortingPolicy(LineChart.SortingPolicy.NONE);
+        }
+        // 棒・折れ線で CategoryAxis の左右マージンが違うと 1 日分ずれて見える
+        bindCategoryAxisMargins(dailyXAxis, cumulativeXAxis);
+        if (dailyLineXAxis != null) {
+            bindCategoryAxisMargins(dailyXAxis, dailyLineXAxis);
+        }
         // 目盛ラベルは自前描画（FXML: tickLabelsVisible=false）。ラベル行の高さは FXML の tickLabelGap で確保する。
         // prefHeight を固定してはいけない: CategoryAxis は setCategories 後 autoRanging=false になり、
         // カテゴリ間隔の再計算が computePrefHeight() 経由でしか走らないため、固定するとバーが左端に潰れる。
@@ -1197,6 +1207,15 @@ public class ProcessingTrendTabController {
         }
     }
 
+    /** 棒グラフ基準の CategoryAxis マージンを折れ線側へ揃える（1 カテゴリずれ防止）。 */
+    private static void bindCategoryAxisMargins(CategoryAxis master, CategoryAxis follower) {
+        if (master == null || follower == null || master == follower) {
+            return;
+        }
+        follower.startMarginProperty().bind(master.startMarginProperty());
+        follower.endMarginProperty().bind(master.endMarginProperty());
+    }
+
     // ---- 自動更新 --------------------------------------------------------------------------
 
     private int snapshotAutoRefreshIntervalSec() {
@@ -1658,12 +1677,12 @@ public class ProcessingTrendTabController {
                 singleYear && days.get(0).date().getMonth() == days.get(n - 1).date().getMonth();
         // カテゴリ文字列は CategoryAxis 内で一意でなければならない（重複は IllegalArgumentException）。
         // 年をまたぐ期間では "9/3" が 2 回現れるので年を付ける
-        DateTimeFormatter labelFmt =
-                DateTimeFormatter.ofPattern(singleMonth ? "d" : singleYear ? "M/d" : "yy/M/d");
+        // カテゴリ文字列は CategoryAxis 内で一意でなければならない（重複は IllegalArgumentException）。
+        // 年をまたぐ期間では "9/3" が 2 回現れるので年を付ける。単月はゼロ埋めで折れ線ソート崩れを防ぐ。
         List<String> labels = new ArrayList<>(n);
         List<LocalDate> dates = new ArrayList<>(n);
         for (DayPoint d : days) {
-            labels.add(d.date().format(labelFmt));
+            labels.add(ProcessingTrendChartSupport.categoryLabel(d.date(), singleMonth, singleYear));
             dates.add(d.date());
         }
         currentCategoryLabels = labels;
@@ -1698,7 +1717,6 @@ public class ProcessingTrendTabController {
         List<XYChart.Data<String, Number>> projCum = new ArrayList<>(n);
         double dailyMax = 0;
         double cumMax = 0;
-        LocalDate projectedStart = r.today().minusDays(1);
         for (int i = 0; i < n; i++) {
             DayPoint d = days.get(i);
             String cat = labels.get(i);
@@ -1706,15 +1724,15 @@ public class ProcessingTrendTabController {
             planDaily.add(new XYChart.Data<>(cat, d.planM()));
             dailyMax = Math.max(dailyMax, Math.max(d.actualM(), Math.max(d.planM(), d.actualMaM())));
             // 移動平均は実績がある当日までプロット（未来にはプロットしない）
-            if (!d.date().isAfter(r.today())) {
+            if (ProcessingTrendChartSupport.includeActualCumPoint(d.date(), r.today())) {
                 actMa.add(new XYChart.Data<>(cat, d.actualMaM()));
             }
             // 実績累計は当日までで線を止める（未来に水平線を伸ばさない）
-            if (!d.date().isAfter(r.today())) {
+            if (ProcessingTrendChartSupport.includeActualCumPoint(d.date(), r.today())) {
                 actCum.add(new XYChart.Data<>(cat, d.actualCumM()));
             }
             // 見込は実績の最終点（前日）から分岐させる。前日より前は実績累計と同一なので描かない
-            if (!d.date().isBefore(projectedStart)) {
+            if (ProcessingTrendChartSupport.includeProjectedCumPoint(d.date(), r.today())) {
                 projCum.add(new XYChart.Data<>(cat, d.projectedCumM()));
             }
             cumMax = Math.max(cumMax, Math.max(d.actualCumM(), d.projectedCumM()));
@@ -1987,6 +2005,14 @@ public class ProcessingTrendTabController {
         }
     }
 
+    /** 内部カテゴリキー（ゼロ埋め日）を表示用に戻す。 */
+    static String formatCategoryAxisLabel(String categoryKey) {
+        if (categoryKey != null && categoryKey.matches("0[1-9]")) {
+            return categoryKey.substring(1);
+        }
+        return categoryKey != null ? categoryKey : "";
+    }
+
     private void layoutXAxisLabels(CategoryAxis xAxis) {
         int used = 0;
         double axisMinX = markerPane.sceneToLocal(xAxis.localToScene(0, 0)).getX();
@@ -2002,7 +2028,7 @@ public class ProcessingTrendTabController {
             Point2D p = markerPane.sceneToLocal(xAxis.localToScene(ax, X_LABEL_TOP_OFFSET));
             Label l = used < xAxisLabelPool.size() ? xAxisLabelPool.get(used) : newXAxisLabel();
             used++;
-            l.setText(currentCategoryLabels.get(i));
+            l.setText(formatCategoryAxisLabel(currentCategoryLabels.get(i)));
             LocalDate d = currentDates.get(i);
             l.pseudoClassStateChanged(PC_SAT, d.getDayOfWeek() == DayOfWeek.SATURDAY);
             l.pseudoClassStateChanged(PC_SUN, d.getDayOfWeek() == DayOfWeek.SUNDAY);

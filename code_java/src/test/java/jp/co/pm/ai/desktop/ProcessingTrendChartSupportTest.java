@@ -125,6 +125,31 @@ class ProcessingTrendChartSupportTest {
         assertEquals(0, ProcessingTrendChartSupport.barGapFor(90));
     }
 
+    @Test
+    void categoryLabel_zeroPadsSingleMonthDaysForLexicographicOrder() {
+        assertEquals("01", ProcessingTrendChartSupport.categoryLabel(LocalDate.of(2026, 9, 1), true, true));
+        assertEquals("07", ProcessingTrendChartSupport.categoryLabel(LocalDate.of(2026, 9, 7), true, true));
+        assertEquals("10", ProcessingTrendChartSupport.categoryLabel(LocalDate.of(2026, 9, 10), true, true));
+        // ゼロ埋めなら "07" < "10"（文字列比較でも日付順）
+        assertTrue(
+                ProcessingTrendChartSupport.categoryLabel(LocalDate.of(2026, 9, 7), true, true)
+                        .compareTo(
+                                ProcessingTrendChartSupport.categoryLabel(LocalDate.of(2026, 9, 10), true, true))
+                        < 0);
+    }
+
+    @Test
+    void cumPointInclusion_actualThroughToday_projectedFromYesterday() {
+        LocalDate today = LocalDate.of(2026, 9, 8);
+        assertTrue(ProcessingTrendChartSupport.includeActualCumPoint(LocalDate.of(2026, 9, 7), today));
+        assertTrue(ProcessingTrendChartSupport.includeActualCumPoint(today, today));
+        assertFalse(ProcessingTrendChartSupport.includeActualCumPoint(LocalDate.of(2026, 9, 9), today));
+
+        assertFalse(ProcessingTrendChartSupport.includeProjectedCumPoint(LocalDate.of(2026, 9, 6), today));
+        assertTrue(ProcessingTrendChartSupport.includeProjectedCumPoint(LocalDate.of(2026, 9, 7), today));
+        assertTrue(ProcessingTrendChartSupport.includeProjectedCumPoint(today, today));
+    }
+
     private static List<LocalDate> days(LocalDate start, int n) {
         List<LocalDate> out = new ArrayList<>(n);
         for (int i = 0; i < n; i++) {

@@ -139,4 +139,40 @@ public final class ProcessingTrendChartSupport {
     public static double barGapFor(int days) {
         return days <= 62 ? 1 : 0;
     }
+
+    /**
+     * CategoryAxis 用ラベル。単月はゼロ埋め日（{@code 01}..{@code 31}）にし、
+     * LineChart の X 軸ソートが文字列比較でも日付順を崩さないようにする。
+     */
+    public static String categoryLabel(LocalDate date, boolean singleMonth, boolean singleYear) {
+        if (date == null) {
+            return "";
+        }
+        if (singleMonth) {
+            return String.format(java.util.Locale.ROOT, "%02d", date.getDayOfMonth());
+        }
+        if (singleYear) {
+            return date.format(java.time.format.DateTimeFormatter.ofPattern("M/dd"));
+        }
+        return date.format(java.time.format.DateTimeFormatter.ofPattern("yy/M/dd"));
+    }
+
+    /** 実績累計折れ線に含める日（当日まで。未来へは伸ばさない）。 */
+    public static boolean includeActualCumPoint(LocalDate date, LocalDate today) {
+        if (date == null || today == null) {
+            return false;
+        }
+        return !date.isAfter(today);
+    }
+
+    /**
+     * 見込累計折れ線に含める日（前日＝実績との分岐点から先）。
+     * 前日より前は実績累計と同一なので描かない。
+     */
+    public static boolean includeProjectedCumPoint(LocalDate date, LocalDate today) {
+        if (date == null || today == null) {
+            return false;
+        }
+        return !date.isBefore(today.minusDays(1));
+    }
 }
