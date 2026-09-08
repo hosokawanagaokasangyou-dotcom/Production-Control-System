@@ -234,7 +234,6 @@ public class ProcessingTrendTabController {
     @FXML private Label kpiRemainingSub;
     @FXML private VBox kpiProjectedCard;
     @FXML private Label kpiProjectedValue;
-    @FXML private Label kpiProjectedSub;
     @FXML private Label chartTitleLabel;
     @FXML private HBox legendBox;
     @FXML private Label unitHintLabel;
@@ -364,8 +363,7 @@ public class ProcessingTrendTabController {
                 kpiProjectedCard,
                 new Tooltip(
                         "見込合計 = 前日までの実績 + 当日以降の予定（当日のみ実績と予定の大きい方）。\n"
-                                + "アラジン予定は当日以降を行ごとに「未加工」で上限し、完了行は 0 とします。\n"
-                                + "下段は予定合計との差（▲ 上回る／▼ 下回る）"));
+                                + "アラジン予定は当日以降を行ごとに「未加工」で上限し、完了行は 0 とします。"));
         Tooltip.install(
                 kpiRemainingSub,
                 new Tooltip("要 X m/日 = 予定合計に到達するために当日以降 1 日あたり必要な加工量\n= （予定合計 − 前日まで実績）÷ 残日数"));
@@ -1662,10 +1660,9 @@ public class ProcessingTrendTabController {
         for (Label l : List.of(kpiActualValue, kpiRemainingValue, kpiProjectedValue)) {
             l.setText("—");
         }
-        for (Label l : List.of(kpiActualSub, kpiRemainingSub, kpiProjectedSub)) {
+        for (Label l : List.of(kpiActualSub, kpiRemainingSub)) {
             l.setText("");
         }
-        setDiffTone(kpiProjectedSub, 0);
         emptyStateTitle.setText(title);
         emptyStateDetail.setText(detail);
         emptyStatePane.setVisible(true);
@@ -1725,14 +1722,6 @@ public class ProcessingTrendTabController {
         }
 
         kpiProjectedValue.setText(formatM(r.projectedTotalM()) + " m");
-        double diff = r.projectedDiffM();
-        String arrow = diff > 0.5 ? "▲ " : diff < -0.5 ? "▼ " : "";
-        String ratio =
-                r.planTotalM() > 0.5
-                        ? String.format(Locale.ROOT, "（対予定 %+.1f%%）", diff / r.planTotalM() * 100.0)
-                        : "";
-        kpiProjectedSub.setText(arrow + formatSigned(diff) + " m" + ratio);
-        setDiffTone(kpiProjectedSub, diff);
     }
 
     private void renderChart(Result r) {
@@ -2385,11 +2374,6 @@ public class ProcessingTrendTabController {
         if (noticeKind == NoticeKind.INFO) {
             hideNotice();
         }
-    }
-
-    private static void setDiffTone(Label label, double diff) {
-        label.pseudoClassStateChanged(PC_GOOD, diff > 0.5);
-        label.pseudoClassStateChanged(PC_BAD, diff < -0.5);
     }
 
     private static void setStyleClassPresent(Node node, String styleClass, boolean present) {

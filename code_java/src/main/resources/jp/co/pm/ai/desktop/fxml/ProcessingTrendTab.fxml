@@ -168,7 +168,6 @@
                 <VBox fx:id="kpiProjectedCard" styleClass="pm-processing-trend-kpi-card">
                     <Label styleClass="pm-processing-trend-kpi-caption" text="見込合計（期間末着地）"/>
                     <Label fx:id="kpiProjectedValue" styleClass="pm-processing-trend-kpi-value" text="—"/>
-                    <Label fx:id="kpiProjectedSub" styleClass="pm-processing-trend-kpi-sub, pm-processing-trend-kpi-sub-strong" text=""/>
                 </VBox>
             </FlowPane>
         </VBox>
