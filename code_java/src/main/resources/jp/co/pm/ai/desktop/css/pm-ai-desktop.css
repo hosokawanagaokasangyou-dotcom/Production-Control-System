@@ -3511,22 +3511,37 @@
     -fx-opacity: 0;
 }
 
-/* 日次折れ線（移動平均）: 背景は透過。X/Y は棒グラフと共有するため軸セレクタは使わない */
+/* 日次折れ線シェル: 線は Path オーバーレイ。軸は棒と余白合わせ用（描画は消す） */
 .pm-trend-daily-line-chart {
     -fx-background-color: transparent;
 }
 .pm-trend-daily-line-chart .chart-plot-background {
     -fx-background-color: transparent;
 }
-.pm-trend-daily-line-chart .default-color0.chart-series-line {
+.pm-trend-daily-line-chart .axis {
+    -fx-opacity: 0;
+}
+.pm-trend-daily-line-chart .chart-series-line,
+.pm-trend-daily-line-chart .chart-line-symbol {
+    -fx-opacity: 0;
+}
+
+/* markerPane 上の折れ線（棒の CategoryAxis / NumberAxis 座標） */
+.pm-trend-path-actual-ma {
     -fx-stroke: -pm-trend-actual-ma7;
     -fx-stroke-width: 2.2px;
+    -fx-fill: null;
 }
-.pm-trend-daily-line-chart .default-color0.chart-line-symbol {
-    -fx-background-color: -pm-trend-actual-ma7, white;
-    -fx-background-radius: 2.5px;
-    -fx-padding: 2.5px;
-    -fx-background-insets: 0;
+.pm-trend-path-actual-cum {
+    -fx-stroke: -pm-trend-actual-cum;
+    -fx-stroke-width: 2.5px;
+    -fx-fill: null;
+}
+.pm-trend-path-projected-cum {
+    -fx-stroke: -pm-trend-projected;
+    -fx-stroke-width: 2.5px;
+    -fx-stroke-dash-array: 6 4;
+    -fx-fill: null;
 }
 
 /* 累計のみ表示時: 棒チャートは共有 X 軸のため残し、プロットだけ消す */
