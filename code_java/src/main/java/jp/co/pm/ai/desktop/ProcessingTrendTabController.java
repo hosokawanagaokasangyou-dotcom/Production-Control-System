@@ -64,6 +64,7 @@ import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Pane;
 import javafx.scene.layout.Region;
+import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.scene.shape.Line;
 import javafx.util.Duration;
@@ -218,6 +219,7 @@ public class ProcessingTrendTabController {
     @FXML private LineChart<String, Number> cumulativeChart;
     @FXML private CategoryAxis cumulativeXAxis;
     @FXML private ProcessingTrendNumberAxis cumulativeYAxis;
+    @FXML private StackPane chartStack;
     @FXML private Pane markerPane;
     @FXML private VBox emptyStatePane;
     @FXML private Label emptyStateTitle;
@@ -587,26 +589,19 @@ public class ProcessingTrendTabController {
         projectedCumSeries.setName("見込累計");
         dailyChart.getData().add(actualDailySeries);
         dailyChart.getData().add(planDailySeries);
-        if (dailyLineChart != null) {
-            dailyLineChart.getData().add(actualMaSeries);
-            dailyLineChart.setHorizontalZeroLineVisible(false);
-            dailyLineChart.setVerticalZeroLineVisible(false);
-            dailyLineChart.setPickOnBounds(false);
-        }
-        cumulativeChart.getData().add(actualCumSeries);
-        cumulativeChart.getData().add(projectedCumSeries);
+
+        // 棒と折れ線で CategoryAxis が別だと X が半日〜1日ずれる。棒の X（と移動平均は Y も）を共有する。
+        rebuildOverlayChartsSharingDailyAxes();
+
         cumulativeChart.setHorizontalZeroLineVisible(false);
         cumulativeChart.setVerticalZeroLineVisible(false);
         cumulativeChart.setPickOnBounds(false);
-        // カテゴリ文字列の辞書順ソートで折れ線の接続順が日付順から崩れるのを防ぐ
         cumulativeChart.setAxisSortingPolicy(LineChart.SortingPolicy.NONE);
         if (dailyLineChart != null) {
+            dailyLineChart.setHorizontalZeroLineVisible(false);
+            dailyLineChart.setVerticalZeroLineVisible(false);
+            dailyLineChart.setPickOnBounds(false);
             dailyLineChart.setAxisSortingPolicy(LineChart.SortingPolicy.NONE);
-        }
-        // 棒・折れ線で CategoryAxis の左右マージンが違うと 1 日分ずれて見える
-        bindCategoryAxisMargins(dailyXAxis, cumulativeXAxis);
-        if (dailyLineXAxis != null) {
-            bindCategoryAxisMargins(dailyXAxis, dailyLineXAxis);
         }
         // 目盛ラベルは自前描画（FXML: tickLabelsVisible=false）。ラベル行の高さは FXML の tickLabelGap で確保する。
         // prefHeight を固定してはいけない: CategoryAxis は setCategories 後 autoRanging=false になり、
@@ -624,9 +619,6 @@ public class ProcessingTrendTabController {
                     }
                 };
         dailyYAxis.setTickLabelFormatter(tickFmt);
-        if (dailyLineYAxis != null) {
-            dailyLineYAxis.setTickLabelFormatter(tickFmt);
-        }
         cumulativeYAxis.setTickLabelFormatter(tickFmt);
 
         // 2 つのチャートのプロット領域を一致させる: 相手側 Y 軸の幅を自分の padding に載せる
@@ -638,13 +630,10 @@ public class ProcessingTrendTabController {
         }
         cumulativeChart.layoutBoundsProperty().addListener((obs, o, n) -> requestMarkerLayout());
         dailyXAxis.layoutBoundsProperty().addListener((obs, o, n) -> requestMarkerLayout());
-        cumulativeXAxis.layoutBoundsProperty().addListener((obs, o, n) -> requestMarkerLayout());
         dailyYAxis.widthProperty().addListener((obs, o, n) -> requestMarkerLayout());
         cumulativeYAxis.widthProperty().addListener((obs, o, n) -> requestMarkerLayout());
         // CategoryAxis の座標は setCategories 後のレイアウトパスで categorySpacing が確定してから有効になる。
-        // 軸のサイズが変わらずカテゴリ数だけ変わる（30 日→31 日など）ケースを拾う
         dailyXAxis.categorySpacingProperty().addListener((obs, o, n) -> requestMarkerLayout());
-        cumulativeXAxis.categorySpacingProperty().addListener((obs, o, n) -> requestMarkerLayout());
         // タブ非選択中は detach されるので、再 attach（同サイズで bounds 変化なし）でも描き直す
         markerPane.sceneProperty().addListener((obs, o, n) -> {
             if (n != null) {
@@ -659,6 +648,68 @@ public class ProcessingTrendTabController {
         todayLine.setVisible(false);
         todayMarkerLabel.setVisible(false);
         markerPane.getChildren().addAll(todayLine, todayMarkerLabel);
+    }
+
+    /**
+     * FXML の折れ線チャートを、棒グラフと同一の {@link CategoryAxis}（移動平均は Y も）を共有する
+     * インスタンスへ差し替える。別 Axis のままだと複合表示で累計点が棒より左にずれる。
+     */
+    private void rebuildOverlayChartsSharingDailyAxes() {
+        if (chartStack == null || dailyXAxis == null || dailyYAxis == null || cumulativeYAxis == null) {
+            if (dailyLineChart != null) {
+                dailyLineChart.getData().add(actualMaSeries);
+            }
+            if (cumulativeChart != null) {
+                cumulativeChart.getData().add(actualCumSeries);
+                cumulativeChart.getData().add(projectedCumSeries);
+            }
+            return;
+        }
+        if (dailyLineChart != null) {
+            chartStack.getChildren().remove(dailyLineChart);
+        }
+        if (cumulativeChart != null) {
+            chartStack.getChildren().remove(cumulativeChart);
+        }
+
+        LineChart<String, Number> maChart = new LineChart<>(dailyXAxis, dailyYAxis);
+        maChart.setAnimated(false);
+        maChart.setCreateSymbols(true);
+        maChart.setLegendVisible(false);
+        maChart.setMinHeight(200.0);
+        maChart.getStyleClass().setAll("pm-trend-daily-line-chart");
+        maChart.setMouseTransparent(true);
+        maChart.setHorizontalGridLinesVisible(false);
+        maChart.setVerticalGridLinesVisible(false);
+        maChart.setAlternativeRowFillVisible(false);
+        maChart.setAlternativeColumnFillVisible(false);
+        maChart.getData().add(actualMaSeries);
+        dailyLineChart = maChart;
+        dailyLineXAxis = dailyXAxis;
+        dailyLineYAxis = dailyYAxis;
+
+        cumulativeYAxis.setSide(Side.RIGHT);
+        LineChart<String, Number> cumChart = new LineChart<>(dailyXAxis, cumulativeYAxis);
+        cumChart.setAnimated(false);
+        cumChart.setCreateSymbols(true);
+        cumChart.setLegendVisible(false);
+        cumChart.setMinHeight(200.0);
+        cumChart.getStyleClass().setAll("pm-trend-cumulative-chart");
+        cumChart.setHorizontalGridLinesVisible(false);
+        cumChart.setVerticalGridLinesVisible(false);
+        cumChart.setAlternativeRowFillVisible(false);
+        cumChart.setAlternativeColumnFillVisible(false);
+        cumChart.getData().add(actualCumSeries);
+        cumChart.getData().add(projectedCumSeries);
+        cumulativeChart = cumChart;
+        cumulativeXAxis = dailyXAxis;
+
+        int insertAt = chartStack.getChildren().indexOf(markerPane);
+        if (insertAt < 0) {
+            insertAt = chartStack.getChildren().size();
+        }
+        chartStack.getChildren().add(insertAt, cumulativeChart);
+        chartStack.getChildren().add(insertAt, dailyLineChart);
     }
 
     private void initDetailTable() {
@@ -1140,8 +1191,11 @@ public class ProcessingTrendTabController {
         boolean showDaily = mode != ViewMode.CUMULATIVE;
         boolean showCum = mode != ViewMode.DAILY;
         boolean isDailyGranularity = currentGranularity() != Granularity.MONTHLY;
-        dailyChart.setVisible(showDaily);
-        dailyChart.setManaged(showDaily);
+        // 共有 CategoryAxis は棒チャート側の子なので、累計のみ表示でも棒チャートを layout から外さない
+        dailyChart.setVisible(true);
+        dailyChart.setManaged(true);
+        dailyChart.setMouseTransparent(!showDaily);
+        setStyleClassPresent(dailyChart, "pm-trend-hidden-plot", !showDaily);
         if (dailyLineChart != null) {
             boolean showDailyLine = showDaily && isDailyGranularity;
             dailyLineChart.setVisible(showDailyLine);
@@ -1193,27 +1247,26 @@ public class ProcessingTrendTabController {
         double left = dailyYAxis.getWidth();
         double right = cumulativeYAxis.getWidth();
         if (mode == ViewMode.COMBO) {
+            // 棒は左 Y を自前で持つ。共有軸の折れ線は軸を持たないので左右パディングでプロットを一致させる。
             dailyChart.setPadding(new Insets(CHART_TOP_PADDING, right, 0, 0));
             if (dailyLineChart != null) {
-                dailyLineChart.setPadding(new Insets(CHART_TOP_PADDING, right, 0, 0));
+                dailyLineChart.setPadding(new Insets(CHART_TOP_PADDING, right, 0, left));
             }
             cumulativeChart.setPadding(new Insets(CHART_TOP_PADDING, 0, 0, left));
+        } else if (mode == ViewMode.CUMULATIVE) {
+            dailyChart.setPadding(new Insets(CHART_TOP_PADDING, 0, 0, 0));
+            if (dailyLineChart != null) {
+                dailyLineChart.setPadding(new Insets(CHART_TOP_PADDING, 0, 0, 0));
+            }
+            cumulativeChart.setPadding(new Insets(CHART_TOP_PADDING, 0, 0, 0));
         } else {
+            // 日次のみ: 移動平均は棒と X/Y 共有のため、見えない右余白は不要。左は棒側 Y に合わせる
             dailyChart.setPadding(new Insets(CHART_TOP_PADDING, 0, 0, 0));
             if (dailyLineChart != null) {
                 dailyLineChart.setPadding(new Insets(CHART_TOP_PADDING, 0, 0, 0));
             }
             cumulativeChart.setPadding(new Insets(CHART_TOP_PADDING, 0, 0, 0));
         }
-    }
-
-    /** 棒グラフ基準の CategoryAxis マージンを折れ線側へ揃える（1 カテゴリずれ防止）。 */
-    private static void bindCategoryAxisMargins(CategoryAxis master, CategoryAxis follower) {
-        if (master == null || follower == null || master == follower) {
-            return;
-        }
-        follower.startMarginProperty().bind(master.startMarginProperty());
-        follower.endMarginProperty().bind(master.endMarginProperty());
     }
 
     // ---- 自動更新 --------------------------------------------------------------------------
@@ -1704,9 +1757,7 @@ public class ProcessingTrendTabController {
                                         + " 〜 "
                                         + days.get(n - 1).date().format(DATE_FMT);
         dailyXAxis.setLabel(axisLabel);
-        cumulativeXAxis.setLabel(axisLabel);
         dailyXAxis.setCategories(FXCollections.observableArrayList(labels));
-        cumulativeXAxis.setCategories(FXCollections.observableArrayList(labels));
         dailyChart.setCategoryGap(ProcessingTrendChartSupport.categoryGapFor(n));
         dailyChart.setBarGap(ProcessingTrendChartSupport.barGapFor(n));
 
@@ -1742,9 +1793,6 @@ public class ProcessingTrendTabController {
             applyNiceRange(dailyLineYAxis, dailyMax);
         }
         applyNiceRange(cumulativeYAxis, cumMax);
-        if (dailyLineXAxis != null) {
-            dailyLineXAxis.setCategories(FXCollections.observableArrayList(labels));
-        }
         actualDailySeries.getData().setAll(actDaily);
         actualMaSeries.getData().setAll(actMa);
         planDailySeries.getData().setAll(planDaily);
@@ -1863,9 +1911,7 @@ public class ProcessingTrendTabController {
                                         + " 〜 "
                                         + months.get(n - 1).month().format(DateTimeFormatter.ofPattern("yyyy/MM"));
         dailyXAxis.setLabel(axisLabel);
-        cumulativeXAxis.setLabel(axisLabel);
         dailyXAxis.setCategories(FXCollections.observableArrayList(labels));
-        cumulativeXAxis.setCategories(FXCollections.observableArrayList(labels));
         dailyChart.setCategoryGap(Math.max(16.0, ProcessingTrendChartSupport.categoryGapFor(n)));
         dailyChart.setBarGap(ProcessingTrendChartSupport.barGapFor(n));
 
@@ -1986,7 +2032,7 @@ public class ProcessingTrendTabController {
             todayMarkerLabel.setVisible(false);
             return;
         }
-        CategoryAxis xAxis = dailyChart.isVisible() ? dailyXAxis : cumulativeXAxis;
+        CategoryAxis xAxis = dailyXAxis;
         XYChart<String, Number> chart = dailyChart.isVisible() ? dailyChart : cumulativeChart;
         Node plotBg = chart.lookup(".chart-plot-background");
         if (plotBg == null || xAxis.getScene() == null || markerPane.getScene() == null) {

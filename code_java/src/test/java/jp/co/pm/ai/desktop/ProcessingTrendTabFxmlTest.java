@@ -118,6 +118,18 @@ class ProcessingTrendTabFxmlTest {
     }
 
     @Test
+    void chartStackExistsForSharedAxisOverlay() throws Exception {
+        Element stack = elementByFxId("chartStack");
+        assertNotNull(stack, "chartStack が無い");
+        assertTrue(
+                stack.getTagName().endsWith("StackPane"),
+                "chartStack は StackPane であるべき: " + stack.getTagName());
+        assertNotNull(elementByFxId("dailyChart"), "dailyChart が無い");
+        assertNotNull(elementByFxId("cumulativeChart"), "cumulativeChart が無い");
+        assertNotNull(elementByFxId("dailyXAxis"), "dailyXAxis が無い");
+    }
+
+    @Test
     void dailyLineChartAndMovingAverageColumnExist() throws Exception {
         Element lineChart = elementByFxId("dailyLineChart");
         assertNotNull(lineChart, "dailyLineChart が無い");

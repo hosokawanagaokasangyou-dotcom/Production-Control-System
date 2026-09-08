@@ -3511,18 +3511,12 @@
     -fx-opacity: 0;
 }
 
-/* 日次折れ線（移動平均）: 背景と軸は透過し、棒グラフの直上に重ねる */
+/* 日次折れ線（移動平均）: 背景は透過。X/Y は棒グラフと共有するため軸セレクタは使わない */
 .pm-trend-daily-line-chart {
     -fx-background-color: transparent;
 }
 .pm-trend-daily-line-chart .chart-plot-background {
     -fx-background-color: transparent;
-}
-.pm-trend-daily-line-chart .axis:bottom {
-    -fx-opacity: 0;
-}
-.pm-trend-daily-line-chart .axis:left {
-    -fx-opacity: 0;
 }
 .pm-trend-daily-line-chart .default-color0.chart-series-line {
     -fx-stroke: -pm-trend-actual-ma7;
@@ -3533,6 +3527,20 @@
     -fx-background-radius: 2.5px;
     -fx-padding: 2.5px;
     -fx-background-insets: 0;
+}
+
+/* 累計のみ表示時: 棒チャートは共有 X 軸のため残し、プロットだけ消す */
+.pm-trend-daily-chart.pm-trend-hidden-plot .chart-plot-background {
+    -fx-background-color: transparent;
+}
+.pm-trend-daily-chart.pm-trend-hidden-plot .chart-bar {
+    -fx-opacity: 0;
+}
+.pm-trend-daily-chart.pm-trend-hidden-plot .axis:left {
+    -fx-opacity: 0;
+}
+.pm-trend-daily-chart.pm-trend-hidden-plot .axis:left .axis-label {
+    -fx-opacity: 0;
 }
 
 .pm-trend-cumulative-chart .default-color0.chart-series-line {
