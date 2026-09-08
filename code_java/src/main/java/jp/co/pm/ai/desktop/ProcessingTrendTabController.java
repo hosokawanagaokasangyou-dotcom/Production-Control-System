@@ -651,8 +651,9 @@ public class ProcessingTrendTabController {
     }
 
     /**
-     * FXML の折れ線チャートを、棒グラフと同一の {@link CategoryAxis}（移動平均は Y も）を共有する
-     * インスタンスへ差し替える。別 Axis のままだと複合表示で累計点が棒より左にずれる。
+     * FXML の折れ線チャートを、棒グラフと同一の {@link CategoryAxis} を共有するインスタンスへ差し替える。
+     * Y 軸は共有しない（共有すると棒の第一軸が折れ線側に奪われ目盛が潰れる）。
+     * 移動平均用 Y は非表示で日次 Y のレンジだけバインドする。
      */
     private void rebuildOverlayChartsSharingDailyAxes() {
         if (chartStack == null || dailyXAxis == null || dailyYAxis == null || cumulativeYAxis == null) {
@@ -672,7 +673,21 @@ public class ProcessingTrendTabController {
             chartStack.getChildren().remove(cumulativeChart);
         }
 
-        LineChart<String, Number> maChart = new LineChart<>(dailyXAxis, dailyYAxis);
+        ProcessingTrendNumberAxis maY = new ProcessingTrendNumberAxis();
+        maY.setAnimated(false);
+        maY.setAutoRanging(false);
+        maY.setOpacity(0.0);
+        maY.setTickLabelsVisible(false);
+        maY.setTickMarkVisible(false);
+        maY.setMinorTickVisible(false);
+        maY.lowerBoundProperty().bind(dailyYAxis.lowerBoundProperty());
+        maY.upperBoundProperty().bind(dailyYAxis.upperBoundProperty());
+        maY.tickUnitProperty().bind(dailyYAxis.tickUnitProperty());
+        // 棒の左軸幅と揃えないと移動平均の X がずれる
+        maY.prefWidthProperty().bind(dailyYAxis.widthProperty());
+        maY.minWidthProperty().bind(dailyYAxis.widthProperty());
+
+        LineChart<String, Number> maChart = new LineChart<>(dailyXAxis, maY);
         maChart.setAnimated(false);
         maChart.setCreateSymbols(true);
         maChart.setLegendVisible(false);
@@ -686,7 +701,7 @@ public class ProcessingTrendTabController {
         maChart.getData().add(actualMaSeries);
         dailyLineChart = maChart;
         dailyLineXAxis = dailyXAxis;
-        dailyLineYAxis = dailyYAxis;
+        dailyLineYAxis = maY;
 
         cumulativeYAxis.setSide(Side.RIGHT);
         LineChart<String, Number> cumChart = new LineChart<>(dailyXAxis, cumulativeYAxis);
@@ -1247,20 +1262,13 @@ public class ProcessingTrendTabController {
         double left = dailyYAxis.getWidth();
         double right = cumulativeYAxis.getWidth();
         if (mode == ViewMode.COMBO) {
-            // 棒は左 Y を自前で持つ。共有軸の折れ線は軸を持たないので左右パディングでプロットを一致させる。
+            // 棒・移動平均は左 Y（移動平均は非表示だが幅確保）。累計は右 Y。相手側を padding で相殺。
             dailyChart.setPadding(new Insets(CHART_TOP_PADDING, right, 0, 0));
             if (dailyLineChart != null) {
-                dailyLineChart.setPadding(new Insets(CHART_TOP_PADDING, right, 0, left));
+                dailyLineChart.setPadding(new Insets(CHART_TOP_PADDING, right, 0, 0));
             }
             cumulativeChart.setPadding(new Insets(CHART_TOP_PADDING, 0, 0, left));
-        } else if (mode == ViewMode.CUMULATIVE) {
-            dailyChart.setPadding(new Insets(CHART_TOP_PADDING, 0, 0, 0));
-            if (dailyLineChart != null) {
-                dailyLineChart.setPadding(new Insets(CHART_TOP_PADDING, 0, 0, 0));
-            }
-            cumulativeChart.setPadding(new Insets(CHART_TOP_PADDING, 0, 0, 0));
         } else {
-            // 日次のみ: 移動平均は棒と X/Y 共有のため、見えない右余白は不要。左は棒側 Y に合わせる
             dailyChart.setPadding(new Insets(CHART_TOP_PADDING, 0, 0, 0));
             if (dailyLineChart != null) {
                 dailyLineChart.setPadding(new Insets(CHART_TOP_PADDING, 0, 0, 0));
@@ -1789,9 +1797,7 @@ public class ProcessingTrendTabController {
             cumMax = Math.max(cumMax, Math.max(d.actualCumM(), d.projectedCumM()));
         }
         applyNiceRange(dailyYAxis, dailyMax);
-        if (dailyLineYAxis != null) {
-            applyNiceRange(dailyLineYAxis, dailyMax);
-        }
+        // dailyLineYAxis は dailyYAxis のレンジにバインド済み（共有 X 用の非表示軸）
         applyNiceRange(cumulativeYAxis, cumMax);
         actualDailySeries.getData().setAll(actDaily);
         actualMaSeries.getData().setAll(actMa);
