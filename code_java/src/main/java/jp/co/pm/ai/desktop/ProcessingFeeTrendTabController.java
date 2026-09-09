@@ -25,6 +25,7 @@ import javafx.fxml.FXML;
 import javafx.geometry.Insets;
 import javafx.geometry.Point2D;
 import javafx.geometry.Side;
+import javafx.scene.Node;
 import javafx.scene.chart.BarChart;
 import javafx.scene.chart.CategoryAxis;
 import javafx.scene.chart.LineChart;
@@ -46,6 +47,7 @@ import javafx.scene.layout.Pane;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.paint.Color;
+import javafx.scene.shape.Line;
 import javafx.scene.shape.LineTo;
 import javafx.scene.shape.MoveTo;
 import javafx.scene.shape.Path;
@@ -158,6 +160,9 @@ public class ProcessingFeeTrendTabController {
     private Set<Integer> labelledCategoryIdx = Set.of();
     private final AtomicLong computeSeq = new AtomicLong();
     private final List<Label> xAxisLabelPool = new ArrayList<>();
+    private boolean overlayLayoutScheduled;
+    private final Line todayLine = new Line();
+    private final Label todayMarkerLabel = new Label("今日");
 
     private final XYChart.Series<String, Number> actualSeries = new XYChart.Series<>();
     private final XYChart.Series<String, Number> planSeries = new XYChart.Series<>();
@@ -206,7 +211,10 @@ public class ProcessingFeeTrendTabController {
         cumulativeChart.setAnimated(false);
         cumulativeChart.setCreateSymbols(false);
         cumulativeChart.setAxisSortingPolicy(LineChart.SortingPolicy.NONE);
-        // 系列は軸レイアウト用に登録するが中身は常に空。描画は Path。
+        cumulativeChart.setHorizontalZeroLineVisible(false);
+        cumulativeChart.setVerticalZeroLineVisible(false);
+        cumulativeChart.setPickOnBounds(false);
+        // 系列は軸レイアウト用に登録するが中身は常に空。描画は Path（加工量 COMBO と同型）。
         cumulativeChart.getData().setAll(actualCumSeries, planCumSeries);
         if (!cumulativeChart.getStyleClass().contains("pm-trend-overlay")) {
             cumulativeChart.getStyleClass().add("pm-trend-overlay");
@@ -214,6 +222,7 @@ public class ProcessingFeeTrendTabController {
         cumulativeYAxis.setSide(Side.RIGHT);
         cumulativeYAxis.setTickLabelsVisible(true);
         cumulativeYAxis.setLabel("累計 (円) ─ 折れ線");
+        cumulativeYAxis.setMinWidth(Region.USE_COMPUTED_SIZE);
         cumulativeChart.setMouseTransparent(true);
         cumulativeChart.setHorizontalGridLinesVisible(false);
 
@@ -221,10 +230,7 @@ public class ProcessingFeeTrendTabController {
                 new StringConverter<>() {
                     @Override
                     public String toString(Number n) {
-                        if (n == null) {
-                            return "";
-                        }
-                        return NumberFormat.getIntegerInstance(Locale.JAPAN).format(Math.rint(n.doubleValue()));
+                        return n == null ? "" : formatAxisTick(n.doubleValue());
                     }
 
                     @Override
@@ -238,6 +244,7 @@ public class ProcessingFeeTrendTabController {
         cumulativeYAxis.setTickLabelFormatter(tickFmt);
 
         initCumOverlayPaths();
+        initTodayMarker();
         initLegend();
 
         periodPresetCombo.setItems(
@@ -277,8 +284,13 @@ public class ProcessingFeeTrendTabController {
         dailyChart.layoutBoundsProperty().addListener((o, a, n) -> requestOverlayLayout());
         cumulativeChart.layoutBoundsProperty().addListener((o, a, n) -> requestOverlayLayout());
         dailyXAxis.layoutBoundsProperty().addListener((o, a, n) -> requestOverlayLayout());
+        if (cumulativeXAxis != null) {
+            cumulativeXAxis.layoutBoundsProperty().addListener((o, a, n) -> requestOverlayLayout());
+        }
         dailyYAxis.widthProperty().addListener((o, a, n) -> requestOverlayLayout());
         cumulativeYAxis.widthProperty().addListener((o, a, n) -> requestOverlayLayout());
+        dailyXAxis.categorySpacingProperty().addListener((o, a, n) -> requestOverlayLayout());
+        markerPane.sceneProperty().addListener((o, a, n) -> requestOverlayLayout());
 
         sourceSummaryLabel.setText("受注 AH × 加工日 m。工程延べのため依頼生産量とは一致しません。");
         initDetailTable();
@@ -495,6 +507,14 @@ public class ProcessingFeeTrendTabController {
         return nf.format(Math.rint(v));
     }
 
+    /** 軸目盛（加工量の formatM と同型。円もカンマ区切り整数）。 */
+    private static String formatAxisTick(double v) {
+        if (Math.abs(v) < 0.5) {
+            return "0";
+        }
+        return String.format(Locale.JAPAN, "%,.0f", v);
+    }
+
     private static String formatDayWithWeekday(LocalDate d) {
         return d.format(DateTimeFormatter.ofPattern("M/d"))
                 + "("
@@ -507,6 +527,16 @@ public class ProcessingFeeTrendTabController {
         styleCumPath(planCumPath, "pm-trend-path-fee-plan-cum", Color.web("#0f766e"), 2.5, true);
         markerPane.getChildren().add(0, planCumPath);
         markerPane.getChildren().add(0, actualCumPath);
+    }
+
+    private void initTodayMarker() {
+        todayLine.getStyleClass().add("pm-processing-trend-today-line");
+        todayLine.setManaged(false);
+        todayMarkerLabel.getStyleClass().add("pm-processing-trend-today-label");
+        todayMarkerLabel.setManaged(false);
+        todayLine.setVisible(false);
+        todayMarkerLabel.setVisible(false);
+        markerPane.getChildren().addAll(todayLine, todayMarkerLabel);
     }
 
     private static void styleCumPath(
@@ -530,7 +560,8 @@ public class ProcessingFeeTrendTabController {
                 legendItem("実績円", "#2563eb", false),
                 legendItem("予定円", "#64748b", false),
                 legendItem("実績累計", "#1e3a8a", false),
-                legendItem("予定累計", "#0f766e", true));
+                legendItem("予定累計", "#0f766e", true),
+                legendItem("今日", "#0f766e", true));
     }
 
     private static HBox legendItem(String text, String color, boolean dashed) {
@@ -786,6 +817,7 @@ public class ProcessingFeeTrendTabController {
             cumulativeXAxis.setCategories(FXCollections.observableArrayList(labels));
         }
         dailyChart.setCategoryGap(ProcessingTrendChartSupport.categoryGapFor(n));
+        dailyChart.setBarGap(ProcessingTrendChartSupport.barGapFor(n));
 
         List<XYChart.Data<String, Number>> act = new ArrayList<>(n);
         List<XYChart.Data<String, Number>> plan = new ArrayList<>(n);
@@ -810,7 +842,6 @@ public class ProcessingFeeTrendTabController {
         // 第一軸（左）= 日次棒 / 第二軸（右）= 累計折（LineChart は軸シェル、線は Path）
         applyNiceRange(dailyYAxis, dailyMax);
         applyNiceRange(cumulativeYAxis, cumMax);
-        ensureRightAxisMinWidth();
         actualSeries.getData().setAll(act);
         planSeries.getData().setAll(plan);
         overlayActualCum = OverlayPolyline.fromChartData(actCum);
@@ -843,23 +874,12 @@ public class ProcessingFeeTrendTabController {
         axis.setLowerBound(0);
         axis.setUpperBound(nr.upperBound());
         axis.setTickUnit(nr.tickUnit());
-        axis.requestAxisLayout();
-    }
-
-    /** 円表記が長いため、第二軸幅が潰れてラベルが消えないよう下限を確保する。 */
-    private void ensureRightAxisMinWidth() {
-        String sample =
-                NumberFormat.getIntegerInstance(Locale.JAPAN)
-                        .format(Math.rint(cumulativeYAxis.getUpperBound()));
-        double estimated = Math.max(64.0, sample.length() * 7.5 + 44.0);
-        if (cumulativeYAxis.getMinWidth() < estimated) {
-            cumulativeYAxis.setMinWidth(estimated);
-        }
     }
 
     private void syncChartPadding() {
-        double left = Math.max(dailyYAxis.getWidth(), 1.0);
-        double right = Math.max(cumulativeYAxis.getWidth(), cumulativeYAxis.getMinWidth());
+        // 加工量 COMBO と同型: 実測幅のみ（minWidth を余白に食い込ませない）
+        double left = dailyYAxis.getWidth();
+        double right = cumulativeYAxis.getWidth();
         dailyChart.setPadding(new Insets(CHART_TOP_PADDING, right, 0, 0));
         cumulativeChart.setPadding(new Insets(CHART_TOP_PADDING, 0, 0, left));
     }
@@ -880,7 +900,15 @@ public class ProcessingFeeTrendTabController {
     }
 
     private void requestOverlayLayout() {
-        Platform.runLater(this::layoutOverlay);
+        if (overlayLayoutScheduled) {
+            return;
+        }
+        overlayLayoutScheduled = true;
+        Platform.runLater(
+                () -> {
+                    overlayLayoutScheduled = false;
+                    layoutOverlay();
+                });
     }
 
     private void layoutOverlay() {
@@ -888,9 +916,20 @@ public class ProcessingFeeTrendTabController {
         if (r == null || r.days().isEmpty() || dailyXAxis.getScene() == null) {
             hideXAxisLabels();
             hideCumPaths();
+            todayLine.setVisible(false);
+            todayMarkerLabel.setVisible(false);
+            return;
+        }
+        Node plotBg = dailyChart.lookup(".chart-plot-background");
+        if (plotBg == null || markerPane.getScene() == null) {
+            hideXAxisLabels();
+            hideCumPaths();
+            todayLine.setVisible(false);
+            todayMarkerLabel.setVisible(false);
             return;
         }
         layoutXAxisLabels(dailyXAxis);
+        layoutTodayMarker(r, dailyXAxis, plotBg);
         layoutCumPaths();
     }
 
@@ -937,6 +976,57 @@ public class ProcessingFeeTrendTabController {
             }
         }
         path.setVisible(started);
+    }
+
+    private void layoutTodayMarker(Result r, CategoryAxis xAxis, Node plotBg) {
+        LocalDate today = r.today();
+        LocalDate first = r.days().get(0).date();
+        LocalDate last = r.days().get(r.days().size() - 1).date();
+        if (today.isBefore(first) || today.isAfter(last.plusDays(1))) {
+            todayLine.setVisible(false);
+            todayMarkerLabel.setVisible(false);
+            return;
+        }
+        double x;
+        if (today.isAfter(last)) {
+            int idx = currentCategoryLabels.size() - 1;
+            x =
+                    xAxis.getDisplayPosition(currentCategoryLabels.get(idx))
+                            + xAxis.getCategorySpacing() / 2.0;
+        } else {
+            int idx = (int) ChronoUnit.DAYS.between(first, today);
+            if (idx < 0 || idx >= currentCategoryLabels.size()) {
+                todayLine.setVisible(false);
+                todayMarkerLabel.setVisible(false);
+                return;
+            }
+            x =
+                    xAxis.getDisplayPosition(currentCategoryLabels.get(idx))
+                            - xAxis.getCategorySpacing() / 2.0;
+        }
+        Point2D top = markerPane.sceneToLocal(xAxis.localToScene(x, 0));
+        var plotBounds = markerPane.sceneToLocal(plotBg.localToScene(plotBg.getBoundsInLocal()));
+        if (Double.isNaN(top.getX()) || plotBounds == null) {
+            todayLine.setVisible(false);
+            todayMarkerLabel.setVisible(false);
+            return;
+        }
+        double px = Math.round(top.getX()) + 0.5;
+        todayLine.setStartX(px);
+        todayLine.setEndX(px);
+        todayLine.setStartY(plotBounds.getMinY());
+        todayLine.setEndY(plotBounds.getMaxY());
+        todayLine.setVisible(true);
+        todayMarkerLabel.setText("今日");
+        todayMarkerLabel.applyCss();
+        todayMarkerLabel.autosize();
+        double labelW = todayMarkerLabel.getWidth();
+        double lx = px + 4;
+        if (lx + labelW > plotBounds.getMaxX() - 2) {
+            lx = px - labelW - 4;
+        }
+        todayMarkerLabel.relocate(Math.round(lx), Math.round(plotBounds.getMinY() + 2));
+        todayMarkerLabel.setVisible(true);
     }
 
     private void layoutXAxisLabels(CategoryAxis xAxis) {
@@ -997,6 +1087,8 @@ public class ProcessingFeeTrendTabController {
         overlayPlanCum = OverlayPolyline.EMPTY;
         hideCumPaths();
         hideXAxisLabels();
+        todayLine.setVisible(false);
+        todayMarkerLabel.setVisible(false);
         kpiActualYen.setText("—");
         kpiPlanYen.setText("—");
         if (detailTable != null) {

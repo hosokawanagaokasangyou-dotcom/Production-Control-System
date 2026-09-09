@@ -3451,6 +3451,7 @@
 .pm-trend-daily-chart .chart-content,
 .pm-trend-cumulative-chart .chart-content {
     -fx-padding: 6 8 4 8;
+    -fx-background-color: transparent;
 }
 
 /* 白地は StackPane 側で塗る（modena の -fx-background はテーマ色なので透過にして重ねる） */

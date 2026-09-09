@@ -34,6 +34,8 @@ class ProcessingFeeTrendTabFxmlTest {
         assertNotNull(elementByFxId("colRequestNo"));
         assertNotNull(elementByFxId("colRateYen"));
         assertNotNull(elementByFxId("colReqActualYen"));
+        assertEquals("false", elementByFxId("detailPane").getAttribute("expanded"));
+        assertEquals("false", elementByFxId("requestPane").getAttribute("expanded"));
         assertEquals(
                 "jp.co.pm.ai.desktop.ProcessingFeeTrendTabController",
                 rootController());
@@ -51,6 +53,9 @@ class ProcessingFeeTrendTabFxmlTest {
                         "/jp/co/pm/ai/desktop/fxml/ProcessingFeeTrendTab.fxml")) {
             assertNotNull(in);
             String xml = new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+            org.junit.jupiter.api.Assertions.assertTrue(
+                    xml.contains("<?import javafx.scene.control.ScrollPane?>"),
+                    "ScrollPane import required for FXMLLoader");
             org.junit.jupiter.api.Assertions.assertTrue(
                     xml.contains("<?import javafx.scene.control.TitledPane?>"),
                     "TitledPane import required for FXMLLoader");
