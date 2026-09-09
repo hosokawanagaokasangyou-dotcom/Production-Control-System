@@ -54,11 +54,14 @@ class ProcessingFeeTrendTabFxmlTest {
             assertNotNull(in);
             String xml = new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
             org.junit.jupiter.api.Assertions.assertTrue(
-                    xml.contains("<?import javafx.scene.control.ScrollPane?>"),
-                    "ScrollPane import required for FXMLLoader");
-            org.junit.jupiter.api.Assertions.assertTrue(
                     xml.contains("<?import javafx.scene.control.TitledPane?>"),
                     "TitledPane import required for FXMLLoader");
+            org.junit.jupiter.api.Assertions.assertFalse(
+                    xml.contains("<?import javafx.scene.control.ScrollPane?>"),
+                    "ScrollPane breaks chart white background inheritance; keep volume-like VBox center");
+            org.junit.jupiter.api.Assertions.assertFalse(
+                    xml.contains("<ScrollPane"),
+                    "ScrollPane element must not wrap chart center");
             org.junit.jupiter.api.Assertions.assertTrue(
                     xml.contains("<?import javafx.scene.control.TableView?>"),
                     "TableView import required for FXMLLoader");

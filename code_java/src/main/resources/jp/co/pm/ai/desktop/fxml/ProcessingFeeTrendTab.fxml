@@ -10,7 +10,6 @@
 <?import javafx.scene.control.DatePicker?>
 <?import javafx.scene.control.Label?>
 <?import javafx.scene.control.ProgressIndicator?>
-<?import javafx.scene.control.ScrollPane?>
 <?import javafx.scene.control.Separator?>
 <?import javafx.scene.control.TableColumn?>
 <?import javafx.scene.control.TableView?>
@@ -24,7 +23,7 @@
 <?import javafx.scene.layout.StackPane?>
 <?import javafx.scene.layout.VBox?>
 
-<!-- 加工量トレンドと同系のチャート構成（白地・左右Y・自前Xラベル） -->
+<!-- 加工量トレンドと同系（白地 StackPane・左右Y）。center は ScrollPane 無し（CSS 継承を加工量に揃える） -->
 <BorderPane fx:id="tabRoot" xmlns="http://javafx.com/javafx/26" xmlns:fx="http://javafx.com/fxml/1"
             fx:controller="jp.co.pm.ai.desktop.ProcessingFeeTrendTabController"
             styleClass="pm-processing-trend-tab-root, pm-processing-fee-trend-tab-root">
@@ -78,80 +77,77 @@
         </VBox>
     </top>
     <center>
-        <ScrollPane fitToWidth="true" hbarPolicy="NEVER" pannable="true"
-                    styleClass="pm-processing-fee-trend-scroll">
-            <VBox spacing="4.0">
-                <padding>
-                    <Insets bottom="4.0" left="8.0" right="8.0" top="0.0"/>
-                </padding>
-                <HBox alignment="CENTER_LEFT" maxWidth="1300.0" spacing="14.0" styleClass="pm-processing-trend-legend-row">
-                    <Label fx:id="chartTitleLabel" styleClass="pm-processing-trend-chart-title" text="加工賃トレンド（円）"/>
-                    <HBox fx:id="legendBox" alignment="CENTER_LEFT" spacing="16.0" styleClass="pm-processing-trend-legend"/>
-                    <Pane HBox.hgrow="ALWAYS"/>
-                    <Label styleClass="pm-processing-trend-muted" text="単位: 円（AH×工程延べ m）"/>
-                </HBox>
-                <StackPane fx:id="chartStack" VBox.vgrow="ALWAYS" maxWidth="1300.0" prefHeight="420.0" maxHeight="600.0"
-                           styleClass="pm-processing-trend-chart-stack">
-                    <BarChart fx:id="dailyChart" animated="false" legendVisible="false" minHeight="200.0"
-                              styleClass="pm-trend-daily-chart" barGap="1.0" categoryGap="8.0"
-                              horizontalGridLinesVisible="true" verticalGridLinesVisible="false"
-                              alternativeRowFillVisible="false" alternativeColumnFillVisible="false"
-                              horizontalZeroLineVisible="false" verticalZeroLineVisible="false">
-                        <xAxis>
-                            <CategoryAxis fx:id="dailyXAxis" animated="false" tickLabelGap="20.0" tickLabelsVisible="false"/>
-                        </xAxis>
-                        <yAxis>
-                            <ProcessingTrendNumberAxis fx:id="dailyYAxis" animated="false" autoRanging="false"
-                                        label="日次 (円) ─ 棒" lowerBound="0.0" upperBound="10.0" tickUnit="2.0" minorTickVisible="false"/>
-                        </yAxis>
-                    </BarChart>
-                    <LineChart fx:id="cumulativeChart" animated="false" createSymbols="false" legendVisible="false"
-                               minHeight="200.0" styleClass="pm-trend-cumulative-chart, pm-trend-overlay"
-                               mouseTransparent="true"
-                               horizontalGridLinesVisible="false" verticalGridLinesVisible="false"
-                               alternativeRowFillVisible="false" alternativeColumnFillVisible="false"
-                               horizontalZeroLineVisible="false" verticalZeroLineVisible="false">
-                        <xAxis>
-                            <CategoryAxis fx:id="cumulativeXAxis" animated="false" tickLabelGap="20.0" tickLabelsVisible="false"/>
-                        </xAxis>
-                        <yAxis>
-                            <ProcessingTrendNumberAxis fx:id="cumulativeYAxis" animated="false" autoRanging="false"
-                                        label="累計 (円) ─ 折れ線"
-                                        lowerBound="0.0" upperBound="10.0" tickUnit="2.0" minorTickVisible="false" side="RIGHT"/>
-                        </yAxis>
-                    </LineChart>
-                    <Pane fx:id="markerPane" mouseTransparent="true" styleClass="pm-processing-trend-marker-pane"/>
-                </StackPane>
-                <Label fx:id="sourceSummaryLabel" maxWidth="1300.0" styleClass="pm-processing-trend-source"
-                       text="" wrapText="true"/>
-                <TitledPane fx:id="detailPane" animated="false" collapsible="true" expanded="false" maxWidth="1300.0" text="日別集計（円）">
-                    <TableView fx:id="detailTable" fixedCellSize="24.0" prefHeight="220.0" maxHeight="320.0"
-                               styleClass="pm-processing-trend-detail-table">
-                        <columns>
-                            <TableColumn fx:id="colDate" prefWidth="110.0" sortable="false" text="日付"/>
-                            <TableColumn fx:id="colActualYen" prefWidth="120.0" sortable="false" text="実績円"/>
-                            <TableColumn fx:id="colPlanYen" prefWidth="120.0" sortable="false" text="予定円"/>
-                            <TableColumn fx:id="colDiffYen" prefWidth="120.0" sortable="false" text="差異（実−予）"/>
-                            <TableColumn fx:id="colActualCumYen" prefWidth="130.0" sortable="false" text="実績累計円"/>
-                            <TableColumn fx:id="colPlanCumYen" prefWidth="130.0" sortable="false" text="予定累計円"/>
-                        </columns>
-                    </TableView>
-                </TitledPane>
-                <TitledPane fx:id="requestPane" animated="false" collapsible="true" expanded="false" maxWidth="1300.0" text="依頼NO別 加工賃">
-                    <TableView fx:id="requestTable" fixedCellSize="24.0" prefHeight="260.0" maxHeight="400.0"
-                               styleClass="pm-processing-trend-detail-table">
-                        <columns>
-                            <TableColumn fx:id="colRequestNo" prefWidth="140.0" sortable="true" text="依頼NO"/>
-                            <TableColumn fx:id="colRateYen" prefWidth="100.0" sortable="true" text="AH単価"/>
-                            <TableColumn fx:id="colActualM" prefWidth="100.0" sortable="true" text="実績 (m)"/>
-                            <TableColumn fx:id="colPlanM" prefWidth="100.0" sortable="true" text="予定 (m)"/>
-                            <TableColumn fx:id="colReqActualYen" prefWidth="120.0" sortable="true" text="実績円"/>
-                            <TableColumn fx:id="colReqPlanYen" prefWidth="120.0" sortable="true" text="予定円"/>
-                            <TableColumn fx:id="colReqDiffYen" prefWidth="120.0" sortable="true" text="差異（実−予）"/>
-                        </columns>
-                    </TableView>
-                </TitledPane>
-            </VBox>
-        </ScrollPane>
+        <VBox spacing="4.0">
+            <padding>
+                <Insets bottom="4.0" left="8.0" right="8.0" top="0.0"/>
+            </padding>
+            <HBox alignment="CENTER_LEFT" maxWidth="1300.0" spacing="14.0" styleClass="pm-processing-trend-legend-row">
+                <Label fx:id="chartTitleLabel" styleClass="pm-processing-trend-chart-title" text="加工賃トレンド（円）"/>
+                <HBox fx:id="legendBox" alignment="CENTER_LEFT" spacing="16.0" styleClass="pm-processing-trend-legend"/>
+                <Pane HBox.hgrow="ALWAYS"/>
+                <Label styleClass="pm-processing-trend-muted" text="単位: 円（AH×工程延べ m）"/>
+            </HBox>
+            <StackPane fx:id="chartStack" VBox.vgrow="ALWAYS" maxWidth="1300.0" maxHeight="600.0"
+                       styleClass="pm-processing-trend-chart-stack">
+                <BarChart fx:id="dailyChart" animated="false" legendVisible="false" minHeight="200.0"
+                          styleClass="pm-trend-daily-chart" barGap="1.0" categoryGap="8.0"
+                          horizontalGridLinesVisible="true" verticalGridLinesVisible="false"
+                          alternativeRowFillVisible="false" alternativeColumnFillVisible="false"
+                          horizontalZeroLineVisible="false" verticalZeroLineVisible="false">
+                    <xAxis>
+                        <CategoryAxis fx:id="dailyXAxis" animated="false" tickLabelGap="20.0" tickLabelsVisible="false"/>
+                    </xAxis>
+                    <yAxis>
+                        <ProcessingTrendNumberAxis fx:id="dailyYAxis" animated="false" autoRanging="false"
+                                    label="日次 (円) ─ 棒" lowerBound="0.0" upperBound="10.0" tickUnit="2.0" minorTickVisible="false"/>
+                    </yAxis>
+                </BarChart>
+                <LineChart fx:id="cumulativeChart" animated="false" createSymbols="false" legendVisible="false"
+                           minHeight="200.0" styleClass="pm-trend-cumulative-chart, pm-trend-overlay"
+                           mouseTransparent="true"
+                           horizontalGridLinesVisible="false" verticalGridLinesVisible="false"
+                           alternativeRowFillVisible="false" alternativeColumnFillVisible="false"
+                           horizontalZeroLineVisible="false" verticalZeroLineVisible="false">
+                    <xAxis>
+                        <CategoryAxis fx:id="cumulativeXAxis" animated="false" tickLabelGap="20.0" tickLabelsVisible="false"/>
+                    </xAxis>
+                    <yAxis>
+                        <ProcessingTrendNumberAxis fx:id="cumulativeYAxis" animated="false" autoRanging="false"
+                                    label="累計 (円) ─ 折れ線"
+                                    lowerBound="0.0" upperBound="10.0" tickUnit="2.0" minorTickVisible="false" side="RIGHT"/>
+                    </yAxis>
+                </LineChart>
+                <Pane fx:id="markerPane" mouseTransparent="true" styleClass="pm-processing-trend-marker-pane"/>
+            </StackPane>
+            <Label fx:id="sourceSummaryLabel" maxWidth="1300.0" styleClass="pm-processing-trend-source"
+                   text="" wrapText="true"/>
+            <TitledPane fx:id="detailPane" animated="false" collapsible="true" expanded="false" maxWidth="1300.0" text="日別集計（円）">
+                <TableView fx:id="detailTable" fixedCellSize="24.0" prefHeight="220.0" maxHeight="320.0"
+                           styleClass="pm-processing-trend-detail-table">
+                    <columns>
+                        <TableColumn fx:id="colDate" prefWidth="110.0" sortable="false" text="日付"/>
+                        <TableColumn fx:id="colActualYen" prefWidth="120.0" sortable="false" text="実績円"/>
+                        <TableColumn fx:id="colPlanYen" prefWidth="120.0" sortable="false" text="予定円"/>
+                        <TableColumn fx:id="colDiffYen" prefWidth="120.0" sortable="false" text="差異（実−予）"/>
+                        <TableColumn fx:id="colActualCumYen" prefWidth="130.0" sortable="false" text="実績累計円"/>
+                        <TableColumn fx:id="colPlanCumYen" prefWidth="130.0" sortable="false" text="予定累計円"/>
+                    </columns>
+                </TableView>
+            </TitledPane>
+            <TitledPane fx:id="requestPane" animated="false" collapsible="true" expanded="false" maxWidth="1300.0" text="依頼NO別 加工賃">
+                <TableView fx:id="requestTable" fixedCellSize="24.0" prefHeight="260.0" maxHeight="400.0"
+                           styleClass="pm-processing-trend-detail-table">
+                    <columns>
+                        <TableColumn fx:id="colRequestNo" prefWidth="140.0" sortable="true" text="依頼NO"/>
+                        <TableColumn fx:id="colRateYen" prefWidth="100.0" sortable="true" text="AH単価"/>
+                        <TableColumn fx:id="colActualM" prefWidth="100.0" sortable="true" text="実績 (m)"/>
+                        <TableColumn fx:id="colPlanM" prefWidth="100.0" sortable="true" text="予定 (m)"/>
+                        <TableColumn fx:id="colReqActualYen" prefWidth="120.0" sortable="true" text="実績円"/>
+                        <TableColumn fx:id="colReqPlanYen" prefWidth="120.0" sortable="true" text="予定円"/>
+                        <TableColumn fx:id="colReqDiffYen" prefWidth="120.0" sortable="true" text="差異（実−予）"/>
+                    </columns>
+                </TableView>
+            </TitledPane>
+        </VBox>
     </center>
 </BorderPane>

@@ -41,7 +41,10 @@ import javafx.scene.control.TableRow;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TitledPane;
 import javafx.scene.control.Tooltip;
+import javafx.scene.layout.Background;
+import javafx.scene.layout.BackgroundFill;
 import javafx.scene.layout.BorderPane;
+import javafx.scene.layout.CornerRadii;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Pane;
 import javafx.scene.layout.Region;
@@ -77,6 +80,12 @@ public class ProcessingFeeTrendTabController {
 
     private static final double CHART_TOP_PADDING = 6.0;
     private static final double X_LABEL_TOP_OFFSET = 7.0;
+    private static final Background CHART_STACK_WHITE =
+            new Background(new BackgroundFill(Color.WHITE, new CornerRadii(4), Insets.EMPTY));
+    private static final Background PLOT_WHITE =
+            new Background(new BackgroundFill(Color.WHITE, CornerRadii.EMPTY, Insets.EMPTY));
+    private static final Background PLOT_TRANSPARENT =
+            new Background(new BackgroundFill(Color.TRANSPARENT, CornerRadii.EMPTY, Insets.EMPTY));
     private static final PseudoClass PC_SAT = PseudoClass.getPseudoClass("sat");
     private static final PseudoClass PC_SUN = PseudoClass.getPseudoClass("sun");
     private static final PseudoClass PC_WEEKEND = PseudoClass.getPseudoClass("weekend");
@@ -246,6 +255,11 @@ public class ProcessingFeeTrendTabController {
         initCumOverlayPaths();
         initTodayMarker();
         initLegend();
+        applyChartWhiteBackground();
+        // スキン生成後にも白地を再適用（テーマの plot 塗りつぶしを上書き）
+        chartStack.sceneProperty().addListener((o, a, n) -> Platform.runLater(this::applyChartWhiteBackground));
+        dailyChart.layoutBoundsProperty().addListener((o, a, n) -> applyChartWhiteBackground());
+        cumulativeChart.layoutBoundsProperty().addListener((o, a, n) -> applyChartWhiteBackground());
 
         periodPresetCombo.setItems(
                 FXCollections.observableArrayList(
@@ -846,10 +860,12 @@ public class ProcessingFeeTrendTabController {
         planSeries.getData().setAll(plan);
         actualCumSeries.getData().setAll(actCum);
         planCumSeries.getData().setAll(planCum);
-        // Path は使わず LineChart の右軸スケールで描く（空系列だと右目盛が欠ける）
+        // Path は使わず LineChart の右軸スケールで描く
         overlayActualCum = OverlayPolyline.EMPTY;
         overlayPlanCum = OverlayPolyline.EMPTY;
         hideCumPaths();
+        styleCumSeriesLines();
+        applyChartWhiteBackground();
 
         NumberFormat nf = NumberFormat.getNumberInstance(Locale.JAPAN);
         nf.setMaximumFractionDigits(0);
@@ -888,17 +904,72 @@ public class ProcessingFeeTrendTabController {
 
     private void settleOverlayLayout() {
         syncChartPadding();
+        applyChartWhiteBackground();
         requestOverlayLayout();
         Platform.runLater(
                 () -> {
                     syncChartPadding();
+                    applyChartWhiteBackground();
+                    styleCumSeriesLines();
                     requestOverlayLayout();
                     Platform.runLater(
                             () -> {
                                 syncChartPadding();
+                                applyChartWhiteBackground();
                                 requestOverlayLayout();
                             });
                 });
+    }
+
+    /** CSS がテーマに負ける場合でもプロットを白地にする（加工量チャートと同見た目）。 */
+    private void applyChartWhiteBackground() {
+        if (chartStack != null) {
+            chartStack.setBackground(CHART_STACK_WHITE);
+        }
+        paintChartChrome(dailyChart, PLOT_WHITE);
+        // 上層は透過（下の棒を隠さない）
+        paintChartChrome(cumulativeChart, PLOT_TRANSPARENT);
+    }
+
+    private static void paintChartChrome(XYChart<?, ?> chart, Background plotBg) {
+        if (chart == null) {
+            return;
+        }
+        chart.setStyle("-fx-background-color: transparent;");
+        Node plot = chart.lookup(".chart-plot-background");
+        if (plot instanceof Region region) {
+            region.setBackground(plotBg);
+            region.setStyle(
+                    plotBg == PLOT_WHITE
+                            ? "-fx-background-color: white;"
+                            : "-fx-background-color: transparent;");
+        }
+        Node content = chart.lookup(".chart-content");
+        if (content instanceof Region region) {
+            region.setStyle("-fx-background-color: transparent;");
+        }
+    }
+
+    private void styleCumSeriesLines() {
+        styleSeriesLine(actualCumSeries, "#1e3a8a", false);
+        styleSeriesLine(planCumSeries, "#0f766e", true);
+    }
+
+    private static void styleSeriesLine(
+            XYChart.Series<String, Number> series, String stroke, boolean dashed) {
+        if (series == null) {
+            return;
+        }
+        Node node = series.getNode();
+        if (node == null) {
+            return;
+        }
+        String dash = dashed ? "; -fx-stroke-dash-array: 6 4" : "";
+        String css = "-fx-stroke: " + stroke + "; -fx-stroke-width: 2.5px" + dash + ";";
+        node.setStyle(css);
+        for (Node child : node.lookupAll(".chart-series-line")) {
+            child.setStyle(css);
+        }
     }
 
     private void requestOverlayLayout() {
