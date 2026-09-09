@@ -22,6 +22,13 @@ class ProcessingFeeTrendTabFxmlTest {
         assertNotNull(elementByFxId("cumulativeChart"));
         assertNotNull(elementByFxId("dailyYAxis"));
         assertNotNull(elementByFxId("cumulativeYAxis"));
+        assertNotNull(elementByFxId("detailPane"));
+        assertNotNull(elementByFxId("detailTable"));
+        assertNotNull(elementByFxId("colActualYen"));
+        assertNotNull(elementByFxId("colPlanYen"));
+        assertNotNull(elementByFxId("colDiffYen"));
+        assertNotNull(elementByFxId("colActualCumYen"));
+        assertNotNull(elementByFxId("colPlanCumYen"));
         assertEquals(
                 "jp.co.pm.ai.desktop.ProcessingFeeTrendTabController",
                 rootController());

@@ -117,6 +117,19 @@
             </StackPane>
             <Label fx:id="sourceSummaryLabel" maxWidth="1300.0" styleClass="pm-processing-trend-source"
                    text="" wrapText="true"/>
+            <TitledPane fx:id="detailPane" animated="false" collapsible="true" expanded="true" maxWidth="1300.0" text="日別集計（円）">
+                <TableView fx:id="detailTable" fixedCellSize="24.0" prefHeight="220.0" maxHeight="320.0"
+                           styleClass="pm-processing-trend-detail-table">
+                    <columns>
+                        <TableColumn fx:id="colDate" prefWidth="110.0" sortable="false" text="日付"/>
+                        <TableColumn fx:id="colActualYen" prefWidth="120.0" sortable="false" text="実績円"/>
+                        <TableColumn fx:id="colPlanYen" prefWidth="120.0" sortable="false" text="予定円"/>
+                        <TableColumn fx:id="colDiffYen" prefWidth="120.0" sortable="false" text="差異（実−予）"/>
+                        <TableColumn fx:id="colActualCumYen" prefWidth="130.0" sortable="false" text="実績累計円"/>
+                        <TableColumn fx:id="colPlanCumYen" prefWidth="130.0" sortable="false" text="予定累計円"/>
+                    </columns>
+                </TableView>
+            </TitledPane>
         </VBox>
     </center>
 </BorderPane>

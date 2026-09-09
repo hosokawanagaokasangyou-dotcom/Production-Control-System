@@ -5,6 +5,8 @@ import java.text.NumberFormat;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.YearMonth;
+import java.time.format.DateTimeFormatter;
+import java.time.format.TextStyle;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -15,6 +17,7 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 
 import javafx.application.Platform;
+import javafx.beans.property.ReadOnlyObjectWrapper;
 import javafx.collections.FXCollections;
 import javafx.concurrent.Task;
 import javafx.css.PseudoClass;
@@ -31,6 +34,12 @@ import javafx.scene.control.ComboBox;
 import javafx.scene.control.DatePicker;
 import javafx.scene.control.Label;
 import javafx.scene.control.ProgressIndicator;
+import javafx.scene.control.TableCell;
+import javafx.scene.control.TableColumn;
+import javafx.scene.control.TableRow;
+import javafx.scene.control.TableView;
+import javafx.scene.control.TitledPane;
+import javafx.scene.control.Tooltip;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Pane;
@@ -63,6 +72,11 @@ public class ProcessingFeeTrendTabController {
     private static final double X_LABEL_TOP_OFFSET = 7.0;
     private static final PseudoClass PC_SAT = PseudoClass.getPseudoClass("sat");
     private static final PseudoClass PC_SUN = PseudoClass.getPseudoClass("sun");
+    private static final PseudoClass PC_WEEKEND = PseudoClass.getPseudoClass("weekend");
+    private static final PseudoClass PC_TODAY = PseudoClass.getPseudoClass("today");
+    private static final PseudoClass PC_FUTURE = PseudoClass.getPseudoClass("future");
+    private static final PseudoClass PC_GOOD = PseudoClass.getPseudoClass("good");
+    private static final PseudoClass PC_BAD = PseudoClass.getPseudoClass("bad");
 
     private enum PeriodPreset {
         THIS_MONTH("今月"),
@@ -108,6 +122,14 @@ public class ProcessingFeeTrendTabController {
     @FXML private ProcessingTrendNumberAxis cumulativeYAxis;
     @FXML private Pane markerPane;
     @FXML private Label sourceSummaryLabel;
+    @FXML private TitledPane detailPane;
+    @FXML private TableView<DayPoint> detailTable;
+    @FXML private TableColumn<DayPoint, DayPoint> colDate;
+    @FXML private TableColumn<DayPoint, Number> colActualYen;
+    @FXML private TableColumn<DayPoint, Number> colPlanYen;
+    @FXML private TableColumn<DayPoint, Number> colDiffYen;
+    @FXML private TableColumn<DayPoint, Number> colActualCumYen;
+    @FXML private TableColumn<DayPoint, Number> colPlanCumYen;
 
     private MainShellController shell;
     private boolean suppressFilterEvents;
@@ -208,8 +230,113 @@ public class ProcessingFeeTrendTabController {
         cumulativeYAxis.widthProperty().addListener((o, a, n) -> requestOverlayLayout());
 
         sourceSummaryLabel.setText("受注 AH × 加工日 m。工程延べのため依頼生産量とは一致しません。");
+        initDetailTable();
         syncChartPadding();
         renderEmpty();
+    }
+
+    private void initDetailTable() {
+        if (detailTable == null) {
+            return;
+        }
+        colDate.setCellValueFactory(cd -> new ReadOnlyObjectWrapper<>(cd.getValue()));
+        colDate.setCellFactory(
+                col ->
+                        new TableCell<>() {
+                            @Override
+                            protected void updateItem(DayPoint item, boolean empty) {
+                                super.updateItem(item, empty);
+                                if (empty || item == null) {
+                                    setText(null);
+                                    pseudoClassStateChanged(PC_SAT, false);
+                                    pseudoClassStateChanged(PC_SUN, false);
+                                    return;
+                                }
+                                LocalDate d = item.date();
+                                setText(formatDayWithWeekday(d));
+                                DayOfWeek dow = d.getDayOfWeek();
+                                pseudoClassStateChanged(PC_SAT, dow == DayOfWeek.SATURDAY);
+                                pseudoClassStateChanged(PC_SUN, dow == DayOfWeek.SUNDAY);
+                            }
+                        });
+        colActualYen.setCellValueFactory(cd -> new ReadOnlyObjectWrapper<>(cd.getValue().actualYen()));
+        colPlanYen.setCellValueFactory(cd -> new ReadOnlyObjectWrapper<>(cd.getValue().planYen()));
+        colDiffYen.setCellValueFactory(
+                cd -> new ReadOnlyObjectWrapper<>(cd.getValue().actualYen() - cd.getValue().planYen()));
+        colActualCumYen.setCellValueFactory(
+                cd -> new ReadOnlyObjectWrapper<>(cd.getValue().actualCumYen()));
+        colPlanCumYen.setCellValueFactory(
+                cd -> new ReadOnlyObjectWrapper<>(cd.getValue().planCumYen()));
+        for (TableColumn<DayPoint, Number> c :
+                List.of(colActualYen, colPlanYen, colActualCumYen, colPlanCumYen)) {
+            c.setCellFactory(col -> yenCell(false));
+            c.setStyle("-fx-alignment: CENTER-RIGHT;");
+        }
+        colDiffYen.setCellFactory(col -> yenCell(true));
+        colDiffYen.setStyle("-fx-alignment: CENTER-RIGHT;");
+        detailTable.setRowFactory(
+                tv ->
+                        new TableRow<>() {
+                            @Override
+                            protected void updateItem(DayPoint item, boolean empty) {
+                                super.updateItem(item, empty);
+                                LocalDate today =
+                                        currentResult != null ? currentResult.today() : LocalDate.now();
+                                if (empty || item == null) {
+                                    pseudoClassStateChanged(PC_WEEKEND, false);
+                                    pseudoClassStateChanged(PC_TODAY, false);
+                                    pseudoClassStateChanged(PC_FUTURE, false);
+                                    return;
+                                }
+                                DayOfWeek dow = item.date().getDayOfWeek();
+                                boolean weekend =
+                                        dow == DayOfWeek.SATURDAY || dow == DayOfWeek.SUNDAY;
+                                pseudoClassStateChanged(PC_WEEKEND, weekend);
+                                pseudoClassStateChanged(PC_TODAY, item.date().equals(today));
+                                pseudoClassStateChanged(PC_FUTURE, item.date().isAfter(today));
+                            }
+                        });
+        detailTable.setPlaceholder(new Label("期間内のデータがありません"));
+        detailTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
+        Tooltip.install(
+                detailTable,
+                new Tooltip("差異 = 実績円 − 予定円。単位は円（AH × 工程延べ m）。"));
+    }
+
+    private TableCell<DayPoint, Number> yenCell(boolean signed) {
+        return new TableCell<>() {
+            @Override
+            protected void updateItem(Number item, boolean empty) {
+                super.updateItem(item, empty);
+                pseudoClassStateChanged(PC_GOOD, false);
+                pseudoClassStateChanged(PC_BAD, false);
+                if (empty || item == null) {
+                    setText(null);
+                    return;
+                }
+                double v = item.doubleValue();
+                NumberFormat nf = NumberFormat.getIntegerInstance(Locale.JAPAN);
+                if (signed) {
+                    String body = nf.format(Math.rint(Math.abs(v)));
+                    if (Math.abs(v) < 0.5) {
+                        setText("±0");
+                    } else {
+                        setText((v > 0 ? "+" : "−") + body);
+                    }
+                    pseudoClassStateChanged(PC_GOOD, v > 0.5);
+                    pseudoClassStateChanged(PC_BAD, v < -0.5);
+                } else {
+                    setText(nf.format(Math.rint(v)));
+                }
+            }
+        };
+    }
+
+    private static String formatDayWithWeekday(LocalDate d) {
+        return d.format(DateTimeFormatter.ofPattern("M/d"))
+                + "("
+                + d.getDayOfWeek().getDisplayName(TextStyle.SHORT, Locale.JAPAN)
+                + ")";
     }
 
     private void initLegend() {
@@ -510,6 +637,11 @@ public class ProcessingFeeTrendTabController {
         kpiActualYen.setText(nf.format(Math.rint(r.actualTotalYen())) + " 円");
         kpiPlanYen.setText(nf.format(Math.rint(r.planTotalYen())) + " 円");
 
+        if (detailTable != null) {
+            detailTable.getItems().setAll(days);
+            detailTable.refresh();
+        }
+
         settleOverlayLayout();
     }
 
@@ -612,6 +744,9 @@ public class ProcessingFeeTrendTabController {
         hideXAxisLabels();
         kpiActualYen.setText("—");
         kpiPlanYen.setText("—");
+        if (detailTable != null) {
+            detailTable.getItems().clear();
+        }
     }
 
     private void setLoading(boolean on, String text) {
