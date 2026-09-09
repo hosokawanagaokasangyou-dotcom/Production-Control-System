@@ -3699,16 +3699,57 @@
 }
 
 /* ===== 加工賃トレンド（第一軸=日次棒 / 第二軸=累計折） ===== */
-/* LineChart は右 Y 軸シェル。折れ線は markerPane の Path（加工量トレンドと同方式） */
 
-.pm-processing-fee-trend-tab-root .pm-trend-cumulative-chart.pm-trend-overlay .chart-series-line,
-.pm-processing-fee-trend-tab-root .pm-trend-cumulative-chart.pm-trend-overlay .chart-line-symbol {
-    -fx-opacity: 0;
+/* 白地は StackPane。上載せ LineChart の plot を白で塗ると棒が消えるので透過のまま */
+.pm-processing-fee-trend-tab-root .pm-processing-fee-trend-scroll,
+.pm-processing-fee-trend-tab-root .pm-processing-fee-trend-scroll > .viewport {
+    -fx-background-color: transparent;
 }
 
-.pm-processing-fee-trend-tab-root .pm-trend-path-fee-plan-cum {
+.pm-processing-fee-trend-tab-root .pm-processing-trend-chart-stack {
+    -fx-background-color: white;
+}
+
+.pm-processing-fee-trend-tab-root .pm-trend-daily-chart,
+.pm-processing-fee-trend-tab-root .pm-trend-cumulative-chart,
+.pm-processing-fee-trend-tab-root .chart {
+    -fx-background-color: transparent;
+}
+
+.pm-processing-fee-trend-tab-root .pm-trend-daily-chart .chart-content,
+.pm-processing-fee-trend-tab-root .pm-trend-cumulative-chart .chart-content {
+    -fx-background-color: transparent;
+}
+
+/* 下層 BarChart のプロットだけ白。上層 LineChart は透過（棒を隠さない） */
+.pm-processing-fee-trend-tab-root .pm-trend-daily-chart .chart-plot-background {
+    -fx-background-color: white;
+}
+
+.pm-processing-fee-trend-tab-root .pm-trend-cumulative-chart .chart-plot-background {
+    -fx-background-color: transparent;
+}
+
+/* 右軸の累計折線（棒は左軸の BarChart） */
+.pm-processing-fee-trend-tab-root .pm-trend-cumulative-chart .default-color0.chart-series-line {
+    -fx-stroke: -pm-trend-actual-cum;
+    -fx-stroke-width: 2.5px;
+}
+
+.pm-processing-fee-trend-tab-root .pm-trend-cumulative-chart .default-color1.chart-series-line {
     -fx-stroke: -pm-trend-today;
     -fx-stroke-width: 2.5px;
     -fx-stroke-dash-array: 6 4;
-    -fx-fill: null;
+}
+
+.pm-processing-fee-trend-tab-root .pm-trend-cumulative-chart .chart-line-symbol {
+    -fx-opacity: 0;
+}
+
+.pm-processing-fee-trend-tab-root .pm-trend-cumulative-chart .axis:right {
+    -fx-tick-label-fill: #1e3a8a;
+}
+
+.pm-processing-fee-trend-tab-root .pm-trend-cumulative-chart .axis:right .axis-label {
+    -fx-text-fill: #1e3a8a;
 }

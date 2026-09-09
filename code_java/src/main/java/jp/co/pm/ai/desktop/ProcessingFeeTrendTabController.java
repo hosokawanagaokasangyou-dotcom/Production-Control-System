@@ -214,7 +214,7 @@ public class ProcessingFeeTrendTabController {
         cumulativeChart.setHorizontalZeroLineVisible(false);
         cumulativeChart.setVerticalZeroLineVisible(false);
         cumulativeChart.setPickOnBounds(false);
-        // 系列は軸レイアウト用に登録するが中身は常に空。描画は Path（加工量 COMBO と同型）。
+        // 系列に累計データを載せ右軸を立てる。棒は dailyChart（左軸）。
         cumulativeChart.getData().setAll(actualCumSeries, planCumSeries);
         if (!cumulativeChart.getStyleClass().contains("pm-trend-overlay")) {
             cumulativeChart.getStyleClass().add("pm-trend-overlay");
@@ -839,15 +839,17 @@ public class ProcessingFeeTrendTabController {
             }
             planCum.add(new XYChart.Data<>(cat, d.planCumYen()));
         }
-        // 第一軸（左）= 日次棒 / 第二軸（右）= 累計折（LineChart は軸シェル、線は Path）
+        // 第一軸（左）= 日次棒 / 第二軸（右）= 累計折線（LineChart 系列で右軸を確実に立てる）
         applyNiceRange(dailyYAxis, dailyMax);
         applyNiceRange(cumulativeYAxis, cumMax);
         actualSeries.getData().setAll(act);
         planSeries.getData().setAll(plan);
-        overlayActualCum = OverlayPolyline.fromChartData(actCum);
-        overlayPlanCum = OverlayPolyline.fromChartData(planCum);
-        actualCumSeries.getData().clear();
-        planCumSeries.getData().clear();
+        actualCumSeries.getData().setAll(actCum);
+        planCumSeries.getData().setAll(planCum);
+        // Path は使わず LineChart の右軸スケールで描く（空系列だと右目盛が欠ける）
+        overlayActualCum = OverlayPolyline.EMPTY;
+        overlayPlanCum = OverlayPolyline.EMPTY;
+        hideCumPaths();
 
         NumberFormat nf = NumberFormat.getNumberInstance(Locale.JAPAN);
         nf.setMaximumFractionDigits(0);
@@ -930,7 +932,8 @@ public class ProcessingFeeTrendTabController {
         }
         layoutXAxisLabels(dailyXAxis);
         layoutTodayMarker(r, dailyXAxis, plotBg);
-        layoutCumPaths();
+        // 累計線は cumulativeChart 系列（右軸）。Path は使わない。
+        hideCumPaths();
     }
 
     private void hideCumPaths() {
