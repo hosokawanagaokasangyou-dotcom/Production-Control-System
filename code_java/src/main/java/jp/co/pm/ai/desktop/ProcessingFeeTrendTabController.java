@@ -45,6 +45,10 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.Pane;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
+import javafx.scene.paint.Color;
+import javafx.scene.shape.LineTo;
+import javafx.scene.shape.MoveTo;
+import javafx.scene.shape.Path;
 import javafx.util.StringConverter;
 
 import jp.co.pm.ai.desktop.ProcessingTrendChartSupport.NiceRange;
@@ -147,8 +151,38 @@ public class ProcessingFeeTrendTabController {
 
     private final XYChart.Series<String, Number> actualSeries = new XYChart.Series<>();
     private final XYChart.Series<String, Number> planSeries = new XYChart.Series<>();
+    /** LineChart は第二軸シェル専用（系列データは載せない。折れ線は Path）。 */
     private final XYChart.Series<String, Number> actualCumSeries = new XYChart.Series<>();
     private final XYChart.Series<String, Number> planCumSeries = new XYChart.Series<>();
+    private final Path actualCumPath = new Path();
+    private final Path planCumPath = new Path();
+    private OverlayPolyline overlayActualCum = OverlayPolyline.EMPTY;
+    private OverlayPolyline overlayPlanCum = OverlayPolyline.EMPTY;
+
+    /** markerPane 上の累計折れ線用。 */
+    private record OverlayPolyline(List<String> categories, List<Double> values) {
+        static final OverlayPolyline EMPTY = new OverlayPolyline(List.of(), List.of());
+
+        static OverlayPolyline fromChartData(List<XYChart.Data<String, Number>> data) {
+            if (data == null || data.isEmpty()) {
+                return EMPTY;
+            }
+            List<String> cats = new ArrayList<>(data.size());
+            List<Double> vals = new ArrayList<>(data.size());
+            for (XYChart.Data<String, Number> d : data) {
+                if (d == null || d.getXValue() == null || d.getYValue() == null) {
+                    continue;
+                }
+                cats.add(d.getXValue());
+                vals.add(d.getYValue().doubleValue());
+            }
+            return cats.isEmpty() ? EMPTY : new OverlayPolyline(List.copyOf(cats), List.copyOf(vals));
+        }
+
+        boolean isEmpty() {
+            return categories.isEmpty();
+        }
+    }
 
     @FXML
     private void initialize() {
@@ -162,10 +196,16 @@ public class ProcessingFeeTrendTabController {
         cumulativeChart.setAnimated(false);
         cumulativeChart.setCreateSymbols(false);
         cumulativeChart.setAxisSortingPolicy(LineChart.SortingPolicy.NONE);
+        // 系列は軸レイアウト用に登録するが中身は常に空。描画は Path。
         cumulativeChart.getData().setAll(actualCumSeries, planCumSeries);
-        cumulativeChart.getStyleClass().add("pm-trend-overlay");
+        if (!cumulativeChart.getStyleClass().contains("pm-trend-overlay")) {
+            cumulativeChart.getStyleClass().add("pm-trend-overlay");
+        }
         cumulativeYAxis.setSide(Side.RIGHT);
+        cumulativeYAxis.setTickLabelsVisible(true);
+        cumulativeYAxis.setLabel("累計 (円) ─ 折れ線");
         cumulativeChart.setMouseTransparent(true);
+        cumulativeChart.setHorizontalGridLinesVisible(false);
 
         StringConverter<Number> tickFmt =
                 new StringConverter<>() {
@@ -187,6 +227,7 @@ public class ProcessingFeeTrendTabController {
         dailyYAxis.setTickLabelFormatter(tickFmt);
         cumulativeYAxis.setTickLabelFormatter(tickFmt);
 
+        initCumOverlayPaths();
         initLegend();
 
         periodPresetCombo.setItems(
@@ -337,6 +378,26 @@ public class ProcessingFeeTrendTabController {
                 + "("
                 + d.getDayOfWeek().getDisplayName(TextStyle.SHORT, Locale.JAPAN)
                 + ")";
+    }
+
+    private void initCumOverlayPaths() {
+        styleCumPath(actualCumPath, "pm-trend-path-actual-cum", Color.web("#1e3a8a"), 2.5, false);
+        styleCumPath(planCumPath, "pm-trend-path-fee-plan-cum", Color.web("#0f766e"), 2.5, true);
+        markerPane.getChildren().add(0, planCumPath);
+        markerPane.getChildren().add(0, actualCumPath);
+    }
+
+    private static void styleCumPath(
+            Path path, String styleClass, Color stroke, double strokeWidth, boolean dashed) {
+        path.setManaged(false);
+        path.setMouseTransparent(true);
+        path.setFill(null);
+        path.setStroke(stroke);
+        path.setStrokeWidth(strokeWidth);
+        path.getStyleClass().setAll(styleClass);
+        if (dashed) {
+            path.getStrokeDashArray().setAll(6.0, 4.0);
+        }
     }
 
     private void initLegend() {
@@ -624,13 +685,16 @@ public class ProcessingFeeTrendTabController {
             }
             planCum.add(new XYChart.Data<>(cat, d.planCumYen()));
         }
-        // 第一軸（左）= 日次のみ / 第二軸（右）= 累計のみ
+        // 第一軸（左）= 日次棒 / 第二軸（右）= 累計折（LineChart は軸シェル、線は Path）
         applyNiceRange(dailyYAxis, dailyMax);
         applyNiceRange(cumulativeYAxis, cumMax);
+        ensureRightAxisMinWidth();
         actualSeries.getData().setAll(act);
         planSeries.getData().setAll(plan);
-        actualCumSeries.getData().setAll(actCum);
-        planCumSeries.getData().setAll(planCum);
+        overlayActualCum = OverlayPolyline.fromChartData(actCum);
+        overlayPlanCum = OverlayPolyline.fromChartData(planCum);
+        actualCumSeries.getData().clear();
+        planCumSeries.getData().clear();
 
         NumberFormat nf = NumberFormat.getNumberInstance(Locale.JAPAN);
         nf.setMaximumFractionDigits(0);
@@ -650,11 +714,23 @@ public class ProcessingFeeTrendTabController {
         axis.setLowerBound(0);
         axis.setUpperBound(nr.upperBound());
         axis.setTickUnit(nr.tickUnit());
+        axis.requestAxisLayout();
+    }
+
+    /** 円表記が長いため、第二軸幅が潰れてラベルが消えないよう下限を確保する。 */
+    private void ensureRightAxisMinWidth() {
+        String sample =
+                NumberFormat.getIntegerInstance(Locale.JAPAN)
+                        .format(Math.rint(cumulativeYAxis.getUpperBound()));
+        double estimated = Math.max(64.0, sample.length() * 7.5 + 44.0);
+        if (cumulativeYAxis.getMinWidth() < estimated) {
+            cumulativeYAxis.setMinWidth(estimated);
+        }
     }
 
     private void syncChartPadding() {
-        double left = dailyYAxis.getWidth();
-        double right = cumulativeYAxis.getWidth();
+        double left = Math.max(dailyYAxis.getWidth(), 1.0);
+        double right = Math.max(cumulativeYAxis.getWidth(), cumulativeYAxis.getMinWidth());
         dailyChart.setPadding(new Insets(CHART_TOP_PADDING, right, 0, 0));
         cumulativeChart.setPadding(new Insets(CHART_TOP_PADDING, 0, 0, left));
     }
@@ -682,9 +758,56 @@ public class ProcessingFeeTrendTabController {
         Result r = currentResult;
         if (r == null || r.days().isEmpty() || dailyXAxis.getScene() == null) {
             hideXAxisLabels();
+            hideCumPaths();
             return;
         }
         layoutXAxisLabels(dailyXAxis);
+        layoutCumPaths();
+    }
+
+    private void hideCumPaths() {
+        actualCumPath.getElements().clear();
+        planCumPath.getElements().clear();
+        actualCumPath.setVisible(false);
+        planCumPath.setVisible(false);
+    }
+
+    private void layoutCumPaths() {
+        layoutOneCumPath(actualCumPath, overlayActualCum);
+        layoutOneCumPath(planCumPath, overlayPlanCum);
+    }
+
+    private void layoutOneCumPath(Path path, OverlayPolyline poly) {
+        path.getElements().clear();
+        if (poly == null || poly.isEmpty() || dailyXAxis.getScene() == null) {
+            path.setVisible(false);
+            return;
+        }
+        if (cumulativeYAxis.getScene() == null || markerPane.getScene() == null) {
+            path.setVisible(false);
+            return;
+        }
+        boolean started = false;
+        for (int i = 0; i < poly.categories().size(); i++) {
+            double ax = dailyXAxis.getDisplayPosition(poly.categories().get(i));
+            double ay = cumulativeYAxis.getDisplayPosition(poly.values().get(i));
+            if (Double.isNaN(ax) || Double.isNaN(ay)) {
+                continue;
+            }
+            Point2D xs = dailyXAxis.localToScene(ax, 0);
+            Point2D ys = cumulativeYAxis.localToScene(0, ay);
+            Point2D p = markerPane.sceneToLocal(xs.getX(), ys.getY());
+            if (Double.isNaN(p.getX()) || Double.isNaN(p.getY())) {
+                continue;
+            }
+            if (!started) {
+                path.getElements().add(new MoveTo(p.getX(), p.getY()));
+                started = true;
+            } else {
+                path.getElements().add(new LineTo(p.getX(), p.getY()));
+            }
+        }
+        path.setVisible(started);
     }
 
     private void layoutXAxisLabels(CategoryAxis xAxis) {
@@ -741,6 +864,9 @@ public class ProcessingFeeTrendTabController {
         planSeries.getData().clear();
         actualCumSeries.getData().clear();
         planCumSeries.getData().clear();
+        overlayActualCum = OverlayPolyline.EMPTY;
+        overlayPlanCum = OverlayPolyline.EMPTY;
+        hideCumPaths();
         hideXAxisLabels();
         kpiActualYen.setText("—");
         kpiPlanYen.setText("—");
