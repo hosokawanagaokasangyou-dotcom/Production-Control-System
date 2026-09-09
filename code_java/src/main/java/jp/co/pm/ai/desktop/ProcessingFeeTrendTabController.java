@@ -36,10 +36,7 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.Pane;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
-import javafx.scene.paint.Color;
-import javafx.scene.shape.LineTo;
-import javafx.scene.shape.MoveTo;
-import javafx.scene.shape.Path;
+import javafx.util.StringConverter;
 
 import jp.co.pm.ai.desktop.ProcessingTrendChartSupport.NiceRange;
 import jp.co.pm.ai.desktop.config.AppPaths;
@@ -128,8 +125,8 @@ public class ProcessingFeeTrendTabController {
 
     private final XYChart.Series<String, Number> actualSeries = new XYChart.Series<>();
     private final XYChart.Series<String, Number> planSeries = new XYChart.Series<>();
-    private final Path actualCumPath = new Path();
-    private final Path planCumPath = new Path();
+    private final XYChart.Series<String, Number> actualCumSeries = new XYChart.Series<>();
+    private final XYChart.Series<String, Number> planCumSeries = new XYChart.Series<>();
 
     @FXML
     private void initialize() {
@@ -137,17 +134,37 @@ public class ProcessingFeeTrendTabController {
         planSeries.setName("予定円");
         dailyChart.getData().setAll(actualSeries, planSeries);
         dailyChart.setAnimated(false);
-        if (cumulativeChart != null) {
-            cumulativeChart.setAnimated(false);
-            cumulativeChart.setCreateSymbols(false);
-            cumulativeChart.getData().clear();
-            cumulativeChart.getStyleClass().add("pm-trend-overlay");
-            cumulativeYAxis.setSide(Side.RIGHT);
-        }
 
-        stylePath(actualCumPath, Color.web("#1e3a8a"), 2.5, false);
-        stylePath(planCumPath, Color.web("#0f766e"), 2.5, true);
-        markerPane.getChildren().addAll(actualCumPath, planCumPath);
+        actualCumSeries.setName("実績累計");
+        planCumSeries.setName("予定累計");
+        cumulativeChart.setAnimated(false);
+        cumulativeChart.setCreateSymbols(false);
+        cumulativeChart.setAxisSortingPolicy(LineChart.SortingPolicy.NONE);
+        cumulativeChart.getData().setAll(actualCumSeries, planCumSeries);
+        cumulativeChart.getStyleClass().add("pm-trend-overlay");
+        cumulativeYAxis.setSide(Side.RIGHT);
+        cumulativeChart.setMouseTransparent(true);
+
+        StringConverter<Number> tickFmt =
+                new StringConverter<>() {
+                    @Override
+                    public String toString(Number n) {
+                        if (n == null) {
+                            return "";
+                        }
+                        return NumberFormat.getIntegerInstance(Locale.JAPAN).format(Math.rint(n.doubleValue()));
+                    }
+
+                    @Override
+                    public Number fromString(String s) {
+                        return null;
+                    }
+                };
+        dailyYAxis.setAutoRanging(false);
+        cumulativeYAxis.setAutoRanging(false);
+        dailyYAxis.setTickLabelFormatter(tickFmt);
+        cumulativeYAxis.setTickLabelFormatter(tickFmt);
+
         initLegend();
 
         periodPresetCombo.setItems(
@@ -462,8 +479,11 @@ public class ProcessingFeeTrendTabController {
 
         List<XYChart.Data<String, Number>> act = new ArrayList<>(n);
         List<XYChart.Data<String, Number>> plan = new ArrayList<>(n);
+        List<XYChart.Data<String, Number>> actCum = new ArrayList<>(n);
+        List<XYChart.Data<String, Number>> planCum = new ArrayList<>(n);
         double dailyMax = 0;
         double cumMax = 0;
+        LocalDate today = r.today();
         for (int i = 0; i < n; i++) {
             DayPoint d = days.get(i);
             String cat = labels.get(i);
@@ -471,11 +491,19 @@ public class ProcessingFeeTrendTabController {
             plan.add(new XYChart.Data<>(cat, d.planYen()));
             dailyMax = Math.max(dailyMax, Math.max(d.actualYen(), d.planYen()));
             cumMax = Math.max(cumMax, Math.max(d.actualCumYen(), d.planCumYen()));
+            // 実績累計は当日まで（未来へ水平延長しない）
+            if (!d.date().isAfter(today)) {
+                actCum.add(new XYChart.Data<>(cat, d.actualCumYen()));
+            }
+            planCum.add(new XYChart.Data<>(cat, d.planCumYen()));
         }
+        // 第一軸（左）= 日次のみ / 第二軸（右）= 累計のみ
         applyNiceRange(dailyYAxis, dailyMax);
         applyNiceRange(cumulativeYAxis, cumMax);
         actualSeries.getData().setAll(act);
         planSeries.getData().setAll(plan);
+        actualCumSeries.getData().setAll(actCum);
+        planCumSeries.getData().setAll(planCum);
 
         NumberFormat nf = NumberFormat.getNumberInstance(Locale.JAPAN);
         nf.setMaximumFractionDigits(0);
@@ -522,59 +550,9 @@ public class ProcessingFeeTrendTabController {
         Result r = currentResult;
         if (r == null || r.days().isEmpty() || dailyXAxis.getScene() == null) {
             hideXAxisLabels();
-            actualCumPath.setVisible(false);
-            planCumPath.setVisible(false);
             return;
         }
         layoutXAxisLabels(dailyXAxis);
-        layoutCumPaths();
-    }
-
-    private void layoutCumPaths() {
-        Result r = currentResult;
-        actualCumPath.getElements().clear();
-        planCumPath.getElements().clear();
-        if (r == null || r.days().isEmpty() || dailyXAxis.getScene() == null) {
-            actualCumPath.setVisible(false);
-            planCumPath.setVisible(false);
-            return;
-        }
-        List<String> cats = currentCategoryLabels;
-        if (cats.size() != r.days().size()) {
-            return;
-        }
-        buildPath(actualCumPath, cats, r.days(), true);
-        buildPath(planCumPath, cats, r.days(), false);
-    }
-
-    private void buildPath(Path path, List<String> cats, List<DayPoint> days, boolean actual) {
-        boolean started = false;
-        LocalDate today = currentResult != null ? currentResult.today() : LocalDate.now();
-        for (int i = 0; i < days.size(); i++) {
-            DayPoint d = days.get(i);
-            if (actual && d.date().isAfter(today)) {
-                break;
-            }
-            double yVal = actual ? d.actualCumYen() : d.planCumYen();
-            double ax = dailyXAxis.getDisplayPosition(cats.get(i));
-            double ay = cumulativeYAxis.getDisplayPosition(yVal);
-            if (Double.isNaN(ax) || Double.isNaN(ay)) {
-                continue;
-            }
-            Point2D xs = dailyXAxis.localToScene(ax, 0);
-            Point2D ys = cumulativeYAxis.localToScene(0, ay);
-            Point2D p = markerPane.sceneToLocal(xs.getX(), ys.getY());
-            if (Double.isNaN(p.getX()) || Double.isNaN(p.getY())) {
-                continue;
-            }
-            if (!started) {
-                path.getElements().add(new MoveTo(p.getX(), p.getY()));
-                started = true;
-            } else {
-                path.getElements().add(new LineTo(p.getX(), p.getY()));
-            }
-        }
-        path.setVisible(started);
     }
 
     private void layoutXAxisLabels(CategoryAxis xAxis) {
@@ -629,8 +607,8 @@ public class ProcessingFeeTrendTabController {
         currentResult = null;
         actualSeries.getData().clear();
         planSeries.getData().clear();
-        actualCumPath.getElements().clear();
-        planCumPath.getElements().clear();
+        actualCumSeries.getData().clear();
+        planCumSeries.getData().clear();
         hideXAxisLabels();
         kpiActualYen.setText("—");
         kpiPlanYen.setText("—");
@@ -657,17 +635,6 @@ public class ProcessingFeeTrendTabController {
         noticeBanner.setVisible(false);
         noticeBanner.setManaged(false);
         noticeLabel.setText("");
-    }
-
-    private static void stylePath(Path path, Color stroke, double width, boolean dashed) {
-        path.setManaged(false);
-        path.setMouseTransparent(true);
-        path.setFill(null);
-        path.setStroke(stroke);
-        path.setStrokeWidth(width);
-        if (dashed) {
-            path.getStrokeDashArray().setAll(6.0, 4.0);
-        }
     }
 
     private record ReloadBundle(

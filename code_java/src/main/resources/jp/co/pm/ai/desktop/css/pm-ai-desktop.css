@@ -3697,8 +3697,19 @@
     -fx-text-fill: -fx-selection-bar-text;
 }
 
-/* ===== 加工賃トレンド（ProcessingFeeTrendTab: 軸CSSは加工量トレンドと共有） ===== */
+/* ===== 加工賃トレンド（第一軸=日次棒 / 第二軸=累計折） ===== */
 
-.pm-processing-fee-trend-tab-root {
-    /* 追加変数があればここに。軸・チャートは .pm-processing-trend-tab-root を併用 */
+.pm-processing-fee-trend-tab-root .pm-trend-cumulative-chart .default-color0.chart-series-line {
+    -fx-stroke: -pm-trend-actual-cum;
+    -fx-stroke-width: 2.5px;
+}
+
+.pm-processing-fee-trend-tab-root .pm-trend-cumulative-chart .default-color1.chart-series-line {
+    -fx-stroke: -pm-trend-today;
+    -fx-stroke-width: 2.5px;
+    -fx-stroke-dash-array: 6 4;
+}
+
+.pm-processing-fee-trend-tab-root .pm-trend-cumulative-chart .chart-line-symbol {
+    -fx-opacity: 0;
 }
