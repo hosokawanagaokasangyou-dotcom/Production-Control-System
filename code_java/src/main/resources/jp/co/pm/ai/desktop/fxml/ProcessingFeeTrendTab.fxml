@@ -11,6 +11,9 @@
 <?import javafx.scene.control.Label?>
 <?import javafx.scene.control.ProgressIndicator?>
 <?import javafx.scene.control.Separator?>
+<?import javafx.scene.control.TableColumn?>
+<?import javafx.scene.control.TableView?>
+<?import javafx.scene.control.TitledPane?>
 <?import javafx.scene.control.ToolBar?>
 <?import javafx.scene.control.Tooltip?>
 <?import javafx.scene.layout.BorderPane?>
@@ -127,6 +130,20 @@
                         <TableColumn fx:id="colDiffYen" prefWidth="120.0" sortable="false" text="差異（実−予）"/>
                         <TableColumn fx:id="colActualCumYen" prefWidth="130.0" sortable="false" text="実績累計円"/>
                         <TableColumn fx:id="colPlanCumYen" prefWidth="130.0" sortable="false" text="予定累計円"/>
+                    </columns>
+                </TableView>
+            </TitledPane>
+            <TitledPane fx:id="requestPane" animated="false" collapsible="true" expanded="true" maxWidth="1300.0" text="依頼NO別 加工賃">
+                <TableView fx:id="requestTable" fixedCellSize="24.0" prefHeight="260.0" maxHeight="400.0"
+                           styleClass="pm-processing-trend-detail-table">
+                    <columns>
+                        <TableColumn fx:id="colRequestNo" prefWidth="140.0" sortable="true" text="依頼NO"/>
+                        <TableColumn fx:id="colRateYen" prefWidth="100.0" sortable="true" text="AH単価"/>
+                        <TableColumn fx:id="colActualM" prefWidth="100.0" sortable="true" text="実績 (m)"/>
+                        <TableColumn fx:id="colPlanM" prefWidth="100.0" sortable="true" text="予定 (m)"/>
+                        <TableColumn fx:id="colReqActualYen" prefWidth="120.0" sortable="true" text="実績円"/>
+                        <TableColumn fx:id="colReqPlanYen" prefWidth="120.0" sortable="true" text="予定円"/>
+                        <TableColumn fx:id="colReqDiffYen" prefWidth="120.0" sortable="true" text="差異（実−予）"/>
                     </columns>
                 </TableView>
             </TitledPane>

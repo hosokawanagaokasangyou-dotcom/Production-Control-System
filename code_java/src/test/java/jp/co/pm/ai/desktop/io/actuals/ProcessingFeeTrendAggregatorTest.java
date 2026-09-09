@@ -72,5 +72,46 @@ class ProcessingFeeTrendAggregatorTest {
         assertEquals(0.0, r.days().get(0).actualYen(), 1e-9);
         assertEquals(1, r.missingRateLines());
         assertEquals(0, r.actualLinesCounted());
+        assertEquals(1, r.requests().size());
+        assertEquals("NO-RATE", r.requests().get(0).requestNo());
+        assertEquals(true, r.requests().get(0).rateMissing());
+        assertEquals(100.0, r.requests().get(0).actualMeters(), 1e-9);
+        assertEquals(0.0, r.requests().get(0).actualYen(), 1e-9);
+    }
+
+    @Test
+    void aggregatesByRequestNo() {
+        LocalDate from = LocalDate.of(2026, 9, 1);
+        LocalDate to = LocalDate.of(2026, 9, 2);
+        Map<String, Double> rates = Map.of("A", 10.0, "B", 20.0);
+        List<QuantityLine> actual =
+                List.of(
+                        new QuantityLine(from, "B", 2), // 40
+                        new QuantityLine(from, "A", 5), // 50
+                        new QuantityLine(to, "A", 1)); // 10
+        List<QuantityLine> plan =
+                List.of(
+                        new QuantityLine(from, "A", 3), // 30
+                        new QuantityLine(to, "B", 4)); // 80
+
+        Result r =
+                ProcessingFeeTrendAggregator.aggregate(
+                        actual, plan, rates, from, to, to);
+        assertEquals(2, r.requests().size());
+        // 依頼NO昇順
+        assertEquals("A", r.requests().get(0).requestNo());
+        assertEquals(10.0, r.requests().get(0).rateYenPerM(), 1e-9);
+        assertEquals(6.0, r.requests().get(0).actualMeters(), 1e-9);
+        assertEquals(3.0, r.requests().get(0).planMeters(), 1e-9);
+        assertEquals(60.0, r.requests().get(0).actualYen(), 1e-9);
+        assertEquals(30.0, r.requests().get(0).planYen(), 1e-9);
+        assertEquals(false, r.requests().get(0).rateMissing());
+
+        assertEquals("B", r.requests().get(1).requestNo());
+        assertEquals(20.0, r.requests().get(1).rateYenPerM(), 1e-9);
+        assertEquals(2.0, r.requests().get(1).actualMeters(), 1e-9);
+        assertEquals(4.0, r.requests().get(1).planMeters(), 1e-9);
+        assertEquals(40.0, r.requests().get(1).actualYen(), 1e-9);
+        assertEquals(80.0, r.requests().get(1).planYen(), 1e-9);
     }
 }

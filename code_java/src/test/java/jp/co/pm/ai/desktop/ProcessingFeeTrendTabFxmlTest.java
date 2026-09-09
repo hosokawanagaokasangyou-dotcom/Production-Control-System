@@ -29,9 +29,38 @@ class ProcessingFeeTrendTabFxmlTest {
         assertNotNull(elementByFxId("colDiffYen"));
         assertNotNull(elementByFxId("colActualCumYen"));
         assertNotNull(elementByFxId("colPlanCumYen"));
+        assertNotNull(elementByFxId("requestPane"));
+        assertNotNull(elementByFxId("requestTable"));
+        assertNotNull(elementByFxId("colRequestNo"));
+        assertNotNull(elementByFxId("colRateYen"));
+        assertNotNull(elementByFxId("colReqActualYen"));
         assertEquals(
                 "jp.co.pm.ai.desktop.ProcessingFeeTrendTabController",
                 rootController());
+        assertFxmlImportsControls();
+    }
+
+    @Test
+    void fxmlImportsTitledPaneAndTableTypes() throws Exception {
+        assertFxmlImportsControls();
+    }
+
+    private static void assertFxmlImportsControls() throws Exception {
+        try (InputStream in =
+                ProcessingFeeTrendTabFxmlTest.class.getResourceAsStream(
+                        "/jp/co/pm/ai/desktop/fxml/ProcessingFeeTrendTab.fxml")) {
+            assertNotNull(in);
+            String xml = new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+            org.junit.jupiter.api.Assertions.assertTrue(
+                    xml.contains("<?import javafx.scene.control.TitledPane?>"),
+                    "TitledPane import required for FXMLLoader");
+            org.junit.jupiter.api.Assertions.assertTrue(
+                    xml.contains("<?import javafx.scene.control.TableView?>"),
+                    "TableView import required for FXMLLoader");
+            org.junit.jupiter.api.Assertions.assertTrue(
+                    xml.contains("<?import javafx.scene.control.TableColumn?>"),
+                    "TableColumn import required for FXMLLoader");
+        }
     }
 
     private static String rootController() throws Exception {

@@ -61,6 +61,7 @@ import jp.co.pm.ai.desktop.io.actuals.JuchuProcessingFeeRateLoader;
 import jp.co.pm.ai.desktop.io.actuals.ProcessingFeeTrendAggregator;
 import jp.co.pm.ai.desktop.io.actuals.ProcessingFeeTrendAggregator.DayPoint;
 import jp.co.pm.ai.desktop.io.actuals.ProcessingFeeTrendAggregator.QuantityLine;
+import jp.co.pm.ai.desktop.io.actuals.ProcessingFeeTrendAggregator.RequestPoint;
 import jp.co.pm.ai.desktop.io.actuals.ProcessingFeeTrendAggregator.Result;
 import jp.co.pm.ai.desktop.io.actuals.ProcessingFeeTrendQuantityExtractor;
 import jp.co.pm.ai.desktop.io.actuals.ProcessingTrendAggregator.ActualSource;
@@ -134,6 +135,15 @@ public class ProcessingFeeTrendTabController {
     @FXML private TableColumn<DayPoint, Number> colDiffYen;
     @FXML private TableColumn<DayPoint, Number> colActualCumYen;
     @FXML private TableColumn<DayPoint, Number> colPlanCumYen;
+    @FXML private TitledPane requestPane;
+    @FXML private TableView<RequestPoint> requestTable;
+    @FXML private TableColumn<RequestPoint, String> colRequestNo;
+    @FXML private TableColumn<RequestPoint, Number> colRateYen;
+    @FXML private TableColumn<RequestPoint, Number> colActualM;
+    @FXML private TableColumn<RequestPoint, Number> colPlanM;
+    @FXML private TableColumn<RequestPoint, Number> colReqActualYen;
+    @FXML private TableColumn<RequestPoint, Number> colReqPlanYen;
+    @FXML private TableColumn<RequestPoint, Number> colReqDiffYen;
 
     private MainShellController shell;
     private boolean suppressFilterEvents;
@@ -272,6 +282,7 @@ public class ProcessingFeeTrendTabController {
 
         sourceSummaryLabel.setText("受注 AH × 加工日 m。工程延べのため依頼生産量とは一致しません。");
         initDetailTable();
+        initRequestTable();
         syncChartPadding();
         renderEmpty();
     }
@@ -344,6 +355,75 @@ public class ProcessingFeeTrendTabController {
                 new Tooltip("差異 = 実績円 − 予定円。単位は円（AH × 工程延べ m）。"));
     }
 
+    private void initRequestTable() {
+        if (requestTable == null) {
+            return;
+        }
+        colRequestNo.setCellValueFactory(
+                cd -> new ReadOnlyObjectWrapper<>(cd.getValue().requestNo()));
+        colRateYen.setCellValueFactory(
+                cd ->
+                        new ReadOnlyObjectWrapper<>(
+                                cd.getValue().rateMissing()
+                                        ? null
+                                        : cd.getValue().rateYenPerM()));
+        colRateYen.setCellFactory(
+                col ->
+                        new TableCell<>() {
+                            @Override
+                            protected void updateItem(Number item, boolean empty) {
+                                super.updateItem(item, empty);
+                                pseudoClassStateChanged(PC_BAD, false);
+                                if (empty) {
+                                    setText(null);
+                                    return;
+                                }
+                                RequestPoint row = getTableRow() != null ? getTableRow().getItem() : null;
+                                if (row != null && row.rateMissing()) {
+                                    setText("—");
+                                    pseudoClassStateChanged(PC_BAD, true);
+                                    return;
+                                }
+                                if (item == null) {
+                                    setText("—");
+                                    return;
+                                }
+                                setText(
+                                        NumberFormat.getIntegerInstance(Locale.JAPAN)
+                                                .format(Math.rint(item.doubleValue())));
+                            }
+                        });
+        colRateYen.setStyle("-fx-alignment: CENTER-RIGHT;");
+        colActualM.setCellValueFactory(
+                cd -> new ReadOnlyObjectWrapper<>(cd.getValue().actualMeters()));
+        colPlanM.setCellValueFactory(
+                cd -> new ReadOnlyObjectWrapper<>(cd.getValue().planMeters()));
+        for (TableColumn<RequestPoint, Number> c : List.of(colActualM, colPlanM)) {
+            c.setCellFactory(col -> metersCell());
+            c.setStyle("-fx-alignment: CENTER-RIGHT;");
+        }
+        colReqActualYen.setCellValueFactory(
+                cd -> new ReadOnlyObjectWrapper<>(cd.getValue().actualYen()));
+        colReqPlanYen.setCellValueFactory(
+                cd -> new ReadOnlyObjectWrapper<>(cd.getValue().planYen()));
+        colReqDiffYen.setCellValueFactory(
+                cd ->
+                        new ReadOnlyObjectWrapper<>(
+                                cd.getValue().actualYen() - cd.getValue().planYen()));
+        for (TableColumn<RequestPoint, Number> c : List.of(colReqActualYen, colReqPlanYen)) {
+            c.setCellFactory(col -> requestYenCell(false));
+            c.setStyle("-fx-alignment: CENTER-RIGHT;");
+        }
+        colReqDiffYen.setCellFactory(col -> requestYenCell(true));
+        colReqDiffYen.setStyle("-fx-alignment: CENTER-RIGHT;");
+        requestTable.setPlaceholder(new Label("期間内の依頼がありません"));
+        requestTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
+        Tooltip.install(
+                requestTable,
+                new Tooltip(
+                        "期間内の実績・予定を依頼NOごとに集約。AH単価欠落は —（当該依頼の円は 0）。"));
+    }
+
     private TableCell<DayPoint, Number> yenCell(boolean signed) {
         return new TableCell<>() {
             @Override
@@ -355,22 +435,64 @@ public class ProcessingFeeTrendTabController {
                     setText(null);
                     return;
                 }
-                double v = item.doubleValue();
-                NumberFormat nf = NumberFormat.getIntegerInstance(Locale.JAPAN);
+                setText(formatYenNumber(item.doubleValue(), signed));
                 if (signed) {
-                    String body = nf.format(Math.rint(Math.abs(v)));
-                    if (Math.abs(v) < 0.5) {
-                        setText("±0");
-                    } else {
-                        setText((v > 0 ? "+" : "−") + body);
-                    }
+                    double v = item.doubleValue();
                     pseudoClassStateChanged(PC_GOOD, v > 0.5);
                     pseudoClassStateChanged(PC_BAD, v < -0.5);
-                } else {
-                    setText(nf.format(Math.rint(v)));
                 }
             }
         };
+    }
+
+    private TableCell<RequestPoint, Number> requestYenCell(boolean signed) {
+        return new TableCell<>() {
+            @Override
+            protected void updateItem(Number item, boolean empty) {
+                super.updateItem(item, empty);
+                pseudoClassStateChanged(PC_GOOD, false);
+                pseudoClassStateChanged(PC_BAD, false);
+                if (empty || item == null) {
+                    setText(null);
+                    return;
+                }
+                setText(formatYenNumber(item.doubleValue(), signed));
+                if (signed) {
+                    double v = item.doubleValue();
+                    pseudoClassStateChanged(PC_GOOD, v > 0.5);
+                    pseudoClassStateChanged(PC_BAD, v < -0.5);
+                }
+            }
+        };
+    }
+
+    private TableCell<RequestPoint, Number> metersCell() {
+        return new TableCell<>() {
+            @Override
+            protected void updateItem(Number item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) {
+                    setText(null);
+                    return;
+                }
+                NumberFormat nf = NumberFormat.getNumberInstance(Locale.JAPAN);
+                nf.setMaximumFractionDigits(1);
+                nf.setMinimumFractionDigits(0);
+                setText(nf.format(item.doubleValue()));
+            }
+        };
+    }
+
+    private static String formatYenNumber(double v, boolean signed) {
+        NumberFormat nf = NumberFormat.getIntegerInstance(Locale.JAPAN);
+        if (signed) {
+            String body = nf.format(Math.rint(Math.abs(v)));
+            if (Math.abs(v) < 0.5) {
+                return "±0";
+            }
+            return (v > 0 ? "+" : "−") + body;
+        }
+        return nf.format(Math.rint(v));
     }
 
     private static String formatDayWithWeekday(LocalDate d) {
@@ -705,6 +827,13 @@ public class ProcessingFeeTrendTabController {
             detailTable.getItems().setAll(days);
             detailTable.refresh();
         }
+        if (requestTable != null) {
+            requestTable.getItems().setAll(r.requests());
+            requestTable.refresh();
+        }
+        if (requestPane != null) {
+            requestPane.setText("依頼NO別 加工賃（" + r.requests().size() + " 件）");
+        }
 
         settleOverlayLayout();
     }
@@ -872,6 +1001,12 @@ public class ProcessingFeeTrendTabController {
         kpiPlanYen.setText("—");
         if (detailTable != null) {
             detailTable.getItems().clear();
+        }
+        if (requestTable != null) {
+            requestTable.getItems().clear();
+        }
+        if (requestPane != null) {
+            requestPane.setText("依頼NO別 加工賃");
         }
     }
 
