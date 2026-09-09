@@ -508,10 +508,7 @@ public final class MainShellController
     private EquipmentStatusDashboardTabController equipmentStatusDashboardTabController;
 
     @FXML
-    private ProcessingTrendTabController processingTrendTabController;
-
-    @FXML
-    private ProcessingFeeTrendTabController processingFeeTrendTabController;
+    private ProcessingTrendHostTabController processingTrendHostTabController;
 
     @FXML
     private CodeDispatchLookupTablesTabController codeDispatchLookupTablesTabController;
@@ -521,9 +518,6 @@ public final class MainShellController
 
     @FXML
     private Tab mainShellTabProcessingTrend;
-
-    @FXML
-    private Tab mainShellTabProcessingFeeTrend;
 
     @FXML
     private Tab mainShellTabRun;
@@ -874,11 +868,8 @@ public final class MainShellController
             if (equipmentStatusDashboardTabController != null) {
                 equipmentStatusDashboardTabController.bindShell(this);
             }
-            if (processingTrendTabController != null) {
-                processingTrendTabController.bindShell(this);
-            }
-            if (processingFeeTrendTabController != null) {
-                processingFeeTrendTabController.bindShell(this);
+            if (processingTrendHostTabController != null) {
+                processingTrendHostTabController.bindShell(this);
             }
             envTabController.bindShell(this);
             memorySettingsTabController.bindShell(this);
@@ -1078,7 +1069,6 @@ public final class MainShellController
                                                 refreshMainShellTabHeaderChromeFromStoredColors();
                                                 scheduleEquipmentStatusDashboardInitialReloadIfSelected();
                                                 scheduleProcessingTrendInitialReloadIfSelected();
-                                                scheduleProcessingFeeTrendInitialReloadIfSelected();
                                                 scheduleRequestFormPipelineCheckInitialRefreshIfSelected();
                                             }));
                 });
@@ -1136,12 +1126,8 @@ public final class MainShellController
                                 equipmentStatusDashboardTabController.onMainShellTabSelected();
                             }
                             if (newTab == mainShellTabProcessingTrend
-                                    && processingTrendTabController != null) {
-                                processingTrendTabController.onMainShellTabSelected();
-                            }
-                            if (newTab == mainShellTabProcessingFeeTrend
-                                    && processingFeeTrendTabController != null) {
-                                processingFeeTrendTabController.onMainShellTabSelected();
+                                    && processingTrendHostTabController != null) {
+                                processingTrendHostTabController.onMainShellTabSelected();
                             }
                             if (newTab == mainShellTabRequestFormInput
                                     && requestFormInputTabController != null
@@ -1206,12 +1192,8 @@ public final class MainShellController
                                 equipmentStatusDashboardTabController.onMainShellTabDeselected();
                             }
                             if (prevTab == mainShellTabProcessingTrend
-                                    && processingTrendTabController != null) {
-                                processingTrendTabController.onMainShellTabDeselected();
-                            }
-                            if (prevTab == mainShellTabProcessingFeeTrend
-                                    && processingFeeTrendTabController != null) {
-                                processingFeeTrendTabController.onMainShellTabDeselected();
+                                    && processingTrendHostTabController != null) {
+                                processingTrendHostTabController.onMainShellTabDeselected();
                             }
                             if (prevTab == mainShellTabRequestFormInput
                                     && requestFormInputTabController != null) {
@@ -2448,9 +2430,6 @@ public final class MainShellController
         if (t == mainShellTabProcessingTrend) {
             return MainShellTabId.PROCESSING_TREND;
         }
-        if (t == mainShellTabProcessingFeeTrend) {
-            return MainShellTabId.PROCESSING_FEE_TREND;
-        }
         if (t == mainShellTabPipelineExecutionTiming) {
             return MainShellTabId.PIPELINE_EXECUTION_TIMING;
         }
@@ -2569,7 +2548,6 @@ public final class MainShellController
         return switch (id) {
             case EQUIPMENT_STATUS_DASHBOARD -> mainShellTabEquipmentStatusDashboard;
             case PROCESSING_TREND -> mainShellTabProcessingTrend;
-            case PROCESSING_FEE_TREND -> mainShellTabProcessingFeeTrend;
             case RUN -> mainShellTabRun;
             case PIPELINE_EXECUTION_TIMING -> mainShellTabPipelineExecutionTiming;
             case UI_BADGE_DESIGN -> mainShellTabUiBadgeDesign;
@@ -3328,22 +3306,11 @@ public final class MainShellController
     private void scheduleProcessingTrendInitialReloadIfSelected() {
         if (tabPane == null
                 || mainShellTabProcessingTrend == null
-                || processingTrendTabController == null) {
+                || processingTrendHostTabController == null) {
             return;
         }
         if (tabPane.getSelectionModel().getSelectedItem() == mainShellTabProcessingTrend) {
-            processingTrendTabController.onMainShellTabSelected();
-        }
-    }
-
-    private void scheduleProcessingFeeTrendInitialReloadIfSelected() {
-        if (tabPane == null
-                || mainShellTabProcessingFeeTrend == null
-                || processingFeeTrendTabController == null) {
-            return;
-        }
-        if (tabPane.getSelectionModel().getSelectedItem() == mainShellTabProcessingFeeTrend) {
-            processingFeeTrendTabController.onMainShellTabSelected();
+            processingTrendHostTabController.onMainShellTabSelected();
         }
     }
 
@@ -4571,11 +4538,8 @@ public final class MainShellController
                 && equipmentStatusDashboardTabController != null) {
             equipmentStatusDashboardTabController.onMainShellTabSelected();
         }
-        if (effective == mainShellTabProcessingTrend && processingTrendTabController != null) {
-            processingTrendTabController.onMainShellTabSelected();
-        }
-        if (effective == mainShellTabProcessingFeeTrend && processingFeeTrendTabController != null) {
-            processingFeeTrendTabController.onMainShellTabSelected();
+        if (effective == mainShellTabProcessingTrend && processingTrendHostTabController != null) {
+            processingTrendHostTabController.onMainShellTabSelected();
         }
         if (effective == mainShellTabRequestFormInput && requestFormInputTabController != null) {
             requestFormInputTabController.onMainShellTabSelected();
@@ -6787,11 +6751,15 @@ public final class MainShellController
 
     @Override
     public ProcessingTrendTabController processingTrendTab() {
-        return processingTrendTabController;
+        return processingTrendHostTabController != null
+                ? processingTrendHostTabController.volumeTab()
+                : null;
     }
 
     public ProcessingFeeTrendTabController processingFeeTrendTab() {
-        return processingFeeTrendTabController;
+        return processingTrendHostTabController != null
+                ? processingTrendHostTabController.feeTab()
+                : null;
     }
 
     @Override

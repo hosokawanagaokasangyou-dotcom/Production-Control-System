@@ -3,6 +3,7 @@
 <?import javafx.geometry.Insets?>
 <?import javafx.scene.chart.BarChart?>
 <?import javafx.scene.chart.CategoryAxis?>
+<?import javafx.scene.chart.LineChart?>
 <?import jp.co.pm.ai.desktop.ProcessingTrendNumberAxis?>
 <?import javafx.scene.control.Button?>
 <?import javafx.scene.control.ComboBox?>
@@ -19,9 +20,10 @@
 <?import javafx.scene.layout.StackPane?>
 <?import javafx.scene.layout.VBox?>
 
+<!-- 加工量トレンドと同系のチャート構成（白地・左右Y・自前Xラベル） -->
 <BorderPane fx:id="tabRoot" xmlns="http://javafx.com/javafx/26" xmlns:fx="http://javafx.com/fxml/1"
             fx:controller="jp.co.pm.ai.desktop.ProcessingFeeTrendTabController"
-            styleClass="pm-processing-fee-trend-tab-root">
+            styleClass="pm-processing-trend-tab-root, pm-processing-fee-trend-tab-root">
     <top>
         <VBox spacing="4.0">
             <ToolBar>
@@ -34,9 +36,9 @@
                 <DatePicker fx:id="toDatePicker" prefWidth="132.0"/>
                 <Button fx:id="thisMonthButton" mnemonicParsing="false" onAction="#onThisMonthAction" text="今月"/>
                 <Separator orientation="VERTICAL"/>
-                <HBox fx:id="loadingChip" alignment="CENTER_LEFT" spacing="6.0" styleClass="pm-processing-fee-trend-loading-chip" visible="false" managed="false">
+                <HBox fx:id="loadingChip" alignment="CENTER_LEFT" spacing="6.0" styleClass="pm-processing-trend-loading-chip" visible="false" managed="false">
                     <ProgressIndicator fx:id="loadingIndicator" prefHeight="18.0" prefWidth="18.0"/>
-                    <Label fx:id="loadingStatusLabel" styleClass="pm-processing-fee-trend-muted" text="読込中…"/>
+                    <Label fx:id="loadingStatusLabel" styleClass="pm-processing-trend-muted" text="読込中…"/>
                 </HBox>
             </ToolBar>
             <FlowPane hgap="14.0" vgap="6.0">
@@ -50,20 +52,20 @@
                     <ComboBox fx:id="planSourceCombo" prefWidth="168.0"/>
                 </HBox>
             </FlowPane>
-            <FlowPane hgap="10.0" vgap="8.0" styleClass="pm-processing-fee-trend-kpi-row">
+            <FlowPane hgap="10.0" vgap="8.0">
                 <padding>
                     <Insets bottom="4.0" left="8.0" right="8.0" top="0.0"/>
                 </padding>
-                <VBox styleClass="pm-processing-fee-trend-kpi-card">
-                    <Label styleClass="pm-processing-fee-trend-kpi-caption" text="実績円合計（期間）"/>
-                    <Label fx:id="kpiActualYen" styleClass="pm-processing-fee-trend-kpi-value" text="—"/>
+                <VBox styleClass="pm-processing-trend-kpi-card">
+                    <Label styleClass="pm-processing-trend-kpi-caption" text="実績円合計（期間）"/>
+                    <Label fx:id="kpiActualYen" styleClass="pm-processing-trend-kpi-value" text="—"/>
                 </VBox>
-                <VBox styleClass="pm-processing-fee-trend-kpi-card">
-                    <Label styleClass="pm-processing-fee-trend-kpi-caption" text="予定円合計（期間）"/>
-                    <Label fx:id="kpiPlanYen" styleClass="pm-processing-fee-trend-kpi-value" text="—"/>
+                <VBox styleClass="pm-processing-trend-kpi-card">
+                    <Label styleClass="pm-processing-trend-kpi-caption" text="予定円合計（期間）"/>
+                    <Label fx:id="kpiPlanYen" styleClass="pm-processing-trend-kpi-value" text="—"/>
                 </VBox>
             </FlowPane>
-            <HBox fx:id="noticeBanner" managed="false" visible="false" styleClass="pm-processing-fee-trend-banner">
+            <HBox fx:id="noticeBanner" managed="false" visible="false" styleClass="pm-processing-trend-banner, pm-processing-trend-banner-warn">
                 <padding>
                     <Insets bottom="4.0" left="8.0" right="8.0" top="0.0"/>
                 </padding>
@@ -76,25 +78,45 @@
             <padding>
                 <Insets bottom="4.0" left="8.0" right="8.0" top="0.0"/>
             </padding>
-            <Label fx:id="chartTitleLabel" styleClass="pm-processing-fee-trend-chart-title" text="加工賃トレンド（円）"/>
+            <HBox alignment="CENTER_LEFT" maxWidth="1300.0" spacing="14.0" styleClass="pm-processing-trend-legend-row">
+                <Label fx:id="chartTitleLabel" styleClass="pm-processing-trend-chart-title" text="加工賃トレンド（円）"/>
+                <HBox fx:id="legendBox" alignment="CENTER_LEFT" spacing="16.0" styleClass="pm-processing-trend-legend"/>
+                <Pane HBox.hgrow="ALWAYS"/>
+                <Label styleClass="pm-processing-trend-muted" text="単位: 円（AH×工程延べ m）"/>
+            </HBox>
             <StackPane fx:id="chartStack" VBox.vgrow="ALWAYS" maxWidth="1300.0" maxHeight="600.0"
-                       styleClass="pm-processing-fee-trend-chart-stack">
+                       styleClass="pm-processing-trend-chart-stack">
                 <BarChart fx:id="dailyChart" animated="false" legendVisible="false" minHeight="200.0"
-                          styleClass="pm-fee-trend-daily-chart" barGap="1.0" categoryGap="8.0"
+                          styleClass="pm-trend-daily-chart" barGap="1.0" categoryGap="8.0"
                           horizontalGridLinesVisible="true" verticalGridLinesVisible="false"
                           alternativeRowFillVisible="false" alternativeColumnFillVisible="false"
                           horizontalZeroLineVisible="false" verticalZeroLineVisible="false">
                     <xAxis>
-                        <CategoryAxis fx:id="dailyXAxis" animated="false" tickLabelGap="20.0" tickLabelsVisible="true"/>
+                        <CategoryAxis fx:id="dailyXAxis" animated="false" tickLabelGap="20.0" tickLabelsVisible="false"/>
                     </xAxis>
                     <yAxis>
                         <ProcessingTrendNumberAxis fx:id="dailyYAxis" animated="false" autoRanging="false"
-                                    label="日次 (円)" lowerBound="0.0" upperBound="10.0" tickUnit="2.0" minorTickVisible="false"/>
+                                    label="日次 (円) ─ 棒" lowerBound="0.0" upperBound="10.0" tickUnit="2.0" minorTickVisible="false"/>
                     </yAxis>
                 </BarChart>
-                <Pane fx:id="markerPane" mouseTransparent="true"/>
+                <LineChart fx:id="cumulativeChart" animated="false" createSymbols="false" legendVisible="false"
+                           minHeight="200.0" styleClass="pm-trend-cumulative-chart, pm-trend-overlay"
+                           mouseTransparent="true"
+                           horizontalGridLinesVisible="false" verticalGridLinesVisible="false"
+                           alternativeRowFillVisible="false" alternativeColumnFillVisible="false">
+                    <xAxis>
+                        <CategoryAxis fx:id="cumulativeXAxis" animated="false" tickLabelGap="20.0" tickLabelsVisible="false"/>
+                    </xAxis>
+                    <yAxis>
+                        <ProcessingTrendNumberAxis fx:id="cumulativeYAxis" animated="false" autoRanging="false"
+                                    label="累計 (円) ─ 折れ線"
+                                    lowerBound="0.0" upperBound="10.0" tickUnit="2.0" minorTickVisible="false" side="RIGHT"/>
+                    </yAxis>
+                </LineChart>
+                <Pane fx:id="markerPane" mouseTransparent="true" styleClass="pm-processing-trend-marker-pane"/>
             </StackPane>
-            <Label fx:id="sourceSummaryLabel" styleClass="pm-processing-fee-trend-muted" wrapText="true" text=""/>
+            <Label fx:id="sourceSummaryLabel" maxWidth="1300.0" styleClass="pm-processing-trend-source"
+                   text="" wrapText="true"/>
         </VBox>
     </center>
 </BorderPane>

@@ -19,6 +19,9 @@ class ProcessingFeeTrendTabFxmlTest {
         assertNotNull(elementByFxId("kpiActualYen"));
         assertNotNull(elementByFxId("kpiPlanYen"));
         assertNotNull(elementByFxId("dailyChart"));
+        assertNotNull(elementByFxId("cumulativeChart"));
+        assertNotNull(elementByFxId("dailyYAxis"));
+        assertNotNull(elementByFxId("cumulativeYAxis"));
         assertEquals(
                 "jp.co.pm.ai.desktop.ProcessingFeeTrendTabController",
                 rootController());

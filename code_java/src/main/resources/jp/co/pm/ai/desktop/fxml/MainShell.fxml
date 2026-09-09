@@ -84,12 +84,7 @@
                 </Tab>
                 <Tab fx:id="mainShellTabProcessingTrend" closable="false" text="加工トレンド">
                     <content>
-                        <fx:include fx:id="processingTrendTab" source="ProcessingTrendTab.fxml"/>
-                    </content>
-                </Tab>
-                <Tab fx:id="mainShellTabProcessingFeeTrend" closable="false" text="加工賃トレンド">
-                    <content>
-                        <fx:include fx:id="processingFeeTrendTab" source="ProcessingFeeTrendTab.fxml"/>
+                        <fx:include fx:id="processingTrendHostTab" source="ProcessingTrendHostTab.fxml"/>
                     </content>
                 </Tab>
                 <Tab fx:id="mainShellTabRun" closable="false" text="実行・ログ">

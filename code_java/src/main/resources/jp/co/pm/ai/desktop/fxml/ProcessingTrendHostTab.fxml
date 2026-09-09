@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.Tab?>
+<?import javafx.scene.control.TabPane?>
+<?import javafx.scene.layout.BorderPane?>
+
+<BorderPane xmlns="http://javafx.com/javafx/26" xmlns:fx="http://javafx.com/fxml/1"
+            fx:controller="jp.co.pm.ai.desktop.ProcessingTrendHostTabController"
+            styleClass="pm-processing-trend-host-root">
+    <center>
+        <TabPane fx:id="innerTabPane" tabClosingPolicy="UNAVAILABLE" styleClass="pm-processing-trend-inner-tabs">
+            <tabs>
+                <Tab closable="false" text="加工量">
+                    <content>
+                        <fx:include fx:id="volumeTab" source="ProcessingTrendTab.fxml"/>
+                    </content>
+                </Tab>
+                <Tab closable="false" text="加工賃">
+                    <content>
+                        <fx:include fx:id="feeTab" source="ProcessingFeeTrendTab.fxml"/>
+                    </content>
+                </Tab>
+            </tabs>
+        </TabPane>
+    </center>
+</BorderPane>

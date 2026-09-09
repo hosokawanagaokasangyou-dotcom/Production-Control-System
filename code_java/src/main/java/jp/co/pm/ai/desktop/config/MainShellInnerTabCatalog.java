@@ -97,6 +97,7 @@ public final class MainShellInnerTabCatalog {
                             "【設定】",
                             "後加工商品マスタ",
                             "マスター一覧");
+            case PROCESSING_TREND -> List.of("加工量", "加工賃");
             default -> List.of();
         };
     }
