@@ -62,7 +62,8 @@ public final class MainShellTabLayoutDefaults {
                     MainShellTabId.GLOBAL_SETTINGS.key(),
                     MainShellTabId.USER_PROFILES.key(),
                     MainShellTabId.OPERATOR_USER_MANAGEMENT.key(),
-                    MainShellTabId.PROCESSING_TREND.key());
+                    MainShellTabId.PROCESSING_TREND.key(),
+                    MainShellTabId.PROCESSING_FEE_TREND.key());
 
     /**
      * All {@link MainShellTabId} keys except {@link MainShellTabId#TAB_ORGANIZER}: DEFAULT order then any enum-only
@@ -83,6 +84,7 @@ public final class MainShellTabLayoutDefaults {
         List<MainShellTabLayoutNode> top = new ArrayList<>();
         top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.EQUIPMENT_STATUS_DASHBOARD.key(), "#994d66"));
         top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.PROCESSING_TREND.key(), "#2f6fb3"));
+        top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.PROCESSING_FEE_TREND.key(), "#0f766e"));
         top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.REMOTE_DESKTOP.key(), "#0000ff"));
         top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.REQUEST_FORM_INPUT.key(), "#336633"));
         top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.REQUEST_FORM_PIPELINE_CHECK.key(), "#9980e6"));

@@ -3696,3 +3696,64 @@
 .table-view.pm-processing-trend-detail-table:focused .table-row-cell:future:filled:selected .table-cell {
     -fx-text-fill: -fx-selection-bar-text;
 }
+
+/* ===== 加工賃トレンド（ProcessingFeeTrendTab.fxml） ===== */
+
+.pm-processing-fee-trend-tab-root {
+    -pm-fee-actual: #2563eb;
+    -pm-fee-plan: #0f766e;
+    -pm-fee-card-bg: derive(-fx-base, 12%);
+    -pm-fee-card-border: derive(-fx-base, -18%);
+}
+
+.pm-processing-fee-trend-loading-chip {
+    -fx-padding: 2 8 2 8;
+}
+
+.label.pm-processing-fee-trend-muted {
+    -fx-text-fill: -fx-mid-text-color;
+    -fx-font-size: 11px;
+}
+
+.pm-processing-fee-trend-kpi-card {
+    -fx-background-color: -pm-fee-card-bg;
+    -fx-border-color: -pm-fee-card-border;
+    -fx-border-radius: 6;
+    -fx-background-radius: 6;
+    -fx-padding: 8 12 8 12;
+    -fx-min-width: 160;
+}
+
+.label.pm-processing-fee-trend-kpi-caption {
+    -fx-font-size: 11px;
+    -fx-text-fill: -fx-mid-text-color;
+}
+
+.label.pm-processing-fee-trend-kpi-value {
+    -fx-font-size: 18px;
+    -fx-font-weight: bold;
+}
+
+.label.pm-processing-fee-trend-chart-title {
+    -fx-font-size: 14px;
+    -fx-font-weight: bold;
+}
+
+.pm-processing-fee-trend-chart-stack {
+    -fx-background-color: white;
+    -fx-border-color: #cbd5e1;
+}
+
+.pm-processing-fee-trend-banner {
+    -fx-background-color: #fef3c7;
+    -fx-padding: 4 8 4 8;
+}
+
+.pm-fee-trend-daily-chart .default-color0.chart-bar {
+    -fx-bar-fill: #2563eb;
+}
+
+.pm-fee-trend-daily-chart .default-color1.chart-bar {
+    -fx-bar-fill: #99f6e4;
+    -fx-border-color: #0f766e;
+}

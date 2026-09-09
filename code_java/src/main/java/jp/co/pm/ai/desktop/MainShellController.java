@@ -511,6 +511,9 @@ public final class MainShellController
     private ProcessingTrendTabController processingTrendTabController;
 
     @FXML
+    private ProcessingFeeTrendTabController processingFeeTrendTabController;
+
+    @FXML
     private CodeDispatchLookupTablesTabController codeDispatchLookupTablesTabController;
 
     @FXML
@@ -518,6 +521,9 @@ public final class MainShellController
 
     @FXML
     private Tab mainShellTabProcessingTrend;
+
+    @FXML
+    private Tab mainShellTabProcessingFeeTrend;
 
     @FXML
     private Tab mainShellTabRun;
@@ -871,6 +877,9 @@ public final class MainShellController
             if (processingTrendTabController != null) {
                 processingTrendTabController.bindShell(this);
             }
+            if (processingFeeTrendTabController != null) {
+                processingFeeTrendTabController.bindShell(this);
+            }
             envTabController.bindShell(this);
             memorySettingsTabController.bindShell(this);
             if (globalSettingsTabController != null) {
@@ -1069,6 +1078,7 @@ public final class MainShellController
                                                 refreshMainShellTabHeaderChromeFromStoredColors();
                                                 scheduleEquipmentStatusDashboardInitialReloadIfSelected();
                                                 scheduleProcessingTrendInitialReloadIfSelected();
+                                                scheduleProcessingFeeTrendInitialReloadIfSelected();
                                                 scheduleRequestFormPipelineCheckInitialRefreshIfSelected();
                                             }));
                 });
@@ -1128,6 +1138,10 @@ public final class MainShellController
                             if (newTab == mainShellTabProcessingTrend
                                     && processingTrendTabController != null) {
                                 processingTrendTabController.onMainShellTabSelected();
+                            }
+                            if (newTab == mainShellTabProcessingFeeTrend
+                                    && processingFeeTrendTabController != null) {
+                                processingFeeTrendTabController.onMainShellTabSelected();
                             }
                             if (newTab == mainShellTabRequestFormInput
                                     && requestFormInputTabController != null
@@ -1194,6 +1208,10 @@ public final class MainShellController
                             if (prevTab == mainShellTabProcessingTrend
                                     && processingTrendTabController != null) {
                                 processingTrendTabController.onMainShellTabDeselected();
+                            }
+                            if (prevTab == mainShellTabProcessingFeeTrend
+                                    && processingFeeTrendTabController != null) {
+                                processingFeeTrendTabController.onMainShellTabDeselected();
                             }
                             if (prevTab == mainShellTabRequestFormInput
                                     && requestFormInputTabController != null) {
@@ -2430,6 +2448,9 @@ public final class MainShellController
         if (t == mainShellTabProcessingTrend) {
             return MainShellTabId.PROCESSING_TREND;
         }
+        if (t == mainShellTabProcessingFeeTrend) {
+            return MainShellTabId.PROCESSING_FEE_TREND;
+        }
         if (t == mainShellTabPipelineExecutionTiming) {
             return MainShellTabId.PIPELINE_EXECUTION_TIMING;
         }
@@ -2548,6 +2569,7 @@ public final class MainShellController
         return switch (id) {
             case EQUIPMENT_STATUS_DASHBOARD -> mainShellTabEquipmentStatusDashboard;
             case PROCESSING_TREND -> mainShellTabProcessingTrend;
+            case PROCESSING_FEE_TREND -> mainShellTabProcessingFeeTrend;
             case RUN -> mainShellTabRun;
             case PIPELINE_EXECUTION_TIMING -> mainShellTabPipelineExecutionTiming;
             case UI_BADGE_DESIGN -> mainShellTabUiBadgeDesign;
@@ -3311,6 +3333,17 @@ public final class MainShellController
         }
         if (tabPane.getSelectionModel().getSelectedItem() == mainShellTabProcessingTrend) {
             processingTrendTabController.onMainShellTabSelected();
+        }
+    }
+
+    private void scheduleProcessingFeeTrendInitialReloadIfSelected() {
+        if (tabPane == null
+                || mainShellTabProcessingFeeTrend == null
+                || processingFeeTrendTabController == null) {
+            return;
+        }
+        if (tabPane.getSelectionModel().getSelectedItem() == mainShellTabProcessingFeeTrend) {
+            processingFeeTrendTabController.onMainShellTabSelected();
         }
     }
 
@@ -4540,6 +4573,9 @@ public final class MainShellController
         }
         if (effective == mainShellTabProcessingTrend && processingTrendTabController != null) {
             processingTrendTabController.onMainShellTabSelected();
+        }
+        if (effective == mainShellTabProcessingFeeTrend && processingFeeTrendTabController != null) {
+            processingFeeTrendTabController.onMainShellTabSelected();
         }
         if (effective == mainShellTabRequestFormInput && requestFormInputTabController != null) {
             requestFormInputTabController.onMainShellTabSelected();
@@ -6752,6 +6788,10 @@ public final class MainShellController
     @Override
     public ProcessingTrendTabController processingTrendTab() {
         return processingTrendTabController;
+    }
+
+    public ProcessingFeeTrendTabController processingFeeTrendTab() {
+        return processingFeeTrendTabController;
     }
 
     @Override

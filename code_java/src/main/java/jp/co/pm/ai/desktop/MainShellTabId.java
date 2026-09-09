@@ -8,6 +8,8 @@ public enum MainShellTabId {
     EQUIPMENT_STATUS_DASHBOARD("equipmentStatusDashboard"),
     /** 加工実績・加工予定を日別に重ねたトレンド（日次棒 + 累計折れ線）。 */
     PROCESSING_TREND("processingTrend"),
+    /** 加工賃（AH×m）の日次円・累計（独立グラフ）。 */
+    PROCESSING_FEE_TREND("processingFeeTrend"),
     RUN("run"),
     UI_BADGE_DESIGN("uiBadgeDesign"),
     PUSH_BUTTON_DESIGN("pushButtonDesign"),
