@@ -35,6 +35,7 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
+import javafx.stage.Window;
 import javafx.util.Duration;
 
 import jp.co.pm.ai.desktop.bridge.PythonProcessRunner;
@@ -42,6 +43,10 @@ import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.config.FactorySite;
 import jp.co.pm.ai.desktop.config.GlobalInitSettingTarget;
 import jp.co.pm.ai.desktop.dispatch.AttendanceOvertimePreview;
+import jp.co.pm.ai.desktop.io.conflict.AttendanceConflictDiffSummarizer;
+import jp.co.pm.ai.desktop.io.conflict.ConflictDiffSummarizer;
+import jp.co.pm.ai.desktop.io.conflict.FingerprintBaseline;
+import jp.co.pm.ai.desktop.io.conflict.SaveConflictUiGate;
 import jp.co.pm.ai.desktop.ui.AttendanceGridCellSizing;
 import jp.co.pm.ai.desktop.ui.AttendanceSyncStatusPane;
 import jp.co.pm.ai.desktop.ui.ButtonAttentionGlow;
@@ -58,6 +63,9 @@ public class MemberAttendanceTabController {
     private static final ObjectMapper JSON = new ObjectMapper();
     private static final int MEMBER_GRID_CACHE_MAX_MONTHS = 12;
     private static final Duration MEMBER_GRID_IDLE_PREFETCH_DELAY = Duration.millis(650);
+
+    private FingerprintBaseline conflictBaseline;
+    private final ConflictDiffSummarizer conflictSummarizer = new AttendanceConflictDiffSummarizer();
 
     @FXML
     private VBox gridHost;
@@ -368,6 +376,26 @@ public class MemberAttendanceTabController {
             }
             return;
         }
+        Window owner =
+                statusLabel != null && statusLabel.getScene() != null
+                        ? statusLabel.getScene().getWindow()
+                        : shell.primaryStageForDialogs();
+        if (!SaveConflictUiGate.allowSave(
+                owner,
+                "メンバー勤怠",
+                conflictBaseline,
+                conflictSummarizer,
+                this::reloadAttendanceDataFromJson,
+                msg -> {
+                    if (statusLabel != null) {
+                        statusLabel.setText(msg);
+                    }
+                })) {
+            if (onComplete != null) {
+                onComplete.accept(false);
+            }
+            return;
+        }
         try {
             Map<String, Object> patch = gridPane.exportPatchJson();
             String json = JSON.writeValueAsString(patch);
@@ -380,6 +408,7 @@ public class MemberAttendanceTabController {
                         gridPane.clearUnsavedEditFlags();
                         applyGridDirtyState(false);
                         clearMemberGridCache();
+                        refreshConflictBaseline();
                         statusLabel.setText(
                                 "保存・勤怠カレンダー.xlsx 出力完了: "
                                         + mergeNode.path("applied").asInt(0)
@@ -594,6 +623,7 @@ public class MemberAttendanceTabController {
         if (gridPane != null) {
             gridPane.loadFromMemberGridJson(node);
         }
+        refreshConflictBaseline();
         statusLabel.setText(
                 "読込 "
                         + year
@@ -604,6 +634,21 @@ public class MemberAttendanceTabController {
                         + " revision="
                         + node.path("member_attendance_revision").asInt(0));
         scheduleMemberGridIdlePrefetch();
+    }
+
+    private void refreshConflictBaseline() {
+        if (shell == null) {
+            conflictBaseline = null;
+            return;
+        }
+        try {
+            Map<String, String> ui = shell.snapshotUiEnv();
+            Path json = AppPaths.attendanceDataJsonPath(ui);
+            Path xlsx = AppPaths.attendanceCalendarXlsxPath(ui);
+            conflictBaseline = FingerprintBaseline.capture(List.of(json, xlsx));
+        } catch (Exception e) {
+            conflictBaseline = null;
+        }
     }
 
     /** セッション・環境変数復元後に MainShell から呼ぶ。JSON 正本を読み込む。 */

@@ -4,6 +4,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDate;
 import java.time.YearMonth;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
@@ -25,10 +26,15 @@ import javafx.scene.control.ToggleButton;
 import javafx.scene.control.ToggleGroup;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
+import javafx.stage.Window;
 
 import jp.co.pm.ai.desktop.bridge.PythonProcessRunner;
 import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.dispatch.AttendanceOvertimePreview;
+import jp.co.pm.ai.desktop.io.conflict.ConflictDiffSummarizer;
+import jp.co.pm.ai.desktop.io.conflict.FingerprintBaseline;
+import jp.co.pm.ai.desktop.io.conflict.MachineCalendarConflictDiffSummarizer;
+import jp.co.pm.ai.desktop.io.conflict.SaveConflictUiGate;
 import jp.co.pm.ai.desktop.ui.AttendanceGridCellSizing;
 import jp.co.pm.ai.desktop.ui.ButtonAttentionGlow;
 import jp.co.pm.ai.desktop.ui.CompanyCalendarDayVisual;
@@ -79,6 +85,9 @@ public class MachineCalendarTabController {
     private InlineMonthCalendarPane monthCalendar;
     private ButtonAttentionGlow saveButtonGlow;
     private final AtomicLong loadGeneration = new AtomicLong(0);
+    private FingerprintBaseline conflictBaseline;
+    private final ConflictDiffSummarizer conflictSummarizer =
+            new MachineCalendarConflictDiffSummarizer();
     private final AtomicLong companyCalendarLoadGeneration = new AtomicLong(0);
     private boolean suppressDateGuard = false;
     private boolean gridDirty = false;
@@ -451,6 +460,26 @@ public class MachineCalendarTabController {
             }
             return;
         }
+        Window owner =
+                statusLabel != null && statusLabel.getScene() != null
+                        ? statusLabel.getScene().getWindow()
+                        : shell.primaryStageForDialogs();
+        if (!SaveConflictUiGate.allowSave(
+                owner,
+                "機械カレンダー",
+                conflictBaseline,
+                conflictSummarizer,
+                this::loadGridFromPython,
+                msg -> {
+                    if (statusLabel != null) {
+                        statusLabel.setText(msg);
+                    }
+                })) {
+            if (onComplete != null) {
+                onComplete.accept(false);
+            }
+            return;
+        }
         gridPane.setGridLoading(true, "JSON 正本へ保存中…");
         setToolbarBusy(true);
         try {
@@ -472,6 +501,7 @@ public class MachineCalendarTabController {
                                     gridPane.captureSavedBaseline();
                                     applyGridDirtyState(false);
                                     endGridLoading();
+                                    refreshConflictBaseline();
                                     if (statusLabel != null) {
                                         statusLabel.setText(
                                                 "保存・Excel 出力完了: "
@@ -627,6 +657,7 @@ public class MachineCalendarTabController {
                     if (gridPane.isGridLoading()) {
                         endGridLoading();
                     }
+                    refreshConflictBaseline();
                     if (statusLabel != null) {
                         statusLabel.setText(
                                 "読込 "
@@ -640,6 +671,21 @@ public class MachineCalendarTabController {
                 null,
                 onComplete,
                 gen);
+    }
+
+    private void refreshConflictBaseline() {
+        if (shell == null) {
+            conflictBaseline = null;
+            return;
+        }
+        try {
+            Map<String, String> ui = shell.snapshotUiEnv();
+            Path json = AppPaths.machineCalendarDataJsonPath(ui);
+            Path xlsx = AppPaths.attendanceCalendarXlsxPath(ui);
+            conflictBaseline = FingerprintBaseline.capture(List.of(json, xlsx));
+        } catch (Exception e) {
+            conflictBaseline = null;
+        }
     }
 
     /** 保存・初期値作成など、既にグリッド暗転中の処理のあとに日次グリッドを再読込する。 */
