@@ -227,7 +227,6 @@ public class ProcessingFeeTrendTabController {
         }
         cumulativeYAxis.setSide(Side.RIGHT);
         cumulativeYAxis.setTickLabelsVisible(true);
-        cumulativeYAxis.setTickMarkVisible(true);
         cumulativeYAxis.setLabel("累計 (円) ─ 折れ線");
         cumulativeChart.setMouseTransparent(true);
         cumulativeChart.setHorizontalGridLinesVisible(false);
@@ -823,7 +822,6 @@ public class ProcessingFeeTrendTabController {
         // 第一軸（左）= 日次棒 / 第二軸（右）= 累計折線（空 LineChart + Path）
         applyNiceRange(dailyYAxis, dailyMax);
         applyNiceRange(cumulativeYAxis, cumMax);
-        ensureRightAxisMinWidth();
         actualSeries.getData().setAll(act);
         planSeries.getData().setAll(plan);
         overlayActualCum = OverlayPolyline.fromChartData(actCum);
@@ -859,23 +857,10 @@ public class ProcessingFeeTrendTabController {
         axis.setTickUnit(nr.tickUnit());
     }
 
-    /**
-     * 円表記が長いため、第二軸幅が潰れて目盛ラベルが消えないよう下限を確保する。
-     */
-    private void ensureRightAxisMinWidth() {
-        String sample =
-                NumberFormat.getIntegerInstance(Locale.JAPAN)
-                        .format(Math.rint(cumulativeYAxis.getUpperBound()));
-        double estimated = Math.max(64.0, sample.length() * 7.5 + 44.0);
-        if (cumulativeYAxis.getMinWidth() < estimated) {
-            cumulativeYAxis.setMinWidth(estimated);
-        }
-        cumulativeYAxis.requestAxisLayout();
-    }
-
     private void syncChartPadding() {
-        double left = Math.max(dailyYAxis.getWidth(), 1.0);
-        double right = Math.max(cumulativeYAxis.getWidth(), cumulativeYAxis.getMinWidth());
+        // 加工量 COMBO と同型: 実測幅で相手側 Y 軸ぶんの余白を空ける（XYChart は minWidth を見ないため使わない）
+        double left = dailyYAxis.getWidth();
+        double right = cumulativeYAxis.getWidth();
         dailyChart.setPadding(new Insets(CHART_TOP_PADDING, right, 0, 0));
         cumulativeChart.setPadding(new Insets(CHART_TOP_PADDING, 0, 0, left));
     }

@@ -102,8 +102,10 @@
                                     label="日次 (円) ─ 棒" lowerBound="0.0" upperBound="10.0" tickUnit="2.0" minorTickVisible="false"/>
                     </yAxis>
                 </BarChart>
+                <!-- 注意: Chart は @NamedArg 経由（ProxyBuilder）で生成されるため styleClass のカンマ区切りは分割されない。
+                     単一クラスのみ書き、pm-trend-overlay は Controller が付与する -->
                 <LineChart fx:id="cumulativeChart" animated="false" createSymbols="false" legendVisible="false"
-                           minHeight="200.0" styleClass="pm-trend-cumulative-chart, pm-trend-overlay"
+                           minHeight="200.0" styleClass="pm-trend-cumulative-chart"
                            mouseTransparent="true"
                            horizontalGridLinesVisible="false" verticalGridLinesVisible="false"
                            alternativeRowFillVisible="false" alternativeColumnFillVisible="false"

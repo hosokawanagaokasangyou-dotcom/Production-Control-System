@@ -1,9 +1,12 @@
 package jp.co.pm.ai.desktop;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 import java.io.InputStream;
+import java.util.List;
 
 import javax.xml.parsers.DocumentBuilderFactory;
 
@@ -26,7 +29,8 @@ class ProcessingFeeTrendTabFxmlTest {
         assertNotNull(elementByFxId("detailTable"));
         assertNotNull(elementByFxId("colActualYen"));
         assertNotNull(elementByFxId("colPlanYen"));
-        assertNotNull(elementByFxId("colDiffYen"));
+        assertNull(elementByFxId("colDiffYen"), "差異列は表示しない");
+        assertNull(elementByFxId("colReqDiffYen"), "差異列は表示しない");
         assertNotNull(elementByFxId("colActualCumYen"));
         assertNotNull(elementByFxId("colPlanCumYen"));
         assertNotNull(elementByFxId("requestPane"));
@@ -45,6 +49,30 @@ class ProcessingFeeTrendTabFxmlTest {
     @Test
     void fxmlImportsTitledPaneAndTableTypes() throws Exception {
         assertFxmlImportsControls();
+    }
+
+    /**
+     * Chart 系（BarChart / LineChart）は軸を @NamedArg で受けるため FXMLLoader が ProxyBuilder 経由で生成し、
+     * その経路では styleClass のカンマ区切りが分割されず「a, b」が 1 つのクラス名になる（CSS が一切当たらない）。
+     */
+    @Test
+    void chartStyleClassMustBeSingleToken() throws Exception {
+        try (InputStream in =
+                ProcessingFeeTrendTabFxmlTest.class.getResourceAsStream(
+                        "/jp/co/pm/ai/desktop/fxml/ProcessingFeeTrendTab.fxml")) {
+            assertNotNull(in);
+            var doc = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(in);
+            for (String tag : List.of("BarChart", "LineChart")) {
+                NodeList charts = doc.getElementsByTagName(tag);
+                for (int i = 0; i < charts.getLength(); i++) {
+                    Element el = (Element) charts.item(i);
+                    String sc = el.getAttribute("styleClass");
+                    assertFalse(
+                            sc.contains(",") || sc.trim().contains(" "),
+                            tag + " styleClass はカンマ区切り不可（ProxyBuilder は分割しない）: " + sc);
+                }
+            }
+        }
     }
 
     private static void assertFxmlImportsControls() throws Exception {
