@@ -556,7 +556,7 @@ public final class MasterDispatchSheetsTabController {
                 "配台マスタ",
                 conflictBaseline,
                 conflictSummarizer,
-                () -> reloadFromCurrentFactory(false),
+                () -> reloadFromCurrentFactory(true),
                 msg -> {
                     if (statusLabel != null) {
                         statusLabel.setText(msg);

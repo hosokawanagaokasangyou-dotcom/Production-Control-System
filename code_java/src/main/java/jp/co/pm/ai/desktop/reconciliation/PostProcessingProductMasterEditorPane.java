@@ -969,6 +969,7 @@ public final class PostProcessingProductMasterEditorPane {
                     reloadAllMasterLookups,
                     rebuildForm,
                     loadUploadFile,
+                    refreshConflictBaseline,
                     log);
         } else {
             loadReferenceHeaders.run();
@@ -998,6 +999,7 @@ public final class PostProcessingProductMasterEditorPane {
             Runnable reloadAllMasterLookups,
             Runnable rebuildForm,
             Runnable loadUploadFile,
+            Runnable refreshConflictBaseline,
             Consumer<String> log) {
         PostProcessingMasterLoadBusyDialog busyDialog =
                 PostProcessingMasterLoadBusyDialog.show(
@@ -1107,6 +1109,7 @@ public final class PostProcessingProductMasterEditorPane {
                                                             referenceHeaders,
                                                             uploadRows,
                                                             statusLabel);
+                                                    refreshConflictBaseline.run();
                                                 } catch (IllegalArgumentException ex) {
                                                     statusLabel.setText(ex.getMessage());
                                                 }

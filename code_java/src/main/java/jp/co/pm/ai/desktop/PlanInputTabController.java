@@ -1235,6 +1235,7 @@ public final class PlanInputTabController {
         File f = ch.showOpenDialog(ownerStage);
         if (f != null) {
             pathField.setText(f.getAbsolutePath());
+            conflictBaseline = null;
         }
     }
 
@@ -1337,7 +1338,21 @@ public final class PlanInputTabController {
             shell.showWarningDialog("保存", "保存先のパスが空です。");
             return;
         }
-        Path path = Path.of(pathField.getText().trim());
+        Path path = Path.of(pathField.getText().trim()).toAbsolutePath().normalize();
+        if (conflictBaseline != null
+                && (conflictBaseline.paths().isEmpty()
+                        || !conflictBaseline.paths().get(0).equals(path))) {
+            shell.showWarningDialog(
+                    "保存",
+                    "保存先パスが読込時と異なります。いったん再読込してから保存してください。\n"
+                            + "読込: "
+                            + (conflictBaseline.paths().isEmpty()
+                                    ? "(なし)"
+                                    : conflictBaseline.paths().get(0))
+                            + "\n保存先: "
+                            + path);
+            return;
+        }
         Window owner =
                 ownerStage != null
                         ? ownerStage

@@ -620,10 +620,18 @@ public class MemberAttendanceTabController {
     }
 
     private void applyMemberGridNode(JsonNode node, int year, int month) {
+        applyMemberGridNode(node, year, month, true);
+    }
+
+    private void applyMemberGridNode(
+            JsonNode node, int year, int month, boolean refreshDiskFingerprint) {
         if (gridPane != null) {
             gridPane.loadFromMemberGridJson(node);
         }
-        refreshConflictBaseline();
+        // キャッシュ適用時はディスク指紋だけ更新しない（UI が古いのに baseline が新しくなり競合をすり抜ける）
+        if (refreshDiskFingerprint) {
+            refreshConflictBaseline();
+        }
         statusLabel.setText(
                 "読込 "
                         + year
@@ -964,7 +972,7 @@ public class MemberAttendanceTabController {
         JsonNode cached = memberGridCache.get(cacheKey);
         if (cached != null) {
             if (gen == loadGeneration.get()) {
-                applyMemberGridNode(cached, year, month);
+                applyMemberGridNode(cached, year, month, false);
             }
             if (onComplete != null) {
                 onComplete.accept(true);
@@ -979,7 +987,7 @@ public class MemberAttendanceTabController {
                         return;
                     }
                     storeMemberGridCache(node);
-                    applyMemberGridNode(node, year, month);
+                    applyMemberGridNode(node, year, month, true);
                 },
                 false,
                 null,

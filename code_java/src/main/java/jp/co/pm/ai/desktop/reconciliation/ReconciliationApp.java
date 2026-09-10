@@ -4203,6 +4203,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
 
                                                     syncOriginalFileMonitorAfterReload();
                                                     enqueueBackgroundCacheTasks();
+                                                    refreshJuchuConflictBaseline();
                                                     setPreviewReloadOverlay(false, "");
                                                     Consumer<Boolean> initialComplete =
                                                             initialDataReloadCompleteListener;

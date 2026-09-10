@@ -277,7 +277,21 @@ public final class ExcludeRulesTabController {
             shell.showWarningDialog("保存", "保存先のパスが空です（PM_AI_EXCLUDE_RULES_JSON または手入力）。");
             return;
         }
-        Path target = Path.of(p);
+        Path target = Path.of(p).toAbsolutePath().normalize();
+        if (conflictBaseline != null
+                && (conflictBaseline.paths().isEmpty()
+                        || !conflictBaseline.paths().get(0).equals(target))) {
+            shell.showWarningDialog(
+                    "保存",
+                    "保存先パスが読込時と異なります。いったん再読込してから保存してください。\n"
+                            + "読込: "
+                            + (conflictBaseline.paths().isEmpty()
+                                    ? "(なし)"
+                                    : conflictBaseline.paths().get(0))
+                            + "\n保存先: "
+                            + target);
+            return;
+        }
         Window owner =
                 ownerStage != null
                         ? ownerStage

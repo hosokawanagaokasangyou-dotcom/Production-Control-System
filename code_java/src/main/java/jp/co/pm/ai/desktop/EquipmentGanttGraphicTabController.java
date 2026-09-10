@@ -1543,10 +1543,14 @@ public final class EquipmentGanttGraphicTabController {
         }
         try {
             Path contract = resolveEquipmentContractSibling(planJson);
+            Path planXlsx = resolvePlanXlsxSibling(planJson);
             List<Path> paths = new ArrayList<>();
             paths.add(planJson);
             if (contract != null) {
                 paths.add(contract);
+            }
+            if (planXlsx != null && Files.isRegularFile(planXlsx)) {
+                paths.add(planXlsx);
             }
             conflictBaseline = FingerprintBaseline.capture(paths);
         } catch (Exception e) {

@@ -490,6 +490,8 @@ public class MachineCalendarTabController {
             runAsync(
                     shell.buildMachineCalendarIoRequest("merge", "--patch-file", tmp.toString()),
                     mergeNode -> {
+                        // merge 成功時点で JSON は更新済み。export 失敗でも偽競合にならないよう指紋を更新する
+                        refreshConflictBaseline();
                         if (statusLabel != null) {
                             statusLabel.setText(CALENDAR_XLSX_LABEL + " を出力中…");
                         }
@@ -702,6 +704,7 @@ public class MachineCalendarTabController {
                 node -> {
                     gridPane.loadFromDayGridJson(node);
                     endGridLoading();
+                    refreshConflictBaseline();
                     if (statusLabel != null) {
                         statusLabel.setText(
                                 "読込 "
