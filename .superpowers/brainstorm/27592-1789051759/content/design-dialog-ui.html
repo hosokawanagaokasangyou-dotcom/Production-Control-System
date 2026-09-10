@@ -1,0 +1,55 @@
+<h2>設計 3/4 — 競合ダイアログ UI</h2>
+<p class="subtitle">見た目の方向性を選んでください（機能は共通）</p>
+
+<div class="cards">
+  <div class="card" data-choice="dialog-a" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup" style="margin:0">
+        <div class="mockup-header">外部変更の検出</div>
+        <div class="mockup-body" style="font-size:12px">
+          <p style="margin:0 0 8px"><strong>メンバー勤怠</strong> — 保存先が他で変更されています。</p>
+          <div class="placeholder" style="min-height:72px;text-align:left;padding:8px;font-size:11px">
+            ・メンバー「山田」が追加されています<br>
+            ・9/12 の出勤区分が 3 件変更<br>
+            ・関連 Excel の更新日時が異なります
+          </div>
+          <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">
+            <button class="mock-button">再読込</button>
+            <button class="mock-button">上書き保存</button>
+            <button class="mock-button">キャンセル</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A. 標準 Alert 風</h3>
+      <p>既存 JavaFX Alert に近い。実装が軽い。</p>
+    </div>
+  </div>
+  <div class="card" data-choice="dialog-b" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup" style="margin:0">
+        <div class="mockup-header" style="background:#5c2b2b;color:#fff">⚠ 競合 — 再確認が必要です</div>
+        <div class="mockup-body" style="font-size:12px">
+          <p class="label" style="margin:0 0 4px">変更の要約</p>
+          <div class="placeholder" style="min-height:88px;text-align:left;padding:8px;font-size:11px;border-left:3px solid #b33">
+            ディスク上の内容（他プロセス）と画面の内容が一致しません。<br><br>
+            ・山田 が追加<br>
+            ・9/12 出勤×3<br>
+            ・勤怠・機械カレンダー.xlsx も変更
+          </div>
+          <p style="font-size:11px;opacity:.8;margin:8px 0">再読込すると、いまの未保存編集は破棄されます。</p>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <button class="mock-button">再読込して更新</button>
+            <button class="mock-button">強制上書き</button>
+            <button class="mock-button">キャンセル</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B. 強調ヘッダ + スクロール要約（推奨）</h3>
+      <p>長文の業務語差分に耐える。危険操作が明確。</p>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,37 @@
+<h2>設計 1/4 — 全体アーキテクチャ</h2>
+<p class="subtitle">保存前競合検知（常時ロックなし）</p>
+
+<div class="mockup">
+  <div class="mockup-header">コンポーネント関係</div>
+  <div class="mockup-body">
+    <pre style="white-space:pre-wrap;font-size:13px;line-height:1.45;margin:0">
+[各 TabController]
+   │ 読込成功時
+   ▼
+FileContentFingerprint.capture(path)  →  SHA-256 をメモリ保持
+   │
+   │ 保存ボタン / saveEdits
+   ▼
+SaveConflictGuard.beforeSave(paths, baseline, summarizer)
+   │ 再ハッシュ一致 → そのまま保存へ
+   │ 不一致
+   ▼
+ConflictDiffSummarizer.summarize(baselineBytes?, diskBytes)  ※画面別プラグイン
+   │
+   ▼
+ConflictSaveDialog（再読込 / 上書き / キャンセル）
+   │ 再読込 → UI 破棄して reload、baseline 更新
+   │ 上書き → 保存続行、成功後 baseline 更新
+   │ キャンセル → 保存中止（編集保持）
+    </pre>
+  </div>
+</div>
+
+<div class="section">
+  <p class="label">方針</p>
+  <ul>
+    <li>OS 常時ロックはしない（保存直前の短い書き込み排他は既存どおり可）</li>
+    <li>正本 JSON と関連 Excel は <strong>セットで指紋</strong>（どちらか変わっても競合）</li>
+    <li>自動保存（session-state 等）は対象外</li>
+  </ul>
+</div>

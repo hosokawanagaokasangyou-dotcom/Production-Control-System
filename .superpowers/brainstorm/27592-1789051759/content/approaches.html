@@ -1,0 +1,61 @@
+<h2>保存前競合検知 — 実装アプローチ</h2>
+<p class="subtitle">クリックして選択してください（推奨は A）</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>共通ガード + 画面別要約プラグイン（推奨）</h3>
+      <p>読込時に SHA-256 を記録。保存直前に共通 <code>SaveConflictGuard</code> が再ハッシュ。衝突時は共通ダイアログへ、差分本文は画面ごとの <code>ConflictDiffSummarizer</code> が業務語で生成。</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul>
+          <li>UX・検知ロジックが全画面で統一</li>
+          <li>要約だけ画面固有に分離でき保守しやすい</li>
+          <li>関連 Excel も同じ指紋で扱える</li>
+        </ul></div>
+        <div class="cons"><h4>Cons</h4><ul>
+          <li>初回で要約実装が画面数ぶん必要</li>
+          <li>横断変更のためレビュー規模が大きい</li>
+        </ul></div>
+      </div>
+    </div>
+  </div>
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>共通ガード + 汎用構造差分フォールバック</h3>
+      <p>ハッシュ検知とダイアログは共通。要約は JSON パス／表セル差分の汎用生成を既定とし、勤怠などだけ業務語に差し替え。</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul>
+          <li>全画面カバーを早く達成</li>
+          <li>未対応画面でも最低限の差分は出る</li>
+        </ul></div>
+        <div class="cons"><h4>Cons</h4><ul>
+          <li>「業務語要約」要件を一部で満たしきれない期間がある</li>
+          <li>汎用差分が長くなりがち</li>
+        </ul></div>
+      </div>
+    </div>
+  </div>
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>各コントローラに個別実装</h3>
+      <p>画面ごとにハッシュ比較・ダイアログ・要約を直書き。共通抽象は最小限。</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul>
+          <li>画面単位で独立に進められる</li>
+        </ul></div>
+        <div class="cons"><h4>Cons</h4><ul>
+          <li>挙動のばらつき・重複コードが増える</li>
+          <li>全画面一気適用には不向き</li>
+        </ul></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <p class="label">推奨</p>
+  <p><strong>A</strong> — 「全画面・業務語・SHA-256」を満たしつつ、検知と UI を一本化できるため。</p>
+</div>

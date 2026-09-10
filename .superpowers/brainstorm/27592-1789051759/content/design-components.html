@@ -1,0 +1,43 @@
+<h2>設計 2/4 — コンポーネントと対象画面</h2>
+<p class="subtitle">共通 API と、明示保存がある画面一覧</p>
+
+<div class="section">
+  <p class="label">共通（新規）</p>
+  <ul>
+    <li><code>FileContentFingerprint</code> — パス → SHA-256（欠落は sentinel）</li>
+    <li><code>SaveConflictGuard</code> — baseline と現ファイルの比較、セット判定</li>
+    <li><code>ConflictDiffSummarizer</code> — 画面別プラグイン interface</li>
+    <li><code>ConflictSaveDialog</code> — 業務語要約 + 3 ボタン</li>
+  </ul>
+</div>
+
+<div class="section">
+  <p class="label">対象画面（明示保存）と関連ファイル</p>
+  <ul>
+    <li>会社カレンダー / メンバー勤怠 → <code>attendance-data.json</code> + 勤怠・機械カレンダー.xlsx</li>
+    <li>機械カレンダー → <code>machine-calendar-data.json</code> + 同 xlsx</li>
+    <li>配台マスタ → <code>master-dispatch-sheets.json</code> + master.xlsm</li>
+    <li>配台計画（タスク入力） → <code>PM_AI_PLAN_INPUT_PATH</code></li>
+    <li>配台不要ルール → exclude rules JSON</li>
+    <li>特別ルール（JSON / ビルダー / 工程優先） → special rules JSON</li>
+    <li>材料・製品種類 → サマリ同フォルダの .txt 群</li>
+    <li>設備ガント担当保存 → 計画 JSON + 契約 JSON（+ 関連 xlsx 同期時）</li>
+    <li>依頼書入力（設定 JSON / 受注転記 / 後加工マスタアップロード xlsx）</li>
+    <li>ユーザープロファイル / グローバル設定パッケージ既定</li>
+    <li>環境変数・Gemini 資格情報暗号化（中身は秘匿、有無・更新のみ要約）</li>
+  </ul>
+</div>
+
+<div class="section">
+  <p class="label">対象外</p>
+  <ul>
+    <li><code>session-state.json</code> 等の自動保存</li>
+    <li>列順・バッジ等の UI 微調整自動永続</li>
+    <li>操作者ユーザー bin の即時永続（別途必要なら後続）</li>
+  </ul>
+</div>
+
+<div class="section">
+  <p class="label">同一ファイルを複数タブが触る場合</p>
+  <p>例: 会社カレンダーとメンバー勤怠は同じ JSON。各タブが独自 baseline を持つ。片方で保存成功したら、他タブは次回保存時に競合扱い → 再読込を促す（意図どおり）。</p>
+</div>

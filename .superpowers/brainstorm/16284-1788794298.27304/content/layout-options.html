@@ -1,0 +1,68 @@
+<h2>検索タブのレイアウト — どれが近いですか？</h2>
+<p class="subtitle">クリックで選択。納期は必須、製品名／投入原反は OR（部分一致想定）</p>
+
+<div class="cards">
+  <div class="card" data-choice="layout-a" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup" style="margin:0;border:none;box-shadow:none">
+        <div class="mockup-body" style="padding:8px;font-size:12px">
+          <div class="mock-nav" style="font-size:10px;margin-bottom:8px">… | 【設定】 | <b>受注検索</b> | 後加工…</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;align-items:center">
+            <span class="label">希望/調整納期</span>
+            <input class="mock-input" style="width:90px" value="開始" readonly>
+            <span>〜</span>
+            <input class="mock-input" style="width:90px" value="終了" readonly>
+            <input class="mock-input" style="width:120px" placeholder="製品名" readonly>
+            <input class="mock-input" style="width:120px" placeholder="投入原反" readonly>
+            <button class="mock-button">検索</button>
+          </div>
+          <div class="placeholder" style="height:80px;font-size:11px">結果テーブル（依頼No / 希望納期 / 調整納期 / 製品 / 原反 …）</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A. 横一列フィルタ</h3>
+      <p>条件を上段に並べ、下に結果表。既存の受注管理に近い操作感。</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="layout-b" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup" style="margin:0;border:none;box-shadow:none">
+        <div class="mockup-body" style="padding:8px;font-size:12px;display:flex;gap:8px">
+          <div style="width:32%;border:1px solid #444;border-radius:6px;padding:8px">
+            <div class="label">条件</div>
+            <div style="margin:6px 0">納期 開始〜終了</div>
+            <div style="margin:6px 0">製品名</div>
+            <div style="margin:6px 0">投入原反</div>
+            <button class="mock-button" style="width:100%;margin-top:8px">検索</button>
+          </div>
+          <div class="placeholder" style="flex:1;height:120px;font-size:11px">結果テーブル</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B. 左条件・右結果</h3>
+      <p>条件パネルを左に固定。条件が多くなっても表が崩れにくい。</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="layout-c" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup" style="margin:0;border:none;box-shadow:none">
+        <div class="mockup-body" style="padding:8px;font-size:12px">
+          <div style="border:1px solid #444;border-radius:6px;padding:8px;margin-bottom:8px">
+            <div><b>1. 納期範囲</b>（必須）　開始 〜 終了</div>
+            <div style="margin-top:6px"><b>2. キーワード</b>（どちらか）　製品名 / 投入原反</div>
+            <button class="mock-button" style="margin-top:8px">検索</button>
+          </div>
+          <div class="placeholder" style="height:70px;font-size:11px">結果テーブル + 件数</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C. ステップ風カード</h3>
+      <p>必須／OR が分かりやすい。縦に少し場所を取る。</p>
+    </div>
+  </div>
+</div>
