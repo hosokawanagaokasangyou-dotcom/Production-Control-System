@@ -30,16 +30,17 @@ public final class AttendanceConflictDiffSummarizer implements ConflictDiffSumma
                     lines.add("・関連 Excel（" + name + "）が変更されています");
                     continue;
                 }
-                byte[] baseBytes = baselineSnapshots.getOrDefault(p, new byte[0]);
-                byte[] diskB = diskBytes.getOrDefault(p, new byte[0]);
-                if (baseBytes.length == 0 && diskB.length == 0) {
+                byte[] baseBytes = SnapshotPresence.get(baselineSnapshots, p);
+                byte[] diskB = SnapshotPresence.get(diskBytes, p);
+                if (SnapshotPresence.isAbsent(baseBytes) && SnapshotPresence.isAbsent(diskB)) {
+                    lines.add("・" + name + " は読込時・保存時ともディスク上にありません");
                     continue;
                 }
-                if (baseBytes.length == 0) {
+                if (SnapshotPresence.isAbsent(baseBytes)) {
                     lines.add("・" + name + " が新規に作成されています");
                     continue;
                 }
-                if (diskB.length == 0) {
+                if (SnapshotPresence.isAbsent(diskB)) {
                     lines.add("・" + name + " がディスク上にありません");
                     continue;
                 }
@@ -59,18 +60,7 @@ public final class AttendanceConflictDiffSummarizer implements ConflictDiffSumma
     }
 
     private static String fallback(List<Path> mismatched, Map<Path, byte[]> diskBytes) {
-        StringBuilder sb = new StringBuilder("詳細差分を生成できませんでした。\n");
-        for (Path p : mismatched) {
-            byte[] bytes = diskBytes.getOrDefault(p, new byte[0]);
-            String hex = FileContentFingerprint.sha256Hex(bytes);
-            String shortHex = hex.length() <= 12 ? hex : hex.substring(0, 12);
-            sb.append("・")
-                    .append(p.getFileName())
-                    .append(" hash=")
-                    .append(shortHex)
-                    .append("…\n");
-        }
-        return sb.toString().trim();
+        return SaveConflictGate.fallbackSummary(diskBytes, ConflictCheckResult.conflict(mismatched));
     }
 
     private static Set<String> rosterNames(JsonNode root) {

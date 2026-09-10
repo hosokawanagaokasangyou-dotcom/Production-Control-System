@@ -23,12 +23,14 @@ public final class NamedFileConflictDiffSummarizer implements ConflictDiffSummar
         lines.add(screenLabel + " の保存先が外部で変更されています。");
         for (Path p : mismatched) {
             String name = p.getFileName() != null ? p.getFileName().toString() : p.toString();
-            byte[] base = baselineSnapshots.getOrDefault(p, new byte[0]);
-            byte[] disk = diskBytes.getOrDefault(p, new byte[0]);
-            if (base.length == 0 && disk.length > 0) {
+            byte[] base = SnapshotPresence.get(baselineSnapshots, p);
+            byte[] disk = SnapshotPresence.get(diskBytes, p);
+            if (SnapshotPresence.isAbsent(base) && SnapshotPresence.isPresent(disk)) {
                 lines.add("・" + name + " が新規に作成されています");
-            } else if (base.length > 0 && disk.length == 0) {
+            } else if (SnapshotPresence.isPresent(base) && SnapshotPresence.isAbsent(disk)) {
                 lines.add("・" + name + " がディスク上にありません");
+            } else if (SnapshotPresence.isAbsent(base) && SnapshotPresence.isAbsent(disk)) {
+                lines.add("・" + name + " は読込時・保存時ともディスク上にありません");
             } else {
                 String hex = FileContentFingerprint.sha256Hex(disk);
                 String shortHex = hex.length() <= 12 ? hex : hex.substring(0, 12);

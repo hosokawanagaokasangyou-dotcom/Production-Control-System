@@ -5,6 +5,7 @@ import java.nio.file.Path;
 import java.util.Map;
 import java.util.function.Consumer;
 
+import javafx.application.Platform;
 import javafx.scene.control.Alert;
 import javafx.scene.control.ButtonType;
 import javafx.stage.Window;
@@ -28,17 +29,22 @@ public final class SaveConflictUiGate {
             Runnable onReload,
             Consumer<String> onStatusError) {
         if (baseline == null) {
-            return true;
+            reportError(
+                    onStatusError,
+                    "保存中止: 競合確認用の読込指紋がありません。再読込してから保存してください。");
+            return false;
+        }
+        if (!Platform.isFxApplicationThread()) {
+            reportError(
+                    onStatusError,
+                    "保存中止: 競合確認は JavaFX アプリケーションスレッドで実行してください。");
+            return false;
         }
         ConflictCheckResult check = SaveConflictChecker.check(baseline);
         if (check.kind() == ConflictCheckResult.Kind.IO_ERROR) {
-            String msg = "保存中止: 競合確認に失敗しました — " + check.errorMessage();
-            if (onStatusError != null) {
-                onStatusError.accept(msg);
-            } else {
-                Alert a = new Alert(Alert.AlertType.ERROR, msg, ButtonType.OK);
-                a.showAndWait();
-            }
+            reportError(
+                    onStatusError,
+                    "保存中止: 競合確認に失敗しました — " + check.errorMessage());
             return false;
         }
         if (check.kind() == ConflictCheckResult.Kind.OK) {
@@ -48,10 +54,7 @@ public final class SaveConflictUiGate {
         try {
             disk = SaveConflictGate.readDiskBytes(baseline);
         } catch (IOException e) {
-            String msg = "保存中止: " + e.getMessage();
-            if (onStatusError != null) {
-                onStatusError.accept(msg);
-            }
+            reportError(onStatusError, "保存中止: " + e.getMessage());
             return false;
         }
         String summary =
@@ -67,5 +70,14 @@ public final class SaveConflictUiGate {
             return false;
         }
         return true;
+    }
+
+    private static void reportError(Consumer<String> onStatusError, String msg) {
+        if (onStatusError != null) {
+            onStatusError.accept(msg);
+            return;
+        }
+        Alert a = new Alert(Alert.AlertType.ERROR, msg, ButtonType.OK);
+        a.showAndWait();
     }
 }

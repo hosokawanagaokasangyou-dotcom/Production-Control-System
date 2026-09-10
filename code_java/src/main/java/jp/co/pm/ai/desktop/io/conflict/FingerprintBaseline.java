@@ -9,10 +9,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-/** 読込時のパスごとの SHA-256 と内容スナップショット。 */
+/** 読込時のパスごとの SHA-256 と内容スナップショット。欠落は snapshot=null・hash=ABSENT。 */
 public final class FingerprintBaseline {
 
     private final Map<Path, String> hashes;
+    /** 欠落パスは値が null。空ファイルは length 0 の配列。 */
     private final Map<Path, byte[]> snapshots;
 
     private FingerprintBaseline(Map<Path, String> hashes, Map<Path, byte[]> snapshots) {
@@ -31,7 +32,7 @@ public final class FingerprintBaseline {
                 snapshots.put(abs, bytes);
                 hashes.put(abs, FileContentFingerprint.sha256Hex(bytes));
             } else {
-                snapshots.put(abs, new byte[0]);
+                snapshots.put(abs, null);
                 hashes.put(abs, FileContentFingerprint.ABSENT);
             }
         }
@@ -44,6 +45,10 @@ public final class FingerprintBaseline {
 
     public Map<Path, byte[]> snapshots() {
         return snapshots;
+    }
+
+    public boolean wasAbsent(Path path) {
+        return FileContentFingerprint.ABSENT.equals(hashes.get(path));
     }
 
     public List<Path> paths() {

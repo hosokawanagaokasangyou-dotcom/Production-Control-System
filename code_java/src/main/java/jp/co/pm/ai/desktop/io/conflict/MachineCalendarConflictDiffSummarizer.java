@@ -28,13 +28,13 @@ public final class MachineCalendarConflictDiffSummarizer implements ConflictDiff
                     lines.add("・関連 Excel（" + name + "）が変更されています");
                     continue;
                 }
-                byte[] baseBytes = baselineSnapshots.getOrDefault(p, new byte[0]);
-                byte[] diskB = diskBytes.getOrDefault(p, new byte[0]);
-                if (baseBytes.length == 0) {
+                byte[] baseBytes = SnapshotPresence.get(baselineSnapshots, p);
+                byte[] diskB = SnapshotPresence.get(diskBytes, p);
+                if (SnapshotPresence.isAbsent(baseBytes)) {
                     lines.add("・" + name + " が新規に作成されています");
                     continue;
                 }
-                if (diskB.length == 0) {
+                if (SnapshotPresence.isAbsent(diskB)) {
                     lines.add("・" + name + " がディスク上にありません");
                     continue;
                 }
@@ -48,7 +48,7 @@ public final class MachineCalendarConflictDiffSummarizer implements ConflictDiff
             }
             return String.join("\n", lines);
         } catch (Exception e) {
-            return "詳細差分を生成できませんでした。\n・" + mismatched;
+            return SaveConflictGate.fallbackSummary(diskBytes, ConflictCheckResult.conflict(mismatched));
         }
     }
 

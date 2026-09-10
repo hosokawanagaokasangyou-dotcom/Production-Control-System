@@ -19,7 +19,11 @@ public final class FileContentFingerprint {
         if (path == null || !Files.isRegularFile(path)) {
             return ABSENT;
         }
-        return sha256Hex(Files.readAllBytes(path));
+        try {
+            return sha256Hex(Files.readAllBytes(path));
+        } catch (java.nio.file.NoSuchFileException e) {
+            return ABSENT;
+        }
     }
 
     public static String sha256Hex(byte[] bytes) {

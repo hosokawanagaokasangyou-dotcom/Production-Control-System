@@ -36,13 +36,13 @@ public final class JsonStructureConflictDiffSummarizer implements ConflictDiffSu
                     lines.add("・関連ブック（" + name + "）が変更されています");
                     continue;
                 }
-                byte[] baseBytes = baselineSnapshots.getOrDefault(p, new byte[0]);
-                byte[] diskB = diskBytes.getOrDefault(p, new byte[0]);
-                if (baseBytes.length == 0) {
+                byte[] baseBytes = SnapshotPresence.get(baselineSnapshots, p);
+                byte[] diskB = SnapshotPresence.get(diskBytes, p);
+                if (SnapshotPresence.isAbsent(baseBytes)) {
                     lines.add("・" + name + " が新規に作成されています");
                     continue;
                 }
-                if (diskB.length == 0) {
+                if (SnapshotPresence.isAbsent(diskB)) {
                     lines.add("・" + name + " がディスク上にありません");
                     continue;
                 }
@@ -56,11 +56,9 @@ public final class JsonStructureConflictDiffSummarizer implements ConflictDiffSu
             return String.join("\n", lines);
         } catch (Exception e) {
             return screenLabel
-                    + " の詳細差分を生成できませんでした。\n・"
-                    + mismatched.stream()
-                            .map(x -> x.getFileName() != null ? x.getFileName().toString() : x.toString())
-                            .reduce((a, b) -> a + ", " + b)
-                            .orElse("");
+                    + "\n"
+                    + SaveConflictGate.fallbackSummary(
+                            diskBytes, ConflictCheckResult.conflict(mismatched));
         }
     }
 
