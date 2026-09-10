@@ -59,6 +59,11 @@ import jp.co.pm.ai.desktop.io.PoiWorkbookFileWriter;
 import jp.co.pm.ai.desktop.io.PoiWorkbookOpener;
 import jp.co.pm.ai.desktop.io.PoiWorkbookSaver;
 import jp.co.pm.ai.desktop.io.RequestFormJuchuFileBackupStore;
+import jp.co.pm.ai.desktop.io.conflict.ConflictDiffSummarizer;
+import jp.co.pm.ai.desktop.io.conflict.FingerprintBaseline;
+import jp.co.pm.ai.desktop.io.conflict.JsonStructureConflictDiffSummarizer;
+import jp.co.pm.ai.desktop.io.conflict.NamedFileConflictDiffSummarizer;
+import jp.co.pm.ai.desktop.io.conflict.SaveConflictUiGate;
 import jp.co.pm.ai.desktop.ui.ComboBoxPopupRightAlign;
 import jp.co.pm.ai.desktop.ui.DatePickerPopupAbove;
 import jp.co.pm.ai.desktop.ui.FourDigitConfirmationDialog;
@@ -126,6 +131,14 @@ public class ReconciliationApp {
     private boolean isLoadingRecord = false;
     /** 受注ファイル転記中（UI スレッドをブロックしないようバックグラウンド実行）。 */
     private volatile boolean juchuTransferInProgress = false;
+
+    private FingerprintBaseline inputSettingsConflictBaseline;
+    private final ConflictDiffSummarizer inputSettingsConflictSummarizer =
+            new JsonStructureConflictDiffSummarizer("依頼書入力設定");
+
+    private FingerprintBaseline juchuConflictBaseline;
+    private final ConflictDiffSummarizer juchuConflictSummarizer =
+            new NamedFileConflictDiffSummarizer("受注ファイル");
 
     /**
      * 自動転記中は数式セルをフォーム値で置換する（既存行の手修正を反映するため）。
@@ -391,6 +404,8 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         RequestFormInputSettingsStore.load(uiEnvSnapshot)
                 .ifPresent(this::applyLoadedInputSettingsPaths);
         ensureJuchuPathDefault();
+        refreshInputSettingsConflictBaseline();
+        refreshJuchuConflictBaseline();
 
         // --- TOP MENU BAR ---
         BorderPane root = new BorderPane();
@@ -1919,6 +1934,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
             applyComboChoices(combo);
         }
         refreshSettingsComboSubtitle();
+        refreshInputSettingsConflictBaseline();
         if (statusLabel != null) {
             statusLabel.setText(
                     "設定 JSON を再読込しました: "
@@ -1976,6 +1992,10 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                         evt.consume();
                         return;
                     }
+                    if (!allowInputSettingsConflictSave()) {
+                        evt.consume();
+                        return;
+                    }
                     try {
                         RequestFormInputSettingsStore.Settings saved =
                                 RequestFormInputSettingsStore.savePrettyJson(
@@ -1990,6 +2010,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                             applyComboChoices(combo);
                         }
                         refreshSettingsComboSubtitle();
+                        refreshInputSettingsConflictBaseline();
                         if (statusLabel != null) {
                             statusLabel.setText("設定 JSON を保存しました: " + storePath);
                         }
@@ -2580,6 +2601,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
             juchuFileChangeHandler.accept(absolutePath);
         }
         refreshJuchuBackupList();
+        refreshJuchuConflictBaseline();
     }
 
     private void applyJuchuFilePathFromUiEnv() {
@@ -2955,6 +2977,12 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
             statusLabel.setText("列定義警告: " + headerWarnings.size() + " 件（詳細はダイアログ）");
         }
         if (!confirmJuchuHeaderWarnings(file, headerWarnings)) {
+            if (onComplete != null) {
+                onComplete.accept(false);
+            }
+            return;
+        }
+        if (!allowJuchuConflictSave()) {
             if (onComplete != null) {
                 onComplete.accept(false);
             }
@@ -3520,7 +3548,10 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
             showAlert("エラー", "依頼Ｎｏを入力してください。");
             return;
         }
-        
+        if (!allowJuchuConflictSave()) {
+            return;
+        }
+
         statusLabel.setText("新規依頼を登録中...");
         
         try {
@@ -5722,6 +5753,9 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         if (!confirmJuchuHeaderWarnings(file, headerWarnings)) {
             return;
         }
+        if (!allowJuchuConflictSave()) {
+            return;
+        }
 
         JuchuTransferFormData formData = captureJuchuTransferFormData(reqNo);
         OrderRecord recordRef = selectedRecord;
@@ -6008,6 +6042,9 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                                 ? "\n受注ファイルで新規挿入した行を削除します。"
                                 : "\n受注ファイルの該当行を転記前の内容に戻します。"));
         if (confirm.showAndWait().orElse(ButtonType.CANCEL) != ButtonType.OK) {
+            return;
+        }
+        if (!allowJuchuConflictSave()) {
             return;
         }
 
@@ -7529,14 +7566,20 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                 || !FactoryOperatorUserStore.sessionMayMutateRequestFormInput()) {
             return;
         }
-        if (confirmWrite && !confirmWriteInputSettingsJson()) {
-            return;
+        if (confirmWrite) {
+            if (!confirmWriteInputSettingsJson()) {
+                return;
+            }
+            if (!allowInputSettingsConflictSave()) {
+                return;
+            }
         }
         comboChoicesLoadGeneration.incrementAndGet();
         comboChoicesState = snapshotComboChoices();
         try {
             RequestFormInputSettingsStore.save(
                     uiEnvSnapshot, comboChoicesState, targetFolder, juchuFilePath);
+            refreshInputSettingsConflictBaseline();
         } catch (IOException ex) {
             Path storePath = RequestFormInputSettingsStore.resolveStorePath(uiEnvSnapshot);
             String message =
@@ -7548,6 +7591,62 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                 statusLabel.setText("設定の保存に失敗しました: " + ex.getMessage());
             }
             showAlert("保存エラー", message);
+        }
+    }
+
+    private boolean allowInputSettingsConflictSave() {
+        return SaveConflictUiGate.allowSave(
+                hostWindow,
+                "依頼書入力設定",
+                inputSettingsConflictBaseline,
+                inputSettingsConflictSummarizer,
+                this::reloadInputSettingsJsonFromDisk,
+                msg -> {
+                    if (statusLabel != null) {
+                        statusLabel.setText(msg);
+                    }
+                });
+    }
+
+    private void refreshInputSettingsConflictBaseline() {
+        Path storePath = RequestFormInputSettingsStore.resolveStorePath(uiEnvSnapshot);
+        if (storePath == null) {
+            inputSettingsConflictBaseline = null;
+            return;
+        }
+        try {
+            inputSettingsConflictBaseline = FingerprintBaseline.capture(List.of(storePath));
+        } catch (Exception e) {
+            inputSettingsConflictBaseline = null;
+        }
+    }
+
+    private boolean allowJuchuConflictSave() {
+        return SaveConflictUiGate.allowSave(
+                hostWindow,
+                "受注ファイル",
+                juchuConflictBaseline,
+                juchuConflictSummarizer,
+                () ->
+                        requestReloadData(
+                                "受注ファイルが外部で変更されたため再読込します。", null),
+                msg -> {
+                    if (statusLabel != null) {
+                        statusLabel.setText(msg);
+                    }
+                });
+    }
+
+    private void refreshJuchuConflictBaseline() {
+        if (juchuFilePath == null || juchuFilePath.isBlank()) {
+            juchuConflictBaseline = null;
+            return;
+        }
+        try {
+            juchuConflictBaseline =
+                    FingerprintBaseline.capture(List.of(Path.of(juchuFilePath.trim())));
+        } catch (Exception e) {
+            juchuConflictBaseline = null;
         }
     }
 
@@ -7772,6 +7871,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                             + ex.getMessage());
         }
         PoiWorkbookFileWriter.writeReplacing(file.toPath(), wb, uiEnvSnapshot);
+        refreshJuchuConflictBaseline();
     }
 
     private void updateLoadingOverlayText(String text) {

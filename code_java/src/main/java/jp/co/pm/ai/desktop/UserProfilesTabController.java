@@ -4,6 +4,8 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
@@ -18,12 +20,17 @@ import javafx.scene.control.ListView;
 import javafx.scene.control.TextField;
 import javafx.stage.FileChooser;
 import javafx.stage.FileChooser.ExtensionFilter;
+import javafx.stage.Window;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import jp.co.pm.ai.desktop.config.AppVersionInfo;
 import jp.co.pm.ai.desktop.config.DesktopSessionStateStore;
 import jp.co.pm.ai.desktop.config.UserProfileStore;
+import jp.co.pm.ai.desktop.io.conflict.ConflictDiffSummarizer;
+import jp.co.pm.ai.desktop.io.conflict.FingerprintBaseline;
+import jp.co.pm.ai.desktop.io.conflict.JsonStructureConflictDiffSummarizer;
+import jp.co.pm.ai.desktop.io.conflict.SaveConflictUiGate;
 import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
 
 /**
@@ -31,6 +38,10 @@ import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
  * （アップデートで上書きされない）。
  */
 public final class UserProfilesTabController {
+
+    private FingerprintBaseline conflictBaseline;
+    private final ConflictDiffSummarizer conflictSummarizer =
+            new JsonStructureConflictDiffSummarizer("ユーザープロファイル");
 
     @FXML
     private ListView<UserProfileStore.ListedProfile> profileListView;
@@ -95,6 +106,16 @@ public final class UserProfilesTabController {
     @FXML
     private void onSaveAction() {
         if (shell == null) {
+            return;
+        }
+        Window owner = shell.primaryStageForDialogs();
+        if (!SaveConflictUiGate.allowSave(
+                owner,
+                "ユーザープロファイル",
+                conflictBaseline,
+                conflictSummarizer,
+                this::refreshList,
+                msg -> warn("保存中止", msg))) {
             return;
         }
         try {
@@ -322,11 +343,33 @@ public final class UserProfilesTabController {
             return;
         }
         try {
+            List<UserProfileStore.ListedProfile> listed = UserProfileStore.listProfiles();
             ObservableList<UserProfileStore.ListedProfile> items =
-                    FXCollections.observableArrayList(UserProfileStore.listProfiles());
+                    FXCollections.observableArrayList(listed);
             profileListView.setItems(items);
+            refreshConflictBaseline(listed);
         } catch (IOException ex) {
             profileListView.setItems(FXCollections.observableArrayList());
+            conflictBaseline = null;
+        }
+    }
+
+    private void refreshConflictBaseline(List<UserProfileStore.ListedProfile> listed) {
+        if (listed == null || listed.isEmpty()) {
+            conflictBaseline = null;
+            return;
+        }
+        try {
+            List<Path> paths = new ArrayList<>(listed.size());
+            for (UserProfileStore.ListedProfile p : listed) {
+                if (p != null && p.path() != null) {
+                    paths.add(p.path());
+                }
+            }
+            conflictBaseline =
+                    paths.isEmpty() ? null : FingerprintBaseline.capture(paths);
+        } catch (Exception e) {
+            conflictBaseline = null;
         }
     }
 

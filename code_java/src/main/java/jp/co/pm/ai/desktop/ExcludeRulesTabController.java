@@ -38,9 +38,14 @@ import javafx.scene.control.cell.TextFieldTableCell;
 import javafx.scene.layout.Region;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
+import javafx.stage.Window;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.crypto.GeminiCredentialsV2Crypto;
+import jp.co.pm.ai.desktop.io.conflict.ConflictDiffSummarizer;
+import jp.co.pm.ai.desktop.io.conflict.FingerprintBaseline;
+import jp.co.pm.ai.desktop.io.conflict.JsonStructureConflictDiffSummarizer;
+import jp.co.pm.ai.desktop.io.conflict.SaveConflictUiGate;
 import jp.co.pm.ai.desktop.ui.FileChooserForEnvKey;
 
 /**
@@ -66,6 +71,10 @@ public final class ExcludeRulesTabController {
 
     private static final ObjectMapper JSON =
             new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT);
+
+    private FingerprintBaseline conflictBaseline;
+    private final ConflictDiffSummarizer conflictSummarizer =
+            new JsonStructureConflictDiffSummarizer("配台不要ルール");
 
     private static final String HINT_TEXT =
             "PM_AI_EXCLUDE_RULES_JSON が実在かつ有効なら"
@@ -250,6 +259,7 @@ public final class ExcludeRulesTabController {
         try {
             String s = Files.readString(fp, StandardCharsets.UTF_8);
             setBodyAndSyncTable(s, "[exclude-json] load ok: " + fp);
+            refreshConflictBaseline(fp);
             shell.showInformationDialog("読込完了", "配台不要ルール JSON を読み込みました。\n" + fp);
         } catch (IOException ex) {
             shell.appendLog("[exclude-json] load error: " + ex.getMessage());
@@ -267,11 +277,26 @@ public final class ExcludeRulesTabController {
             shell.showWarningDialog("保存", "保存先のパスが空です（PM_AI_EXCLUDE_RULES_JSON または手入力）。");
             return;
         }
+        Path target = Path.of(p);
+        Window owner =
+                ownerStage != null
+                        ? ownerStage
+                        : (pathField.getScene() != null ? pathField.getScene().getWindow() : null);
+        if (!SaveConflictUiGate.allowSave(
+                owner,
+                "配台不要ルール",
+                conflictBaseline,
+                conflictSummarizer,
+                this::tryStartupLoadFromPathField,
+                msg -> shell.appendLog("[exclude-json] " + msg))) {
+            return;
+        }
         try {
             if (preferTableOnSave) {
                 applyTableToBodyInternal();
             }
-            Files.writeString(Path.of(p), bodyArea.getText(), StandardCharsets.UTF_8);
+            Files.writeString(target, bodyArea.getText(), StandardCharsets.UTF_8);
+            refreshConflictBaseline(target);
             shell.appendLog("[exclude-json] save ok: " + p);
             shell.showInformationDialog("保存完了", "配台不要ルール JSON を保存しました。\n" + p);
         } catch (IOException ex) {
@@ -306,8 +331,21 @@ public final class ExcludeRulesTabController {
         try {
             String jsonText = Files.readString(fp, StandardCharsets.UTF_8);
             setBodyAndSyncTable(jsonText, "[exclude-json] restored session: " + fp);
+            refreshConflictBaseline(fp);
         } catch (IOException ex) {
             shell.appendLog("[exclude-json] session restore load error: " + ex.getMessage());
+        }
+    }
+
+    private void refreshConflictBaseline(Path jsonPath) {
+        if (jsonPath == null) {
+            conflictBaseline = null;
+            return;
+        }
+        try {
+            conflictBaseline = FingerprintBaseline.capture(List.of(jsonPath));
+        } catch (Exception e) {
+            conflictBaseline = null;
         }
     }
 

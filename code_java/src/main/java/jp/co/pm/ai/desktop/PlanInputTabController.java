@@ -40,6 +40,7 @@ import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
+import javafx.stage.Window;
 
 import org.controlsfx.control.spreadsheet.GridBase;
 import org.controlsfx.control.spreadsheet.GridChange;
@@ -54,6 +55,10 @@ import jp.co.pm.ai.desktop.dispatch.DispatchPlanInputInteractiveCoverageCheck.Ta
 import jp.co.pm.ai.desktop.io.ExcelCellReadSupport;
 import jp.co.pm.ai.desktop.io.PlanInputAiSpecialParseSidecar;
 import jp.co.pm.ai.desktop.io.PlanInputTabularIo;
+import jp.co.pm.ai.desktop.io.conflict.ConflictDiffSummarizer;
+import jp.co.pm.ai.desktop.io.conflict.FingerprintBaseline;
+import jp.co.pm.ai.desktop.io.conflict.NamedFileConflictDiffSummarizer;
+import jp.co.pm.ai.desktop.io.conflict.SaveConflictUiGate;
 import jp.co.pm.ai.desktop.ui.ColumnVisibilitySupport;
 import jp.co.pm.ai.desktop.ui.LimitedOperatorCellEditor;
 import jp.co.pm.ai.desktop.ui.PlanInputCellInPlaceUpdateSupport;
@@ -111,6 +116,10 @@ public final class PlanInputTabController {
     private Stage ownerStage;
 
     private MainShellController shell;
+
+    private FingerprintBaseline conflictBaseline;
+    private final ConflictDiffSummarizer conflictSummarizer =
+            new NamedFileConflictDiffSummarizer("配台計画（タスク入力）");
 
     @FXML
     private TextField pathField;
@@ -1329,6 +1338,21 @@ public final class PlanInputTabController {
             return;
         }
         Path path = Path.of(pathField.getText().trim());
+        Window owner =
+                ownerStage != null
+                        ? ownerStage
+                        : (pathField.getScene() != null
+                                ? pathField.getScene().getWindow()
+                                : shell.primaryStageForDialogs());
+        if (!SaveConflictUiGate.allowSave(
+                owner,
+                "配台計画（タスク入力）",
+                conflictBaseline,
+                conflictSummarizer,
+                () -> loadFromCurrentPath(false),
+                msg -> shell.appendLog("[plan-input] " + msg))) {
+            return;
+        }
         try {
             List<List<String>> dataRows = new ArrayList<>();
             for (ObservableList<String> r : rows) {
@@ -1348,6 +1372,7 @@ public final class PlanInputTabController {
                             : sheetField.getText().trim(),
                     new PlanInputTabularIo.TabularSheet(headersRef, dataRows));
             PlanInputEditedCellMarks.save(path, editedCellMarks);
+            refreshConflictBaseline(path);
             shell.appendLog("[plan-input] saved " + path);
             clearPlanInputTableDirtySinceSave();
             embossClusterHighlight.markSaved();
@@ -1786,6 +1811,7 @@ public final class PlanInputTabController {
                             + headersRef.size()
                             + " path="
                             + path);
+            refreshConflictBaseline(path);
             if (showCompletionDialog) {
                 shell.showInformationDialog(
                         "読込完了",
@@ -1797,12 +1823,25 @@ public final class PlanInputTabController {
                                 + headersRef.size());
             }
         } catch (Exception ex) {
+            conflictBaseline = null;
             shell.appendLog("[plan-input] load error: " + ex.getMessage());
             if (showCompletionDialog) {
                 shell.showErrorDialog(
                         "読込エラー",
                         ex.getMessage() != null ? ex.getMessage() : ex.toString());
             }
+        }
+    }
+
+    private void refreshConflictBaseline(Path path) {
+        if (path == null) {
+            conflictBaseline = null;
+            return;
+        }
+        try {
+            conflictBaseline = FingerprintBaseline.capture(List.of(path));
+        } catch (Exception e) {
+            conflictBaseline = null;
         }
     }
 

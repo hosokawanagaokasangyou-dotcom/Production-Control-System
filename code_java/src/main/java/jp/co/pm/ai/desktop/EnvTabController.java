@@ -54,6 +54,10 @@ import jp.co.pm.ai.desktop.config.GeminiDispatchModelTryOrderDefaults;
 import jp.co.pm.ai.desktop.gemini.GeminiFreeTierModelsCache;
 import jp.co.pm.ai.desktop.gemini.GeminiFreeTierModelsRefreshService;
 import jp.co.pm.ai.desktop.crypto.GeminiCredentialsV2Crypto;
+import jp.co.pm.ai.desktop.io.conflict.ConflictDiffSummarizer;
+import jp.co.pm.ai.desktop.io.conflict.FingerprintBaseline;
+import jp.co.pm.ai.desktop.io.conflict.GeminiCredentialsConflictDiffSummarizer;
+import jp.co.pm.ai.desktop.io.conflict.SaveConflictUiGate;
 import jp.co.pm.ai.desktop.ui.ButtonAttentionGlow;
 import jp.co.pm.ai.desktop.ui.ColumnVisibilitySupport;
 import jp.co.pm.ai.desktop.ui.FileChooserForEnvKey;
@@ -188,6 +192,10 @@ public final class EnvTabController {
 
     @FXML
     private Button encryptGeminiCredentialsButton;
+
+    private FingerprintBaseline geminiCredentialsConflictBaseline;
+    private final ConflictDiffSummarizer geminiCredentialsConflictSummarizer =
+            new GeminiCredentialsConflictDiffSummarizer();
 
     /** 起動時チェックで初期化が必要なときの「環境変数を初期化」注目グロー。 */
     private ButtonAttentionGlow resetEnvDefaultsGlow;
@@ -954,6 +962,7 @@ public final class EnvTabController {
             return;
         }
         Path target = resolveGeminiCredentialsJsonOutputPath();
+        refreshGeminiCredentialsConflictBaseline(target);
         Dialog<String> dialog = new Dialog<>();
         dialog.initOwner(ownerStage);
         dialog.setTitle("Gemini 認証 JSON を暗号化保存");
@@ -986,8 +995,18 @@ public final class EnvTabController {
             alertFolderOpen(ownerStage, AlertType.WARNING, "API キーが空です。");
             return;
         }
+        if (!SaveConflictUiGate.allowSave(
+                ownerStage,
+                "Gemini 資格情報",
+                geminiCredentialsConflictBaseline,
+                geminiCredentialsConflictSummarizer,
+                () -> refreshGeminiCredentialsConflictBaseline(target),
+                msg -> alertFolderOpen(ownerStage, AlertType.ERROR, msg))) {
+            return;
+        }
         try {
             GeminiCredentialsV2Crypto.writeEncryptedCredentials(target, apiKey);
+            refreshGeminiCredentialsConflictBaseline(target);
             alertFolderOpen(
                     ownerStage,
                     AlertType.INFORMATION,
@@ -998,6 +1017,18 @@ public final class EnvTabController {
                             ? ex.getMessage()
                             : ex.getClass().getSimpleName();
             alertFolderOpen(ownerStage, AlertType.ERROR, "書き込みに失敗しました: " + msg);
+        }
+    }
+
+    private void refreshGeminiCredentialsConflictBaseline(Path target) {
+        if (target == null) {
+            geminiCredentialsConflictBaseline = null;
+            return;
+        }
+        try {
+            geminiCredentialsConflictBaseline = FingerprintBaseline.capture(List.of(target));
+        } catch (Exception e) {
+            geminiCredentialsConflictBaseline = null;
         }
     }
 

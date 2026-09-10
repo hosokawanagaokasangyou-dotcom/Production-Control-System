@@ -29,11 +29,16 @@ import javafx.scene.control.cell.TextFieldTableCell;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
+import javafx.stage.Window;
 
 import jp.co.pm.ai.desktop.MainShellController;
 import jp.co.pm.ai.desktop.dispatch.rules.migration.DispatchRuleMigrationService;
 import jp.co.pm.ai.desktop.dispatch.rules.model.ProcessMachinePriorityEntry;
 import jp.co.pm.ai.desktop.dispatch.rules.paths.DispatchRulePaths;
+import jp.co.pm.ai.desktop.io.conflict.ConflictDiffSummarizer;
+import jp.co.pm.ai.desktop.io.conflict.FingerprintBaseline;
+import jp.co.pm.ai.desktop.io.conflict.JsonStructureConflictDiffSummarizer;
+import jp.co.pm.ai.desktop.io.conflict.SaveConflictUiGate;
 
 /**
  * 工程名+機械名の配台優先。同一実機械上の連続選好。グローバル試行順は書き換えない。
@@ -53,6 +58,9 @@ public final class ProcessMachinePriorityTabController {
     private MainShellController shell;
     private final ObservableList<Row> rows = FXCollections.observableArrayList();
     private Runnable afterSave;
+    private FingerprintBaseline conflictBaseline;
+    private final ConflictDiffSummarizer conflictSummarizer =
+            new JsonStructureConflictDiffSummarizer("特別ルール");
 
     @FXML private VBox root;
     private TableView<Row> table;
@@ -141,10 +149,12 @@ public final class ProcessMachinePriorityTabController {
             DispatchRulePaths.ensureWorkJsonFromRepoIfMissing(shell.dispatchRulesUiEnv());
             Path work = DispatchRulePaths.resolveWorkJson(shell.dispatchRulesUiEnv());
             rows.setAll(loadRows(work));
+            refreshConflictBaseline(work);
             if (statusLabel != null) {
                 statusLabel.setText(work.toString());
             }
         } catch (IOException ex) {
+            conflictBaseline = null;
             if (statusLabel != null) {
                 statusLabel.setText("読込失敗: " + ex.getMessage());
             }
@@ -153,6 +163,23 @@ public final class ProcessMachinePriorityTabController {
 
     private void saveToDisk() {
         if (shell == null) {
+            return;
+        }
+        Window owner =
+                statusLabel != null && statusLabel.getScene() != null
+                        ? statusLabel.getScene().getWindow()
+                        : shell.primaryStageForDialogs();
+        if (!SaveConflictUiGate.allowSave(
+                owner,
+                "特別ルール",
+                conflictBaseline,
+                conflictSummarizer,
+                this::reloadFromDisk,
+                msg -> {
+                    if (statusLabel != null) {
+                        statusLabel.setText(msg);
+                    }
+                })) {
             return;
         }
         try {
@@ -179,6 +206,7 @@ public final class ProcessMachinePriorityTabController {
                     work,
                     JSON.writerWithDefaultPrettyPrinter().writeValueAsString(rootNode),
                     StandardCharsets.UTF_8);
+            refreshConflictBaseline(work);
             if (statusLabel != null) {
                 statusLabel.setText("保存しました: " + work);
             }
@@ -187,6 +215,18 @@ public final class ProcessMachinePriorityTabController {
             }
         } catch (IOException ex) {
             shell.showErrorDialog("保存エラー", ex.getMessage());
+        }
+    }
+
+    private void refreshConflictBaseline(Path work) {
+        if (work == null) {
+            conflictBaseline = null;
+            return;
+        }
+        try {
+            conflictBaseline = FingerprintBaseline.capture(List.of(work));
+        } catch (Exception e) {
+            conflictBaseline = null;
         }
     }
 

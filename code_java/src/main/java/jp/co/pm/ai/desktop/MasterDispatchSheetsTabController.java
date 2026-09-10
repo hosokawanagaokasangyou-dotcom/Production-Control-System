@@ -42,6 +42,10 @@ import jp.co.pm.ai.desktop.io.MasterDispatchSheetsDocument;
 import jp.co.pm.ai.desktop.io.MasterDispatchSheetsSaveWriter;
 import jp.co.pm.ai.desktop.io.MasterDispatchSheetsSeeder;
 import jp.co.pm.ai.desktop.io.MasterTeamCombinationTableReader;
+import jp.co.pm.ai.desktop.io.conflict.ConflictDiffSummarizer;
+import jp.co.pm.ai.desktop.io.conflict.FingerprintBaseline;
+import jp.co.pm.ai.desktop.io.conflict.NamedFileConflictDiffSummarizer;
+import jp.co.pm.ai.desktop.io.conflict.SaveConflictUiGate;
 import jp.co.pm.ai.desktop.ui.AttendanceGridLoadingOverlay;
 import jp.co.pm.ai.desktop.ui.ButtonAttentionGlow;
 import jp.co.pm.ai.desktop.ui.ColumnVisibilityDialog;
@@ -85,6 +89,9 @@ public final class MasterDispatchSheetsTabController {
     private MainShellController shell;
     private MasterDispatchSheetsDocument document = MasterDispatchSheetsDocument.empty("");
     private Path loadedJsonPath;
+    private FingerprintBaseline conflictBaseline;
+    private final ConflictDiffSummarizer conflictSummarizer =
+            new NamedFileConflictDiffSummarizer("配台マスタ");
     /** 4タブ共通。工程+機械の正規化キー。空なら空き列以外をすべて表示。 */
     private final Set<String> equipmentFocusKeys = new LinkedHashSet<>();
     private ButtonAttentionGlow missingEquipmentGlow;
@@ -270,6 +277,7 @@ public final class MasterDispatchSheetsTabController {
                                                                         jsonRef,
                                                                         sourceRef,
                                                                         result));
+                                                        refreshConflictBaseline(jsonRef, sourceRef);
                                                         applySaveDirtyState(false);
                                                         setLoadingVisible(false, null);
                                                         scheduleEnsureReadableChromeTextColors();
@@ -281,6 +289,7 @@ public final class MasterDispatchSheetsTabController {
                                             if (epoch != loadEpoch) {
                                                 return;
                                             }
+                                            conflictBaseline = null;
                                             statusLabel.setText(
                                                     "読込に失敗しました: " + e.getMessage());
                                             setLoadingVisible(false, null);
@@ -542,6 +551,19 @@ public final class MasterDispatchSheetsTabController {
             statusLabel.setText("保存を中止しました。");
             return false;
         }
+        if (!SaveConflictUiGate.allowSave(
+                owner,
+                "配台マスタ",
+                conflictBaseline,
+                conflictSummarizer,
+                () -> reloadFromCurrentFactory(false),
+                msg -> {
+                    if (statusLabel != null) {
+                        statusLabel.setText(msg);
+                    }
+                })) {
+            return false;
+        }
         LinkedHashMap<String, MasterDispatchSheetsDocument.SheetGrid> sheets = new LinkedHashMap<>();
         sheets.put(
                 MasterDispatchSheetsDocument.KEY_SKILLS,
@@ -566,6 +588,7 @@ public final class MasterDispatchSheetsTabController {
             MasterDispatchSheetsSaveWriter.Result saved =
                     MasterDispatchSheetsSaveWriter.save(json, source, document, ui);
             loadedJsonPath = saved.jsonPath();
+            refreshConflictBaseline(saved.jsonPath(), saved.workbookPath());
             String jsonBackup =
                     saved.jsonBackup() != null ? saved.jsonBackup().toString() : "（JSON 正本なし）";
             String xlsmBackup =
@@ -587,6 +610,25 @@ public final class MasterDispatchSheetsTabController {
         } catch (Exception e) {
             statusLabel.setText("保存に失敗しました: " + e.getMessage());
             return false;
+        }
+    }
+
+    private void refreshConflictBaseline(Path json, Path source) {
+        try {
+            List<Path> paths = new java.util.ArrayList<>();
+            if (json != null) {
+                paths.add(json);
+            }
+            if (source != null) {
+                paths.add(source);
+            }
+            if (paths.isEmpty()) {
+                conflictBaseline = null;
+                return;
+            }
+            conflictBaseline = FingerprintBaseline.capture(paths);
+        } catch (Exception e) {
+            conflictBaseline = null;
         }
     }
 

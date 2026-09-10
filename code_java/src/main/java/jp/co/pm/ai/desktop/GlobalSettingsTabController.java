@@ -1,5 +1,7 @@
 package jp.co.pm.ai.desktop;
 
+import java.nio.file.Path;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -11,15 +13,24 @@ import javafx.scene.control.ButtonType;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.TextInputDialog;
+import javafx.stage.Window;
 
 import jp.co.pm.ai.desktop.config.FactorySite;
 import jp.co.pm.ai.desktop.config.GlobalInitSettingTarget;
 import jp.co.pm.ai.desktop.config.InitSettingPaths;
 import jp.co.pm.ai.desktop.config.InitSettingPersistence;
+import jp.co.pm.ai.desktop.io.conflict.ConflictDiffSummarizer;
+import jp.co.pm.ai.desktop.io.conflict.FingerprintBaseline;
+import jp.co.pm.ai.desktop.io.conflict.NamedFileConflictDiffSummarizer;
+import jp.co.pm.ai.desktop.io.conflict.SaveConflictUiGate;
 import jp.co.pm.ai.desktop.ui.FactorySiteComboPresentation;
 
 /** Global settings tab (factory UI reset and saving package defaults to init_setting). */
 public final class GlobalSettingsTabController {
+
+    private FingerprintBaseline conflictBaseline;
+    private final ConflictDiffSummarizer conflictSummarizer =
+            new NamedFileConflictDiffSummarizer("パッケージ既定");
 
     @FXML
     private Button resetUiButton;
@@ -42,6 +53,7 @@ public final class GlobalSettingsTabController {
         this.shell = shell;
         wireInitSettingTargetCombo();
         syncTableRowHoverDimmingCheckbox();
+        refreshConflictBaseline();
     }
 
     void syncTableRowHoverDimmingCheckbox() {
@@ -95,6 +107,7 @@ public final class GlobalSettingsTabController {
                                 return;
                             }
                             shell.switchActiveFactorySite(newV);
+                            refreshConflictBaseline();
                         });
         setInitSettingTargetComboValueSilently(GlobalInitSettingTarget.load());
     }
@@ -138,6 +151,25 @@ public final class GlobalSettingsTabController {
         if (ans.isEmpty() || !"111".equals(ans.get().trim())) {
             return;
         }
+        Window owner = shell.primaryStageForDialogs();
+        if (!SaveConflictUiGate.allowSave(
+                owner,
+                "パッケージ既定",
+                conflictBaseline,
+                conflictSummarizer,
+                this::refreshConflictBaseline,
+                msg -> {
+                    Alert err = new Alert(AlertType.ERROR);
+                    if (owner != null) {
+                        err.initOwner(owner);
+                    }
+                    err.setTitle("保存中止");
+                    err.setHeaderText(null);
+                    err.setContentText(msg);
+                    err.showAndWait();
+                })) {
+            return;
+        }
         try {
             shell.preparePackageDefaultsExport();
             InitSettingPersistence.savePackageDefaults(
@@ -145,6 +177,7 @@ public final class GlobalSettingsTabController {
                     shell.snapshotDesktopSessionForExport(),
                     GlobalInitSettingTarget.load(),
                     shell.snapshotJuchuHeaderAliasRegistryForExport());
+            refreshConflictBaseline();
             Alert ok = new Alert(AlertType.INFORMATION);
             if (shell.primaryStageForDialogs() != null) {
                 ok.initOwner(shell.primaryStageForDialogs());
@@ -170,6 +203,28 @@ public final class GlobalSettingsTabController {
             err.setHeaderText(null);
             err.setContentText(ex.getMessage() != null ? ex.getMessage() : ex.toString());
             err.showAndWait();
+        }
+    }
+
+    private void refreshConflictBaseline() {
+        if (shell == null) {
+            conflictBaseline = null;
+            return;
+        }
+        try {
+            FactorySite t = GlobalInitSettingTarget.load();
+            Map<String, String> ui = shell.snapshotUiEnv();
+            Path dir = InitSettingPaths.resolveRepoInitSettingDir(ui);
+            conflictBaseline =
+                    FingerprintBaseline.capture(
+                            List.of(
+                                    dir.resolve(InitSettingPaths.sessionDefaultsFileForFactory(t)),
+                                    dir.resolve(
+                                            InitSettingPaths.tableColumnDefaultsFileForFactory(t)),
+                                    dir.resolve(
+                                            InitSettingPaths.juchuHeaderAliasesFileForFactory(t))));
+        } catch (Exception e) {
+            conflictBaseline = null;
         }
     }
 }

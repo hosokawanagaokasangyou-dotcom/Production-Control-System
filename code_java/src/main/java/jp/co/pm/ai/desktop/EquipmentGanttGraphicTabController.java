@@ -49,6 +49,7 @@ import javafx.scene.layout.VBox;
 import javafx.scene.Parent;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
+import javafx.stage.Window;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import javafx.util.Duration;
@@ -67,6 +68,10 @@ import jp.co.pm.ai.desktop.config.DesktopTheme;
 import jp.co.pm.ai.desktop.config.PersonBadgeStyle;
 import jp.co.pm.ai.desktop.io.DesktopFileOpener;
 import jp.co.pm.ai.desktop.io.Stage2OutputNaming;
+import jp.co.pm.ai.desktop.io.conflict.ConflictDiffSummarizer;
+import jp.co.pm.ai.desktop.io.conflict.FingerprintBaseline;
+import jp.co.pm.ai.desktop.io.conflict.NamedFileConflictDiffSummarizer;
+import jp.co.pm.ai.desktop.io.conflict.SaveConflictUiGate;
 import jp.co.pm.ai.desktop.io.gantt.EquipmentGanttAssignmentBadgeGridUpdater;
 import jp.co.pm.ai.desktop.io.gantt.EquipmentGanttAssignmentBarContext;
 import jp.co.pm.ai.desktop.io.gantt.EquipmentGanttAssignmentDragPayload;
@@ -206,6 +211,10 @@ public final class EquipmentGanttGraphicTabController {
     private Stage ownerStage;
 
     private String lastLoadedPlanPath = "";
+
+    private FingerprintBaseline conflictBaseline;
+    private final ConflictDiffSummarizer conflictSummarizer =
+            new NamedFileConflictDiffSummarizer("設備ガント");
 
     /** 再描画用に保持する最新の選択シート（ズーム・テーマ変更時）。 */
     private JsonTableIo.SheetTable lastGraphicSheet;
@@ -1468,6 +1477,24 @@ public final class EquipmentGanttGraphicTabController {
             Map<String, String> ui,
             String expectedTimelineHash,
             String confirmToken) {
+        Window owner = ownerStage != null ? ownerStage : shell.primaryStageForDialogs();
+        if (!SaveConflictUiGate.allowSave(
+                owner,
+                "設備ガント",
+                conflictBaseline,
+                conflictSummarizer,
+                () -> reloadFromFields(false),
+                msg -> {
+                    if (statusLabel != null) {
+                        statusLabel.setText(msg);
+                    } else if (shell != null) {
+                        shell.appendLog("[equipment-gantt-assignment] " + msg);
+                    }
+                })) {
+            assignmentSaveInProgress = false;
+            refreshAssignmentActionButtonsState();
+            return;
+        }
         boolean forceWarnings = confirmToken != null && !confirmToken.isBlank();
         EquipmentGanttAssignmentSyncPython.Request applyReq =
                 new EquipmentGanttAssignmentSyncPython.Request(
@@ -1507,6 +1534,24 @@ public final class EquipmentGanttGraphicTabController {
         shell.showInformationDialog("担当割当の保存", "担当割当を保存しました。");
         shell.refreshOperatorCardAfterPipelineRun();
         reloadFromFields(false);
+    }
+
+    private void refreshConflictBaseline(Path planJson) {
+        if (planJson == null) {
+            conflictBaseline = null;
+            return;
+        }
+        try {
+            Path contract = resolveEquipmentContractSibling(planJson);
+            List<Path> paths = new ArrayList<>();
+            paths.add(planJson);
+            if (contract != null) {
+                paths.add(contract);
+            }
+            conflictBaseline = FingerprintBaseline.capture(paths);
+        } catch (Exception e) {
+            conflictBaseline = null;
+        }
     }
 
     private boolean confirmAssignmentSaveWithWarnings(String message) {
@@ -1980,6 +2025,7 @@ public final class EquipmentGanttGraphicTabController {
             String ps = planJsonField != null ? planJsonField.getText().strip() : "";
             Path planPath = ps.isEmpty() ? null : Path.of(ps);
             if (planPath == null || !Files.isRegularFile(planPath)) {
+                conflictBaseline = null;
                 resetGraphicState(
                         "ファイルが指定されていないか、見つかりません。", false);
                 statusLabel.setText("読み込み対象なし");
@@ -2001,6 +2047,7 @@ public final class EquipmentGanttGraphicTabController {
             refreshAssignmentEditRadioState();
             loadRegularShiftTimesFromPlan(planPath);
             lastLoadedPlanPath = planPath.toString();
+            refreshConflictBaseline(planPath);
 
             Map<String, JsonTableIo.SheetTable> eligible = filterEquipmentTimelineSheets(sheets);
             if (eligible.isEmpty()) {

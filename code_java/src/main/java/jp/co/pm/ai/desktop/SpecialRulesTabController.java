@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
@@ -13,6 +14,7 @@ import javafx.scene.control.Label;
 import javafx.scene.control.Tab;
 import javafx.scene.control.TabPane;
 import javafx.scene.control.TextArea;
+import javafx.stage.Window;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.dispatch.rules.ProcessMachinePriorityTabController;
@@ -22,12 +24,20 @@ import jp.co.pm.ai.desktop.dispatch.rules.migration.DispatchRuleMigrationService
 import jp.co.pm.ai.desktop.dispatch.rules.model.DispatchRuleDocument;
 import jp.co.pm.ai.desktop.dispatch.rules.paths.DispatchRulePaths;
 import jp.co.pm.ai.desktop.dispatch.rules.trace.SpecialRulesTraceTabController;
+import jp.co.pm.ai.desktop.io.conflict.ConflictDiffSummarizer;
+import jp.co.pm.ai.desktop.io.conflict.FingerprintBaseline;
+import jp.co.pm.ai.desktop.io.conflict.JsonStructureConflictDiffSummarizer;
+import jp.co.pm.ai.desktop.io.conflict.SaveConflictUiGate;
 
 /** Special rules tab: markdown + builder + test lab + trace + JSON. */
 public final class SpecialRulesTabController {
 
     private static final ObjectMapper JSON =
             new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT);
+
+    private FingerprintBaseline conflictBaseline;
+    private final ConflictDiffSummarizer conflictSummarizer =
+            new JsonStructureConflictDiffSummarizer("特別ルール");
 
     private MainShellController shell;
 
@@ -112,10 +122,24 @@ public final class SpecialRulesTabController {
         if (shell == null || jsonBodyArea == null) {
             return;
         }
+        Window owner =
+                jsonBodyArea.getScene() != null
+                        ? jsonBodyArea.getScene().getWindow()
+                        : shell.primaryStageForDialogs();
+        if (!SaveConflictUiGate.allowSave(
+                owner,
+                "特別ルール",
+                conflictBaseline,
+                conflictSummarizer,
+                this::reloadJsonEditor,
+                msg -> shell.dispatchRulesAppendLog("[dispatch-rules] " + msg))) {
+            return;
+        }
         try {
             Path work = DispatchRulePaths.resolveWorkJson(shell.dispatchRulesUiEnv());
             Files.createDirectories(work.getParent());
             Files.writeString(work, jsonBodyArea.getText(), StandardCharsets.UTF_8);
+            refreshConflictBaseline();
             shell.dispatchRulesAppendLog("[dispatch-rules] JSON tab saved: " + work);
             reloadLinkedDispatchRuleTabs();
         } catch (IOException ex) {
@@ -163,8 +187,23 @@ public final class SpecialRulesTabController {
             } else {
                 jsonBodyArea.setText(JSON.writerWithDefaultPrettyPrinter().writeValueAsString(new DispatchRuleDocument()));
             }
+            refreshConflictBaseline();
         } catch (IOException ex) {
             jsonBodyArea.setText("読込エラー: " + ex.getMessage());
+            conflictBaseline = null;
+        }
+    }
+
+    private void refreshConflictBaseline() {
+        if (shell == null) {
+            conflictBaseline = null;
+            return;
+        }
+        try {
+            Path work = DispatchRulePaths.resolveWorkJson(shell.dispatchRulesUiEnv());
+            conflictBaseline = FingerprintBaseline.capture(List.of(work));
+        } catch (Exception e) {
+            conflictBaseline = null;
         }
     }
 }

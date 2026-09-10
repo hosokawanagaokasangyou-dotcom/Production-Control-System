@@ -34,10 +34,14 @@ import javafx.scene.control.cell.TextFieldTableCell;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
+import javafx.stage.Window;
 import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.config.AppPaths.DispatchLookupTableOverwriteResult;
 import jp.co.pm.ai.desktop.io.CodeDispatchLookupTableIo;
 import jp.co.pm.ai.desktop.io.CodeDispatchLookupTableIo.KeyValTable;
+import jp.co.pm.ai.desktop.io.conflict.FingerprintBaseline;
+import jp.co.pm.ai.desktop.io.conflict.NamedFileConflictDiffSummarizer;
+import jp.co.pm.ai.desktop.io.conflict.SaveConflictUiGate;
 
 /**
  * 「材料・製品種類情報」: {@code code/} 配下のキー・値テーブルをタブ切替で編集する。
@@ -195,6 +199,9 @@ public final class CodeDispatchLookupTablesTabController {
         private final ObservableList<ObservableList<String>> rows = FXCollections.observableArrayList();
         private final FilteredList<ObservableList<String>> rowsFiltered;
         private volatile boolean loaded;
+        private FingerprintBaseline conflictBaseline;
+        private final NamedFileConflictDiffSummarizer conflictSummarizer =
+                new NamedFileConflictDiffSummarizer("材料・製品種類");
 
         FilePanel(FileSpec spec) {
             this.spec = spec;
@@ -313,6 +320,7 @@ public final class CodeDispatchLookupTablesTabController {
                 }
                 applySearchPredicate();
                 loaded = true;
+                refreshConflictBaseline(path);
                 logLine("[code-lookup] 読込: " + path);
                 if (wasLoaded) {
                     scheduleInvalidatePlanInputRollUnitHighlightCache();
@@ -325,6 +333,19 @@ public final class CodeDispatchLookupTablesTabController {
 
         void saveToDisk() {
             Path path = resolvePath();
+            Window owner =
+                    root.getScene() != null
+                            ? root.getScene().getWindow()
+                            : (shell != null ? shell.primaryStageForDialogs() : null);
+            if (!SaveConflictUiGate.allowSave(
+                    owner,
+                    "材料・製品種類",
+                    conflictBaseline,
+                    conflictSummarizer,
+                    this::reloadFromDisk,
+                    msg -> logLine("[code-lookup] " + msg))) {
+                return;
+            }
             try {
                 LinkedHashMap<String, String> m = new LinkedHashMap<>();
                 for (ObservableList<String> r : rows) {
@@ -340,6 +361,7 @@ public final class CodeDispatchLookupTablesTabController {
                 }
                 KeyValTable cur = CodeDispatchLookupTableIo.readOrEmpty(path, spec.defaultHeaderLine());
                 CodeDispatchLookupTableIo.write(path, new KeyValTable(cur.headerLine(), m));
+                refreshConflictBaseline(path);
                 logLine("[code-lookup] 保存: " + path + " (" + m.size() + " 行)");
                 scheduleInvalidatePlanInputRollUnitHighlightCache();
             } catch (IOException ex) {
@@ -347,6 +369,14 @@ public final class CodeDispatchLookupTablesTabController {
                 if (shell != null) {
                     shell.showErrorDialog("保存", "保存に失敗しました。\n" + ex.getMessage());
                 }
+            }
+        }
+
+        private void refreshConflictBaseline(Path path) {
+            try {
+                conflictBaseline = FingerprintBaseline.capture(List.of(path));
+            } catch (Exception e) {
+                conflictBaseline = null;
             }
         }
 

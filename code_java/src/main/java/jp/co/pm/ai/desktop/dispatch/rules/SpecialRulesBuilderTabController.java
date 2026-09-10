@@ -34,6 +34,7 @@ import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
 import javafx.scene.control.cell.CheckBoxTableCell;
 import javafx.scene.control.cell.PropertyValueFactory;
+import javafx.stage.Window;
 
 import jp.co.pm.ai.desktop.MainShellController;
 import jp.co.pm.ai.desktop.dispatch.rules.execution.DispatchRuleExecutionPlanner;
@@ -45,6 +46,10 @@ import jp.co.pm.ai.desktop.dispatch.rules.paths.DispatchRulePaths;
 import jp.co.pm.ai.desktop.dispatch.rules.stage.DispatchRuleBuilderRunContext;
 import jp.co.pm.ai.desktop.dispatch.rules.ui.editor.DispatchRuleGraphEditorPane;
 import jp.co.pm.ai.desktop.dispatch.rules.validation.DispatchRuleConflictChecker;
+import jp.co.pm.ai.desktop.io.conflict.ConflictDiffSummarizer;
+import jp.co.pm.ai.desktop.io.conflict.FingerprintBaseline;
+import jp.co.pm.ai.desktop.io.conflict.JsonStructureConflictDiffSummarizer;
+import jp.co.pm.ai.desktop.io.conflict.SaveConflictUiGate;
 
 /** Rule builder child tab. */
 public final class SpecialRulesBuilderTabController {
@@ -59,6 +64,9 @@ public final class SpecialRulesBuilderTabController {
     private DispatchRuleDocument document = new DispatchRuleDocument();
     private Path workPath;
     private boolean suppressDirty;
+    private FingerprintBaseline conflictBaseline;
+    private final ConflictDiffSummarizer conflictSummarizer =
+            new JsonStructureConflictDiffSummarizer("特別ルール");
 
     @FXML private Label schemaBadge;
     @FXML private Label runStatusBanner;
@@ -184,6 +192,19 @@ public final class SpecialRulesBuilderTabController {
         if (shell == null || workPath == null) {
             return;
         }
+        Window owner =
+                pathField != null && pathField.getScene() != null
+                        ? pathField.getScene().getWindow()
+                        : shell.primaryStageForDialogs();
+        if (!SaveConflictUiGate.allowSave(
+                owner,
+                "特別ルール",
+                conflictBaseline,
+                conflictSummarizer,
+                () -> reloadFromDisk(false),
+                msg -> shell.dispatchRulesAppendLog("[dispatch-rules] " + msg))) {
+            return;
+        }
         try {
             syncTableToDocument();
             document.schemaVersion = DispatchRuleMigrationService.CURRENT_SCHEMA_VERSION;
@@ -191,6 +212,7 @@ public final class SpecialRulesBuilderTabController {
             syncSelectedRuleFromUi();
             Files.createDirectories(workPath.getParent());
             JSON.writeValue(workPath.toFile(), document);
+            refreshConflictBaseline();
             DispatchRuleHistoryStore.appendAutoSave(shell.dispatchRulesUiEnv(), workPath);
             DispatchRuleBuilderRunContext.get().setDirty(false);
             refreshHistory();
@@ -328,11 +350,25 @@ public final class SpecialRulesBuilderTabController {
             refreshHistory();
             DispatchRuleBuilderRunContext.get().setDirty(false);
             suppressDirty = false;
+            refreshConflictBaseline();
             if (dialog) {
                 shell.showInformationDialog("再読込", "特別ルール JSON を読み込みました。");
             }
         } catch (IOException ex) {
+            conflictBaseline = null;
             shell.showErrorDialog("読込エラー", ex.getMessage());
+        }
+    }
+
+    private void refreshConflictBaseline() {
+        if (workPath == null) {
+            conflictBaseline = null;
+            return;
+        }
+        try {
+            conflictBaseline = FingerprintBaseline.capture(List.of(workPath));
+        } catch (Exception e) {
+            conflictBaseline = null;
         }
     }
 

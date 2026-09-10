@@ -43,6 +43,10 @@ import javafx.stage.Window;
 
 import jp.co.pm.ai.desktop.io.PlanInputTabularIo;
 import jp.co.pm.ai.desktop.io.PostProcessingProductMasterIo;
+import jp.co.pm.ai.desktop.io.conflict.ConflictDiffSummarizer;
+import jp.co.pm.ai.desktop.io.conflict.FingerprintBaseline;
+import jp.co.pm.ai.desktop.io.conflict.NamedFileConflictDiffSummarizer;
+import jp.co.pm.ai.desktop.io.conflict.SaveConflictUiGate;
 import jp.co.pm.ai.desktop.ui.PostProcessingMasterLoadBusyDialog;
 
 /**
@@ -146,6 +150,24 @@ public final class PostProcessingProductMasterEditorPane {
         List<String> referenceHeaders = new ArrayList<>();
         AtomicReference<PostProcessingProductMasterEditorModel> editorModelRef =
                 new AtomicReference<>(new PostProcessingProductMasterEditorModel(List.of()));
+        AtomicReference<FingerprintBaseline> conflictBaselineRef = new AtomicReference<>();
+        ConflictDiffSummarizer conflictSummarizer =
+                new NamedFileConflictDiffSummarizer("後加工商品マスタ");
+        Runnable refreshConflictBaseline =
+                () -> {
+                    try {
+                        String raw = uploadPathField.getText();
+                        if (raw == null || raw.isBlank()) {
+                            conflictBaselineRef.set(null);
+                            return;
+                        }
+                        conflictBaselineRef.set(
+                                FingerprintBaseline.capture(
+                                        List.of(Path.of(raw.trim()).toAbsolutePath().normalize())));
+                    } catch (Exception e) {
+                        conflictBaselineRef.set(null);
+                    }
+                };
         Map<String, String> templateRow = new LinkedHashMap<>();
 
         AtomicBoolean suppressFormDirtyTracking = new AtomicBoolean(false);
@@ -470,6 +492,7 @@ public final class PostProcessingProductMasterEditorPane {
                         if (!Files.isRegularFile(up)) {
                             uploadRows.clear();
                             statusLabel.setText("アップロード用ファイルがありません（新規作成可）");
+                            refreshConflictBaseline.run();
                             return;
                         }
                         if (referenceHeaders.isEmpty()) {
@@ -480,6 +503,7 @@ public final class PostProcessingProductMasterEditorPane {
                                 referenceHeaders,
                                 uploadRows,
                                 statusLabel);
+                        refreshConflictBaseline.run();
                     } catch (Exception ex) {
                         showError("読込エラー", ex.getMessage());
                         log.accept("[postproc-master] upload read: " + ex.getMessage());
@@ -496,9 +520,23 @@ public final class PostProcessingProductMasterEditorPane {
                             editorModelRef.get().set(e.getKey(), e.getValue().getText());
                         }
                         Path up = Path.of(uploadPathField.getText().trim());
+                        if (!SaveConflictUiGate.allowSave(
+                                owner != null
+                                        ? owner
+                                        : (uploadPathField.getScene() != null
+                                                ? uploadPathField.getScene().getWindow()
+                                                : null),
+                                "後加工商品マスタ",
+                                conflictBaselineRef.get(),
+                                conflictSummarizer,
+                                loadUploadFile,
+                                msg -> statusLabel.setText(msg))) {
+                            return;
+                        }
                         List<Map<String, String>> rows = new ArrayList<>(uploadRows);
                         PostProcessingProductMasterIo.writeUploadWorkbook(
                                 up, referenceHeaders, rows);
+                        refreshConflictBaseline.run();
                         statusLabel.setText("保存しました: " + up);
                         log.accept("[postproc-master] saved " + up + " rows=" + rows.size());
                     } catch (Exception ex) {
@@ -720,6 +758,7 @@ public final class PostProcessingProductMasterEditorPane {
                         Path up = Path.of(uploadPathField.getText().trim());
                         PostProcessingProductMasterIo.createEmptyUploadFromReference(ref, up);
                         uploadRows.clear();
+                        refreshConflictBaseline.run();
                         statusLabel.setText("空のアップロード用ファイルを作成しました。");
                     } catch (Exception ex) {
                         showError("新規作成エラー", ex.getMessage());
