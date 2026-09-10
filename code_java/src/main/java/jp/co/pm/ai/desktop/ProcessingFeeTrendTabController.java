@@ -809,15 +809,13 @@ public class ProcessingFeeTrendTabController {
             act.add(new XYChart.Data<>(cat, d.actualYen()));
             plan.add(new XYChart.Data<>(cat, d.planYen()));
             dailyMax = Math.max(dailyMax, Math.max(d.actualYen(), d.planYen()));
-            cumMax = Math.max(cumMax, Math.max(d.actualCumYen(), d.projectedCumYen()));
+            cumMax = Math.max(cumMax, Math.max(d.actualCumYen(), d.planCumYen()));
             // 実績累計は当日まで（未来へ水平延長しない）
             if (ProcessingTrendChartSupport.includeActualCumPoint(d.date(), today)) {
                 actCum.add(new XYChart.Data<>(cat, d.actualCumYen()));
             }
-            // 予定累計線＝見込累計（実績先端から接続。前日より前は描かない）
-            if (ProcessingTrendChartSupport.includeProjectedCumPoint(d.date(), today)) {
-                planCum.add(new XYChart.Data<>(cat, d.projectedCumYen()));
-            }
+            // 予定累計は予定のみの累計（終点＝予定円合計。KPI・日別集計表と同値）
+            planCum.add(new XYChart.Data<>(cat, d.planCumYen()));
         }
         // 第一軸（左）= 日次棒 / 第二軸（右）= 累計折線（空 LineChart + Path）
         applyNiceRange(dailyYAxis, dailyMax);
