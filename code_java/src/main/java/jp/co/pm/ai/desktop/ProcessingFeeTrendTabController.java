@@ -223,7 +223,7 @@ public class ProcessingFeeTrendTabController {
         cumulativeChart.setHorizontalZeroLineVisible(false);
         cumulativeChart.setVerticalZeroLineVisible(false);
         cumulativeChart.setPickOnBounds(false);
-        // 系列に累計データを載せ右軸を立てる。棒は dailyChart（左軸）。
+        // 系列は凡例用のみ（データは載せない。折れ線は Path、右軸は空シェルで立てる）
         cumulativeChart.getData().setAll(actualCumSeries, planCumSeries);
         if (!cumulativeChart.getStyleClass().contains("pm-trend-overlay")) {
             cumulativeChart.getStyleClass().add("pm-trend-overlay");
@@ -846,25 +846,25 @@ public class ProcessingFeeTrendTabController {
             act.add(new XYChart.Data<>(cat, d.actualYen()));
             plan.add(new XYChart.Data<>(cat, d.planYen()));
             dailyMax = Math.max(dailyMax, Math.max(d.actualYen(), d.planYen()));
-            cumMax = Math.max(cumMax, Math.max(d.actualCumYen(), d.planCumYen()));
+            cumMax = Math.max(cumMax, Math.max(d.actualCumYen(), d.projectedCumYen()));
             // 実績累計は当日まで（未来へ水平延長しない）
-            if (!d.date().isAfter(today)) {
+            if (ProcessingTrendChartSupport.includeActualCumPoint(d.date(), today)) {
                 actCum.add(new XYChart.Data<>(cat, d.actualCumYen()));
             }
-            planCum.add(new XYChart.Data<>(cat, d.planCumYen()));
+            // 予定累計線＝見込累計（実績先端から接続。前日より前は描かない）
+            if (ProcessingTrendChartSupport.includeProjectedCumPoint(d.date(), today)) {
+                planCum.add(new XYChart.Data<>(cat, d.projectedCumYen()));
+            }
         }
-        // 第一軸（左）= 日次棒 / 第二軸（右）= 累計折線（LineChart 系列で右軸を確実に立てる）
+        // 第一軸（左）= 日次棒 / 第二軸（右）= 累計折線（空 LineChart + Path）
         applyNiceRange(dailyYAxis, dailyMax);
         applyNiceRange(cumulativeYAxis, cumMax);
         actualSeries.getData().setAll(act);
         planSeries.getData().setAll(plan);
-        actualCumSeries.getData().setAll(actCum);
-        planCumSeries.getData().setAll(planCum);
-        // Path は使わず LineChart の右軸スケールで描く
-        overlayActualCum = OverlayPolyline.EMPTY;
-        overlayPlanCum = OverlayPolyline.EMPTY;
-        hideCumPaths();
-        styleCumSeriesLines();
+        overlayActualCum = OverlayPolyline.fromChartData(actCum);
+        overlayPlanCum = OverlayPolyline.fromChartData(planCum);
+        actualCumSeries.getData().clear();
+        planCumSeries.getData().clear();
         applyChartWhiteBackground();
 
         NumberFormat nf = NumberFormat.getNumberInstance(Locale.JAPAN);
@@ -910,7 +910,6 @@ public class ProcessingFeeTrendTabController {
                 () -> {
                     syncChartPadding();
                     applyChartWhiteBackground();
-                    styleCumSeriesLines();
                     requestOverlayLayout();
                     Platform.runLater(
                             () -> {
@@ -950,28 +949,6 @@ public class ProcessingFeeTrendTabController {
         }
     }
 
-    private void styleCumSeriesLines() {
-        styleSeriesLine(actualCumSeries, "#1e3a8a", false);
-        styleSeriesLine(planCumSeries, "#0f766e", true);
-    }
-
-    private static void styleSeriesLine(
-            XYChart.Series<String, Number> series, String stroke, boolean dashed) {
-        if (series == null) {
-            return;
-        }
-        Node node = series.getNode();
-        if (node == null) {
-            return;
-        }
-        String dash = dashed ? "; -fx-stroke-dash-array: 6 4" : "";
-        String css = "-fx-stroke: " + stroke + "; -fx-stroke-width: 2.5px" + dash + ";";
-        node.setStyle(css);
-        for (Node child : node.lookupAll(".chart-series-line")) {
-            child.setStyle(css);
-        }
-    }
-
     private void requestOverlayLayout() {
         if (overlayLayoutScheduled) {
             return;
@@ -1003,8 +980,7 @@ public class ProcessingFeeTrendTabController {
         }
         layoutXAxisLabels(dailyXAxis);
         layoutTodayMarker(r, dailyXAxis, plotBg);
-        // 累計線は cumulativeChart 系列（右軸）。Path は使わない。
-        hideCumPaths();
+        layoutCumPaths();
     }
 
     private void hideCumPaths() {

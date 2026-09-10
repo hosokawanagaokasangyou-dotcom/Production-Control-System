@@ -37,12 +37,16 @@ class ProcessingFeeTrendAggregatorTest {
         assertEquals(30.0, d0.planYen(), 1e-6);
         assertEquals(50.0, d0.actualCumYen(), 1e-6);
         assertEquals(30.0, d0.planCumYen(), 1e-6);
+        // 見込累計: 当日より前は実績
+        assertEquals(50.0, d0.projectedCumYen(), 1e-6);
 
         DayPoint d1 = r.days().get(1);
         assertEquals(40.0, d1.actualYen(), 1e-6);
         assertEquals(0.0, d1.planYen(), 1e-6);
         assertEquals(90.0, d1.actualCumYen(), 1e-6);
         assertEquals(30.0, d1.planCumYen(), 1e-6);
+        // 当日: max(実績,予定)=40 → 実績累計と接続
+        assertEquals(90.0, d1.projectedCumYen(), 1e-6);
 
         DayPoint d2 = r.days().get(2);
         assertEquals(10.0, d2.actualYen(), 1e-6);
@@ -50,6 +54,8 @@ class ProcessingFeeTrendAggregatorTest {
         // 実績累計は today まで（9/2）で止まる
         assertEquals(90.0, d2.actualCumYen(), 1e-6);
         assertEquals(50.0, d2.planCumYen(), 1e-6);
+        // 見込累計: 実績先端(90)から予定日次を積む → 110
+        assertEquals(110.0, d2.projectedCumYen(), 1e-6);
 
         assertEquals(100.0, r.actualTotalYen(), 1e-6);
         assertEquals(50.0, r.planTotalYen(), 1e-6);
