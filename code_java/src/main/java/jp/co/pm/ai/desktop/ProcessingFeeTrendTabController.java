@@ -91,7 +91,6 @@ public class ProcessingFeeTrendTabController {
     private static final PseudoClass PC_WEEKEND = PseudoClass.getPseudoClass("weekend");
     private static final PseudoClass PC_TODAY = PseudoClass.getPseudoClass("today");
     private static final PseudoClass PC_FUTURE = PseudoClass.getPseudoClass("future");
-    private static final PseudoClass PC_GOOD = PseudoClass.getPseudoClass("good");
     private static final PseudoClass PC_BAD = PseudoClass.getPseudoClass("bad");
 
     private enum PeriodPreset {
@@ -143,7 +142,6 @@ public class ProcessingFeeTrendTabController {
     @FXML private TableColumn<DayPoint, DayPoint> colDate;
     @FXML private TableColumn<DayPoint, Number> colActualYen;
     @FXML private TableColumn<DayPoint, Number> colPlanYen;
-    @FXML private TableColumn<DayPoint, Number> colDiffYen;
     @FXML private TableColumn<DayPoint, Number> colActualCumYen;
     @FXML private TableColumn<DayPoint, Number> colPlanCumYen;
     @FXML private TitledPane requestPane;
@@ -154,7 +152,6 @@ public class ProcessingFeeTrendTabController {
     @FXML private TableColumn<RequestPoint, Number> colPlanM;
     @FXML private TableColumn<RequestPoint, Number> colReqActualYen;
     @FXML private TableColumn<RequestPoint, Number> colReqPlanYen;
-    @FXML private TableColumn<RequestPoint, Number> colReqDiffYen;
 
     private MainShellController shell;
     private boolean suppressFilterEvents;
@@ -230,8 +227,8 @@ public class ProcessingFeeTrendTabController {
         }
         cumulativeYAxis.setSide(Side.RIGHT);
         cumulativeYAxis.setTickLabelsVisible(true);
+        cumulativeYAxis.setTickMarkVisible(true);
         cumulativeYAxis.setLabel("累計 (円) ─ 折れ線");
-        cumulativeYAxis.setMinWidth(Region.USE_COMPUTED_SIZE);
         cumulativeChart.setMouseTransparent(true);
         cumulativeChart.setHorizontalGridLinesVisible(false);
 
@@ -339,19 +336,15 @@ public class ProcessingFeeTrendTabController {
                         });
         colActualYen.setCellValueFactory(cd -> new ReadOnlyObjectWrapper<>(cd.getValue().actualYen()));
         colPlanYen.setCellValueFactory(cd -> new ReadOnlyObjectWrapper<>(cd.getValue().planYen()));
-        colDiffYen.setCellValueFactory(
-                cd -> new ReadOnlyObjectWrapper<>(cd.getValue().actualYen() - cd.getValue().planYen()));
         colActualCumYen.setCellValueFactory(
                 cd -> new ReadOnlyObjectWrapper<>(cd.getValue().actualCumYen()));
         colPlanCumYen.setCellValueFactory(
                 cd -> new ReadOnlyObjectWrapper<>(cd.getValue().planCumYen()));
         for (TableColumn<DayPoint, Number> c :
                 List.of(colActualYen, colPlanYen, colActualCumYen, colPlanCumYen)) {
-            c.setCellFactory(col -> yenCell(false));
+            c.setCellFactory(col -> yenCell());
             c.setStyle("-fx-alignment: CENTER-RIGHT;");
         }
-        colDiffYen.setCellFactory(col -> yenCell(true));
-        colDiffYen.setStyle("-fx-alignment: CENTER-RIGHT;");
         detailTable.setRowFactory(
                 tv ->
                         new TableRow<>() {
@@ -377,8 +370,7 @@ public class ProcessingFeeTrendTabController {
         detailTable.setPlaceholder(new Label("期間内のデータがありません"));
         detailTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
         Tooltip.install(
-                detailTable,
-                new Tooltip("差異 = 実績円 − 予定円。単位は円（AH × 工程延べ m）。"));
+                detailTable, new Tooltip("単位は円（AH × 工程延べ m）。"));
     }
 
     private void initRequestTable() {
@@ -432,16 +424,10 @@ public class ProcessingFeeTrendTabController {
                 cd -> new ReadOnlyObjectWrapper<>(cd.getValue().actualYen()));
         colReqPlanYen.setCellValueFactory(
                 cd -> new ReadOnlyObjectWrapper<>(cd.getValue().planYen()));
-        colReqDiffYen.setCellValueFactory(
-                cd ->
-                        new ReadOnlyObjectWrapper<>(
-                                cd.getValue().actualYen() - cd.getValue().planYen()));
         for (TableColumn<RequestPoint, Number> c : List.of(colReqActualYen, colReqPlanYen)) {
-            c.setCellFactory(col -> requestYenCell(false));
+            c.setCellFactory(col -> requestYenCell());
             c.setStyle("-fx-alignment: CENTER-RIGHT;");
         }
-        colReqDiffYen.setCellFactory(col -> requestYenCell(true));
-        colReqDiffYen.setStyle("-fx-alignment: CENTER-RIGHT;");
         requestTable.setPlaceholder(new Label("期間内の依頼がありません"));
         requestTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
         Tooltip.install(
@@ -450,44 +436,30 @@ public class ProcessingFeeTrendTabController {
                         "期間内の実績・予定を依頼NOごとに集約。AH単価欠落は —（当該依頼の円は 0）。"));
     }
 
-    private TableCell<DayPoint, Number> yenCell(boolean signed) {
+    private TableCell<DayPoint, Number> yenCell() {
         return new TableCell<>() {
             @Override
             protected void updateItem(Number item, boolean empty) {
                 super.updateItem(item, empty);
-                pseudoClassStateChanged(PC_GOOD, false);
-                pseudoClassStateChanged(PC_BAD, false);
                 if (empty || item == null) {
                     setText(null);
                     return;
                 }
-                setText(formatYenNumber(item.doubleValue(), signed));
-                if (signed) {
-                    double v = item.doubleValue();
-                    pseudoClassStateChanged(PC_GOOD, v > 0.5);
-                    pseudoClassStateChanged(PC_BAD, v < -0.5);
-                }
+                setText(formatYenNumber(item.doubleValue()));
             }
         };
     }
 
-    private TableCell<RequestPoint, Number> requestYenCell(boolean signed) {
+    private TableCell<RequestPoint, Number> requestYenCell() {
         return new TableCell<>() {
             @Override
             protected void updateItem(Number item, boolean empty) {
                 super.updateItem(item, empty);
-                pseudoClassStateChanged(PC_GOOD, false);
-                pseudoClassStateChanged(PC_BAD, false);
                 if (empty || item == null) {
                     setText(null);
                     return;
                 }
-                setText(formatYenNumber(item.doubleValue(), signed));
-                if (signed) {
-                    double v = item.doubleValue();
-                    pseudoClassStateChanged(PC_GOOD, v > 0.5);
-                    pseudoClassStateChanged(PC_BAD, v < -0.5);
-                }
+                setText(formatYenNumber(item.doubleValue()));
             }
         };
     }
@@ -509,16 +481,8 @@ public class ProcessingFeeTrendTabController {
         };
     }
 
-    private static String formatYenNumber(double v, boolean signed) {
-        NumberFormat nf = NumberFormat.getIntegerInstance(Locale.JAPAN);
-        if (signed) {
-            String body = nf.format(Math.rint(Math.abs(v)));
-            if (Math.abs(v) < 0.5) {
-                return "±0";
-            }
-            return (v > 0 ? "+" : "−") + body;
-        }
-        return nf.format(Math.rint(v));
+    private static String formatYenNumber(double v) {
+        return NumberFormat.getIntegerInstance(Locale.JAPAN).format(Math.rint(v));
     }
 
     /** 軸目盛（加工量の formatM と同型。円もカンマ区切り整数）。 */
@@ -859,6 +823,7 @@ public class ProcessingFeeTrendTabController {
         // 第一軸（左）= 日次棒 / 第二軸（右）= 累計折線（空 LineChart + Path）
         applyNiceRange(dailyYAxis, dailyMax);
         applyNiceRange(cumulativeYAxis, cumMax);
+        ensureRightAxisMinWidth();
         actualSeries.getData().setAll(act);
         planSeries.getData().setAll(plan);
         overlayActualCum = OverlayPolyline.fromChartData(actCum);
@@ -894,10 +859,23 @@ public class ProcessingFeeTrendTabController {
         axis.setTickUnit(nr.tickUnit());
     }
 
+    /**
+     * 円表記が長いため、第二軸幅が潰れて目盛ラベルが消えないよう下限を確保する。
+     */
+    private void ensureRightAxisMinWidth() {
+        String sample =
+                NumberFormat.getIntegerInstance(Locale.JAPAN)
+                        .format(Math.rint(cumulativeYAxis.getUpperBound()));
+        double estimated = Math.max(64.0, sample.length() * 7.5 + 44.0);
+        if (cumulativeYAxis.getMinWidth() < estimated) {
+            cumulativeYAxis.setMinWidth(estimated);
+        }
+        cumulativeYAxis.requestAxisLayout();
+    }
+
     private void syncChartPadding() {
-        // 加工量 COMBO と同型: 実測幅のみ（minWidth を余白に食い込ませない）
-        double left = dailyYAxis.getWidth();
-        double right = cumulativeYAxis.getWidth();
+        double left = Math.max(dailyYAxis.getWidth(), 1.0);
+        double right = Math.max(cumulativeYAxis.getWidth(), cumulativeYAxis.getMinWidth());
         dailyChart.setPadding(new Insets(CHART_TOP_PADDING, right, 0, 0));
         cumulativeChart.setPadding(new Insets(CHART_TOP_PADDING, 0, 0, left));
     }
