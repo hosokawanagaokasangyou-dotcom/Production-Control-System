@@ -132,7 +132,7 @@
     <ul>
       <li>開始下限は <code>配台可能日時_上書き → 配台可能日時 → 原反投入日由来</code> の順で解決する。</li>
       <li>同日下限は <code>DISPATCHABLE_FROM_TIME = 12:45</code> を適用（13:00は使用しない）。</li>
-      <li><strong>例外</strong>: 湖南工場（<code>PM_AI_FACTORY_SITE=KONAN</code>）かつ在庫場所「湖南」は <code>DISPATCHABLE_FROM_TIME_KONAN_STOCK</code>（既定 9:30）。</li>
+      <li><strong>例外</strong>: 湖南工場（<code>PM_AI_FACTORY_SITE=KONAN</code>）かつ在庫場所が湖南工場内（「湖南」またはコード <code>K</code>）は <code>DISPATCHABLE_FROM_TIME_KONAN_STOCK</code>（既定 8:45）。</li>
       <li><strong>両面EC の配台時間</strong>:
         <ul>
           <li>湖南工場: 両面EC を EC 機械に載せるときは EC 加工2回分（配台時間を倍化）。SEC 機械はワンパスのため等倍。</li>
@@ -185,7 +185,7 @@
       <li>原反: <code>原反投入日_上書き</code> 優先。</li>
       <li>配台可能日時: 上書き列 → 算出列 → 原反日＋<strong>12:45</strong>（<code>DISPATCHABLE_FROM_TIME</code>）。</li>
       <li>同日加工下限も 12:45（旧 13:00 は使用しない）。</li>
-      <li><strong>湖南工場・在庫場所「湖南」の例外</strong>: <code>DISPATCHABLE_FROM_TIME_KONAN_STOCK</code>（既定 <strong>9:30</strong>）。</li>
+      <li><strong>湖南工場・湖南工場内在庫の例外</strong>: 在庫場所に「湖南」またはコード <code>K</code> のとき <code>DISPATCHABLE_FROM_TIME_KONAN_STOCK</code>（既定 <strong>8:45</strong>）。</li>
     </ul>
   </section>
 
@@ -292,7 +292,7 @@
       <li>B系: <code>PLANNING_B1_INSPECTION_EXCLUSIVE_MACHINE</code> / <code>PLANNING_B2_EC_FOLLOWER_DISJOINT_TEAMS</code></li>
       <li>WIP: <code>WIP_LIMIT_EC_BEFORE_INSP_ROLLS</code> / <code>WIP_LIMIT_SLIT_BEFORE_SEC_ROLLS</code> / <code>WIP_LIMIT_CONNECTION_BEFORE_SEC_ROLLS</code></li>
       <li>配台試行: <code>PM_AI_INTERACTIVE_TRIAL_STAGE2_PARITY</code></li>
-      <li>工場別例外: <code>PM_AI_FACTORY_SITE</code>（KONAN / KOKUBU。国分は両面EC 配台時間等倍） / <code>DISPATCHABLE_FROM_TIME_KONAN_STOCK</code>（既定 9:30）</li>
+      <li>工場別例外: <code>PM_AI_FACTORY_SITE</code>（KONAN / KOKUBU。国分は両面EC 配台時間等倍） / <code>DISPATCHABLE_FROM_TIME_KONAN_STOCK</code>（既定 8:45、在庫場所「湖南」または <code>K</code>）</li>
     </ul>
   </section>
 

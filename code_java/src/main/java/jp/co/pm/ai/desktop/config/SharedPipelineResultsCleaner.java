@@ -77,6 +77,8 @@ public final class SharedPipelineResultsCleaner {
     private static List<Path> deleteUnderSharedRoot(Path root) {
         List<Path> deleted = new ArrayList<>();
         deleteExact(root.resolve(AppPaths.STAGE1_PLAN_TASKS_FILENAME), deleted);
+        deleteExact(
+                root.resolve(AppPaths.STAGE1_PLAN_TASKS_FILENAME + ".editmarks.json"), deleted);
         deleteExact(root.resolve(AppPaths.STAGE1_TASK_INPUT_PREVIEW_FILENAME), deleted);
         deleteExact(root.resolve(AppPaths.STAGE1_EXCLUDE_RULES_JSON_FILENAME), deleted);
         deleteExact(root.resolve(AppPaths.RESULT_DISPATCH_TABLE_JSON_BASENAME), deleted);
@@ -111,6 +113,7 @@ public final class SharedPipelineResultsCleaner {
             return false;
         }
         if (n.equals(AppPaths.STAGE1_PLAN_TASKS_FILENAME)
+                || n.equals(AppPaths.STAGE1_PLAN_TASKS_FILENAME + ".editmarks.json")
                 || n.equals(AppPaths.STAGE1_TASK_INPUT_PREVIEW_FILENAME)
                 || n.equals(AppPaths.STAGE1_EXCLUDE_RULES_JSON_FILENAME)
                 || n.equals(AppPaths.RESULT_DISPATCH_TABLE_JSON_BASENAME)

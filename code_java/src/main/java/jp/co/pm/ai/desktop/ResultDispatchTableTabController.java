@@ -35,6 +35,7 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
+import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 import javafx.util.Duration;
 
@@ -81,12 +82,17 @@ public final class ResultDispatchTableTabController {
         public boolean succeeded() {
             return error == null && result != null;
         }
+
+        /** 結果_配台表が 0 行（翌日配台0ロール等）で Excel も空シート出力のとき。 */
+        public boolean emptyDispatchResults() {
+            return succeeded() && result.emptyDispatchTable();
+        }
     }
 
     private static final String HINT_TEXT =
-            "PM_AI_RESULT_DISPATCH_TABLE_DIR またはデフォルトの output/"
-                    + " 配下の JSON を表示します。再読みで"
-                    + "最新化します。"
+            "起動時・親タブからの自動再読込は PM_AI_RESULT_DISPATCH_TABLE_DIR"
+                    + " またはデフォルトの output/ 配下の JSON を表示します。"
+                    + " 「再読み…」では対象 JSON を毎回選択します。"
                     + " ControlsFX SpreadsheetView （段階1成形結果と同じ"
                     + "列フィルタ）。";
 
@@ -551,18 +557,90 @@ public final class ResultDispatchTableTabController {
 
     @FXML
     private void onRefreshButtonAction() {
-        reloadFromDisk(true);
+        Path picked = chooseResultDispatchJsonFile();
+        if (picked == null) {
+            return;
+        }
+        reloadFromPath(picked, true);
     }
 
+    /** 環境変数／既定パスから再読込（親タブ・起動時。ダイアログは出さない）。 */
     private void reloadFromDisk(boolean userCompletionDialog) {
         if (shell == null) {
+            return;
+        }
+        Map<String, String> ui = shell.snapshotUiEnv();
+        Path path = AppPaths.resolveResultDispatchTableJsonPath(ui);
+        reloadFromPath(path, userCompletionDialog);
+    }
+
+    /**
+     * 手動「再読み…」用。キャンセル時は {@code null}。
+     * 初期ディレクトリは現在表示中のパス、なければ環境変数解決パスの親。
+     */
+    private Path chooseResultDispatchJsonFile() {
+        FileChooser ch = new FileChooser();
+        ch.setTitle("結果_配台表 JSON を選択");
+        ch.getExtensionFilters().add(new FileChooser.ExtensionFilter("JSON", "*.json"));
+        ch.getExtensionFilters().add(new FileChooser.ExtensionFilter("All", "*.*"));
+        Path seed = null;
+        if (pathLabel != null) {
+            String shown = pathLabel.getText();
+            if (shown != null && !shown.isBlank()) {
+                try {
+                    seed = Path.of(shown.strip());
+                } catch (Exception ignored) {
+                    // fall through
+                }
+            }
+        }
+        if (seed == null && shell != null) {
+            seed = AppPaths.resolveResultDispatchTableJsonPath(shell.snapshotUiEnv());
+        }
+        applyFileChooserInitialLocation(ch, seed);
+        java.io.File picked = ch.showOpenDialog(ownerStage);
+        return picked == null ? null : picked.toPath();
+    }
+
+    private static void applyFileChooserInitialLocation(FileChooser ch, Path seed) {
+        if (ch == null || seed == null) {
+            return;
+        }
+        try {
+            Path abs = seed.toAbsolutePath().normalize();
+            if (Files.isRegularFile(abs)) {
+                Path parent = abs.getParent();
+                if (parent != null && Files.isDirectory(parent)) {
+                    ch.setInitialDirectory(parent.toFile());
+                }
+                Path name = abs.getFileName();
+                if (name != null) {
+                    ch.setInitialFileName(name.toString());
+                }
+            } else if (Files.isDirectory(abs)) {
+                ch.setInitialDirectory(abs.toFile());
+            } else {
+                Path parent = abs.getParent();
+                if (parent != null && Files.isDirectory(parent)) {
+                    ch.setInitialDirectory(parent.toFile());
+                }
+                Path name = abs.getFileName();
+                if (name != null) {
+                    ch.setInitialFileName(name.toString());
+                }
+            }
+        } catch (Exception ignored) {
+            // FileChooser 初期位置は失敗しても続行
+        }
+    }
+
+    private void reloadFromPath(Path path, boolean userCompletionDialog) {
+        if (shell == null || path == null) {
             return;
         }
         if (refreshButton != null) {
             refreshButton.setDisable(true);
         }
-        Map<String, String> ui = shell.snapshotUiEnv();
-        Path path = AppPaths.resolveResultDispatchTableJsonPath(ui);
         pathLabel.setText(path.toString());
         if (!Files.isRegularFile(path)) {
             statusLabel.setText("ファイルなし");

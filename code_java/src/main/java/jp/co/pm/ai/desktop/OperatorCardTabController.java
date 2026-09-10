@@ -277,25 +277,83 @@ public final class OperatorCardTabController {
     }
 
     private void browseJson(TextField target) {
+        Path picked = chooseJsonFile("JSON を選択", target);
+        if (picked != null) {
+            target.setText(picked.toAbsolutePath().normalize().toString());
+            if (target == memberJsonField) {
+                reloadMemberCachesAndOperators();
+            }
+        }
+    }
+
+    /**
+     * プレビュー更新用。キャンセル時は {@code null}（呼び出し側は現状パスを維持）。
+     *
+     * @param title ダイアログ題名
+     * @param seedField 初期位置のヒント（現在のパス欄）
+     */
+    private Path chooseJsonFile(String title, TextField seedField) {
         FileChooser ch = new FileChooser();
-        ch.setTitle("JSON");
+        ch.setTitle(title != null ? title : "JSON を選択");
         ch.getExtensionFilters().add(new FileChooser.ExtensionFilter("JSON", "*.json"));
         ch.getExtensionFilters().add(new FileChooser.ExtensionFilter("All", "*.*"));
-        if (shell != null) {
+        Path seed = null;
+        if (seedField != null) {
+            String raw = seedField.getText();
+            if (raw != null && !raw.isBlank()) {
+                try {
+                    seed = Path.of(raw.strip());
+                } catch (Exception ignored) {
+                    // fall through
+                }
+            }
+        }
+        if (seed == null && shell != null) {
             try {
                 Map<String, String> ui = shell.snapshotUiEnv();
-                Path dir = AppPaths.defaultPlanningOutputDir(ui);
-                if (Files.isDirectory(dir)) {
-                    ch.setInitialDirectory(dir.toFile());
+                if (seedField == dispatchJsonField) {
+                    seed = AppPaths.resolveResultDispatchTableJsonPath(ui);
+                } else {
+                    seed = AppPaths.defaultPlanningOutputDir(ui);
                 }
             } catch (Exception ignored) {
                 // ignore
             }
         }
+        applyFileChooserInitialLocation(ch, seed);
         java.io.File picked = ch.showOpenDialog(ownerStage);
-        if (picked != null) {
-            target.setText(picked.getAbsolutePath());
-            reloadMemberCachesAndOperators();
+        return picked == null ? null : picked.toPath();
+    }
+
+    private static void applyFileChooserInitialLocation(FileChooser ch, Path seed) {
+        if (ch == null || seed == null) {
+            return;
+        }
+        try {
+            Path abs = seed.toAbsolutePath().normalize();
+            if (Files.isRegularFile(abs)) {
+                Path parent = abs.getParent();
+                if (parent != null && Files.isDirectory(parent)) {
+                    ch.setInitialDirectory(parent.toFile());
+                }
+                Path name = abs.getFileName();
+                if (name != null) {
+                    ch.setInitialFileName(name.toString());
+                }
+            } else if (Files.isDirectory(abs)) {
+                ch.setInitialDirectory(abs.toFile());
+            } else {
+                Path parent = abs.getParent();
+                if (parent != null && Files.isDirectory(parent)) {
+                    ch.setInitialDirectory(parent.toFile());
+                }
+                Path name = abs.getFileName();
+                if (name != null) {
+                    ch.setInitialFileName(name.toString());
+                }
+            }
+        } catch (Exception ignored) {
+            // FileChooser 初期位置は失敗しても続行
         }
     }
 
@@ -317,7 +375,9 @@ public final class OperatorCardTabController {
             }
             if (mem == null && !Files.isRegularFile(dispDirFile)) {
                 statusLabel.setText(
-                        "最新 JSON が見つかりません: " + dir);
+                        "最新 JSON が見つかりません: "
+                                + dir
+                                + " （参照… または「プレビュー更新」で指定）");
                 return;
             }
             statusLabel.setText(
@@ -334,6 +394,15 @@ public final class OperatorCardTabController {
 
     @FXML
     private void onRefreshPreviewButtonAction() {
+        Path memberPicked = chooseJsonFile("member_schedule*.json を選択", memberJsonField);
+        if (memberPicked != null && memberJsonField != null) {
+            memberJsonField.setText(memberPicked.toAbsolutePath().normalize().toString());
+            reloadMemberCachesAndOperators();
+        }
+        Path dispatchPicked = chooseJsonFile("結果_配台表.json を選択", dispatchJsonField);
+        if (dispatchPicked != null && dispatchJsonField != null) {
+            dispatchJsonField.setText(dispatchPicked.toAbsolutePath().normalize().toString());
+        }
         rebuildPreview();
     }
 

@@ -56,4 +56,37 @@ class Stage1AiCacheClearerTest {
         assertFalse(Stage1AiCacheClearer.hasAnyExistingDiskCache(ui));
         assertFalse(Stage1AiCacheClearer.hasExistingPlanInputTasksFile(ui));
     }
+
+    @Test
+    void clearBeforeStage1Run_deletesPlanInputEditMarksSidecar() throws Exception {
+        Path repo = temp.resolve("repo");
+        Path code = repo.resolve("code");
+        Path python = code.resolve("python");
+        Path json = code.resolve("json");
+        Path output = code.resolve("output");
+        Files.createDirectories(python);
+        Files.createDirectories(json);
+        Files.createDirectories(output);
+        Files.writeString(python.resolve("task_extract_stage1.py"), "# stub\n");
+
+        Path planInputTasks = output.resolve(AppPaths.STAGE1_PLAN_TASKS_FILENAME);
+        Path sidecar =
+                planInputTasks.resolveSibling(
+                        planInputTasks.getFileName().toString() + ".editmarks.json");
+        Files.writeString(planInputTasks, "stub");
+        Files.writeString(sidecar, "{\"marks\":[\"JR1\\u0001工程\\u0001機\\u0001配台試行順番\"]}");
+
+        Map<String, String> ui =
+                Map.of(
+                        AppPaths.KEY_PM_AI_REPO_ROOT,
+                        repo.toString(),
+                        AppPaths.KEY_PM_AI_CODE_PYTHON_DIR,
+                        python.toString());
+
+        Stage1AiCacheClearer.ClearResult result = Stage1AiCacheClearer.clearBeforeStage1Run(ui);
+        assertTrue(result.anyDeleted());
+        assertFalse(Files.exists(planInputTasks));
+        assertFalse(Files.exists(sidecar), "段階1キャッシュ削除で編集マーク sidecar も消す");
+        assertFalse(Stage1AiCacheClearer.hasAnyExistingDiskCache(ui));
+    }
 }

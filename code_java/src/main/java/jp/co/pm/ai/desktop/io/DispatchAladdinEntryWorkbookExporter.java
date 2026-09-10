@@ -117,7 +117,12 @@ public final class DispatchAladdinEntryWorkbookExporter {
     }
 
     /** 出力結果（最新固定パスと世代パス）。最新固定パスは常にローカルディスク。 */
-    public record ExportResult(Path latestPath, Path generationPath) {}
+    public record ExportResult(
+            Path latestPath, Path generationPath, boolean emptyDispatchTable) {
+        public ExportResult(Path latestPath, Path generationPath) {
+            this(latestPath, generationPath, false);
+        }
+    }
 
     /**
      * ディスク上の 結果_配台表.json / shaped_aladdin_plan.json と目次情報からブックを組み立てて出力する。
@@ -199,7 +204,8 @@ public final class DispatchAladdinEntryWorkbookExporter {
             Files.deleteIfExists(stagingTmp);
         }
         Path generation = saveGenerationCopy(u, latest);
-        return new ExportResult(latest, generation);
+        boolean empty = model == null || model.sheets().isEmpty();
+        return new ExportResult(latest, generation, empty);
     }
 
     /** 最新ファイルを操作者別世代フォルダへコピーし、上限超過分を古い順に削除する。 */

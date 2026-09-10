@@ -140,6 +140,7 @@ public class ReconciliationApp {
     private RadioButton rbExistingOnlyFilter;
     private RadioButton rbNewOnlyFilter;
     private RadioButton rbJuchuWithoutOriginalFilter;
+    private RadioButton rbTpiPdfFilter;
     private ObservableList<OrderRecord> orderRecords = FXCollections.observableArrayList();
 
     private GridPane sheetGrid;
@@ -490,13 +491,19 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         rbJuchuWithoutOriginalFilter.setStyle(radioStyle);
         rbJuchuWithoutOriginalFilter.setTooltip(
                 new Tooltip("依頼書原本にないが受注ファイルには存在するタスクのみを表示（入力日が新しい順）"));
+        rbTpiPdfFilter = new RadioButton("TPI PDF");
+        rbTpiPdfFilter.setStyle(radioStyle);
+        rbTpiPdfFilter.setTooltip(
+                new Tooltip(
+                        "TPI 依頼書フォルダ（PM_AI_REQUEST_FORM_TPI_PDF_DIR）由来・関連付け行のみを表示"));
         ToggleGroup recordListFilterGroup = new ToggleGroup();
         for (RadioButton rb :
                 List.of(
                         rbAllRecordsFilter,
                         rbExistingOnlyFilter,
                         rbNewOnlyFilter,
-                        rbJuchuWithoutOriginalFilter)) {
+                        rbJuchuWithoutOriginalFilter,
+                        rbTpiPdfFilter)) {
             rb.setToggleGroup(recordListFilterGroup);
             rb.setMinWidth(Region.USE_PREF_SIZE);
             rb.setMaxWidth(Double.MAX_VALUE);
@@ -510,9 +517,13 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         HBox filterModeRow2 = new HBox(12);
         filterModeRow2.setAlignment(Pos.CENTER_LEFT);
         filterModeRow2.getChildren().addAll(rbNewOnlyFilter, rbJuchuWithoutOriginalFilter);
+        HBox filterModeRow3 = new HBox(12);
+        filterModeRow3.setAlignment(Pos.CENTER_LEFT);
+        filterModeRow3.getChildren().add(rbTpiPdfFilter);
         VBox filterModePanel = new VBox(4);
         filterModePanel.setFillWidth(true);
-        filterModePanel.getChildren().addAll(filterModeRow1, filterModeRow2);
+        filterModePanel.getChildren().addAll(filterModeRow1, filterModeRow2, filterModeRow3);
+        refreshTpiPdfFilterRadioVisibility();
         filterRowPrimary.getChildren().addAll(lblSearch, txtRecordFilter);
         VBox filterPanel = new VBox(4);
         filterPanel.getChildren().addAll(filterRowPrimary, filterModePanel);
@@ -2492,6 +2503,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         refreshJuchuPathDisplay();
         refreshSettingsComboSubtitle();
         applyGuestSessionRestrictions();
+        refreshTpiPdfFilterRadioVisibility();
     }
 
     /** 依頼書入力タブ上部タイトル（工場は環境変数／グローバル設定から解決）。 */
@@ -2515,6 +2527,22 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                 AppPaths.resolveRequestFormTpiPdfDir(uiEnvSnapshot)
                         .map(Path::toString)
                         .orElse("");
+    }
+
+    private void refreshTpiPdfFilterRadioVisibility() {
+        if (rbTpiPdfFilter == null) {
+            return;
+        }
+        boolean enabled = AppPaths.isRequestFormTpiPdfEnabled(uiEnvSnapshot);
+        rbTpiPdfFilter.setVisible(enabled);
+        rbTpiPdfFilter.setManaged(enabled);
+        if (!enabled && rbTpiPdfFilter.isSelected()) {
+            rbTpiPdfFilter.setSelected(false);
+            if (rbAllRecordsFilter != null) {
+                rbAllRecordsFilter.setSelected(true);
+            }
+            applyRecordFilter();
+        }
     }
 
     private void applySelectedOriginalDir(String absolutePath) {
@@ -4853,6 +4881,9 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         if (rbJuchuWithoutOriginalFilter != null && rbJuchuWithoutOriginalFilter.isSelected()) {
             return RecordListFilterMode.JUCHU_WITHOUT_ORIGINAL;
         }
+        if (rbTpiPdfFilter != null && rbTpiPdfFilter.isSelected()) {
+            return RecordListFilterMode.TPI_PDF;
+        }
         return RecordListFilterMode.WITH_ORIGINAL;
     }
 
@@ -4900,7 +4931,20 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
             case JUCHU_WITHOUT_ORIGINAL ->
                     isJuchuRowWithoutRequestFormOriginal(rec, hasOriginalFile);
             case WITH_ORIGINAL -> hasOriginalFile.test(rec);
+            case TPI_PDF -> isTpiRelatedRecord(rec);
         };
+    }
+
+    /** TPI PDF フォルダ由来、またはステータスに「TPI PDF」を含む行。 */
+    static boolean isTpiRelatedRecord(OrderRecord rec) {
+        if (rec == null) {
+            return false;
+        }
+        if (isTpiPdfRaw(rec.getRawValues())) {
+            return true;
+        }
+        String status = rec.getStatus();
+        return status != null && status.contains("TPI PDF");
     }
 
     static boolean recordStatusContainsExisting(OrderRecord rec) {

@@ -33,5 +33,8 @@ class SharedPipelineResultsCleanerTest {
         assertTrue(
                 SharedPipelineResultsCleaner.shouldDeleteStageArtifactFileName(
                         "shaped_aladdin_plan.json"));
+        assertTrue(
+                SharedPipelineResultsCleaner.shouldDeleteStageArtifactFileName(
+                        AppPaths.STAGE1_PLAN_TASKS_FILENAME + ".editmarks.json"));
     }
 }

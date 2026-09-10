@@ -37,7 +37,7 @@
                             text="最新JSONを検索"
                             onAction="#onSyncLatestButtonAction"/>
                     <Button fx:id="refreshPreviewButton" mnemonicParsing="false"
-                            text="プレビュー更新"
+                            text="プレビュー更新…"
                             onAction="#onRefreshPreviewButtonAction"/>
                     <Button fx:id="printButton" mnemonicParsing="false"
                             text="印刷..."
@@ -91,6 +91,9 @@
 
                 <Label styleClass="pm-operator-card-hint"
                        text="プレビューは選択オペレーターの1枚。全員連続印刷は印刷時のみ有効。"
+                       wrapText="true"/>
+                <Label styleClass="pm-operator-card-hint"
+                       text="「プレビュー更新…」では member_schedule と結果_配台表の JSON を毎回選べます（キャンセルで現状パス維持）。"
                        wrapText="true"/>
             </VBox>
         </ScrollPane>

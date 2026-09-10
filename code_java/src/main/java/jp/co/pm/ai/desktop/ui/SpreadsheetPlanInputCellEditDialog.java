@@ -16,10 +16,14 @@ import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import javafx.stage.Modality;
 import javafx.stage.Screen;
+import javafx.stage.Stage;
 import javafx.stage.Window;
 
 /**
  * Modal editor for a single plan-input spreadsheet cell (near-click placement, width from column).
+ *
+ * <p>表示後の {@code setX/setY} や {@code setOpacity} の切り替えは、Windows 上でダイアログが
+ * 左右に震えたように見えるため行わない。位置は {@code onShowing}（可視化前）で一度だけ決める。
  */
 public final class SpreadsheetPlanInputCellEditDialog {
 
@@ -69,18 +73,9 @@ public final class SpreadsheetPlanInputCellEditDialog {
         dialog.getDialogPane().getButtonTypes().setAll(ButtonType.OK, ButtonType.CANCEL);
         dialog.getDialogPane().setPrefWidth(w + 40);
 
-        dialog.setOnShown(
-                e ->
-                        Platform.runLater(
-                                () -> {
-                                    positionNearAnchor(
-                                            dialog.getDialogPane().getScene().getWindow(),
-                                            anchorScreenX,
-                                            anchorScreenY);
-                                    focusForImmediateEdit(area);
-                                }));
+        wirePositionBeforeShow(dialog, anchorScreenX, anchorScreenY, () -> focusForImmediateEdit(area));
 
-        Optional<ButtonType> r = dialog.showAndWait();
+        Optional<ButtonType> r = showAndWaitGuarded(dialog);
         if (r.isPresent() && r.get() == ButtonType.OK) {
             return Optional.of(area.getText());
         }
@@ -126,16 +121,8 @@ public final class SpreadsheetPlanInputCellEditDialog {
         dialog.getDialogPane().getButtonTypes().setAll(ButtonType.CLOSE);
         dialog.getDialogPane().setPrefWidth(w + 40);
 
-        dialog.setOnShown(
-                e ->
-                        Platform.runLater(
-                                () ->
-                                        positionNearAnchor(
-                                                dialog.getDialogPane().getScene().getWindow(),
-                                                anchorScreenX,
-                                                anchorScreenY)));
-
-        dialog.showAndWait();
+        wirePositionBeforeShow(dialog, anchorScreenX, anchorScreenY, null);
+        showAndWaitGuarded(dialog);
     }
 
     /**
@@ -178,18 +165,9 @@ public final class SpreadsheetPlanInputCellEditDialog {
         dialog.getDialogPane().getButtonTypes().setAll(ButtonType.OK, ButtonType.CANCEL);
         dialog.getDialogPane().setPrefWidth(320);
 
-        dialog.setOnShown(
-                e ->
-                        Platform.runLater(
-                                () -> {
-                                    positionNearAnchor(
-                                            dialog.getDialogPane().getScene().getWindow(),
-                                            anchorScreenX,
-                                            anchorScreenY);
-                                    picker.requestFocus();
-                                }));
+        wirePositionBeforeShow(dialog, anchorScreenX, anchorScreenY, () -> picker.requestFocus());
 
-        Optional<ButtonType> r = dialog.showAndWait();
+        Optional<ButtonType> r = showAndWaitGuarded(dialog);
         if (r.isPresent() && r.get() == ButtonType.OK) {
             return Optional.of(PlanInputDateColumnSupport.formatCellValue(picker.getValue()));
         }
@@ -218,31 +196,31 @@ public final class SpreadsheetPlanInputCellEditDialog {
         DatePicker picker = new DatePicker();
         javafx.scene.control.TextField timeField = new javafx.scene.control.TextField();
         timeField.setPromptText("12:45");
-        timeField.setPrefColumnCount(6);
         PlanInputDateColumnSupport.parseDateTimeCellValue(initialValue)
-                .ifPresentOrElse(
+                .ifPresent(
                         dt -> {
                             picker.setValue(dt.toLocalDate());
                             timeField.setText(
                                     String.format("%d:%02d", dt.getHour(), dt.getMinute()));
-                        },
-                        () -> timeField.setText("12:45"));
-
-        Button clearButton = new Button("クリア");
-        clearButton.setOnAction(
-                ev -> {
-                    picker.setValue(null);
-                    timeField.clear();
-                });
+                        });
+        if (timeField.getText() == null || timeField.getText().isBlank()) {
+            PlanInputDateColumnSupport.parseCellValue(initialValue)
+                    .ifPresentOrElse(
+                            d -> {
+                                picker.setValue(d);
+                                timeField.setText("12:45");
+                            },
+                            () -> timeField.setText("12:45"));
+        }
 
         Label hint =
                 new Label(
                         columnTitle != null && !columnTitle.isBlank()
-                                ? "列: " + columnTitle.strip() + "（日付＋時刻 HH:mm）"
-                                : "日付と時刻を選択してください");
+                                ? "列: " + columnTitle.strip()
+                                : "日時を選択してください");
         hint.setStyle("-fx-font-size: 11px; -fx-text-fill: derive(-fx-text-inner-color, 18%);");
 
-        HBox pickerRow = new HBox(8, picker, timeField, clearButton);
+        HBox pickerRow = new HBox(8, picker, new Label("時刻"), timeField);
         pickerRow.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
 
         VBox box = new VBox(10, hint, pickerRow);
@@ -250,18 +228,10 @@ public final class SpreadsheetPlanInputCellEditDialog {
         dialog.getDialogPane().getButtonTypes().setAll(ButtonType.OK, ButtonType.CANCEL);
         dialog.getDialogPane().setPrefWidth(360);
 
-        dialog.setOnShown(
-                e ->
-                        Platform.runLater(
-                                () -> {
-                                    positionNearAnchor(
-                                            dialog.getDialogPane().getScene().getWindow(),
-                                            anchorScreenX,
-                                            anchorScreenY);
-                                    focusForImmediateEdit(timeField);
-                                }));
+        wirePositionBeforeShow(
+                dialog, anchorScreenX, anchorScreenY, () -> focusForImmediateEdit(timeField));
 
-        Optional<ButtonType> r = dialog.showAndWait();
+        Optional<ButtonType> r = showAndWaitGuarded(dialog);
         if (r.isPresent() && r.get() == ButtonType.OK) {
             java.time.LocalDate d = picker.getValue();
             if (d == null) {
@@ -293,13 +263,53 @@ public final class SpreadsheetPlanInputCellEditDialog {
         return java.time.LocalTime.of(12, 45);
     }
 
-    private static void positionNearAnchor(Window win, double anchorScreenX, double anchorScreenY) {
+    /** 可視化前（onShowing）に一度だけ位置を決める。表示後の移動・opacity 操作はしない。 */
+    private static void wirePositionBeforeShow(
+            Dialog<?> dialog,
+            double anchorScreenX,
+            double anchorScreenY,
+            Runnable afterFocused) {
+        dialog.setOnShowing(
+                e -> {
+                    Window win = dialog.getDialogPane().getScene().getWindow();
+                    if (win instanceof Stage stage) {
+                        stage.setResizable(false);
+                    }
+                    positionNearAnchor(win, dialog, anchorScreenX, anchorScreenY);
+                });
+        if (afterFocused != null) {
+            dialog.setOnShown(e -> Platform.runLater(afterFocused));
+        }
+    }
+
+    private static <R> Optional<R> showAndWaitGuarded(Dialog<R> dialog) {
+        SpreadsheetPlanInputCellEditSupport.beginCellEditDialog();
+        try {
+            return dialog.showAndWait();
+        } finally {
+            SpreadsheetPlanInputCellEditSupport.endCellEditDialog();
+        }
+    }
+
+    private static void positionNearAnchor(
+            Window win, Dialog<?> dialog, double anchorScreenX, double anchorScreenY) {
         if (win == null) {
             return;
         }
-        win.sizeToScene();
         double ww = win.getWidth();
         double hh = win.getHeight();
+        if (!(ww > 1) || !(hh > 1)) {
+            double prefW =
+                    dialog != null && dialog.getDialogPane() != null
+                            ? dialog.getDialogPane().prefWidth(-1)
+                            : -1;
+            double prefH =
+                    dialog != null && dialog.getDialogPane() != null
+                            ? dialog.getDialogPane().prefHeight(-1)
+                            : -1;
+            ww = prefW > 1 ? prefW : 320;
+            hh = prefH > 1 ? prefH : 160;
+        }
         Rectangle2D bounds = null;
         for (Screen s : Screen.getScreensForRectangle(anchorScreenX, anchorScreenY, 1, 1)) {
             bounds = s.getVisualBounds();

@@ -1,0 +1,170 @@
+[
+  {
+    "id": "W9-1",
+    "skip": "nan",
+    "proc": "検査",
+    "mach": "熱融着機　湖南",
+    "qty": "600",
+    "rolls": "2"
+  },
+  {
+    "id": "W9-2",
+    "skip": "yes",
+    "proc": "EC",
+    "mach": "EC機　湖南",
+    "qty": "2400",
+    "rolls": "8"
+  },
+  {
+    "id": "W9-2",
+    "skip": "yes",
+    "proc": "検査",
+    "mach": "熱融着機　湖南",
+    "qty": "0",
+    "rolls": "15"
+  },
+  {
+    "id": "T9-1",
+    "skip": "yes",
+    "proc": "エンボス",
+    "mach": "エンボス　湖南",
+    "qty": "4400",
+    "rolls": "11"
+  },
+  {
+    "id": "C9-2",
+    "skip": "yes",
+    "proc": "SEC",
+    "mach": "SEC機　湖南",
+    "qty": "0",
+    "rolls": "13"
+  },
+  {
+    "id": "GB60806",
+    "skip": "yes",
+    "proc": "穴あけ",
+    "mach": "SEC機　湖南",
+    "qty": "0",
+    "rolls": "2"
+  },
+  {
+    "id": "C9-4",
+    "skip": "yes",
+    "proc": "SEC",
+    "mach": "SEC機　湖南",
+    "qty": "0",
+    "rolls": "27"
+  },
+  {
+    "id": "V9-1",
+    "skip": "yes",
+    "proc": "接続",
+    "mach": "熱融着機　湖南",
+    "qty": "0",
+    "rolls": "5"
+  },
+  {
+    "id": "C9-3",
+    "skip": "yes",
+    "proc": "SEC",
+    "mach": "SEC機　湖南",
+    "qty": "0",
+    "rolls": "6"
+  },
+  {
+    "id": "PN09-01",
+    "skip": "yes",
+    "proc": "EC",
+    "mach": "SEC機　湖南",
+    "qty": "0",
+    "rolls": "20"
+  },
+  {
+    "id": "W9-3",
+    "skip": "yes",
+    "proc": "検査",
+    "mach": "熱融着機　湖南",
+    "qty": "0",
+    "rolls": "15"
+  },
+  {
+    "id": "Y9-2",
+    "skip": "yes",
+    "proc": "スライス",
+    "mach": "スライス機1　湖南",
+    "qty": "0",
+    "rolls": "26"
+  },
+  {
+    "id": "Y9-3",
+    "skip": "yes",
+    "proc": "スライス",
+    "mach": "スライス機1　湖南",
+    "qty": "0",
+    "rolls": "25"
+  },
+  {
+    "id": "C9-6",
+    "skip": "yes",
+    "proc": "スリット",
+    "mach": "スリット機1　湖南",
+    "qty": "0",
+    "rolls": "13"
+  },
+  {
+    "id": "C9-6",
+    "skip": "yes",
+    "proc": "SEC",
+    "mach": "SEC機　湖南",
+    "qty": "0",
+    "rolls": "13"
+  },
+  {
+    "id": "C9-5",
+    "skip": "yes",
+    "proc": "SEC",
+    "mach": "SEC機　湖南",
+    "qty": "0",
+    "rolls": "7"
+  },
+  {
+    "id": "C9-5",
+    "skip": "yes",
+    "proc": "スリット",
+    "mach": "スリット機1　湖南",
+    "qty": "0",
+    "rolls": "7"
+  },
+  {
+    "id": "C9-7",
+    "skip": "yes",
+    "proc": "SEC",
+    "mach": "SEC機　湖南",
+    "qty": "0",
+    "rolls": "50"
+  },
+  {
+    "id": "C9-8",
+    "skip": "yes",
+    "proc": "SEC",
+    "mach": "SEC機　湖南",
+    "qty": "0",
+    "rolls": "50"
+  },
+  {
+    "id": "PN09-01",
+    "skip": "yes",
+    "proc": "梱包",
+    "mach": "SEC機　湖南",
+    "qty": "0",
+    "rolls": "20"
+  },
+  {
+    "id": "T9-1",
+    "skip": "yes",
+    "proc": "分割",
+    "mach": "エンボス　湖南",
+    "qty": "4400",
+    "rolls": "11"
+  }
+]

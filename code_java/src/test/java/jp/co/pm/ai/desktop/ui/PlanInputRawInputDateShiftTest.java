@@ -3,6 +3,7 @@ package jp.co.pm.ai.desktop.ui;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.util.List;
+import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 
@@ -74,5 +75,83 @@ class PlanInputRawInputDateShiftTest {
                         headers, rows, 0, "2025/7/8"));
         assertEquals("2025/7/8", rows.get(0).get(0));
         assertEquals("2025/7/10", rows.get(1).get(0));
+    }
+
+    @Test
+    void propagateRawInputDate_syncsDispatchableDatetimeToNewRawDate() {
+        List<String> headers =
+                List.of(
+                        PlanInputRawInputDateShift.COL_TASK_ID,
+                        PlanInputRawInputDateShift.COL_RAW_INPUT_DATE,
+                        PlanInputRawInputDateShift.COL_DISPATCHABLE_DATETIME);
+        ObservableList<ObservableList<String>> rows = FXCollections.observableArrayList();
+        rows.add(FXCollections.observableArrayList("W9-4", "2026/9/9", "2026/9/9 12:45"));
+        rows.add(FXCollections.observableArrayList("W9-4", "2026/9/9", "2026/9/9 12:45"));
+        rows.add(FXCollections.observableArrayList("X", "2026/9/9", "2026/9/9 12:45"));
+        int n =
+                PlanInputRawInputDateShift.propagateRawInputDateToSameTaskIdRows(
+                        headers, rows, 0, "2026/9/7");
+        assertEquals(2, n);
+        assertEquals("2026/9/7", rows.get(0).get(1));
+        assertEquals("2026/9/7 12:45", rows.get(0).get(2));
+        assertEquals("2026/9/7 12:45", rows.get(1).get(2));
+        assertEquals("2026/9/9 12:45", rows.get(2).get(2));
+    }
+
+    @Test
+    void applyMinusOneDay_syncsDispatchableDatetime() {
+        List<String> headers =
+                List.of(
+                        PlanInputRawInputDateShift.COL_RAW_INPUT_DATE,
+                        PlanInputRawInputDateShift.COL_STOCK_LOCATION,
+                        PlanInputRawInputDateShift.COL_DISPATCHABLE_DATETIME);
+        ObservableList<ObservableList<String>> rows = FXCollections.observableArrayList();
+        rows.add(FXCollections.observableArrayList("2026/9/9", "K", "2026/9/9 12:45"));
+        assertEquals(1, PlanInputRawInputDateShift.applyMinusOneDayToAllRows(headers, rows));
+        assertEquals("2026/9/8", rows.get(0).get(0));
+        assertEquals("2026/9/8 8:45", rows.get(0).get(2));
+    }
+
+    @Test
+    void propagateRawInputDate_stockK_setsDispatchable845() {
+        List<String> headers =
+                List.of(
+                        PlanInputRawInputDateShift.COL_TASK_ID,
+                        PlanInputRawInputDateShift.COL_RAW_INPUT_DATE,
+                        PlanInputRawInputDateShift.COL_STOCK_LOCATION,
+                        PlanInputRawInputDateShift.COL_DISPATCHABLE_DATETIME);
+        ObservableList<ObservableList<String>> rows = FXCollections.observableArrayList();
+        rows.add(FXCollections.observableArrayList("W9-4", "2026/9/9", "K", "2026/9/9 12:45"));
+        int n =
+                PlanInputRawInputDateShift.propagateRawInputDateToSameTaskIdRows(
+                        headers, rows, 0, "2026/9/7");
+        assertEquals(1, n);
+        assertEquals("2026/9/7", rows.get(0).get(1));
+        assertEquals("2026/9/7 8:45", rows.get(0).get(3));
+    }
+
+    @Test
+    void resyncStaleDispatchable_whenRawEditedMarkOnly() {
+        List<String> headers =
+                List.of(
+                        "依頼NO",
+                        "工程名",
+                        "機械名",
+                        PlanInputRawInputDateShift.COL_RAW_INPUT_DATE,
+                        PlanInputRawInputDateShift.COL_STOCK_LOCATION,
+                        PlanInputRawInputDateShift.COL_DISPATCHABLE_DATETIME);
+        ObservableList<ObservableList<String>> rows = FXCollections.observableArrayList();
+        rows.add(
+                FXCollections.observableArrayList(
+                        "W9-4", "検査", "熱融着機　湖南", "2026/9/7", "K", "2026/9/9 12:45"));
+        String rawMark =
+                PlanInputEditedCellMarks.markKey(
+                        PlanInputEditedCellMarks.rowKey(headers, rows.get(0)),
+                        PlanInputRawInputDateShift.COL_RAW_INPUT_DATE);
+        int n =
+                PlanInputRawInputDateShift.resyncStaleDispatchableDatetimeFromRawInput(
+                        headers, rows, Set.of(rawMark));
+        assertEquals(1, n);
+        assertEquals("2026/9/7 8:45", rows.get(0).get(5));
     }
 }

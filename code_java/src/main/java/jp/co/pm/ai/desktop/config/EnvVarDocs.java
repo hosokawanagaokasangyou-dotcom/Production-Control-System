@@ -363,8 +363,9 @@ public final class EnvVarDocs {
                         + " 段階1の湖南工場限定ロジック（DISPATCHABLE_FROM_TIME_KONAN_STOCK 等）の判定にも使用（未設定時は KONAN）。");
         put(
                 "DISPATCHABLE_FROM_TIME_KONAN_STOCK",
-                "湖南工場（PM_AI_FACTORY_SITE=KONAN）かつ受注ファイル「在庫場所」列に「湖南」を含むタスクのみ:"
-                        + " 原反投入日と同日の配台開始下限（HH:MM）。既定 09:30。"
+                "湖南工場（PM_AI_FACTORY_SITE=KONAN）かつ受注ファイル「在庫場所」が湖南工場内"
+                        + "（「湖南」を含む、またはコード K）のタスクのみ:"
+                        + " 原反投入日と同日の配台開始下限（HH:MM）。既定 08:45。"
                         + " 他タスクは従来通り DISPATCHABLE_FROM_TIME(12:45) を使用。");
         put(
                 "PM_AI_RDP_LAUNCHER_AUTO_DEPLOY",

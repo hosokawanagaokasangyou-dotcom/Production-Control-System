@@ -35,7 +35,7 @@ final class RequestFormSourceCache {
     static final String PARSE_SCHEMA_VERSION = "request-form-cell-layout-v7";
 
     /** TPI 依頼書 PDF 用 parse キャッシュ schema（Excel 原本とは別バージョン）。 */
-    static final String TPI_PDF_PARSE_SCHEMA_VERSION = "request-form-tpi-pdf-v19";
+    static final String TPI_PDF_PARSE_SCHEMA_VERSION = "request-form-tpi-pdf-v21";
 
     /** Excel 原本シート PDF プレビュー用 schema。レンダラ・範囲変更時に上げる。 */
     static final String PREVIEW_SCHEMA_VERSION = "request-form-preview-v2";

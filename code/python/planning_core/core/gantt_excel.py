@@ -1483,8 +1483,8 @@ def compute_dispatchable_datetime(raw_input_date, run_date=None, stock_location=
     日付 = max(run_date, raw_input_date)（run_date 指定時のみ）、時刻 = DISPATCHABLE_FROM_TIME。
     raw_input_date が None のときは None（原反投入日が無い行は配台可能日時を持たない）。
 
-    湖南工場（PM_AI_FACTORY_SITE=KONAN）かつ ``stock_location`` が「湖南」を含むときは、
-    時刻に DISPATCHABLE_FROM_TIME_KONAN_STOCK（既定9:30）を使う。
+    湖南工場（PM_AI_FACTORY_SITE=KONAN）かつ ``stock_location`` が湖南工場内在庫（「湖南」/``K``）のときは、
+    時刻に DISPATCHABLE_FROM_TIME_KONAN_STOCK（既定8:45）を使う。
     """
     if raw_input_date is None:
         return None
@@ -1502,29 +1502,33 @@ def resolve_dispatchable_datetime_from_plan_row(
 ):
     """配台計画1行から配台可能日時を解決。
 
-    優先順: 列「配台可能日時」→ 未設定時のフォールバック。
-    列に値があるとき原反投入日は暦日・時刻の下限に使わない。
+    暦日・時刻とも原反投入日＋在庫場所由来（``compute_dispatchable_datetime``）を正とする。
+    列「配台可能日時」は原反投入日が無い行のフォールバック、または列だけ指定のときに使う。
+    （タスク入力で原反投入日や在庫場所を変えても、列が古い 12:45 のままで配台が遅れないようにする）
 
     ``regular_shift_start`` を渡したときは、未設定時に
     原反投入日+12:45 ではなく ``max(run_date, 原反投入日)`` の暦日 + 定常開始時刻とする。
     """
-    col = parse_optional_datetime(
-        _planning_df_cell_scalar(row, PLAN_COL_DISPATCHABLE_DATETIME)
-    )
-    if col is not None:
-        return col
-    if regular_shift_start is not None:
-        raw = parse_optional_date(_planning_df_cell_scalar(row, TASK_COL_RAW_INPUT_DATE))
-        if raw is None:
-            if run_date is None:
-                return None
-            base_d = run_date
-        else:
-            base_d = max(run_date, raw) if run_date is not None else raw
-        return datetime.combine(base_d, regular_shift_start)
     raw = parse_optional_date(_planning_df_cell_scalar(row, TASK_COL_RAW_INPUT_DATE))
     stock_location = _planning_df_cell_scalar(row, TASK_COL_STOCK_LOCATION)
-    return compute_dispatchable_datetime(raw, run_date=run_date, stock_location=stock_location)
+    if regular_shift_start is not None:
+        if raw is None:
+            if run_date is None:
+                computed = None
+            else:
+                computed = datetime.combine(run_date, regular_shift_start)
+        else:
+            base_d = max(run_date, raw) if run_date is not None else raw
+            computed = datetime.combine(base_d, regular_shift_start)
+    else:
+        computed = compute_dispatchable_datetime(
+            raw, run_date=run_date, stock_location=stock_location
+        )
+    if computed is not None:
+        return computed
+    return parse_optional_datetime(
+        _planning_df_cell_scalar(row, PLAN_COL_DISPATCHABLE_DATETIME)
+    )
 def _planning_df_cell_scalar(row, col_name):
     """
     iterrows() 1行分から列値を得る。同一見出しの重複列はあると row.get は Series になり」

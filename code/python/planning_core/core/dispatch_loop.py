@@ -234,7 +234,7 @@ def _trial_order_flow_day_start_floor(
     macro_now_dt: datetime,
     task_queue: list | None = None,
 ) -> datetime:
-    """当該暦日の加工開始下限。配台可能日時（列）があれば原反投入日+12:45 より優先。"""
+    """当該暦日の加工開始下限。タスクの dispatchable_datetime（原反投入日暦日＋列の同時刻）を優先。"""
     floor = datetime.combine(current_date, DEFAULT_START_TIME)
     # §B-2 検査 / §B-3 巻返しは EC 完了を待って開始でしるため、
     # 原板投入日（=同日12:45以降）の制約をしのまま適用すると後続は丝必須に後ゝへ倒れる。
@@ -499,6 +499,9 @@ def _trial_order_flow_eligible_tasks(
             task.get("equipment_line_key") or machine or ""
         ).strip() or machine
         _mocc_trial = _machine_occupancy_key_resolve(task, eq_line)
+        from planning_core.core.plan_input import dispatch_trial_order_key_from_task
+
+        _my_dispatch_ord = dispatch_trial_order_key_from_task(task)
         if PLANNING_B1_INSPECTION_EXCLUSIVE_MACHINE:
             _b1_holder = _exclusive_b1_inspection_holder_for_machine(
                 task_queue,
@@ -506,9 +509,6 @@ def _trial_order_flow_eligible_tasks(
             )
             if _b1_holder is not None and _b1_holder is not task:
                 continue
-            from planning_core.core.plan_input import dispatch_trial_order_key_from_task
-
-            _my_dispatch_ord = dispatch_trial_order_key_from_task(task)
         if _equipment_line_lower_dispatch_trial_still_pending(
             task_queue,
             _mocc_trial,
@@ -905,6 +905,7 @@ def _assign_one_roll_trial_order_flow(
     ]
     if _pair_gate_candidates:
         _sec_pair_gate_floor_dt = max(_pair_gate_candidates)
+
 
     def _one_roll_from_team(
         team: tuple,
@@ -1860,6 +1861,13 @@ def _stage2_aladdin_next_day_exclude_consumes_roll(task: dict, current_date: dat
         return False
     skip_m = min(rem, um)
     task["aladdin_next_day_exclude_remaining_m"] = max(0.0, rem - skip_m)
+    # 除外 m は未配台の消化扱い。remaining_units を減らさないと rem が残り続け日次空回りする。
+    skip_units = skip_m / um
+    try:
+        _ru_before = float(task.get("remaining_units") or 0)
+    except (TypeError, ValueError):
+        _ru_before = 0.0
+    task["remaining_units"] = max(0.0, _ru_before - skip_units)
     logging.info(
         "段階2: アラジン当日・翌日除外を適用 依頼NO=%s 工程=%s 機械名=%s → 除外 %s m（配台日=%s）",
         task.get("task_id"),

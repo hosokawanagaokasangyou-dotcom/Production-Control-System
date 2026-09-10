@@ -55,6 +55,23 @@ public final class PlanInputEditedCellMarks {
         return planInput.resolveSibling(name + ns + SIDECAR_SUFFIX);
     }
 
+    /**
+     * 段階1キャッシュ削除・再出力時に既定 namespace の sidecar を破棄する。
+     *
+     * @return 実ファイルを削除したとき {@code true}
+     */
+    public static boolean deleteSidecarIfPresent(Path planInput) {
+        Path sidecar = sidecarPath(planInput);
+        if (sidecar == null) {
+            return false;
+        }
+        try {
+            return Files.deleteIfExists(sidecar);
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
     /** 行同定キー（同定列がすべて空のときは空文字＝マーク対象外）。 */
     public static String rowKey(List<String> headers, List<String> row) {
         if (headers == null || row == null) {

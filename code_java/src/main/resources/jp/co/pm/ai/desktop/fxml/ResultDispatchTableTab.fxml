@@ -31,8 +31,10 @@
                     </padding>
                     <Label fx:id="dataStageBadgeLabel" styleClass="pm-planning-stage-badge"
                            text="段階2" visible="false" managed="false"/>
-                    <Button fx:id="refreshButton" mnemonicParsing="false" text="再読み"
-                            onAction="#onRefreshButtonAction"/>
+                    <Button fx:id="refreshButton" mnemonicParsing="false" text="再読み…"
+                            onAction="#onRefreshButtonAction">
+                        <Tooltip text="対象の結果_配台表 JSON を選んで読み込みます。"/>
+                    </Button>
                     <Button mnemonicParsing="false" text="列フィルタ・並べ替え解除"
                             onAction="#onClearColumnFiltersAction"/>
                     <Button fx:id="aladdinEntryReloadExportButton" mnemonicParsing="false"

@@ -56,6 +56,7 @@ import jp.co.pm.ai.desktop.io.PlanInputAiSpecialParseSidecar;
 import jp.co.pm.ai.desktop.io.PlanInputTabularIo;
 import jp.co.pm.ai.desktop.ui.ColumnVisibilitySupport;
 import jp.co.pm.ai.desktop.ui.LimitedOperatorCellEditor;
+import jp.co.pm.ai.desktop.ui.PlanInputCellInPlaceUpdateSupport;
 import jp.co.pm.ai.desktop.ui.PlanInputDeprecatedOverrideColumnSupport;
 import jp.co.pm.ai.desktop.ui.PlanInputEditedCellMarks;
 import jp.co.pm.ai.desktop.ui.PlanInputExcludeToggleSupport;
@@ -295,10 +296,10 @@ public final class PlanInputTabController {
                 headersRef,
                 this::finishPlanInputRowReorderAfterDnD);
 
+        // layoutBounds 変化での列クロム再適用は、モーダル開閉で表が跳ねて見えるため配台計画では無効。
+        // 列固定・フィルタは rebuildSpreadsheet / 読込時に明示適用する。
         SpreadsheetTabularSupport.installSpreadsheetChromeRelayoutDebouncerForHost(
-                spreadsheetHost,
-                headerColumnCount::get,
-                SpreadsheetPlanInputRowDragSupport::skipFullRowExpansionDuringPlanInputRowDrag);
+                spreadsheetHost, headerColumnCount::get, () -> true);
 
         rowSearchField
                 .textProperty()
@@ -354,6 +355,7 @@ public final class PlanInputTabController {
                         pathField.setText(AppPaths.defaultStage1PlanTasksPath(env).toString());
                     }
                     sheetField.setText(AppPaths.STAGE1_PLAN_OUTPUT_SHEET);
+                    discardStaleEditMarksSidecarForStage1Reload();
                     loadFromCurrentPath(false);
                 });
 
@@ -366,9 +368,11 @@ public final class PlanInputTabController {
                     rows,
                     () -> {
                         markPlanInputTableDirtySinceSave();
-                        // セル編集後は IN_PLACE（列幅再適用を避け、ウィンドウ揺れを抑える）
-                        rebuildSpreadsheet(
-                                true, SpreadsheetTabularSupport.GridAttachMode.IN_PLACE);
+                        // setGrid 再構築は layoutBounds が跳ねて画面揺れになるため、まずインプレース同期
+                        if (!presentPlanInputCellsInPlaceAfterEdit()) {
+                            rebuildSpreadsheet(
+                                    true, SpreadsheetTabularSupport.GridAttachMode.IN_PLACE);
+                        }
                     },
                     col -> {
                         if (PlanInputProcessSequenceRowOrder.COL_DISPATCH_TRIAL_ORDER.equals(col)) {
@@ -1262,11 +1266,27 @@ public final class PlanInputTabController {
         }
         clearColumnFiltersAndSort();
         clearPlanInputTableDirtySinceSave();
+        clearPlanInputEditMarksState();
         embossClusterHighlight.resetForLoadedTable();
         rebuildSpreadsheet();
         if (shell != null) {
             shell.appendLog("[plan-input] キャッシュクリアに伴い表を空にしました。");
         }
+    }
+
+    /** 段階1再出力後の再読込前: 旧世代の薄黄マーク sidecar を破棄する。 */
+    private void discardStaleEditMarksSidecarForStage1Reload() {
+        clearPlanInputEditMarksState();
+        String p = pathField.getText();
+        if (p != null && !p.isBlank()) {
+            PlanInputEditedCellMarks.deleteSidecarIfPresent(Path.of(p.trim()));
+        }
+    }
+
+    private void clearPlanInputEditMarksState() {
+        editBaselineByMarkKey.clear();
+        editMarksPersistedAtLoad.clear();
+        editedCellMarks.clear();
     }
 
     @FXML
@@ -1426,6 +1446,31 @@ public final class PlanInputTabController {
 
     private void rebuildSpreadsheet() {
         rebuildSpreadsheet(true, SpreadsheetTabularSupport.GridAttachMode.STANDARD);
+    }
+
+    /**
+     * セル編集後: モデル行を既存グリッドへ反映し、編集マーク・違反ハイライトだけ付け直す。
+     * {@code setGrid} しない（ウィンドウ揺れ防止）。
+     *
+     * @return 反映できたとき {@code true}（失敗時は呼び出し側が rebuild）
+     */
+    private boolean presentPlanInputCellsInPlaceAfterEdit() {
+        if (currentGrid == null || headersRef.isEmpty() || rows == null) {
+            return false;
+        }
+        int firstData = SpreadsheetTabularSupport.spreadsheetFirstDataRowIndex();
+        refreshPlanInputEditMarksInMemory();
+        if (!PlanInputCellInPlaceUpdateSupport.syncAllRowsFromModel(
+                currentGrid, firstData, headersRef, rows)) {
+            return false;
+        }
+        PlanInputEditedCellMarks.applyHighlights(
+                currentGrid, headersRef, rows, firstData, editedCellMarks);
+        PlanInputUnprocessedDispatchRemainingMismatchSupport.applyViolationHighlights(
+                currentGrid, headersRef, rows, firstData);
+        updatePlanInputUnprocessedDispatchRemainingWarning();
+        refreshEmbossClusterButtonHighlight();
+        return true;
     }
 
     /**
@@ -1720,9 +1765,20 @@ public final class PlanInputTabController {
             TableColumnOrderPersistence.saveColumnVisibility(
                     TableColumnOrderPersistence.TableId.PLAN_INPUT, visAfter);
             loadPlanInputEditMarks(path);
+            int synced =
+                    PlanInputRawInputDateShift.resyncStaleDispatchableDatetimeFromRawInput(
+                            headersRef, rows, editedCellMarks);
             embossClusterHighlight.resetForLoadedTable();
             applyLoaded();
-            clearPlanInputTableDirtySinceSave();
+            if (synced > 0) {
+                markPlanInputTableDirtySinceSave();
+                shell.appendLog(
+                        "[plan-input] 原反投入日編集に追従し配台可能日時を "
+                                + synced
+                                + " 行再同期しました（保存して段階2へ）。");
+            } else {
+                clearPlanInputTableDirtySinceSave();
+            }
             shell.appendLog(
                     "[plan-input] loaded rows="
                             + rows.size()

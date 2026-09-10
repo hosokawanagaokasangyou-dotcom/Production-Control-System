@@ -117,6 +117,23 @@ def _initialize_stage1_manual_input_columns(rec: dict) -> None:
     rec[PLAN_COL_SPECIAL_REMARK] = ""
     rec[PLAN_COL_EXCLUDE_FROM_ASSIGNMENT] = ""
     rec[PLAN_COL_AI_PARSE] = ""
+
+
+def _discard_plan_input_editmarks_sidecar(plan_xlsx_path: str) -> bool:
+    """Java 配台計画タブの薄黄マーク sidecar（*.xlsx.editmarks.json）を破棄する。"""
+    if not plan_xlsx_path:
+        return False
+    sidecar = str(plan_xlsx_path) + ".editmarks.json"
+    try:
+        if os.path.isfile(sidecar):
+            os.remove(sidecar)
+            logging.info("段階1: 編集マーク sidecar を破棄しました: %s", sidecar)
+            return True
+    except OSError as ex:
+        logging.warning("段階1: 編集マーク sidecar の削除に失敗（続行）: %s", ex)
+    return False
+
+
 def run_stage1_extract():
     """
     段階1: 加工計画DATA から配台用タスク一覧を抽出し output/plan_input_tasks.xlsx へ出力。
@@ -429,6 +446,7 @@ def run_stage1_extract():
     _fill_plan_dispatch_remaining_qty_column(out_df)
     _apply_stage1_in_progress_dispatch_plan_exclude_marker(out_df, log_prefix="段階1")
     out_path = os.path.join(output_dir, STAGE1_OUTPUT_FILENAME)
+    _discard_plan_input_editmarks_sidecar(out_path)
     with pd.ExcelWriter(out_path, engine="openpyxl") as writer:
         out_df.to_excel(writer, sheet_name=STAGE1_PLAN_OUTPUT_SHEET, index=False)
     normalize_ooxml_shared_strings_if_missing(out_path)

@@ -63,6 +63,8 @@ class ResultDispatchTableTabFxmlTest {
         assertEquals(
                 "#onAladdinEntryIdentityCheckLocalAction",
                 buttonsById.get("aladdinEntryIdentityCheckButton").getAttribute("onAction"));
+        assertEquals("再読み…", buttonsById.get("refreshButton").getAttribute("text"));
+        assertEquals("#onRefreshButtonAction", buttonsById.get("refreshButton").getAttribute("onAction"));
         var tooltips = document.getElementsByTagName("Tooltip");
         boolean identityCheckTooltip =
                 IntStream.range(0, tooltips.getLength())
@@ -71,6 +73,13 @@ class ResultDispatchTableTabFxmlTest {
                         .map(Element.class::cast)
                         .anyMatch(t -> t.getAttribute("text").contains("アラジン入力用Excelを生成"));
         assertTrue(identityCheckTooltip);
+        boolean refreshJsonPickTooltip =
+                IntStream.range(0, tooltips.getLength())
+                        .mapToObj(tooltips::item)
+                        .filter(Element.class::isInstance)
+                        .map(Element.class::cast)
+                        .anyMatch(t -> t.getAttribute("text").contains("結果_配台表 JSON"));
+        assertTrue(refreshJsonPickTooltip);
         assertTrue(labelIds.contains("aladdinEntryIdentityCheckBadge"));
         assertFalse(
                 "true".equalsIgnoreCase(

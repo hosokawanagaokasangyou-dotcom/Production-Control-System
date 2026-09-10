@@ -116,7 +116,7 @@
             </VBox>
         </content>
     </TitledPane>
-    <TitledPane animated="true" expanded="true" maxHeight="1.7976931348623157E308" text="データ表" VBox.vgrow="ALWAYS">
+    <TitledPane animated="false" expanded="true" maxHeight="1.7976931348623157E308" text="データ表" VBox.vgrow="ALWAYS">
         <content>
             <VBox fillWidth="true" spacing="4.0">
                 <Label fx:id="planInputValidationWarningLabel" managed="false" visible="false" wrapText="true"

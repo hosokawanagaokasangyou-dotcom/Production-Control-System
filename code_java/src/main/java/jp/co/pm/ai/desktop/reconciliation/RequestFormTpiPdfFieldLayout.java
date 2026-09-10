@@ -35,6 +35,22 @@ public final class RequestFormTpiPdfFieldLayout {
             Pattern.compile("(?:依頼No[,.]?\\s*|No\\.)(G\\s*B\\s*[\\d０-９]{4,6})", Pattern.CASE_INSENSITIVE);
     private static final Pattern GB_FILE_STEM =
             Pattern.compile("^(GB[\\d０-９]{4,6})(?:[^\\d].*)?$", Pattern.CASE_INSENSITIVE);
+    /**
+     * 単独ファイル名 stem の簡易依頼Ｎｏ（例: {@code A9-1.pdf}）。
+     * {@code GB}/{@code PN}/{@code JR} 系は既存パターンが先に当たる前提。
+     */
+    private static final Pattern SIMPLE_IRAI_FILE_STEM =
+            Pattern.compile(
+                    "^([A-Za-zＡ-Ｚ][\\d０-９]{1,4}(?:[\\-－][\\d０-９]{1,4})?)$",
+                    Pattern.CASE_INSENSITIVE);
+    /**
+     * TPI 系依頼Ｎｏ（例: ファイル名 {@code … TPI07-01.pdf}、本文 {@code TPI 07-01}）。
+     * 数字の前後スペースを許容し {@code TPI07-01} に正規化する。
+     */
+    private static final Pattern TPI_IRAI =
+            Pattern.compile(
+                    "TPI\\s*([\\d０-９]{2})\\s*[\\-－]\\s*([\\d０-９]{2})",
+                    Pattern.CASE_INSENSITIVE);
     private static final Pattern DELIVERY_DATE =
             Pattern.compile("年\\s*([\\d０-９]{1,2})\\s*月\\s*([\\d０-９]{1,2})\\s*日\\s*湖南");
     private static final Pattern DOCUMENT_YEAR = Pattern.compile("20([\\d０-９]{2})");
@@ -128,6 +144,10 @@ public final class RequestFormTpiPdfFieldLayout {
         if (pn.find()) {
             return normalizeIraiNo(pn.group(1));
         }
+        Matcher tpiInName = TPI_IRAI.matcher(fileName);
+        if (tpiInName.find()) {
+            return normalizeTpiIrai(tpiInName.group(1), tpiInName.group(2));
+        }
         String stem = fileName;
         int dot = fileName.lastIndexOf('.');
         if (dot > 0) {
@@ -136,6 +156,10 @@ public final class RequestFormTpiPdfFieldLayout {
         Matcher gbStem = GB_FILE_STEM.matcher(stem);
         if (gbStem.find()) {
             return normalizeIraiNo(gbStem.group(1));
+        }
+        Matcher simpleStem = SIMPLE_IRAI_FILE_STEM.matcher(stem);
+        if (simpleStem.find()) {
+            return normalizeIraiNo(simpleStem.group(1));
         }
         return "";
     }
@@ -154,7 +178,16 @@ public final class RequestFormTpiPdfFieldLayout {
         if (pn.find()) {
             return normalizeIraiNo(pn.group(1));
         }
+        Matcher tpi = TPI_IRAI.matcher(body);
+        if (tpi.find()) {
+            return normalizeTpiIrai(tpi.group(1), tpi.group(2));
+        }
         return "";
+    }
+
+    private static String normalizeTpiIrai(String left, String right) {
+        return normalizeIraiNo(
+                "TPI" + toAsciiDigits(left) + "-" + toAsciiDigits(right));
     }
 
     static String resolveIraiNo(String fileName, String text) {

@@ -63,6 +63,34 @@ def _stage2_in_progress_next_day_dispatch_key(
 ) -> str:
     tid = planning_task_id_str_from_scalar(task_id)
     return f"{tid}\x1e{str(machine or '').strip()}\x1e{str(machine_name or '').strip()}"
+
+
+def _positive_processing_speed_m_per_min(raw) -> float | None:
+    """
+    加工速度セル（m/分）を正の有限 float に正規化する。
+    空・非数値・非正は None（段階2では黙って 1.0 にしない）。
+    """
+    if raw is None or (isinstance(raw, float) and pd.isna(raw)):
+        return None
+    if isinstance(raw, bool):
+        return None
+    if isinstance(raw, (int, float)):
+        try:
+            v = float(raw)
+        except (TypeError, ValueError):
+            return None
+        return v if math.isfinite(v) and v > 0.0 else None
+    s = unicodedata.normalize("NFKC", str(raw).strip())
+    if not s or s.lower() in ("nan", "none"):
+        return None
+    v = parse_float_safe(s, 0.0)
+    try:
+        v = float(v)
+    except (TypeError, ValueError):
+        return None
+    return v if math.isfinite(v) and v > 0.0 else None
+
+
 def build_task_queue_from_planning_df(
     tasks_df,
     run_date,
@@ -72,10 +100,12 @@ def build_task_queue_from_planning_df(
     equipment_list=None,
 ):
     """
-    ``generate_plan`` 内で呼みれる。完了済み・配台試行行を除し」残りを task_queue に穝む。
+    ``generate_plan`` 内で呼ばれる。完了済み・配台試行行を除き、残りを task_queue に積む。
 
     「配台不要」列に「配台計画除外」が含まれる行は段階2の配台キューへ入れない（``PLAN_COL_STAGE2_DISPATCH_PLAN_EXCLUDE_MARKER``）。
-    ai_by_tid は None のときの値内部で analyze_task_special_remarks を実行れる。
+    配台対象行の加工速度（列「加工速度_上書き」→「加工速度」）が空・非正のときは
+    ``PlanningValidationError``（段階2 exit=3）。
+    ai_by_tid は None のとき内部で analyze_task_special_remarks を実行する。
     """
     if ai_by_tid is None:
         ai_by_tid = analyze_task_special_remarks(tasks_df, reference_year=run_date.year)
@@ -84,6 +114,7 @@ def build_task_queue_from_planning_df(
     aladdin_exclude_next_day_m = _load_stage2_aladdin_today_exclude_next_day_overrides()
     task_queue = []
     n_exclude_plan = 0
+    invalid_speed_rows: list[str] = []
     seq_by_tid = _collect_process_content_order_by_task_id(tasks_df)
     same_tid_line_seq = defaultdict(int)
     # 依頼NO直列配台の順庝用: iterrows の読み込み順（0 始まり）。task_queue.sort 後も試行。
@@ -92,6 +123,8 @@ def build_task_queue_from_planning_df(
     _plan_df_reset_effective_roll_unit_ilocs(tasks_df)
 
     for planning_df_iloc, (row_idx, row) in enumerate(tasks_df.iterrows()):
+        if _plan_input_row_is_blank_task_row(tasks_df, planning_df_iloc):
+            continue
         task_id = planning_task_id_str_from_plan_row(row)
         planning_excel_row = planning_df_iloc + 2
         # 枝番タスク（入力3表）の親。列「元依頼NO」が空なら自身を親とする。
@@ -119,8 +152,8 @@ def build_task_queue_from_planning_df(
         )
         dispatch_m, dispatch_rolls = _plan_row_stage2_dispatch_qty_and_rolls(row)
         # 加工速度: ②列「加工速度」（master.xlsm speed で基本速度×実稼働比率を反映）→
-        # speed_ov は列「加工速度_上書き」のみ（①があれば上書き）。
-        speed_raw = row.get(TASK_COL_SPEED, 1)
+        # speed_ov は列「加工速度_上書き」のみ（①があれば上書き）。空・非正は後段で検証失敗。
+        speed_raw = row.get(TASK_COL_SPEED)
         product_name = row.get(TASK_COL_PRODUCT, None)
         answer_due = parse_optional_date(_planning_df_cell_scalar(row, TASK_COL_ANSWER_DUE))
         specified_due = parse_optional_date(_planning_df_cell_scalar(row, TASK_COL_SPECIFIED_DUE))
@@ -151,7 +184,7 @@ def build_task_queue_from_planning_df(
                 qty = _sanitize_dispatch_qty_m(float(in_progress_next_day_m[ov_key]))
                 qty_from_in_progress_next_day_dialog = True
                 logging.info(
-                    "段階2: 加工途中の翌日配台量を適用 依頼NO=%s 工程=%s 機械名=%s → %s m（シート残量 %s m、1ロール固定）",
+                    "段階2: 加工途中の翌日配台量を適用 依頼NO=%s 工程=%s 機械名=%s → %s m（シート残量 %s m）",
                     task_id,
                     _log_plain_label(machine),
                     _log_plain_label(machine_name),
@@ -182,10 +215,6 @@ def build_task_queue_from_planning_df(
                         _log_plain_label(machine_name),
                         aladdin_today_exclude_next_day_m,
                     )
-
-        speed = parse_float_safe(speed_raw, 1.0)
-        if speed <= 0:
-            speed = 1.0
 
         if qty <= 0 or not machine or not task_id:
             continue
@@ -227,10 +256,16 @@ def build_task_queue_from_planning_df(
             due_source_rank = 1
         has_done_deadline_override = False
 
-        if speed_ov is not None:
-            speed = speed_ov
-        if speed <= 0:
-            speed = 1.0
+        if speed_ov is not None and float(speed_ov) > 0:
+            speed = float(speed_ov)
+        else:
+            speed = _positive_processing_speed_m_per_min(speed_raw)
+        if speed is None:
+            invalid_speed_rows.append(
+                f"Excel行{planning_excel_row} 依頼NO={task_id} "
+                f"工程={_log_plain_label(machine)} 機械名={_log_plain_label(machine_name)}"
+            )
+            continue
 
         gsm = _global_speed_multiplier_for_row(
             machine, machine_name, gpo.get("global_speed_rules") or []
@@ -238,10 +273,15 @@ def build_task_queue_from_planning_df(
         if abs(gsm - 1.0) > 1e-12:
             speed_before_g = speed
             speed = speed * gsm
-            if speed <= 0:
-                speed = 1.0
+            if speed is None or speed <= 0:
+                invalid_speed_rows.append(
+                    f"Excel行{planning_excel_row} 依頼NO={task_id} "
+                    f"工程={_log_plain_label(machine)} 機械名={_log_plain_label(machine_name)}"
+                    f"（global_speed_rules 適用後の速度が非正: {speed_before_g}×{gsm}）"
+                )
+                continue
             logging.info(
-                "メイングローバル: 依頼NO=%s 工程=%s 機械名=%s に speed_multiplier 累穝=%s を適用（速度 %s → %s）",
+                "メイングローバル: 依頼NO=%s 工程=%s 機械名=%s に speed_multiplier 累積=%s を適用（速度 %s → %s）",
                 task_id,
                 _log_plain_label(machine),
                 _log_plain_label(machine_name),
@@ -256,6 +296,13 @@ def build_task_queue_from_planning_df(
         speed = apply_speed_special_rules(
             row, task_id, machine, machine_name, speed, _apply_dispatch_speed_special_rules_enumerated_md
         )
+        if speed is None or float(speed) <= 0:
+            invalid_speed_rows.append(
+                f"Excel行{planning_excel_row} 依頼NO={task_id} "
+                f"工程={_log_plain_label(machine)} 機械名={_log_plain_label(machine_name)}"
+                f"（特別ルール適用後の加工速度が非正）"
+            )
+            continue
 
         _prod_w = _planning_df_cell_scalar(row, PLAN_COL_PRODUCT_WIDTH)
         try:
@@ -277,6 +324,13 @@ def build_task_queue_from_planning_df(
             else:
                 unit = float(qty)
                 _init_rem = 1.0
+            logging.info(
+                "段階2: 加工途中の翌日配台をロール分割 依頼NO=%s 目標=%s m → 単位=%s m × %s ロール",
+                task_id,
+                qty,
+                unit,
+                int(_init_rem),
+            )
         elif dispatch_rolls > 1e-12 and qty > 1e-12:
             unit = float(qty) / float(dispatch_rolls)
             _init_rem = float(dispatch_rolls)
@@ -327,9 +381,9 @@ def build_task_queue_from_planning_df(
             due_urgent = due_basis <= run_date
 
         # 開始日ルール:
-        # 1) 原反投入日があるときは「原反投入日 12:45 以降」を開始可能日時の下限にする。
+        # 1) 原反投入日があるときは「原反投入日 + 同日開始時刻」を開始可能日時の下限にする。
         #    （日付下限: max(run_date, raw_input_date)」同日時間下限: DISPATCHABLE_FROM_TIME=12:45。
-        #    湖南工場かつ在庫場所「湖南」は DISPATCHABLE_FROM_TIME_KONAN_STOCK=9:30、
+        #    湖南工場かつ在庫場所「湖南」/「K」は DISPATCHABLE_FROM_TIME_KONAN_STOCK=8:45、
         #    dispatchable_from_time_for() 参照）
         # 2) 特別指定（セル/AI）の開始日があっても原反投入日より前倒しにはしない（date 下限を維持）
         # 3) 原反投入日が無いときは run_date
@@ -359,9 +413,8 @@ def build_task_queue_from_planning_df(
             else None
         )
 
-        # 段階2.0: 配台開始の下限は「配台可能日時」列（上書き列 → 算出列 → 原反投入日+12:45）を正とする。
-        # 列・上書きが指定されていれば原反投入日由来の下限より優先し、開始日（暦日）と同日開始時刻を上書きする。
-        # 原反投入日が無く列も空の行は dispatchable_dt=None となり、従来どおり run_date 起点のまま。
+        # 段階2.0: 配台開始の下限暦日は原反投入日由来。列「配台可能日時」は同日の時刻上書き。
+        # （列だけが古い 9/9 12:45 のままでも、原反投入日を 9/7 にすれば 9/7 起算になる）
         dispatchable_dt = resolve_dispatchable_datetime_from_plan_row(
             row,
             run_date=run_date,
@@ -496,6 +549,17 @@ def build_task_queue_from_planning_df(
         planning_sheet_row_seq += 1
 
     _sync_roll_pipeline_start_date_req_min_for_same_request(task_queue)
+
+    if invalid_speed_rows:
+        _shown = invalid_speed_rows[:20]
+        _more = len(invalid_speed_rows) - len(_shown)
+        _tail = f"\n…他 {_more} 件" if _more > 0 else ""
+        raise PlanningValidationError(
+            "段階2: 配台対象行の加工速度が空または非正です。"
+            " master.xlsm の speed シート／計画シート「加工速度」を確認してください。\n"
+            + "\n".join(_shown)
+            + _tail
+        )
 
     logging.info(
         "task_queue 構築完了: total=%s（配台試行によりスキップ %s 行）",
@@ -930,10 +994,84 @@ def _master_speed_first_excel_col_1based() -> int:
     except ValueError:
         return 4
     return n if n >= 1 else 4
+def _normalize_speed_sheet_row_label(raw) -> str:
+    """speed シート A 列の行ラベルを照合用に正規化する。"""
+    if raw is None or (isinstance(raw, float) and pd.isna(raw)):
+        return ""
+    s = unicodedata.normalize("NFKC", str(raw).strip())
+    return re.sub(r"[\s　]+", "", s)
+
+
+def _parse_master_speed_sheet_float(raw, default: float = 0.0) -> float:
+    """speed シート数値セルを NFKC 後に float 化（全角数字対応）。"""
+    if raw is None or (isinstance(raw, float) and pd.isna(raw)):
+        return float(default)
+    if isinstance(raw, bool):
+        return float(default)
+    if isinstance(raw, (int, float)):
+        return parse_float_safe(raw, default)
+    s = unicodedata.normalize("NFKC", str(raw).strip())
+    return parse_float_safe(s, default)
+
+
+def _resolve_master_speed_base_ratio_row_indices(
+    raw: "pd.DataFrame",
+) -> tuple[int, int] | None:
+    """
+    speed シートの「基本速度」「実稼働比率」行（0 始まり）を解決する。
+
+    現行 master は Excel 3・4 行目（index 2・3）。旧レイアウトは 4・5 行目（index 3・4）。
+    A 列ラベル（正規化後の完全一致）を優先し、当該行に正の数値があるときだけ採用。
+    無ければ数値の入る候補 (2,3)→(3,4) を試す。
+    """
+    if raw is None or raw.empty:
+        return None
+    first_col = _master_speed_first_excel_col_1based()
+    c0 = first_col - 1
+
+    def _pair_has_positive_metrics(bi: int, ri: int) -> bool:
+        if bi < 0 or ri < 0 or bi >= raw.shape[0] or ri >= raw.shape[0]:
+            return False
+        if bi == ri or raw.shape[1] <= c0:
+            return False
+        for j in range(c0, raw.shape[1]):
+            base = _parse_master_speed_sheet_float(raw.iat[bi, j], 0.0)
+            ratio = _parse_master_speed_sheet_float(raw.iat[ri, j], 0.0)
+            if base > 0 and ratio > 0:
+                return True
+        return False
+
+    base_i: int | None = None
+    ratio_i: int | None = None
+    scan_n = min(int(raw.shape[0]), 12)
+    for i in range(scan_n):
+        lab = _normalize_speed_sheet_row_label(raw.iat[i, 0] if raw.shape[1] else None)
+        if not lab:
+            continue
+        # 最初の完全一致のみ（後勝ちで注釈行を拾わない）
+        if lab == "基本速度" and base_i is None:
+            base_i = i
+        elif lab == "実稼働比率" and ratio_i is None:
+            ratio_i = i
+    if (
+        base_i is not None
+        and ratio_i is not None
+        and _pair_has_positive_metrics(base_i, ratio_i)
+    ):
+        return int(base_i), int(ratio_i)
+
+    # フォールバック: 現行(2,3) → 旧(3,4)
+    for cand in ((2, 3), (3, 4)):
+        if _pair_has_positive_metrics(*cand):
+            return cand
+    return None
+
+
 def _load_master_speed_lookup_from_master_workbook() -> dict[tuple[str, str], float]:
     """
     master.xlsm の speed シートから (工程名, 機械名) 正規化キー → 加工速度 (m/分)。
-    速度は Excel 4 行目×5 行目（基本速度×実稼働比率）。同一キーが複数列で数値が食い違うときは先頭列を採用。
+    速度は「基本速度」行×「実稼働比率」行（A 列ラベルで特定。従来の固定行番号にもフォールバック）。
+    同一キーが複数列で数値が食い違うときは先頭列を採用。
     """
     out: dict[tuple[str, str], float] = {}
     if not _master_speed_sheet_apply_enabled():
@@ -950,13 +1088,21 @@ def _load_master_speed_lookup_from_master_workbook() -> dict[tuple[str, str], fl
             e,
         )
         return out
-    if raw is None or raw.empty or raw.shape[0] < 5:
-        logging.info("master.xlsm speed: 行が不足しています（5行目まで必須）。")
+    if raw is None or raw.empty or raw.shape[0] < 4:
+        logging.info("master.xlsm speed: 行が不足しています（基本速度・実稼働比率行が必要）。")
         return out
+    metric_rows = _resolve_master_speed_base_ratio_row_indices(raw)
+    if metric_rows is None:
+        logging.warning(
+            "master.xlsm speed: 「基本速度」「実稼働比率」行を特定できませんでした。"
+            " 加工速度マスタは適用されません。"
+        )
+        return out
+    base_row_i, ratio_row_i = metric_rows
     first_col = _master_speed_first_excel_col_1based()
     c0 = first_col - 1
     if raw.shape[1] <= c0:
-        logging.info(
+        logging.warning(
             "master.xlsm speed: 列が足りません（データ開始列=%s）。",
             first_col,
         )
@@ -979,10 +1125,10 @@ def _load_master_speed_lookup_from_master_workbook() -> dict[tuple[str, str], fl
         m_norm = _normalize_equipment_match_key(m_str)
         if not p_norm or not m_norm:
             continue
-        bs_raw = raw.iat[3, j]
-        rr_raw = raw.iat[4, j]
-        base = parse_float_safe(bs_raw, 0.0)
-        ratio = parse_float_safe(rr_raw, 0.0)
+        bs_raw = raw.iat[base_row_i, j]
+        rr_raw = raw.iat[ratio_row_i, j]
+        base = _parse_master_speed_sheet_float(bs_raw, 0.0)
+        ratio = _parse_master_speed_sheet_float(rr_raw, 0.0)
         if base <= 0 or ratio <= 0:
             continue
         spd = float(base * ratio)
@@ -1001,14 +1147,20 @@ def _load_master_speed_lookup_from_master_workbook() -> dict[tuple[str, str], fl
         )
     if out:
         logging.info(
-            "master.xlsm speed: シート %r から %s 件の (工程名, 機械名) 速度を読み込みました。",
+            "master.xlsm speed: シート %r から %s 件の (工程名, 機械名) 速度を読み込みました"
+            "（基本速度行=%s 実稼働比率行=%s）。",
             sheet,
             len(out),
+            base_row_i + 1,
+            ratio_row_i + 1,
         )
     else:
-        logging.info(
-            "master.xlsm speed: シート %r に有効な速度列がありませんでした。",
+        logging.warning(
+            "master.xlsm speed: シート %r に有効な速度列がありませんでした"
+            "（基本速度行=%s 実稼働比率行=%s）。加工速度マスタは適用されません。",
             sheet,
+            base_row_i + 1,
+            ratio_row_i + 1,
         )
     return out
 def _apply_master_speed_sheet_to_plan_df(
@@ -1025,6 +1177,12 @@ def _apply_master_speed_sheet_to_plan_df(
         return
     lu = _load_master_speed_lookup_from_master_workbook()
     if not lu:
+        logging.warning(
+            "%s: master.xlsm「%s」から有効な加工速度を取得できませんでした。"
+            " 計画シートの加工速度セルは変更しません。",
+            log_prefix,
+            MASTER_SHEET_SPEED,
+        )
         return
     n_hit = 0
     n_miss = 0
@@ -1046,6 +1204,14 @@ def _apply_master_speed_sheet_to_plan_df(
         n_hit,
         n_miss,
     )
+    if n_hit == 0 and len(df) > 0:
+        logging.warning(
+            "%s: master.xlsm「%s」の速度適用ヒットが 0 件です（未該当 %s 行）。"
+            " 工程名・機械名の表記ずれや speed シート欠落を確認してください。",
+            log_prefix,
+            MASTER_SHEET_SPEED,
+            n_miss,
+        )
 def _exclude_rules_sheet_header_map(ws) -> dict:
     """1行目見出し → 列番坷(1始まり)。
     openpyxl は新規シート直後に max_column は 0 のままのことはあり」見出しは読ゝう保存剝に return してしまご。

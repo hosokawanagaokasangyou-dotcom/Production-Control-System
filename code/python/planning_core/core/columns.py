@@ -311,19 +311,26 @@ def _parse_hhmm_env_or_default(name: str, default_hhmm: str) -> time:
             continue
     return time(0, 0)
 DISPATCHABLE_FROM_TIME_KONAN_STOCK = _parse_hhmm_env_or_default(
-    "DISPATCHABLE_FROM_TIME_KONAN_STOCK", "09:30"
+    "DISPATCHABLE_FROM_TIME_KONAN_STOCK", "08:45"
 )
 def _current_factory_is_konan() -> bool:
     """選択中の利用工場が湖南工場か（``PM_AI_FACTORY_SITE``。未設定時は KONAN 扱い）。"""
     v = (os.environ.get("PM_AI_FACTORY_SITE") or "KONAN").strip().upper()
     return v == "KONAN"
 def _stock_location_is_konan(value) -> bool:
-    """受注ファイル「在庫場所」の値が湖南を指すか（「湖南」を含む値を対象）。"""
+    """受注ファイル「在庫場所」が湖南工場内在庫を指すか。
+
+    「湖南」を含む値、またはコード ``K``（前後空白・大小無視）を対象とする。
+    """
     s = str(value or "").strip()
-    return "湖南" in s
+    if not s:
+        return False
+    if "湖南" in s:
+        return True
+    return s.upper() == "K"
 def dispatchable_from_time_for(stock_location=None) -> time:
-    """原反投入日同日の配台開始下限。湖南工場かつ在庫場所「湖南」のタスクのみ
-    ``DISPATCHABLE_FROM_TIME_KONAN_STOCK``（既定9:30）を使い、他は既定の
+    """原反投入日同日の配台開始下限。湖南工場かつ在庫が湖南工場内（「湖南」/``K``）のタスクのみ
+    ``DISPATCHABLE_FROM_TIME_KONAN_STOCK``（既定8:45）を使い、他は既定の
     ``DISPATCHABLE_FROM_TIME``（12:45）を使う。"""
     if _current_factory_is_konan() and _stock_location_is_konan(stock_location):
         return DISPATCHABLE_FROM_TIME_KONAN_STOCK

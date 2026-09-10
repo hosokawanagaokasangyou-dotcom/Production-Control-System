@@ -1,6 +1,7 @@
 package jp.co.pm.ai.desktop.ui;
 
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
 import javafx.collections.ObservableList;
@@ -23,6 +24,14 @@ import org.controlsfx.control.spreadsheet.SpreadsheetView;
  */
 public final class SpreadsheetPlanInputCellEditSupport {
 
+    /** セル編集ダイアログ表示中（ネスト可）。ホスト layoutBounds 変化での列クロム再適用を抑止する。 */
+    private static final AtomicInteger CELL_EDIT_DIALOG_DEPTH = new AtomicInteger();
+
+    /** ダイアログ閉鎖直後も layoutBounds が跳ねるため、この時刻まで列クロム再適用を抑止。 */
+    private static volatile long chromeRelayoutGraceUntilMillis;
+
+    private static final long CHROME_RELAYOUT_GRACE_MS = 450L;
+
     @FunctionalInterface
     public interface LimitedOperatorEditor {
         void edit(
@@ -42,6 +51,35 @@ public final class SpreadsheetPlanInputCellEditSupport {
     }
 
     private SpreadsheetPlanInputCellEditSupport() {}
+
+    /** セル編集ダイアログ表示開始（{@link #endCellEditDialog} と対）。 */
+    public static void beginCellEditDialog() {
+        CELL_EDIT_DIALOG_DEPTH.incrementAndGet();
+    }
+
+    /** セル編集ダイアログ終了。直後のレイアウト跳ね用 grace を開始する。 */
+    public static void endCellEditDialog() {
+        CELL_EDIT_DIALOG_DEPTH.updateAndGet(v -> Math.max(0, v - 1));
+        chromeRelayoutGraceUntilMillis = System.currentTimeMillis() + CHROME_RELAYOUT_GRACE_MS;
+    }
+
+    public static boolean isCellEditDialogOpen() {
+        return CELL_EDIT_DIALOG_DEPTH.get() > 0;
+    }
+
+    /**
+     * 配台計画ホストの列クロム再適用をスキップすべきか（ダイアログ中／閉鎖直後）。
+     * {@link SpreadsheetTabularSupport#installSpreadsheetChromeRelayoutDebouncerForHost} の skip に渡す。
+     */
+    public static boolean shouldSkipChromeRelayout() {
+        return CELL_EDIT_DIALOG_DEPTH.get() > 0
+                || System.currentTimeMillis() < chromeRelayoutGraceUntilMillis;
+    }
+
+    /** 単体テスト用: grace を即時解除する。 */
+    static void clearChromeRelayoutGraceForTests() {
+        chromeRelayoutGraceUntilMillis = 0L;
+    }
 
     /**
      * @param firstDataGridRow {@link SpreadsheetTabularSupport#spreadsheetFirstDataRowIndex()}
@@ -130,6 +168,26 @@ public final class SpreadsheetPlanInputCellEditSupport {
             return;
         }
 
+        // ダブルクリックの press 時点でインライン編集を止め、CLICKED でのダイアログと競合しないようにする
+        spreadsheetView.addEventFilter(
+                MouseEvent.MOUSE_PRESSED,
+                e -> {
+                    if (e.getClickCount() != 2 || e.getButton() != MouseButton.PRIMARY) {
+                        return;
+                    }
+                    Node n =
+                            e.getPickResult() != null
+                                    ? e.getPickResult().getIntersectedNode()
+                                    : null;
+                    TableCell<?, ?> tc = SpreadsheetPlanInputRowDragSupport.findTableCell(n);
+                    if (tc == null
+                            || !SpreadsheetPlanInputRowDragSupport.isUnderSpreadsheet(
+                                    spreadsheetView, tc)) {
+                        return;
+                    }
+                    SpreadsheetTabularSupport.cancelSpreadsheetCellEdit(spreadsheetView);
+                });
+
         spreadsheetView.addEventFilter(
                 MouseEvent.MOUSE_CLICKED,
                 e -> {
@@ -169,8 +227,10 @@ public final class SpreadsheetPlanInputCellEditSupport {
                     }
                     String cur = row.get(colIndex) != null ? row.get(colIndex) : "";
 
+                    // ControlsFX のインライン編集開始とダイアログが重なると表がチラつく
+                    SpreadsheetTabularSupport.cancelSpreadsheetCellEdit(spreadsheetView);
+
                     if ("配台不要".equals(columnTitle)) {
-                        SpreadsheetTabularSupport.cancelSpreadsheetCellEdit(spreadsheetView);
                         String next = PlanInputExcludeToggleSupport.toggledValue(cur);
                         row.set(colIndex, next);
                         boolean presented =

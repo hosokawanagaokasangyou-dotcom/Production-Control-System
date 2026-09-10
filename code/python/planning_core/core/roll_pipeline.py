@@ -4555,6 +4555,8 @@ def _task_fully_machine_calendar_blocked_on_date(
     return _machine_calendar_occ_blocks_full_plan_window(
         occ, current_date, daily_status, members
     )
+
+
 def _task_no_machining_window_left_from_avail_floor(
     t: dict,
     current_date: date,
@@ -4637,10 +4639,23 @@ def _task_no_machining_window_left_from_avail_floor(
     t_eff = parse_float_safe(t.get("task_eff_factor"), 1.0)
     if t_eff <= 0:
         t_eff = 1.0
-    # eff_time_per_unit ≈ base / avg_eff / t_eff × 余力係数。avg_eff はフォーム次第で下はる。
-    _avg_eff_floor = 0.5
-    approx_need_mins = max(1.0, float(btp) / t_eff / _avg_eff_floor)
-    return rem < timedelta(minutes=approx_need_mins)
+    # 当日の実効効率で 1 ロール所要を見積もる。固定 0.5 で倍加すると
+    # 工場窓（DEFAULT_START〜DEFAULT_END ≈ 495 分）に btp=300 が入るタスクまで
+    # 毎日 eligible から外れ、配台が永久に進まない（W9-1 検査再現）。
+    _effs: list[float] = []
+    for _m in members:
+        _st = daily_status.get(_m) or {}
+        if not _st.get("eligible_for_assignment", _st.get("is_working", False)):
+            continue
+        _e = parse_float_safe(_st.get("efficiency"), 0.0)
+        if _e > 0:
+            _effs.append(float(_e))
+    avg_eff = (sum(_effs) / len(_effs)) if _effs else 1.0
+    if avg_eff <= 0:
+        avg_eff = 1.0
+    approx_need_mins = max(1.0, float(btp) / t_eff / avg_eff)
+    _wl = rem < timedelta(minutes=approx_need_mins)
+    return _wl
 def _bump_machine_avail_after_roll_for_calendar(
     current_date: date,
     eq_line: str,
@@ -6249,6 +6264,7 @@ def append_plan_input_rows_missing_from_dispatch_table(
     except Exception:
         src_lookup3, src_lookup2 = {}, {}
     in_progress_next_day_m = _load_stage2_in_progress_next_day_dispatch_overrides()
+    aladdin_exclude_m = _load_stage2_aladdin_today_exclude_next_day_overrides()
 
     added = 0
     for _, plan_row in tasks_df.iterrows():
@@ -6264,13 +6280,22 @@ def append_plan_input_rows_missing_from_dispatch_table(
         ).strip()
         if not tid or not proc or not mach:
             continue
+        ov_key = _stage2_in_progress_next_day_dispatch_key(tid, proc, mach)
         if in_progress_next_day_m:
-            ov_key = _stage2_in_progress_next_day_dispatch_key(tid, proc, mach)
             try:
                 ov_m = float(in_progress_next_day_m.get(ov_key, -1.0))
             except (TypeError, ValueError):
                 ov_m = -1.0
             if ov_key in in_progress_next_day_m and ov_m <= 1e-12:
+                continue
+        # アラジン翌日配台0ロール → exclude_m が残量全量。タイムライン無しの 0 行スタブは載せない。
+        if aladdin_exclude_m and ov_key in aladdin_exclude_m:
+            try:
+                ex_m = float(aladdin_exclude_m.get(ov_key) or 0)
+            except (TypeError, ValueError):
+                ex_m = 0.0
+            rem_m = _safe_plan_dispatch_remaining_m(plan_row)
+            if ex_m > 1e-12 and ex_m + 1e-9 >= rem_m:
                 continue
         key = (tid, proc, mach)
         if key in existing_keys:
@@ -9320,12 +9345,15 @@ def _write_dispatch_table_standalone_json(df_dispatch: pd.DataFrame, target_dir:
     """
     結果_配台表と同一内容を UTF-8 JSON に書く（xlsx 動的生成と同データソース）。
     PM_AI_RESULT_DISPATCH_TABLE_JSON=0/false/no で無効化可能。
+
+    行が 0 件でも columns 付きの空 JSON を書く（翌日配台0ロール等で意図的に空のとき、
+    後続の Excel 出力が「JSON 無し＝失敗」にならないようにする）。
     """
     try:
         off = (os.environ.get("PM_AI_RESULT_DISPATCH_TABLE_JSON") or "").strip().lower()
         if off in ("0", "false", "no", "off", "none"):
             return None
-        if df_dispatch is None or getattr(df_dispatch, "empty", True):
+        if df_dispatch is None:
             return None
         if not target_dir:
             return None
@@ -9342,15 +9370,29 @@ def _write_dispatch_table_standalone_json(df_dispatch: pd.DataFrame, target_dir:
                 os.remove(out_path)
         except Exception:
             pass
-        rows = json.loads(
-            df_dispatch.to_json(orient="records", date_format="iso", double_precision=15)
-        )
+        if getattr(df_dispatch, "empty", True):
+            col_list = list(df_dispatch.columns)
+            cols = (
+                col_list
+                if col_list
+                else (list(RESULT_DISPATCH_TABLE_STATIC_HEADERS) + ["配台日", "当日配台数量"])
+            )
+            rows = []
+            logging.info(
+                "結果_配台表.json: 配台行が 0 件のため空の JSON を出力します（%s）",
+                out_path,
+            )
+        else:
+            cols = list(df_dispatch.columns)
+            rows = json.loads(
+                df_dispatch.to_json(orient="records", date_format="iso", double_precision=15)
+            )
         payload = {
             "format_version": 1,
             "sheet_name": RESULT_DISPATCH_TABLE_SHEET_NAME,
             "excel_table_name": RESULT_DISPATCH_TABLE_EXCEL_TABLE_NAME,
-            "columns": list(df_dispatch.columns),
-            "row_count": int(len(df_dispatch)),
+            "columns": cols,
+            "row_count": int(len(rows)),
             "rows": rows,
         }
         p_out = pathlib.Path(target_dir) / RESULT_DISPATCH_TABLE_JSON_FILENAME

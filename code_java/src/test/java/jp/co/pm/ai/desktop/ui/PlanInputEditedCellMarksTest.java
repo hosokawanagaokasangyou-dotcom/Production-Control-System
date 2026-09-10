@@ -98,6 +98,21 @@ class PlanInputEditedCellMarksTest {
     }
 
     @Test
+    void deleteSidecarIfPresent_removesPersistedMarks(@TempDir Path dir) throws Exception {
+        Path planInput = dir.resolve("plan_input_tasks.xlsx");
+        Set<String> marks = new LinkedHashSet<>(List.of("JR260602\u0001スリット\u0001SL1\u0001配台試行順番"));
+        PlanInputEditedCellMarks.save(planInput, marks);
+        assertTrue(Files.isRegularFile(PlanInputEditedCellMarks.sidecarPath(planInput)));
+
+        assertTrue(PlanInputEditedCellMarks.deleteSidecarIfPresent(planInput));
+        assertFalse(Files.exists(PlanInputEditedCellMarks.sidecarPath(planInput)));
+        assertTrue(PlanInputEditedCellMarks.load(planInput).isEmpty());
+        assertFalse(
+                PlanInputEditedCellMarks.deleteSidecarIfPresent(planInput),
+                "無い sidecar は false");
+    }
+
+    @Test
     void namespaceSeparatesSidecars(@TempDir Path dir) {
         Path planInput = dir.resolve("plan_input_tasks.xlsx");
         PlanInputEditedCellMarks.save(planInput, new LinkedHashSet<>(List.of("a")), "");

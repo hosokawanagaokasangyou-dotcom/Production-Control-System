@@ -4035,8 +4035,27 @@ def analyze_task_special_remarks(tasks_df, reference_year=None, ai_sheet_sink: d
             ai_sheet_sink["特別指定備考_Geminiモデル"] = "—（呼び出し失敗）"
         return {}
 def _planning_speed_override_sheet_column_only(row) -> float | None:
-    """廃止: 加工速度は列「加工速度」のみ。互換のため常に None。"""
-    return None
+    """列「加工速度_上書き」が正の数ならその値（m/分）。空・非正・列なしは None。"""
+    if not _plan_row_cell_nonempty(row, PLAN_COL_SPEED_OVERRIDE):
+        return None
+    raw = row.get(PLAN_COL_SPEED_OVERRIDE)
+    if isinstance(raw, bool):
+        return None
+    if isinstance(raw, (int, float)) and not (isinstance(raw, float) and pd.isna(raw)):
+        try:
+            v = float(raw)
+        except (TypeError, ValueError):
+            return None
+        return v if math.isfinite(v) and v > 0.0 else None
+    s = unicodedata.normalize("NFKC", str(raw).strip())
+    if not s or s.lower() in ("nan", "none"):
+        return None
+    v = parse_float_safe(s, 0.0)
+    try:
+        v = float(v)
+    except (TypeError, ValueError):
+        return None
+    return v if math.isfinite(v) and v > 0.0 else None
 def _merge_task_row_with_ai(
     row, ai_for_tid, *, allow_ai_dispatch_priority_from_remark: bool = True
 ):

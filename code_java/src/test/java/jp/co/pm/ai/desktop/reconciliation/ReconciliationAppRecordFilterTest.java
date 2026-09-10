@@ -116,6 +116,36 @@ class ReconciliationAppRecordFilterTest {
     }
 
     @Test
+    void recordIncludedInListFilter_tpiPdf_mode() {
+        OrderRecord tpiRaw =
+                new OrderRecord(
+                        "A9-1",
+                        "新規自動追加 (未登録)",
+                        "A",
+                        "",
+                        "",
+                        Map.of(
+                                RequestFormTpiPdfFieldLayout.META_SOURCE_KIND,
+                                RequestFormTpiPdfFieldLayout.META_SOURCE_KIND_TPI_PDF),
+                        Map.of());
+        OrderRecord tpiStatus =
+                record("JR260801", "既存登録 (相違あり・TPI PDF)", "長岡産業");
+        OrderRecord plain = record("Y5-5", "既存登録 (相違あり)", "A");
+        assertTrue(
+                ReconciliationApp.recordIncludedInListFilter(
+                        tpiRaw, RecordListFilterMode.TPI_PDF, HAS_ORIGINAL));
+        assertTrue(
+                ReconciliationApp.recordIncludedInListFilter(
+                        tpiStatus, RecordListFilterMode.TPI_PDF, HAS_ORIGINAL));
+        assertFalse(
+                ReconciliationApp.recordIncludedInListFilter(
+                        plain, RecordListFilterMode.TPI_PDF, HAS_ORIGINAL));
+        assertTrue(ReconciliationApp.isTpiRelatedRecord(tpiRaw));
+        assertTrue(ReconciliationApp.isTpiRelatedRecord(tpiStatus));
+        assertFalse(ReconciliationApp.isTpiRelatedRecord(plain));
+    }
+
+    @Test
     void compareRecordByInputDateDesc_newestFirst() {
         OrderRecord older =
                 recordWithDb("A", "既存登録 (原本未確認)", "", Map.of("入力日", "2026-01-01"));

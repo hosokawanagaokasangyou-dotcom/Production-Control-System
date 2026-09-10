@@ -11,5 +11,7 @@ enum RecordListFilterMode {
     /** 依頼書ありかつステータスに「新規」を含む行。 */
     NEW_ONLY,
     /** 受注ファイルのみ（原本なし）、入力日降順。 */
-    JUCHU_WITHOUT_ORIGINAL
+    JUCHU_WITHOUT_ORIGINAL,
+    /** TPI PDF フォルダ由来、またはステータスに「TPI PDF」を含む行。 */
+    TPI_PDF
 }

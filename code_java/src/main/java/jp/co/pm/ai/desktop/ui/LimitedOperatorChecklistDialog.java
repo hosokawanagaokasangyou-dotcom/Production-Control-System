@@ -152,7 +152,13 @@ public final class LimitedOperatorChecklistDialog {
                                 }));
         refreshList.run();
 
-        Optional<ButtonType> result = dialog.showAndWait();
+        SpreadsheetPlanInputCellEditSupport.beginCellEditDialog();
+        Optional<ButtonType> result;
+        try {
+            result = dialog.showAndWait();
+        } finally {
+            SpreadsheetPlanInputCellEditSupport.endCellEditDialog();
+        }
         if (result.isPresent() && result.get() == ButtonType.OK) {
             model.validateConfirmable();
             return Optional.of(LimitedOperatorJsonCodec.encode(model.selectedNames()));

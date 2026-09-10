@@ -38,4 +38,33 @@ class Stage2AutoExportCompletionTest {
         assertTrue(MainShellController.stage2CompletionContent(outcome).contains("共有先へ書き込めません"));
         assertFalse(MainShellController.stage2CompletionContent(outcome).contains("段階2 の処理に失敗"));
     }
+
+    @Test
+    void emptyDispatchResultsMessageIsNotFailure() {
+        AladdinEntryExportOutcome outcome =
+                new AladdinEntryExportOutcome(
+                        new DispatchAladdinEntryWorkbookExporter.ExportResult(
+                                Path.of("latest.xlsx"), Path.of("generation.xlsx"), true),
+                        List.of(),
+                        null);
+
+        assertTrue(MainShellController.stage2CompletionHeader(outcome).contains("配台結果が空です"));
+        assertFalse(MainShellController.stage2CompletionHeader(outcome).contains("失敗"));
+        assertTrue(MainShellController.stage2CompletionContent(outcome).contains("0 行"));
+        assertTrue(MainShellController.stage2CompletionContent(outcome).contains("正常終了"));
+    }
+
+    @Test
+    void missingDispatchJsonTreatedAsEmptyResultNotHardFailure() {
+        AladdinEntryExportOutcome outcome =
+                new AladdinEntryExportOutcome(
+                        null,
+                        List.of(),
+                        new IllegalStateException(
+                                "結果_配台表.json が見つかりません: C:/tmp/結果_配台表.json"));
+
+        assertTrue(MainShellController.stage2CompletionHeader(outcome).contains("配台結果が空です"));
+        assertFalse(MainShellController.stage2CompletionHeader(outcome).contains("失敗"));
+        assertTrue(MainShellController.stage2CompletionContent(outcome).contains("配台結果が空です"));
+    }
 }
