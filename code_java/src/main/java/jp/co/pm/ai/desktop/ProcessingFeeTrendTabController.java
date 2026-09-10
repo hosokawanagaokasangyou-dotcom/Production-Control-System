@@ -213,7 +213,7 @@ public class ProcessingFeeTrendTabController {
         dailyChart.setAnimated(false);
 
         actualCumSeries.setName("実績累計");
-        planCumSeries.setName("予定累計");
+        planCumSeries.setName("見込累計");
         cumulativeChart.setAnimated(false);
         cumulativeChart.setCreateSymbols(false);
         cumulativeChart.setAxisSortingPolicy(LineChart.SortingPolicy.NONE);
@@ -537,7 +537,7 @@ public class ProcessingFeeTrendTabController {
                 legendItem("実績円", "#2563eb", false),
                 legendItem("予定円", "#64748b", false),
                 legendItem("実績累計", "#1e3a8a", false),
-                legendItem("予定累計", "#0f766e", true),
+                legendItem("見込累計", "#0f766e", true),
                 legendItem("今日", "#0f766e", true));
     }
 
@@ -809,13 +809,15 @@ public class ProcessingFeeTrendTabController {
             act.add(new XYChart.Data<>(cat, d.actualYen()));
             plan.add(new XYChart.Data<>(cat, d.planYen()));
             dailyMax = Math.max(dailyMax, Math.max(d.actualYen(), d.planYen()));
-            cumMax = Math.max(cumMax, Math.max(d.actualCumYen(), d.planCumYen()));
+            cumMax = Math.max(cumMax, Math.max(d.actualCumYen(), d.projectedCumYen()));
             // 実績累計は当日まで（未来へ水平延長しない）
             if (ProcessingTrendChartSupport.includeActualCumPoint(d.date(), today)) {
                 actCum.add(new XYChart.Data<>(cat, d.actualCumYen()));
             }
-            // 予定累計は予定のみの累計（終点＝予定円合計。KPI・日別集計表と同値）
-            planCum.add(new XYChart.Data<>(cat, d.planCumYen()));
+            // 見込累計線＝実績先端から接続（前日より前は描かない。加工量トレンドと同型）
+            if (ProcessingTrendChartSupport.includeProjectedCumPoint(d.date(), today)) {
+                planCum.add(new XYChart.Data<>(cat, d.projectedCumYen()));
+            }
         }
         // 第一軸（左）= 日次棒 / 第二軸（右）= 累計折線（空 LineChart + Path）
         applyNiceRange(dailyYAxis, dailyMax);

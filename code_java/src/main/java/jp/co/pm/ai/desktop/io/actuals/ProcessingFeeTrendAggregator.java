@@ -27,13 +27,18 @@ public final class ProcessingFeeTrendAggregator {
         }
     }
 
-    /** 実績累計は当日で止まる。予定累計は期間内の予定のみの累計（終点＝予定円合計）。 */
+    /**
+     * 日別点。実績累計は当日で止まる。予定累計は予定のみの累計（終点＝予定円合計）。
+     * 見込累計は加工量トレンドと同型（当日より前は実績、当日は max(実績,予定)、翌日以降は予定）。
+     */
     public record DayPoint(
             LocalDate date,
             double actualYen,
             double planYen,
             double actualCumYen,
-            double planCumYen) {}
+            double planCumYen,
+            /** 見込累計（チャートで実績累計線と接続する破線）。 */
+            double projectedCumYen) {}
 
     /** 期間内の依頼NO別集計行。 */
     public record RequestPoint(
@@ -97,6 +102,7 @@ public final class ProcessingFeeTrendAggregator {
         List<DayPoint> days = new ArrayList<>(byDay.size());
         double actCum = 0;
         double planCum = 0;
+        double projCum = 0;
         double actTotal = 0;
         double planTotal = 0;
         for (Map.Entry<LocalDate, double[]> e : byDay.entrySet()) {
@@ -105,11 +111,15 @@ public final class ProcessingFeeTrendAggregator {
             double p = e.getValue()[1];
             actTotal += a;
             planTotal += p;
+            boolean usesPlan = !d.isBefore(t);
+            // 当日より前は実績、当日は max(実績,予定)、翌日以降は予定（加工量見込と同型）
+            double projected = !usesPlan ? a : d.equals(t) ? Math.max(a, p) : p;
             if (!d.isAfter(t)) {
                 actCum += a;
             }
             planCum += p;
-            days.add(new DayPoint(d, a, p, actCum, planCum));
+            projCum += projected;
+            days.add(new DayPoint(d, a, p, actCum, planCum, projCum));
         }
 
         List<RequestPoint> requests = new ArrayList<>(byRequest.size());
