@@ -11,6 +11,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.Supplier;
 
+import javafx.application.Platform;
 import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.SimpleBooleanProperty;
 import javafx.beans.property.SimpleStringProperty;
@@ -260,31 +261,28 @@ public final class JuchuOrderSearchPane {
         }
         busy.set(true);
         status.setText("検査表索引を更新中…");
-        Task<InspectionSheetOpenService.RebuildResult> task =
-                new Task<>() {
-                    @Override
-                    protected InspectionSheetOpenService.RebuildResult call() throws Exception {
-                        return InspectionSheetOpenService.rebuild(
-                                ui, (done, total) -> updateMessage(done + " / " + total));
-                    }
-                };
-        task.messageProperty()
-                .addListener((o, a, b) -> status.setText("検査表索引を更新中… " + b));
-        task.setOnSucceeded(
-                e -> {
-                    InspectionSheetOpenService.RebuildResult r = task.getValue();
-                    status.setText("検査表索引 " + r.rows().size() + " 件（Excel読込 " + r.readExcelCount() + "）");
-                    busy.set(false);
-                });
-        task.setOnFailed(
-                e -> {
-                    Throwable ex = task.getException();
-                    status.setText("検査表索引の更新に失敗: " + (ex != null ? ex.getMessage() : ""));
-                    busy.set(false);
-                });
-        Thread t = new Thread(task, "inspection-sheet-index");
-        t.setDaemon(true);
-        t.start();
+        InspectionSheetOpenService.startBackgroundRebuild(
+                        ui,
+                        (done, total) ->
+                                Platform.runLater(
+                                        () -> status.setText("検査表索引を更新中… " + done + " / " + total)))
+                .whenComplete(
+                        (r, ex) ->
+                                Platform.runLater(
+                                        () -> {
+                                            busy.set(false);
+                                            if (ex != null) {
+                                                status.setText(
+                                                        "検査表索引の更新に失敗: " + ex.getMessage());
+                                                return;
+                                            }
+                                            status.setText(
+                                                    "検査表索引 "
+                                                            + r.rows().size()
+                                                            + " 件（Excel読込 "
+                                                            + r.readExcelCount()
+                                                            + "）");
+                                        }));
     }
 
     private static void openInspectionSheet(

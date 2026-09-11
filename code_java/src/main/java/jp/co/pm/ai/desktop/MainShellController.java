@@ -135,6 +135,7 @@ import jp.co.pm.ai.desktop.config.FactorySiteWorkspaceRestorePlan;
 import jp.co.pm.ai.desktop.config.FactorySiteWorkspaceSnapshot;
 import jp.co.pm.ai.desktop.config.FactorySiteWorkspaceStore;
 import jp.co.pm.ai.desktop.reconciliation.InspectionSheetDirPicker;
+import jp.co.pm.ai.desktop.reconciliation.InspectionSheetOpenService;
 import jp.co.pm.ai.desktop.config.PortableBundleUpgradeUiSnapshot;
 import jp.co.pm.ai.desktop.config.GeminiDispatchModelTryOrderDefaults;
 import jp.co.pm.ai.desktop.config.EnvVarsAutoInitialization;
@@ -4818,6 +4819,7 @@ public final class MainShellController
         if (promptAndSelectRunTab) {
             maybePromptRequestFormOriginalDirIfUnset("[env]", effective);
             maybePromptInspectionSheetDirIfUnset("[env]", effective);
+            startInspectionSheetIndexWarmup();
             requireOperatorSelectionForFactory(effective, false);
             ensureMainShellRunTabSelected();
             Platform.runLater(this::ensureMainShellRunTabSelected);
@@ -5565,6 +5567,7 @@ public final class MainShellController
                 && !shouldSuppressStartupRequestFormOriginalDirPrompt()) {
             maybePromptRequestFormOriginalDirAtStartup();
         }
+        startInspectionSheetIndexWarmup();
     }
 
     /** 初期化記録・起動時照合の直前に、環境変数タブの表示値を安定化する（ブートストラップ補完・表示既定・フォルダ正規化）。 */
@@ -5867,6 +5870,34 @@ public final class MainShellController
         saveCurrentFactoryWorkspace();
         DesktopSessionStateStore.save(collectDesktopSession());
         appendLog(logPrefix + " " + AppPaths.KEY_PM_AI_INSPECTION_SHEET_DIR + " を設定: " + abs);
+        startInspectionSheetIndexWarmup();
+    }
+
+    /** 起動・工場切替・フォルダ確定後に、検査表索引 CSV をバックグラウンドで増分更新する。 */
+    private void startInspectionSheetIndexWarmup() {
+        Map<String, String> ui = collectUiEnv();
+        if (!InspectionSheetOpenService.dirReachable(ui)) {
+            return;
+        }
+        appendLog("[inspection-sheet] 索引CSVをバックグラウンドで更新します");
+        InspectionSheetOpenService.startBackgroundRebuild(ui)
+                .whenComplete(
+                        (r, ex) ->
+                                Platform.runLater(
+                                        () -> {
+                                            if (ex != null) {
+                                                appendLog(
+                                                        "[inspection-sheet] 索引CSVの更新に失敗: "
+                                                                + ex.getMessage());
+                                                return;
+                                            }
+                                            appendLog(
+                                                    "[inspection-sheet] 索引CSV "
+                                                            + r.rows().size()
+                                                            + " 件（Excel読込 "
+                                                            + r.readExcelCount()
+                                                            + "）");
+                                        }));
     }
 
     /** BOX 同期フォルダ（{@code %USERPROFILE%\\Box} 等）があれば DirectoryChooser の初期ディレクトリ候補にする。 */
@@ -6863,6 +6894,7 @@ public final class MainShellController
             selectRunTabAfterBusyProgressIfAllowed();
             maybePromptRequestFormOriginalDirIfUnset("[factory]", switchedFactory);
             maybePromptInspectionSheetDirIfUnset("[factory]", switchedFactory);
+            startInspectionSheetIndexWarmup();
         }
         clearGlobalLongTaskProgress();
         refreshAttendanceReadiness();

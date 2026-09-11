@@ -53,6 +53,7 @@ import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.config.GeminiDispatchModelTryOrderDefaults;
 import jp.co.pm.ai.desktop.config.GlobalInitSettingTarget;
 import jp.co.pm.ai.desktop.reconciliation.InspectionSheetDirPicker;
+import jp.co.pm.ai.desktop.reconciliation.InspectionSheetOpenService;
 import jp.co.pm.ai.desktop.gemini.GeminiFreeTierModelsCache;
 import jp.co.pm.ai.desktop.gemini.GeminiFreeTierModelsRefreshService;
 import jp.co.pm.ai.desktop.crypto.GeminiCredentialsV2Crypto;
@@ -413,6 +414,11 @@ public final class EnvTabController {
                                                         f -> {
                                                             row.setValue(f.getAbsolutePath());
                                                             envTable.refresh();
+                                                            InspectionSheetOpenService.startBackgroundRebuild(
+                                                                    Map.of(
+                                                                            AppPaths
+                                                                                    .KEY_PM_AI_INSPECTION_SHEET_DIR,
+                                                                            f.getAbsolutePath()));
                                                         });
                                                 return;
                                             }
