@@ -16,6 +16,15 @@ public final class JuchuOrderSearch {
 
     private JuchuOrderSearch() {}
 
+    public static LocalDate defaultDeliveryFrom(LocalDate today) {
+        LocalDate t = today != null ? today : LocalDate.now();
+        return t.minusMonths(6);
+    }
+
+    public static LocalDate defaultDeliveryTo(LocalDate today) {
+        return today != null ? today : LocalDate.now();
+    }
+
     public static List<OrderRecord> filter(
             Collection<OrderRecord> records, JuchuOrderSearchCriteria criteria) {
         Objects.requireNonNull(criteria, "criteria");

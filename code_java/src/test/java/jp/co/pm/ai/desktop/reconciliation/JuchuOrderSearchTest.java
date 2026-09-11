@@ -260,4 +260,14 @@ class JuchuOrderSearchTest {
         assertTrue(names.contains("スリット"));
         assertTrue(names.contains("カット"));
     }
+
+    @Test
+    void defaultDeliveryRange_isSixMonthsAgoThroughToday() {
+        LocalDate today = LocalDate.of(2026, 9, 11);
+        assertEquals(LocalDate.of(2026, 3, 11), JuchuOrderSearch.defaultDeliveryFrom(today));
+        assertEquals(today, JuchuOrderSearch.defaultDeliveryTo(today));
+        assertEquals(
+                LocalDate.of(2026, 2, 28),
+                JuchuOrderSearch.defaultDeliveryFrom(LocalDate.of(2026, 8, 31)));
+    }
 }

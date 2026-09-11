@@ -2,6 +2,7 @@ package jp.co.pm.ai.desktop.reconciliation;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.LocalDate;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -63,8 +64,9 @@ public final class JuchuOrderSearchPane {
         Supplier<Map<String, String>> env = uiEnv != null ? uiEnv : Map::of;
         Supplier<Window> owner = ownerSupplier != null ? ownerSupplier : () -> null;
 
-        DatePicker from = new DatePicker();
-        DatePicker to = new DatePicker();
+        LocalDate today = LocalDate.now();
+        DatePicker from = new DatePicker(JuchuOrderSearch.defaultDeliveryFrom(today));
+        DatePicker to = new DatePicker(JuchuOrderSearch.defaultDeliveryTo(today));
         ComboBox<String> product = keywordCombo("製品名（部分一致・候補から選択可）");
         ComboBox<String> raw = keywordCombo("投入原反（部分一致・候補から選択可）");
         ComboBox<String> machine = keywordCombo("機械名（部分一致・候補から選択可）");
