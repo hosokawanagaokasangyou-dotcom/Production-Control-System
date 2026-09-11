@@ -41,6 +41,8 @@ public final class ProcessingFeeTrendQuantityExtractor {
     private static final String COL_ACTUAL_START_DT = "加工開始日時";
     /** 加工日報の終了時刻（加工日付と合成して最終工程判定に使う）。 */
     private static final String COL_END_TIME = "終了時間";
+    /** 加工日報発行問合せ CSV の製品加工終了（HH:mm）。{@link #COL_END_TIME} が無いとき使う。 */
+    private static final String COL_PRODUCT_END_TIME = "製品加工終了時間分";
     private static final String COL_WAREHOUSE = "倉庫";
     private static final String COL_TASK_ID = "依頼NO";
     private static final String COL_CONVERSION_QTY = "換算数量";
@@ -111,7 +113,7 @@ public final class ProcessingFeeTrendQuantityExtractor {
         int iStartDt = colIdx(headers, COL_ACTUAL_START_DT);
         int iDailyDate = colIdx(headers, COL_ACTUAL_DATE_DAILY);
         int iKakouDate = colIdx(headers, COL_ACTUAL_DATE);
-        int iEndTime = colIdx(headers, COL_END_TIME);
+        int iEndTime = firstCol(headers, COL_END_TIME, COL_PRODUCT_END_TIME);
         String mk = normKey(f.machine());
         String pk = normKey(f.process());
         LocalDate from = f.from();

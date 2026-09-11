@@ -536,7 +536,7 @@ public class ProcessingFeeTrendTabController {
                 requestTable,
                 new Tooltip(
                         "円/m = AO ÷ 受注最終工程 m。実績円 = 円/m × 実績 m、未了円 = 円/m × (受注 m − 実績 m)。\n"
-                                + "実績円＋未了円 = AO（受注額）。日報は終了時間がある最遅工程のみ（終了時間なし＝未完了）。"));
+                                + "実績円＋未了円 = AO（受注額）。日報は製品加工終了時間がある最遅工程のみ（終了時間なし＝未完了）。"));
     }
 
     private TableCell<RequestPoint, Number> yenNumberCell() {

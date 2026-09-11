@@ -55,8 +55,23 @@ class ProcessingFeeTrendQuantityExtractorTest {
         LocalDate d = LocalDate.of(2026, 9, 10);
         ActualsSnapshot daily =
                 new ActualsSnapshot(
-                        List.of("機械名", "依頼NO", "工程名", "加工日付", "実加工量", "実製品出来高", "終了時間"),
-                        List.of(List.of("M1", "Y7-2", "最終", "2026/09/10", "400", "1600", "15:30")));
+                        List.of(
+                                "機械名",
+                                "依頼NO",
+                                "工程名",
+                                "加工日付",
+                                "実加工量",
+                                "実製品出来高",
+                                "製品加工終了時間分"),
+                        List.of(
+                                List.of(
+                                        "M1",
+                                        "Y7-2",
+                                        "最終",
+                                        "2026/09/10",
+                                        "400",
+                                        "1600",
+                                        "15:30")));
         Filter filter =
                 new Filter(
                         LocalDate.of(2026, 9, 1),
@@ -72,6 +87,33 @@ class ProcessingFeeTrendQuantityExtractorTest {
         assertEquals(1_600.0, actual.get(0).meters(), 1e-9);
         assertEquals("Y7-2", actual.get(0).requestNo());
         assertEquals(LocalDateTime.of(2026, 9, 10, 15, 30), actual.get(0).finishedAt());
+    }
+
+    @Test
+    void extractActual_usesProductEndTimeColumnFromDailyReportCsv() {
+        // 加工日報発行問合せ CSV は「終了時間」ではなく「製品加工終了時間分」
+        LocalDate d = LocalDate.of(2026, 7, 15);
+        ActualsSnapshot daily =
+                new ActualsSnapshot(
+                        List.of("機械名", "依頼NO", "工程名", "加工日付", "実製品出来高", "製品加工終了時間分"),
+                        List.of(
+                                List.of("SEC機", "C7-10", "SEC", "2026/07/15", "2000", "14:27"),
+                                List.of("SEC機", "C7-10", "SEC", "2026/07/15", "2000", "15:20"),
+                                List.of("接続機", "C7-10", "接続", "2026/07/15", "2000", "11:47")));
+        Filter filter =
+                new Filter(
+                        LocalDate.of(2026, 7, 1),
+                        LocalDate.of(2026, 7, 31),
+                        ProcessingTrendAggregator.ActualSource.DAILY_REPORT,
+                        PlanSource.ALADDIN,
+                        null,
+                        null,
+                        7);
+        List<QuantityLine> actual =
+                ProcessingFeeTrendQuantityExtractor.extractActual(daily, null, filter);
+        assertEquals(3, actual.size());
+        assertEquals(LocalDateTime.of(2026, 7, 15, 15, 20), actual.get(1).finishedAt());
+        assertEquals(LocalDateTime.of(2026, 7, 15, 11, 47), actual.get(2).finishedAt());
     }
 
     @Test
