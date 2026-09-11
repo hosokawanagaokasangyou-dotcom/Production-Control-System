@@ -1,10 +1,15 @@
 package jp.co.pm.ai.desktop.reconciliation;
 
+import java.text.Collator;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.Function;
 
 public final class JuchuOrderSearch {
@@ -115,6 +120,38 @@ public final class JuchuOrderSearch {
                 extraHaystack);
     }
 
+    public static List<String> productCandidates(Collection<OrderRecord> records) {
+        return distinctSorted(collectField(records, r -> dbField(r, "製品")));
+    }
+
+    public static List<String> rawMaterialCandidates(Collection<OrderRecord> records) {
+        return distinctSorted(collectField(records, JuchuOrderSearch::displayRawMaterialFromRecord));
+    }
+
+    public static List<String> machineCandidates(
+            Collection<OrderRecord> records, Collection<String> extraNames) {
+        Set<String> values = collectField(records, r -> displayMachine(r.getDbValues(), ""));
+        addAllCandidates(values, extraNames);
+        return distinctSorted(values);
+    }
+
+    public static List<String> processCandidates(
+            Collection<OrderRecord> records, Collection<String> extraNames) {
+        Set<String> values = collectField(records, r -> displayProcess(r.getDbValues(), ""));
+        addAllCandidates(values, extraNames);
+        return distinctSorted(values);
+    }
+
+    static List<String> distinctSorted(Collection<String> values) {
+        Set<String> unique = new LinkedHashSet<>();
+        addAllCandidates(unique, values);
+        List<String> out = new ArrayList<>(unique);
+        Collator ja = Collator.getInstance(Locale.JAPAN);
+        ja.setStrength(Collator.PRIMARY);
+        out.sort(ja);
+        return List.copyOf(out);
+    }
+
     private static boolean keywordMatches(
             OrderRecord record,
             JuchuOrderSearchCriteria criteria,
@@ -165,6 +202,57 @@ public final class JuchuOrderSearch {
             }
         }
         return "";
+    }
+
+    private static String displayRawMaterialFromRecord(OrderRecord record) {
+        return displayRawMaterial(record != null ? record.getDbValues() : null);
+    }
+
+    private static String dbField(OrderRecord record, String key) {
+        if (record == null || record.getDbValues() == null) {
+            return "";
+        }
+        return nullToEmpty(record.getDbValues().get(key));
+    }
+
+    private static Set<String> collectField(
+            Collection<OrderRecord> records, Function<OrderRecord, String> extractor) {
+        Set<String> out = new LinkedHashSet<>();
+        if (records == null || extractor == null) {
+            return out;
+        }
+        for (OrderRecord record : records) {
+            addCandidates(out, extractor.apply(record));
+        }
+        return out;
+    }
+
+    private static void addAllCandidates(Set<String> out, Collection<String> values) {
+        if (out == null || values == null) {
+            return;
+        }
+        for (String value : values) {
+            addCandidates(out, value);
+        }
+    }
+
+    private static void addCandidates(Set<String> out, String raw) {
+        if (out == null || raw == null || raw.isBlank()) {
+            return;
+        }
+        for (String line : raw.split("\\R")) {
+            if (line == null) {
+                continue;
+            }
+            String v = line.strip();
+            if (!v.isEmpty()) {
+                out.add(v);
+            }
+        }
+    }
+
+    private static String nullToEmpty(String value) {
+        return value != null ? value : "";
     }
 
     private static String normalizedKeyword(String keyword) {

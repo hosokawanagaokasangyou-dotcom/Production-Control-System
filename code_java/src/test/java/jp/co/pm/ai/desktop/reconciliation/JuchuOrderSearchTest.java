@@ -212,4 +212,52 @@ class JuchuOrderSearchTest {
         assertEquals(1, out.size());
         assertEquals("a", out.get(0).getReqNo());
     }
+
+    @Test
+    void productCandidates_uniqueSplitLinesIgnoreBlank() {
+        List<String> names =
+                JuchuOrderSearch.productCandidates(
+                        List.of(
+                                rec("1", Map.of("製品", "B製品")),
+                                rec("2", Map.of("製品", "A製品\nC製品")),
+                                rec("3", Map.of("製品", "A製品")),
+                                rec("4", Map.of("製品", "  "))));
+        assertEquals(List.of("A製品", "B製品", "C製品"), names);
+    }
+
+    @Test
+    void rawMaterialCandidates_prefersHinmei1() {
+        List<String> names =
+                JuchuOrderSearch.rawMaterialCandidates(
+                        List.of(
+                                rec("1", Map.of("品名1", "原反A")),
+                                rec("2", Map.of("原反品名", "原反B")),
+                                rec("3", Map.of("品名1", "原反A"))));
+        assertEquals(List.of("原反A", "原反B"), names);
+    }
+
+    @Test
+    void machineCandidates_mergesDbAndExtras() {
+        List<String> names =
+                JuchuOrderSearch.machineCandidates(
+                        List.of(rec("1", Map.of("機械名", "スライス機1 湖南"))),
+                        List.of("W9-1", "スライス機1 湖南", ""));
+        assertEquals(2, names.size());
+        assertTrue(names.contains("スライス機1 湖南"));
+        assertTrue(names.contains("W9-1"));
+    }
+
+    @Test
+    void processCandidates_usesKouteiAndKakouNaiyo() {
+        List<String> names =
+                JuchuOrderSearch.processCandidates(
+                        List.of(
+                                rec("1", Map.of("工程名", "SEC")),
+                                rec("2", Map.of("加工内容", "スリット"))),
+                        List.of("カット"));
+        assertEquals(3, names.size());
+        assertTrue(names.contains("SEC"));
+        assertTrue(names.contains("スリット"));
+        assertTrue(names.contains("カット"));
+    }
 }

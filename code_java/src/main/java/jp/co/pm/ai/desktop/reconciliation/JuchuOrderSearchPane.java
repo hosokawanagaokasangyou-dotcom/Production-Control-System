@@ -23,6 +23,7 @@ import javafx.scene.control.Alert;
 import javafx.scene.control.Alert.AlertType;
 import javafx.scene.control.Button;
 import javafx.scene.control.ChoiceDialog;
+import javafx.scene.control.ComboBox;
 import javafx.scene.control.DatePicker;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
@@ -64,14 +65,10 @@ public final class JuchuOrderSearchPane {
 
         DatePicker from = new DatePicker();
         DatePicker to = new DatePicker();
-        TextField product = new TextField();
-        product.setPromptText("製品名（部分一致）");
-        TextField raw = new TextField();
-        raw.setPromptText("投入原反（部分一致）");
-        TextField machine = new TextField();
-        machine.setPromptText("機械名（部分一致）");
-        TextField process = new TextField();
-        process.setPromptText("工程名（部分一致）");
+        ComboBox<String> product = keywordCombo("製品名（部分一致・候補から選択可）");
+        ComboBox<String> raw = keywordCombo("投入原反（部分一致・候補から選択可）");
+        ComboBox<String> machine = keywordCombo("機械名（部分一致・候補から選択可）");
+        ComboBox<String> process = keywordCombo("工程名（部分一致・候補から選択可）");
         Button search = new Button("検索");
         Button openKensa = new Button("検査表を開く");
         Button rebuildIndex = new Button("検査表索引を更新");
@@ -103,6 +100,29 @@ public final class JuchuOrderSearchPane {
         TableView<OrderRecord> table = new TableView<>(items);
         BooleanProperty indexBusy = new SimpleBooleanProperty(false);
         PipelineScanIndex[] planIndex = {PipelineScanIndex.empty()};
+        Runnable refreshKeywordCandidates =
+                () -> {
+                    List<OrderRecord> recs = recordsSupplier.get();
+                    if (planIndex[0].planEntriesByTaskId().isEmpty()) {
+                        planIndex[0] = loadPlanIndex(env.get());
+                    }
+                    setComboCandidates(
+                            product, JuchuOrderSearch.productCandidates(recs));
+                    setComboCandidates(
+                            raw, JuchuOrderSearch.rawMaterialCandidates(recs));
+                    setComboCandidates(
+                            machine,
+                            JuchuOrderSearch.machineCandidates(
+                                    recs, collectPlanNames(planIndex[0], true)));
+                    setComboCandidates(
+                            process,
+                            JuchuOrderSearch.processCandidates(
+                                    recs, collectPlanNames(planIndex[0], false)));
+                };
+        product.setOnShowing(e -> refreshKeywordCandidates.run());
+        raw.setOnShowing(e -> refreshKeywordCandidates.run());
+        machine.setOnShowing(e -> refreshKeywordCandidates.run());
+        process.setOnShowing(e -> refreshKeywordCandidates.run());
         table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
         table.setPlaceholder(new Label("条件を指定して検索してください"));
         table.getColumns()
@@ -175,10 +195,10 @@ public final class JuchuOrderSearchPane {
                             new JuchuOrderSearchCriteria(
                                     from.getValue(),
                                     to.getValue(),
-                                    product.getText(),
-                                    raw.getText(),
-                                    machine.getText(),
-                                    process.getText());
+                                    comboText(product),
+                                    comboText(raw),
+                                    comboText(machine),
+                                    comboText(process));
                     Optional<String> err = c.validationError();
                     if (err.isPresent()) {
                         statusMessage.setText(err.get());
@@ -188,6 +208,7 @@ public final class JuchuOrderSearchPane {
                     }
                     planIndex[0] = loadPlanIndex(env.get());
                     PipelineScanIndex index = planIndex[0];
+                    refreshKeywordCandidates.run();
                     List<OrderRecord> hits =
                             JuchuOrderSearch.filter(
                                     recordsSupplier.get(),
@@ -401,12 +422,67 @@ public final class JuchuOrderSearchPane {
         return String.join(" ", names);
     }
 
+    private static ComboBox<String> keywordCombo(String prompt) {
+        ComboBox<String> combo = new ComboBox<>();
+        combo.setEditable(true);
+        combo.setMaxWidth(Double.MAX_VALUE);
+        combo.setVisibleRowCount(12);
+        combo.setPromptText(prompt);
+        HBox.setHgrow(combo, Priority.ALWAYS);
+        return combo;
+    }
+
+    private static String comboText(ComboBox<String> combo) {
+        if (combo == null) {
+            return "";
+        }
+        if (combo.isEditable() && combo.getEditor() != null) {
+            String typed = combo.getEditor().getText();
+            if (typed != null) {
+                return typed;
+            }
+        }
+        return combo.getValue() != null ? combo.getValue() : "";
+    }
+
+    private static void setComboCandidates(ComboBox<String> combo, List<String> names) {
+        if (combo == null) {
+            return;
+        }
+        String typed = comboText(combo);
+        combo.getItems().setAll(names != null ? names : List.of());
+        if (combo.getEditor() != null) {
+            combo.getEditor().setText(typed);
+        }
+    }
+
+    private static List<String> collectPlanNames(PipelineScanIndex index, boolean machine) {
+        if (index == null) {
+            return List.of();
+        }
+        Set<String> names = new LinkedHashSet<>();
+        for (List<PlanEntry> entries : index.planEntriesByTaskId().values()) {
+            if (entries == null) {
+                continue;
+            }
+            for (PlanEntry entry : entries) {
+                String value = machine ? entry.machineName() : entry.processName();
+                if (value != null && !value.isBlank()) {
+                    names.add(value.strip());
+                }
+            }
+        }
+        return List.copyOf(names);
+    }
+
     private static VBox labeled(String caption, javafx.scene.Node field) {
         Label label = new Label(caption);
         VBox box = new VBox(4, label, field);
         HBox.setHgrow(field, Priority.ALWAYS);
         if (field instanceof TextField tf) {
             tf.setMaxWidth(Double.MAX_VALUE);
+        } else if (field instanceof ComboBox<?> cb) {
+            cb.setMaxWidth(Double.MAX_VALUE);
         } else if (field instanceof DatePicker dp) {
             dp.setMaxWidth(Double.MAX_VALUE);
         }
