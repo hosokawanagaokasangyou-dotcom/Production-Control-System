@@ -28,7 +28,7 @@ class ProcessingFeeTrendWorkbookExporterTest {
         FeeInfo fee = new FeeInfo(null, 1_000.0, "最終", null, null, 100.0);
         Result r =
                 ProcessingFeeTrendAggregator.aggregate(
-                        List.of(new QuantityLine(d, "R", 60, "最終")),
+                        List.of(new QuantityLine(d, "R", 60, "最終", java.time.LocalDateTime.of(d, java.time.LocalTime.of(15, 0)))),
                         List.of(),
                         Map.of("R", fee),
                         d,

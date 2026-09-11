@@ -26,6 +26,13 @@ class ProcessingFeeTrendAggregatorTest {
         return new FeeInfo(null, aoYen, processContent, null, null, orderFinalM);
     }
 
+    /** 日報完了行（加工日付＋終了時間）。 */
+    private static QuantityLine done(
+            LocalDate day, String req, double meters, String process, int hour, int minute) {
+        return new QuantityLine(
+                day, req, meters, process, LocalDateTime.of(day, java.time.LocalTime.of(hour, minute)));
+    }
+
     @Test
     void aoIsAuthority_actualPlusRemainEqualsAo() {
         // AO=1000, 受注100m → 10円/m。実績60 → 600、未了40 → 400
@@ -33,7 +40,7 @@ class ProcessingFeeTrendAggregatorTest {
         Map<String, FeeInfo> fees = Map.of("R", ao(1_000.0, 100.0, "最終"));
         Result r =
                 ProcessingFeeTrendAggregator.aggregate(
-                        List.of(new QuantityLine(d, "R", 60, "最終")),
+                        List.of(done(d, "R", 60, "最終", 15, 0)),
                         List.of(),
                         fees,
                         d,
@@ -50,17 +57,17 @@ class ProcessingFeeTrendAggregatorTest {
     }
 
     @Test
-    void multiProcessUsesOnlyFinalProcessMetersForActualAndOrderM() {
+    void multiProcessUsesOnlyLatestFinishedProcessMeters() {
         LocalDate d0 = LocalDate.of(2026, 9, 1);
         LocalDate d1 = LocalDate.of(2026, 9, 2);
-        // 工程A は捨て、最終B の受注50m・AO10000 → 200円/m。実績50で未了0
+        // 工程A より B の終了が遅い → B のみ。受注50m・AO10000 → 200円/m
         Map<String, FeeInfo> fees = Map.of("R", ao(10_000.0, 50.0, "A,B"));
         Result r =
                 ProcessingFeeTrendAggregator.aggregate(
                         List.of(
-                                new QuantityLine(d0, "R", 100, "A"),
-                                new QuantityLine(d0, "R", 30, "B"),
-                                new QuantityLine(d1, "R", 20, "B")),
+                                done(d0, "R", 100, "A", 10, 0),
+                                done(d0, "R", 30, "B", 12, 0),
+                                done(d1, "R", 20, "B", 11, 0)),
                         List.of(),
                         fees,
                         d0,
@@ -77,11 +84,12 @@ class ProcessingFeeTrendAggregatorTest {
     }
 
     @Test
-    void finalProcessZero_fallsBackToProcessMatchingOrderMeters() {
-        LocalDate d = LocalDate.of(2024, 7, 15);
+    void missingEndTimeMeansIncomplete_notCountedEvenWithProcessContent() {
+        LocalDate d = LocalDate.of(2026, 7, 15);
         LocalDate from = LocalDate.of(2026, 7, 1);
         LocalDate to = LocalDate.of(2026, 7, 31);
-        Map<String, FeeInfo> fees = Map.of("C7-10", ao(112_000.0, 4_000.0, "SEC,増刷"));
+        Map<String, FeeInfo> fees =
+                Map.of("C7-10", new FeeInfo(null, 112_000.0, "SEC,増刷", 2026, 7, 4_000.0));
         Result r =
                 ProcessingFeeTrendAggregator.aggregate(
                         List.of(
@@ -93,13 +101,35 @@ class ProcessingFeeTrendAggregatorTest {
                         from,
                         to,
                         LocalDate.of(2026, 9, 11));
-        assertEquals(4_000.0, r.requests().get(0).actualMeters(), 1e-6);
-        assertEquals(112_000.0, r.requests().get(0).actualYen(), 1e-6);
+        // 終了時間なし＝未完了 → 実績0。受注月があるので未了に AO 全額
+        assertEquals(1, r.requests().size());
+        assertEquals(0.0, r.requests().get(0).actualMeters(), 1e-6);
+        assertEquals(0.0, r.requests().get(0).actualYen(), 1e-6);
+        assertEquals(112_000.0, r.requests().get(0).planYen(), 1e-6);
+    }
+
+    @Test
+    void incompleteRowsExcluded_evenWhenSameProcessHasCompletedRows() {
+        LocalDate day = LocalDate.of(2026, 7, 15);
+        Map<String, FeeInfo> fees = Map.of("R", ao(1_000.0, 100.0, "SEC"));
+        Result r =
+                ProcessingFeeTrendAggregator.aggregate(
+                        List.of(
+                                done(day, "R", 40, "SEC", 14, 0),
+                                new QuantityLine(day, "R", 60, "SEC"), // 終了時間なし＝未完了
+                                done(day, "R", 10, "裁断", 10, 0)),
+                        List.of(),
+                        fees,
+                        day,
+                        day,
+                        day);
+        assertEquals(40.0, r.requests().get(0).actualMeters(), 1e-6);
+        assertEquals(400.0, r.requests().get(0).actualYen(), 1e-6);
     }
 
     @Test
     void emptyProcessContent_multiProcess_usesLatestFinishedAt_withinPeriod() {
-        // C7-10 相当: 期間内・加工内容空・SEC+裁断 → 終了時間が遅い工程（SEC）の出来高のみ
+        // C7-10 相当: 期間内・加工内容空・SEC+裁断 → 終了時間が遅い工程（SEC）の完了出来高のみ
         LocalDate day = LocalDate.of(2026, 7, 15);
         LocalDate from = LocalDate.of(2026, 7, 1);
         LocalDate to = LocalDate.of(2026, 7, 31);
@@ -108,24 +138,9 @@ class ProcessingFeeTrendAggregatorTest {
         Result r =
                 ProcessingFeeTrendAggregator.aggregate(
                         List.of(
-                                new QuantityLine(
-                                        day,
-                                        "C7-10",
-                                        2_000,
-                                        "SEC",
-                                        LocalDateTime.of(2026, 7, 15, 14, 30)),
-                                new QuantityLine(
-                                        day,
-                                        "C7-10",
-                                        2_000,
-                                        "SEC",
-                                        LocalDateTime.of(2026, 7, 15, 16, 0)),
-                                new QuantityLine(
-                                        day,
-                                        "C7-10",
-                                        2_000,
-                                        "裁断",
-                                        LocalDateTime.of(2026, 7, 15, 10, 0))),
+                                done(day, "C7-10", 2_000, "SEC", 14, 30),
+                                done(day, "C7-10", 2_000, "SEC", 16, 0),
+                                done(day, "C7-10", 2_000, "裁断", 10, 0)),
                         List.of(),
                         fees,
                         from,
@@ -140,16 +155,11 @@ class ProcessingFeeTrendAggregatorTest {
 
     @Test
     void finishedAtOverridesProcessContentLastToken() {
-        // 加工内容末尾は B だが、終了が遅いのは A → A を最終工程とする
         LocalDate d = LocalDate.of(2026, 9, 1);
         Map<String, FeeInfo> fees = Map.of("R", ao(1_000.0, 100.0, "A,B"));
         Result r =
                 ProcessingFeeTrendAggregator.aggregate(
-                        List.of(
-                                new QuantityLine(
-                                        d, "R", 100, "A", LocalDateTime.of(2026, 9, 1, 17, 0)),
-                                new QuantityLine(
-                                        d, "R", 50, "B", LocalDateTime.of(2026, 9, 1, 12, 0))),
+                        List.of(done(d, "R", 100, "A", 17, 0), done(d, "R", 50, "B", 12, 0)),
                         List.of(),
                         fees,
                         d,
@@ -167,11 +177,7 @@ class ProcessingFeeTrendAggregatorTest {
         Map<String, FeeInfo> fees = Map.of("R", ao(2_000.0, 100.0, ""));
         Result r =
                 ProcessingFeeTrendAggregator.aggregate(
-                        List.of(
-                                new QuantityLine(
-                                        d0, "R", 80, "裁断", LocalDateTime.of(2026, 7, 14, 20, 0)),
-                                new QuantityLine(
-                                        d1, "R", 100, "SEC", LocalDateTime.of(2026, 7, 15, 9, 0))),
+                        List.of(done(d0, "R", 80, "裁断", 20, 0), done(d1, "R", 100, "SEC", 9, 0)),
                         List.of(),
                         fees,
                         LocalDate.of(2026, 7, 1),
@@ -182,15 +188,15 @@ class ProcessingFeeTrendAggregatorTest {
 
     @Test
     void requestActualUsesOutsidePeriodMeters_dailyBarsStayInPeriod() {
-        // 表示期間外の日報日付でも依頼NO別実績には算入（日次棒は期間内のみ）
         LocalDate from = LocalDate.of(2026, 7, 1);
         LocalDate to = LocalDate.of(2026, 7, 31);
         LocalDate today = LocalDate.of(2026, 9, 11);
+        LocalDate outDay = LocalDate.of(2024, 7, 15);
         Map<String, FeeInfo> fees = Map.of("C7-10", ao(112_000.0, 4_000.0, "SEC"));
         List<QuantityLine> actual =
                 List.of(
-                        new QuantityLine(LocalDate.of(2024, 7, 15), "C7-10", 2_000, "SEC"),
-                        new QuantityLine(LocalDate.of(2024, 7, 15), "C7-10", 2_000, "SEC"));
+                        done(outDay, "C7-10", 2_000, "SEC", 10, 0),
+                        done(outDay, "C7-10", 2_000, "SEC", 11, 0));
         Result r =
                 ProcessingFeeTrendAggregator.aggregate(
                         actual, List.of(), fees, from, to, today);
@@ -203,14 +209,13 @@ class ProcessingFeeTrendAggregatorTest {
 
     @Test
     void pastPeriod_noDailyRemainBars_kpiRemainFromAlloc() {
-        // 7月を9月に見る: 日次未了棒は出さない。KPI・依頼の未了は残す
         LocalDate from = LocalDate.of(2026, 7, 1);
         LocalDate to = LocalDate.of(2026, 7, 31);
         LocalDate today = LocalDate.of(2026, 9, 11);
         Map<String, FeeInfo> fees = Map.of("R", ao(1_000.0, 100.0, "最終"));
         Result r =
                 ProcessingFeeTrendAggregator.aggregate(
-                        List.of(new QuantityLine(LocalDate.of(2026, 7, 10), "R", 60, "最終")),
+                        List.of(done(LocalDate.of(2026, 7, 10), "R", 60, "最終", 15, 0)),
                         List.of(),
                         fees,
                         from,
@@ -250,7 +255,7 @@ class ProcessingFeeTrendAggregatorTest {
         Map<String, FeeInfo> fees = Map.of("R", ao(1_000.0, 100.0, "最終"));
         Result r =
                 ProcessingFeeTrendAggregator.aggregate(
-                        List.of(new QuantityLine(LocalDate.of(2026, 9, 5), "R", 60, "最終")),
+                        List.of(done(LocalDate.of(2026, 9, 5), "R", 60, "最終", 12, 0)),
                         List.of(),
                         fees,
                         from,
@@ -269,17 +274,16 @@ class ProcessingFeeTrendAggregatorTest {
         LocalDate from = LocalDate.of(2026, 9, 1);
         LocalDate to = LocalDate.of(2026, 9, 3);
         LocalDate today = LocalDate.of(2026, 9, 2);
-        // AH のみ・受注 m = 実績+予定相当は allocateRequest が act+planSched を orderM に使う
         Map<String, FeeInfo> fees =
                 Map.of(
                         "A", new FeeInfo(10.0, null, "", null, null, 9.0),
                         "B", new FeeInfo(20.0, null, "", null, null, 3.0));
         List<QuantityLine> actual =
                 List.of(
-                        new QuantityLine(from, "A", 5),
-                        new QuantityLine(today, "B", 2),
-                        new QuantityLine(to, "A", 1));
-        List<QuantityLine> plan = List.of(new QuantityLine(to, "B", 1));
+                        done(from, "A", 5, "P", 10, 0),
+                        done(today, "B", 2, "P", 11, 0),
+                        done(to, "A", 1, "P", 12, 0));
+        List<QuantityLine> plan = List.of(new QuantityLine(to, "B", 1, "P"));
 
         Result r = ProcessingFeeTrendAggregator.aggregate(actual, plan, fees, from, to, today);
         assertEquals(3, r.days().size());
@@ -287,7 +291,6 @@ class ProcessingFeeTrendAggregatorTest {
         assertEquals(50.0, d0.actualYen(), 1e-6);
         RequestPoint a =
                 r.requests().stream().filter(x -> "A".equals(x.requestNo())).findFirst().orElseThrow();
-        // A: orderM=9, act=6 → remain 3, yen 60+30
         assertEquals(6.0, a.actualMeters(), 1e-9);
         assertEquals(3.0, a.remainMeters(), 1e-9);
         assertEquals(60.0, a.actualYen(), 1e-9);
@@ -299,7 +302,7 @@ class ProcessingFeeTrendAggregatorTest {
         LocalDate d = LocalDate.of(2026, 9, 1);
         Result r =
                 ProcessingFeeTrendAggregator.aggregate(
-                        List.of(new QuantityLine(d, "NO-RATE", 100)),
+                        List.of(done(d, "NO-RATE", 100, "P", 10, 0)),
                         List.of(),
                         Map.of("OTHER", ah(1.0)),
                         d,
@@ -338,7 +341,7 @@ class ProcessingFeeTrendAggregatorTest {
                         new FeeInfo(null, 9_999.0, "C", 2026, 8, 50.0));
         Result r =
                 ProcessingFeeTrendAggregator.aggregate(
-                        List.of(new QuantityLine(from, "ACT", 10, "A")),
+                        List.of(done(from, "ACT", 10, "A", 10, 0)),
                         List.of(),
                         fees,
                         from,
@@ -357,14 +360,14 @@ class ProcessingFeeTrendAggregatorTest {
     }
 
     @Test
-    void processContentLastTokenMatchesNormalizedProcessName() {
+    void latestFinishedProcessWins_overProcessContentLastToken() {
         LocalDate d = LocalDate.of(2026, 9, 1);
         Map<String, FeeInfo> fees = Map.of("E9-2", ao(5_000.0, 25.0, "スリット,E9-2"));
         Result r =
                 ProcessingFeeTrendAggregator.aggregate(
                         List.of(
-                                new QuantityLine(d, "E9-2", 40, "スリット"),
-                                new QuantityLine(d, "E9-2", 25, "E9-2")),
+                                done(d, "E9-2", 40, "スリット", 10, 0),
+                                done(d, "E9-2", 25, "E9-2", 16, 0)),
                         List.of(),
                         fees,
                         d,
@@ -377,7 +380,7 @@ class ProcessingFeeTrendAggregatorTest {
     }
 
     @Test
-    void emptyProcessContentWithMultipleProcessesDropsAll() {
+    void missingEndTimeWithMultipleProcesses_countsAsIncomplete() {
         LocalDate d = LocalDate.of(2026, 9, 1);
         Map<String, FeeInfo> fees = Map.of("R", ao(9_000.0, 30.0, ""));
         Result r =
@@ -390,7 +393,6 @@ class ProcessingFeeTrendAggregatorTest {
                         d,
                         d,
                         d);
-        // 加工内容空・複数工程 → 実績採用なし。受注月が無いので依頼自体も出ないか 0
         assertTrue(
                 r.requests().isEmpty()
                         || (r.requests().get(0).actualMeters() == 0.0

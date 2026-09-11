@@ -26,7 +26,8 @@ import jp.co.pm.ai.desktop.ui.PlanInputProcessSequenceRowOrder;
  * <p>AO（受注額）を正とする。円/m = AO ÷ 受注最終工程 m。実績円 = 円/m × 実績 m、
  * 未了（残予定）円 = 円/m × (受注 m − 実績 m) とし、両者の合計は当該依頼の AO に一致する。
  * 依頼NO別の実績 m は表示期間外の日報出来高も含む（日次棒のみ表示期間内）。
- * 複数工程は実績・受注とも最終工程 m のみ。日報の最終工程は加工日付＋終了時間の最遅行の工程名。
+ * 複数工程は実績・受注とも最終工程 m のみ。日報の最終工程は加工日付＋終了時間の最遅行の工程名
+ * （終了時間が無い行は未完了のため実績に含めない）。予定は受注「加工内容」末尾。
  * AO 欠落時は AH × m（未了は受注 m があれば同様）。
  */
 public final class ProcessingFeeTrendAggregator {
@@ -220,8 +221,8 @@ public final class ProcessingFeeTrendAggregator {
         }
         Map<String, FeeInfo> feeMap = normalizeFeeKeys(fees);
 
-        List<QuantityLine> actFiltered = filterToFinalProcess(actualLines, feeMap);
-        List<QuantityLine> planFiltered = filterToFinalProcess(planLines, feeMap);
+        List<QuantityLine> actFiltered = filterActualToCompletedFinalProcess(actualLines);
+        List<QuantityLine> planFiltered = filterPlanToFinalProcess(planLines, feeMap);
 
         Map<String, Double> actualMetersByReq = sumMetersByRequest(actFiltered);
         Set<String> reqKeys = new HashSet<>(actualMetersByReq.keySet());
@@ -530,12 +531,40 @@ public final class ProcessingFeeTrendAggregator {
     }
 
     /**
-     * 最終工程以外の行を落とす。
-     *
-     * <p>日報行に終了日時がある依頼は、加工日付＋終了時間の最遅行の工程名のみ採用する。
-     * 終了日時が無い場合は受注「加工内容」末尾。加工内容が空で工程が複数ある依頼は全行落とす（誤合算防止）。
+     * 日報実績: 終了時間がある行だけを完了とみなし、依頼内で加工日付＋終了時間が最遅の工程の完了行のみ残す。
+     * 終了時間が無い行は未完了のため採用しない（加工内容・受注 m 一致へのフォールバックはしない）。
      */
-    static List<QuantityLine> filterToFinalProcess(
+    static List<QuantityLine> filterActualToCompletedFinalProcess(List<QuantityLine> lines) {
+        if (lines == null || lines.isEmpty()) {
+            return List.of();
+        }
+        Map<String, List<QuantityLine>> byReq = new LinkedHashMap<>();
+        for (QuantityLine line : lines) {
+            if (line == null || Math.abs(line.meters()) <= EPS || line.finishedAt() == null) {
+                continue;
+            }
+            String lookup = line.requestNo().isEmpty() ? "（依頼NOなし）" : line.requestNo();
+            byReq.computeIfAbsent(lookup, k -> new ArrayList<>()).add(line);
+        }
+        List<QuantityLine> out = new ArrayList<>();
+        for (List<QuantityLine> group : byReq.values()) {
+            String finalProc = resolveFinalProcessByFinishedAt(group);
+            if (finalProc == null) {
+                continue;
+            }
+            for (QuantityLine line : group) {
+                if (finalProc.equals(normalizeProcessName(line.processName()))) {
+                    out.add(line);
+                }
+            }
+        }
+        return out;
+    }
+
+    /**
+     * 予定行: 受注「加工内容」末尾の工程のみ。加工内容が空で工程が複数ある依頼は全行落とす。
+     */
+    static List<QuantityLine> filterPlanToFinalProcess(
             List<QuantityLine> lines, Map<String, FeeInfo> fees) {
         if (lines == null || lines.isEmpty()) {
             return List.of();
@@ -556,21 +585,11 @@ public final class ProcessingFeeTrendAggregator {
         List<QuantityLine> out = new ArrayList<>();
         for (Map.Entry<String, List<QuantityLine>> e : byReq.entrySet()) {
             String lookup = e.getKey();
-            List<QuantityLine> group = e.getValue();
-            String byFinished = resolveFinalProcessByFinishedAt(group);
-            if (byFinished != null) {
-                for (QuantityLine line : group) {
-                    if (byFinished.equals(normalizeProcessName(line.processName()))) {
-                        out.add(line);
-                    }
-                }
-                continue;
-            }
             String reqKey = "（依頼NOなし）".equals(lookup) ? "" : lookup;
             FeeInfo info = fees.get(reqKey);
             String content = info != null ? info.processContent() : "";
             List<String> tokens = PlanInputProcessSequenceRowOrder.parseProcessContentTokens(content);
-            for (QuantityLine line : group) {
+            for (QuantityLine line : e.getValue()) {
                 String proc = normalizeProcessName(line.processName());
                 if (tokens.size() >= 2) {
                     String finalTok = normalizeProcessName(tokens.get(tokens.size() - 1));
@@ -580,14 +599,13 @@ public final class ProcessingFeeTrendAggregator {
                 } else if (tokens.isEmpty()) {
                     Set<String> procs = processesByReq.getOrDefault(lookup, Set.of());
                     if (procs.size() >= 2) {
-                        // 加工内容無しで複数工程 → 採用しない（後段で受注 m 一致フォールバック）
                         continue;
                     }
                 }
                 out.add(line);
             }
         }
-        return withOrderMetersProcessFallback(lines, out, fees);
+        return out;
     }
 
     /**
@@ -621,61 +639,6 @@ public final class ProcessingFeeTrendAggregator {
             return null;
         }
         return bestProc;
-    }
-
-    /**
-     * 最終工程名で 0 m になったとき、受注最終工程 m と一致する工程の出来高があればそれを採用する。
-     * （例: 加工内容末尾が「増刷」で出来高 0、SEC が 4000=受注 m）
-     */
-    private static List<QuantityLine> withOrderMetersProcessFallback(
-            List<QuantityLine> all, List<QuantityLine> filtered, Map<String, FeeInfo> fees) {
-        Map<String, Double> filteredMeters = sumMetersByRequest(filtered);
-        Map<String, List<QuantityLine>> byReq = new HashMap<>();
-        for (QuantityLine line : all) {
-            if (line == null || Math.abs(line.meters()) <= EPS || line.requestNo().isEmpty()) {
-                continue;
-            }
-            byReq.computeIfAbsent(line.requestNo(), k -> new ArrayList<>()).add(line);
-        }
-        List<QuantityLine> out = new ArrayList<>(filtered);
-        for (Map.Entry<String, List<QuantityLine>> e : byReq.entrySet()) {
-            String req = e.getKey();
-            if (filteredMeters.getOrDefault(req, 0.0) > EPS) {
-                continue;
-            }
-            FeeInfo info = fees.get(req);
-            if (info == null || !info.hasOrderFinalMeters()) {
-                continue;
-            }
-            double orderM = info.orderFinalMeters();
-            Map<String, Double> byProc = new HashMap<>();
-            for (QuantityLine line : e.getValue()) {
-                String proc = normalizeProcessName(line.processName());
-                if (proc.isEmpty()) {
-                    continue;
-                }
-                byProc.merge(proc, line.meters(), Double::sum);
-            }
-            String matchProc = null;
-            for (Map.Entry<String, Double> p : byProc.entrySet()) {
-                if (Math.abs(p.getValue() - orderM) <= Math.max(0.5, orderM * 1e-6)) {
-                    if (matchProc != null) {
-                        matchProc = null; // 複数工程が一致 → 曖昧なので使わない
-                        break;
-                    }
-                    matchProc = p.getKey();
-                }
-            }
-            if (matchProc == null) {
-                continue;
-            }
-            for (QuantityLine line : e.getValue()) {
-                if (matchProc.equals(normalizeProcessName(line.processName()))) {
-                    out.add(line);
-                }
-            }
-        }
-        return out;
     }
 
     private static void addMeters(Map<String, Double> meters, List<QuantityLine> lines) {
