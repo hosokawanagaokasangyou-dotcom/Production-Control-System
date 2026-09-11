@@ -28,8 +28,7 @@ public final class ProcessingFeeTrendAggregator {
     }
 
     /**
-     * 日別点。実績累計は当日で止まる。予定累計は予定のみの累計（終点＝予定円合計）。
-     * 見込累計は加工量トレンドと同型（当日より前は実績、当日は max(実績,予定)、翌日以降は予定）。
+     * 見込累計は加工量トレンドと同型（当日までは実績、翌日以降は予定。先端で接続）。
      */
     public record DayPoint(
             LocalDate date,
@@ -111,9 +110,9 @@ public final class ProcessingFeeTrendAggregator {
             double p = e.getValue()[1];
             actTotal += a;
             planTotal += p;
-            boolean usesPlan = !d.isBefore(t);
-            // 当日より前は実績、当日は max(実績,予定)、翌日以降は予定（加工量見込と同型）
-            double projected = !usesPlan ? a : d.equals(t) ? Math.max(a, p) : p;
+            boolean usesPlan = d.isAfter(t);
+            // 当日まで実績、翌日以降は予定（実績累計の先端と必ず接続）
+            double projected = usesPlan ? p : a;
             if (!d.isAfter(t)) {
                 actCum += a;
             }

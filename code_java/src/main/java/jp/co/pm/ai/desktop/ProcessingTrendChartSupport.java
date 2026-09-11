@@ -166,13 +166,13 @@ public final class ProcessingTrendChartSupport {
     }
 
     /**
-     * 見込累計折れ線に含める日（前日＝実績との分岐点から先）。
-     * 前日より前は実績累計と同一なので描かない。
+     * 見込累計折れ線に含める日（当日＝実績先端との接続点から先）。
+     * 当日より前は実績累計と同一なので描かない。
      */
     public static boolean includeProjectedCumPoint(LocalDate date, LocalDate today) {
         if (date == null || today == null) {
             return false;
         }
-        return !date.isBefore(today.minusDays(1));
+        return !date.isBefore(today);
     }
 }

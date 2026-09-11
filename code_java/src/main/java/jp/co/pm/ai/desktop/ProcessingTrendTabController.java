@@ -358,15 +358,15 @@ public class ProcessingTrendTabController {
                         "実績・予定ともに換算数量（m）を依頼×工程×機械ごとに合算した「工程延べ m」。\n"
                                 + "全工程を合算した値は依頼の生産量ではありません（同じ依頼が工程ごとに数えられます）。\n"
                                 + "参考 Excel（売上金額・依頼単位・完了日基準）とは単位・件数基準が異なります。\n"
-                                + "見込累計 = 前日までの実績累計 + 当日以降の予定（当日は実績と予定の大きい方）"));
+                                + "見込累計 = 当日までの実績累計 + 翌日以降の予定（実績先端で接続）"));
         Tooltip.install(
                 kpiProjectedCard,
                 new Tooltip(
-                        "見込合計 = 前日までの実績 + 当日以降の予定（当日のみ実績と予定の大きい方）。\n"
+                        "見込合計 = 当日までの実績 + 翌日以降の予定。\n"
                                 + "アラジン予定は当日以降を行ごとに「未加工」で上限し、完了行は 0 とします。"));
         Tooltip.install(
                 kpiRemainingSub,
-                new Tooltip("要 X m/日 = 予定合計に到達するために当日以降 1 日あたり必要な加工量\n= （予定合計 − 前日まで実績）÷ 残日数"));
+                new Tooltip("要 X m/日 = 予定合計に到達するために翌日以降 1 日あたり必要な加工量\n= （予定合計 − 当日まで実績）÷ 残日数"));
         renderEmpty(
                 "データ未読込",
                 "起動後にバックグラウンドで読み込みます（初期チェックの進捗には含めません）。"
@@ -777,7 +777,7 @@ public class ProcessingTrendTabController {
         }
         Tooltip.install(
                 detailTable,
-                new Tooltip("差異 = 日報実績と実績明細の差（日報 − 明細）。見込累計 = 前日まで実績、当日以降は予定を採用"));
+                new Tooltip("差異 = 日報実績と実績明細の差（日報 − 明細）。見込累計 = 当日まで実績、翌日以降は予定を採用"));
         detailTable.setRowFactory(
                 tv ->
                         new TableRow<>() {
@@ -1797,7 +1797,7 @@ public class ProcessingTrendTabController {
             if (ProcessingTrendChartSupport.includeActualCumPoint(d.date(), r.today())) {
                 actCum.add(new XYChart.Data<>(cat, d.actualCumM()));
             }
-            // 見込は実績の最終点（前日）から分岐させる。前日より前は実績累計と同一なので描かない
+            // 見込は実績先端（当日）から接続。当日より前は実績累計と同一なので描かない
             if (ProcessingTrendChartSupport.includeProjectedCumPoint(d.date(), r.today())) {
                 projCum.add(new XYChart.Data<>(cat, d.projectedCumM()));
             }
@@ -1852,14 +1852,7 @@ public class ProcessingTrendTabController {
         }
         sb.append("  予定 ").append(formatM(d.planM())).append(" m\n");
         sb.append("実績累計 ").append(formatM(d.actualCumM())).append(" m\n");
-        String basis;
-        if (!d.usesPlanForProjection()) {
-            basis = "実績を採用";
-        } else if (d.date().equals(today)) {
-            basis = d.actualM() > d.planM() ? "当日: 実績が予定を上回るため実績を採用" : "当日: 予定を採用";
-        } else {
-            basis = "予定を採用";
-        }
+        String basis = d.usesPlanForProjection() ? "予定を採用" : "実績を採用";
         sb.append("見込累計 ").append(formatM(d.projectedCumM())).append(" m（").append(basis).append("）");
         return sb.toString();
     }

@@ -32,7 +32,7 @@ class ProcessingTrendAggregatorTest {
                         List.of("EC-2", "R3", "EC", "2026/09/02", "2026/09/02 13:00", "300", "30"),
                         // 期間外
                         List.of("W9-1", "R4", "スリット", "2026/08/31", "2026/08/31 09:00", "100", "999"),
-                        // 当日（見込では予定側を使う）
+                        // 当日（見込でも実績を使い、先端で接続）
                         List.of("W9-1", "R5", "スリット", "2026/09/03", "2026/09/03 09:00", "100", "10")));
     }
 
@@ -79,19 +79,22 @@ class ProcessingTrendAggregatorTest {
         Assertions.assertEquals(190, d4.actualCumM(), 1e-9);
         Assertions.assertEquals(840, d4.planCumM(), 1e-9);
 
-        // 見込: 9/1, 9/2 は実績、9/3 以降は予定
+        // 見込: 9/1〜9/3 は実績、9/4 以降は予定（当日先端で接続）
         Assertions.assertFalse(d2.usesPlanForProjection());
-        Assertions.assertTrue(d3.usesPlanForProjection());
-        Assertions.assertEquals(100 + 80 + 600 + 80, d4.projectedCumM(), 1e-9);
+        Assertions.assertFalse(d3.usesPlanForProjection());
+        Assertions.assertTrue(d4.usesPlanForProjection());
+        Assertions.assertEquals(100 + 80 + 10 + 80, d4.projectedCumM(), 1e-9);
+        // 当日の見込累計 = 実績累計（先端接続）
+        Assertions.assertEquals(d3.actualCumM(), d3.projectedCumM(), 1e-9);
 
         Assertions.assertEquals(190, r.actualTotalM(), 1e-9);
         Assertions.assertEquals(840, r.planTotalM(), 1e-9);
-        Assertions.assertEquals(180, r.actualToDateM(), 1e-9);
-        Assertions.assertEquals(160, r.planToDateM(), 1e-9);
-        Assertions.assertEquals(680, r.remainingPlanM(), 1e-9);
-        Assertions.assertEquals(860, r.projectedTotalM(), 1e-9);
-        Assertions.assertEquals(100.0, r.progressPct(), 1e-9);
-        Assertions.assertEquals(20, r.projectedDiffM(), 1e-9);
+        Assertions.assertEquals(190, r.actualToDateM(), 1e-9);
+        Assertions.assertEquals(760, r.planToDateM(), 1e-9);
+        Assertions.assertEquals(80, r.remainingPlanM(), 1e-9);
+        Assertions.assertEquals(270, r.projectedTotalM(), 1e-9);
+        Assertions.assertEquals(190.0 / 760.0 * 100.0, r.progressPct(), 1e-9);
+        Assertions.assertEquals(270 - 840, r.projectedDiffM(), 1e-9);
         Assertions.assertEquals(4, r.actualRowsCounted());
         Assertions.assertEquals(2, r.planRowsCounted());
         Assertions.assertEquals(LocalDate.of(2026, 8, 31), r.actualMinDate());
@@ -101,26 +104,27 @@ class ProcessingTrendAggregatorTest {
     }
 
     @Test
-    void aggregate_todayUsesMaxOfActualAndPlanForProjection() {
+    void aggregate_todayUsesActualForProjectionToConnectAtTip() {
         ActualsSnapshot act =
                 new ActualsSnapshot(
                         ACT_HEADERS,
                         List.of(
                                 List.of("W9-1", "R1", "スリット", "2026/09/02", "", "500", "100"),
-                                // 当日: 実績 900 > 予定 600
-                                List.of("W9-1", "R5", "スリット", "2026/09/03", "", "1000", "900")));
+                                // 当日: 予定 600 > 実績 10 でも見込は実績（先端接続）
+                                List.of("W9-1", "R5", "スリット", "2026/09/03", "", "100", "10")));
         Result r =
                 ProcessingTrendAggregator.aggregate(
                         act, aladdin(), dispatch(),
                         new Filter(FROM, TO, PlanSource.ALADDIN, null, null), TODAY);
         DayPoint d3 = r.days().get(2);
-        Assertions.assertEquals(900, d3.actualM(), 1e-9);
+        Assertions.assertEquals(10, d3.actualM(), 1e-9);
         Assertions.assertEquals(600, d3.planM(), 1e-9);
-        Assertions.assertTrue(d3.usesPlanForProjection());
-        // 9/1 実績 0, 9/2 実績 100, 9/3 max(900,600)=900, 9/4 予定 80
-        Assertions.assertEquals(100 + 900 + 80, r.days().get(3).projectedCumM(), 1e-9);
-        Assertions.assertEquals(900 + 80, r.remainingPlanM(), 1e-9);
-        Assertions.assertEquals(100 + 900 + 80, r.projectedTotalM(), 1e-9);
+        Assertions.assertFalse(d3.usesPlanForProjection());
+        Assertions.assertEquals(d3.actualCumM(), d3.projectedCumM(), 1e-9);
+        // 9/1 実績 0, 9/2 実績 100, 9/3 実績 10, 9/4 予定 80
+        Assertions.assertEquals(100 + 10 + 80, r.days().get(3).projectedCumM(), 1e-9);
+        Assertions.assertEquals(80, r.remainingPlanM(), 1e-9);
+        Assertions.assertEquals(100 + 10 + 80, r.projectedTotalM(), 1e-9);
     }
 
     @Test
@@ -258,17 +262,18 @@ class ProcessingTrendAggregatorTest {
                 ProcessingTrendAggregator.aggregate(
                         actuals(), aladdin(), dispatch(),
                         new Filter(FROM, TO, PlanSource.ALADDIN, null, null), TODAY);
-        // 前日まで 160 / 期間合計 840 = 19% ≥ 10%
+        // 当日まで 760 / 期間合計 840 ≥ 10%
         Assertions.assertTrue(r.progressDenominatorSufficient());
 
         AladdinSnapshot mostlyFuture =
                 new AladdinSnapshot(
-                        List.of("機械名", "依頼NO", "工程名", "2026/09/01", "2026/09/03"),
+                        List.of("機械名", "依頼NO", "工程名", "2026/09/01", "2026/09/04"),
                         List.of(List.of("W9-1", "R1", "スリット", "50", "950")));
         Result r2 =
                 ProcessingTrendAggregator.aggregate(
                         actuals(), mostlyFuture, dispatch(),
                         new Filter(FROM, TO, PlanSource.ALADDIN, null, null), TODAY);
+        // 当日まで 50 / 期間合計 1000 = 5% < 10%
         Assertions.assertFalse(r2.progressDenominatorSufficient());
         Assertions.assertFalse(Double.isNaN(r2.progressPct()));
     }
@@ -514,8 +519,8 @@ class ProcessingTrendAggregatorTest {
             double pl = 15.0;
             actualCum += act;
             planCum += pl;
-            boolean usePlan = !d.isBefore(today);
-            projCum += (d.isBefore(today) ? act : (d.equals(today) ? Math.max(act, pl) : pl));
+            boolean usePlan = d.isAfter(today);
+            projCum += usePlan ? pl : act;
             days.add(new DayPoint(d, act, pl, actualCum, planCum, projCum, usePlan));
         }
 

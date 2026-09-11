@@ -37,7 +37,7 @@ class ProcessingFeeTrendAggregatorTest {
         assertEquals(30.0, d0.planYen(), 1e-6);
         assertEquals(50.0, d0.actualCumYen(), 1e-6);
         assertEquals(30.0, d0.planCumYen(), 1e-6);
-        // 見込累計: 当日より前は実績
+        // 見込累計: 当日まで実績
         assertEquals(50.0, d0.projectedCumYen(), 1e-6);
 
         DayPoint d1 = r.days().get(1);
@@ -45,8 +45,9 @@ class ProcessingFeeTrendAggregatorTest {
         assertEquals(0.0, d1.planYen(), 1e-6);
         assertEquals(90.0, d1.actualCumYen(), 1e-6);
         assertEquals(30.0, d1.planCumYen(), 1e-6);
-        // 当日: max(実績,予定)=40 → 実績累計と接続
+        // 当日: 実績を採用 → 実績累計と接続
         assertEquals(90.0, d1.projectedCumYen(), 1e-6);
+        assertEquals(d1.actualCumYen(), d1.projectedCumYen(), 1e-6);
 
         DayPoint d2 = r.days().get(2);
         assertEquals(10.0, d2.actualYen(), 1e-6);
@@ -56,7 +57,7 @@ class ProcessingFeeTrendAggregatorTest {
         // 予定累計は予定のみの累計（表・KPI用）
         assertEquals(50.0, d2.planCumYen(), 1e-6);
         assertEquals(r.planTotalYen(), d2.planCumYen(), 1e-6);
-        // 見込累計: 実績先端(90)から予定日次を積む → 110
+        // 見込累計: 実績先端(90)から翌日以降の予定を積む → 110
         assertEquals(110.0, d2.projectedCumYen(), 1e-6);
 
         assertEquals(100.0, r.actualTotalYen(), 1e-6);
@@ -64,6 +65,32 @@ class ProcessingFeeTrendAggregatorTest {
         assertEquals(3, r.actualLinesCounted());
         assertEquals(2, r.planLinesCounted());
         assertEquals(0, r.missingRateLines());
+    }
+
+    @Test
+    void projectedCumConnectsAtTodayTipEvenWhenPlanExceedsActual() {
+        LocalDate from = LocalDate.of(2026, 9, 1);
+        LocalDate to = LocalDate.of(2026, 9, 3);
+        LocalDate today = LocalDate.of(2026, 9, 2);
+        Map<String, Double> rates = Map.of("A", 10.0);
+        // 当日: 予定 50 > 実績 10 → 見込は実績先端で接続し、翌日予定のみ積む
+        Result r =
+                ProcessingFeeTrendAggregator.aggregate(
+                        List.of(
+                                new QuantityLine(from, "A", 5), // 50
+                                new QuantityLine(today, "A", 1)), // 10
+                        List.of(
+                                new QuantityLine(today, "A", 5), // 50
+                                new QuantityLine(to, "A", 2)), // 20
+                        rates,
+                        from,
+                        to,
+                        today);
+        DayPoint tip = r.days().get(1);
+        assertEquals(60.0, tip.actualCumYen(), 1e-6);
+        assertEquals(tip.actualCumYen(), tip.projectedCumYen(), 1e-6);
+        DayPoint after = r.days().get(2);
+        assertEquals(80.0, after.projectedCumYen(), 1e-6); // 60 + 20
     }
 
     @Test

@@ -814,7 +814,7 @@ public class ProcessingFeeTrendTabController {
             if (ProcessingTrendChartSupport.includeActualCumPoint(d.date(), today)) {
                 actCum.add(new XYChart.Data<>(cat, d.actualCumYen()));
             }
-            // 見込累計線＝実績先端から接続（前日より前は描かない。加工量トレンドと同型）
+            // 見込累計線＝実績先端（当日）から接続（当日より前は描かない。加工量トレンドと同型）
             if (ProcessingTrendChartSupport.includeProjectedCumPoint(d.date(), today)) {
                 planCum.add(new XYChart.Data<>(cat, d.projectedCumYen()));
             }

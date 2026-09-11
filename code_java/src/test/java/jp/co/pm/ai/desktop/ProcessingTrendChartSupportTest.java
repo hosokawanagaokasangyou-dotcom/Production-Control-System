@@ -139,15 +139,16 @@ class ProcessingTrendChartSupportTest {
     }
 
     @Test
-    void cumPointInclusion_actualThroughToday_projectedFromYesterday() {
+    void cumPointInclusion_actualThroughToday_projectedFromToday() {
         LocalDate today = LocalDate.of(2026, 9, 8);
         assertTrue(ProcessingTrendChartSupport.includeActualCumPoint(LocalDate.of(2026, 9, 7), today));
         assertTrue(ProcessingTrendChartSupport.includeActualCumPoint(today, today));
         assertFalse(ProcessingTrendChartSupport.includeActualCumPoint(LocalDate.of(2026, 9, 9), today));
 
         assertFalse(ProcessingTrendChartSupport.includeProjectedCumPoint(LocalDate.of(2026, 9, 6), today));
-        assertTrue(ProcessingTrendChartSupport.includeProjectedCumPoint(LocalDate.of(2026, 9, 7), today));
+        assertFalse(ProcessingTrendChartSupport.includeProjectedCumPoint(LocalDate.of(2026, 9, 7), today));
         assertTrue(ProcessingTrendChartSupport.includeProjectedCumPoint(today, today));
+        assertTrue(ProcessingTrendChartSupport.includeProjectedCumPoint(LocalDate.of(2026, 9, 9), today));
     }
 
     private static List<LocalDate> days(LocalDate start, int n) {

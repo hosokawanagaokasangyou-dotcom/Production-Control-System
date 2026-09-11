@@ -27,9 +27,9 @@ import jp.co.pm.ai.desktop.dispatch.ResultDispatchSchema;
  * <p>単位はすべて m（換算数量ベース・工程延べ）。同一依頼でも工程ごとに行があるため、全工程を合算した値は
  * 「工程延べ m」であり依頼の生産量ではない。金額は Java 側にソースが無いため扱わない。
  *
- * <p>見込（projected）の定義: <b>当日より前は実績、翌日以降は予定、当日は実績と予定の大きい方</b>を採用した
- * 日別値の累計。当日は加工途中で実績が確定しないため予定側に寄せるが、終業後に実績が予定を超えている場合は
- * 実績を採用する（境界は {@code today}）。
+ * <p>見込（projected）の定義: <b>当日までは実績、翌日以降は予定</b>を採用した日別値の累計。
+ * チャート上で実績累計の先端（当日）と見込累計が必ず接続する。
+ * 当日に予定があっても実績先端をずらさない（旧: 当日 {@code max(実績,予定)} は先端で段差になるため廃止）。
  *
  * <p>アラジン加工計画の日付列は「計画者による現時点の残予定の配置」であり、完了した依頼は抽出から消える。
  * そのため <b>前日までの予定は構造的に欠け得る</b>（進捗率は参考値）。また日付列に既加工分が残る行があるため、
@@ -158,7 +158,7 @@ public final class ProcessingTrendAggregator {
      * @param actualCumM 期間開始からの実績累計 (m)
      * @param planCumM 期間開始からの予定累計 (m)
      * @param projectedCumM 見込累計 (m)。当日より前は実績、当日以降は予定を積む
-     * @param usesPlanForProjection 見込の当日値が予定側かどうか（{@code date >= today}）
+     * @param usesPlanForProjection 見込の当日値が予定側かどうか（{@code date > today}）
      * @param compareActualM 比較対象実績 (m)（日報選択時は実績明細、明細選択時は日報）
      * @param compareActualCumM 比較対象実績の累計 (m)
      * @param actualMaM 当日を含む直近 N 日間の実績移動平均 (m)。N は {@link Filter#movingAverageDays()}
@@ -234,9 +234,9 @@ public final class ProcessingTrendAggregator {
      * @param days 期間内の全日（欠損日も 0 で埋める）
      * @param actualTotalM 期間実績合計
      * @param planTotalM 期間予定合計
-     * @param actualToDateM 当日より前の実績合計（進捗率の分子）
-     * @param planToDateM 当日より前の予定合計（進捗率の分母）
-     * @param remainingPlanM 当日以降の見込合計（翌日以降は予定、当日は実績と予定の大きい方）
+     * @param actualToDateM 当日までの実績合計（進捗率の分子。見込の実績側と一致）
+     * @param planToDateM 当日までの予定合計（進捗率の分母）
+     * @param remainingPlanM 翌日以降の予定合計（当日は実績側のため含めない）
      * @param projectedTotalM 見込合計 = actualToDateM + remainingPlanM
      * @param today 見込境界に用いた当日
      * @param actualRowsCounted 集計に採用した実績行数（フィルタ後・期間内で非 0 の行）
@@ -313,7 +313,7 @@ public final class ProcessingTrendAggregator {
         }
 
         /**
-         * 進捗率 (%) = 当日より前の実績 ÷ 当日より前の予定。分母 0 のとき {@code NaN}。
+         * 進捗率 (%) = 当日までの実績 ÷ 当日までの予定。分母 0 のとき {@code NaN}。
          * 予定が構造的に欠けると生値が 100% を超え得るが、進捗率としては 100% を上限とする。
          */
         public double progressPct() {
@@ -324,7 +324,7 @@ public final class ProcessingTrendAggregator {
         }
 
         /**
-         * 進捗率の分母（前日までの予定）が期間予定合計に対して十分か。
+         * 進捗率の分母（当日までの予定）が期間予定合計に対して十分か。
          * アラジン予定は完了依頼が抽出から消えるため、月初などで分母が極端に小さいと参考にならない。
          */
         public boolean progressDenominatorSufficient() {
@@ -656,12 +656,10 @@ public final class ProcessingTrendAggregator {
                 actSum += dp.actualM();
                 planSum += dp.planM();
                 compareActSum += dp.compareActualM();
-                if (dp.date().isBefore(t)) {
-                    projContrib += dp.actualM();
-                } else if (dp.date().equals(t)) {
-                    projContrib += Math.max(dp.actualM(), dp.planM());
-                } else {
+                if (dp.date().isAfter(t)) {
                     projContrib += dp.planM();
+                } else {
+                    projContrib += dp.actualM();
                 }
             }
 
@@ -840,15 +838,15 @@ public final class ProcessingTrendAggregator {
             double actual = e.getValue()[0];
             double plan = e.getValue()[1];
             double compareActual = e.getValue()[2];
-            boolean usesPlan = !d.isBefore(t);
-            // 当日のみ: 実績が予定を上回っていれば（終業後など）実績を見込に採用する
-            double projected = !usesPlan ? actual : d.equals(t) ? Math.max(actual, plan) : plan;
+            boolean usesPlan = d.isAfter(t);
+            // 当日まで実績、翌日以降は予定（実績累計の先端と必ず接続）
+            double projected = usesPlan ? plan : actual;
             actCum += actual;
             planCum += plan;
             projCum += projected;
             compareActCum += compareActual;
             if (usesPlan) {
-                remainingPlan += projected;
+                remainingPlan += plan;
             } else {
                 actualToDate += actual;
                 planToDate += plan;
