@@ -1091,8 +1091,10 @@ public class ProcessingFeeTrendTabController {
             return;
         }
         boolean started = false;
+        LocalDate prevDate = null;
         for (int i = 0; i < poly.categories().size(); i++) {
-            double ax = dailyXAxis.getDisplayPosition(poly.categories().get(i));
+            String cat = poly.categories().get(i);
+            double ax = dailyXAxis.getDisplayPosition(cat);
             double ay = cumulativeYAxis.getDisplayPosition(poly.values().get(i));
             if (Double.isNaN(ax) || Double.isNaN(ay)) {
                 continue;
@@ -1103,14 +1105,30 @@ public class ProcessingFeeTrendTabController {
             if (Double.isNaN(p.getX()) || Double.isNaN(p.getY())) {
                 continue;
             }
-            if (!started) {
+            LocalDate date = dateForCategory(cat);
+            boolean gap =
+                    started
+                            && !ProcessingTrendChartSupport.shouldConnectCumPoints(prevDate, date);
+            if (!started || gap) {
                 path.getElements().add(new MoveTo(p.getX(), p.getY()));
                 started = true;
             } else {
                 path.getElements().add(new LineTo(p.getX(), p.getY()));
             }
+            prevDate = date;
         }
         path.setVisible(started);
+    }
+
+    private LocalDate dateForCategory(String category) {
+        if (category == null || currentCategoryLabels.isEmpty() || currentDates.isEmpty()) {
+            return null;
+        }
+        int idx = currentCategoryLabels.indexOf(category);
+        if (idx < 0 || idx >= currentDates.size()) {
+            return null;
+        }
+        return currentDates.get(idx);
     }
 
     private void layoutTodayMarker(Result r, CategoryAxis xAxis, Node plotBg) {

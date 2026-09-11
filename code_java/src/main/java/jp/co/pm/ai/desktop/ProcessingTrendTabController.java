@@ -2165,9 +2165,10 @@ public class ProcessingTrendTabController {
         boolean showCum = mode != ViewMode.DAILY;
         boolean showMa =
                 mode != ViewMode.CUMULATIVE && currentGranularity() != Granularity.MONTHLY;
-        layoutOneTrendPath(actualMaPath, overlayActualMa, xAxis, dailyYAxis, showMa);
-        layoutOneTrendPath(actualCumPath, overlayActualCum, xAxis, cumulativeYAxis, showCum);
-        layoutOneTrendPath(projectedCumPath, overlayProjectedCum, xAxis, cumulativeYAxis, showCum);
+        layoutOneTrendPath(actualMaPath, overlayActualMa, xAxis, dailyYAxis, showMa, false);
+        layoutOneTrendPath(actualCumPath, overlayActualCum, xAxis, cumulativeYAxis, showCum, true);
+        layoutOneTrendPath(
+                projectedCumPath, overlayProjectedCum, xAxis, cumulativeYAxis, showCum, true);
     }
 
     private void layoutOneTrendPath(
@@ -2175,7 +2176,8 @@ public class ProcessingTrendTabController {
             OverlayPolyline poly,
             CategoryAxis xAxis,
             ProcessingTrendNumberAxis yAxis,
-            boolean show) {
+            boolean show,
+            boolean breakAtMonthBoundary) {
         path.getElements().clear();
         if (!show || poly == null || poly.isEmpty() || xAxis == null || yAxis == null) {
             path.setVisible(false);
@@ -2185,9 +2187,14 @@ public class ProcessingTrendTabController {
             path.setVisible(false);
             return;
         }
+        // 月別粒度は 1 点が 1 月なので、隣月どうしは結ぶ（日次の月初リセット斜め線だけ切る）
+        boolean breakMonth =
+                breakAtMonthBoundary && currentGranularity() != Granularity.MONTHLY;
         boolean started = false;
+        LocalDate prevDate = null;
         for (int i = 0; i < poly.categories().size(); i++) {
-            double ax = xAxis.getDisplayPosition(poly.categories().get(i));
+            String cat = poly.categories().get(i);
+            double ax = xAxis.getDisplayPosition(cat);
             double ay = yAxis.getDisplayPosition(poly.values().get(i));
             if (Double.isNaN(ax) || Double.isNaN(ay)) {
                 continue;
@@ -2198,14 +2205,31 @@ public class ProcessingTrendTabController {
             if (Double.isNaN(p.getX()) || Double.isNaN(p.getY())) {
                 continue;
             }
-            if (!started) {
+            LocalDate date = dateForCategory(cat);
+            boolean gap =
+                    breakMonth
+                            && started
+                            && !ProcessingTrendChartSupport.shouldConnectCumPoints(prevDate, date);
+            if (!started || gap) {
                 path.getElements().add(new MoveTo(p.getX(), p.getY()));
                 started = true;
             } else {
                 path.getElements().add(new LineTo(p.getX(), p.getY()));
             }
+            prevDate = date;
         }
         path.setVisible(started);
+    }
+
+    private LocalDate dateForCategory(String category) {
+        if (category == null || currentCategoryLabels.isEmpty() || currentDates.isEmpty()) {
+            return null;
+        }
+        int idx = currentCategoryLabels.indexOf(category);
+        if (idx < 0 || idx >= currentDates.size()) {
+            return null;
+        }
+        return currentDates.get(idx);
     }
 
     private void hideXAxisLabels() {

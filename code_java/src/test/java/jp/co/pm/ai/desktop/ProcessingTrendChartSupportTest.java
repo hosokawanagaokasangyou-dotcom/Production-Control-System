@@ -177,6 +177,18 @@ class ProcessingTrendChartSupportTest {
         assertEquals("2026/9", ProcessingTrendChartSupport.monthBandLabel(YearMonth.of(2026, 9), true));
     }
 
+    @Test
+    void shouldConnectCumPoints_breaksAcrossMonthBoundary() {
+        assertTrue(
+                ProcessingTrendChartSupport.shouldConnectCumPoints(
+                        LocalDate.of(2026, 7, 30), LocalDate.of(2026, 7, 31)));
+        assertFalse(
+                ProcessingTrendChartSupport.shouldConnectCumPoints(
+                        LocalDate.of(2026, 7, 31), LocalDate.of(2026, 8, 1)));
+        assertTrue(ProcessingTrendChartSupport.shouldConnectCumPoints(null, LocalDate.of(2026, 8, 1)));
+        assertTrue(ProcessingTrendChartSupport.shouldConnectCumPoints(LocalDate.of(2026, 8, 1), null));
+    }
+
     private static List<LocalDate> days(LocalDate start, int n) {
         List<LocalDate> out = new ArrayList<>(n);
         for (int i = 0; i < n; i++) {

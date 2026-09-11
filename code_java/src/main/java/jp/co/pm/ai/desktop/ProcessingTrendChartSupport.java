@@ -212,6 +212,17 @@ public final class ProcessingTrendChartSupport {
         return month.getMonthValue() + "月";
     }
 
+    /**
+     * 累計折れ線で隣接点を結んでよいか。年月が異なれば false（月初リセットの斜め線を防ぐ）。
+     * どちらかが null のときは結んでよい（日付不明点は従来どおり連続描画）。
+     */
+    public static boolean shouldConnectCumPoints(LocalDate prev, LocalDate next) {
+        if (prev == null || next == null) {
+            return true;
+        }
+        return YearMonth.from(prev).equals(YearMonth.from(next));
+    }
+
     /** プロット上の 1 か月帯（両端は dates / categories の inclusive index）。 */
     public record MonthBand(YearMonth month, int fromIndexInclusive, int toIndexInclusive) {
         public MonthBand {
