@@ -102,4 +102,43 @@ class JuchuProcessingFeeRateLoaderTest {
         assertEquals(90.0, JuchuProcessingFeeRateLoader.parseFeeRateLastLine("80\n90\n"));
         assertNull(JuchuProcessingFeeRateLoader.parseFeeRateLastLine("  "));
     }
+
+    @Test
+    void computeAoFromAhAmProductSum_pairsLinesLikeExcel() {
+        assertEquals(
+                80.0 * 10 + 90.0 * 20,
+                JuchuProcessingFeeRateLoader.computeAoFromAhAmProductSum("80\n90", "10\n20"),
+                1e-9);
+        assertNull(JuchuProcessingFeeRateLoader.computeAoFromAhAmProductSum("", ""));
+        assertNull(JuchuProcessingFeeRateLoader.computeAoFromAhAmProductSum("0", "0"));
+    }
+
+    @Test
+    void loadFeeInfo_computesAoFromAhAmWhenAoFormulaUnusable() throws Exception {
+        Path xlsx = tempDir.resolve("juchu-ao-fallback.xlsx");
+        int irai = JuchuSheetColumnLayout.Col.IRAI_NO.columnIndex();
+        int ah = JuchuSheetColumnLayout.Col.KAKOCHIN.columnIndex();
+        int am = JuchuProcessingFeeRateLoader.AM_COLUMN_INDEX;
+        int ao = JuchuProcessingFeeRateLoader.AO_COLUMN_INDEX;
+        try (XSSFWorkbook wb = new XSSFWorkbook()) {
+            Sheet sh = wb.createSheet(JuchuProcessingFeeRateLoader.SHEET_NAME);
+            Row h = sh.createRow(2);
+            h.createCell(irai).setCellValue("依頼Ｎｏ");
+            Row r0 = sh.createRow(3);
+            r0.createCell(irai).setCellValue("W9-3");
+            r0.createCell(ah).setCellValue("38");
+            r0.createCell(am).setCellValue("4500");
+            // TEXTSPLIT 数式は POI が評価できずキャッシュ 0 → AH×AM 再計算
+            r0.createCell(ao).setCellFormula("SUM(IFERROR(VALUE(_xlfn.TEXTSPLIT(AH4,CHAR(10))),0))");
+            try (var out = Files.newOutputStream(xlsx)) {
+                wb.write(out);
+            }
+        }
+
+        Map<String, FeeInfo> fees = JuchuProcessingFeeRateLoader.loadFeeInfo(xlsx);
+        FeeInfo info = fees.get("W9-3");
+        assertEquals(38.0, info.rateAhYenPerM());
+        assertEquals(38.0 * 4500.0, info.totalAoYen(), 1e-6);
+        assertTrue(info.hasAo());
+    }
 }
