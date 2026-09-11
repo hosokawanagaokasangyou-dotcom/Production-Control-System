@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -149,6 +150,31 @@ class ProcessingTrendChartSupportTest {
         assertFalse(ProcessingTrendChartSupport.includeProjectedCumPoint(LocalDate.of(2026, 9, 7), today));
         assertTrue(ProcessingTrendChartSupport.includeProjectedCumPoint(today, today));
         assertTrue(ProcessingTrendChartSupport.includeProjectedCumPoint(LocalDate.of(2026, 9, 9), today));
+    }
+
+    @Test
+    void monthBands_splitsContiguousDatesByYearMonth() {
+        List<LocalDate> dates =
+                List.of(
+                        LocalDate.of(2026, 8, 30),
+                        LocalDate.of(2026, 8, 31),
+                        LocalDate.of(2026, 9, 1),
+                        LocalDate.of(2026, 9, 2),
+                        LocalDate.of(2026, 10, 1));
+        var bands = ProcessingTrendChartSupport.monthBands(dates);
+        assertEquals(3, bands.size());
+        assertEquals(YearMonth.of(2026, 8), bands.get(0).month());
+        assertEquals(0, bands.get(0).fromIndexInclusive());
+        assertEquals(1, bands.get(0).toIndexInclusive());
+        assertEquals(YearMonth.of(2026, 9), bands.get(1).month());
+        assertEquals(2, bands.get(1).fromIndexInclusive());
+        assertEquals(3, bands.get(1).toIndexInclusive());
+        assertEquals(YearMonth.of(2026, 10), bands.get(2).month());
+        assertEquals(4, bands.get(2).fromIndexInclusive());
+        assertEquals(4, bands.get(2).toIndexInclusive());
+        assertEquals(List.of(), ProcessingTrendChartSupport.monthBands(List.of()));
+        assertEquals("9月", ProcessingTrendChartSupport.monthBandLabel(YearMonth.of(2026, 9), false));
+        assertEquals("2026/9", ProcessingTrendChartSupport.monthBandLabel(YearMonth.of(2026, 9), true));
     }
 
     private static List<LocalDate> days(LocalDate start, int n) {

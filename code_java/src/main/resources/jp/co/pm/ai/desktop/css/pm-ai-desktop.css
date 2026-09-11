@@ -3545,6 +3545,28 @@
     -fx-fill: null;
 }
 
+/* 複数月表示時のプロット月帯（半透明） */
+.pm-trend-month-band-a {
+    -fx-fill: rgba(100, 116, 139, 0.07);
+}
+.pm-trend-month-band-b {
+    -fx-fill: rgba(37, 99, 235, 0.06);
+}
+.pm-trend-month-boundary {
+    -fx-stroke: rgba(71, 85, 105, 0.40);
+    -fx-stroke-width: 1px;
+    -fx-stroke-dash-array: 4 3;
+    -fx-fill: null;
+}
+.pm-trend-month-band-label {
+    -fx-text-fill: rgba(51, 65, 85, 0.72);
+    -fx-font-size: 11px;
+    -fx-font-weight: bold;
+    -fx-background-color: rgba(255, 255, 255, 0.55);
+    -fx-background-radius: 3px;
+    -fx-padding: 1 4 1 4;
+}
+
 /* 累計のみ表示時: 棒チャートは共有 X 軸のため残し、プロットだけ消す */
 .pm-trend-daily-chart.pm-trend-hidden-plot .chart-plot-background {
     -fx-background-color: transparent;

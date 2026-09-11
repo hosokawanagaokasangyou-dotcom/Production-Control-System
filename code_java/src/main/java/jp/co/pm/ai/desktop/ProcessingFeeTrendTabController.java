@@ -54,8 +54,11 @@ import javafx.scene.shape.Line;
 import javafx.scene.shape.LineTo;
 import javafx.scene.shape.MoveTo;
 import javafx.scene.shape.Path;
+import javafx.scene.shape.Rectangle;
+import javafx.scene.Group;
 import javafx.util.StringConverter;
 
+import jp.co.pm.ai.desktop.ProcessingTrendChartSupport.MonthBand;
 import jp.co.pm.ai.desktop.ProcessingTrendChartSupport.NiceRange;
 import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.io.actuals.EquipmentStatusDashboardSourceLoader;
@@ -169,6 +172,8 @@ public class ProcessingFeeTrendTabController {
     private boolean overlayLayoutScheduled;
     private final Line todayLine = new Line();
     private final Label todayMarkerLabel = new Label("今日");
+    /** プロット背景の月帯（半透明）。折れ線・今日線より背面。 */
+    private final Group monthBandLayer = new Group();
 
     private final XYChart.Series<String, Number> actualSeries = new XYChart.Series<>();
     private final XYChart.Series<String, Number> planSeries = new XYChart.Series<>();
@@ -502,8 +507,11 @@ public class ProcessingFeeTrendTabController {
     private void initCumOverlayPaths() {
         styleCumPath(actualCumPath, "pm-trend-path-actual-cum", Color.web("#1e3a8a"), 2.5, false);
         styleCumPath(planCumPath, "pm-trend-path-fee-plan-cum", Color.web("#0f766e"), 2.5, true);
+        monthBandLayer.setManaged(false);
+        monthBandLayer.setMouseTransparent(true);
         markerPane.getChildren().add(0, planCumPath);
         markerPane.getChildren().add(0, actualCumPath);
+        markerPane.getChildren().add(0, monthBandLayer);
     }
 
     private void initTodayMarker() {
@@ -929,6 +937,7 @@ public class ProcessingFeeTrendTabController {
         if (r == null || r.days().isEmpty() || dailyXAxis.getScene() == null) {
             hideXAxisLabels();
             hideCumPaths();
+            clearMonthBands();
             todayLine.setVisible(false);
             todayMarkerLabel.setVisible(false);
             return;
@@ -937,13 +946,87 @@ public class ProcessingFeeTrendTabController {
         if (plotBg == null || markerPane.getScene() == null) {
             hideXAxisLabels();
             hideCumPaths();
+            clearMonthBands();
             todayLine.setVisible(false);
             todayMarkerLabel.setVisible(false);
             return;
         }
+        layoutMonthBands(dailyXAxis, plotBg);
         layoutXAxisLabels(dailyXAxis);
         layoutTodayMarker(r, dailyXAxis, plotBg);
         layoutCumPaths();
+    }
+
+    private void clearMonthBands() {
+        monthBandLayer.getChildren().clear();
+    }
+
+    /** 複数月のとき、プロットに薄い月帯と境界線・月ラベルを置く。 */
+    private void layoutMonthBands(CategoryAxis xAxis, Node plotBg) {
+        clearMonthBands();
+        if (currentDates.isEmpty()
+                || currentCategoryLabels.isEmpty()
+                || xAxis.getScene() == null
+                || markerPane.getScene() == null) {
+            return;
+        }
+        List<MonthBand> bands = ProcessingTrendChartSupport.monthBands(currentDates);
+        if (bands.size() < 2) {
+            return;
+        }
+        var plotBounds = markerPane.sceneToLocal(plotBg.localToScene(plotBg.getBoundsInLocal()));
+        double top = plotBounds.getMinY();
+        double bottom = plotBounds.getMaxY();
+        double height = bottom - top;
+        if (!(height > 1) || Double.isNaN(height)) {
+            return;
+        }
+        boolean includeYear =
+                bands.get(0).month().getYear() != bands.get(bands.size() - 1).month().getYear();
+        double spacing = xAxis.getCategorySpacing();
+        for (int bi = 0; bi < bands.size(); bi++) {
+            MonthBand band = bands.get(bi);
+            if (band.toIndexInclusive() >= currentCategoryLabels.size()) {
+                continue;
+            }
+            String leftCat = currentCategoryLabels.get(band.fromIndexInclusive());
+            String rightCat = currentCategoryLabels.get(band.toIndexInclusive());
+            double leftAx = xAxis.getDisplayPosition(leftCat) - spacing / 2.0;
+            double rightAx = xAxis.getDisplayPosition(rightCat) + spacing / 2.0;
+            if (Double.isNaN(leftAx) || Double.isNaN(rightAx)) {
+                continue;
+            }
+            Point2D left = markerPane.sceneToLocal(xAxis.localToScene(leftAx, 0));
+            Point2D right = markerPane.sceneToLocal(xAxis.localToScene(rightAx, 0));
+            double x = Math.max(plotBounds.getMinX(), left.getX());
+            double x2 = Math.min(plotBounds.getMaxX(), right.getX());
+            double w = x2 - x;
+            if (!(w > 0.5)) {
+                continue;
+            }
+            Rectangle rect = new Rectangle(x, top, w, height);
+            rect.getStyleClass()
+                    .add(bi % 2 == 0 ? "pm-trend-month-band-a" : "pm-trend-month-band-b");
+            rect.setMouseTransparent(true);
+            monthBandLayer.getChildren().add(rect);
+            if (bi > 0) {
+                Line boundary = new Line(x, top, x, bottom);
+                boundary.getStyleClass().add("pm-trend-month-boundary");
+                boundary.setMouseTransparent(true);
+                monthBandLayer.getChildren().add(boundary);
+            }
+            Label lab =
+                    new Label(ProcessingTrendChartSupport.monthBandLabel(band.month(), includeYear));
+            lab.getStyleClass().add("pm-trend-month-band-label");
+            lab.setManaged(false);
+            lab.setMouseTransparent(true);
+            lab.applyCss();
+            lab.autosize();
+            if (lab.getWidth() + 8 <= w) {
+                lab.relocate(Math.round(x + 4), Math.round(top + 2));
+                monthBandLayer.getChildren().add(lab);
+            }
+        }
     }
 
     private void hideCumPaths() {
@@ -1100,6 +1183,7 @@ public class ProcessingFeeTrendTabController {
         overlayPlanCum = OverlayPolyline.EMPTY;
         hideCumPaths();
         hideXAxisLabels();
+        clearMonthBands();
         todayLine.setVisible(false);
         todayMarkerLabel.setVisible(false);
         kpiActualYen.setText("—");

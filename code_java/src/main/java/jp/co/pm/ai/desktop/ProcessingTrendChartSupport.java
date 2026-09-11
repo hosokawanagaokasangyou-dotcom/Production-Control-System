@@ -2,10 +2,13 @@ package jp.co.pm.ai.desktop;
 
 import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.time.YearMonth;
+import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -174,5 +177,49 @@ public final class ProcessingTrendChartSupport {
             return false;
         }
         return !date.isBefore(today);
+    }
+
+    /**
+     * 連続する日付列を月ごとの帯に分割する（プロット背景の月区切り用）。
+     *
+     * @param dates 昇順の日付（カテゴリと同順）
+     */
+    public static List<MonthBand> monthBands(List<LocalDate> dates) {
+        if (dates == null || dates.isEmpty()) {
+            return List.of();
+        }
+        List<MonthBand> out = new ArrayList<>();
+        YearMonth cur = YearMonth.from(dates.get(0));
+        int start = 0;
+        for (int i = 1; i < dates.size(); i++) {
+            YearMonth ym = YearMonth.from(dates.get(i));
+            if (!ym.equals(cur)) {
+                out.add(new MonthBand(cur, start, i - 1));
+                cur = ym;
+                start = i;
+            }
+        }
+        out.add(new MonthBand(cur, start, dates.size() - 1));
+        return List.copyOf(out);
+    }
+
+    /** 月帯の見出し（同一年内は「M月」、年をまたぐと {@code yyyy/M}）。 */
+    public static String monthBandLabel(YearMonth month, boolean includeYear) {
+        Objects.requireNonNull(month, "month");
+        if (includeYear) {
+            return month.format(DateTimeFormatter.ofPattern("yyyy/M"));
+        }
+        return month.getMonthValue() + "月";
+    }
+
+    /** プロット上の 1 か月帯（両端は dates / categories の inclusive index）。 */
+    public record MonthBand(YearMonth month, int fromIndexInclusive, int toIndexInclusive) {
+        public MonthBand {
+            Objects.requireNonNull(month, "month");
+            if (fromIndexInclusive < 0 || toIndexInclusive < fromIndexInclusive) {
+                throw new IllegalArgumentException(
+                        "from=" + fromIndexInclusive + " to=" + toIndexInclusive);
+            }
+        }
     }
 }
