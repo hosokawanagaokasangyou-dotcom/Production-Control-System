@@ -4,7 +4,10 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.Collections;
+import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -13,6 +16,7 @@ import java.util.Objects;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellType;
 import org.apache.poi.ss.usermodel.DataFormatter;
+import org.apache.poi.ss.usermodel.DateUtil;
 import org.apache.poi.ss.usermodel.FormulaEvaluator;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
@@ -22,12 +26,13 @@ import org.apache.poi.ss.usermodel.WorkbookFactory;
 import jp.co.pm.ai.desktop.reconciliation.JuchuSheetColumnLayout;
 
 /**
- * 受注ﾌｧｲﾙシートから依頼No → 加工賃情報（AH・AO・加工内容）を読む。
+ * 受注ﾌｧｲﾙシートから依頼No → 加工賃情報（AH・AO・加工内容・受注年月）を読む。
  *
- * <p>列位置は index 固定（AH={@link JuchuSheetColumnLayout.Col#KAKOCHIN}、AM、AO、Z=加工内容）。
+ * <p>列位置は index 固定（AH={@link JuchuSheetColumnLayout.Col#KAKOCHIN}、AM=受注数、AO、Z=加工内容、
+ * AK=月数、AF=希望納期）。
  * 同一依頼No は後勝ち。AH の改行複数値は <b>末尾</b>の数値（最終工程単価）を採用する。
- * AO は依頼NOごとの加工賃合計（円）。Excel の TEXTSPLIT 数式は POI で評価できないため、
- * キャッシュ値が無い／0 のときは AH×AM の改行対応積和で再計算する。
+ * AO は依頼NOごとの受注金額合計（円）。Excel の TEXTSPLIT 数式は POI で評価できないため、
+ * キャッシュ値が無い／0 のときは AH×AM（だめなら AH×数量1）の改行対応積和で再計算する。
  */
 public final class JuchuProcessingFeeRateLoader {
 
@@ -35,11 +40,15 @@ public final class JuchuProcessingFeeRateLoader {
     /** 見出し行（1-based）。工場既定に合わせる。 */
     public static final int DEFAULT_HEADER_ROW_ONE_BASED = 3;
 
-    /** 受注ﾌｧｲﾙ AO 列（0-based）。依頼NOごとの加工賃合計。 */
+    /** 受注ﾌｧｲﾙ AO 列（0-based）。依頼NOごとの受注金額合計。 */
     public static final int AO_COLUMN_INDEX = JuchuSheetColumnLayout.columnLetterToIndex("AO");
 
-    /** 受注ﾌｧｲﾙ AM 列（0-based）。工程別 m（AH と改行対応）。 */
+    /** 受注ﾌｧｲﾙ AM 列（0-based）。受注数（AH と改行対応。多くは =M 行参照）。 */
     public static final int AM_COLUMN_INDEX = JuchuSheetColumnLayout.columnLetterToIndex("AM");
+
+    /** 受注ﾌｧｲﾙ AK 列（0-based）。月数 = MONTH(希望納期)。 */
+    public static final int ORDER_MONTH_COLUMN_INDEX =
+            JuchuSheetColumnLayout.columnLetterToIndex("AK");
 
     private static final DataFormatter FORMATTER = new DataFormatter(Locale.JAPAN);
     private static final double EPS = 1e-9;
@@ -48,12 +57,23 @@ public final class JuchuProcessingFeeRateLoader {
 
     /**
      * @param rateAhYenPerM AH 末尾行の単価（円/m）。欠落時は {@code null}
-     * @param totalAoYen AO の加工賃合計（円）。欠落・非数値は {@code null}
+     * @param totalAoYen AO の受注金額合計（円）。欠落・非数値は {@code null}
      * @param processContent Z 列の加工内容（カンマ区切り工程列）
+     * @param orderYear 希望納期の年。欠落時は {@code null}
+     * @param orderMonth 月数（1〜12）。欠落時は {@code null}
      */
-    public record FeeInfo(Double rateAhYenPerM, Double totalAoYen, String processContent) {
+    public record FeeInfo(
+            Double rateAhYenPerM,
+            Double totalAoYen,
+            String processContent,
+            Integer orderYear,
+            Integer orderMonth) {
         public FeeInfo {
             processContent = processContent == null ? "" : processContent.strip();
+        }
+
+        public FeeInfo(Double rateAhYenPerM, Double totalAoYen, String processContent) {
+            this(rateAhYenPerM, totalAoYen, processContent, null, null);
         }
 
         public boolean hasAo() {
@@ -62,6 +82,15 @@ public final class JuchuProcessingFeeRateLoader {
 
         public boolean hasAh() {
             return rateAhYenPerM != null && !Double.isNaN(rateAhYenPerM);
+        }
+
+        public boolean hasOrderYearMonth() {
+            return orderYear != null
+                    && orderMonth != null
+                    && orderMonth >= 1
+                    && orderMonth <= 12
+                    && orderYear >= 2000
+                    && orderYear <= 2100;
         }
     }
 
@@ -129,8 +158,11 @@ public final class JuchuProcessingFeeRateLoader {
         int iraiCol = JuchuSheetColumnLayout.Col.IRAI_NO.columnIndex();
         int feeCol = JuchuSheetColumnLayout.Col.KAKOCHIN.columnIndex();
         int kakoCol = JuchuSheetColumnLayout.Col.KAKO_NAIYO.columnIndex();
+        int nokiCol = JuchuSheetColumnLayout.Col.KIBO_NOKI.columnIndex();
+        int suryo1Col = JuchuSheetColumnLayout.Col.SURYO_1.columnIndex();
         int aoCol = AO_COLUMN_INDEX;
         int amCol = AM_COLUMN_INDEX;
+        int monthCol = ORDER_MONTH_COLUMN_INDEX;
         int firstDataRow = headerRowOneBased; // 0-based: header is headerRowOneBased-1
         Map<String, FeeInfo> out = new LinkedHashMap<>();
         int last = Math.min(sheet.getLastRowNum(), firstDataRow + 50_000);
@@ -149,15 +181,23 @@ public final class JuchuProcessingFeeRateLoader {
             if (ao == null || ao <= EPS) {
                 String amRaw = cellText(row.getCell(amCol), eval);
                 Double computed = computeAoFromAhAmProductSum(ahRaw, amRaw);
+                if (computed == null || computed <= EPS) {
+                    // AM が =M 行の参照で取れないとき数量1で再計算
+                    computed =
+                            computeAoFromAhAmProductSum(
+                                    ahRaw, cellText(row.getCell(suryo1Col), eval));
+                }
                 if (computed != null && computed > EPS) {
                     ao = computed;
                 }
             }
             String kako = cellText(row.getCell(kakoCol), eval);
-            if (rate == null && ao == null && kako.isBlank()) {
+            Integer orderMonth = parseOrderMonth(row.getCell(monthCol));
+            Integer orderYear = parseOrderYear(row.getCell(nokiCol));
+            if (rate == null && ao == null && kako.isBlank() && orderMonth == null) {
                 continue;
             }
-            out.put(irai, new FeeInfo(rate, ao, kako));
+            out.put(irai, new FeeInfo(rate, ao, kako, orderYear, orderMonth));
         }
         return Collections.unmodifiableMap(out);
     }
@@ -311,6 +351,80 @@ public final class JuchuProcessingFeeRateLoader {
         } catch (NumberFormatException ex) {
             return null;
         }
+    }
+
+    static Integer parseOrderMonth(Cell cell) {
+        Double n = numericCachedOrRaw(cell);
+        if (n == null) {
+            return null;
+        }
+        int m = (int) Math.rint(n);
+        if (m < 1 || m > 12) {
+            return null;
+        }
+        return m;
+    }
+
+    static Integer parseOrderYear(Cell cell) {
+        if (cell == null) {
+            return null;
+        }
+        try {
+            CellType type = cell.getCellType();
+            if (type == CellType.FORMULA) {
+                type = cell.getCachedFormulaResultType();
+            }
+            if (type == CellType.NUMERIC) {
+                if (DateUtil.isCellDateFormatted(cell)) {
+                    Date d = cell.getDateCellValue();
+                    if (d == null) {
+                        return null;
+                    }
+                    LocalDate ld =
+                            d.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
+                    return ld.getYear();
+                }
+                double v = cell.getNumericCellValue();
+                // Excel 日付シリアルの可能性
+                if (v > 2000 && v < 2100) {
+                    return (int) Math.rint(v);
+                }
+                if (DateUtil.isValidExcelDate(v)) {
+                    Date d = DateUtil.getJavaDate(v);
+                    LocalDate ld =
+                            d.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
+                    return ld.getYear();
+                }
+            }
+        } catch (RuntimeException ignored) {
+            return null;
+        }
+        return null;
+    }
+
+    private static Double numericCachedOrRaw(Cell cell) {
+        if (cell == null) {
+            return null;
+        }
+        try {
+            CellType type = cell.getCellType();
+            if (type == CellType.FORMULA) {
+                type = cell.getCachedFormulaResultType();
+            }
+            if (type == CellType.NUMERIC) {
+                double n = cell.getNumericCellValue();
+                if (Double.isNaN(n) || Double.isInfinite(n)) {
+                    return null;
+                }
+                return n;
+            }
+            if (type == CellType.STRING) {
+                return parsePlainNumber(cell.getStringCellValue());
+            }
+        } catch (RuntimeException ignored) {
+            return null;
+        }
+        return null;
     }
 
     private static String cellText(Cell cell, FormulaEvaluator eval) {

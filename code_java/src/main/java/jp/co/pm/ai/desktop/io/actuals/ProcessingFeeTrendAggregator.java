@@ -179,6 +179,7 @@ public final class ProcessingFeeTrendAggregator {
         int[] missing = {0};
         accumulate(actFiltered, yenPerM, feeMap, byDay, byRequest, 0, actCount, missing);
         accumulate(planFiltered, yenPerM, feeMap, byDay, byRequest, 1, planCount, missing);
+        includeOrderMonthRequests(feeMap, byRequest, from, to);
 
         List<DayPoint> days = new ArrayList<>(byDay.size());
         double actCum = 0;
@@ -248,6 +249,39 @@ public final class ProcessingFeeTrendAggregator {
                 actCount[0],
                 planCount[0],
                 missing[0]);
+    }
+
+    /**
+     * 期間に重なる受注年月（希望納期の年×月数）の依頼を依頼NO表へ含める。
+     * 加工実績・予定が無い依頼も AO 合計が受注側と一致するようにする。
+     */
+    static void includeOrderMonthRequests(
+            Map<String, FeeInfo> fees,
+            TreeMap<String, double[]> byRequest,
+            LocalDate from,
+            LocalDate to) {
+        if (fees == null || fees.isEmpty() || byRequest == null) {
+            return;
+        }
+        Set<YearMonth> months = new HashSet<>();
+        for (LocalDate d = from; !d.isAfter(to); d = d.plusDays(1)) {
+            months.add(YearMonth.from(d));
+        }
+        for (Map.Entry<String, FeeInfo> e : fees.entrySet()) {
+            FeeInfo info = e.getValue();
+            if (info == null || !info.hasOrderYearMonth()) {
+                continue;
+            }
+            YearMonth ym = YearMonth.of(info.orderYear(), info.orderMonth());
+            if (!months.contains(ym)) {
+                continue;
+            }
+            String req = e.getKey() == null || e.getKey().isBlank() ? "（依頼NOなし）" : e.getKey();
+            double[] arr = byRequest.computeIfAbsent(req, k -> new double[6]);
+            if (info.hasAo() && arr[5] <= EPS) {
+                arr[5] = info.totalAoYen();
+            }
+        }
     }
 
     /**

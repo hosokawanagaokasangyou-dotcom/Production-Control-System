@@ -468,7 +468,7 @@ public class ProcessingFeeTrendTabController {
         Tooltip.install(
                 requestTable,
                 new Tooltip(
-                        "期間内の最終工程 m で AO を按分。AO/単価欠落は —（当該依頼の円は 0）。先頭行は合計。"));
+                        "期間内の最終工程 m で AO を按分。受注年月が期間に重なる依頼も一覧に含め、先頭行 AO 合計が受注側と一致するようにする。AO/単価欠落は —。"));
     }
 
     private TableCell<RequestPoint, Number> yenNumberCell() {

@@ -322,4 +322,36 @@ class ProcessingFeeTrendAggregatorTest {
         assertEquals("B", withTotal.get(2).requestNo());
         assertTrue(ProcessingFeeTrendAggregator.withLeadingTotalRow(List.of()).isEmpty());
     }
+
+    @Test
+    void includeOrderMonthRequests_addsInactiveOrdersInPeriod() {
+        LocalDate from = LocalDate.of(2026, 9, 1);
+        LocalDate to = LocalDate.of(2026, 9, 30);
+        Map<String, FeeInfo> fees =
+                Map.of(
+                        "ACT",
+                        new FeeInfo(10.0, 1_000.0, "A", 2026, 9),
+                        "IDLE",
+                        new FeeInfo(20.0, 4_796_700.0, "B", 2026, 9),
+                        "OTHER",
+                        new FeeInfo(30.0, 9_999.0, "C", 2026, 8));
+        Result r =
+                ProcessingFeeTrendAggregator.aggregate(
+                        List.of(new QuantityLine(from, "ACT", 10, "A")),
+                        List.of(),
+                        fees,
+                        from,
+                        to,
+                        from);
+        assertEquals(2, r.requests().size());
+        double aoSum =
+                r.requests().stream().mapToDouble(RequestPoint::aoYen).sum();
+        assertEquals(4_797_700.0, aoSum, 1e-6);
+        RequestPoint idle =
+                r.requests().stream().filter(x -> "IDLE".equals(x.requestNo())).findFirst().orElseThrow();
+        assertEquals(0.0, idle.actualMeters(), 1e-9);
+        assertEquals(4_796_700.0, idle.aoYen(), 1e-6);
+        List<RequestPoint> withTotal = ProcessingFeeTrendAggregator.withLeadingTotalRow(r.requests());
+        assertEquals(4_797_700.0, withTotal.get(0).aoYen(), 1e-6);
+    }
 }
