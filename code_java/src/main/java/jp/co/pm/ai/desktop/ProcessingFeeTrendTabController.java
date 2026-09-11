@@ -452,10 +452,23 @@ public class ProcessingFeeTrendTabController {
         }
         requestTable.setPlaceholder(new Label("期間内の依頼がありません"));
         requestTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
+        requestTable.setRowFactory(
+                tv ->
+                        new TableRow<>() {
+                            @Override
+                            protected void updateItem(RequestPoint item, boolean empty) {
+                                super.updateItem(item, empty);
+                                if (!empty && item != null && item.isTotalRow()) {
+                                    setStyle("-fx-font-weight: bold;");
+                                } else {
+                                    setStyle(null);
+                                }
+                            }
+                        });
         Tooltip.install(
                 requestTable,
                 new Tooltip(
-                        "期間内の最終工程 m で AO を按分。AO/単価欠落は —（当該依頼の円は 0）。"));
+                        "期間内の最終工程 m で AO を按分。AO/単価欠落は —（当該依頼の円は 0）。先頭行は合計。"));
     }
 
     private TableCell<RequestPoint, Number> yenNumberCell() {
@@ -914,7 +927,7 @@ public class ProcessingFeeTrendTabController {
             detailTable.refresh();
         }
         if (requestTable != null) {
-            requestTable.getItems().setAll(r.requests());
+            requestTable.getItems().setAll(ProcessingFeeTrendAggregator.withLeadingTotalRow(r.requests()));
             requestTable.refresh();
         }
         if (requestPane != null) {

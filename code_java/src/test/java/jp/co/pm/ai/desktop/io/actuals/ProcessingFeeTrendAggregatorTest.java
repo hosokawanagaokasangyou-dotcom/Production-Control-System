@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import jp.co.pm.ai.desktop.io.actuals.JuchuProcessingFeeRateLoader.FeeInfo;
 import jp.co.pm.ai.desktop.io.actuals.ProcessingFeeTrendAggregator.DayPoint;
 import jp.co.pm.ai.desktop.io.actuals.ProcessingFeeTrendAggregator.QuantityLine;
+import jp.co.pm.ai.desktop.io.actuals.ProcessingFeeTrendAggregator.RequestPoint;
 import jp.co.pm.ai.desktop.io.actuals.ProcessingFeeTrendAggregator.Result;
 
 class ProcessingFeeTrendAggregatorTest {
@@ -298,5 +299,27 @@ class ProcessingFeeTrendAggregatorTest {
                         d);
         assertTrue(r.requests().isEmpty() || r.requests().get(0).actualMeters() == 0.0);
         assertEquals(0.0, r.actualTotalYen(), 1e-9);
+    }
+
+    @Test
+    void withLeadingTotalRow_sumsMetersAndYen_rateMissing() {
+        List<RequestPoint> rows =
+                List.of(
+                        new RequestPoint("A", 10.0, 1_000.0, false, 5, 3, 50, 30),
+                        new RequestPoint("B", 20.0, 2_000.0, false, 2, 4, 40, 80));
+        List<RequestPoint> withTotal = ProcessingFeeTrendAggregator.withLeadingTotalRow(rows);
+        assertEquals(3, withTotal.size());
+        RequestPoint tot = withTotal.get(0);
+        assertTrue(tot.isTotalRow());
+        assertEquals("合計", tot.requestNo());
+        assertEquals(3_000.0, tot.aoYen(), 1e-9);
+        assertEquals(7.0, tot.actualMeters(), 1e-9);
+        assertEquals(7.0, tot.planMeters(), 1e-9);
+        assertEquals(90.0, tot.actualYen(), 1e-9);
+        assertEquals(110.0, tot.planYen(), 1e-9);
+        assertTrue(tot.rateMissing());
+        assertEquals("A", withTotal.get(1).requestNo());
+        assertEquals("B", withTotal.get(2).requestNo());
+        assertTrue(ProcessingFeeTrendAggregator.withLeadingTotalRow(List.of()).isEmpty());
     }
 }

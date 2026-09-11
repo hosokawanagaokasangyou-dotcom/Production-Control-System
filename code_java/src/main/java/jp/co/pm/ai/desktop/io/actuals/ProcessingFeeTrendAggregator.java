@@ -83,6 +83,48 @@ public final class ProcessingFeeTrendAggregator {
                 double planYen) {
             this(requestNo, rateYenPerM, 0.0, rateMissing, actualMeters, planMeters, actualYen, planYen);
         }
+
+        public boolean isTotalRow() {
+            return TOTAL_REQUEST_LABEL.equals(requestNo);
+        }
+    }
+
+    /** 依頼NO別表の先頭合計行ラベル。 */
+    public static final String TOTAL_REQUEST_LABEL = "合計";
+
+    /**
+     * 依頼NO別一覧の先頭に合計行を付ける。空なら空リスト。
+     * 円/m は合算しない（欠落扱いで UI は —）。
+     */
+    public static List<RequestPoint> withLeadingTotalRow(List<RequestPoint> requests) {
+        if (requests == null || requests.isEmpty()) {
+            return List.of();
+        }
+        double ao = 0;
+        double actM = 0;
+        double planM = 0;
+        double actYen = 0;
+        double planYen = 0;
+        for (RequestPoint r : requests) {
+            if (r == null || r.isTotalRow()) {
+                continue;
+            }
+            ao += r.aoYen();
+            actM += r.actualMeters();
+            planM += r.planMeters();
+            actYen += r.actualYen();
+            planYen += r.planYen();
+        }
+        RequestPoint total =
+                new RequestPoint(TOTAL_REQUEST_LABEL, 0.0, ao, true, actM, planM, actYen, planYen);
+        List<RequestPoint> out = new ArrayList<>(requests.size() + 1);
+        out.add(total);
+        for (RequestPoint r : requests) {
+            if (r != null && !r.isTotalRow()) {
+                out.add(r);
+            }
+        }
+        return List.copyOf(out);
     }
 
     public record Result(
