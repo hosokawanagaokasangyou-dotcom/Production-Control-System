@@ -469,8 +469,9 @@ public class ProcessingFeeTrendTabController {
         Tooltip.install(
                 requestTable,
                 new Tooltip(
-                        "各行の AO は受注額。合計行の AO は按分円（実績円＋予定円）で、未加工の受注額は含めない。\n"
-                                + "按分は期間内最終工程 m。受注年月が期間に重なる依頼も一覧に含める。"));
+                        "AO(受注額) は受注の合計。合計行・KPI「受注額合計」は同値。\n"
+                                + "実績円・予定円は期間内最終工程 m で AO を按分した額（未加工・単価欠落分は 0）。\n"
+                                + "そのため受注額合計 ≠ 実績円＋予定円 になることがある。"));
     }
 
     private TableCell<RequestPoint, Number> yenNumberCell() {
@@ -831,11 +832,28 @@ public class ProcessingFeeTrendTabController {
                     Result r = task.getValue();
                     currentResult = r;
                     render(r);
+                    double orderAo = ProcessingFeeTrendAggregator.sumOrderAoYen(r.requests());
+                    double allocated = r.actualTotalYen() + r.planTotalYen();
+                    StringBuilder notice = new StringBuilder();
                     if (r.missingRateLines() > 0) {
-                        showNotice(
-                                "AO/AH 単価が無い行が "
-                                        + r.missingRateLines()
-                                        + " 件あります（当該行の按分円は 0）。");
+                        notice.append("AO/AH 単価が無い行が ")
+                                .append(r.missingRateLines())
+                                .append(" 件あります（当該行の按分円は 0）。");
+                    }
+                    if (orderAo > 1e-6 && Math.abs(orderAo - allocated) > 0.5) {
+                        if (notice.length() > 0) {
+                            notice.append(' ');
+                        }
+                        notice.append("受注額合計（")
+                                .append(NumberFormat.getIntegerInstance(Locale.JAPAN).format(Math.rint(orderAo)))
+                                .append("）と按分円（実績+予定 ")
+                                .append(
+                                        NumberFormat.getIntegerInstance(Locale.JAPAN)
+                                                .format(Math.rint(allocated)))
+                                .append("）の差は、未加工または単価欠落分です。");
+                    }
+                    if (notice.length() > 0) {
+                        showNotice(notice.toString());
                     } else {
                         hideNotice();
                     }

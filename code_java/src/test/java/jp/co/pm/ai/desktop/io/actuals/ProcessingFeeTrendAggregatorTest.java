@@ -312,8 +312,7 @@ class ProcessingFeeTrendAggregatorTest {
         RequestPoint tot = withTotal.get(0);
         assertTrue(tot.isTotalRow());
         assertEquals("合計", tot.requestNo());
-        // 合計行 AO = 按分円（実績+予定）
-        assertEquals(90.0 + 110.0, tot.aoYen(), 1e-9);
+        assertEquals(3_000.0, tot.aoYen(), 1e-9);
         assertEquals(7.0, tot.actualMeters(), 1e-9);
         assertEquals(7.0, tot.planMeters(), 1e-9);
         assertEquals(90.0, tot.actualYen(), 1e-9);
@@ -353,8 +352,7 @@ class ProcessingFeeTrendAggregatorTest {
         assertEquals(0.0, idle.actualMeters(), 1e-9);
         assertEquals(4_796_700.0, idle.aoYen(), 1e-6);
         List<RequestPoint> withTotal = ProcessingFeeTrendAggregator.withLeadingTotalRow(r.requests());
-        // 合計行 AO は按分円のみ（ACT: AO 1000 / 10m → 1000 円）
-        assertEquals(1_000.0, withTotal.get(0).aoYen(), 1e-6);
+        assertEquals(4_797_700.0, withTotal.get(0).aoYen(), 1e-6);
         assertEquals(1_000.0, withTotal.get(0).actualYen() + withTotal.get(0).planYen(), 1e-6);
     }
 }
