@@ -26,6 +26,7 @@ import jp.co.pm.ai.desktop.ui.PlanInputProcessSequenceRowOrder;
  * <p>AO（受注額）を正とする。円/m = AO ÷ 受注最終工程 m。実績円 = 円/m × 実績 m、
  * 未了（残予定）円 = 円/m × (受注 m − 実績 m) とし、両者の合計は当該依頼の AO に一致する。
  * 依頼NO別の実績 m は表示期間外の日報出来高も含む（日次棒のみ表示期間内）。
+ * 依頼NO別表の行は集計期間内に限る（期間内に完了実績がある・受注月が期間に含まれる・期間内予定がある）。
  * 複数工程は実績・受注とも最終工程 m のみ。日報の最終工程は加工日付＋終了時間の最遅行の工程名
  * （終了時間が無い行は未完了のため実績に含めない）。予定は受注「加工内容」末尾。
  * AO 欠落時は AH × m（未了は受注 m があれば同様）。
@@ -224,8 +225,16 @@ public final class ProcessingFeeTrendAggregator {
         List<QuantityLine> actFiltered = filterActualToCompletedFinalProcess(actualLines);
         List<QuantityLine> planFiltered = filterPlanToFinalProcess(planLines, feeMap);
 
+        // 依頼NO別の実績 m は期間外の完了出来高も含む（AO 正本の受注残）。
+        // 表に載せる依頼は集計期間内のみ（期間内実績・受注月・期間内予定）。
         Map<String, Double> actualMetersByReq = sumMetersByRequest(actFiltered);
-        Set<String> reqKeys = new HashSet<>(actualMetersByReq.keySet());
+        List<QuantityLine> actInPeriod = new ArrayList<>();
+        for (QuantityLine line : actFiltered) {
+            if (line != null && !line.date().isBefore(from) && !line.date().isAfter(to)) {
+                actInPeriod.add(line);
+            }
+        }
+        Set<String> reqKeys = new HashSet<>(sumMetersByRequest(actInPeriod).keySet());
         addOrderMonthRequestKeys(feeMap, reqKeys, from, to);
         for (QuantityLine line : planFiltered) {
             if (line != null && !line.requestNo().isEmpty()) {
@@ -248,13 +257,6 @@ public final class ProcessingFeeTrendAggregator {
         TreeMap<LocalDate, double[]> byDay = new TreeMap<>();
         for (LocalDate d = from; !d.isAfter(to); d = d.plusDays(1)) {
             byDay.put(d, new double[2]);
-        }
-        // 日次棒は表示期間内のみ。依頼NO別の実績 m は期間外の出来高も含む（AO 正本）
-        List<QuantityLine> actInPeriod = new ArrayList<>();
-        for (QuantityLine line : actFiltered) {
-            if (line != null && !line.date().isBefore(from) && !line.date().isAfter(to)) {
-                actInPeriod.add(line);
-            }
         }
         int actCount = accumulateActualDays(actInPeriod, allocs, feeMap, byDay);
         boolean periodFullyPast = to.isBefore(t);

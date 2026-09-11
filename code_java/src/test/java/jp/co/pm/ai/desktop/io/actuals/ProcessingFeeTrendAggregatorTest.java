@@ -187,12 +187,14 @@ class ProcessingFeeTrendAggregatorTest {
     }
 
     @Test
-    void requestActualUsesOutsidePeriodMeters_dailyBarsStayInPeriod() {
+    void requestActualUsesOutsidePeriodMeters_whenOrderMonthInPeriod() {
+        // 受注月が集計期間内なら、期間外完了出来高も依頼実績 m に算入（日次棒は期間内のみ）
         LocalDate from = LocalDate.of(2026, 7, 1);
         LocalDate to = LocalDate.of(2026, 7, 31);
         LocalDate today = LocalDate.of(2026, 9, 11);
         LocalDate outDay = LocalDate.of(2024, 7, 15);
-        Map<String, FeeInfo> fees = Map.of("C7-10", ao(112_000.0, 4_000.0, "SEC"));
+        Map<String, FeeInfo> fees =
+                Map.of("C7-10", new FeeInfo(null, 112_000.0, "SEC", 2026, 7, 4_000.0));
         List<QuantityLine> actual =
                 List.of(
                         done(outDay, "C7-10", 2_000, "SEC", 10, 0),
@@ -205,6 +207,44 @@ class ProcessingFeeTrendAggregatorTest {
         assertEquals(0.0, row.remainMeters(), 1e-6);
         assertEquals(112_000.0, row.actualYen(), 1e-6);
         assertEquals(0.0, r.days().stream().mapToDouble(DayPoint::actualYen).sum(), 1e-9);
+    }
+
+    @Test
+    void outsidePeriodActualOnly_withoutOrderMonth_notListed() {
+        // 期間外の完了だけ・受注月なし → 集計期間の表に載せない
+        LocalDate from = LocalDate.of(2026, 7, 1);
+        LocalDate to = LocalDate.of(2026, 7, 31);
+        Map<String, FeeInfo> fees = Map.of("A3-1", ao(3_900.0, 300.0, "SEC"));
+        Result r =
+                ProcessingFeeTrendAggregator.aggregate(
+                        List.of(done(LocalDate.of(2024, 3, 1), "A3-1", 300, "SEC", 10, 0)),
+                        List.of(),
+                        fees,
+                        from,
+                        to,
+                        LocalDate.of(2026, 9, 11));
+        assertTrue(r.requests().isEmpty());
+        assertEquals(0.0, r.actualTotalYen(), 1e-9);
+    }
+
+    @Test
+    void outsideOrderMonth_withInPeriodActual_isListed() {
+        // 受注月は期間外でも、期間内に完了実績があれば表に載せる
+        LocalDate from = LocalDate.of(2026, 7, 1);
+        LocalDate to = LocalDate.of(2026, 7, 31);
+        Map<String, FeeInfo> fees =
+                Map.of("A3-1", new FeeInfo(null, 3_900.0, "SEC", 2023, 3, 300.0));
+        Result r =
+                ProcessingFeeTrendAggregator.aggregate(
+                        List.of(done(LocalDate.of(2026, 7, 15), "A3-1", 300, "SEC", 10, 0)),
+                        List.of(),
+                        fees,
+                        from,
+                        to,
+                        LocalDate.of(2026, 9, 11));
+        assertEquals(1, r.requests().size());
+        assertEquals("A3-1", r.requests().get(0).requestNo());
+        assertEquals(300.0, r.requests().get(0).actualMeters(), 1e-6);
     }
 
     @Test
