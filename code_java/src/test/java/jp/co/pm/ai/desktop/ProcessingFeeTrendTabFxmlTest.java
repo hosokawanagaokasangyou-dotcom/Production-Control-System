@@ -38,8 +38,11 @@ class ProcessingFeeTrendTabFxmlTest {
         assertNotNull(elementByFxId("planSourceMetaLabel"));
         assertNotNull(elementByFxId("sourceSummaryLabel"));
         assertNotNull(elementByFxId("colRequestNo"));
+        assertNotNull(elementByFxId("colAoYen"));
         assertNotNull(elementByFxId("colRateYen"));
         assertNotNull(elementByFxId("colReqActualYen"));
+        assertEquals("AO合計", elementByFxId("colAoYen").getAttribute("text"));
+        assertEquals("円/m", elementByFxId("colRateYen").getAttribute("text"));
         assertEquals("false", elementByFxId("detailPane").getAttribute("expanded"));
         assertEquals("false", elementByFxId("requestPane").getAttribute("expanded"));
         assertEquals(

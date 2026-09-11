@@ -87,7 +87,7 @@
                 <Label fx:id="chartTitleLabel" styleClass="pm-processing-trend-chart-title" text="加工賃トレンド（円）"/>
                 <HBox fx:id="legendBox" alignment="CENTER_LEFT" spacing="16.0" styleClass="pm-processing-trend-legend"/>
                 <Pane HBox.hgrow="ALWAYS"/>
-                <Label styleClass="pm-processing-trend-muted" text="単位: 円（AH×工程延べ m）"/>
+                <Label styleClass="pm-processing-trend-muted" text="単位: 円（AO÷最終工程m）"/>
             </HBox>
             <StackPane fx:id="chartStack" VBox.vgrow="ALWAYS" maxWidth="1300.0" maxHeight="600.0"
                        styleClass="pm-processing-trend-chart-stack">
@@ -142,7 +142,8 @@
                            styleClass="pm-processing-trend-detail-table">
                     <columns>
                         <TableColumn fx:id="colRequestNo" prefWidth="140.0" sortable="true" text="依頼NO"/>
-                        <TableColumn fx:id="colRateYen" prefWidth="100.0" sortable="true" text="AH単価"/>
+                        <TableColumn fx:id="colAoYen" prefWidth="120.0" sortable="true" text="AO合計"/>
+                        <TableColumn fx:id="colRateYen" prefWidth="100.0" sortable="true" text="円/m"/>
                         <TableColumn fx:id="colActualM" prefWidth="100.0" sortable="true" text="実績 (m)"/>
                         <TableColumn fx:id="colPlanM" prefWidth="100.0" sortable="true" text="予定 (m)"/>
                         <TableColumn fx:id="colReqActualYen" prefWidth="120.0" sortable="true" text="実績円"/>

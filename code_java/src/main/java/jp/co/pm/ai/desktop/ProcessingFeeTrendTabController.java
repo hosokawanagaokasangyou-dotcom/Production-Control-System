@@ -67,6 +67,7 @@ import jp.co.pm.ai.desktop.io.actuals.EquipmentStatusDashboardSourceLoader.Loade
 import jp.co.pm.ai.desktop.io.actuals.EquipmentStatusDashboardSourceLoader.ReloadDecision;
 import jp.co.pm.ai.desktop.io.actuals.EquipmentStatusDashboardSourceLoader.SourceFingerprint;
 import jp.co.pm.ai.desktop.io.actuals.JuchuProcessingFeeRateLoader;
+import jp.co.pm.ai.desktop.io.actuals.JuchuProcessingFeeRateLoader.FeeInfo;
 import jp.co.pm.ai.desktop.io.actuals.ProcessingFeeTrendAggregator;
 import jp.co.pm.ai.desktop.io.actuals.ProcessingFeeTrendAggregator.DayPoint;
 import jp.co.pm.ai.desktop.io.actuals.ProcessingFeeTrendAggregator.QuantityLine;
@@ -152,6 +153,7 @@ public class ProcessingFeeTrendTabController {
     @FXML private TitledPane requestPane;
     @FXML private TableView<RequestPoint> requestTable;
     @FXML private TableColumn<RequestPoint, String> colRequestNo;
+    @FXML private TableColumn<RequestPoint, Number> colAoYen;
     @FXML private TableColumn<RequestPoint, Number> colRateYen;
     @FXML private TableColumn<RequestPoint, Number> colActualM;
     @FXML private TableColumn<RequestPoint, Number> colPlanM;
@@ -164,7 +166,7 @@ public class ProcessingFeeTrendTabController {
     private boolean reloadInFlight;
     private LoadedSources cachedSources;
     private SourceFingerprint loadedFingerprint;
-    private Map<String, Double> feeRates = Map.of();
+    private Map<String, FeeInfo> feeInfos = Map.of();
     private Result currentResult;
     private List<String> currentCategoryLabels = List.of();
     private List<LocalDate> currentDates = List.of();
@@ -314,7 +316,7 @@ public class ProcessingFeeTrendTabController {
         dailyXAxis.categorySpacingProperty().addListener((o, a, n) -> requestOverlayLayout());
         markerPane.sceneProperty().addListener((o, a, n) -> requestOverlayLayout());
 
-        sourceSummaryLabel.setText("受注 AH × 加工日 m。工程延べのため依頼生産量とは一致しません。");
+        sourceSummaryLabel.setText("受注 AO を最終工程 m で按分。複数工程は加工内容の末尾工程のみ。");
         initDetailTable();
         initRequestTable();
         syncChartPadding();
@@ -381,7 +383,8 @@ public class ProcessingFeeTrendTabController {
         detailTable.setPlaceholder(new Label("期間内のデータがありません"));
         detailTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
         Tooltip.install(
-                detailTable, new Tooltip("単位は円（AH × 工程延べ m）。累計列は月初でリセット。"));
+                detailTable,
+                new Tooltip("単位は円（受注AO÷最終工程m × 日次最終工程m）。累計列は月初でリセット。"));
     }
 
     private void initRequestTable() {
@@ -390,6 +393,14 @@ public class ProcessingFeeTrendTabController {
         }
         colRequestNo.setCellValueFactory(
                 cd -> new ReadOnlyObjectWrapper<>(cd.getValue().requestNo()));
+        if (colAoYen != null) {
+            colAoYen.setCellValueFactory(
+                    cd ->
+                            new ReadOnlyObjectWrapper<>(
+                                    cd.getValue().aoYen() > 0 ? cd.getValue().aoYen() : null));
+            colAoYen.setCellFactory(col -> yenNumberCell());
+            colAoYen.setStyle("-fx-alignment: CENTER-RIGHT;");
+        }
         colRateYen.setCellValueFactory(
                 cd ->
                         new ReadOnlyObjectWrapper<>(
@@ -444,7 +455,23 @@ public class ProcessingFeeTrendTabController {
         Tooltip.install(
                 requestTable,
                 new Tooltip(
-                        "期間内の実績・予定を依頼NOごとに集約。AH単価欠落は —（当該依頼の円は 0）。"));
+                        "期間内の最終工程 m で AO を按分。AO/単価欠落は —（当該依頼の円は 0）。"));
+    }
+
+    private TableCell<RequestPoint, Number> yenNumberCell() {
+        return new TableCell<>() {
+            @Override
+            protected void updateItem(Number item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) {
+                    setText(empty ? null : "—");
+                    return;
+                }
+                setText(
+                        NumberFormat.getIntegerInstance(Locale.JAPAN)
+                                .format(Math.rint(item.doubleValue())));
+            }
+        };
     }
 
     private TableCell<DayPoint, Number> yenCell() {
@@ -700,17 +727,17 @@ public class ProcessingFeeTrendTabController {
                                 decision != null && decision.sources() != null
                                         ? decision.sources()
                                         : (haveCache ? cachedSources : null);
-                        Map<String, Double> rates = Map.of();
+                        Map<String, FeeInfo> fees = Map.of();
                         java.nio.file.Path juchu =
                                 AppPaths.resolveRequestFormJuchuFile(ui).orElse(null);
                         String juchuNote;
                         if (juchu != null && Files.isRegularFile(juchu)) {
-                            rates = JuchuProcessingFeeRateLoader.loadRates(juchu);
-                            juchuNote = juchu.getFileName().toString() + " AH=" + rates.size() + "件";
+                            fees = JuchuProcessingFeeRateLoader.loadFeeInfo(juchu);
+                            juchuNote = juchu.getFileName().toString() + " 依頼=" + fees.size() + "件";
                         } else {
                             juchuNote = "受注ファイル未設定または不在";
                         }
-                        return new ReloadBundle(decision, sources, rates, juchuNote);
+                        return new ReloadBundle(decision, sources, fees, juchuNote);
                     }
                 };
         task.setOnSucceeded(
@@ -724,11 +751,11 @@ public class ProcessingFeeTrendTabController {
                     } else if (b.sources() != null) {
                         cachedSources = b.sources();
                     }
-                    feeRates = b.rates() != null ? b.rates() : Map.of();
+                    feeInfos = b.fees() != null ? b.fees() : Map.of();
                     sourceSummaryLabel.setText(
-                            "単価: "
+                            "受注: "
                                     + b.juchuNote()
-                                    + " ／ 単位: 円（AH×工程延べ m）。依頼の生産金額ではありません。");
+                                    + " ／ 単位: 円（AO÷最終工程m）。工程延べではありません。");
                     updatePlanSourceMeta();
                     hideNotice();
                     recomputeNow();
@@ -761,7 +788,7 @@ public class ProcessingFeeTrendTabController {
         }
         final long seq = computeSeq.incrementAndGet();
         final LoadedSources src = cachedSources;
-        final Map<String, Double> rates = feeRates;
+        final Map<String, FeeInfo> fees = feeInfos;
         final ActualSource actSrc = actualSourceCombo.getValue();
         final PlanSource planSrc = planSourceCombo.getValue();
         setLoading(true, "集計中…");
@@ -777,7 +804,7 @@ public class ProcessingFeeTrendTabController {
                                 ProcessingFeeTrendQuantityExtractor.extractPlan(
                                         src.aladdin(), src.dispatch(), filter, LocalDate.now());
                         return ProcessingFeeTrendAggregator.aggregate(
-                                actual, plan, rates, from, to, LocalDate.now());
+                                actual, plan, fees, from, to, LocalDate.now());
                     }
                 };
         task.setOnSucceeded(
@@ -1310,6 +1337,6 @@ public class ProcessingFeeTrendTabController {
     private record ReloadBundle(
             ReloadDecision decision,
             LoadedSources sources,
-            Map<String, Double> rates,
+            Map<String, FeeInfo> fees,
             String juchuNote) {}
 }

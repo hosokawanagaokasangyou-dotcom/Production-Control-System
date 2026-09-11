@@ -2,6 +2,7 @@ package jp.co.pm.ai.desktop.io.actuals;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
@@ -14,6 +15,7 @@ import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import jp.co.pm.ai.desktop.io.actuals.JuchuProcessingFeeRateLoader.FeeInfo;
 import jp.co.pm.ai.desktop.reconciliation.JuchuSheetColumnLayout;
 
 class JuchuProcessingFeeRateLoaderTest {
@@ -55,9 +57,49 @@ class JuchuProcessingFeeRateLoaderTest {
     }
 
     @Test
+    void loadFeeInfo_readsAoProcessContent_andAhLastLine() throws Exception {
+        Path xlsx = tempDir.resolve("juchu-ao.xlsx");
+        int irai = JuchuSheetColumnLayout.Col.IRAI_NO.columnIndex();
+        int ah = JuchuSheetColumnLayout.Col.KAKOCHIN.columnIndex();
+        int kako = JuchuSheetColumnLayout.Col.KAKO_NAIYO.columnIndex();
+        int ao = JuchuProcessingFeeRateLoader.AO_COLUMN_INDEX;
+        try (XSSFWorkbook wb = new XSSFWorkbook()) {
+            Sheet sh = wb.createSheet(JuchuProcessingFeeRateLoader.SHEET_NAME);
+            Row h = sh.createRow(2);
+            h.createCell(irai).setCellValue("依頼Ｎｏ");
+            h.createCell(ah).setCellValue("加工賃");
+            h.createCell(ao).setCellValue("加工賃合計");
+            h.createCell(kako).setCellValue("加工内容");
+            Row r0 = sh.createRow(3);
+            r0.createCell(irai).setCellValue("E9-2");
+            r0.createCell(ah).setCellValue("80\n90");
+            r0.createCell(ao).setCellValue(10_000);
+            r0.createCell(kako).setCellValue("スリット,E9-2");
+            try (var out = Files.newOutputStream(xlsx)) {
+                wb.write(out);
+            }
+        }
+
+        Map<String, FeeInfo> fees = JuchuProcessingFeeRateLoader.loadFeeInfo(xlsx);
+        FeeInfo info = fees.get("E9-2");
+        assertEquals(90.0, info.rateAhYenPerM());
+        assertEquals(10_000.0, info.totalAoYen());
+        assertEquals("スリット,E9-2", info.processContent());
+        assertTrue(info.hasAo());
+        assertTrue(info.hasAh());
+    }
+
+    @Test
     void parseFeeRate_takesFirstLineOnly() {
         assertEquals(80.0, JuchuProcessingFeeRateLoader.parseFeeRate("80\n90"));
         assertTrue(JuchuProcessingFeeRateLoader.parseFeeRate("  ") == null);
         assertTrue(JuchuProcessingFeeRateLoader.parseFeeRate(null) == null);
+    }
+
+    @Test
+    void parseFeeRateLastLine_takesTrailingNumericLine() {
+        assertEquals(90.0, JuchuProcessingFeeRateLoader.parseFeeRateLastLine("80\n90"));
+        assertEquals(90.0, JuchuProcessingFeeRateLoader.parseFeeRateLastLine("80\n90\n"));
+        assertNull(JuchuProcessingFeeRateLoader.parseFeeRateLastLine("  "));
     }
 }

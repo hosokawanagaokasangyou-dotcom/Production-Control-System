@@ -46,6 +46,7 @@ class ProcessingFeeTrendQuantityExtractorTest {
         assertEquals(1, plan.size());
         assertEquals(LocalDate.of(2026, 9, 12), plan.get(0).date());
         assertEquals(300.0, plan.get(0).meters(), 1e-9);
+        assertEquals("P1", plan.get(0).processName());
     }
 
     @Test

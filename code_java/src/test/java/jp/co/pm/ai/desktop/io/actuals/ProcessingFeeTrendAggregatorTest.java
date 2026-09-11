@@ -1,6 +1,7 @@
 package jp.co.pm.ai.desktop.io.actuals;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -8,18 +9,27 @@ import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 
+import jp.co.pm.ai.desktop.io.actuals.JuchuProcessingFeeRateLoader.FeeInfo;
 import jp.co.pm.ai.desktop.io.actuals.ProcessingFeeTrendAggregator.DayPoint;
 import jp.co.pm.ai.desktop.io.actuals.ProcessingFeeTrendAggregator.QuantityLine;
 import jp.co.pm.ai.desktop.io.actuals.ProcessingFeeTrendAggregator.Result;
 
 class ProcessingFeeTrendAggregatorTest {
 
+    private static FeeInfo ah(double rate) {
+        return new FeeInfo(rate, null, "");
+    }
+
+    private static FeeInfo ao(double aoYen, String processContent) {
+        return new FeeInfo(null, aoYen, processContent);
+    }
+
     @Test
     void aggregatesDailyAndCumulativeYen() {
         LocalDate from = LocalDate.of(2026, 9, 1);
         LocalDate to = LocalDate.of(2026, 9, 3);
         LocalDate today = LocalDate.of(2026, 9, 2);
-        Map<String, Double> rates = Map.of("A", 10.0, "B", 20.0);
+        Map<String, FeeInfo> fees = Map.of("A", ah(10.0), "B", ah(20.0));
         List<QuantityLine> actual =
                 List.of(
                         new QuantityLine(from, "A", 5), // 50
@@ -30,7 +40,7 @@ class ProcessingFeeTrendAggregatorTest {
                         new QuantityLine(from, "A", 3), // 30
                         new QuantityLine(to, "B", 1)); // 20
 
-        Result r = ProcessingFeeTrendAggregator.aggregate(actual, plan, rates, from, to, today);
+        Result r = ProcessingFeeTrendAggregator.aggregate(actual, plan, fees, from, to, today);
         assertEquals(3, r.days().size());
         DayPoint d0 = r.days().get(0);
         assertEquals(50.0, d0.actualYen(), 1e-6);
@@ -72,7 +82,7 @@ class ProcessingFeeTrendAggregatorTest {
         LocalDate from = LocalDate.of(2026, 8, 31);
         LocalDate to = LocalDate.of(2026, 9, 2);
         LocalDate today = LocalDate.of(2026, 9, 2);
-        Map<String, Double> rates = Map.of("A", 10.0);
+        Map<String, FeeInfo> fees = Map.of("A", ah(10.0));
         Result r =
                 ProcessingFeeTrendAggregator.aggregate(
                         List.of(
@@ -83,7 +93,7 @@ class ProcessingFeeTrendAggregatorTest {
                                 new QuantityLine(from, "A", 1), // 10
                                 new QuantityLine(LocalDate.of(2026, 9, 1), "A", 4), // 40
                                 new QuantityLine(today, "A", 6)), // 60
-                        rates,
+                        fees,
                         from,
                         to,
                         today);
@@ -109,7 +119,7 @@ class ProcessingFeeTrendAggregatorTest {
         LocalDate from = LocalDate.of(2026, 9, 1);
         LocalDate to = LocalDate.of(2026, 9, 3);
         LocalDate today = LocalDate.of(2026, 9, 2);
-        Map<String, Double> rates = Map.of("A", 10.0);
+        Map<String, FeeInfo> fees = Map.of("A", ah(10.0));
         // 当日: 予定 50 > 実績 10 → 見込は実績先端で接続し、翌日予定のみ積む
         Result r =
                 ProcessingFeeTrendAggregator.aggregate(
@@ -119,7 +129,7 @@ class ProcessingFeeTrendAggregatorTest {
                         List.of(
                                 new QuantityLine(today, "A", 5), // 50
                                 new QuantityLine(to, "A", 2)), // 20
-                        rates,
+                        fees,
                         from,
                         to,
                         today);
@@ -135,14 +145,14 @@ class ProcessingFeeTrendAggregatorTest {
         LocalDate from = LocalDate.of(2026, 9, 1);
         LocalDate to = LocalDate.of(2026, 9, 3);
         LocalDate today = LocalDate.of(2026, 9, 1);
-        Map<String, Double> rates = Map.of("A", 10.0);
+        Map<String, FeeInfo> fees = Map.of("A", ah(10.0));
         Result r =
                 ProcessingFeeTrendAggregator.aggregate(
                         List.of(
                                 new QuantityLine(from, "A", 1), // 10
                                 new QuantityLine(to, "A", 3)), // 30 future actual
                         List.of(new QuantityLine(to, "A", 5)), // 50 future plan
-                        rates,
+                        fees,
                         from,
                         to,
                         today);
@@ -160,7 +170,7 @@ class ProcessingFeeTrendAggregatorTest {
                 ProcessingFeeTrendAggregator.aggregate(
                         List.of(new QuantityLine(d, "NO-RATE", 100)),
                         List.of(),
-                        Map.of("OTHER", 1.0),
+                        Map.of("OTHER", ah(1.0)),
                         d,
                         d,
                         d);
@@ -178,7 +188,7 @@ class ProcessingFeeTrendAggregatorTest {
     void aggregatesByRequestNo() {
         LocalDate from = LocalDate.of(2026, 9, 1);
         LocalDate to = LocalDate.of(2026, 9, 2);
-        Map<String, Double> rates = Map.of("A", 10.0, "B", 20.0);
+        Map<String, FeeInfo> fees = Map.of("A", ah(10.0), "B", ah(20.0));
         List<QuantityLine> actual =
                 List.of(
                         new QuantityLine(from, "B", 2), // 40
@@ -191,7 +201,7 @@ class ProcessingFeeTrendAggregatorTest {
 
         Result r =
                 ProcessingFeeTrendAggregator.aggregate(
-                        actual, plan, rates, from, to, to);
+                        actual, plan, fees, from, to, to);
         assertEquals(2, r.requests().size());
         // 依頼NO昇順
         assertEquals("A", r.requests().get(0).requestNo());
@@ -208,5 +218,85 @@ class ProcessingFeeTrendAggregatorTest {
         assertEquals(4.0, r.requests().get(1).planMeters(), 1e-9);
         assertEquals(40.0, r.requests().get(1).actualYen(), 1e-9);
         assertEquals(80.0, r.requests().get(1).planYen(), 1e-9);
+    }
+
+    @Test
+    void multiProcessUsesOnlyFinalProcessMetersAndAllocatesAo() {
+        LocalDate d0 = LocalDate.of(2026, 9, 1);
+        LocalDate d1 = LocalDate.of(2026, 9, 2);
+        // 工程A 100m + 最終工程B 50m、AO=10,000 → 円/m=200。Bの日次だけ円が立つ
+        Map<String, FeeInfo> fees = Map.of("R", ao(10_000.0, "A,B"));
+        List<QuantityLine> actual =
+                List.of(
+                        new QuantityLine(d0, "R", 100, "A"),
+                        new QuantityLine(d0, "R", 30, "B"),
+                        new QuantityLine(d1, "R", 20, "B"));
+        Result r =
+                ProcessingFeeTrendAggregator.aggregate(
+                        actual, List.of(), fees, d0, d1, d1);
+        assertEquals(200.0, r.requests().get(0).rateYenPerM(), 1e-6);
+        assertEquals(50.0, r.requests().get(0).actualMeters(), 1e-6);
+        assertEquals(10_000.0, r.requests().get(0).actualYen(), 1e-6);
+        assertEquals(10_000.0, r.requests().get(0).aoYen(), 1e-6);
+        assertEquals(6000.0, r.days().get(0).actualYen(), 1e-6); // 30*200
+        assertEquals(4000.0, r.days().get(1).actualYen(), 1e-6); // 20*200
+        assertEquals(10_000.0, r.actualTotalYen(), 1e-6);
+    }
+
+    @Test
+    void processContentLastTokenMatchesNormalizedProcessName() {
+        LocalDate d = LocalDate.of(2026, 9, 1);
+        Map<String, FeeInfo> fees = Map.of("E9-2", ao(5_000.0, "スリット,E9-2"));
+        Result r =
+                ProcessingFeeTrendAggregator.aggregate(
+                        List.of(
+                                new QuantityLine(d, "E9-2", 40, "スリット"),
+                                new QuantityLine(d, "E9-2", 25, "E9-2")),
+                        List.of(),
+                        fees,
+                        d,
+                        d,
+                        d);
+        assertEquals(25.0, r.requests().get(0).actualMeters(), 1e-6);
+        assertEquals(200.0, r.requests().get(0).rateYenPerM(), 1e-6); // 5000/25
+        assertEquals(5_000.0, r.requests().get(0).actualYen(), 1e-6);
+    }
+
+    @Test
+    void aoMissingFallsBackToAhTimesFinalProcessMeters() {
+        LocalDate d = LocalDate.of(2026, 9, 1);
+        Map<String, FeeInfo> fees =
+                Map.of("R", new FeeInfo(50.0, null, "スリット,最終"));
+        Result r =
+                ProcessingFeeTrendAggregator.aggregate(
+                        List.of(
+                                new QuantityLine(d, "R", 10, "スリット"),
+                                new QuantityLine(d, "R", 4, "最終")),
+                        List.of(),
+                        fees,
+                        d,
+                        d,
+                        d);
+        assertEquals(4.0, r.requests().get(0).actualMeters(), 1e-6);
+        assertEquals(50.0, r.requests().get(0).rateYenPerM(), 1e-6);
+        assertEquals(200.0, r.requests().get(0).actualYen(), 1e-6);
+    }
+
+    @Test
+    void emptyProcessContentWithMultipleProcessesDropsAll() {
+        LocalDate d = LocalDate.of(2026, 9, 1);
+        Map<String, FeeInfo> fees = Map.of("R", ao(9_000.0, ""));
+        Result r =
+                ProcessingFeeTrendAggregator.aggregate(
+                        List.of(
+                                new QuantityLine(d, "R", 10, "A"),
+                                new QuantityLine(d, "R", 20, "B")),
+                        List.of(),
+                        fees,
+                        d,
+                        d,
+                        d);
+        assertTrue(r.requests().isEmpty() || r.requests().get(0).actualMeters() == 0.0);
+        assertEquals(0.0, r.actualTotalYen(), 1e-9);
     }
 }

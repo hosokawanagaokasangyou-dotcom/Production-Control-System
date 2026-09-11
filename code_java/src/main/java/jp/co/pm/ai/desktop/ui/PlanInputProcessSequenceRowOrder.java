@@ -686,7 +686,8 @@ public final class PlanInputProcessSequenceRowOrder {
         }
     }
 
-    static List<String> parseProcessContentTokens(String raw) {
+    /** 加工内容をカンマ／読点で分割した工程トークン列（空要素除去）。 */
+    public static List<String> parseProcessContentTokens(String raw) {
         if (raw == null || raw.isBlank()) {
             return List.of();
         }

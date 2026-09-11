@@ -103,7 +103,8 @@ public final class ProcessingFeeTrendQuantityExtractor {
                 continue;
             }
             String task = iTask >= 0 ? cellAt(row, iTask).strip() : "";
-            out.add(new QuantityLine(d, task, qty));
+            String process = iProcess >= 0 ? cellAt(row, iProcess).strip() : "";
+            out.add(new QuantityLine(d, task, qty, process));
         }
         return out;
     }
@@ -148,6 +149,7 @@ public final class ProcessingFeeTrendQuantityExtractor {
                 continue;
             }
             String task = iTask >= 0 ? cellAt(row, iTask).strip() : "";
+            String process = iProcess >= 0 ? cellAt(row, iProcess).strip() : "";
             rowValues.clear();
             for (Map.Entry<LocalDate, Integer> e : allDateCols.entrySet()) {
                 double v = parseDouble(cellAt(row, e.getValue()));
@@ -167,7 +169,7 @@ public final class ProcessingFeeTrendQuantityExtractor {
                 if (Math.abs(e.getValue()) <= EPS) {
                     continue;
                 }
-                out.add(new QuantityLine(day, task, e.getValue()));
+                out.add(new QuantityLine(day, task, e.getValue(), process));
             }
         }
         return out;
@@ -215,7 +217,8 @@ public final class ProcessingFeeTrendQuantityExtractor {
                 continue;
             }
             String task = iTask >= 0 ? cellAt(row, iTask).strip() : "";
-            out.add(new QuantityLine(d, task, v));
+            String process = iProcess >= 0 ? cellAt(row, iProcess).strip() : "";
+            out.add(new QuantityLine(d, task, v, process));
         }
         return out;
     }
