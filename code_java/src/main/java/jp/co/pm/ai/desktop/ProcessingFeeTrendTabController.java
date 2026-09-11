@@ -905,11 +905,37 @@ public class ProcessingFeeTrendTabController {
     }
 
     private void syncChartPadding() {
-        // 加工量 COMBO と同型: 実測幅で相手側 Y 軸ぶんの余白を空ける（XYChart は minWidth を見ないため使わない）
-        double left = dailyYAxis.getWidth();
-        double right = cumulativeYAxis.getWidth();
-        dailyChart.setPadding(new Insets(CHART_TOP_PADDING, right, 0, 0));
-        cumulativeChart.setPadding(new Insets(CHART_TOP_PADDING, 0, 0, left));
+        // 加工量 COMBO と同型: 相手側 Y 軸ぶんを空ける。CSS よりインライン -fx-padding を優先する
+        double left = overlayAxisReserve(dailyYAxis);
+        double right = overlayAxisReserve(cumulativeYAxis);
+        applyOverlayChartPadding(dailyChart, CHART_TOP_PADDING, right, 0, 0);
+        applyOverlayChartPadding(cumulativeChart, CHART_TOP_PADDING, 0, 0, left);
+    }
+
+    private static double overlayAxisReserve(ProcessingTrendNumberAxis axis) {
+        if (axis == null) {
+            return ProcessingTrendChartSupport.OVERLAY_AXIS_RESERVE_MIN_PX;
+        }
+        return ProcessingTrendChartSupport.overlayAxisReservePx(axis.getWidth(), axis.prefWidth(-1));
+    }
+
+    /**
+     * スタイルシートの {@code -fx-padding} よりインラインを優先し、第2軸用の余白を保つ。
+     */
+    private static void applyOverlayChartPadding(
+            Region chart, double top, double right, double bottom, double left) {
+        if (chart == null) {
+            return;
+        }
+        chart.setPadding(new Insets(top, right, bottom, left));
+        chart.setStyle(
+                String.format(
+                        Locale.US,
+                        "-fx-background-color: transparent; -fx-padding: %.2f %.2f %.2f %.2f;",
+                        top,
+                        right,
+                        bottom,
+                        left));
     }
 
     private void settleOverlayLayout() {
@@ -944,7 +970,9 @@ public class ProcessingFeeTrendTabController {
         if (chart == null) {
             return;
         }
-        chart.setStyle("-fx-background-color: transparent;");
+        // syncChartPadding が書いた -fx-padding を消さない（背景だけ透過にする）
+        Insets p = chart.getPadding();
+        applyOverlayChartPadding(chart, p.getTop(), p.getRight(), p.getBottom(), p.getLeft());
         Node plot = chart.lookup(".chart-plot-background");
         if (plot instanceof Region region) {
             region.setBackground(plotBg);

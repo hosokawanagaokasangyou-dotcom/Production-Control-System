@@ -189,6 +189,18 @@ class ProcessingTrendChartSupportTest {
         assertTrue(ProcessingTrendChartSupport.shouldConnectCumPoints(LocalDate.of(2026, 8, 1), null));
     }
 
+    @Test
+    void overlayAxisReservePx_usesMaxAndFloor() {
+        assertEquals(
+                ProcessingTrendChartSupport.OVERLAY_AXIS_RESERVE_MIN_PX,
+                ProcessingTrendChartSupport.overlayAxisReservePx(0, 0));
+        assertEquals(
+                ProcessingTrendChartSupport.OVERLAY_AXIS_RESERVE_MIN_PX,
+                ProcessingTrendChartSupport.overlayAxisReservePx(40, 50));
+        assertEquals(120.0, ProcessingTrendChartSupport.overlayAxisReservePx(120, 80));
+        assertEquals(90.0, ProcessingTrendChartSupport.overlayAxisReservePx(70, 90));
+    }
+
     private static List<LocalDate> days(LocalDate start, int n) {
         List<LocalDate> out = new ArrayList<>(n);
         for (int i = 0; i < n; i++) {

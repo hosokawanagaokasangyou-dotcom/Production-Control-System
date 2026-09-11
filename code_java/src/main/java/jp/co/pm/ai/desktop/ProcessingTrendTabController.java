@@ -1259,21 +1259,45 @@ public class ProcessingTrendTabController {
 
     private void syncChartPadding() {
         ViewMode mode = currentViewMode();
-        double left = dailyYAxis.getWidth();
-        double right = cumulativeYAxis.getWidth();
+        double left = overlayAxisReserve(dailyYAxis);
+        double right = overlayAxisReserve(cumulativeYAxis);
         if (mode == ViewMode.COMBO) {
-            dailyChart.setPadding(new Insets(CHART_TOP_PADDING, right, 0, 0));
+            // CSS よりインライン -fx-padding を優先し、第2軸がプロットに食い込むのを防ぐ
+            applyOverlayChartPadding(dailyChart, CHART_TOP_PADDING, right, 0, 0);
             if (dailyLineChart != null) {
-                dailyLineChart.setPadding(new Insets(CHART_TOP_PADDING, right, 0, 0));
+                applyOverlayChartPadding(dailyLineChart, CHART_TOP_PADDING, right, 0, 0);
             }
-            cumulativeChart.setPadding(new Insets(CHART_TOP_PADDING, 0, 0, left));
+            applyOverlayChartPadding(cumulativeChart, CHART_TOP_PADDING, 0, 0, left);
         } else {
-            dailyChart.setPadding(new Insets(CHART_TOP_PADDING, 0, 0, 0));
+            applyOverlayChartPadding(dailyChart, CHART_TOP_PADDING, 0, 0, 0);
             if (dailyLineChart != null) {
-                dailyLineChart.setPadding(new Insets(CHART_TOP_PADDING, 0, 0, 0));
+                applyOverlayChartPadding(dailyLineChart, CHART_TOP_PADDING, 0, 0, 0);
             }
-            cumulativeChart.setPadding(new Insets(CHART_TOP_PADDING, 0, 0, 0));
+            applyOverlayChartPadding(cumulativeChart, CHART_TOP_PADDING, 0, 0, 0);
         }
+    }
+
+    private static double overlayAxisReserve(ProcessingTrendNumberAxis axis) {
+        if (axis == null) {
+            return ProcessingTrendChartSupport.OVERLAY_AXIS_RESERVE_MIN_PX;
+        }
+        return ProcessingTrendChartSupport.overlayAxisReservePx(axis.getWidth(), axis.prefWidth(-1));
+    }
+
+    private static void applyOverlayChartPadding(
+            Region chart, double top, double right, double bottom, double left) {
+        if (chart == null) {
+            return;
+        }
+        chart.setPadding(new Insets(top, right, bottom, left));
+        chart.setStyle(
+                String.format(
+                        Locale.US,
+                        "-fx-background-color: transparent; -fx-padding: %.2f %.2f %.2f %.2f;",
+                        top,
+                        right,
+                        bottom,
+                        left));
     }
 
     /** 軸幅・カテゴリ確定後にオーバーレイを合わせる（操作後の再レイアウトずれ対策）。 */

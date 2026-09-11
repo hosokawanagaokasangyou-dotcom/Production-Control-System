@@ -223,6 +223,20 @@ public final class ProcessingTrendChartSupport {
         return YearMonth.from(prev).equals(YearMonth.from(next));
     }
 
+    /**
+     * 複合チャートで相手側に空ける Y 軸余白 (px)。
+     * レイアウト前の 0 幅や実測不足で第2軸がプロットに食い込むのを防ぐ下限付き。
+     */
+    public static final double OVERLAY_AXIS_RESERVE_MIN_PX = 64.0;
+
+    public static double overlayAxisReservePx(double axisWidth, double axisPrefWidth) {
+        double w = Math.max(axisWidth, axisPrefWidth);
+        if (!(w > 0) || Double.isNaN(w)) {
+            return OVERLAY_AXIS_RESERVE_MIN_PX;
+        }
+        return Math.max(w, OVERLAY_AXIS_RESERVE_MIN_PX);
+    }
+
     /** プロット上の 1 か月帯（両端は dates / categories の inclusive index）。 */
     public record MonthBand(YearMonth month, int fromIndexInclusive, int toIndexInclusive) {
         public MonthBand {

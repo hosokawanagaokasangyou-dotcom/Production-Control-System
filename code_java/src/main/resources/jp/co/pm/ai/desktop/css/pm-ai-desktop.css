@@ -3436,7 +3436,8 @@
     -fx-text-fill: #1f2937;
 }
 
-/* チャート本体: 2 枚重ね。padding は Controller が相手側 Y 軸幅で調整する */
+/* チャート本体: 2 枚重ね。左右 padding は Controller がインライン -fx-padding で相手側 Y 軸幅を確保する
+   （ここへ -fx-padding:0 を書くと setPadding が潰され、第2軸がプロット内に食い込む） */
 .pm-processing-trend-chart-stack {
     -fx-background-color: -pm-trend-chart-bg;
     -fx-background-radius: 4;
@@ -3447,7 +3448,6 @@
 
 .pm-trend-daily-chart,
 .pm-trend-cumulative-chart {
-    -fx-padding: 0;
     -fx-background-color: transparent;
 }
 
