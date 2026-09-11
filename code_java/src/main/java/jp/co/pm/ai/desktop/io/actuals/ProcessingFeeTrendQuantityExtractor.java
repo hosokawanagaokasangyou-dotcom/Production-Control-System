@@ -22,6 +22,8 @@ import jp.co.pm.ai.desktop.io.actuals.ProcessingTrendAggregator.PlanSource;
 
 /**
  * 実績・予定スナップショットから加工賃集計用の数量行（日付・依頼No・m）を抽出する。
+ *
+ * <p>日報ソースの実績 m は「実製品出来高」を正とする（無ければ実加工量→実加工数へフォールバック）。
  */
 public final class ProcessingFeeTrendQuantityExtractor {
 
@@ -30,6 +32,8 @@ public final class ProcessingFeeTrendQuantityExtractor {
     private static final String COL_PROCESS = "工程名";
     private static final String COL_ACTUAL_QTY_DETAIL = "実加工数";
     private static final String COL_ACTUAL_QTY_DAILY = "実加工量";
+    /** 加工賃用: 加工日報の製品出来高（加工量トレンドの実加工量とは別）。 */
+    private static final String COL_PRODUCT_OUTPUT_DAILY = "実製品出来高";
     private static final String COL_ACTUAL_DATE_DAILY = "加工日付";
     private static final String COL_ACTUAL_DATE = "加工日";
     private static final String COL_ACTUAL_START_DT = "加工開始日時";
@@ -71,9 +75,14 @@ public final class ProcessingFeeTrendQuantityExtractor {
             return out;
         }
         List<String> headers = actuals.headers();
-        int iQty = preferDaily
-                ? firstCol(headers, COL_ACTUAL_QTY_DAILY, COL_ACTUAL_QTY_DETAIL)
-                : firstCol(headers, COL_ACTUAL_QTY_DETAIL, COL_ACTUAL_QTY_DAILY);
+        int iQty =
+                preferDaily
+                        ? firstCol(
+                                headers,
+                                COL_PRODUCT_OUTPUT_DAILY,
+                                COL_ACTUAL_QTY_DAILY,
+                                COL_ACTUAL_QTY_DETAIL)
+                        : firstCol(headers, COL_ACTUAL_QTY_DETAIL, COL_ACTUAL_QTY_DAILY, COL_PRODUCT_OUTPUT_DAILY);
         if (iQty < 0) {
             return out;
         }
@@ -299,9 +308,17 @@ public final class ProcessingFeeTrendQuantityExtractor {
         return iKakouDate >= 0 ? parseDate(cellAt(row, iKakouDate)) : null;
     }
 
-    private static int firstCol(List<String> headers, String a, String b) {
-        int i = colIdx(headers, a);
-        return i >= 0 ? i : colIdx(headers, b);
+    private static int firstCol(List<String> headers, String... names) {
+        if (names == null) {
+            return -1;
+        }
+        for (String name : names) {
+            int i = colIdx(headers, name);
+            if (i >= 0) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     private static int colIdx(List<String> headers, String name) {

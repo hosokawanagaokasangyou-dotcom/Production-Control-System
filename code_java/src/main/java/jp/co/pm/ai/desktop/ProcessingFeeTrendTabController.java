@@ -316,6 +316,30 @@ public class ProcessingFeeTrendTabController {
                         PeriodPreset.CUSTOM));
         actualSourceCombo.setItems(FXCollections.observableArrayList(ActualSource.values()));
         planSourceCombo.setItems(FXCollections.observableArrayList(PlanSource.values()));
+        actualSourceCombo.setConverter(
+                new StringConverter<>() {
+                    @Override
+                    public String toString(ActualSource s) {
+                        if (s == null) {
+                            return "";
+                        }
+                        return switch (s) {
+                            case DAILY_REPORT -> "日報（実製品出来高）";
+                            case DETAIL -> "実績明細（実加工数）";
+                        };
+                    }
+
+                    @Override
+                    public ActualSource fromString(String string) {
+                        return null;
+                    }
+                });
+        Tooltip.install(
+                actualSourceCombo,
+                new Tooltip(
+                        "実績 m の取得元。\n"
+                                + "日報: 加工日報CSVの「実製品出来高」（無ければ実加工量）。\n"
+                                + "実績明細: 問合せExcelの「実加工数」。"));
         actualSourceCombo.getSelectionModel().select(ActualSource.DAILY_REPORT);
         planSourceCombo.getSelectionModel().select(PlanSource.ALADDIN);
         updatePlanSourceMeta();
@@ -1099,7 +1123,7 @@ public class ProcessingFeeTrendTabController {
                     sourceSummaryLabel.setText(
                             "受注: "
                                     + b.juchuNote()
-                                    + " ／ 単位: 円（AO÷最終工程m）。工程延べではありません。");
+                                    + " ／ 実績m: 日報は実製品出来高 ／ 単位: 円（AO÷最終工程m）");
                     updatePlanSourceMeta();
                     if (userInitiated || sourcesChanged || currentResult == null) {
                         hideNotice();

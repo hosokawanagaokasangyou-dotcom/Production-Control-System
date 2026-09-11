@@ -50,6 +50,29 @@ class ProcessingFeeTrendQuantityExtractorTest {
     }
 
     @Test
+    void extractActual_dailyReportPrefersProductOutputOverProcessingQty() {
+        LocalDate d = LocalDate.of(2026, 9, 10);
+        ActualsSnapshot daily =
+                new ActualsSnapshot(
+                        List.of("機械名", "依頼NO", "工程名", "加工日付", "実加工量", "実製品出来高"),
+                        List.of(List.of("M1", "Y7-2", "最終", "2026/09/10", "400", "1600")));
+        Filter filter =
+                new Filter(
+                        LocalDate.of(2026, 9, 1),
+                        LocalDate.of(2026, 9, 30),
+                        ProcessingTrendAggregator.ActualSource.DAILY_REPORT,
+                        PlanSource.ALADDIN,
+                        null,
+                        null,
+                        7);
+        List<QuantityLine> actual =
+                ProcessingFeeTrendQuantityExtractor.extractActual(daily, null, filter);
+        assertEquals(1, actual.size());
+        assertEquals(1_600.0, actual.get(0).meters(), 1e-9);
+        assertEquals("Y7-2", actual.get(0).requestNo());
+    }
+
+    @Test
     void extractDispatchNormalizesLegacyDuplicateRows() {
         LocalDate today = LocalDate.of(2026, 9, 1);
         DispatchSnapshot dispatch =
