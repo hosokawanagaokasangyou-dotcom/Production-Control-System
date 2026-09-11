@@ -246,6 +246,9 @@ public final class ProcessingFeeTrendAggregator {
         int missing = 0;
         for (String req : new TreeSet<>(reqKeys)) {
             FeeInfo info = feeMap.get(req);
+            if (isCanceledOrder(info)) {
+                continue;
+            }
             double actM = actualMetersByReq.getOrDefault(req, 0.0);
             RequestAlloc alloc = allocateRequest(info, actM, planFiltered, req);
             allocs.put(req, alloc);
@@ -404,7 +407,7 @@ public final class ProcessingFeeTrendAggregator {
         }
         for (Map.Entry<String, FeeInfo> e : fees.entrySet()) {
             FeeInfo info = e.getValue();
-            if (info == null || !info.hasOrderYearMonth()) {
+            if (info == null || !info.hasOrderYearMonth() || isCanceledOrder(info)) {
                 continue;
             }
             YearMonth ym = YearMonth.of(info.orderYear(), info.orderMonth());
@@ -415,6 +418,17 @@ public final class ProcessingFeeTrendAggregator {
                 reqKeys.add(e.getKey());
             }
         }
+    }
+
+    /** 受注 m または AO が明示的に 0 以下ならキャンセル（表に載せない）。 */
+    static boolean isCanceledOrder(FeeInfo info) {
+        if (info == null) {
+            return false;
+        }
+        if (info.orderFinalMeters() != null && info.orderFinalMeters() <= EPS) {
+            return true;
+        }
+        return info.totalAoYen() != null && info.totalAoYen() <= EPS;
     }
 
     /** 実績日次円。受注 m を超えないよう依頼ごとにクリップ。 */

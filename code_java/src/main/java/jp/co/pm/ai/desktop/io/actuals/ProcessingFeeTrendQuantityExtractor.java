@@ -43,6 +43,8 @@ public final class ProcessingFeeTrendQuantityExtractor {
     private static final String COL_END_TIME = "終了時間";
     /** 加工日報発行問合せ CSV の製品加工終了（HH:mm）。{@link #COL_END_TIME} が無いとき使う。 */
     private static final String COL_PRODUCT_END_TIME = "製品加工終了時間分";
+    /** 日報の受注数量。0 はキャンセル扱い（実績に含めない）。 */
+    private static final String COL_ORDER_QTY = "受注数量";
     private static final String COL_WAREHOUSE = "倉庫";
     private static final String COL_TASK_ID = "依頼NO";
     private static final String COL_CONVERSION_QTY = "換算数量";
@@ -114,6 +116,7 @@ public final class ProcessingFeeTrendQuantityExtractor {
         int iDailyDate = colIdx(headers, COL_ACTUAL_DATE_DAILY);
         int iKakouDate = colIdx(headers, COL_ACTUAL_DATE);
         int iEndTime = firstCol(headers, COL_END_TIME, COL_PRODUCT_END_TIME);
+        int iOrderQty = colIdx(headers, COL_ORDER_QTY);
         String mk = normKey(f.machine());
         String pk = normKey(f.process());
         LocalDate from = f.from();
@@ -123,6 +126,10 @@ public final class ProcessingFeeTrendQuantityExtractor {
                 continue;
             }
             if (!matches(mk, cellAt(row, iMachine)) || !matches(pk, cellAt(row, iProcess))) {
+                continue;
+            }
+            // 受注数量が明示的に 0 以下 → キャンセル。出来高があっても加工賃実績に載せない
+            if (iOrderQty >= 0 && isCanceledOrderQty(cellAt(row, iOrderQty))) {
                 continue;
             }
             LocalDate d = rowActualDate(row, iStartDt, iDailyDate, iKakouDate);
@@ -144,6 +151,23 @@ public final class ProcessingFeeTrendQuantityExtractor {
             out.add(new QuantityLine(d, task, qty, process, finishedAt));
         }
         return out;
+    }
+
+    /** 受注数量セルが数値として 0 以下ならキャンセル。空・非数値はキャンセルとみなさない。 */
+    static boolean isCanceledOrderQty(String raw) {
+        if (raw == null) {
+            return false;
+        }
+        String s = WHITESPACE.matcher(raw.strip()).replaceAll("");
+        if (s.isEmpty()) {
+            return false;
+        }
+        s = s.replace(",", "").replace("，", "");
+        try {
+            return Double.parseDouble(s) <= EPS;
+        } catch (NumberFormatException ex) {
+            return false;
+        }
     }
 
     private static List<QuantityLine> extractAladdin(

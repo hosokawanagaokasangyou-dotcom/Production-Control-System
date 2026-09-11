@@ -420,6 +420,30 @@ class ProcessingFeeTrendAggregatorTest {
     }
 
     @Test
+    void canceledZeroAoOrOrderMeters_notListedEvenWithActuals() {
+        LocalDate d = LocalDate.of(2026, 7, 15);
+        Map<String, FeeInfo> fees =
+                Map.of(
+                        "W7-23",
+                        new FeeInfo(null, 0.0, "EC", 2026, 7, 0.0),
+                        "W7-23-1",
+                        new FeeInfo(null, 8_400.0, "検反", 2026, 7, 300.0));
+        Result r =
+                ProcessingFeeTrendAggregator.aggregate(
+                        List.of(
+                                done(d, "W7-23", 3, "EC", 10, 0),
+                                done(d, "W7-23-1", 300, "検反", 15, 0)),
+                        List.of(),
+                        fees,
+                        LocalDate.of(2026, 7, 1),
+                        LocalDate.of(2026, 7, 31),
+                        LocalDate.of(2026, 9, 11));
+        assertEquals(1, r.requests().size());
+        assertEquals("W7-23-1", r.requests().get(0).requestNo());
+        assertEquals(300.0, r.requests().get(0).actualMeters(), 1e-6);
+    }
+
+    @Test
     void missingEndTimeWithMultipleProcesses_countsAsIncomplete() {
         LocalDate d = LocalDate.of(2026, 9, 1);
         Map<String, FeeInfo> fees = Map.of("R", ao(9_000.0, 30.0, ""));

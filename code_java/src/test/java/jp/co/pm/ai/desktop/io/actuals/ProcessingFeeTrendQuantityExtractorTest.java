@@ -117,6 +117,60 @@ class ProcessingFeeTrendQuantityExtractorTest {
     }
 
     @Test
+    void extractActual_skipsCanceledZeroOrderQty() {
+        // W7-23: 受注数量0はキャンセル。W7-23-1: 300は残す
+        ActualsSnapshot daily =
+                new ActualsSnapshot(
+                        List.of(
+                                "機械名",
+                                "依頼NO",
+                                "工程名",
+                                "加工日付",
+                                "実製品出来高",
+                                "受注数量",
+                                "製品加工終了時間分"),
+                        List.of(
+                                List.of(
+                                        "EC機",
+                                        "W7-23",
+                                        "EC",
+                                        "2025/03/03",
+                                        "3",
+                                        "0.00",
+                                        "10:00"),
+                                List.of(
+                                        "EC機",
+                                        "W7-23",
+                                        "EC",
+                                        "2025/03/07",
+                                        "3",
+                                        "0",
+                                        "11:00"),
+                                List.of(
+                                        "熱転写機",
+                                        "W7-23-1",
+                                        "検反",
+                                        "2025/03/17",
+                                        "300",
+                                        "300.00",
+                                        "15:00")));
+        Filter filter =
+                new Filter(
+                        LocalDate.of(2025, 3, 1),
+                        LocalDate.of(2025, 3, 31),
+                        ProcessingTrendAggregator.ActualSource.DAILY_REPORT,
+                        PlanSource.ALADDIN,
+                        null,
+                        null,
+                        7);
+        List<QuantityLine> actual =
+                ProcessingFeeTrendQuantityExtractor.extractActual(daily, null, filter);
+        assertEquals(1, actual.size());
+        assertEquals("W7-23-1", actual.get(0).requestNo());
+        assertEquals(300.0, actual.get(0).meters(), 1e-9);
+    }
+
+    @Test
     void extractActual_parsesEndTimeVariants() {
         assertEquals(
                 LocalDateTime.of(2026, 7, 15, 9, 5),
