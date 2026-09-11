@@ -4,10 +4,12 @@ import java.nio.file.Files;
 import java.text.NumberFormat;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
 import java.time.format.TextStyle;
 import java.time.temporal.ChronoUnit;
+import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -16,6 +18,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 
+import javafx.animation.KeyFrame;
+import javafx.animation.Timeline;
 import javafx.application.Platform;
 import javafx.beans.property.ReadOnlyObjectWrapper;
 import javafx.collections.FXCollections;
@@ -31,15 +35,21 @@ import javafx.scene.chart.CategoryAxis;
 import javafx.scene.chart.LineChart;
 import javafx.scene.chart.XYChart;
 import javafx.scene.control.Button;
+import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.DatePicker;
 import javafx.scene.control.Label;
 import javafx.scene.control.ProgressIndicator;
+import javafx.scene.control.Spinner;
+import javafx.scene.control.SpinnerValueFactory;
 import javafx.scene.control.TableCell;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableRow;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TitledPane;
+import javafx.scene.control.Toggle;
+import javafx.scene.control.ToggleButton;
+import javafx.scene.control.ToggleGroup;
 import javafx.scene.control.Tooltip;
 import javafx.scene.layout.Background;
 import javafx.scene.layout.BackgroundFill;
@@ -56,12 +66,14 @@ import javafx.scene.shape.MoveTo;
 import javafx.scene.shape.Path;
 import javafx.scene.shape.Rectangle;
 import javafx.scene.Group;
+import javafx.util.Duration;
 import javafx.util.StringConverter;
 
 import jp.co.pm.ai.desktop.ProcessingTrendChartSupport.MonthBand;
 import jp.co.pm.ai.desktop.ProcessingTrendChartSupport.NiceRange;
 import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchProvenance;
+import jp.co.pm.ai.desktop.io.DesktopFileOpener;
 import jp.co.pm.ai.desktop.io.actuals.EquipmentStatusDashboardSourceLoader;
 import jp.co.pm.ai.desktop.io.actuals.EquipmentStatusDashboardSourceLoader.LoadedSources;
 import jp.co.pm.ai.desktop.io.actuals.EquipmentStatusDashboardSourceLoader.ReloadDecision;
@@ -74,9 +86,11 @@ import jp.co.pm.ai.desktop.io.actuals.ProcessingFeeTrendAggregator.QuantityLine;
 import jp.co.pm.ai.desktop.io.actuals.ProcessingFeeTrendAggregator.RequestPoint;
 import jp.co.pm.ai.desktop.io.actuals.ProcessingFeeTrendAggregator.Result;
 import jp.co.pm.ai.desktop.io.actuals.ProcessingFeeTrendQuantityExtractor;
+import jp.co.pm.ai.desktop.io.actuals.ProcessingFeeTrendWorkbookExporter;
 import jp.co.pm.ai.desktop.io.actuals.ProcessingTrendAggregator.ActualSource;
 import jp.co.pm.ai.desktop.io.actuals.ProcessingTrendAggregator.Filter;
 import jp.co.pm.ai.desktop.io.actuals.ProcessingTrendAggregator.PlanSource;
+import jp.co.pm.ai.desktop.io.actuals.ProcessingTrendExcelExportStore;
 
 /**
  * 「加工賃」子タブ: AO÷受注最終工程m の実績円・未了円・累計折れ線（加工量トレンドと同系の軸デザイン）。
@@ -97,6 +111,15 @@ public class ProcessingFeeTrendTabController {
     private static final PseudoClass PC_TODAY = PseudoClass.getPseudoClass("today");
     private static final PseudoClass PC_FUTURE = PseudoClass.getPseudoClass("future");
     private static final PseudoClass PC_BAD = PseudoClass.getPseudoClass("bad");
+    private static final int AUTO_REFRESH_DEFAULT_SEC = 300;
+    private static final int AUTO_REFRESH_MIN_SEC = 30;
+    private static final int AUTO_REFRESH_MAX_SEC = 3600;
+
+    private enum ViewMode {
+        COMBO,
+        DAILY,
+        CUMULATIVE
+    }
 
     private enum PeriodPreset {
         THIS_MONTH("今月"),
@@ -119,15 +142,26 @@ public class ProcessingFeeTrendTabController {
     @FXML private BorderPane tabRoot;
     @FXML private Button reloadButton;
     @FXML private ComboBox<PeriodPreset> periodPresetCombo;
+    @FXML private Button prevPeriodButton;
     @FXML private DatePicker fromDatePicker;
     @FXML private DatePicker toDatePicker;
+    @FXML private Button nextPeriodButton;
     @FXML private Button thisMonthButton;
+    @FXML private Button exportExcelButton;
+    @FXML private Button openExcelButton;
+    @FXML private CheckBox autoRefreshCheckBox;
+    @FXML private Spinner<Integer> autoRefreshIntervalSpinner;
+    @FXML private Label nextRefreshLabel;
     @FXML private HBox loadingChip;
     @FXML private ProgressIndicator loadingIndicator;
     @FXML private Label loadingStatusLabel;
     @FXML private ComboBox<ActualSource> actualSourceCombo;
     @FXML private ComboBox<PlanSource> planSourceCombo;
     @FXML private Label planSourceMetaLabel;
+    @FXML private ToggleGroup viewModeGroup;
+    @FXML private ToggleButton viewComboToggle;
+    @FXML private ToggleButton viewDailyToggle;
+    @FXML private ToggleButton viewCumulativeToggle;
     @FXML private Label kpiOrderAoYen;
     @FXML private Label kpiActualYen;
     @FXML private Label kpiPlanYen;
@@ -189,6 +223,9 @@ public class ProcessingFeeTrendTabController {
     private final Path planCumPath = new Path();
     private OverlayPolyline overlayActualCum = OverlayPolyline.EMPTY;
     private OverlayPolyline overlayPlanCum = OverlayPolyline.EMPTY;
+    private Timeline autoRefreshTimeline;
+    private int autoRefreshRemainingSec;
+    private java.nio.file.Path lastExportedExcel;
 
     /** markerPane 上の累計折れ線用。 */
     private record OverlayPolyline(List<String> categories, List<Double> values) {
@@ -261,7 +298,11 @@ public class ProcessingFeeTrendTabController {
         initCumOverlayPaths();
         initTodayMarker();
         initLegend();
+        initViewModeToggles();
+        initAutoRefreshControls();
+        refreshOpenExcelButtonEnabled();
         applyChartWhiteBackground();
+        applyViewMode(ViewMode.COMBO);
         // スキン生成後にも白地を再適用（テーマの plot 塗りつぶしを上書き）
         chartStack.sceneProperty().addListener((o, a, n) -> Platform.runLater(this::applyChartWhiteBackground));
         dailyChart.layoutBoundsProperty().addListener((o, a, n) -> applyChartWhiteBackground());
@@ -624,11 +665,12 @@ public class ProcessingFeeTrendTabController {
 
     public void onMainShellTabSelected() {
         tabActive = true;
+        updateAutoRefreshTimer();
         if (shell != null && shell.isStartupTabBackgroundLoadActive()) {
             return;
         }
         if (cachedSources == null) {
-            reloadFromSources();
+            reloadFromSources(true);
         } else {
             scheduleRecompute();
         }
@@ -636,11 +678,22 @@ public class ProcessingFeeTrendTabController {
 
     public void onMainShellTabDeselected() {
         tabActive = false;
+        updateAutoRefreshTimer();
     }
 
     @FXML
     private void onReloadAction() {
-        reloadFromSources();
+        reloadFromSources(true);
+    }
+
+    @FXML
+    private void onPrevPeriodAction() {
+        shiftPeriod(-1);
+    }
+
+    @FXML
+    private void onNextPeriodAction() {
+        shiftPeriod(+1);
     }
 
     @FXML
@@ -650,6 +703,274 @@ public class ProcessingFeeTrendTabController {
         periodPresetCombo.getSelectionModel().select(PeriodPreset.THIS_MONTH);
         suppressFilterEvents = false;
         scheduleRecompute();
+    }
+
+    @FXML
+    private void onExportExcelAction() {
+        exportToExcel();
+    }
+
+    @FXML
+    private void onOpenExcelAction() {
+        java.nio.file.Path newest =
+                ProcessingTrendExcelExportStore.findNewestXlsx(
+                                ProcessingTrendExcelExportStore.resolveFeeDirectory(
+                                        shell != null ? shell.snapshotUiEnv() : Map.of()))
+                        .orElse(lastExportedExcel);
+        if (newest == null || !Files.isRegularFile(newest)) {
+            showNotice("開く Excel がありません。先に「Excel出力」してください。");
+            refreshOpenExcelButtonEnabled();
+            return;
+        }
+        try {
+            DesktopFileOpener.openFile(newest);
+        } catch (Exception ex) {
+            showNotice("ファイルを開けませんでした: " + (ex.getMessage() != null ? ex.getMessage() : "不明"));
+        }
+    }
+
+    private void shiftPeriod(int direction) {
+        LocalDate from = fromDatePicker.getValue();
+        LocalDate to = toDatePicker.getValue();
+        if (from == null || to == null) {
+            onThisMonthAction();
+            return;
+        }
+        if (to.isBefore(from)) {
+            LocalDate tmp = from;
+            from = to;
+            to = tmp;
+        }
+        LocalDate nf;
+        LocalDate nt;
+        boolean wholeMonths =
+                from.getDayOfMonth() == 1 && to.equals(to.with(TemporalAdjusters.lastDayOfMonth()));
+        if (wholeMonths) {
+            long months = Math.max(1, ChronoUnit.MONTHS.between(from, to.plusDays(1)));
+            nf = from.plusMonths(direction * months);
+            nt = nf.plusMonths(months).minusDays(1);
+        } else {
+            long days = ChronoUnit.DAYS.between(from, to) + 1;
+            nf = from.plusDays(direction * days);
+            nt = to.plusDays(direction * days);
+        }
+        suppressFilterEvents = true;
+        fromDatePicker.setValue(nf);
+        toDatePicker.setValue(nt);
+        periodPresetCombo.getSelectionModel().select(presetMatching(nf, nt));
+        suppressFilterEvents = false;
+        scheduleRecompute();
+    }
+
+    private PeriodPreset presetMatching(LocalDate from, LocalDate to) {
+        LocalDate today = LocalDate.now();
+        YearMonth thisYm = YearMonth.from(today);
+        if (from.equals(thisYm.atDay(1)) && to.equals(thisYm.atEndOfMonth())) {
+            return PeriodPreset.THIS_MONTH;
+        }
+        YearMonth lastYm = thisYm.minusMonths(1);
+        if (from.equals(lastYm.atDay(1)) && to.equals(lastYm.atEndOfMonth())) {
+            return PeriodPreset.LAST_MONTH;
+        }
+        if (to.equals(today) && from.equals(today.minusMonths(3).plusDays(1))) {
+            return PeriodPreset.PAST_3_MONTHS;
+        }
+        return PeriodPreset.CUSTOM;
+    }
+
+    private void initViewModeToggles() {
+        if (viewModeGroup == null) {
+            return;
+        }
+        viewModeGroup
+                .selectedToggleProperty()
+                .addListener(
+                        (o, a, n) -> {
+                            if (n != null) {
+                                applyViewMode(currentViewMode());
+                            }
+                        });
+    }
+
+    private ViewMode currentViewMode() {
+        Toggle t = viewModeGroup != null ? viewModeGroup.getSelectedToggle() : null;
+        if (t == viewDailyToggle) {
+            return ViewMode.DAILY;
+        }
+        if (t == viewCumulativeToggle) {
+            return ViewMode.CUMULATIVE;
+        }
+        return ViewMode.COMBO;
+    }
+
+    private void applyViewMode(ViewMode mode) {
+        boolean showDaily = mode != ViewMode.CUMULATIVE;
+        boolean showCum = mode != ViewMode.DAILY;
+        if (dailyChart != null) {
+            dailyChart.setVisible(showDaily);
+            dailyChart.setManaged(showDaily);
+            dailyChart.setOpacity(showDaily ? 1.0 : 0.0);
+        }
+        if (cumulativeChart != null) {
+            cumulativeChart.setVisible(showCum);
+            cumulativeChart.setMouseTransparent(true);
+            // 複合時は重ね、累計のみ時は不透明表示
+            cumulativeChart.setOpacity(showCum ? 1.0 : 0.0);
+        }
+        if (actualCumPath != null) {
+            actualCumPath.setVisible(showCum);
+        }
+        if (planCumPath != null) {
+            planCumPath.setVisible(showCum);
+        }
+        requestOverlayLayout();
+    }
+
+    private void initAutoRefreshControls() {
+        if (autoRefreshIntervalSpinner == null || autoRefreshCheckBox == null) {
+            return;
+        }
+        autoRefreshIntervalSpinner.setValueFactory(
+                new SpinnerValueFactory.IntegerSpinnerValueFactory(
+                        AUTO_REFRESH_MIN_SEC, AUTO_REFRESH_MAX_SEC, AUTO_REFRESH_DEFAULT_SEC));
+        autoRefreshIntervalSpinner.valueProperty().addListener((o, a, b) -> updateAutoRefreshTimer());
+        autoRefreshIntervalSpinner
+                .focusedProperty()
+                .addListener(
+                        (o, was, is) -> {
+                            if (!is) {
+                                commitAutoRefreshSpinnerEditor();
+                            }
+                        });
+        autoRefreshCheckBox.selectedProperty().addListener((o, a, b) -> updateAutoRefreshTimer());
+        Tooltip.install(nextRefreshLabel, new Tooltip("自動更新の次回実行までの残り時間"));
+    }
+
+    private void commitAutoRefreshSpinnerEditor() {
+        String text = autoRefreshIntervalSpinner.getEditor().getText();
+        try {
+            int v = Integer.parseInt(text.strip());
+            autoRefreshIntervalSpinner
+                    .getValueFactory()
+                    .setValue(Math.max(AUTO_REFRESH_MIN_SEC, Math.min(AUTO_REFRESH_MAX_SEC, v)));
+        } catch (Exception ex) {
+            autoRefreshIntervalSpinner
+                    .getEditor()
+                    .setText(String.valueOf(autoRefreshIntervalSpinner.getValue()));
+        }
+    }
+
+    private int snapshotAutoRefreshIntervalSec() {
+        Integer v = autoRefreshIntervalSpinner != null ? autoRefreshIntervalSpinner.getValue() : null;
+        if (v == null) {
+            return AUTO_REFRESH_DEFAULT_SEC;
+        }
+        return Math.max(AUTO_REFRESH_MIN_SEC, Math.min(AUTO_REFRESH_MAX_SEC, v));
+    }
+
+    private void updateAutoRefreshTimer() {
+        if (autoRefreshTimeline != null) {
+            autoRefreshTimeline.stop();
+            autoRefreshTimeline = null;
+        }
+        if (autoRefreshCheckBox == null || nextRefreshLabel == null) {
+            return;
+        }
+        boolean want = tabActive && autoRefreshCheckBox.isSelected();
+        if (!want) {
+            nextRefreshLabel.setText(autoRefreshCheckBox.isSelected() ? "" : "自動更新 停止中");
+            return;
+        }
+        autoRefreshRemainingSec = snapshotAutoRefreshIntervalSec();
+        updateNextRefreshLabel();
+        autoRefreshTimeline = new Timeline(new KeyFrame(Duration.seconds(1), e -> onAutoRefreshTick()));
+        autoRefreshTimeline.setCycleCount(Timeline.INDEFINITE);
+        autoRefreshTimeline.play();
+    }
+
+    private void onAutoRefreshTick() {
+        autoRefreshRemainingSec--;
+        if (autoRefreshRemainingSec <= 0) {
+            autoRefreshRemainingSec = snapshotAutoRefreshIntervalSec();
+            reloadFromSources(false);
+        }
+        updateNextRefreshLabel();
+    }
+
+    private void updateNextRefreshLabel() {
+        if (nextRefreshLabel == null) {
+            return;
+        }
+        int sec = Math.max(0, autoRefreshRemainingSec);
+        nextRefreshLabel.setText(String.format(Locale.ROOT, "次回更新まで %d:%02d", sec / 60, sec % 60));
+    }
+
+    private void exportToExcel() {
+        if (currentResult == null) {
+            showNotice("出力対象のデータがありません。先にデータを読み込んでください。");
+            return;
+        }
+        Map<String, String> uiEnv = shell != null ? shell.snapshotUiEnv() : Map.of();
+        java.nio.file.Path exportDir = ProcessingTrendExcelExportStore.resolveFeeDirectory(uiEnv);
+        String name =
+                ProcessingFeeTrendWorkbookExporter.suggestFileName(
+                        currentResult.from(), currentResult.to(), LocalDateTime.now());
+        final java.nio.file.Path target;
+        try {
+            target = ProcessingTrendExcelExportStore.prepareTarget(exportDir, name);
+        } catch (Exception ex) {
+            showNotice("Excel 出力先の準備に失敗しました: " + (ex.getMessage() != null ? ex.getMessage() : "不明"));
+            return;
+        }
+        Result snapshot = currentResult;
+        if (exportExcelButton != null) {
+            exportExcelButton.setDisable(true);
+        }
+        if (openExcelButton != null) {
+            openExcelButton.setDisable(true);
+        }
+        Task<java.nio.file.Path> task =
+                new Task<>() {
+                    @Override
+                    protected java.nio.file.Path call() throws Exception {
+                        ProcessingFeeTrendWorkbookExporter.write(snapshot, target);
+                        return target;
+                    }
+                };
+        task.setOnSucceeded(
+                e -> {
+                    lastExportedExcel = task.getValue();
+                    refreshOpenExcelButtonEnabled();
+                    if (exportExcelButton != null) {
+                        exportExcelButton.setDisable(false);
+                    }
+                    showNotice("Excel を出力しました: " + lastExportedExcel.getFileName());
+                });
+        task.setOnFailed(
+                e -> {
+                    refreshOpenExcelButtonEnabled();
+                    if (exportExcelButton != null) {
+                        exportExcelButton.setDisable(false);
+                    }
+                    Throwable ex = task.getException();
+                    showNotice("Excel 出力失敗: " + (ex != null ? ex.getMessage() : "不明"));
+                });
+        Thread th = new Thread(task, "processing-fee-excel-export");
+        th.setDaemon(true);
+        th.start();
+    }
+
+    private void refreshOpenExcelButtonEnabled() {
+        if (openExcelButton == null) {
+            return;
+        }
+        java.nio.file.Path dir =
+                ProcessingTrendExcelExportStore.resolveFeeDirectory(
+                        shell != null ? shell.snapshotUiEnv() : Map.of());
+        boolean has =
+                ProcessingTrendExcelExportStore.findNewestXlsx(dir).isPresent()
+                        || (lastExportedExcel != null && Files.isRegularFile(lastExportedExcel));
+        openExcelButton.setDisable(!has);
     }
 
     private void onDateManual() {
@@ -724,15 +1045,18 @@ public class ProcessingFeeTrendTabController {
         recomputeNow();
     }
 
-    private void reloadFromSources() {
+    private void reloadFromSources(boolean userInitiated) {
         if (shell == null || reloadInFlight) {
             return;
         }
         reloadInFlight = true;
-        setLoading(true, "ソース読込中…");
         final Map<String, String> ui = shell.snapshotUiEnv();
         final SourceFingerprint previous = loadedFingerprint;
         final boolean haveCache = cachedSources != null;
+        final boolean showBusy = userInitiated || !haveCache;
+        if (showBusy) {
+            setLoading(true, "ソース読込中…");
+        }
         Task<ReloadBundle> task =
                 new Task<>() {
                     @Override
@@ -759,9 +1083,13 @@ public class ProcessingFeeTrendTabController {
         task.setOnSucceeded(
                 e -> {
                     reloadInFlight = false;
-                    setLoading(false, "");
+                    if (showBusy) {
+                        setLoading(false, "");
+                    }
                     ReloadBundle b = task.getValue();
-                    if (b.decision() != null && !b.decision().sourcesUnchanged() && b.sources() != null) {
+                    boolean sourcesChanged =
+                            b.decision() != null && !b.decision().sourcesUnchanged() && b.sources() != null;
+                    if (sourcesChanged) {
                         cachedSources = b.sources();
                         loadedFingerprint = b.decision().fingerprint();
                     } else if (b.sources() != null) {
@@ -773,13 +1101,17 @@ public class ProcessingFeeTrendTabController {
                                     + b.juchuNote()
                                     + " ／ 単位: 円（AO÷最終工程m）。工程延べではありません。");
                     updatePlanSourceMeta();
-                    hideNotice();
-                    recomputeNow();
+                    if (userInitiated || sourcesChanged || currentResult == null) {
+                        hideNotice();
+                        recomputeNow();
+                    }
                 });
         task.setOnFailed(
                 e -> {
                     reloadInFlight = false;
-                    setLoading(false, "");
+                    if (showBusy) {
+                        setLoading(false, "");
+                    }
                     Throwable ex = task.getException();
                     showNotice("読込失敗: " + (ex != null ? ex.getMessage() : "不明"));
                 });

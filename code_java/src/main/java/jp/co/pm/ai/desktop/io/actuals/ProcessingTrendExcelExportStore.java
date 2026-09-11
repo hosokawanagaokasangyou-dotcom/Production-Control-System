@@ -20,12 +20,23 @@ public final class ProcessingTrendExcelExportStore {
     private ProcessingTrendExcelExportStore() {}
 
     public static Path resolveDirectory(Map<String, String> ui) {
+        return resolveDirectory(ui, "processing-trend");
+    }
+
+    /** @param exportFolder {@code .pm-ai-cache/exports/} 直下のフォルダ名 */
+    public static Path resolveDirectory(Map<String, String> ui, String exportFolder) {
+        String folder =
+                exportFolder != null && !exportFolder.isBlank() ? exportFolder.strip() : "processing-trend";
         return AppPaths.resolveRepoRoot(ui != null ? ui : Map.of())
                 .resolve(".pm-ai-cache")
                 .resolve("exports")
-                .resolve("processing-trend")
+                .resolve(folder)
                 .toAbsolutePath()
                 .normalize();
+    }
+
+    public static Path resolveFeeDirectory(Map<String, String> ui) {
+        return resolveDirectory(ui, "processing-fee-trend");
     }
 
     /** ディレクトリを用意し、既存 {@code *.xlsx} を消してから出力パスを返す（ファイルはまだ作らない）。 */

@@ -42,6 +42,16 @@ class ProcessingFeeTrendTabFxmlTest {
         assertNotNull(elementByFxId("colRateYen"));
         assertNotNull(elementByFxId("colReqActualYen"));
         assertNotNull(elementByFxId("kpiOrderAoYen"));
+        assertNotNull(elementByFxId("prevPeriodButton"));
+        assertNotNull(elementByFxId("nextPeriodButton"));
+        assertNotNull(elementByFxId("exportExcelButton"));
+        assertNotNull(elementByFxId("openExcelButton"));
+        assertNotNull(elementByFxId("autoRefreshCheckBox"));
+        assertNotNull(elementByFxId("autoRefreshIntervalSpinner"));
+        assertNotNull(elementByFxId("nextRefreshLabel"));
+        assertNotNull(elementByFxId("viewComboToggle"));
+        assertNotNull(elementByFxId("viewDailyToggle"));
+        assertNotNull(elementByFxId("viewCumulativeToggle"));
         assertEquals("AO(受注額)", elementByFxId("colAoYen").getAttribute("text"));
         assertEquals("円/m", elementByFxId("colRateYen").getAttribute("text"));
         assertEquals("未了円", elementByFxId("colPlanYen").getAttribute("text"));
@@ -90,6 +100,15 @@ class ProcessingFeeTrendTabFxmlTest {
                         "/jp/co/pm/ai/desktop/fxml/ProcessingFeeTrendTab.fxml")) {
             assertNotNull(in);
             String xml = new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+            org.junit.jupiter.api.Assertions.assertTrue(
+                    xml.contains("<?import javafx.scene.control.CheckBox?>"),
+                    "CheckBox import required for auto-refresh");
+            org.junit.jupiter.api.Assertions.assertTrue(
+                    xml.contains("<?import javafx.scene.control.Spinner?>"),
+                    "Spinner import required for auto-refresh interval");
+            org.junit.jupiter.api.Assertions.assertTrue(
+                    xml.contains("<?import javafx.scene.control.ToggleButton?>"),
+                    "ToggleButton import required for view mode");
             org.junit.jupiter.api.Assertions.assertTrue(
                     xml.contains("<?import javafx.scene.control.TitledPane?>"),
                     "TitledPane import required for FXMLLoader");

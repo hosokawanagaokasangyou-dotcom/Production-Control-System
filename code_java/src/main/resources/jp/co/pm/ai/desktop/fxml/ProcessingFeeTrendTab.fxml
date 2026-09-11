@@ -6,14 +6,18 @@
 <?import javafx.scene.chart.LineChart?>
 <?import jp.co.pm.ai.desktop.ProcessingTrendNumberAxis?>
 <?import javafx.scene.control.Button?>
+<?import javafx.scene.control.CheckBox?>
 <?import javafx.scene.control.ComboBox?>
 <?import javafx.scene.control.DatePicker?>
 <?import javafx.scene.control.Label?>
 <?import javafx.scene.control.ProgressIndicator?>
 <?import javafx.scene.control.Separator?>
+<?import javafx.scene.control.Spinner?>
 <?import javafx.scene.control.TableColumn?>
 <?import javafx.scene.control.TableView?>
 <?import javafx.scene.control.TitledPane?>
+<?import javafx.scene.control.ToggleButton?>
+<?import javafx.scene.control.ToggleGroup?>
 <?import javafx.scene.control.ToolBar?>
 <?import javafx.scene.control.Tooltip?>
 <?import javafx.scene.layout.BorderPane?>
@@ -30,33 +34,73 @@
     <top>
         <VBox spacing="4.0">
             <ToolBar>
-                <Button fx:id="reloadButton" mnemonicParsing="false" onAction="#onReloadAction" text="再読込"/>
+                <Button fx:id="reloadButton" mnemonicParsing="false" onAction="#onReloadAction" text="再読込">
+                    <tooltip><Tooltip text="受注・実績・予定ソースをディスクから再読込します（F5）"/></tooltip>
+                </Button>
                 <Separator orientation="VERTICAL"/>
                 <Label text="期間"/>
                 <ComboBox fx:id="periodPresetCombo" prefWidth="118.0"/>
+                <Button fx:id="prevPeriodButton" mnemonicParsing="false" onAction="#onPrevPeriodAction" text="◀">
+                    <tooltip><Tooltip text="前の期間へ"/></tooltip>
+                </Button>
                 <DatePicker fx:id="fromDatePicker" prefWidth="132.0"/>
                 <Label text="〜"/>
                 <DatePicker fx:id="toDatePicker" prefWidth="132.0"/>
+                <Button fx:id="nextPeriodButton" mnemonicParsing="false" onAction="#onNextPeriodAction" text="▶">
+                    <tooltip><Tooltip text="次の期間へ"/></tooltip>
+                </Button>
                 <Button fx:id="thisMonthButton" mnemonicParsing="false" onAction="#onThisMonthAction" text="今月"/>
                 <Separator orientation="VERTICAL"/>
+                <Button fx:id="exportExcelButton" mnemonicParsing="false" onAction="#onExportExcelAction" text="Excel出力">
+                    <tooltip><Tooltip text="表示中の日別集計と依頼NO別を固定フォルダへ Excel 出力します（最新1件のみ残します）。"/></tooltip>
+                </Button>
+                <Button fx:id="openExcelButton" mnemonicParsing="false" onAction="#onOpenExcelAction" text="Excelを開く" disable="true">
+                    <tooltip><Tooltip text="出力フォルダ内の最新の加工賃トレンド Excel を開きます。"/></tooltip>
+                </Button>
+                <Separator orientation="VERTICAL"/>
+                <CheckBox fx:id="autoRefreshCheckBox" mnemonicParsing="false" selected="true" text="自動更新">
+                    <tooltip><Tooltip text="一定間隔でソースの更新を確認し、変わっていれば再集計します"/></tooltip>
+                </CheckBox>
+                <Label text="間隔(秒)"/>
+                <Spinner fx:id="autoRefreshIntervalSpinner" editable="true" prefWidth="76.0"/>
+                <Label fx:id="nextRefreshLabel" styleClass="pm-processing-trend-muted" text=""/>
                 <HBox fx:id="loadingChip" alignment="CENTER_LEFT" spacing="6.0" styleClass="pm-processing-trend-loading-chip" visible="false" managed="false">
                     <ProgressIndicator fx:id="loadingIndicator" prefHeight="18.0" prefWidth="18.0"/>
                     <Label fx:id="loadingStatusLabel" styleClass="pm-processing-trend-muted" text="読込中…"/>
                 </HBox>
             </ToolBar>
-            <FlowPane hgap="14.0" vgap="6.0">
+            <VBox spacing="4.0" styleClass="pm-processing-trend-subbar">
                 <padding>
                     <Insets bottom="4.0" left="8.0" right="8.0" top="2.0"/>
                 </padding>
-                <HBox spacing="6.0" alignment="CENTER_LEFT">
-                    <Label text="実績"/>
-                    <ComboBox fx:id="actualSourceCombo" prefWidth="160.0"/>
-                    <Label text="未了"/>
-                    <ComboBox fx:id="planSourceCombo" prefWidth="168.0"/>
-                    <Label fx:id="planSourceMetaLabel" managed="false" visible="false"
-                           styleClass="pm-processing-trend-plan-source-meta" text=""/>
-                </HBox>
-            </FlowPane>
+                <FlowPane hgap="14.0" vgap="4.0" styleClass="pm-processing-trend-subbar-controls">
+                    <HBox spacing="6.0" alignment="CENTER_LEFT">
+                        <Label text="実績"/>
+                        <ComboBox fx:id="actualSourceCombo" prefWidth="160.0"/>
+                        <Label text="未了"/>
+                        <ComboBox fx:id="planSourceCombo" prefWidth="168.0"/>
+                        <Label fx:id="planSourceMetaLabel" managed="false" visible="false"
+                               styleClass="pm-processing-trend-plan-source-meta" text=""/>
+                    </HBox>
+                    <HBox spacing="4.0" alignment="CENTER_LEFT" styleClass="pm-processing-trend-view-toggle">
+                        <fx:define>
+                            <ToggleGroup fx:id="viewModeGroup"/>
+                        </fx:define>
+                        <ToggleButton fx:id="viewComboToggle" mnemonicParsing="false" selected="true"
+                                      text="複合" toggleGroup="$viewModeGroup">
+                            <tooltip><Tooltip text="日次の棒グラフに累計の折れ線を重ねて表示"/></tooltip>
+                        </ToggleButton>
+                        <ToggleButton fx:id="viewDailyToggle" mnemonicParsing="false"
+                                      text="日次" toggleGroup="$viewModeGroup">
+                            <tooltip><Tooltip text="日次の実績・未了の棒グラフのみ"/></tooltip>
+                        </ToggleButton>
+                        <ToggleButton fx:id="viewCumulativeToggle" mnemonicParsing="false"
+                                      text="累計" toggleGroup="$viewModeGroup">
+                            <tooltip><Tooltip text="実績累計・見込累計の折れ線のみ"/></tooltip>
+                        </ToggleButton>
+                    </HBox>
+                </FlowPane>
+            </VBox>
             <FlowPane hgap="10.0" vgap="8.0">
                 <padding>
                     <Insets bottom="4.0" left="8.0" right="8.0" top="0.0"/>
@@ -120,40 +164,40 @@
                         <CategoryAxis fx:id="cumulativeXAxis" animated="false" tickLabelGap="20.0" tickLabelsVisible="false"/>
                     </xAxis>
                     <yAxis>
-                        <ProcessingTrendNumberAxis fx:id="cumulativeYAxis" animated="false" autoRanging="false"
-                                    label="累計 (円) ─ 折れ線"
-                                    lowerBound="0.0" upperBound="10.0" tickUnit="2.0" minorTickVisible="false" side="RIGHT"/>
+                        <ProcessingTrendNumberAxis fx:id="cumulativeYAxis" animated="false" autoRanging="false" side="RIGHT"
+                                    label="累計 (円) ─ 折れ線" lowerBound="0.0" upperBound="10.0" tickUnit="2.0" minorTickVisible="false"/>
                     </yAxis>
                 </LineChart>
                 <Pane fx:id="markerPane" mouseTransparent="true" styleClass="pm-processing-trend-marker-pane"/>
             </StackPane>
-            <Label fx:id="sourceSummaryLabel" maxWidth="1300.0" styleClass="pm-processing-trend-source"
-                   text="" wrapText="true"/>
+            <Label fx:id="sourceSummaryLabel" styleClass="pm-processing-trend-muted" text=""/>
             <TitledPane fx:id="detailPane" animated="false" collapsible="true" expanded="false" maxWidth="1300.0" text="日別集計（円）">
-                <TableView fx:id="detailTable" fixedCellSize="24.0" prefHeight="220.0" maxHeight="320.0"
-                           styleClass="pm-processing-trend-detail-table">
-                    <columns>
-                        <TableColumn fx:id="colDate" prefWidth="110.0" sortable="false" text="日付"/>
+                <content>
+                    <TableView fx:id="detailTable" prefHeight="220.0">
+                        <columns>
+                        <TableColumn fx:id="colDate" prefWidth="120.0" sortable="false" text="日付"/>
                         <TableColumn fx:id="colActualYen" prefWidth="120.0" sortable="false" text="実績円"/>
                         <TableColumn fx:id="colPlanYen" prefWidth="120.0" sortable="false" text="未了円"/>
                         <TableColumn fx:id="colActualCumYen" prefWidth="130.0" sortable="false" text="実績累計円"/>
                         <TableColumn fx:id="colPlanCumYen" prefWidth="130.0" sortable="false" text="未了累計円"/>
-                    </columns>
-                </TableView>
+                        </columns>
+                    </TableView>
+                </content>
             </TitledPane>
             <TitledPane fx:id="requestPane" animated="false" collapsible="true" expanded="false" maxWidth="1300.0" text="依頼NO別 加工賃">
-                <TableView fx:id="requestTable" fixedCellSize="24.0" prefHeight="260.0" maxHeight="400.0"
-                           styleClass="pm-processing-trend-detail-table">
-                    <columns>
-                        <TableColumn fx:id="colRequestNo" prefWidth="140.0" sortable="true" text="依頼NO"/>
+                <content>
+                    <TableView fx:id="requestTable" prefHeight="260.0">
+                        <columns>
+                        <TableColumn fx:id="colRequestNo" prefWidth="100.0" sortable="true" text="依頼NO"/>
                         <TableColumn fx:id="colAoYen" prefWidth="120.0" sortable="true" text="AO(受注額)"/>
-                        <TableColumn fx:id="colRateYen" prefWidth="100.0" sortable="true" text="円/m"/>
+                        <TableColumn fx:id="colRateYen" prefWidth="90.0" sortable="true" text="円/m"/>
                         <TableColumn fx:id="colActualM" prefWidth="100.0" sortable="true" text="実績 (m)"/>
                         <TableColumn fx:id="colPlanM" prefWidth="100.0" sortable="true" text="未了 (m)"/>
                         <TableColumn fx:id="colReqActualYen" prefWidth="120.0" sortable="true" text="実績円"/>
                         <TableColumn fx:id="colReqPlanYen" prefWidth="120.0" sortable="true" text="未了円"/>
-                    </columns>
-                </TableView>
+                        </columns>
+                    </TableView>
+                </content>
             </TitledPane>
         </VBox>
     </center>
