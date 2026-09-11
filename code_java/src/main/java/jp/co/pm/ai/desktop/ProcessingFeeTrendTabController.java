@@ -1171,7 +1171,7 @@ public class ProcessingFeeTrendTabController {
                         Filter filter = new Filter(from, to, actSrc, planSrc, null, null, 7);
                         List<QuantityLine> actual =
                                 ProcessingFeeTrendQuantityExtractor.extractActual(
-                                        src.dailyReportActuals(), src.actuals(), filter);
+                                        src.dailyReportActuals(), src.actuals(), filter, false);
                         List<QuantityLine> plan =
                                 ProcessingFeeTrendQuantityExtractor.extractPlan(
                                         src.aladdin(), src.dispatch(), filter, LocalDate.now());

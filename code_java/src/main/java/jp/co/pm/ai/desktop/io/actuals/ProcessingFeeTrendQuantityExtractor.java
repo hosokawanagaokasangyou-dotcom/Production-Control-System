@@ -52,9 +52,21 @@ public final class ProcessingFeeTrendQuantityExtractor {
             ActualsSnapshot dailyReport,
             ActualsSnapshot detail,
             Filter filter) {
+        return extractActual(dailyReport, detail, filter, true);
+    }
+
+    /**
+     * @param boundToPeriod true なら Filter の from〜to 内のみ。false なら日付がある行は期間外も採用
+     *     （依頼NO別の受注残＝AO 正本用。日次棒は呼び出し側で期間に絞る）
+     */
+    public static List<QuantityLine> extractActual(
+            ActualsSnapshot dailyReport,
+            ActualsSnapshot detail,
+            Filter filter,
+            boolean boundToPeriod) {
         boolean daily = filter.actualSource() == ActualSource.DAILY_REPORT;
         ActualsSnapshot src = daily ? dailyReport : detail;
-        return extractActualFrom(src, filter, daily);
+        return extractActualFrom(src, filter, daily, boundToPeriod);
     }
 
     public static List<QuantityLine> extractPlan(
@@ -69,7 +81,7 @@ public final class ProcessingFeeTrendQuantityExtractor {
     }
 
     private static List<QuantityLine> extractActualFrom(
-            ActualsSnapshot actuals, Filter f, boolean preferDaily) {
+            ActualsSnapshot actuals, Filter f, boolean preferDaily, boolean boundToPeriod) {
         List<QuantityLine> out = new ArrayList<>();
         if (actuals == null || actuals.headers() == null || actuals.rows() == null) {
             return out;
@@ -104,14 +116,18 @@ public final class ProcessingFeeTrendQuantityExtractor {
                 continue;
             }
             LocalDate d = rowActualDate(row, iStartDt, iDailyDate, iKakouDate);
-            if (d == null || d.isBefore(from) || d.isAfter(to)) {
+            if (d == null) {
+                continue;
+            }
+            if (boundToPeriod && (d.isBefore(from) || d.isAfter(to))) {
                 continue;
             }
             double qty = parseDouble(cellAt(row, iQty));
             if (Math.abs(qty) <= EPS) {
                 continue;
             }
-            String task = iTask >= 0 ? cellAt(row, iTask).strip() : "";
+            String task =
+                    iTask >= 0 ? ProcessingTrendAggregator.normKey(cellAt(row, iTask)) : "";
             String process = iProcess >= 0 ? cellAt(row, iProcess).strip() : "";
             out.add(new QuantityLine(d, task, qty, process));
         }

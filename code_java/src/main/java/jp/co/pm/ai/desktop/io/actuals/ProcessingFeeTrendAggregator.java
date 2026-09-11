@@ -4,6 +4,7 @@ import java.text.Normalizer;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -23,6 +24,7 @@ import jp.co.pm.ai.desktop.ui.PlanInputProcessSequenceRowOrder;
  *
  * <p>AO（受注額）を正とする。円/m = AO ÷ 受注最終工程 m。実績円 = 円/m × 実績 m、
  * 未了（残予定）円 = 円/m × (受注 m − 実績 m) とし、両者の合計は当該依頼の AO に一致する。
+ * 依頼NO別の実績 m は表示期間外の日報出来高も含む（日次棒のみ表示期間内）。
  * 複数工程は実績・受注とも最終工程 m のみ。AO 欠落時は AH × m（未了は受注 m があれば同様）。
  */
 public final class ProcessingFeeTrendAggregator {
@@ -41,7 +43,10 @@ public final class ProcessingFeeTrendAggregator {
 
         public QuantityLine {
             Objects.requireNonNull(date, "date");
-            requestNo = requestNo == null ? "" : requestNo.strip();
+            requestNo =
+                    requestNo == null || requestNo.isBlank()
+                            ? ""
+                            : ProcessingTrendAggregator.normKey(requestNo);
             processName = processName == null ? "" : processName.strip();
         }
     }
@@ -198,7 +203,7 @@ public final class ProcessingFeeTrendAggregator {
         if (from.plusDays(MAX_DAYS - 1).isBefore(to)) {
             to = from.plusDays(MAX_DAYS - 1);
         }
-        Map<String, FeeInfo> feeMap = fees != null ? fees : Map.of();
+        Map<String, FeeInfo> feeMap = normalizeFeeKeys(fees);
 
         List<QuantityLine> actFiltered = filterToFinalProcess(actualLines, feeMap);
         List<QuantityLine> planFiltered = filterToFinalProcess(planLines, feeMap);
@@ -228,8 +233,14 @@ public final class ProcessingFeeTrendAggregator {
         for (LocalDate d = from; !d.isAfter(to); d = d.plusDays(1)) {
             byDay.put(d, new double[2]);
         }
-        int actCount =
-                accumulateActualDays(actFiltered, allocs, feeMap, byDay);
+        // 日次棒は表示期間内のみ。依頼NO別の実績 m は期間外の出来高も含む（AO 正本）
+        List<QuantityLine> actInPeriod = new ArrayList<>();
+        for (QuantityLine line : actFiltered) {
+            if (line != null && !line.date().isBefore(from) && !line.date().isAfter(to)) {
+                actInPeriod.add(line);
+            }
+        }
+        int actCount = accumulateActualDays(actInPeriod, allocs, feeMap, byDay);
         boolean periodFullyPast = to.isBefore(t);
         // 過去期間: 日次チャートに未了棒を載せない（KPI・依頼表の未了は alloc 側）
         int planCount =
@@ -485,6 +496,24 @@ public final class ProcessingFeeTrendAggregator {
         return counted;
     }
 
+    private static Map<String, FeeInfo> normalizeFeeKeys(Map<String, FeeInfo> fees) {
+        if (fees == null || fees.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, FeeInfo> out = new LinkedHashMap<>();
+        for (Map.Entry<String, FeeInfo> e : fees.entrySet()) {
+            if (e.getKey() == null || e.getKey().isBlank() || e.getValue() == null) {
+                continue;
+            }
+            String k = ProcessingTrendAggregator.normKey(e.getKey());
+            if (k.isEmpty()) {
+                continue;
+            }
+            out.put(k, e.getValue());
+        }
+        return Collections.unmodifiableMap(out);
+    }
+
     /**
      * 最終工程以外の行を落とす。加工内容が空で工程が複数ある依頼は全行落とす（誤合算防止）。
      */
@@ -524,12 +553,67 @@ public final class ProcessingFeeTrendAggregator {
                 String lookup = reqKey.isEmpty() ? "（依頼NOなし）" : reqKey;
                 Set<String> procs = processesByReq.getOrDefault(lookup, Set.of());
                 if (procs.size() >= 2) {
-                    // 加工内容無しで複数工程 → 採用しない
+                    // 加工内容無しで複数工程 → 採用しない（後段で受注 m 一致フォールバック）
                     continue;
                 }
             }
             // 単工程トークン or 工程1種類 or 工程名空: 採用
             out.add(line);
+        }
+        return withOrderMetersProcessFallback(lines, out, fees);
+    }
+
+    /**
+     * 最終工程名で 0 m になったとき、受注最終工程 m と一致する工程の出来高があればそれを採用する。
+     * （例: 加工内容末尾が「増刷」で出来高 0、SEC が 4000=受注 m）
+     */
+    private static List<QuantityLine> withOrderMetersProcessFallback(
+            List<QuantityLine> all, List<QuantityLine> filtered, Map<String, FeeInfo> fees) {
+        Map<String, Double> filteredMeters = sumMetersByRequest(filtered);
+        Map<String, List<QuantityLine>> byReq = new HashMap<>();
+        for (QuantityLine line : all) {
+            if (line == null || Math.abs(line.meters()) <= EPS || line.requestNo().isEmpty()) {
+                continue;
+            }
+            byReq.computeIfAbsent(line.requestNo(), k -> new ArrayList<>()).add(line);
+        }
+        List<QuantityLine> out = new ArrayList<>(filtered);
+        for (Map.Entry<String, List<QuantityLine>> e : byReq.entrySet()) {
+            String req = e.getKey();
+            if (filteredMeters.getOrDefault(req, 0.0) > EPS) {
+                continue;
+            }
+            FeeInfo info = fees.get(req);
+            if (info == null || !info.hasOrderFinalMeters()) {
+                continue;
+            }
+            double orderM = info.orderFinalMeters();
+            Map<String, Double> byProc = new HashMap<>();
+            for (QuantityLine line : e.getValue()) {
+                String proc = normalizeProcessName(line.processName());
+                if (proc.isEmpty()) {
+                    continue;
+                }
+                byProc.merge(proc, line.meters(), Double::sum);
+            }
+            String matchProc = null;
+            for (Map.Entry<String, Double> p : byProc.entrySet()) {
+                if (Math.abs(p.getValue() - orderM) <= Math.max(0.5, orderM * 1e-6)) {
+                    if (matchProc != null) {
+                        matchProc = null; // 複数工程が一致 → 曖昧なので使わない
+                        break;
+                    }
+                    matchProc = p.getKey();
+                }
+            }
+            if (matchProc == null) {
+                continue;
+            }
+            for (QuantityLine line : e.getValue()) {
+                if (matchProc.equals(normalizeProcessName(line.processName()))) {
+                    out.add(line);
+                }
+            }
         }
         return out;
     }

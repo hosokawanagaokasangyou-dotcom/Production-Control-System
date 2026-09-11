@@ -76,6 +76,48 @@ class ProcessingFeeTrendAggregatorTest {
     }
 
     @Test
+    void finalProcessZero_fallsBackToProcessMatchingOrderMeters() {
+        LocalDate d = LocalDate.of(2024, 7, 15);
+        LocalDate from = LocalDate.of(2026, 7, 1);
+        LocalDate to = LocalDate.of(2026, 7, 31);
+        Map<String, FeeInfo> fees = Map.of("C7-10", ao(112_000.0, 4_000.0, "SEC,増刷"));
+        Result r =
+                ProcessingFeeTrendAggregator.aggregate(
+                        List.of(
+                                new QuantityLine(d, "C7-10", 2_000, "SEC"),
+                                new QuantityLine(d, "C7-10", 2_000, "SEC"),
+                                new QuantityLine(d, "C7-10", 0, "増刷")),
+                        List.of(),
+                        fees,
+                        from,
+                        to,
+                        LocalDate.of(2026, 9, 11));
+        assertEquals(4_000.0, r.requests().get(0).actualMeters(), 1e-6);
+        assertEquals(112_000.0, r.requests().get(0).actualYen(), 1e-6);
+    }
+
+    @Test
+    void requestActualUsesOutsidePeriodMeters_dailyBarsStayInPeriod() {
+        // 日報が 2024/07/15 でも依頼NO別は実績に算入。日次棒は 2026/07 のみ
+        LocalDate from = LocalDate.of(2026, 7, 1);
+        LocalDate to = LocalDate.of(2026, 7, 31);
+        LocalDate today = LocalDate.of(2026, 9, 11);
+        Map<String, FeeInfo> fees = Map.of("C7-10", ao(112_000.0, 4_000.0, "SEC"));
+        List<QuantityLine> actual =
+                List.of(
+                        new QuantityLine(LocalDate.of(2024, 7, 15), "C7-10", 2_000, "SEC"),
+                        new QuantityLine(LocalDate.of(2024, 7, 15), "C7-10", 2_000, "SEC"));
+        Result r =
+                ProcessingFeeTrendAggregator.aggregate(
+                        actual, List.of(), fees, from, to, today);
+        RequestPoint row = r.requests().get(0);
+        assertEquals(4_000.0, row.actualMeters(), 1e-6);
+        assertEquals(0.0, row.remainMeters(), 1e-6);
+        assertEquals(112_000.0, row.actualYen(), 1e-6);
+        assertEquals(0.0, r.days().stream().mapToDouble(DayPoint::actualYen).sum(), 1e-9);
+    }
+
+    @Test
     void pastPeriod_noDailyRemainBars_kpiRemainFromAlloc() {
         // 7月を9月に見る: 日次未了棒は出さない。KPI・依頼の未了は残す
         LocalDate from = LocalDate.of(2026, 7, 1);

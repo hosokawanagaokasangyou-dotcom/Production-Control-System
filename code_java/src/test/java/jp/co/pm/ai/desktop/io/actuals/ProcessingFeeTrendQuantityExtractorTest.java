@@ -73,6 +73,39 @@ class ProcessingFeeTrendQuantityExtractorTest {
     }
 
     @Test
+    void extractActual_unboundedIncludesOutsidePeriod() {
+        LocalDate in = LocalDate.of(2026, 7, 10);
+        LocalDate out = LocalDate.of(2024, 7, 15);
+        ActualsSnapshot daily =
+                new ActualsSnapshot(
+                        List.of("機械名", "依頼NO", "工程名", "加工日付", "実製品出来高"),
+                        List.of(
+                                List.of("M1", "C7-10", "SEC", "2026/07/10", "100"),
+                                List.of("M1", "C7-10", "SEC", "2024/07/15", "2000"),
+                                List.of("M1", "C7-10", "SEC", "2024/07/15", "2000")));
+        Filter filter =
+                new Filter(
+                        LocalDate.of(2026, 7, 1),
+                        LocalDate.of(2026, 7, 31),
+                        ProcessingTrendAggregator.ActualSource.DAILY_REPORT,
+                        PlanSource.ALADDIN,
+                        null,
+                        null,
+                        7);
+        List<QuantityLine> bounded =
+                ProcessingFeeTrendQuantityExtractor.extractActual(daily, null, filter, true);
+        List<QuantityLine> unbounded =
+                ProcessingFeeTrendQuantityExtractor.extractActual(daily, null, filter, false);
+        assertEquals(1, bounded.size());
+        assertEquals(100.0, bounded.get(0).meters(), 1e-9);
+        assertEquals(3, unbounded.size());
+        assertEquals(
+                4_100.0, unbounded.stream().mapToDouble(QuantityLine::meters).sum(), 1e-9);
+        assertEquals(in, bounded.get(0).date());
+        assertTrue(unbounded.stream().anyMatch(q -> out.equals(q.date())));
+    }
+
+    @Test
     void extractDispatchNormalizesLegacyDuplicateRows() {
         LocalDate today = LocalDate.of(2026, 9, 1);
         DispatchSnapshot dispatch =
