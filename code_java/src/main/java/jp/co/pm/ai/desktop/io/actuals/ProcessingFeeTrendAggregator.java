@@ -50,8 +50,7 @@ public final class ProcessingFeeTrendAggregator {
      * 見込累計は加工量トレンドと同型（当日までは実績、翌日以降は未了。先端で接続）。
      * 翌日以降で同日に実績がある分は未了から差し引き（二重計上防止）。
      * 実績・未了・見込の累計はいずれも月初でリセットする。
-     * 表示期間がすべて過去のときは、未了を月末へ一括せず期間内予定（無ければ日割）で配分し、
-     * 見込累計は実績＋未了の積み上げとする。
+     * 表示期間がすべて過去（本日以前）のときは日次の未了棒を出さない（KPI・依頼表の未了のみ）。
      */
     public record DayPoint(
             LocalDate date,
@@ -232,8 +231,11 @@ public final class ProcessingFeeTrendAggregator {
         int actCount =
                 accumulateActualDays(actFiltered, allocs, feeMap, byDay);
         boolean periodFullyPast = to.isBefore(t);
+        // 過去期間: 日次チャートに未了棒を載せない（KPI・依頼表の未了は alloc 側）
         int planCount =
-                distributeRemainToPlanDays(planFiltered, allocs, byDay, from, to, t, periodFullyPast);
+                periodFullyPast
+                        ? 0
+                        : distributeRemainToPlanDays(planFiltered, allocs, byDay, from, to, t);
 
         List<DayPoint> days = new ArrayList<>(byDay.size());
         double actCum = 0;
@@ -252,20 +254,12 @@ public final class ProcessingFeeTrendAggregator {
                 cumMonth = ym;
             }
             double a = e.getValue()[0];
-            double p = e.getValue()[1];
-            boolean usesPlan = d.isAfter(t);
+            double p = periodFullyPast ? 0.0 : e.getValue()[1];
+            boolean usesPlan = !periodFullyPast && d.isAfter(t);
             double planForMetrics = usesPlan ? Math.max(0.0, p - a) : p;
             actTotal += a;
             planTotal += planForMetrics;
-            double projected;
-            if (periodFullyPast) {
-                // 過去期間: 見込 = 実績 + 未了（日割／予定配分済み）
-                projected = a + planForMetrics;
-            } else if (usesPlan) {
-                projected = planForMetrics;
-            } else {
-                projected = a;
-            }
+            double projected = usesPlan ? planForMetrics : a;
             if (!d.isAfter(t) || periodFullyPast) {
                 actCum += a;
             }
@@ -275,8 +269,10 @@ public final class ProcessingFeeTrendAggregator {
         }
 
         List<RequestPoint> requests = new ArrayList<>(allocs.size());
+        double remainYenFromAlloc = 0;
         for (Map.Entry<String, RequestAlloc> e : allocs.entrySet()) {
             RequestAlloc al = e.getValue();
+            remainYenFromAlloc += al.planYen();
             requests.add(
                     new RequestPoint(
                             e.getKey(),
@@ -287,6 +283,10 @@ public final class ProcessingFeeTrendAggregator {
                             al.remainMeters(),
                             al.actualYen(),
                             al.planYen()));
+        }
+        // 過去期間は日次未了棒を出さないため、KPI 未了は依頼配分の合計を使う
+        if (periodFullyPast) {
+            planTotal = remainYenFromAlloc;
         }
 
         return new Result(
@@ -429,12 +429,9 @@ public final class ProcessingFeeTrendAggregator {
     }
 
     /**
-     * 未了円を予定日に配分。
-     *
-     * <ul>
-     *   <li>進行中・未来期間: 翌日以降の予定 m 比率。予定が無ければ「今日の翌日」（期間外なら期間末）へ一括。
-     *   <li>過去期間のみ: 期間内の予定 m 比率。予定が無ければ期間日数で日割（月末一括はしない）。
-     * </ul>
+     * 未了円を予定日に配分（進行中・未来の表示期間向け）。
+     * 翌日以降の予定 m 比率。予定行が無ければ「今日の翌日」（期間外なら期間末）へ一括。
+     * 過去期間のみの表示では呼ばない（日次未了棒は出さない）。
      */
     private static int distributeRemainToPlanDays(
             List<QuantityLine> planFiltered,
@@ -442,8 +439,7 @@ public final class ProcessingFeeTrendAggregator {
             TreeMap<LocalDate, double[]> byDay,
             LocalDate from,
             LocalDate to,
-            LocalDate today,
-            boolean periodFullyPast) {
+            LocalDate today) {
         int counted = 0;
         for (Map.Entry<String, RequestAlloc> e : allocs.entrySet()) {
             RequestAlloc al = e.getValue();
@@ -458,10 +454,10 @@ public final class ProcessingFeeTrendAggregator {
                     if (line == null || !req.equals(line.requestNo())) {
                         continue;
                     }
-                    if (!byDay.containsKey(line.date())) {
+                    if (!line.date().isAfter(today)) {
                         continue;
                     }
-                    if (!periodFullyPast && !line.date().isAfter(today)) {
+                    if (!byDay.containsKey(line.date())) {
                         continue;
                     }
                     weights.merge(line.date(), line.meters(), Double::sum);
@@ -472,16 +468,6 @@ public final class ProcessingFeeTrendAggregator {
                 for (Map.Entry<LocalDate, Double> w : weights.entrySet()) {
                     double yen = al.planYen() * (w.getValue() / wSum);
                     byDay.get(w.getKey())[1] += yen;
-                }
-                counted++;
-            } else if (periodFullyPast) {
-                int n = byDay.size();
-                if (n <= 0) {
-                    continue;
-                }
-                double each = al.planYen() / n;
-                for (double[] slot : byDay.values()) {
-                    slot[1] += each;
                 }
                 counted++;
             } else {

@@ -904,9 +904,6 @@ public class ProcessingFeeTrendTabController {
         double dailyMax = 0;
         double cumMax = 0;
         LocalDate today = r.today();
-        // 過去期間のみ: 見込累計を全日描画（当日接続ルールは進行中期間向け）
-        LocalDate projectedFrom =
-                r.to() != null && today != null && r.to().isBefore(today) ? r.from() : today;
         for (int i = 0; i < n; i++) {
             DayPoint d = days.get(i);
             String cat = labels.get(i);
@@ -918,8 +915,8 @@ public class ProcessingFeeTrendTabController {
             if (ProcessingTrendChartSupport.includeActualCumPoint(d.date(), today)) {
                 actCum.add(new XYChart.Data<>(cat, d.actualCumYen()));
             }
-            // 見込累計線＝実績先端（当日）から接続（当日より前は描かない。過去期間は全日）
-            if (ProcessingTrendChartSupport.includeProjectedCumPoint(d.date(), projectedFrom)) {
+            // 見込累計線＝実績先端（当日）から接続（当日より前は描かない。加工量トレンドと同型）
+            if (ProcessingTrendChartSupport.includeProjectedCumPoint(d.date(), today)) {
                 planCum.add(new XYChart.Data<>(cat, d.projectedCumYen()));
             }
         }

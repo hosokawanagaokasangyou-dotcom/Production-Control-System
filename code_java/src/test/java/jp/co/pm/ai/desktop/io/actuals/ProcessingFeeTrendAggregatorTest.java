@@ -76,8 +76,8 @@ class ProcessingFeeTrendAggregatorTest {
     }
 
     @Test
-    void pastPeriod_spreadsRemainEvenly_projectedEndsAtActualPlusRemain() {
-        // 7月を9月に見る: 未了を月末一括にしない。見込累計は実績+未了で AO に到達
+    void pastPeriod_noDailyRemainBars_kpiRemainFromAlloc() {
+        // 7月を9月に見る: 日次未了棒は出さない。KPI・依頼の未了は残す
         LocalDate from = LocalDate.of(2026, 7, 1);
         LocalDate to = LocalDate.of(2026, 7, 31);
         LocalDate today = LocalDate.of(2026, 9, 11);
@@ -91,14 +91,29 @@ class ProcessingFeeTrendAggregatorTest {
                         to,
                         today);
         assertEquals(31, r.days().size());
+        assertEquals(0.0, r.days().stream().mapToDouble(DayPoint::planYen).sum(), 1e-9);
         DayPoint last = r.days().get(30);
         assertEquals(600.0, last.actualCumYen(), 1e-6);
-        assertEquals(400.0, last.planCumYen(), 1e-6);
-        assertEquals(1_000.0, last.projectedCumYen(), 1e-6);
-        assertTrue(last.planYen() < 50.0, "月末一括だと ~400。日割なら ~12.9");
-        double planSum = r.days().stream().mapToDouble(DayPoint::planYen).sum();
-        assertEquals(400.0, planSum, 1e-6);
+        assertEquals(0.0, last.planCumYen(), 1e-6);
+        assertEquals(600.0, last.projectedCumYen(), 1e-6);
         assertEquals(400.0, r.planTotalYen(), 1e-6);
+        assertEquals(400.0, r.requests().get(0).planYen(), 1e-6);
+    }
+
+    @Test
+    void idleOrderMonthRow_allAoGoesToRemain() {
+        LocalDate from = LocalDate.of(2026, 9, 1);
+        LocalDate to = LocalDate.of(2026, 9, 30);
+        Map<String, FeeInfo> fees =
+                Map.of("IDLE", new FeeInfo(null, 4_000.0, "X", 2026, 9, 200.0));
+        Result r =
+                ProcessingFeeTrendAggregator.aggregate(
+                        List.of(), List.of(), fees, from, to, from);
+        RequestPoint idle = r.requests().get(0);
+        assertEquals(0.0, idle.actualYen(), 1e-9);
+        assertEquals(4_000.0, idle.planYen(), 1e-9);
+        assertEquals(4_000.0, idle.aoYen(), 1e-9);
+        assertEquals(200.0, idle.remainMeters(), 1e-9);
     }
 
     @Test
