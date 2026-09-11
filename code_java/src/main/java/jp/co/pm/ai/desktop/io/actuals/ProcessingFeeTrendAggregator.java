@@ -94,13 +94,13 @@ public final class ProcessingFeeTrendAggregator {
 
     /**
      * 依頼NO別一覧の先頭に合計行を付ける。空なら空リスト。
+     * 合計行の AO は按分円（実績円＋予定円）とし、各行 AO（受注額）の単純合算と混同しない。
      * 円/m は合算しない（欠落扱いで UI は —）。
      */
     public static List<RequestPoint> withLeadingTotalRow(List<RequestPoint> requests) {
         if (requests == null || requests.isEmpty()) {
             return List.of();
         }
-        double ao = 0;
         double actM = 0;
         double planM = 0;
         double actYen = 0;
@@ -109,14 +109,16 @@ public final class ProcessingFeeTrendAggregator {
             if (r == null || r.isTotalRow()) {
                 continue;
             }
-            ao += r.aoYen();
             actM += r.actualMeters();
             planM += r.planMeters();
             actYen += r.actualYen();
             planYen += r.planYen();
         }
+        // 合計行 AO = 按分された実績円+予定円（受注月のみの未加工 AO は含めない）
+        double allocatedAo = actYen + planYen;
         RequestPoint total =
-                new RequestPoint(TOTAL_REQUEST_LABEL, 0.0, ao, true, actM, planM, actYen, planYen);
+                new RequestPoint(
+                        TOTAL_REQUEST_LABEL, 0.0, allocatedAo, true, actM, planM, actYen, planYen);
         List<RequestPoint> out = new ArrayList<>(requests.size() + 1);
         out.add(total);
         for (RequestPoint r : requests) {
@@ -125,6 +127,24 @@ public final class ProcessingFeeTrendAggregator {
             }
         }
         return List.copyOf(out);
+    }
+
+    /**
+     * 一覧上の受注 AO 合計（受注年月で含めた未加工依頼分も含む）。
+     * 按分円合計（実績+予定）とは一致しない場合がある。
+     */
+    public static double sumOrderAoYen(List<RequestPoint> requests) {
+        if (requests == null || requests.isEmpty()) {
+            return 0.0;
+        }
+        double ao = 0;
+        for (RequestPoint r : requests) {
+            if (r == null || r.isTotalRow()) {
+                continue;
+            }
+            ao += r.aoYen();
+        }
+        return ao;
     }
 
     public record Result(

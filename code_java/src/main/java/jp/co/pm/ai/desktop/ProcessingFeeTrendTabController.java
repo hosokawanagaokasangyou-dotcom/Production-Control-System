@@ -128,6 +128,7 @@ public class ProcessingFeeTrendTabController {
     @FXML private ComboBox<ActualSource> actualSourceCombo;
     @FXML private ComboBox<PlanSource> planSourceCombo;
     @FXML private Label planSourceMetaLabel;
+    @FXML private Label kpiOrderAoYen;
     @FXML private Label kpiActualYen;
     @FXML private Label kpiPlanYen;
     @FXML private HBox noticeBanner;
@@ -468,7 +469,8 @@ public class ProcessingFeeTrendTabController {
         Tooltip.install(
                 requestTable,
                 new Tooltip(
-                        "期間内の最終工程 m で AO を按分。受注年月が期間に重なる依頼も一覧に含め、先頭行 AO 合計が受注側と一致するようにする。AO/単価欠落は —。"));
+                        "各行の AO は受注額。合計行の AO は按分円（実績円＋予定円）で、未加工の受注額は含めない。\n"
+                                + "按分は期間内最終工程 m。受注年月が期間に重なる依頼も一覧に含める。"));
     }
 
     private TableCell<RequestPoint, Number> yenNumberCell() {
@@ -831,9 +833,9 @@ public class ProcessingFeeTrendTabController {
                     render(r);
                     if (r.missingRateLines() > 0) {
                         showNotice(
-                                "AH 単価が無い行が "
+                                "AO/AH 単価が無い行が "
                                         + r.missingRateLines()
-                                        + " 件あります（当該行は 0 円）。");
+                                        + " 件あります（当該行の按分円は 0）。");
                     } else {
                         hideNotice();
                     }
@@ -919,6 +921,10 @@ public class ProcessingFeeTrendTabController {
 
         NumberFormat nf = NumberFormat.getNumberInstance(Locale.JAPAN);
         nf.setMaximumFractionDigits(0);
+        double orderAo = ProcessingFeeTrendAggregator.sumOrderAoYen(r.requests());
+        if (kpiOrderAoYen != null) {
+            kpiOrderAoYen.setText(nf.format(Math.rint(orderAo)) + " 円");
+        }
         kpiActualYen.setText(nf.format(Math.rint(r.actualTotalYen())) + " 円");
         kpiPlanYen.setText(nf.format(Math.rint(r.planTotalYen())) + " 円");
 
@@ -1313,6 +1319,9 @@ public class ProcessingFeeTrendTabController {
         todayMarkerLabel.setVisible(false);
         kpiActualYen.setText("—");
         kpiPlanYen.setText("—");
+        if (kpiOrderAoYen != null) {
+            kpiOrderAoYen.setText("—");
+        }
         if (detailTable != null) {
             detailTable.getItems().clear();
         }

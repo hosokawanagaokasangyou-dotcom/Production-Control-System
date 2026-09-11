@@ -62,6 +62,10 @@
                     <Insets bottom="4.0" left="8.0" right="8.0" top="0.0"/>
                 </padding>
                 <VBox styleClass="pm-processing-trend-kpi-card">
+                    <Label styleClass="pm-processing-trend-kpi-caption" text="受注額合計（AO・受注月）"/>
+                    <Label fx:id="kpiOrderAoYen" styleClass="pm-processing-trend-kpi-value" text="—"/>
+                </VBox>
+                <VBox styleClass="pm-processing-trend-kpi-card">
                     <Label styleClass="pm-processing-trend-kpi-caption" text="実績円合計（期間）"/>
                     <Label fx:id="kpiActualYen" styleClass="pm-processing-trend-kpi-value" text="—"/>
                 </VBox>
@@ -142,7 +146,7 @@
                            styleClass="pm-processing-trend-detail-table">
                     <columns>
                         <TableColumn fx:id="colRequestNo" prefWidth="140.0" sortable="true" text="依頼NO"/>
-                        <TableColumn fx:id="colAoYen" prefWidth="120.0" sortable="true" text="AO合計"/>
+                        <TableColumn fx:id="colAoYen" prefWidth="120.0" sortable="true" text="AO(受注額)"/>
                         <TableColumn fx:id="colRateYen" prefWidth="100.0" sortable="true" text="円/m"/>
                         <TableColumn fx:id="colActualM" prefWidth="100.0" sortable="true" text="実績 (m)"/>
                         <TableColumn fx:id="colPlanM" prefWidth="100.0" sortable="true" text="予定 (m)"/>

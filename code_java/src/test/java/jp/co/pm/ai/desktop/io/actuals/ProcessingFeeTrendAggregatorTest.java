@@ -312,7 +312,8 @@ class ProcessingFeeTrendAggregatorTest {
         RequestPoint tot = withTotal.get(0);
         assertTrue(tot.isTotalRow());
         assertEquals("合計", tot.requestNo());
-        assertEquals(3_000.0, tot.aoYen(), 1e-9);
+        // 合計行 AO = 按分円（実績+予定）
+        assertEquals(90.0 + 110.0, tot.aoYen(), 1e-9);
         assertEquals(7.0, tot.actualMeters(), 1e-9);
         assertEquals(7.0, tot.planMeters(), 1e-9);
         assertEquals(90.0, tot.actualYen(), 1e-9);
@@ -320,6 +321,7 @@ class ProcessingFeeTrendAggregatorTest {
         assertTrue(tot.rateMissing());
         assertEquals("A", withTotal.get(1).requestNo());
         assertEquals("B", withTotal.get(2).requestNo());
+        assertEquals(3_000.0, ProcessingFeeTrendAggregator.sumOrderAoYen(rows), 1e-9);
         assertTrue(ProcessingFeeTrendAggregator.withLeadingTotalRow(List.of()).isEmpty());
     }
 
@@ -344,14 +346,15 @@ class ProcessingFeeTrendAggregatorTest {
                         to,
                         from);
         assertEquals(2, r.requests().size());
-        double aoSum =
-                r.requests().stream().mapToDouble(RequestPoint::aoYen).sum();
-        assertEquals(4_797_700.0, aoSum, 1e-6);
+        double orderAo = ProcessingFeeTrendAggregator.sumOrderAoYen(r.requests());
+        assertEquals(4_797_700.0, orderAo, 1e-6);
         RequestPoint idle =
                 r.requests().stream().filter(x -> "IDLE".equals(x.requestNo())).findFirst().orElseThrow();
         assertEquals(0.0, idle.actualMeters(), 1e-9);
         assertEquals(4_796_700.0, idle.aoYen(), 1e-6);
         List<RequestPoint> withTotal = ProcessingFeeTrendAggregator.withLeadingTotalRow(r.requests());
-        assertEquals(4_797_700.0, withTotal.get(0).aoYen(), 1e-6);
+        // 合計行 AO は按分円のみ（ACT: AO 1000 / 10m → 1000 円）
+        assertEquals(1_000.0, withTotal.get(0).aoYen(), 1e-6);
+        assertEquals(1_000.0, withTotal.get(0).actualYen() + withTotal.get(0).planYen(), 1e-6);
     }
 }
