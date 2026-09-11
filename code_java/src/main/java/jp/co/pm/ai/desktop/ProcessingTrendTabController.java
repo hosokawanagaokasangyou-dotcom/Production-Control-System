@@ -358,7 +358,7 @@ public class ProcessingTrendTabController {
                         "実績・予定ともに換算数量（m）を依頼×工程×機械ごとに合算した「工程延べ m」。\n"
                                 + "全工程を合算した値は依頼の生産量ではありません（同じ依頼が工程ごとに数えられます）。\n"
                                 + "参考 Excel（売上金額・依頼単位・完了日基準）とは単位・件数基準が異なります。\n"
-                                + "見込累計 = 当日までの実績累計 + 翌日以降の予定（実績先端で接続）"));
+                                + "見込累計 = 当日までの実績累計 + 翌日以降の予定（実績先端で接続。累計は月初リセット）"));
         Tooltip.install(
                 kpiProjectedCard,
                 new Tooltip(
@@ -777,7 +777,7 @@ public class ProcessingTrendTabController {
         }
         Tooltip.install(
                 detailTable,
-                new Tooltip("差異 = 日報実績と実績明細の差（日報 − 明細）。見込累計 = 当日まで実績、翌日以降は予定を採用"));
+                new Tooltip("差異 = 日報実績と実績明細の差（日報 − 明細）。見込累計 = 当日まで実績、翌日以降は予定（累計は月初リセット）"));
         detailTable.setRowFactory(
                 tv ->
                         new TableRow<>() {

@@ -155,12 +155,12 @@ public final class ProcessingTrendAggregator {
      * @param date 日付
      * @param actualM 当日実績 (m)
      * @param planM 当日予定 (m)
-     * @param actualCumM 期間開始からの実績累計 (m)
-     * @param planCumM 期間開始からの予定累計 (m)
-     * @param projectedCumM 見込累計 (m)。当日より前は実績、当日以降は予定を積む
+     * @param actualCumM 月初からの実績累計 (m)（月が変わると 0 から再開）
+     * @param planCumM 月初からの予定累計 (m)（月が変わると 0 から再開）
+     * @param projectedCumM 月初からの見込累計 (m)。当日までは実績、翌日以降は予定
      * @param usesPlanForProjection 見込の当日値が予定側かどうか（{@code date > today}）
      * @param compareActualM 比較対象実績 (m)（日報選択時は実績明細、明細選択時は日報）
-     * @param compareActualCumM 比較対象実績の累計 (m)
+     * @param compareActualCumM 月初からの比較対象実績累計 (m)
      * @param actualMaM 当日を含む直近 N 日間の実績移動平均 (m)。N は {@link Filter#movingAverageDays()}
      */
     public record DayPoint(
@@ -369,15 +369,15 @@ public final class ProcessingTrendAggregator {
      * @param calendarDaysInMonth その月の暦日数
      * @param actualM 月内実績合計
      * @param planM 月内予定合計
-     * @param actualCumM 期間開始からの実績累計（月末時点）
-     * @param planCumM 期間開始からの予定累計（月末時点）
-     * @param projectedCumM 期間開始からの見込累計（月末時点）
+     * @param actualCumM 月内実績累計（月末時点。月単位リセットのため月合計に等しい）
+     * @param planCumM 月内予定累計（月末時点）
+     * @param projectedCumM 月内見込累計（月末時点）
      * @param projectedM 月内の見込寄与
      * @param usesPlanForProjection 当月以降かどうか
      * @param incomplete 月の一部のみ期間に含まれるか
      * @param isCurrentMonth 当月かどうか
      * @param compareActualM 比較対象実績の月内合計 (m)
-     * @param compareActualCumM 比較対象実績の累計 (m)
+     * @param compareActualCumM 月内の比較対象実績累計 (m)
      */
     public record MonthPoint(
             YearMonth month,
@@ -602,8 +602,8 @@ public final class ProcessingTrendAggregator {
     /**
      * 日別集計結果を月別にロールアップする。
      *
-     * <p>期間内の月を連続で列挙し、月内の実績・予定の合算と月末時点の累計を保持する。
-     * 期間全体の合計・進捗率・見込指標は日次集計と完全一致する。
+     * <p>期間内の月を連続で列挙し、月内の実績・予定の合算と月内累計（月末時点）を保持する。
+     * 累計は月単位でリセットする。期間全体の合計・進捗率・見込指標は日次集計と完全一致する。
      */
     public static MonthlyResult rollUpMonthly(Result daily, Filter filter, LocalDate today) {
         Objects.requireNonNull(daily, "daily");
@@ -629,10 +629,6 @@ public final class ProcessingTrendAggregator {
         }
 
         List<MonthPoint> monthPoints = new ArrayList<>();
-        double runningActualCum = 0.0;
-        double runningPlanCum = 0.0;
-        double runningProjectedCum = 0.0;
-        double runningCompareActualCum = 0.0;
 
         for (YearMonth ym = startYm; !ym.isAfter(endYm); ym = ym.plusMonths(1)) {
             List<DayPoint> monthDays = daysByMonth.getOrDefault(ym, List.of());
@@ -663,22 +659,18 @@ public final class ProcessingTrendAggregator {
                 }
             }
 
-            runningActualCum += actSum;
-            runningPlanCum += planSum;
-            runningProjectedCum += projContrib;
-            runningCompareActualCum += compareActSum;
-
+            // 月単位リセット: 月末累計 = 月内合計（期間横断の通し累計にはしない）
             double lastActualCum =
-                    monthDays.isEmpty() ? runningActualCum : monthDays.get(monthDays.size() - 1).actualCumM();
+                    monthDays.isEmpty() ? actSum : monthDays.get(monthDays.size() - 1).actualCumM();
             double lastPlanCum =
-                    monthDays.isEmpty() ? runningPlanCum : monthDays.get(monthDays.size() - 1).planCumM();
+                    monthDays.isEmpty() ? planSum : monthDays.get(monthDays.size() - 1).planCumM();
             double lastProjCum =
                     monthDays.isEmpty()
-                            ? runningProjectedCum
+                            ? projContrib
                             : monthDays.get(monthDays.size() - 1).projectedCumM();
             double lastCompareActualCum =
                     monthDays.isEmpty()
-                            ? runningCompareActualCum
+                            ? compareActSum
                             : monthDays.get(monthDays.size() - 1).compareActualCumM();
 
             monthPoints.add(
@@ -830,17 +822,32 @@ public final class ProcessingTrendAggregator {
         double planCum = 0;
         double projCum = 0;
         double compareActCum = 0;
+        double actTotal = 0;
+        double planTotal = 0;
+        double compareActTotal = 0;
         double actualToDate = 0;
         double planToDate = 0;
         double remainingPlan = 0;
+        YearMonth cumMonth = null;
         for (Map.Entry<LocalDate, double[]> e : byDay.entrySet()) {
             LocalDate d = e.getKey();
+            YearMonth ym = YearMonth.from(d);
+            if (cumMonth == null || !ym.equals(cumMonth)) {
+                actCum = 0;
+                planCum = 0;
+                projCum = 0;
+                compareActCum = 0;
+                cumMonth = ym;
+            }
             double actual = e.getValue()[0];
             double plan = e.getValue()[1];
             double compareActual = e.getValue()[2];
             boolean usesPlan = d.isAfter(t);
             // 当日まで実績、翌日以降は予定（実績累計の先端と必ず接続）
             double projected = usesPlan ? plan : actual;
+            actTotal += actual;
+            planTotal += plan;
+            compareActTotal += compareActual;
             actCum += actual;
             planCum += plan;
             projCum += projected;
@@ -889,8 +896,8 @@ public final class ProcessingTrendAggregator {
         }
         return new Result(
                 days,
-                actCum,
-                planCum,
+                actTotal,
+                planTotal,
                 actualToDate,
                 planToDate,
                 remainingPlan,
@@ -901,7 +908,7 @@ public final class ProcessingTrendAggregator {
                 act.minDate,
                 act.maxDate,
                 warnings,
-                compareActCum,
+                compareActTotal,
                 compareLabel);
     }
 

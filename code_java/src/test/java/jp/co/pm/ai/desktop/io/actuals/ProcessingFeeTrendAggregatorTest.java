@@ -68,6 +68,43 @@ class ProcessingFeeTrendAggregatorTest {
     }
 
     @Test
+    void cumulativeYenResetsAtMonthBoundary() {
+        LocalDate from = LocalDate.of(2026, 8, 31);
+        LocalDate to = LocalDate.of(2026, 9, 2);
+        LocalDate today = LocalDate.of(2026, 9, 2);
+        Map<String, Double> rates = Map.of("A", 10.0);
+        Result r =
+                ProcessingFeeTrendAggregator.aggregate(
+                        List.of(
+                                new QuantityLine(from, "A", 5), // 50
+                                new QuantityLine(LocalDate.of(2026, 9, 1), "A", 3), // 30
+                                new QuantityLine(today, "A", 2)), // 20
+                        List.of(
+                                new QuantityLine(from, "A", 1), // 10
+                                new QuantityLine(LocalDate.of(2026, 9, 1), "A", 4), // 40
+                                new QuantityLine(today, "A", 6)), // 60
+                        rates,
+                        from,
+                        to,
+                        today);
+        DayPoint aug = r.days().get(0);
+        DayPoint sep1 = r.days().get(1);
+        DayPoint sep2 = r.days().get(2);
+        assertEquals(50.0, aug.actualCumYen(), 1e-6);
+        assertEquals(10.0, aug.planCumYen(), 1e-6);
+        assertEquals(50.0, aug.projectedCumYen(), 1e-6);
+        // 9/1 でリセット
+        assertEquals(30.0, sep1.actualCumYen(), 1e-6);
+        assertEquals(40.0, sep1.planCumYen(), 1e-6);
+        assertEquals(30.0, sep1.projectedCumYen(), 1e-6);
+        assertEquals(50.0, sep2.actualCumYen(), 1e-6);
+        assertEquals(100.0, sep2.planCumYen(), 1e-6);
+        assertEquals(50.0, sep2.projectedCumYen(), 1e-6); // 当日まで実績
+        assertEquals(100.0, r.actualTotalYen(), 1e-6);
+        assertEquals(110.0, r.planTotalYen(), 1e-6);
+    }
+
+    @Test
     void projectedCumConnectsAtTodayTipEvenWhenPlanExceedsActual() {
         LocalDate from = LocalDate.of(2026, 9, 1);
         LocalDate to = LocalDate.of(2026, 9, 3);

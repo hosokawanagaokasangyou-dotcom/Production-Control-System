@@ -369,7 +369,7 @@ public class ProcessingFeeTrendTabController {
         detailTable.setPlaceholder(new Label("期間内のデータがありません"));
         detailTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
         Tooltip.install(
-                detailTable, new Tooltip("単位は円（AH × 工程延べ m）。"));
+                detailTable, new Tooltip("単位は円（AH × 工程延べ m）。累計列は月初でリセット。"));
     }
 
     private void initRequestTable() {

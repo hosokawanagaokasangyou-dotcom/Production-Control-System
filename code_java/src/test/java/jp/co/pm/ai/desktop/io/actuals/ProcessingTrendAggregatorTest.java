@@ -104,6 +104,47 @@ class ProcessingTrendAggregatorTest {
     }
 
     @Test
+    void aggregate_resetsCumulativeAtMonthBoundary() {
+        LocalDate from = LocalDate.of(2026, 8, 30);
+        LocalDate to = LocalDate.of(2026, 9, 2);
+        LocalDate today = LocalDate.of(2026, 9, 2);
+        ActualsSnapshot act =
+                new ActualsSnapshot(
+                        ACT_HEADERS,
+                        List.of(
+                                List.of("W9-1", "R1", "スリット", "2026/08/30", "", "100", "100"),
+                                List.of("W9-1", "R2", "スリット", "2026/08/31", "", "100", "50"),
+                                List.of("W9-1", "R3", "スリット", "2026/09/01", "", "100", "40"),
+                                List.of("W9-1", "R4", "スリット", "2026/09/02", "", "100", "10")));
+        AladdinSnapshot plan =
+                new AladdinSnapshot(
+                        List.of("機械名", "依頼NO", "工程名", "2026/08/30", "2026/08/31", "2026/09/01", "2026/09/02"),
+                        List.of(List.of("W9-1", "R1", "スリット", "10", "20", "30", "40")));
+        Result r =
+                ProcessingTrendAggregator.aggregate(
+                        act, plan, dispatch(),
+                        new Filter(from, to, PlanSource.ALADDIN, null, null), today);
+        Assertions.assertEquals(4, r.days().size());
+        DayPoint aug30 = r.days().get(0);
+        DayPoint aug31 = r.days().get(1);
+        DayPoint sep01 = r.days().get(2);
+        DayPoint sep02 = r.days().get(3);
+        Assertions.assertEquals(100, aug30.actualCumM(), 1e-9);
+        Assertions.assertEquals(150, aug31.actualCumM(), 1e-9);
+        Assertions.assertEquals(10, aug30.planCumM(), 1e-9);
+        Assertions.assertEquals(30, aug31.planCumM(), 1e-9);
+        // 9/1 で累計リセット
+        Assertions.assertEquals(40, sep01.actualCumM(), 1e-9);
+        Assertions.assertEquals(30, sep01.planCumM(), 1e-9);
+        Assertions.assertEquals(50, sep02.actualCumM(), 1e-9);
+        Assertions.assertEquals(70, sep02.planCumM(), 1e-9);
+        Assertions.assertEquals(sep02.actualCumM(), sep02.projectedCumM(), 1e-9);
+        // 期間合計は通し（リセットしない）
+        Assertions.assertEquals(200, r.actualTotalM(), 1e-9);
+        Assertions.assertEquals(100, r.planTotalM(), 1e-9);
+    }
+
+    @Test
     void aggregate_todayUsesActualForProjectionToConnectAtTip() {
         ActualsSnapshot act =
                 new ActualsSnapshot(
@@ -509,14 +550,26 @@ class ProcessingTrendAggregatorTest {
         Filter f = new Filter(start, end, PlanSource.ALADDIN, null, null);
         LocalDate today = LocalDate.of(2026, 1, 10);
 
-        // ダミー日次データ: 12月(17日), 1月(31日), 2月(10日)
+        // ダミー日次データ: 12月(17日), 1月(31日), 2月(10日) — 累計は月単位リセット
         List<DayPoint> days = new java.util.ArrayList<>();
+        double actTotal = 0;
+        double planTotal = 0;
         double actualCum = 0;
         double planCum = 0;
         double projCum = 0;
+        java.time.YearMonth cumYm = null;
         for (LocalDate d = start; !d.isAfter(end); d = d.plusDays(1)) {
+            java.time.YearMonth ym = java.time.YearMonth.from(d);
+            if (cumYm == null || !ym.equals(cumYm)) {
+                actualCum = 0;
+                planCum = 0;
+                projCum = 0;
+                cumYm = ym;
+            }
             double act = d.getMonthValue() == 12 ? 10.0 : (d.getMonthValue() == 1 ? 20.0 : 5.0);
             double pl = 15.0;
+            actTotal += act;
+            planTotal += pl;
             actualCum += act;
             planCum += pl;
             boolean usePlan = d.isAfter(today);
@@ -526,7 +579,7 @@ class ProcessingTrendAggregatorTest {
 
         Result daily =
                 new Result(
-                        days, actualCum, planCum, 500.0, 400.0, 300.0, actualCum + 100.0,
+                        days, actTotal, planTotal, 500.0, 400.0, 300.0, actTotal + 100.0,
                         today, 10, 10, start, end, List.of("テスト注意"));
 
         ProcessingTrendAggregator.MonthlyResult mr =
@@ -542,6 +595,8 @@ class ProcessingTrendAggregatorTest {
         Assertions.assertFalse(m1.usesPlanForProjection());
         Assertions.assertEquals(170.0, m1.actualM(), 1e-9);
         Assertions.assertEquals(17 * 15.0, m1.planM(), 1e-9);
+        Assertions.assertEquals(170.0, m1.actualCumM(), 1e-9);
+        Assertions.assertEquals(17 * 15.0, m1.planCumM(), 1e-9);
         Assertions.assertEquals(170.0 - (17 * 15.0), m1.diffM(), 1e-9);
 
         ProcessingTrendAggregator.MonthPoint m2 = mr.months().get(1); // 2026-01
@@ -551,6 +606,7 @@ class ProcessingTrendAggregatorTest {
         Assertions.assertTrue(m2.isCurrentMonth());
         Assertions.assertTrue(m2.usesPlanForProjection());
         Assertions.assertEquals(31 * 20.0, m2.actualM(), 1e-9);
+        Assertions.assertEquals(31 * 20.0, m2.actualCumM(), 1e-9);
 
         ProcessingTrendAggregator.MonthPoint m3 = mr.months().get(2); // 2026-02
         Assertions.assertEquals(java.time.YearMonth.of(2026, 2), m3.month());
@@ -558,10 +614,12 @@ class ProcessingTrendAggregatorTest {
         Assertions.assertTrue(m3.incomplete());
         Assertions.assertFalse(m3.isCurrentMonth());
         Assertions.assertTrue(m3.usesPlanForProjection());
+        Assertions.assertEquals(50.0, m3.actualM(), 1e-9);
+        Assertions.assertEquals(10 * 15.0, m3.planM(), 1e-9);
 
-        // 累計が最終月で日次Resultと一致
+        // 月末累計は月内合計（通し累計ではない）
         Assertions.assertEquals(daily.actualCumAtEnd(), m3.actualCumM(), 1e-9);
-        Assertions.assertEquals(daily.planTotalM(), m3.planCumM(), 1e-9);
+        Assertions.assertEquals(m3.planM(), m3.planCumM(), 1e-9);
         Assertions.assertEquals(daily.actualTotalM(), mr.actualTotalM(), 1e-9);
         Assertions.assertEquals(daily.planTotalM(), mr.planTotalM(), 1e-9);
         Assertions.assertEquals(daily.projectedTotalM(), mr.projectedTotalM(), 1e-9);

@@ -1,6 +1,7 @@
 package jp.co.pm.ai.desktop.io.actuals;
 
 import java.time.LocalDate;
+import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -29,6 +30,7 @@ public final class ProcessingFeeTrendAggregator {
 
     /**
      * 見込累計は加工量トレンドと同型（当日までは実績、翌日以降は予定。先端で接続）。
+     * 実績・予定・見込の累計はいずれも月初でリセットする。
      */
     public record DayPoint(
             LocalDate date,
@@ -36,7 +38,7 @@ public final class ProcessingFeeTrendAggregator {
             double planYen,
             double actualCumYen,
             double planCumYen,
-            /** 見込累計（チャートで実績累計線と接続する破線）。 */
+            /** 見込累計（チャートで実績累計線と接続する破線）。月初リセット。 */
             double projectedCumYen) {}
 
     /** 期間内の依頼NO別集計行。 */
@@ -104,8 +106,16 @@ public final class ProcessingFeeTrendAggregator {
         double projCum = 0;
         double actTotal = 0;
         double planTotal = 0;
+        YearMonth cumMonth = null;
         for (Map.Entry<LocalDate, double[]> e : byDay.entrySet()) {
             LocalDate d = e.getKey();
+            YearMonth ym = YearMonth.from(d);
+            if (cumMonth == null || !ym.equals(cumMonth)) {
+                actCum = 0;
+                planCum = 0;
+                projCum = 0;
+                cumMonth = ym;
+            }
             double a = e.getValue()[0];
             double p = e.getValue()[1];
             actTotal += a;
