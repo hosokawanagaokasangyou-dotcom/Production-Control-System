@@ -97,8 +97,34 @@ class ProcessingFeeTrendAggregatorTest {
     }
 
     @Test
+    void emptyProcessContent_multiProcess_fallsBackToOrderMetersMatch_withinPeriod() {
+        // C7-10 相当: 期間内・加工内容空・SEC+裁断 → 旧実装は全捨てで 0。受注 m=4000 と SEC 合計が一致すれば採用
+        LocalDate day = LocalDate.of(2026, 7, 15);
+        LocalDate from = LocalDate.of(2026, 7, 1);
+        LocalDate to = LocalDate.of(2026, 7, 31);
+        Map<String, FeeInfo> fees =
+                Map.of("C7-10", new FeeInfo(null, 112_000.0, "", 2026, 7, 4_000.0));
+        Result r =
+                ProcessingFeeTrendAggregator.aggregate(
+                        List.of(
+                                new QuantityLine(day, "C7-10", 2_000, "SEC"),
+                                new QuantityLine(day, "C7-10", 2_000, "SEC"),
+                                new QuantityLine(day, "C7-10", 2_000, "裁断")),
+                        List.of(),
+                        fees,
+                        from,
+                        to,
+                        LocalDate.of(2026, 9, 11));
+        RequestPoint row = r.requests().get(0);
+        assertEquals(4_000.0, row.actualMeters(), 1e-6);
+        assertEquals(0.0, row.remainMeters(), 1e-6);
+        assertEquals(112_000.0, row.actualYen(), 1e-6);
+        assertEquals(112_000.0, r.days().stream().mapToDouble(DayPoint::actualYen).sum(), 1e-6);
+    }
+
+    @Test
     void requestActualUsesOutsidePeriodMeters_dailyBarsStayInPeriod() {
-        // 日報が 2024/07/15 でも依頼NO別は実績に算入。日次棒は 2026/07 のみ
+        // 表示期間外の日報日付でも依頼NO別実績には算入（日次棒は期間内のみ）
         LocalDate from = LocalDate.of(2026, 7, 1);
         LocalDate to = LocalDate.of(2026, 7, 31);
         LocalDate today = LocalDate.of(2026, 9, 11);
