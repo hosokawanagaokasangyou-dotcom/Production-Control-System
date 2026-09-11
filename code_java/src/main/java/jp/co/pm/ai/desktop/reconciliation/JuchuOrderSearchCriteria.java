@@ -4,7 +4,17 @@ import java.time.LocalDate;
 import java.util.Optional;
 
 public record JuchuOrderSearchCriteria(
-        LocalDate from, LocalDate to, String productKeyword, String rawMaterialKeyword) {
+        LocalDate from,
+        LocalDate to,
+        String productKeyword,
+        String rawMaterialKeyword,
+        String machineKeyword,
+        String processKeyword) {
+
+    public JuchuOrderSearchCriteria(
+            LocalDate from, LocalDate to, String productKeyword, String rawMaterialKeyword) {
+        this(from, to, productKeyword, rawMaterialKeyword, "", "");
+    }
 
     public Optional<String> validationError() {
         if (from == null || to == null) {
@@ -13,8 +23,11 @@ public record JuchuOrderSearchCriteria(
         if (from.isAfter(to)) {
             return Optional.of("開始日が終了日より後です");
         }
-        if (isBlankKeyword(productKeyword) && isBlankKeyword(rawMaterialKeyword)) {
-            return Optional.of("製品名または投入原反を入力してください");
+        if (isBlankKeyword(productKeyword)
+                && isBlankKeyword(rawMaterialKeyword)
+                && isBlankKeyword(machineKeyword)
+                && isBlankKeyword(processKeyword)) {
+            return Optional.of("製品名・投入原反・機械名・工程名のいずれかを入力してください");
         }
         return Optional.empty();
     }

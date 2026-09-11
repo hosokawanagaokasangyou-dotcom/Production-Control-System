@@ -43,6 +43,26 @@ class JuchuOrderSearchTest {
                 new JuchuOrderSearchCriteria(
                                 LocalDate.of(2026, 6, 1), LocalDate.of(2026, 6, 30), "製品X", "")
                         .validationError());
+        assertEquals(
+                Optional.empty(),
+                new JuchuOrderSearchCriteria(
+                                LocalDate.of(2026, 6, 1),
+                                LocalDate.of(2026, 6, 30),
+                                "",
+                                "",
+                                "スライス",
+                                "")
+                        .validationError());
+        assertEquals(
+                Optional.empty(),
+                new JuchuOrderSearchCriteria(
+                                LocalDate.of(2026, 6, 1),
+                                LocalDate.of(2026, 6, 30),
+                                "",
+                                "",
+                                "",
+                                "SEC")
+                        .validationError());
     }
 
     @Test
@@ -115,7 +135,67 @@ class JuchuOrderSearchTest {
                 assertThrows(
                         IllegalArgumentException.class,
                         () -> JuchuOrderSearch.filter(List.of(), invalid));
-        assertEquals("製品名または投入原反を入力してください", ex.getMessage());
+        assertEquals("製品名・投入原反・機械名・工程名のいずれかを入力してください", ex.getMessage());
+    }
+
+    @Test
+    void matches_machineName_partial() {
+        var c =
+                new JuchuOrderSearchCriteria(
+                        LocalDate.of(2026, 6, 1),
+                        LocalDate.of(2026, 6, 30),
+                        "",
+                        "",
+                        "スライス",
+                        "");
+        assertTrue(
+                JuchuOrderSearch.matches(
+                        rec(
+                                "1",
+                                Map.of(
+                                        "希望納期",
+                                        "2026-06-10",
+                                        "機械名",
+                                        "スライス機1 湖南")),
+                        c));
+        assertTrue(
+                JuchuOrderSearch.matches(
+                        rec("2", Map.of("希望納期", "2026-06-10", "機械", "スライス2")), c));
+        assertFalse(
+                JuchuOrderSearch.matches(
+                        rec("3", Map.of("希望納期", "2026-06-10", "製品", "スライス製品")), c));
+    }
+
+    @Test
+    void matches_processName_orKakouNaiyo() {
+        var c =
+                new JuchuOrderSearchCriteria(
+                        LocalDate.of(2026, 6, 1), LocalDate.of(2026, 6, 30), "", "", "", "SEC");
+        assertTrue(
+                JuchuOrderSearch.matches(
+                        rec("1", Map.of("希望納期", "2026-06-10", "工程名", "SEC工程")), c));
+        assertTrue(
+                JuchuOrderSearch.matches(
+                        rec("2", Map.of("希望納期", "2026-06-10", "加工内容", "①SEC")), c));
+        assertFalse(
+                JuchuOrderSearch.matches(
+                        rec("3", Map.of("希望納期", "2026-06-10", "製品", "SECフィルム")), c));
+    }
+
+    @Test
+    void matches_machineAndProcess_fromExtraHaystack() {
+        var c =
+                new JuchuOrderSearchCriteria(
+                        LocalDate.of(2026, 6, 1),
+                        LocalDate.of(2026, 6, 30),
+                        "",
+                        "",
+                        "W9",
+                        "スリット");
+        OrderRecord rec = rec("C8-9", Map.of("希望納期", "2026-06-10", "製品", "X"));
+        assertFalse(JuchuOrderSearch.matches(rec, c));
+        assertTrue(JuchuOrderSearch.matches(rec, c, "W9-1 湖南", "スリット カット"));
+        assertFalse(JuchuOrderSearch.matches(rec, c, "W9-1 湖南", "SEC"));
     }
 
     @Test

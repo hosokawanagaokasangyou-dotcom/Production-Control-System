@@ -5,6 +5,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Function;
 
 public final class JuchuOrderSearch {
 
@@ -20,17 +21,55 @@ public final class JuchuOrderSearch {
         if (records == null) {
             return List.of();
         }
-        return records.stream().filter(record -> matches(record, criteria)).toList();
+        return records.stream()
+                .filter(record -> matches(record, criteria, "", ""))
+                .toList();
+    }
+
+    public static List<OrderRecord> filter(
+            Collection<OrderRecord> records,
+            JuchuOrderSearchCriteria criteria,
+            Function<OrderRecord, String> extraMachineHaystack,
+            Function<OrderRecord, String> extraProcessHaystack) {
+        Objects.requireNonNull(criteria, "criteria");
+        var validationError = criteria.validationError();
+        if (validationError.isPresent()) {
+            throw new IllegalArgumentException(validationError.get());
+        }
+        if (records == null) {
+            return List.of();
+        }
+        Function<OrderRecord, String> machines =
+                extraMachineHaystack != null ? extraMachineHaystack : r -> "";
+        Function<OrderRecord, String> processes =
+                extraProcessHaystack != null ? extraProcessHaystack : r -> "";
+        return records.stream()
+                .filter(
+                        record ->
+                                matches(
+                                        record,
+                                        criteria,
+                                        machines.apply(record),
+                                        processes.apply(record)))
+                .toList();
     }
 
     public static boolean matches(OrderRecord record, JuchuOrderSearchCriteria criteria) {
+        return matches(record, criteria, "", "");
+    }
+
+    public static boolean matches(
+            OrderRecord record,
+            JuchuOrderSearchCriteria criteria,
+            String extraMachineHaystack,
+            String extraProcessHaystack) {
         if (record == null || criteria == null) {
             return false;
         }
         if (!deliveryInRange(record, criteria.from(), criteria.to())) {
             return false;
         }
-        return keywordMatches(record, criteria);
+        return keywordMatches(record, criteria, extraMachineHaystack, extraProcessHaystack);
     }
 
     public static String displayRawMaterial(Map<String, String> dbValues) {
@@ -62,13 +101,33 @@ public final class JuchuOrderSearch {
         return !parsed.isBefore(from) && !parsed.isAfter(to);
     }
 
-    private static boolean keywordMatches(OrderRecord record, JuchuOrderSearchCriteria criteria) {
+    public static String displayMachine(Map<String, String> dbValues, String extraHaystack) {
+        return firstNonBlank(
+                dbValues != null ? dbValues.get("機械名") : null,
+                dbValues != null ? dbValues.get("機械") : null,
+                extraHaystack);
+    }
+
+    public static String displayProcess(Map<String, String> dbValues, String extraHaystack) {
+        return firstNonBlank(
+                dbValues != null ? dbValues.get("工程名") : null,
+                dbValues != null ? dbValues.get("加工内容") : null,
+                extraHaystack);
+    }
+
+    private static boolean keywordMatches(
+            OrderRecord record,
+            JuchuOrderSearchCriteria criteria,
+            String extraMachineHaystack,
+            String extraProcessHaystack) {
         Map<String, String> db = record.getDbValues();
         if (db == null) {
             return false;
         }
         String productKeyword = normalizedKeyword(criteria.productKeyword());
         String rawMaterialKeyword = normalizedKeyword(criteria.rawMaterialKeyword());
+        String machineKeyword = normalizedKeyword(criteria.machineKeyword());
+        String processKeyword = normalizedKeyword(criteria.processKeyword());
 
         boolean productMatch =
                 !productKeyword.isEmpty()
@@ -77,7 +136,35 @@ public final class JuchuOrderSearch {
                 !rawMaterialKeyword.isEmpty()
                         && (containsNormalized(db.get("品名1"), rawMaterialKeyword)
                                 || containsNormalized(db.get("原反品名"), rawMaterialKeyword));
-        return productMatch || rawMaterialMatch;
+        boolean machineMatch =
+                !machineKeyword.isEmpty()
+                        && (containsNormalized(db.get("機械名"), machineKeyword)
+                                || containsNormalized(db.get("機械"), machineKeyword)
+                                || containsNormalized(extraMachineHaystack, machineKeyword));
+        boolean processMatch =
+                !processKeyword.isEmpty()
+                        && (containsNormalized(db.get("工程名"), processKeyword)
+                                || containsNormalized(db.get("加工内容"), processKeyword)
+                                || containsNormalized(extraProcessHaystack, processKeyword));
+        boolean productOrRawOk =
+                (productKeyword.isEmpty() && rawMaterialKeyword.isEmpty())
+                        || productMatch
+                        || rawMaterialMatch;
+        boolean machineOk = machineKeyword.isEmpty() || machineMatch;
+        boolean processOk = processKeyword.isEmpty() || processMatch;
+        return productOrRawOk && machineOk && processOk;
+    }
+
+    private static String firstNonBlank(String... values) {
+        if (values == null) {
+            return "";
+        }
+        for (String value : values) {
+            if (value != null && !value.strip().isEmpty()) {
+                return value.strip();
+            }
+        }
+        return "";
     }
 
     private static String normalizedKeyword(String keyword) {

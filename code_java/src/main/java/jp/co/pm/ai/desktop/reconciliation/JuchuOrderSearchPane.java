@@ -1,10 +1,13 @@
 package jp.co.pm.ai.desktop.reconciliation;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Supplier;
 
 import javafx.beans.property.BooleanProperty;
@@ -36,6 +39,9 @@ import javafx.scene.layout.VBox;
 import javafx.stage.Window;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
+import jp.co.pm.ai.desktop.dispatch.AladdinShapedPlanQtyLookup;
+import jp.co.pm.ai.desktop.dispatch.AladdinShapedPlanQtyLookup.PlanEntry;
+import jp.co.pm.ai.desktop.dispatch.AladdinShapedPlanQtyLookup.PipelineScanIndex;
 
 /**
  * 受注検索。左条件・右結果。選択した依頼NOの後加工検査表を開ける。
@@ -62,6 +68,10 @@ public final class JuchuOrderSearchPane {
         product.setPromptText("製品名（部分一致）");
         TextField raw = new TextField();
         raw.setPromptText("投入原反（部分一致）");
+        TextField machine = new TextField();
+        machine.setPromptText("機械名（部分一致）");
+        TextField process = new TextField();
+        process.setPromptText("工程名（部分一致）");
         Button search = new Button("検索");
         Button openKensa = new Button("検査表を開く");
         Button rebuildIndex = new Button("検査表索引を更新");
@@ -77,6 +87,8 @@ public final class JuchuOrderSearchPane {
                         labeled("納期 To", to),
                         labeled("製品", product),
                         labeled("投入原反", raw),
+                        labeled("機械名", machine),
+                        labeled("工程名", process),
                         search,
                         openKensa,
                         rebuildIndex,
@@ -90,6 +102,7 @@ public final class JuchuOrderSearchPane {
         ObservableList<OrderRecord> items = FXCollections.observableArrayList();
         TableView<OrderRecord> table = new TableView<>(items);
         BooleanProperty indexBusy = new SimpleBooleanProperty(false);
+        PipelineScanIndex[] planIndex = {PipelineScanIndex.empty()};
         table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
         table.setPlaceholder(new Label("条件を指定して検索してください"));
         table.getColumns()
@@ -99,6 +112,18 @@ public final class JuchuOrderSearchPane {
                         col("調整納期", r -> dbValue(r, "調整納期")),
                         col("製品", r -> dbValue(r, "製品")),
                         col("原反", r -> JuchuOrderSearch.displayRawMaterial(r.getDbValues())),
+                        col(
+                                "機械名",
+                                r ->
+                                        JuchuOrderSearch.displayMachine(
+                                                r.getDbValues(),
+                                                planHaystack(planIndex[0], r, true))),
+                        col(
+                                "工程名",
+                                r ->
+                                        JuchuOrderSearch.displayProcess(
+                                                r.getDbValues(),
+                                                planHaystack(planIndex[0], r, false))),
                         col("ユーザー", r -> nullToEmpty(r.getUser())),
                         col("入力日", r -> dbValue(r, "入力日")));
 
@@ -151,7 +176,9 @@ public final class JuchuOrderSearchPane {
                                     from.getValue(),
                                     to.getValue(),
                                     product.getText(),
-                                    raw.getText());
+                                    raw.getText(),
+                                    machine.getText(),
+                                    process.getText());
                     Optional<String> err = c.validationError();
                     if (err.isPresent()) {
                         statusMessage.setText(err.get());
@@ -159,7 +186,14 @@ public final class JuchuOrderSearchPane {
                         countLabel.setText("0 件");
                         return;
                     }
-                    List<OrderRecord> hits = JuchuOrderSearch.filter(recordsSupplier.get(), c);
+                    planIndex[0] = loadPlanIndex(env.get());
+                    PipelineScanIndex index = planIndex[0];
+                    List<OrderRecord> hits =
+                            JuchuOrderSearch.filter(
+                                    recordsSupplier.get(),
+                                    c,
+                                    r -> planHaystack(index, r, true),
+                                    r -> planHaystack(index, r, false));
                     items.setAll(hits);
                     String countText = hits.size() + " 件";
                     statusMessage.setText(countText);
@@ -332,6 +366,39 @@ public final class JuchuOrderSearchPane {
         a.setHeaderText(null);
         a.setContentText(message);
         a.showAndWait();
+    }
+
+    private static PipelineScanIndex loadPlanIndex(Map<String, String> ui) {
+        try {
+            Path path = AppPaths.resolveShapedAladdinPlanJsonPath(ui);
+            if (path == null || !Files.isRegularFile(path)) {
+                return PipelineScanIndex.empty();
+            }
+            AladdinShapedPlanQtyLookup.ShapedTable table =
+                    AladdinShapedPlanQtyLookup.loadShapedTable(path);
+            return AladdinShapedPlanQtyLookup.buildPipelineScanIndex(table.headers(), table.rows());
+        } catch (RuntimeException ex) {
+            return PipelineScanIndex.empty();
+        }
+    }
+
+    private static String planHaystack(
+            PipelineScanIndex index, OrderRecord record, boolean machine) {
+        if (index == null || record == null) {
+            return "";
+        }
+        List<PlanEntry> entries = index.planEntriesFor(record.getReqNo());
+        if (entries == null || entries.isEmpty()) {
+            return "";
+        }
+        Set<String> names = new LinkedHashSet<>();
+        for (PlanEntry entry : entries) {
+            String value = machine ? entry.machineName() : entry.processName();
+            if (value != null && !value.isBlank()) {
+                names.add(value.strip());
+            }
+        }
+        return String.join(" ", names);
     }
 
     private static VBox labeled(String caption, javafx.scene.Node field) {
