@@ -110,6 +110,18 @@ class JuchuOrderSearchTest {
                 JuchuOrderSearch.matches(
                         rec("2", Map.of("希望納期", "2026-06-10", "製品", "zzz", "原反品名", "xxRAWyy")),
                         c));
+        assertTrue(
+                JuchuOrderSearch.matches(
+                        rec(
+                                "4",
+                                Map.of(
+                                        "希望納期",
+                                        "2026-06-10",
+                                        "製品",
+                                        "zzz",
+                                        "原反",
+                                        "0R040-8Y0B-RAW")),
+                        c));
         assertFalse(
                 JuchuOrderSearch.matches(
                         rec("3", Map.of("希望納期", "2026-06-10", "製品", "zzz", "品名1", "zzz")),
@@ -226,14 +238,34 @@ class JuchuOrderSearchTest {
     }
 
     @Test
-    void rawMaterialCandidates_prefersHinmei1() {
+    void displayRawMaterial_prefersGenpanSpecOverHinmei1() {
+        assertEquals(
+                "0R040-8Y0B-250X197",
+                JuchuOrderSearch.displayRawMaterial(
+                        Map.of("原反", "0R040-8Y0B-250X197", "品名1", "6710")));
+        assertEquals("原反A", JuchuOrderSearch.displayRawMaterial(Map.of("品名1", "原反A")));
+        assertEquals("原反B", JuchuOrderSearch.displayRawMaterial(Map.of("原反品名", "原反B")));
+    }
+
+    @Test
+    void rawMaterialCandidates_prefersGenpanSpec_fallsBackToHinmei() {
         List<String> names =
                 JuchuOrderSearch.rawMaterialCandidates(
                         List.of(
-                                rec("1", Map.of("品名1", "原反A")),
-                                rec("2", Map.of("原反品名", "原反B")),
-                                rec("3", Map.of("品名1", "原反A"))));
-        assertEquals(List.of("原反A", "原反B"), names);
+                                rec(
+                                        "1",
+                                        Map.of(
+                                                "原反",
+                                                "0R040-8Y0B-250X197",
+                                                "品名1",
+                                                "6710")),
+                                rec("2", Map.of("原反", "05020-AY00-630X100\n0R040-8Y0B-250X198")),
+                                rec("3", Map.of("品名1", "原反A")),
+                                rec("4", Map.of("原反品名", "原反B"))));
+        assertEquals(
+                List.of("05020-AY00-630X100", "0R040-8Y0B-250X197", "0R040-8Y0B-250X198", "原反A", "原反B"),
+                names);
+        assertFalse(names.contains("6710"));
     }
 
     @Test

@@ -90,12 +90,7 @@ public final class JuchuOrderSearch {
         if (dbValues == null) {
             return "";
         }
-        String hinmei1 = dbValues.get("品名1");
-        if (hinmei1 != null && !hinmei1.strip().isEmpty()) {
-            return hinmei1.strip();
-        }
-        String rawName = dbValues.get("原反品名");
-        return rawName != null ? rawName.strip() : "";
+        return firstNonBlank(dbValues.get("原反"), dbValues.get("品名1"), dbValues.get("原反品名"));
     }
 
     private static boolean deliveryInRange(OrderRecord record, LocalDate from, LocalDate to) {
@@ -180,7 +175,8 @@ public final class JuchuOrderSearch {
                         && containsNormalized(db.get("製品"), productKeyword);
         boolean rawMaterialMatch =
                 !rawMaterialKeyword.isEmpty()
-                        && (containsNormalized(db.get("品名1"), rawMaterialKeyword)
+                        && (containsNormalized(db.get("原反"), rawMaterialKeyword)
+                                || containsNormalized(db.get("品名1"), rawMaterialKeyword)
                                 || containsNormalized(db.get("原反品名"), rawMaterialKeyword));
         boolean machineMatch =
                 !machineKeyword.isEmpty()
