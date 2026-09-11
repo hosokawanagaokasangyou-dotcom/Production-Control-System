@@ -53,6 +53,8 @@
                     <ComboBox fx:id="actualSourceCombo" prefWidth="160.0"/>
                     <Label text="予定"/>
                     <ComboBox fx:id="planSourceCombo" prefWidth="168.0"/>
+                    <Label fx:id="planSourceMetaLabel" managed="false" visible="false"
+                           styleClass="pm-processing-trend-plan-source-meta" text=""/>
                 </HBox>
             </FlowPane>
             <FlowPane hgap="10.0" vgap="8.0">

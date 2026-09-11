@@ -3307,7 +3307,10 @@
     -fx-pref-width: 210px;
 }
 
-.label.pm-processing-trend-kpi-caption {
+.pm-processing-trend-plan-source-meta {
+    -fx-text-fill: derive(-fx-text-background-color, 35%);
+    -fx-font-size: 11px;
+}
     -fx-font-size: 11px;
     -fx-text-fill: -fx-mid-text-color;
 }

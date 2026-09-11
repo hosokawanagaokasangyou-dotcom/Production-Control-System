@@ -77,6 +77,8 @@ import javafx.util.StringConverter;
 
 import jp.co.pm.ai.desktop.ProcessingTrendChartSupport.MonthBand;
 import jp.co.pm.ai.desktop.ProcessingTrendChartSupport.NiceRange;
+import jp.co.pm.ai.desktop.config.AppPaths;
+import jp.co.pm.ai.desktop.dispatch.ResultDispatchProvenance;
 import jp.co.pm.ai.desktop.io.DesktopFileOpener;
 import jp.co.pm.ai.desktop.io.actuals.DashboardLoadErrorFormatter;
 import jp.co.pm.ai.desktop.io.actuals.EquipmentStatusDashboardSourceLoader;
@@ -210,6 +212,7 @@ public class ProcessingTrendTabController {
     @FXML private Label nextRefreshLabel;
     @FXML private ComboBox<ProcessingTrendAggregator.ActualSource> actualSourceCombo;
     @FXML private ComboBox<PlanSource> planSourceCombo;
+    @FXML private Label planSourceMetaLabel;
     @FXML private ComboBox<String> machineCombo;
     @FXML private ComboBox<String> processCombo;
     @FXML private ToggleGroup granularityGroup;
@@ -553,7 +556,12 @@ public class ProcessingTrendTabController {
         planSourceCombo
                 .getSelectionModel()
                 .selectedItemProperty()
-                .addListener((obs, o, n) -> onFilterChanged());
+                .addListener(
+                        (obs, o, n) -> {
+                            updatePlanSourceMeta();
+                            onFilterChanged();
+                        });
+        updatePlanSourceMeta();
         machineCombo.setItems(FXCollections.observableArrayList(ALL_ITEM));
         machineCombo.getSelectionModel().selectFirst();
         machineCombo.getSelectionModel().selectedItemProperty().addListener((obs, o, n) -> onFilterChanged());
@@ -2408,6 +2416,39 @@ public class ProcessingTrendTabController {
         boolean show = !sb.isEmpty();
         sourceSummaryLabel.setVisible(show);
         sourceSummaryLabel.setManaged(show);
+        updatePlanSourceMeta();
+    }
+
+    private void updatePlanSourceMeta() {
+        if (planSourceMetaLabel == null) {
+            return;
+        }
+        PlanSource src =
+                planSourceCombo != null ? planSourceCombo.getSelectionModel().getSelectedItem() : null;
+        if (src != PlanSource.DISPATCH) {
+            planSourceMetaLabel.setText("");
+            planSourceMetaLabel.setVisible(false);
+            planSourceMetaLabel.setManaged(false);
+            planSourceMetaLabel.setTooltip(null);
+            return;
+        }
+        Map<String, String> ui = shell != null ? shell.snapshotUiEnv() : Map.of();
+        java.nio.file.Path path = AppPaths.resolveResultDispatchTableJsonPath(ui);
+        var info = ResultDispatchProvenance.read(path);
+        if (info.isEmpty()) {
+            planSourceMetaLabel.setText("配台JSON: （ファイルなし）");
+            planSourceMetaLabel.setVisible(true);
+            planSourceMetaLabel.setManaged(true);
+            planSourceMetaLabel.setTooltip(null);
+            return;
+        }
+        ResultDispatchProvenance.Info p = info.get();
+        planSourceMetaLabel.setText(p.formatDisplayLine());
+        planSourceMetaLabel.setVisible(true);
+        planSourceMetaLabel.setManaged(true);
+        if (p.path() != null) {
+            Tooltip.install(planSourceMetaLabel, new Tooltip(p.path().toAbsolutePath().toString()));
+        }
     }
 
     private void showNotice(String text, NoticeKind kind) {

@@ -61,6 +61,7 @@ import javafx.util.StringConverter;
 import jp.co.pm.ai.desktop.ProcessingTrendChartSupport.MonthBand;
 import jp.co.pm.ai.desktop.ProcessingTrendChartSupport.NiceRange;
 import jp.co.pm.ai.desktop.config.AppPaths;
+import jp.co.pm.ai.desktop.dispatch.ResultDispatchProvenance;
 import jp.co.pm.ai.desktop.io.actuals.EquipmentStatusDashboardSourceLoader;
 import jp.co.pm.ai.desktop.io.actuals.EquipmentStatusDashboardSourceLoader.LoadedSources;
 import jp.co.pm.ai.desktop.io.actuals.EquipmentStatusDashboardSourceLoader.ReloadDecision;
@@ -125,6 +126,7 @@ public class ProcessingFeeTrendTabController {
     @FXML private Label loadingStatusLabel;
     @FXML private ComboBox<ActualSource> actualSourceCombo;
     @FXML private ComboBox<PlanSource> planSourceCombo;
+    @FXML private Label planSourceMetaLabel;
     @FXML private Label kpiActualYen;
     @FXML private Label kpiPlanYen;
     @FXML private HBox noticeBanner;
@@ -272,6 +274,7 @@ public class ProcessingFeeTrendTabController {
         planSourceCombo.setItems(FXCollections.observableArrayList(PlanSource.values()));
         actualSourceCombo.getSelectionModel().select(ActualSource.DAILY_REPORT);
         planSourceCombo.getSelectionModel().select(PlanSource.ALADDIN);
+        updatePlanSourceMeta();
 
         suppressFilterEvents = true;
         applyPreset(PeriodPreset.THIS_MONTH);
@@ -292,7 +295,11 @@ public class ProcessingFeeTrendTabController {
         fromDatePicker.valueProperty().addListener((o, a, n) -> onDateManual());
         toDatePicker.valueProperty().addListener((o, a, n) -> onDateManual());
         actualSourceCombo.valueProperty().addListener((o, a, n) -> scheduleRecompute());
-        planSourceCombo.valueProperty().addListener((o, a, n) -> scheduleRecompute());
+        planSourceCombo.valueProperty().addListener(
+                (o, a, n) -> {
+                    updatePlanSourceMeta();
+                    scheduleRecompute();
+                });
 
         dailyYAxis.widthProperty().addListener((o, a, n) -> syncChartPadding());
         cumulativeYAxis.widthProperty().addListener((o, a, n) -> syncChartPadding());
@@ -636,6 +643,37 @@ public class ProcessingFeeTrendTabController {
         toDatePicker.setValue(to);
     }
 
+    private void updatePlanSourceMeta() {
+        if (planSourceMetaLabel == null) {
+            return;
+        }
+        PlanSource src = planSourceCombo != null ? planSourceCombo.getValue() : null;
+        if (src != PlanSource.DISPATCH) {
+            planSourceMetaLabel.setText("");
+            planSourceMetaLabel.setVisible(false);
+            planSourceMetaLabel.setManaged(false);
+            planSourceMetaLabel.setTooltip(null);
+            return;
+        }
+        Map<String, String> ui = shell != null ? shell.snapshotUiEnv() : Map.of();
+        java.nio.file.Path path = AppPaths.resolveResultDispatchTableJsonPath(ui);
+        var info = ResultDispatchProvenance.read(path);
+        if (info.isEmpty()) {
+            planSourceMetaLabel.setText("配台JSON: （ファイルなし）");
+            planSourceMetaLabel.setVisible(true);
+            planSourceMetaLabel.setManaged(true);
+            planSourceMetaLabel.setTooltip(null);
+            return;
+        }
+        ResultDispatchProvenance.Info p = info.get();
+        planSourceMetaLabel.setText(p.formatDisplayLine());
+        planSourceMetaLabel.setVisible(true);
+        planSourceMetaLabel.setManaged(true);
+        if (p.path() != null) {
+            Tooltip.install(planSourceMetaLabel, new Tooltip(p.path().toAbsolutePath().toString()));
+        }
+    }
+
     private void scheduleRecompute() {
         if (suppressFilterEvents || cachedSources == null) {
             return;
@@ -691,6 +729,7 @@ public class ProcessingFeeTrendTabController {
                             "単価: "
                                     + b.juchuNote()
                                     + " ／ 単位: 円（AH×工程延べ m）。依頼の生産金額ではありません。");
+                    updatePlanSourceMeta();
                     hideNotice();
                     recomputeNow();
                 });

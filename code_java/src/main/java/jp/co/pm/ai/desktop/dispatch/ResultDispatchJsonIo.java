@@ -3,6 +3,7 @@ package jp.co.pm.ai.desktop.dispatch;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -12,6 +13,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+
+import jp.co.pm.ai.desktop.config.OperatorUserPaths;
 
 /**
  * Read / write {@code 結果_配台表.json} compatible with {@link jp.co.pm.ai.desktop.ResultDispatchTableTabController}.
@@ -58,16 +61,25 @@ public final class ResultDispatchJsonIo {
         doc.setFormatVersion(formatVer);
         doc.setSheetName(sheetName);
         doc.setExcelTableName(excelTable);
+        doc.setGeneratedBy(textOr(root, ResultDispatchProvenance.JSON_KEY_GENERATED_BY));
+        doc.setGeneratedAt(textOr(root, ResultDispatchProvenance.JSON_KEY_GENERATED_AT));
         ResultDispatchNormalizer.normalizeInPlace(doc.columns(), doc.rows());
         return doc;
     }
 
     public static void write(Path path, ResultDispatchDocument doc) throws Exception {
         ResultDispatchStage2ColumnSupport.ensureStage2RequiredColumns(doc);
+        stampProvenanceIfBlank(doc);
         ObjectNode root = JSON.createObjectNode();
         root.put("format_version", doc.formatVersion());
         root.put("sheet_name", doc.sheetName());
         root.put("excel_table_name", doc.excelTableName());
+        if (!doc.generatedBy().isBlank()) {
+            root.put(ResultDispatchProvenance.JSON_KEY_GENERATED_BY, doc.generatedBy());
+        }
+        if (!doc.generatedAt().isBlank()) {
+            root.put(ResultDispatchProvenance.JSON_KEY_GENERATED_AT, doc.generatedAt());
+        }
         ArrayNode cols = JSON.createArrayNode();
         for (String c : doc.columns()) {
             cols.add(c);
@@ -86,6 +98,24 @@ public final class ResultDispatchJsonIo {
         String text = JSON.writerWithDefaultPrettyPrinter().writeValueAsString(root) + "\n";
         Files.createDirectories(path.getParent());
         Files.writeString(path, text, StandardCharsets.UTF_8);
+    }
+
+    /** 未設定ならセッション操作者と現在時刻を埋める（既存メタは上書きしない）。 */
+    static void stampProvenanceIfBlank(ResultDispatchDocument doc) {
+        if (doc == null) {
+            return;
+        }
+        if (doc.generatedBy().isBlank()) {
+            String op = OperatorUserPaths.resolveOperatorUser(Map.of());
+            if (op != null
+                    && !op.isBlank()
+                    && !OperatorUserPaths.UNKNOWN_OPERATOR_DIR.equals(op)) {
+                doc.setGeneratedBy(op);
+            }
+        }
+        if (doc.generatedAt().isBlank()) {
+            doc.setGeneratedAt(ResultDispatchProvenance.formatInstantIso(Instant.now()));
+        }
     }
 
     /** Legacy JSON without {@code メンバー名}: insert after {@code 加工終了日時}. */

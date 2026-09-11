@@ -82,6 +82,8 @@
                         <ComboBox fx:id="planSourceCombo" prefWidth="168.0">
                             <tooltip><Tooltip text="予定系列の取得元。&#10;アラジン加工計画: 日付列の計画 m（未完依頼のスナップショット。完了依頼は消えるため前日までの予定は欠け得る）&#10;配台結果 JSON: 配台日×当日配台数量（本日以降の残量配台のみ。前日までの予定は持たない）"/></tooltip>
                         </ComboBox>
+                        <Label fx:id="planSourceMetaLabel" managed="false" visible="false"
+                               styleClass="pm-processing-trend-plan-source-meta" text=""/>
                     </HBox>
                     <HBox spacing="4.0" alignment="CENTER_LEFT" styleClass="pm-processing-trend-granularity-toggle">
                         <fx:define>

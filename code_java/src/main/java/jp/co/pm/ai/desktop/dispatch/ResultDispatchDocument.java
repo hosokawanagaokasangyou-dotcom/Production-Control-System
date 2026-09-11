@@ -11,6 +11,10 @@ public final class ResultDispatchDocument {
     private int formatVersion = 1;
     private String sheetName = "結果_配台表";
     private String excelTableName = "_t結果_配台表";
+    /** 生成操作者（JSON {@code generated_by}）。空なら未記録。 */
+    private String generatedBy = "";
+    /** 生成日時 ISO-8601（JSON {@code generated_at}）。空なら未記録。 */
+    private String generatedAt = "";
     private final List<String> columns;
     private final List<Map<String, String>> rows;
 
@@ -47,6 +51,22 @@ public final class ResultDispatchDocument {
         this.excelTableName = excelTableName != null ? excelTableName : "";
     }
 
+    public String generatedBy() {
+        return generatedBy;
+    }
+
+    public void setGeneratedBy(String generatedBy) {
+        this.generatedBy = generatedBy != null ? generatedBy.strip() : "";
+    }
+
+    public String generatedAt() {
+        return generatedAt;
+    }
+
+    public void setGeneratedAt(String generatedAt) {
+        this.generatedAt = generatedAt != null ? generatedAt.strip() : "";
+    }
+
     public List<String> columns() {
         return columns;
     }
@@ -65,6 +85,8 @@ public final class ResultDispatchDocument {
         d.formatVersion = formatVersion;
         d.sheetName = sheetName;
         d.excelTableName = excelTableName;
+        d.generatedBy = generatedBy;
+        d.generatedAt = generatedAt;
         return d;
     }
 }

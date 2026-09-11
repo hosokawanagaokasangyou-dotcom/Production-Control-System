@@ -9395,6 +9395,10 @@ def _write_dispatch_table_standalone_json(df_dispatch: pd.DataFrame, target_dir:
             "row_count": int(len(rows)),
             "rows": rows,
         }
+        _op = (os.environ.get("PM_AI_OPERATOR_USER") or "").strip()
+        if _op:
+            payload["generated_by"] = _op
+        payload["generated_at"] = datetime.now().astimezone().isoformat(timespec="seconds")
         p_out = pathlib.Path(target_dir) / RESULT_DISPATCH_TABLE_JSON_FILENAME
         p_out.parent.mkdir(parents=True, exist_ok=True)
         text = json.dumps(payload, ensure_ascii=False, indent=2) + "\n"

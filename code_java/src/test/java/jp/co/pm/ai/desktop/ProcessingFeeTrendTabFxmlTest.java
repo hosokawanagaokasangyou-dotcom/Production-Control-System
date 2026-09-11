@@ -34,7 +34,9 @@ class ProcessingFeeTrendTabFxmlTest {
         assertNotNull(elementByFxId("colActualCumYen"));
         assertNotNull(elementByFxId("colPlanCumYen"));
         assertNotNull(elementByFxId("requestPane"));
-        assertNotNull(elementByFxId("requestTable"));
+        assertNotNull(elementByFxId("planSourceCombo"));
+        assertNotNull(elementByFxId("planSourceMetaLabel"));
+        assertNotNull(elementByFxId("sourceSummaryLabel"));
         assertNotNull(elementByFxId("colRequestNo"));
         assertNotNull(elementByFxId("colRateYen"));
         assertNotNull(elementByFxId("colReqActualYen"));
