@@ -44,6 +44,9 @@ class ProcessingFeeTrendTabFxmlTest {
         assertNotNull(elementByFxId("kpiOrderAoYen"));
         assertEquals("AO(受注額)", elementByFxId("colAoYen").getAttribute("text"));
         assertEquals("円/m", elementByFxId("colRateYen").getAttribute("text"));
+        assertEquals("未了円", elementByFxId("colPlanYen").getAttribute("text"));
+        assertEquals("未了円", elementByFxId("colReqPlanYen").getAttribute("text"));
+        assertEquals("未了 (m)", elementByFxId("colPlanM").getAttribute("text"));
         assertEquals("false", elementByFxId("detailPane").getAttribute("expanded"));
         assertEquals("false", elementByFxId("requestPane").getAttribute("expanded"));
         assertEquals(

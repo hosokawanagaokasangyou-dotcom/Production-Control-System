@@ -79,7 +79,7 @@ import jp.co.pm.ai.desktop.io.actuals.ProcessingTrendAggregator.Filter;
 import jp.co.pm.ai.desktop.io.actuals.ProcessingTrendAggregator.PlanSource;
 
 /**
- * 「加工賃」子タブ: AH×m の実績円・予定円・累計折れ線（加工量トレンドと同系の軸デザイン）。
+ * 「加工賃」子タブ: AO÷受注最終工程m の実績円・未了円・累計折れ線（加工量トレンドと同系の軸デザイン）。
  */
 public class ProcessingFeeTrendTabController {
 
@@ -218,7 +218,7 @@ public class ProcessingFeeTrendTabController {
     @FXML
     private void initialize() {
         actualSeries.setName("実績円");
-        planSeries.setName("予定円");
+        planSeries.setName("未了円");
         dailyChart.getData().setAll(actualSeries, planSeries);
         dailyChart.setAnimated(false);
 
@@ -317,7 +317,7 @@ public class ProcessingFeeTrendTabController {
         dailyXAxis.categorySpacingProperty().addListener((o, a, n) -> requestOverlayLayout());
         markerPane.sceneProperty().addListener((o, a, n) -> requestOverlayLayout());
 
-        sourceSummaryLabel.setText("受注 AO を最終工程 m で按分。複数工程は加工内容の末尾工程のみ。");
+        sourceSummaryLabel.setText("円/m = AO ÷ 受注最終工程 m。実績＋未了＝受注額。");
         initDetailTable();
         initRequestTable();
         syncChartPadding();
@@ -385,7 +385,8 @@ public class ProcessingFeeTrendTabController {
         detailTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
         Tooltip.install(
                 detailTable,
-                new Tooltip("単位は円（受注AO÷最終工程m × 日次最終工程m）。累計列は月初でリセット。"));
+                new Tooltip(
+                        "単位は円。円/m＝AO÷受注最終工程m。日次は実績円／未了円。累計列は月初でリセット。"));
     }
 
     private void initRequestTable() {
@@ -469,9 +470,8 @@ public class ProcessingFeeTrendTabController {
         Tooltip.install(
                 requestTable,
                 new Tooltip(
-                        "AO(受注額) は受注の合計。合計行・KPI「受注額合計」は同値。\n"
-                                + "実績円・予定円は期間内最終工程 m で AO を按分した額（未加工・単価欠落分は 0）。\n"
-                                + "そのため受注額合計 ≠ 実績円＋予定円 になることがある。"));
+                        "円/m = AO ÷ 受注最終工程 m。実績円 = 円/m × 実績 m、未了円 = 円/m × (受注 m − 実績 m)。\n"
+                                + "実績円＋未了円 = AO（受注額）。複数工程は最終工程 m のみ。"));
     }
 
     private TableCell<RequestPoint, Number> yenNumberCell() {
@@ -593,7 +593,7 @@ public class ProcessingFeeTrendTabController {
         }
         legendBox.getChildren().setAll(
                 legendItem("実績円", "#2563eb", false),
-                legendItem("予定円", "#64748b", false),
+                legendItem("未了円", "#64748b", false),
                 legendItem("実績累計", "#1e3a8a", false),
                 legendItem("見込累計", "#0f766e", true),
                 legendItem("今日", "#0f766e", true));
@@ -844,13 +844,7 @@ public class ProcessingFeeTrendTabController {
                         if (notice.length() > 0) {
                             notice.append(' ');
                         }
-                        notice.append("受注額合計（")
-                                .append(NumberFormat.getIntegerInstance(Locale.JAPAN).format(Math.rint(orderAo)))
-                                .append("）と按分円（実績+予定 ")
-                                .append(
-                                        NumberFormat.getIntegerInstance(Locale.JAPAN)
-                                                .format(Math.rint(allocated)))
-                                .append("）の差は、未加工または単価欠落分です。");
+                        notice.append("受注額と実績円＋未了円に差があります（単価欠落や受注 m 欠落を確認）。");
                     }
                     if (notice.length() > 0) {
                         showNotice(notice.toString());

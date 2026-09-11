@@ -12,6 +12,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.TreeSet;
 import java.util.regex.Pattern;
 
 import jp.co.pm.ai.desktop.io.actuals.JuchuProcessingFeeRateLoader.FeeInfo;
@@ -20,8 +21,9 @@ import jp.co.pm.ai.desktop.ui.PlanInputProcessSequenceRowOrder;
 /**
  * 加工賃トレンド用の日次円集計および依頼NO別一覧。
  *
- * <p>複数工程の依頼は受注「加工内容」末尾＝最終工程の m のみを使う。日次円は受注 AO（依頼の加工賃合計）を
- * 期間内最終工程 m 比率で按分する。AO 欠落時は AH（末尾単価）×最終工程 m。
+ * <p>AO（受注額）を正とする。円/m = AO ÷ 受注最終工程 m。実績円 = 円/m × 実績 m、
+ * 未了（残予定）円 = 円/m × (受注 m − 実績 m) とし、両者の合計は当該依頼の AO に一致する。
+ * 複数工程は実績・受注とも最終工程 m のみ。AO 欠落時は AH × m（未了は受注 m があれば同様）。
  */
 public final class ProcessingFeeTrendAggregator {
 
@@ -87,6 +89,11 @@ public final class ProcessingFeeTrendAggregator {
         public boolean isTotalRow() {
             return TOTAL_REQUEST_LABEL.equals(requestNo);
         }
+
+        /** 未了 m（受注最終工程 m − 実績 m）。フィールド名 planMeters の別名。 */
+        public double remainMeters() {
+            return planMeters;
+        }
     }
 
     /** 依頼NO別表の先頭合計行ラベル。 */
@@ -94,8 +101,7 @@ public final class ProcessingFeeTrendAggregator {
 
     /**
      * 依頼NO別一覧の先頭に合計行を付ける。空なら空リスト。
-     * 合計行の AO は各行の受注額 AO の合算（KPI「受注額合計」と同値）。
-     * 実績円＋予定円は按分円であり、未加工・単価欠落があるとき AO とは一致しない。
+     * AO 正本のとき、合計行の AO と実績円＋予定円（未了）は一致する（単価欠落行を除く）。
      * 円/m は合算しない（欠落扱いで UI は —）。
      */
     public static List<RequestPoint> withLeadingTotalRow(List<RequestPoint> requests) {
@@ -159,8 +165,19 @@ public final class ProcessingFeeTrendAggregator {
             int planLinesCounted,
             int missingRateLines) {}
 
+    /** 依頼ごとの AO 正本配分結果。 */
+    record RequestAlloc(
+            double yenPerM,
+            double orderMeters,
+            double actualMeters,
+            double remainMeters,
+            double actualYen,
+            double planYen,
+            double aoYen,
+            boolean rateMissing) {}
+
     /**
-     * @param fees 依頼No → 受注 FeeInfo（AO・AH・加工内容）。null 可
+     * @param fees 依頼No → 受注 FeeInfo（AO・AH・加工内容・受注最終工程 m）。null 可
      */
     public static Result aggregate(
             List<QuantityLine> actualLines,
@@ -185,21 +202,35 @@ public final class ProcessingFeeTrendAggregator {
         List<QuantityLine> actFiltered = filterToFinalProcess(actualLines, feeMap);
         List<QuantityLine> planFiltered = filterToFinalProcess(planLines, feeMap);
 
-        Map<String, Double> yenPerM = resolveYenPerMeter(actFiltered, planFiltered, feeMap);
+        Map<String, Double> actualMetersByReq = sumMetersByRequest(actFiltered);
+        Set<String> reqKeys = new HashSet<>(actualMetersByReq.keySet());
+        addOrderMonthRequestKeys(feeMap, reqKeys, from, to);
+        for (QuantityLine line : planFiltered) {
+            if (line != null && !line.requestNo().isEmpty()) {
+                reqKeys.add(line.requestNo());
+            }
+        }
+
+        Map<String, RequestAlloc> allocs = new LinkedHashMap<>();
+        int missing = 0;
+        for (String req : new TreeSet<>(reqKeys)) {
+            FeeInfo info = feeMap.get(req);
+            double actM = actualMetersByReq.getOrDefault(req, 0.0);
+            RequestAlloc alloc = allocateRequest(info, actM, planFiltered, req);
+            allocs.put(req, alloc);
+            if (alloc.rateMissing()) {
+                missing++;
+            }
+        }
 
         TreeMap<LocalDate, double[]> byDay = new TreeMap<>();
         for (LocalDate d = from; !d.isAfter(to); d = d.plusDays(1)) {
-            byDay.put(d, new double[2]); // 0=actualYen, 1=planYen
+            byDay.put(d, new double[2]);
         }
-        // requestNo -> [actualM, planM, actualYen, planYen, rateMissingFlag(1/0), aoYen]
-        TreeMap<String, double[]> byRequest = new TreeMap<>();
-
-        int[] actCount = {0};
-        int[] planCount = {0};
-        int[] missing = {0};
-        accumulate(actFiltered, yenPerM, feeMap, byDay, byRequest, 0, actCount, missing);
-        accumulate(planFiltered, yenPerM, feeMap, byDay, byRequest, 1, planCount, missing);
-        includeOrderMonthRequests(feeMap, byRequest, from, to);
+        int actCount =
+                accumulateActualDays(actFiltered, allocs, feeMap, byDay);
+        int planCount =
+                distributeRemainToPlanDays(planFiltered, allocs, byDay, from, to, t);
 
         List<DayPoint> days = new ArrayList<>(byDay.size());
         double actCum = 0;
@@ -232,30 +263,19 @@ public final class ProcessingFeeTrendAggregator {
             days.add(new DayPoint(d, a, planForMetrics, actCum, planCum, projCum));
         }
 
-        List<RequestPoint> requests = new ArrayList<>(byRequest.size());
-        for (Map.Entry<String, double[]> e : byRequest.entrySet()) {
-            double[] v = e.getValue();
-            boolean missingRate = v[4] > 0.5;
-            FeeInfo info = feeMap.get(e.getKey());
-            double rateVal = info != null && info.hasAh() ? info.rateAhYenPerM() : 0.0;
-            double aoVal = v[5];
-            if (aoVal <= EPS && info != null && info.hasAo()) {
-                aoVal = info.totalAoYen();
-            }
-            Double ypm = yenPerM.get(e.getKey());
-            if (ypm != null && ypm > EPS) {
-                rateVal = ypm;
-            }
+        List<RequestPoint> requests = new ArrayList<>(allocs.size());
+        for (Map.Entry<String, RequestAlloc> e : allocs.entrySet()) {
+            RequestAlloc al = e.getValue();
             requests.add(
                     new RequestPoint(
                             e.getKey(),
-                            rateVal,
-                            aoVal,
-                            missingRate,
-                            v[0],
-                            v[1],
-                            v[2],
-                            v[3]));
+                            al.yenPerM(),
+                            al.aoYen(),
+                            al.rateMissing(),
+                            al.actualMeters(),
+                            al.remainMeters(),
+                            al.actualYen(),
+                            al.planYen()));
         }
 
         return new Result(
@@ -266,21 +286,76 @@ public final class ProcessingFeeTrendAggregator {
                 t,
                 from,
                 to,
-                actCount[0],
-                planCount[0],
-                missing[0]);
+                actCount,
+                planCount,
+                missing);
     }
 
-    /**
-     * 期間に重なる受注年月（希望納期の年×月数）の依頼を依頼NO表へ含める。
-     * 加工実績・予定が無い依頼も AO 合計が受注側と一致するようにする。
-     */
-    static void includeOrderMonthRequests(
-            Map<String, FeeInfo> fees,
-            TreeMap<String, double[]> byRequest,
-            LocalDate from,
-            LocalDate to) {
-        if (fees == null || fees.isEmpty() || byRequest == null) {
+    static RequestAlloc allocateRequest(
+            FeeInfo info, double actualMeters, List<QuantityLine> planFiltered, String req) {
+        double actM = Math.max(0.0, actualMeters);
+        double ao = info != null && info.hasAo() ? info.totalAoYen() : 0.0;
+        if (info != null && info.hasAo() && info.hasOrderFinalMeters()) {
+            double orderM = info.orderFinalMeters();
+            double ypm = ao / orderM;
+            double actUsed = Math.min(actM, orderM);
+            double remain = Math.max(0.0, orderM - actUsed);
+            return new RequestAlloc(
+                    ypm, orderM, actUsed, remain, actUsed * ypm, remain * ypm, ao, false);
+        }
+        if (info != null && info.hasAo() && !info.hasOrderFinalMeters()) {
+            // 受注 m 不明: 期間実績が無ければ全額を未了、あれば実績に全額（一致優先）
+            if (actM <= EPS) {
+                return new RequestAlloc(0.0, 0.0, 0.0, 0.0, 0.0, ao, ao, false);
+            }
+            double ypm = ao / actM;
+            return new RequestAlloc(ypm, actM, actM, 0.0, ao, 0.0, ao, false);
+        }
+        if (info != null && info.hasAh()) {
+            double ypm = info.rateAhYenPerM();
+            double planSched = sumMetersForRequest(planFiltered, req);
+            double orderM =
+                    info.hasOrderFinalMeters() ? info.orderFinalMeters() : actM + planSched;
+            if (orderM <= EPS) {
+                orderM = actM;
+            }
+            double actUsed = orderM > EPS ? Math.min(actM, orderM) : actM;
+            double remain = Math.max(0.0, orderM - actUsed);
+            return new RequestAlloc(
+                    ypm,
+                    orderM,
+                    actUsed,
+                    remain,
+                    actUsed * ypm,
+                    remain * ypm,
+                    ao,
+                    false);
+        }
+        return new RequestAlloc(0.0, 0.0, actM, 0.0, 0.0, 0.0, ao, actM > EPS || ao > EPS);
+    }
+
+    private static double sumMetersForRequest(List<QuantityLine> lines, String req) {
+        if (lines == null || req == null) {
+            return 0.0;
+        }
+        double s = 0;
+        for (QuantityLine line : lines) {
+            if (line != null && req.equals(line.requestNo())) {
+                s += line.meters();
+            }
+        }
+        return s;
+    }
+
+    private static Map<String, Double> sumMetersByRequest(List<QuantityLine> lines) {
+        Map<String, Double> meters = new HashMap<>();
+        addMeters(meters, lines);
+        return meters;
+    }
+
+    private static void addOrderMonthRequestKeys(
+            Map<String, FeeInfo> fees, Set<String> reqKeys, LocalDate from, LocalDate to) {
+        if (fees == null || fees.isEmpty()) {
             return;
         }
         Set<YearMonth> months = new HashSet<>();
@@ -296,12 +371,105 @@ public final class ProcessingFeeTrendAggregator {
             if (!months.contains(ym)) {
                 continue;
             }
-            String req = e.getKey() == null || e.getKey().isBlank() ? "（依頼NOなし）" : e.getKey();
-            double[] arr = byRequest.computeIfAbsent(req, k -> new double[6]);
-            if (info.hasAo() && arr[5] <= EPS) {
-                arr[5] = info.totalAoYen();
+            if (e.getKey() != null && !e.getKey().isBlank()) {
+                reqKeys.add(e.getKey());
             }
         }
+    }
+
+    /** 実績日次円。受注 m を超えないよう依頼ごとにクリップ。 */
+    private static int accumulateActualDays(
+            List<QuantityLine> actFiltered,
+            Map<String, RequestAlloc> allocs,
+            Map<String, FeeInfo> feeMap,
+            TreeMap<LocalDate, double[]> byDay) {
+        if (actFiltered == null) {
+            return 0;
+        }
+        Map<String, Double> used = new HashMap<>();
+        int counted = 0;
+        for (QuantityLine line : actFiltered) {
+            if (line == null || Math.abs(line.meters()) <= EPS) {
+                continue;
+            }
+            double[] slotArr = byDay.get(line.date());
+            if (slotArr == null) {
+                continue;
+            }
+            String req = line.requestNo().isEmpty() ? "（依頼NOなし）" : line.requestNo();
+            RequestAlloc al = allocs.get(req);
+            if (al == null || al.rateMissing() || al.yenPerM() <= EPS) {
+                continue;
+            }
+            double already = used.getOrDefault(req, 0.0);
+            double room =
+                    al.orderMeters() > EPS
+                            ? Math.max(0.0, al.orderMeters() - already)
+                            : line.meters();
+            double take = Math.min(line.meters(), room);
+            if (take <= EPS) {
+                continue;
+            }
+            slotArr[0] += take * al.yenPerM();
+            used.put(req, already + take);
+            counted++;
+        }
+        return counted;
+    }
+
+    /**
+     * 未了円を予定日に配分。翌日以降の予定 m 比率。予定行が無ければ期間末（または翌日）へ一括。
+     */
+    private static int distributeRemainToPlanDays(
+            List<QuantityLine> planFiltered,
+            Map<String, RequestAlloc> allocs,
+            TreeMap<LocalDate, double[]> byDay,
+            LocalDate from,
+            LocalDate to,
+            LocalDate today) {
+        int counted = 0;
+        for (Map.Entry<String, RequestAlloc> e : allocs.entrySet()) {
+            RequestAlloc al = e.getValue();
+            if (al.planYen() <= EPS || al.rateMissing()) {
+                continue;
+            }
+            String req = e.getKey();
+            Map<LocalDate, Double> weights = new HashMap<>();
+            double wSum = 0;
+            if (planFiltered != null) {
+                for (QuantityLine line : planFiltered) {
+                    if (line == null || !req.equals(line.requestNo())) {
+                        continue;
+                    }
+                    if (!line.date().isAfter(today)) {
+                        continue;
+                    }
+                    if (!byDay.containsKey(line.date())) {
+                        continue;
+                    }
+                    weights.merge(line.date(), line.meters(), Double::sum);
+                    wSum += line.meters();
+                }
+            }
+            if (wSum > EPS) {
+                for (Map.Entry<LocalDate, Double> w : weights.entrySet()) {
+                    double yen = al.planYen() * (w.getValue() / wSum);
+                    byDay.get(w.getKey())[1] += yen;
+                }
+                counted++;
+            } else {
+                LocalDate anchor = today.plusDays(1);
+                if (anchor.isBefore(from)) {
+                    anchor = from;
+                }
+                if (anchor.isAfter(to)) {
+                    anchor = to;
+                }
+                byDay.get(anchor)[1] += al.planYen();
+                counted++;
+            }
+        }
+        return counted;
     }
 
     /**
@@ -353,30 +521,6 @@ public final class ProcessingFeeTrendAggregator {
         return out;
     }
 
-    /** 依頼NO → 円/m（AO÷期間最終工程m合計。AO無ければ AH）。 */
-    static Map<String, Double> resolveYenPerMeter(
-            List<QuantityLine> actualFinal,
-            List<QuantityLine> planFinal,
-            Map<String, FeeInfo> fees) {
-        Map<String, Double> meters = new HashMap<>();
-        addMeters(meters, actualFinal);
-        addMeters(meters, planFinal);
-        Map<String, Double> out = new LinkedHashMap<>();
-        Set<String> keys = new HashSet<>();
-        keys.addAll(meters.keySet());
-        keys.addAll(fees.keySet());
-        for (String req : keys) {
-            FeeInfo info = fees.get(req);
-            double m = meters.getOrDefault(req, 0.0);
-            if (info != null && info.hasAo() && m > EPS) {
-                out.put(req, info.totalAoYen() / m);
-            } else if (info != null && info.hasAh()) {
-                out.put(req, info.rateAhYenPerM());
-            }
-        }
-        return out;
-    }
-
     private static void addMeters(Map<String, Double> meters, List<QuantityLine> lines) {
         if (lines == null) {
             return;
@@ -387,55 +531,6 @@ public final class ProcessingFeeTrendAggregator {
             }
             String req = line.requestNo().isEmpty() ? "（依頼NOなし）" : line.requestNo();
             meters.merge(req, line.meters(), Double::sum);
-        }
-    }
-
-    private static void accumulate(
-            List<QuantityLine> lines,
-            Map<String, Double> yenPerM,
-            Map<String, FeeInfo> fees,
-            TreeMap<LocalDate, double[]> byDay,
-            TreeMap<String, double[]> byRequest,
-            int slot,
-            int[] counted,
-            int[] missingRate) {
-        if (lines == null) {
-            return;
-        }
-        for (QuantityLine line : lines) {
-            if (line == null || Math.abs(line.meters()) <= EPS) {
-                continue;
-            }
-            double[] slotArr = byDay.get(line.date());
-            if (slotArr == null) {
-                continue;
-            }
-            String req = line.requestNo();
-            if (req.isEmpty()) {
-                req = "（依頼NOなし）";
-            }
-            Double ypm = yenPerM.get(line.requestNo());
-            if (ypm == null) {
-                ypm = yenPerM.get(req);
-            }
-            boolean missing = ypm == null;
-            if (missing) {
-                missingRate[0]++;
-            } else {
-                slotArr[slot] += line.meters() * ypm;
-                counted[0]++;
-            }
-            double[] reqArr = byRequest.computeIfAbsent(req, k -> new double[6]);
-            reqArr[slot] += line.meters();
-            if (!missing) {
-                reqArr[slot + 2] += line.meters() * ypm;
-            } else {
-                reqArr[4] = 1.0;
-            }
-            FeeInfo info = fees.get(line.requestNo());
-            if (info != null && info.hasAo()) {
-                reqArr[5] = info.totalAoYen();
-            }
         }
     }
 

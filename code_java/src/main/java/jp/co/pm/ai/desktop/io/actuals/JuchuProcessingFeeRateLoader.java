@@ -61,19 +61,30 @@ public final class JuchuProcessingFeeRateLoader {
      * @param processContent Z 列の加工内容（カンマ区切り工程列）
      * @param orderYear 希望納期の年。欠落時は {@code null}
      * @param orderMonth 月数（1〜12）。欠落時は {@code null}
+     * @param orderFinalMeters 受注の最終工程 m（AM 末尾行。複数工程時は最終工程数量）
      */
     public record FeeInfo(
             Double rateAhYenPerM,
             Double totalAoYen,
             String processContent,
             Integer orderYear,
-            Integer orderMonth) {
+            Integer orderMonth,
+            Double orderFinalMeters) {
         public FeeInfo {
             processContent = processContent == null ? "" : processContent.strip();
         }
 
         public FeeInfo(Double rateAhYenPerM, Double totalAoYen, String processContent) {
-            this(rateAhYenPerM, totalAoYen, processContent, null, null);
+            this(rateAhYenPerM, totalAoYen, processContent, null, null, null);
+        }
+
+        public FeeInfo(
+                Double rateAhYenPerM,
+                Double totalAoYen,
+                String processContent,
+                Integer orderYear,
+                Integer orderMonth) {
+            this(rateAhYenPerM, totalAoYen, processContent, orderYear, orderMonth, null);
         }
 
         public boolean hasAo() {
@@ -82,6 +93,12 @@ public final class JuchuProcessingFeeRateLoader {
 
         public boolean hasAh() {
             return rateAhYenPerM != null && !Double.isNaN(rateAhYenPerM);
+        }
+
+        public boolean hasOrderFinalMeters() {
+            return orderFinalMeters != null
+                    && orderFinalMeters > 0
+                    && !Double.isNaN(orderFinalMeters);
         }
 
         public boolean hasOrderYearMonth() {
@@ -177,15 +194,14 @@ public final class JuchuProcessingFeeRateLoader {
             }
             String ahRaw = cellText(row.getCell(feeCol), eval);
             Double rate = parseFeeRateLastLine(ahRaw);
+            String amRaw = cellText(row.getCell(amCol), eval);
+            String suryo1Raw = cellText(row.getCell(suryo1Col), eval);
+            Double orderFinalM = parseOrderFinalMeters(amRaw, suryo1Raw);
             Double ao = parseAoYen(row.getCell(aoCol), eval);
             if (ao == null || ao <= EPS) {
-                String amRaw = cellText(row.getCell(amCol), eval);
                 Double computed = computeAoFromAhAmProductSum(ahRaw, amRaw);
                 if (computed == null || computed <= EPS) {
-                    // AM が =M 行の参照で取れないとき数量1で再計算
-                    computed =
-                            computeAoFromAhAmProductSum(
-                                    ahRaw, cellText(row.getCell(suryo1Col), eval));
+                    computed = computeAoFromAhAmProductSum(ahRaw, suryo1Raw);
                 }
                 if (computed != null && computed > EPS) {
                     ao = computed;
@@ -194,12 +210,34 @@ public final class JuchuProcessingFeeRateLoader {
             String kako = cellText(row.getCell(kakoCol), eval);
             Integer orderMonth = parseOrderMonth(row.getCell(monthCol));
             Integer orderYear = parseOrderYear(row.getCell(nokiCol));
-            if (rate == null && ao == null && kako.isBlank() && orderMonth == null) {
+            if (rate == null
+                    && ao == null
+                    && kako.isBlank()
+                    && orderMonth == null
+                    && orderFinalM == null) {
                 continue;
             }
-            out.put(irai, new FeeInfo(rate, ao, kako, orderYear, orderMonth));
+            out.put(
+                    irai,
+                    new FeeInfo(rate, ao, kako, orderYear, orderMonth, orderFinalM));
         }
         return Collections.unmodifiableMap(out);
+    }
+
+    /** AM（改行時は末尾行＝最終工程）または数量1から受注最終工程 m を取る。 */
+    static Double parseOrderFinalMeters(String amRaw, String suryo1Raw) {
+        double[] am = parseNumericLines(amRaw);
+        if (am.length > 0) {
+            double last = am[am.length - 1];
+            if (last > EPS) {
+                return last;
+            }
+        }
+        Double s1 = parsePlainNumber(suryo1Raw);
+        if (s1 != null && s1 > EPS) {
+            return s1;
+        }
+        return null;
     }
 
     /** 互換: 先頭行の数値。空・非数値は null。 */
