@@ -2,6 +2,7 @@ package jp.co.pm.ai.desktop.io.actuals;
 
 import java.text.Normalizer;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -25,7 +26,8 @@ import jp.co.pm.ai.desktop.ui.PlanInputProcessSequenceRowOrder;
  * <p>AO（受注額）を正とする。円/m = AO ÷ 受注最終工程 m。実績円 = 円/m × 実績 m、
  * 未了（残予定）円 = 円/m × (受注 m − 実績 m) とし、両者の合計は当該依頼の AO に一致する。
  * 依頼NO別の実績 m は表示期間外の日報出来高も含む（日次棒のみ表示期間内）。
- * 複数工程は実績・受注とも最終工程 m のみ。AO 欠落時は AH × m（未了は受注 m があれば同様）。
+ * 複数工程は実績・受注とも最終工程 m のみ。日報の最終工程は加工日付＋終了時間の最遅行の工程名。
+ * AO 欠落時は AH × m（未了は受注 m があれば同様）。
  */
 public final class ProcessingFeeTrendAggregator {
 
@@ -35,10 +37,23 @@ public final class ProcessingFeeTrendAggregator {
 
     private ProcessingFeeTrendAggregator() {}
 
-    /** 実績または予定の数量行。 */
-    public record QuantityLine(LocalDate date, String requestNo, double meters, String processName) {
+    /**
+     * 実績または予定の数量行。
+     *
+     * @param finishedAt 日報の加工日付＋終了時間。無い・未解析は {@code null}
+     */
+    public record QuantityLine(
+            LocalDate date,
+            String requestNo,
+            double meters,
+            String processName,
+            LocalDateTime finishedAt) {
         public QuantityLine(LocalDate date, String requestNo, double meters) {
-            this(date, requestNo, meters, "");
+            this(date, requestNo, meters, "", null);
+        }
+
+        public QuantityLine(LocalDate date, String requestNo, double meters, String processName) {
+            this(date, requestNo, meters, processName, null);
         }
 
         public QuantityLine {
@@ -515,52 +530,97 @@ public final class ProcessingFeeTrendAggregator {
     }
 
     /**
-     * 最終工程以外の行を落とす。加工内容が空で工程が複数ある依頼は全行落とす（誤合算防止）。
+     * 最終工程以外の行を落とす。
+     *
+     * <p>日報行に終了日時がある依頼は、加工日付＋終了時間の最遅行の工程名のみ採用する。
+     * 終了日時が無い場合は受注「加工内容」末尾。加工内容が空で工程が複数ある依頼は全行落とす（誤合算防止）。
      */
     static List<QuantityLine> filterToFinalProcess(
             List<QuantityLine> lines, Map<String, FeeInfo> fees) {
         if (lines == null || lines.isEmpty()) {
             return List.of();
         }
+        Map<String, List<QuantityLine>> byReq = new LinkedHashMap<>();
         Map<String, Set<String>> processesByReq = new HashMap<>();
-        for (QuantityLine line : lines) {
-            if (line == null) {
-                continue;
-            }
-            String req = line.requestNo().isEmpty() ? "（依頼NOなし）" : line.requestNo();
-            String proc = normalizeProcessName(line.processName());
-            if (!proc.isEmpty()) {
-                processesByReq.computeIfAbsent(req, k -> new HashSet<>()).add(proc);
-            }
-        }
-        List<QuantityLine> out = new ArrayList<>();
         for (QuantityLine line : lines) {
             if (line == null || Math.abs(line.meters()) <= EPS) {
                 continue;
             }
-            String reqKey = line.requestNo();
+            String lookup = line.requestNo().isEmpty() ? "（依頼NOなし）" : line.requestNo();
+            byReq.computeIfAbsent(lookup, k -> new ArrayList<>()).add(line);
+            String proc = normalizeProcessName(line.processName());
+            if (!proc.isEmpty()) {
+                processesByReq.computeIfAbsent(lookup, k -> new HashSet<>()).add(proc);
+            }
+        }
+        List<QuantityLine> out = new ArrayList<>();
+        for (Map.Entry<String, List<QuantityLine>> e : byReq.entrySet()) {
+            String lookup = e.getKey();
+            List<QuantityLine> group = e.getValue();
+            String byFinished = resolveFinalProcessByFinishedAt(group);
+            if (byFinished != null) {
+                for (QuantityLine line : group) {
+                    if (byFinished.equals(normalizeProcessName(line.processName()))) {
+                        out.add(line);
+                    }
+                }
+                continue;
+            }
+            String reqKey = "（依頼NOなし）".equals(lookup) ? "" : lookup;
             FeeInfo info = fees.get(reqKey);
             String content = info != null ? info.processContent() : "";
             List<String> tokens = PlanInputProcessSequenceRowOrder.parseProcessContentTokens(content);
-            String proc = normalizeProcessName(line.processName());
-            if (tokens.size() >= 2) {
-                String finalTok =
-                        normalizeProcessName(tokens.get(tokens.size() - 1));
-                if (finalTok.isEmpty() || !finalTok.equals(proc)) {
-                    continue;
+            for (QuantityLine line : group) {
+                String proc = normalizeProcessName(line.processName());
+                if (tokens.size() >= 2) {
+                    String finalTok = normalizeProcessName(tokens.get(tokens.size() - 1));
+                    if (finalTok.isEmpty() || !finalTok.equals(proc)) {
+                        continue;
+                    }
+                } else if (tokens.isEmpty()) {
+                    Set<String> procs = processesByReq.getOrDefault(lookup, Set.of());
+                    if (procs.size() >= 2) {
+                        // 加工内容無しで複数工程 → 採用しない（後段で受注 m 一致フォールバック）
+                        continue;
+                    }
                 }
-            } else if (tokens.isEmpty()) {
-                String lookup = reqKey.isEmpty() ? "（依頼NOなし）" : reqKey;
-                Set<String> procs = processesByReq.getOrDefault(lookup, Set.of());
-                if (procs.size() >= 2) {
-                    // 加工内容無しで複数工程 → 採用しない（後段で受注 m 一致フォールバック）
-                    continue;
-                }
+                out.add(line);
             }
-            // 単工程トークン or 工程1種類 or 工程名空: 採用
-            out.add(line);
         }
         return withOrderMetersProcessFallback(lines, out, fees);
+    }
+
+    /**
+     * 依頼内で加工日付＋終了時間が最も遅い行の工程名。終了日時が無い・同刻で工程が複数なら null。
+     */
+    static String resolveFinalProcessByFinishedAt(List<QuantityLine> group) {
+        if (group == null || group.isEmpty()) {
+            return null;
+        }
+        LocalDateTime max = null;
+        String bestProc = null;
+        boolean ambiguous = false;
+        for (QuantityLine line : group) {
+            if (line == null || line.finishedAt() == null) {
+                continue;
+            }
+            String proc = normalizeProcessName(line.processName());
+            if (proc.isEmpty()) {
+                continue;
+            }
+            LocalDateTime fa = line.finishedAt();
+            if (max == null || fa.isAfter(max)) {
+                max = fa;
+                bestProc = proc;
+                ambiguous = false;
+            } else if (fa.equals(max) && !proc.equals(bestProc)) {
+                ambiguous = true;
+            }
+        }
+        if (max == null || ambiguous) {
+            return null;
+        }
+        return bestProc;
     }
 
     /**

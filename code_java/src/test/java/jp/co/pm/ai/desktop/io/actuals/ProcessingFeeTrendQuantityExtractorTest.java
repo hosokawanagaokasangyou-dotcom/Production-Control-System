@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
@@ -54,8 +55,8 @@ class ProcessingFeeTrendQuantityExtractorTest {
         LocalDate d = LocalDate.of(2026, 9, 10);
         ActualsSnapshot daily =
                 new ActualsSnapshot(
-                        List.of("機械名", "依頼NO", "工程名", "加工日付", "実加工量", "実製品出来高"),
-                        List.of(List.of("M1", "Y7-2", "最終", "2026/09/10", "400", "1600")));
+                        List.of("機械名", "依頼NO", "工程名", "加工日付", "実加工量", "実製品出来高", "終了時間"),
+                        List.of(List.of("M1", "Y7-2", "最終", "2026/09/10", "400", "1600", "15:30")));
         Filter filter =
                 new Filter(
                         LocalDate.of(2026, 9, 1),
@@ -70,6 +71,23 @@ class ProcessingFeeTrendQuantityExtractorTest {
         assertEquals(1, actual.size());
         assertEquals(1_600.0, actual.get(0).meters(), 1e-9);
         assertEquals("Y7-2", actual.get(0).requestNo());
+        assertEquals(LocalDateTime.of(2026, 9, 10, 15, 30), actual.get(0).finishedAt());
+    }
+
+    @Test
+    void extractActual_parsesEndTimeVariants() {
+        assertEquals(
+                LocalDateTime.of(2026, 7, 15, 9, 5),
+                ProcessingFeeTrendQuantityExtractor.composeFinishedAt(
+                        LocalDate.of(2026, 7, 15), "9:05"));
+        assertEquals(
+                LocalDateTime.of(2026, 7, 15, 16, 0),
+                ProcessingFeeTrendQuantityExtractor.composeFinishedAt(
+                        LocalDate.of(2026, 7, 15), "1600"));
+        assertEquals(
+                LocalDateTime.of(2026, 7, 15, 18, 0),
+                ProcessingFeeTrendQuantityExtractor.composeFinishedAt(
+                        LocalDate.of(2026, 7, 15), "18"));
     }
 
     @Test

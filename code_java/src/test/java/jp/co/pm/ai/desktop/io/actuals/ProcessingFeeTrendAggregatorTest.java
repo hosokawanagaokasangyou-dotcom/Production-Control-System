@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
@@ -97,8 +98,8 @@ class ProcessingFeeTrendAggregatorTest {
     }
 
     @Test
-    void emptyProcessContent_multiProcess_fallsBackToOrderMetersMatch_withinPeriod() {
-        // C7-10 相当: 期間内・加工内容空・SEC+裁断 → 旧実装は全捨てで 0。受注 m=4000 と SEC 合計が一致すれば採用
+    void emptyProcessContent_multiProcess_usesLatestFinishedAt_withinPeriod() {
+        // C7-10 相当: 期間内・加工内容空・SEC+裁断 → 終了時間が遅い工程（SEC）の出来高のみ
         LocalDate day = LocalDate.of(2026, 7, 15);
         LocalDate from = LocalDate.of(2026, 7, 1);
         LocalDate to = LocalDate.of(2026, 7, 31);
@@ -107,9 +108,24 @@ class ProcessingFeeTrendAggregatorTest {
         Result r =
                 ProcessingFeeTrendAggregator.aggregate(
                         List.of(
-                                new QuantityLine(day, "C7-10", 2_000, "SEC"),
-                                new QuantityLine(day, "C7-10", 2_000, "SEC"),
-                                new QuantityLine(day, "C7-10", 2_000, "裁断")),
+                                new QuantityLine(
+                                        day,
+                                        "C7-10",
+                                        2_000,
+                                        "SEC",
+                                        LocalDateTime.of(2026, 7, 15, 14, 30)),
+                                new QuantityLine(
+                                        day,
+                                        "C7-10",
+                                        2_000,
+                                        "SEC",
+                                        LocalDateTime.of(2026, 7, 15, 16, 0)),
+                                new QuantityLine(
+                                        day,
+                                        "C7-10",
+                                        2_000,
+                                        "裁断",
+                                        LocalDateTime.of(2026, 7, 15, 10, 0))),
                         List.of(),
                         fees,
                         from,
@@ -120,6 +136,48 @@ class ProcessingFeeTrendAggregatorTest {
         assertEquals(0.0, row.remainMeters(), 1e-6);
         assertEquals(112_000.0, row.actualYen(), 1e-6);
         assertEquals(112_000.0, r.days().stream().mapToDouble(DayPoint::actualYen).sum(), 1e-6);
+    }
+
+    @Test
+    void finishedAtOverridesProcessContentLastToken() {
+        // 加工内容末尾は B だが、終了が遅いのは A → A を最終工程とする
+        LocalDate d = LocalDate.of(2026, 9, 1);
+        Map<String, FeeInfo> fees = Map.of("R", ao(1_000.0, 100.0, "A,B"));
+        Result r =
+                ProcessingFeeTrendAggregator.aggregate(
+                        List.of(
+                                new QuantityLine(
+                                        d, "R", 100, "A", LocalDateTime.of(2026, 9, 1, 17, 0)),
+                                new QuantityLine(
+                                        d, "R", 50, "B", LocalDateTime.of(2026, 9, 1, 12, 0))),
+                        List.of(),
+                        fees,
+                        d,
+                        d,
+                        d);
+        assertEquals(100.0, r.requests().get(0).actualMeters(), 1e-6);
+        assertEquals(1_000.0, r.requests().get(0).actualYen(), 1e-6);
+        assertEquals(0.0, r.requests().get(0).planYen(), 1e-6);
+    }
+
+    @Test
+    void laterCalendarDayWinsEvenIfClockIsEarlier() {
+        LocalDate d0 = LocalDate.of(2026, 7, 14);
+        LocalDate d1 = LocalDate.of(2026, 7, 15);
+        Map<String, FeeInfo> fees = Map.of("R", ao(2_000.0, 100.0, ""));
+        Result r =
+                ProcessingFeeTrendAggregator.aggregate(
+                        List.of(
+                                new QuantityLine(
+                                        d0, "R", 80, "裁断", LocalDateTime.of(2026, 7, 14, 20, 0)),
+                                new QuantityLine(
+                                        d1, "R", 100, "SEC", LocalDateTime.of(2026, 7, 15, 9, 0))),
+                        List.of(),
+                        fees,
+                        LocalDate.of(2026, 7, 1),
+                        LocalDate.of(2026, 7, 31),
+                        LocalDate.of(2026, 9, 11));
+        assertEquals(100.0, r.requests().get(0).actualMeters(), 1e-6);
     }
 
     @Test

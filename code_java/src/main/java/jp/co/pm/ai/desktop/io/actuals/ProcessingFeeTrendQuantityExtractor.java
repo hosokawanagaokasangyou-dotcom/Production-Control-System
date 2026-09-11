@@ -3,6 +3,7 @@ package jp.co.pm.ai.desktop.io.actuals;
 import java.text.Normalizer;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
@@ -11,6 +12,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.TreeMap;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchPlanningStageSupport;
@@ -37,6 +39,8 @@ public final class ProcessingFeeTrendQuantityExtractor {
     private static final String COL_ACTUAL_DATE_DAILY = "加工日付";
     private static final String COL_ACTUAL_DATE = "加工日";
     private static final String COL_ACTUAL_START_DT = "加工開始日時";
+    /** 加工日報の終了時刻（加工日付と合成して最終工程判定に使う）。 */
+    private static final String COL_END_TIME = "終了時間";
     private static final String COL_WAREHOUSE = "倉庫";
     private static final String COL_TASK_ID = "依頼NO";
     private static final String COL_CONVERSION_QTY = "換算数量";
@@ -45,6 +49,9 @@ public final class ProcessingFeeTrendQuantityExtractor {
     private static final String TOTAL_ROW_PREFIX = "[合計]";
     private static final Pattern DATE_HEADER = Pattern.compile("\\d{4}/\\d{2}/\\d{2}");
     private static final Pattern WHITESPACE = Pattern.compile("\\s+");
+    private static final Pattern TIME_HM =
+            Pattern.compile("^(\\d{1,2}):(\\d{2})(?::(\\d{2}))?$");
+    private static final Pattern TIME_COMPACT = Pattern.compile("^(\\d{1,2})(\\d{2})$");
 
     private ProcessingFeeTrendQuantityExtractor() {}
 
@@ -104,6 +111,7 @@ public final class ProcessingFeeTrendQuantityExtractor {
         int iStartDt = colIdx(headers, COL_ACTUAL_START_DT);
         int iDailyDate = colIdx(headers, COL_ACTUAL_DATE_DAILY);
         int iKakouDate = colIdx(headers, COL_ACTUAL_DATE);
+        int iEndTime = colIdx(headers, COL_END_TIME);
         String mk = normKey(f.machine());
         String pk = normKey(f.process());
         LocalDate from = f.from();
@@ -129,7 +137,9 @@ public final class ProcessingFeeTrendQuantityExtractor {
             String task =
                     iTask >= 0 ? ProcessingTrendAggregator.normKey(cellAt(row, iTask)) : "";
             String process = iProcess >= 0 ? cellAt(row, iProcess).strip() : "";
-            out.add(new QuantityLine(d, task, qty, process));
+            LocalDateTime finishedAt =
+                    iEndTime >= 0 ? composeFinishedAt(d, cellAt(row, iEndTime)) : null;
+            out.add(new QuantityLine(d, task, qty, process, finishedAt));
         }
         return out;
     }
@@ -322,6 +332,88 @@ public final class ProcessingFeeTrendQuantityExtractor {
             }
         }
         return iKakouDate >= 0 ? parseDate(cellAt(row, iKakouDate)) : null;
+    }
+
+    /** 加工日付＋終了時間 → 最終工程比較用の日時。解釈できないときは null。 */
+    static LocalDateTime composeFinishedAt(LocalDate day, String endTimeRaw) {
+        if (day == null) {
+            return null;
+        }
+        LocalTime t = parseEndTime(endTimeRaw);
+        if (t == null) {
+            LocalDateTime asDt = parseDateTime(endTimeRaw);
+            return asDt;
+        }
+        return LocalDateTime.of(day, t);
+    }
+
+    static LocalTime parseEndTime(String raw) {
+        if (raw == null) {
+            return null;
+        }
+        String s = raw.strip();
+        if (s.isEmpty()) {
+            return null;
+        }
+        // 日付付きなら時刻部だけ取る
+        if (s.length() > 10 && (s.charAt(10) == ' ' || s.charAt(10) == 'T')) {
+            s = s.substring(11).strip();
+        }
+        Matcher hm = TIME_HM.matcher(s);
+        if (hm.matches()) {
+            int h = Integer.parseInt(hm.group(1));
+            int m = Integer.parseInt(hm.group(2));
+            int sec = hm.group(3) != null ? Integer.parseInt(hm.group(3)) : 0;
+            if (h >= 0 && h <= 23 && m >= 0 && m <= 59 && sec >= 0 && sec <= 59) {
+                return LocalTime.of(h, m, sec);
+            }
+            return null;
+        }
+        Matcher compact = TIME_COMPACT.matcher(s);
+        if (compact.matches()) {
+            int h = Integer.parseInt(compact.group(1));
+            int m = Integer.parseInt(compact.group(2));
+            if (h >= 0 && h <= 23 && m >= 0 && m <= 59) {
+                return LocalTime.of(h, m);
+            }
+            return null;
+        }
+        // 整数時のみ（例: 15）
+        try {
+            double n = Double.parseDouble(s.replace(",", ""));
+            int h = (int) n;
+            if (h == n && h >= 0 && h <= 23) {
+                return LocalTime.of(h, 0);
+            }
+        } catch (NumberFormatException ignored) {
+            // fall through
+        }
+        return null;
+    }
+
+    private static LocalDateTime parseDateTime(String raw) {
+        if (raw == null) {
+            return null;
+        }
+        String s = raw.strip();
+        if (s.isEmpty() || s.length() <= 10) {
+            return null;
+        }
+        String[] patterns = {
+            "yyyy/M/d H:mm:ss",
+            "yyyy/M/d H:mm",
+            "yyyy-M-d H:mm:ss",
+            "yyyy-M-d H:mm",
+            "yyyy-MM-dd'T'HH:mm:ss"
+        };
+        for (String p : patterns) {
+            try {
+                return LocalDateTime.parse(s, DateTimeFormatter.ofPattern(p, Locale.JAPAN));
+            } catch (DateTimeParseException ignored) {
+                // try next
+            }
+        }
+        return null;
     }
 
     private static int firstCol(List<String> headers, String... names) {
