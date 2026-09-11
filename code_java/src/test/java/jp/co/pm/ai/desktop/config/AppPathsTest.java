@@ -98,6 +98,12 @@ class AppPathsTest {
     }
 
     @Test
+    void inspectionSheetDir_usesFolderPickerNotFile() {
+        assertTrue(AppPaths.isFolderPathEnvKey(AppPaths.KEY_PM_AI_INSPECTION_SHEET_DIR));
+        assertFalse(AppPaths.isFilePathEnvKey(AppPaths.KEY_PM_AI_INSPECTION_SHEET_DIR));
+    }
+
+    @Test
     void requestFormTpiPdfDir_usesFolderPickerNotFile() {
         assertTrue(AppPaths.isFolderPathEnvKey(AppPaths.KEY_PM_AI_REQUEST_FORM_TPI_PDF_DIR));
         assertFalse(AppPaths.isFilePathEnvKey(AppPaths.KEY_PM_AI_REQUEST_FORM_TPI_PDF_DIR));
@@ -1506,10 +1512,12 @@ class AppPathsTest {
         LinkedHashMap<String, String> map = new LinkedHashMap<>();
         map.put(AppPaths.KEY_PM_AI_FACTORY_SITE, "KONAN");
         map.put(AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR, "");
+        map.put(AppPaths.KEY_PM_AI_INSPECTION_SHEET_DIR, "");
 
         AppPaths.overlayFactorySiteRequestFormPaths(map, FactorySite.KONAN);
 
         assertEquals("", map.get(AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR));
+        assertEquals("", map.get(AppPaths.KEY_PM_AI_INSPECTION_SHEET_DIR));
     }
 
     @Test
@@ -1543,5 +1551,37 @@ class AppPathsTest {
 
         AppPaths.overlayFactorySiteRequestFormPaths(map, FactorySite.KOKUBU);
         assertEquals("", map.get(AppPaths.KEY_PM_AI_MACHINE_DELIVERY_MANAGEMENT_XLSM));
+    }
+
+    @Test
+    void overlayFactorySiteRequestFormPaths_clearsStaleInspectionSheetDirOnFactorySwitch() {
+        LinkedHashMap<String, String> map = new LinkedHashMap<>();
+        map.put(AppPaths.KEY_PM_AI_FACTORY_SITE, "KONAN");
+        map.put(
+                AppPaths.KEY_PM_AI_INSPECTION_SHEET_DIR,
+                "C:\\Users\\me\\Box\\長岡産業\\後加工検査表\\国分工場");
+
+        AppPaths.overlayFactorySiteRequestFormPaths(map, FactorySite.KONAN);
+
+        assertEquals("", map.get(AppPaths.KEY_PM_AI_INSPECTION_SHEET_DIR));
+    }
+
+    @Test
+    void defaultInspectionSheetDirForFactory_usesBoxFactoryRoot() {
+        String konan = AppPaths.defaultInspectionSheetDirForFactory(FactorySite.KONAN);
+        String kokubu = AppPaths.defaultInspectionSheetDirForFactory(FactorySite.KOKUBU);
+        assertTrue(konan.contains("後加工検査表"));
+        assertTrue(konan.contains("湖南工場"));
+        assertTrue(kokubu.contains("国分工場"));
+        assertFalse(konan.equals(kokubu));
+    }
+
+    @Test
+    void resolveInspectionSheetDir_prefersExplicitEnv() {
+        Path custom = Path.of("C:\\custom\\kensa");
+        assertEquals(
+                custom.toAbsolutePath().normalize(),
+                AppPaths.resolveInspectionSheetDir(
+                        Map.of(AppPaths.KEY_PM_AI_INSPECTION_SHEET_DIR, custom.toString())));
     }
 }

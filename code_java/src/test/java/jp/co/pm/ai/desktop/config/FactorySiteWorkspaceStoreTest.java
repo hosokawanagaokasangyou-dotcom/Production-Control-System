@@ -175,6 +175,42 @@ class FactorySiteWorkspaceStoreTest {
     }
 
     @Test
+    void loadReachableInspectionSheetDir_returnsOnlyTargetFactoryPath(@TempDir Path tmp)
+            throws Exception {
+        Path konanDir = Files.createDirectory(tmp.resolve("konan-kensa"));
+        Path kokubuDir = Files.createDirectory(tmp.resolve("kokubu-kensa"));
+        FactorySiteWorkspaceStore.save(
+                "砂田",
+                FactorySite.KONAN,
+                new FactorySiteWorkspaceSnapshot(
+                        List.of(
+                                new UiEnvRowSnapshot(
+                                        AppPaths.KEY_PM_AI_INSPECTION_SHEET_DIR,
+                                        konanDir.toString(),
+                                        "")),
+                        DesktopSessionState.empty()));
+        FactorySiteWorkspaceStore.save(
+                "砂田",
+                FactorySite.KOKUBU,
+                new FactorySiteWorkspaceSnapshot(
+                        List.of(
+                                new UiEnvRowSnapshot(
+                                        AppPaths.KEY_PM_AI_INSPECTION_SHEET_DIR,
+                                        kokubuDir.toString(),
+                                        "")),
+                        DesktopSessionState.empty()));
+
+        assertEquals(
+                konanDir.toAbsolutePath().normalize().toString(),
+                FactorySiteWorkspaceStore.loadReachableInspectionSheetDir("砂田", FactorySite.KONAN)
+                        .orElseThrow());
+        assertEquals(
+                kokubuDir.toAbsolutePath().normalize().toString(),
+                FactorySiteWorkspaceStore.loadReachableInspectionSheetDir("砂田", FactorySite.KOKUBU)
+                        .orElseThrow());
+    }
+
+    @Test
     void saveLastFactorySite_persistsToDisk() throws Exception {
         FactorySiteWorkspaceStore.saveLastFactorySite("砂田", FactorySite.KOKUBU);
         assertEquals(

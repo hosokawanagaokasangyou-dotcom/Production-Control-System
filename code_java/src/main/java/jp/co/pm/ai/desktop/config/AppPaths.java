@@ -161,6 +161,11 @@ public final class AppPaths {
     public static final String KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR = "PM_AI_REQUEST_FORM_ORIGINAL_DIR";
 
     /**
+     * 後加工検査表フォルダ（湖南: {@code Box\長岡産業\後加工検査表\湖南工場}、国分: 同\\国分工場）。
+     */
+    public static final String KEY_PM_AI_INSPECTION_SHEET_DIR = "PM_AI_INSPECTION_SHEET_DIR";
+
+    /**
      * TPI（東レペフ加工品）依頼書 PDF のスキャン先フォルダ（{@code *.pdf}）。
      */
     public static final String KEY_PM_AI_REQUEST_FORM_TPI_PDF_DIR = "PM_AI_REQUEST_FORM_TPI_PDF_DIR";
@@ -729,6 +734,7 @@ public final class AppPaths {
             KEY_PM_AI_ORDER_DETAIL_SOURCE_DIR,
             KEY_PM_AI_ALADDIN_MASTER_DIR,
             KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR,
+            KEY_PM_AI_INSPECTION_SHEET_DIR,
             KEY_PM_AI_REQUEST_FORM_TPI_PDF_DIR,
             KEY_PM_AI_TESSERACT_TESSDATA_DIR,
             KEY_PM_AI_OUTPUT_DIR,
@@ -753,6 +759,7 @@ public final class AppPaths {
                     KEY_PM_AI_WORKSPACE,
                     KEY_PM_AI_ALADDIN_MASTER_DIR,
                     KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR,
+                    KEY_PM_AI_INSPECTION_SHEET_DIR,
                     KEY_PM_AI_REQUEST_FORM_TPI_PDF_DIR,
                     KEY_PM_AI_OUTPUT_DIR,
                     KEY_PM_AI_RESULT_DISPATCH_TABLE_DIR,
@@ -1323,6 +1330,29 @@ public final class AppPaths {
     }
 
     /**
+     * 後加工検査表フォルダ。{@link #KEY_PM_AI_INSPECTION_SHEET_DIR} が空のときは
+     * {@link #defaultInspectionSheetDirForFactory(FactorySite)}（Box 上の工場ルート）。
+     */
+    public static Path resolveInspectionSheetDir(Map<String, String> ui) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        String override = trim(u.get(KEY_PM_AI_INSPECTION_SHEET_DIR));
+        if (!override.isEmpty()) {
+            return Path.of(override).toAbsolutePath().normalize();
+        }
+        return Path.of(
+                        defaultInspectionSheetDirForFactory(
+                                GlobalInitSettingTarget.loadEffective(u)))
+                .toAbsolutePath()
+                .normalize();
+    }
+
+    /** 環境変数タブで {@link #KEY_PM_AI_INSPECTION_SHEET_DIR} が明示設定されているか。 */
+    public static boolean isInspectionSheetDirEnvConfigured(Map<String, String> ui) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        return !trim(u.get(KEY_PM_AI_INSPECTION_SHEET_DIR)).isEmpty();
+    }
+
+    /**
      * TPI 依頼書 PDF フォルダ。{@link #KEY_PM_AI_REQUEST_FORM_TPI_PDF_DIR} が空のときは工場既定（湖南のみ UNC）。
      * 国分など未設定工場では empty。
      */
@@ -1755,6 +1785,33 @@ public final class AppPaths {
             return Optional.empty();
         }
         return Optional.of(configured);
+    }
+
+    /** {@link FactorySite} 別の後加工検査表フォルダ名（湖南工場／国分工場）。 */
+    public static String inspectionSheetDirLeafForFactory(FactorySite site) {
+        if (site == FactorySite.KONAN) {
+            return "湖南工場";
+        }
+        if (site == FactorySite.KOKUBU) {
+            return "国分工場";
+        }
+        return "";
+    }
+
+    /**
+     * {@link FactorySite} 別の {@link #KEY_PM_AI_INSPECTION_SHEET_DIR} 既定。
+     * {@code %USERPROFILE%\Box\長岡産業\後加工検査表\{湖南工場|国分工場}}。
+     */
+    public static String defaultInspectionSheetDirForFactory(FactorySite site) {
+        FactorySite effective = site != null ? site : FactorySite.KONAN;
+        String leaf = inspectionSheetDirLeafForFactory(effective);
+        if (leaf.isEmpty()) {
+            leaf = inspectionSheetDirLeafForFactory(FactorySite.KONAN);
+        }
+        return Path.of(System.getProperty("user.home"), "Box", "長岡産業", "後加工検査表", leaf)
+                .toAbsolutePath()
+                .normalize()
+                .toString();
     }
 
     /** {@link FactorySite} 別の {@link #KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR} 既定（受注ファイルの親フォルダ）。 */
@@ -3093,6 +3150,10 @@ public final class AppPaths {
         // 未設定は空のまま（ui_ref 既定・BOX フォルダ案内用）。実行時フォールバックは resolveRequestFormOriginalDir。
         if (!originalDir.isEmpty() && factoryPathHintConflictsWithSite(originalDir, site)) {
             putFactoryManagedEnv(map, KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR, "");
+        }
+        String inspectionDir = trim(map.get(KEY_PM_AI_INSPECTION_SHEET_DIR));
+        if (!inspectionDir.isEmpty() && factoryPathHintConflictsWithSite(inspectionDir, site)) {
+            putFactoryManagedEnv(map, KEY_PM_AI_INSPECTION_SHEET_DIR, "");
         }
         String tpiPdf = trim(map.get(KEY_PM_AI_REQUEST_FORM_TPI_PDF_DIR));
         String tpiDefault = defaultRequestFormTpiPdfDirForFactory(site);

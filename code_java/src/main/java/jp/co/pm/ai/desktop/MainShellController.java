@@ -134,6 +134,7 @@ import jp.co.pm.ai.desktop.config.FactorySiteWorkspaceMigrator;
 import jp.co.pm.ai.desktop.config.FactorySiteWorkspaceRestorePlan;
 import jp.co.pm.ai.desktop.config.FactorySiteWorkspaceSnapshot;
 import jp.co.pm.ai.desktop.config.FactorySiteWorkspaceStore;
+import jp.co.pm.ai.desktop.reconciliation.InspectionSheetDirPicker;
 import jp.co.pm.ai.desktop.config.PortableBundleUpgradeUiSnapshot;
 import jp.co.pm.ai.desktop.config.GeminiDispatchModelTryOrderDefaults;
 import jp.co.pm.ai.desktop.config.EnvVarsAutoInitialization;
@@ -312,6 +313,7 @@ public final class MainShellController
                     AppPaths.KEY_PM_AI_ORDER_DETAIL_SOURCE_DIR,
                     AppPaths.KEY_PM_AI_ALADDIN_MASTER_DIR,
                     AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR,
+                    AppPaths.KEY_PM_AI_INSPECTION_SHEET_DIR,
                     AppPaths.KEY_PM_AI_REQUEST_FORM_JUCHU_FILE,
                     AppPaths.KEY_PM_AI_MACHINE_DELIVERY_MANAGEMENT_XLSM,
                     AppPaths.KEY_PM_AI_REQUEST_FORM_TPI_PDF_DIR,
@@ -4815,6 +4817,7 @@ public final class MainShellController
         recordEnvInitializationBaseline();
         if (promptAndSelectRunTab) {
             maybePromptRequestFormOriginalDirIfUnset("[env]", effective);
+            maybePromptInspectionSheetDirIfUnset("[env]", effective);
             requireOperatorSelectionForFactory(effective, false);
             ensureMainShellRunTabSelected();
             Platform.runLater(this::ensureMainShellRunTabSelected);
@@ -4832,20 +4835,26 @@ public final class MainShellController
     private void applyFactoryScopedGlobalAndEnvReset(FactorySite site, boolean persistSession) {
         FactorySite effective = site != null ? site : FactorySite.KONAN;
         String preservedOriginalDir = captureReachableRequestFormOriginalDir();
+        String preservedInspectionDir = captureReachableInspectionSheetDir();
         preserveRequestFormOriginalDirForFactory(effective, preservedOriginalDir);
+        preserveInspectionSheetDirForFactory(effective, preservedInspectionDir);
         applyGlobalInitSettingBeforeEnvReset(effective);
         applyEnvRowsFullBundledResetAndPersist(persistSession, effective);
         restoreRequestFormOriginalDirFromFactoryWorkspace(effective, preservedOriginalDir);
+        restoreInspectionSheetDirFromFactoryWorkspace(effective, preservedInspectionDir);
     }
 
     private void applyFactoryScopedGlobalAndEnvResetStrict(
             FactorySite site, boolean persistSession) throws IOException {
         FactorySite effective = site != null ? site : FactorySite.KONAN;
         String preservedOriginalDir = captureReachableRequestFormOriginalDir();
+        String preservedInspectionDir = captureReachableInspectionSheetDir();
         preserveRequestFormOriginalDirForFactory(effective, preservedOriginalDir);
+        preserveInspectionSheetDirForFactory(effective, preservedInspectionDir);
         applyGlobalInitSettingBeforeEnvReset(effective);
         applyEnvRowsFullBundledResetAndPersist(persistSession, effective, true);
         restoreRequestFormOriginalDirFromFactoryWorkspace(effective, preservedOriginalDir);
+        restoreInspectionSheetDirFromFactoryWorkspace(effective, preservedInspectionDir);
     }
 
     private String captureReachableRequestFormOriginalDir() {
@@ -4864,7 +4873,15 @@ public final class MainShellController
 
     private void preserveRequestFormOriginalDirForFactory(
             FactorySite site, String preservedOriginalDir) {
-        if (preservedOriginalDir == null || preservedOriginalDir.isBlank()) {
+        persistFactoryWorkspaceIfPreserving(site, preservedOriginalDir);
+    }
+
+    private void preserveInspectionSheetDirForFactory(FactorySite site, String preservedDir) {
+        persistFactoryWorkspaceIfPreserving(site, preservedDir);
+    }
+
+    private void persistFactoryWorkspaceIfPreserving(FactorySite site, String preservedDir) {
+        if (preservedDir == null || preservedDir.isBlank()) {
             return;
         }
         String operator = FactoryOperatorUserStore.sessionOperatorName();
@@ -4899,6 +4916,38 @@ public final class MainShellController
             return false;
         }
         updateEnvTabValue(AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR, originalDir);
+        return true;
+    }
+
+    private String captureReachableInspectionSheetDir() {
+        String configured = envTabValueTrimmed(AppPaths.KEY_PM_AI_INSPECTION_SHEET_DIR);
+        if (configured.isEmpty()
+                || !NetworkSourceDirResolver.isInspectionSheetDirReachable(
+                        Map.of(AppPaths.KEY_PM_AI_INSPECTION_SHEET_DIR, configured))) {
+            return "";
+        }
+        try {
+            return Path.of(configured).toAbsolutePath().normalize().toString();
+        } catch (RuntimeException ex) {
+            return "";
+        }
+    }
+
+    private boolean restoreInspectionSheetDirFromFactoryWorkspace(
+            FactorySite site, String fallbackDir) {
+        String operator = FactoryOperatorUserStore.sessionOperatorName();
+        String dir =
+                !operator.isBlank() && site != null && site != FactorySite.RDP_LAUNCHER
+                        ? FactorySiteWorkspaceStore.loadReachableInspectionSheetDir(operator, site)
+                                .orElse("")
+                        : "";
+        if (dir.isBlank() && fallbackDir != null) {
+            dir = fallbackDir.strip();
+        }
+        if (dir.isBlank()) {
+            return false;
+        }
+        updateEnvTabValue(AppPaths.KEY_PM_AI_INSPECTION_SHEET_DIR, dir);
         return true;
     }
 
@@ -5717,6 +5766,7 @@ public final class MainShellController
             return;
         }
         maybePromptRequestFormOriginalDirIfUnset("[startup]", null);
+        maybePromptInspectionSheetDirIfUnset("[startup]", GlobalInitSettingTarget.load());
     }
 
     /**
@@ -5782,6 +5832,41 @@ public final class MainShellController
         saveCurrentFactoryWorkspace();
         DesktopSessionStateStore.save(collectDesktopSession());
         appendLog(logPrefix + " " + AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR + " を設定: " + abs);
+    }
+
+    /**
+     * {@link AppPaths#KEY_PM_AI_INSPECTION_SHEET_DIR} が空のとき、後加工検査表フォルダ選択を案内する。
+     * DirectoryChooser の前に {@code kensa} 入力が必要。キャンセル時は Box 工場フォルダへ実行時フォールバック。
+     */
+    private void maybePromptInspectionSheetDirIfUnset(String logPrefix, FactorySite factorySiteHint) {
+        if (primaryStage == null || envRows == null) {
+            return;
+        }
+        String configured = envTabValueTrimmed(AppPaths.KEY_PM_AI_INSPECTION_SHEET_DIR);
+        if (!configured.isEmpty()
+                && NetworkSourceDirResolver.isInspectionSheetDirReachable(
+                        Map.of(AppPaths.KEY_PM_AI_INSPECTION_SHEET_DIR, configured))) {
+            return;
+        }
+        if (!configured.isEmpty()) {
+            updateEnvTabValue(AppPaths.KEY_PM_AI_INSPECTION_SHEET_DIR, "");
+        }
+        FactorySite site =
+                factorySiteHint != null ? factorySiteHint : GlobalInitSettingTarget.load();
+        Optional<File> selected = InspectionSheetDirPicker.pick(primaryStage, site);
+        if (selected.isEmpty()) {
+            appendLog(
+                    logPrefix
+                            + " "
+                            + AppPaths.KEY_PM_AI_INSPECTION_SHEET_DIR
+                            + " は未設定のまま起動します（実行時は Box 工場フォルダを使用）。");
+            return;
+        }
+        String abs = selected.get().toPath().toAbsolutePath().normalize().toString();
+        updateEnvTabValue(AppPaths.KEY_PM_AI_INSPECTION_SHEET_DIR, abs);
+        saveCurrentFactoryWorkspace();
+        DesktopSessionStateStore.save(collectDesktopSession());
+        appendLog(logPrefix + " " + AppPaths.KEY_PM_AI_INSPECTION_SHEET_DIR + " を設定: " + abs);
     }
 
     /** BOX 同期フォルダ（{@code %USERPROFILE%\\Box} 等）があれば DirectoryChooser の初期ディレクトリ候補にする。 */
@@ -6777,6 +6862,7 @@ public final class MainShellController
             endFactorySiteSwitchBusy();
             selectRunTabAfterBusyProgressIfAllowed();
             maybePromptRequestFormOriginalDirIfUnset("[factory]", switchedFactory);
+            maybePromptInspectionSheetDirIfUnset("[factory]", switchedFactory);
         }
         clearGlobalLongTaskProgress();
         refreshAttendanceReadiness();
@@ -12197,6 +12283,9 @@ public final class MainShellController
                         GlobalInitSettingTarget.load());
             }
             case AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR -> {
+                return "";
+            }
+            case AppPaths.KEY_PM_AI_INSPECTION_SHEET_DIR -> {
                 return "";
             }
             case AppPaths.KEY_PM_AI_REQUEST_FORM_TPI_PDF_DIR -> {

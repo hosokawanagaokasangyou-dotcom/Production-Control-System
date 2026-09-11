@@ -67,17 +67,28 @@ public final class FactorySiteWorkspaceStore {
         return disk;
     }
 
+    /** 対象工場に保存された、現在も一覧可能な後加工検査表フォルダを返す。 */
+    public static Optional<String> loadReachableInspectionSheetDir(
+            String operatorName, FactorySite site) {
+        return loadReachableEnvFolder(operatorName, site, AppPaths.KEY_PM_AI_INSPECTION_SHEET_DIR);
+    }
+
     /** 対象工場に保存された、現在も一覧可能な依頼書原本フォルダを返す。 */
     public static Optional<String> loadReachableRequestFormOriginalDir(
             String operatorName, FactorySite site) {
+        return loadReachableEnvFolder(operatorName, site, AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR);
+    }
+
+    private static Optional<String> loadReachableEnvFolder(
+            String operatorName, FactorySite site, String envKey) {
+        if (envKey == null || envKey.isBlank()) {
+            return Optional.empty();
+        }
         return load(operatorName, site)
                 .flatMap(
                         snapshot ->
                                 snapshot.uiEnvRows().stream()
-                                        .filter(
-                                                row ->
-                                                        AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR
-                                                                .equals(row.name()))
+                                        .filter(row -> envKey.equals(row.name()))
                                         .map(UiEnvRowSnapshot::value)
                                         .map(value -> value != null ? value.strip() : "")
                                         .filter(value -> !value.isEmpty())

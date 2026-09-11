@@ -51,6 +51,8 @@ import org.controlsfx.control.table.TableFilter;
 import jp.co.pm.ai.desktop.benchmark.GeminiGenerateContentRestClient;
 import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.config.GeminiDispatchModelTryOrderDefaults;
+import jp.co.pm.ai.desktop.config.GlobalInitSettingTarget;
+import jp.co.pm.ai.desktop.reconciliation.InspectionSheetDirPicker;
 import jp.co.pm.ai.desktop.gemini.GeminiFreeTierModelsCache;
 import jp.co.pm.ai.desktop.gemini.GeminiFreeTierModelsRefreshService;
 import jp.co.pm.ai.desktop.crypto.GeminiCredentialsV2Crypto;
@@ -399,6 +401,19 @@ public final class EnvTabController {
                                             EnvVarRow row =
                                                     getTableRow() != null ? getTableRow().getItem() : null;
                                             if (row == null) {
+                                                return;
+                                            }
+                                            if (AppPaths.KEY_PM_AI_INSPECTION_SHEET_DIR.equals(
+                                                    row.getName())) {
+                                                Optional<File> picked =
+                                                        InspectionSheetDirPicker.pick(
+                                                                ownerStage,
+                                                                GlobalInitSettingTarget.load());
+                                                picked.ifPresent(
+                                                        f -> {
+                                                            row.setValue(f.getAbsolutePath());
+                                                            envTable.refresh();
+                                                        });
                                                 return;
                                             }
                                             DirectoryChooser dc = new DirectoryChooser();

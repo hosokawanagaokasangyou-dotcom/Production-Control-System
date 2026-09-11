@@ -1548,7 +1548,9 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
     private Tab createJuchuOrderSearchTab() {
         Tab tab = new Tab("受注検索");
         tab.setClosable(false);
-        tab.setContent(JuchuOrderSearchPane.build(() -> List.copyOf(orderRecords)));
+        tab.setContent(
+                JuchuOrderSearchPane.build(
+                        () -> List.copyOf(orderRecords), () -> uiEnvSnapshot, () -> hostWindow));
         return tab;
     }
 

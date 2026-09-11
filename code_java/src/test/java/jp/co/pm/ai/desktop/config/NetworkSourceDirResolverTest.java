@@ -98,6 +98,14 @@ class NetworkSourceDirResolverTest {
     }
 
     @Test
+    void inspectionSheetDir_reachable_whenPresent(@TempDir Path dir) throws Exception {
+        Files.writeString(dir.resolve("sample.xlsx"), "x");
+        Map<String, String> ui =
+                Map.of(AppPaths.KEY_PM_AI_INSPECTION_SHEET_DIR, dir.toString());
+        assertTrue(NetworkSourceDirResolver.isInspectionSheetDirReachable(ui));
+    }
+
+    @Test
     void requestFormTpiPdfDir_unreachable_whenUnset() {
         GlobalInitSettingTarget.save(FactorySite.KOKUBU);
         assertFalse(NetworkSourceDirResolver.isRequestFormTpiPdfDirReachable(Map.of()));
