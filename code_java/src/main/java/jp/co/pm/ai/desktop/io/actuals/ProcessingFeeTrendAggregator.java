@@ -47,9 +47,11 @@ public final class ProcessingFeeTrendAggregator {
     }
 
     /**
-     * 見込累計は加工量トレンドと同型（当日までは実績、翌日以降は予定。先端で接続）。
-     * 翌日以降で同日に実績がある分は予定から差し引き（二重計上防止）。
-     * 実績・予定・見込の累計はいずれも月初でリセットする。
+     * 見込累計は加工量トレンドと同型（当日までは実績、翌日以降は未了。先端で接続）。
+     * 翌日以降で同日に実績がある分は未了から差し引き（二重計上防止）。
+     * 実績・未了・見込の累計はいずれも月初でリセットする。
+     * 表示期間がすべて過去のときは、未了を月末へ一括せず期間内予定（無ければ日割）で配分し、
+     * 見込累計は実績＋未了の積み上げとする。
      */
     public record DayPoint(
             LocalDate date,
@@ -229,8 +231,9 @@ public final class ProcessingFeeTrendAggregator {
         }
         int actCount =
                 accumulateActualDays(actFiltered, allocs, feeMap, byDay);
+        boolean periodFullyPast = to.isBefore(t);
         int planCount =
-                distributeRemainToPlanDays(planFiltered, allocs, byDay, from, to, t);
+                distributeRemainToPlanDays(planFiltered, allocs, byDay, from, to, t, periodFullyPast);
 
         List<DayPoint> days = new ArrayList<>(byDay.size());
         double actCum = 0;
@@ -254,8 +257,16 @@ public final class ProcessingFeeTrendAggregator {
             double planForMetrics = usesPlan ? Math.max(0.0, p - a) : p;
             actTotal += a;
             planTotal += planForMetrics;
-            double projected = usesPlan ? planForMetrics : a;
-            if (!d.isAfter(t)) {
+            double projected;
+            if (periodFullyPast) {
+                // 過去期間: 見込 = 実績 + 未了（日割／予定配分済み）
+                projected = a + planForMetrics;
+            } else if (usesPlan) {
+                projected = planForMetrics;
+            } else {
+                projected = a;
+            }
+            if (!d.isAfter(t) || periodFullyPast) {
                 actCum += a;
             }
             planCum += planForMetrics;
@@ -418,7 +429,12 @@ public final class ProcessingFeeTrendAggregator {
     }
 
     /**
-     * 未了円を予定日に配分。翌日以降の予定 m 比率。予定行が無ければ期間末（または翌日）へ一括。
+     * 未了円を予定日に配分。
+     *
+     * <ul>
+     *   <li>進行中・未来期間: 翌日以降の予定 m 比率。予定が無ければ「今日の翌日」（期間外なら期間末）へ一括。
+     *   <li>過去期間のみ: 期間内の予定 m 比率。予定が無ければ期間日数で日割（月末一括はしない）。
+     * </ul>
      */
     private static int distributeRemainToPlanDays(
             List<QuantityLine> planFiltered,
@@ -426,7 +442,8 @@ public final class ProcessingFeeTrendAggregator {
             TreeMap<LocalDate, double[]> byDay,
             LocalDate from,
             LocalDate to,
-            LocalDate today) {
+            LocalDate today,
+            boolean periodFullyPast) {
         int counted = 0;
         for (Map.Entry<String, RequestAlloc> e : allocs.entrySet()) {
             RequestAlloc al = e.getValue();
@@ -441,10 +458,10 @@ public final class ProcessingFeeTrendAggregator {
                     if (line == null || !req.equals(line.requestNo())) {
                         continue;
                     }
-                    if (!line.date().isAfter(today)) {
+                    if (!byDay.containsKey(line.date())) {
                         continue;
                     }
-                    if (!byDay.containsKey(line.date())) {
+                    if (!periodFullyPast && !line.date().isAfter(today)) {
                         continue;
                     }
                     weights.merge(line.date(), line.meters(), Double::sum);
@@ -455,6 +472,16 @@ public final class ProcessingFeeTrendAggregator {
                 for (Map.Entry<LocalDate, Double> w : weights.entrySet()) {
                     double yen = al.planYen() * (w.getValue() / wSum);
                     byDay.get(w.getKey())[1] += yen;
+                }
+                counted++;
+            } else if (periodFullyPast) {
+                int n = byDay.size();
+                if (n <= 0) {
+                    continue;
+                }
+                double each = al.planYen() / n;
+                for (double[] slot : byDay.values()) {
+                    slot[1] += each;
                 }
                 counted++;
             } else {

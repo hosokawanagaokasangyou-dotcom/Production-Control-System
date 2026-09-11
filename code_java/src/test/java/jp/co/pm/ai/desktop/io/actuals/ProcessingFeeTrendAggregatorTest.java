@@ -76,21 +76,51 @@ class ProcessingFeeTrendAggregatorTest {
     }
 
     @Test
-    void idleOrderMonthRow_allAoGoesToRemain() {
-        LocalDate from = LocalDate.of(2026, 9, 1);
-        LocalDate to = LocalDate.of(2026, 9, 30);
-        Map<String, FeeInfo> fees =
-                Map.of(
-                        "IDLE",
-                        new FeeInfo(null, 4_000.0, "X", 2026, 9, 200.0));
+    void pastPeriod_spreadsRemainEvenly_projectedEndsAtActualPlusRemain() {
+        // 7月を9月に見る: 未了を月末一括にしない。見込累計は実績+未了で AO に到達
+        LocalDate from = LocalDate.of(2026, 7, 1);
+        LocalDate to = LocalDate.of(2026, 7, 31);
+        LocalDate today = LocalDate.of(2026, 9, 11);
+        Map<String, FeeInfo> fees = Map.of("R", ao(1_000.0, 100.0, "最終"));
         Result r =
                 ProcessingFeeTrendAggregator.aggregate(
-                        List.of(), List.of(), fees, from, to, from);
-        RequestPoint idle = r.requests().get(0);
-        assertEquals(0.0, idle.actualYen(), 1e-9);
-        assertEquals(4_000.0, idle.planYen(), 1e-9);
-        assertEquals(4_000.0, idle.aoYen(), 1e-9);
-        assertEquals(200.0, idle.remainMeters(), 1e-9);
+                        List.of(new QuantityLine(LocalDate.of(2026, 7, 10), "R", 60, "最終")),
+                        List.of(),
+                        fees,
+                        from,
+                        to,
+                        today);
+        assertEquals(31, r.days().size());
+        DayPoint last = r.days().get(30);
+        assertEquals(600.0, last.actualCumYen(), 1e-6);
+        assertEquals(400.0, last.planCumYen(), 1e-6);
+        assertEquals(1_000.0, last.projectedCumYen(), 1e-6);
+        assertTrue(last.planYen() < 50.0, "月末一括だと ~400。日割なら ~12.9");
+        double planSum = r.days().stream().mapToDouble(DayPoint::planYen).sum();
+        assertEquals(400.0, planSum, 1e-6);
+        assertEquals(400.0, r.planTotalYen(), 1e-6);
+    }
+
+    @Test
+    void currentMonth_withoutPlan_stillAnchorsRemainOnTomorrow() {
+        LocalDate from = LocalDate.of(2026, 9, 1);
+        LocalDate to = LocalDate.of(2026, 9, 30);
+        LocalDate today = LocalDate.of(2026, 9, 11);
+        Map<String, FeeInfo> fees = Map.of("R", ao(1_000.0, 100.0, "最終"));
+        Result r =
+                ProcessingFeeTrendAggregator.aggregate(
+                        List.of(new QuantityLine(LocalDate.of(2026, 9, 5), "R", 60, "最終")),
+                        List.of(),
+                        fees,
+                        from,
+                        to,
+                        today);
+        DayPoint tomorrow =
+                r.days().stream()
+                        .filter(d -> d.date().equals(today.plusDays(1)))
+                        .findFirst()
+                        .orElseThrow();
+        assertEquals(400.0, tomorrow.planYen(), 1e-6);
     }
 
     @Test
