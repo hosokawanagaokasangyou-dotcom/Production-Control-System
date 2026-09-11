@@ -13,6 +13,7 @@ import java.util.Map;
 import java.util.TreeMap;
 import java.util.regex.Pattern;
 
+import jp.co.pm.ai.desktop.dispatch.ResultDispatchPlanningStageSupport;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchSchema;
 import jp.co.pm.ai.desktop.io.actuals.ProcessingFeeTrendAggregator.QuantityLine;
 import jp.co.pm.ai.desktop.io.actuals.ProcessingTrendAggregator.ActualSource;
@@ -58,7 +59,7 @@ public final class ProcessingFeeTrendQuantityExtractor {
             Filter filter,
             LocalDate today) {
         if (filter.planSource() == PlanSource.DISPATCH) {
-            return extractDispatch(dispatch, filter);
+            return extractDispatch(dispatch, filter, today != null ? today : LocalDate.now());
         }
         return extractAladdin(aladdin, filter, today != null ? today : LocalDate.now());
     }
@@ -172,7 +173,8 @@ public final class ProcessingFeeTrendQuantityExtractor {
         return out;
     }
 
-    private static List<QuantityLine> extractDispatch(DispatchSnapshot dispatch, Filter f) {
+    private static List<QuantityLine> extractDispatch(
+            DispatchSnapshot dispatch, Filter f, LocalDate today) {
         List<QuantityLine> out = new ArrayList<>();
         if (dispatch == null || dispatch.headers() == null || dispatch.rows() == null) {
             return out;
@@ -186,11 +188,14 @@ public final class ProcessingFeeTrendQuantityExtractor {
         if (iDate < 0 || iQty < 0) {
             return out;
         }
+        List<List<String>> rows =
+                ResultDispatchPlanningStageSupport.normalizeLegacyDispatchRowsForAggregation(
+                        headers, dispatch.rows());
         String mk = normKey(f.machine());
         String pk = normKey(f.process());
         LocalDate from = f.from();
         LocalDate to = f.to();
-        for (List<String> row : dispatch.rows()) {
+        for (List<String> row : rows) {
             if (row == null) {
                 continue;
             }
@@ -199,6 +204,10 @@ public final class ProcessingFeeTrendQuantityExtractor {
             }
             LocalDate d = parseDate(cellAt(row, iDate));
             if (d == null || d.isBefore(from) || d.isAfter(to)) {
+                continue;
+            }
+            // 当日以前の配台数量は実績と二重になるため予定に載せない（見込＝実績+翌日以降予定）
+            if (today != null && !d.isAfter(today)) {
                 continue;
             }
             double v = parseDouble(cellAt(row, iQty));

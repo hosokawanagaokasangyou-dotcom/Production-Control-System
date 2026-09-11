@@ -30,6 +30,7 @@ public final class ProcessingFeeTrendAggregator {
 
     /**
      * 見込累計は加工量トレンドと同型（当日までは実績、翌日以降は予定。先端で接続）。
+     * 翌日以降で同日に実績がある分は予定から差し引く（二重計上防止）。
      * 実績・予定・見込の累計はいずれも月初でリセットする。
      */
     public record DayPoint(
@@ -118,17 +119,19 @@ public final class ProcessingFeeTrendAggregator {
             }
             double a = e.getValue()[0];
             double p = e.getValue()[1];
-            actTotal += a;
-            planTotal += p;
             boolean usesPlan = d.isAfter(t);
-            // 当日まで実績、翌日以降は予定（実績累計の先端と必ず接続）
-            double projected = usesPlan ? p : a;
+            // 翌日以降で同日に実績がある分は予定から差し引き（早期消化の二重計上防止）
+            double planForMetrics = usesPlan ? Math.max(0.0, p - a) : p;
+            actTotal += a;
+            planTotal += planForMetrics;
+            // 当日まで実績、翌日以降は（差し引き後の）予定
+            double projected = usesPlan ? planForMetrics : a;
             if (!d.isAfter(t)) {
                 actCum += a;
             }
-            planCum += p;
+            planCum += planForMetrics;
             projCum += projected;
-            days.add(new DayPoint(d, a, p, actCum, planCum, projCum));
+            days.add(new DayPoint(d, a, planForMetrics, actCum, planCum, projCum));
         }
 
         List<RequestPoint> requests = new ArrayList<>(byRequest.size());

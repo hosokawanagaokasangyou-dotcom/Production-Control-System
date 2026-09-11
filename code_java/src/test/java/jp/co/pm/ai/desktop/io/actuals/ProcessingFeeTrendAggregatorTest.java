@@ -51,17 +51,17 @@ class ProcessingFeeTrendAggregatorTest {
 
         DayPoint d2 = r.days().get(2);
         assertEquals(10.0, d2.actualYen(), 1e-6);
-        assertEquals(20.0, d2.planYen(), 1e-6);
+        // 翌日以降: 同日実績分を予定から差し引き → 20-10=10
+        assertEquals(10.0, d2.planYen(), 1e-6);
         // 実績累計は today まで（9/2）で止まる
         assertEquals(90.0, d2.actualCumYen(), 1e-6);
-        // 予定累計は予定のみの累計（表・KPI用）
-        assertEquals(50.0, d2.planCumYen(), 1e-6);
+        assertEquals(40.0, d2.planCumYen(), 1e-6);
         assertEquals(r.planTotalYen(), d2.planCumYen(), 1e-6);
-        // 見込累計: 実績先端(90)から翌日以降の予定を積む → 110
-        assertEquals(110.0, d2.projectedCumYen(), 1e-6);
+        // 見込累計: 実績先端(90) + 差し引き後予定(10) → 100
+        assertEquals(100.0, d2.projectedCumYen(), 1e-6);
 
         assertEquals(100.0, r.actualTotalYen(), 1e-6);
-        assertEquals(50.0, r.planTotalYen(), 1e-6);
+        assertEquals(40.0, r.planTotalYen(), 1e-6);
         assertEquals(3, r.actualLinesCounted());
         assertEquals(2, r.planLinesCounted());
         assertEquals(0, r.missingRateLines());
@@ -128,6 +128,29 @@ class ProcessingFeeTrendAggregatorTest {
         assertEquals(tip.actualCumYen(), tip.projectedCumYen(), 1e-6);
         DayPoint after = r.days().get(2);
         assertEquals(80.0, after.projectedCumYen(), 1e-6); // 60 + 20
+    }
+
+    @Test
+    void futureDayPlanIsReducedBySameDayActual() {
+        LocalDate from = LocalDate.of(2026, 9, 1);
+        LocalDate to = LocalDate.of(2026, 9, 3);
+        LocalDate today = LocalDate.of(2026, 9, 1);
+        Map<String, Double> rates = Map.of("A", 10.0);
+        Result r =
+                ProcessingFeeTrendAggregator.aggregate(
+                        List.of(
+                                new QuantityLine(from, "A", 1), // 10
+                                new QuantityLine(to, "A", 3)), // 30 future actual
+                        List.of(new QuantityLine(to, "A", 5)), // 50 future plan
+                        rates,
+                        from,
+                        to,
+                        today);
+        DayPoint future = r.days().get(2);
+        assertEquals(30.0, future.actualYen(), 1e-6);
+        assertEquals(20.0, future.planYen(), 1e-6); // 50-30
+        assertEquals(10.0, future.actualCumYen(), 1e-6); // tip at today
+        assertEquals(30.0, future.projectedCumYen(), 1e-6); // 10 + 20
     }
 
     @Test

@@ -349,33 +349,32 @@ class ProcessingTrendAggregatorTest {
                 ProcessingTrendAggregator.aggregate(
                         actuals(), aladdin(), dispatch(),
                         new Filter(FROM, TO, PlanSource.DISPATCH, null, null), TODAY);
-        Assertions.assertEquals(111, r.days().get(0).planM(), 1e-9);
+        // 当日以前の配台は予定に含めない（実績との二重計上防止）
+        Assertions.assertEquals(0, r.days().get(0).planM(), 1e-9);
         Assertions.assertEquals(0, r.days().get(1).planM(), 1e-9);
-        Assertions.assertEquals(222, r.days().get(2).planM(), 1e-9);
+        Assertions.assertEquals(0, r.days().get(2).planM(), 1e-9);
         Assertions.assertEquals(333, r.days().get(3).planM(), 1e-9);
-        Assertions.assertEquals(666, r.planTotalM(), 1e-9);
-        Assertions.assertEquals(3, r.planRowsCounted());
+        Assertions.assertEquals(333, r.planTotalM(), 1e-9);
+        Assertions.assertEquals(1, r.planRowsCounted());
     }
 
     @Test
     void aggregate_legacyDispatchWithActualQtyColumn_doesNotDoubleCount() {
         // 旧 段階3 JSON: 目標行（当日配台数量のみ）とタイムライン行（実配台数量・加工開始日時）が同一 (依頼,工程,機械) に共存
+        // 配台日は翌日以降（当日以前は予定スキップ）に置き、統合後の数量が二重にならないことだけ検証する
         DispatchSnapshot legacy =
                 new DispatchSnapshot(
                         List.of("機械名", "依頼NO", "工程名", "配台日", "当日配台数量", "実配台数量", "加工開始日時"),
                         List.of(
-                                // 孤立目標行（時刻なし）: 実績行と共存するので除外される
-                                List.of("W9-1", "R1", "スリット", "2026/09/03", "500", "", ""),
-                                // タイムライン行: 実配台 320 を主数量に
-                                List.of("W9-1", "R1", "スリット", "2026/09/03", "0", "320", "2026/09/03 08:00"),
-                                // 実配台 0 の別暦日タイムライン行は、目標が孤立のみの場合は残る（当日配台 0 なので合算に影響なし）
-                                List.of("W9-1", "R1", "スリット", "2026/09/04", "0", "0", "2026/09/04 08:00")));
+                                List.of("W9-1", "R1", "スリット", "2026/09/04", "500", "", ""),
+                                List.of("W9-1", "R1", "スリット", "2026/09/04", "0", "320", "2026/09/04 08:00"),
+                                List.of("W9-1", "R1", "スリット", "2026/09/05", "0", "0", "2026/09/05 08:00")));
         Result r =
                 ProcessingTrendAggregator.aggregate(
                         new ActualsSnapshot(ACT_HEADERS, List.of()), aladdin(), legacy,
                         new Filter(FROM, TO, PlanSource.DISPATCH, null, null), TODAY);
-        Assertions.assertEquals(320, r.days().get(2).planM(), 1e-9);
-        Assertions.assertEquals(0, r.days().get(3).planM(), 1e-9);
+        Assertions.assertEquals(0, r.days().get(2).planM(), 1e-9);
+        Assertions.assertEquals(320, r.days().get(3).planM(), 1e-9);
         Assertions.assertEquals(320, r.planTotalM(), 1e-9);
     }
 

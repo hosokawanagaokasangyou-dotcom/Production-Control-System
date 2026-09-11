@@ -117,6 +117,41 @@ public final class ResultDispatchPlanningStageSupport {
         }
     }
 
+    /**
+     * トレンド集計用: 旧段階3 JSON（{@code 実配台数量} 列あり）は編集目標行とタイムライン実績行が重複するため、
+     * 配台結果タブと同じ統合を掛けてから合算する。現行の段階2出力（列なし）はそのまま返す。
+     */
+    public static List<List<String>> normalizeLegacyDispatchRowsForAggregation(
+            List<String> headers, List<List<String>> rows) {
+        if (headers == null || rows == null || !hasActualDispatchQtyColumn(headers)) {
+            return rows;
+        }
+        List<String> cols = new ArrayList<>(headers);
+        List<Map<String, String>> maps = new ArrayList<>(rows.size());
+        for (List<String> row : rows) {
+            if (row == null) {
+                continue;
+            }
+            Map<String, String> m = new LinkedHashMap<>();
+            for (int i = 0; i < cols.size(); i++) {
+                String v = i < row.size() && row.get(i) != null ? row.get(i) : "";
+                m.put(cols.get(i), v);
+            }
+            maps.add(m);
+        }
+        ResultDispatchInteractiveConsolidator.consolidatePlanAndTimelineRowsInPlace(cols, maps);
+        applyActualQtyDisplayQuantities(cols, maps);
+        List<List<String>> out = new ArrayList<>(maps.size());
+        for (Map<String, String> m : maps) {
+            List<String> row = new ArrayList<>(headers.size());
+            for (String h : headers) {
+                row.add(m.getOrDefault(h, ""));
+            }
+            out.add(row);
+        }
+        return out;
+    }
+
     public static void removeRedundantActualColumnFromMaps(
             List<String> columns, List<Map<String, String>> rows) {
         if (!hasActualDispatchQtyColumn(columns)) {

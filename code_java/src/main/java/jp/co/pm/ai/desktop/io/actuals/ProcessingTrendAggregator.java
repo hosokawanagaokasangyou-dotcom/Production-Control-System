@@ -16,7 +16,6 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.regex.Pattern;
 
-import jp.co.pm.ai.desktop.dispatch.ResultDispatchInteractiveConsolidator;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchPlanningStageSupport;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchSchema;
 
@@ -805,7 +804,8 @@ public final class ProcessingTrendAggregator {
 
         int planRows =
                 filter.planSource() == PlanSource.DISPATCH
-                        ? accumulateDispatch(dispatch, filter, byDay, skipStable ? stableEnd : null)
+                        // 当日以前の配台は実績側。見込＝実績+予定の二重計上を防ぐ
+                        ? accumulateDispatch(dispatch, filter, byDay, t)
                         : accumulateAladdin(aladdin, filter, byDay, t, skipStable ? stableEnd : null);
         if (skipStable) {
             LocalDate observeEnd = to.isBefore(stableEnd) ? to : stableEnd;
@@ -843,20 +843,21 @@ public final class ProcessingTrendAggregator {
             double plan = e.getValue()[1];
             double compareActual = e.getValue()[2];
             boolean usesPlan = d.isAfter(t);
-            // 当日まで実績、翌日以降は予定（実績累計の先端と必ず接続）
-            double projected = usesPlan ? plan : actual;
+            // 翌日以降で同日実績がある分は予定から差し引き（見込の二重計上防止）
+            double planForMetrics = usesPlan ? Math.max(0.0, plan - actual) : plan;
+            double projected = usesPlan ? planForMetrics : actual;
             actTotal += actual;
-            planTotal += plan;
+            planTotal += planForMetrics;
             compareActTotal += compareActual;
             actCum += actual;
-            planCum += plan;
+            planCum += planForMetrics;
             projCum += projected;
             compareActCum += compareActual;
             if (usesPlan) {
-                remainingPlan += plan;
+                remainingPlan += planForMetrics;
             } else {
                 actualToDate += actual;
-                planToDate += plan;
+                planToDate += planForMetrics;
             }
 
             // N 日間移動平均 (当日を含む直近 N 日間の主実績平均)
@@ -882,7 +883,7 @@ public final class ProcessingTrendAggregator {
                     new DayPoint(
                             d,
                             actual,
-                            plan,
+                            planForMetrics,
                             actCum,
                             planCum,
                             projCum,
@@ -1271,7 +1272,8 @@ public final class ProcessingTrendAggregator {
         if (iDate < 0 || iQty < 0) {
             return 0;
         }
-        List<List<String>> rows = normalizeLegacyDispatchRows(headers, dispatch.rows());
+        List<List<String>> rows = ResultDispatchPlanningStageSupport.normalizeLegacyDispatchRowsForAggregation(
+                headers, dispatch.rows());
         String mk = normKey(f.machine());
         String pk = normKey(f.process());
         int counted = 0;
@@ -1301,40 +1303,6 @@ public final class ProcessingTrendAggregator {
             counted++;
         }
         return counted;
-    }
-
-    /**
-     * 旧 段階3 JSON（{@code 実配台数量} 列あり）は編集目標行とタイムライン実績行が重複するため、
-     * 配台結果タブと同じ統合（孤立目標行の除去・実配台&gt;0 を主数量に）を掛けてから合算する。
-     * 現行の段階2出力（列なし）はそのまま返す。
-     */
-    private static List<List<String>> normalizeLegacyDispatchRows(List<String> headers, List<List<String>> rows) {
-        if (!ResultDispatchPlanningStageSupport.hasActualDispatchQtyColumn(headers)) {
-            return rows;
-        }
-        List<String> cols = new ArrayList<>(headers);
-        List<Map<String, String>> maps = new ArrayList<>(rows.size());
-        for (List<String> row : rows) {
-            if (row == null) {
-                continue;
-            }
-            Map<String, String> m = new LinkedHashMap<>();
-            for (int i = 0; i < cols.size(); i++) {
-                m.put(cols.get(i), cellAt(row, i));
-            }
-            maps.add(m);
-        }
-        ResultDispatchInteractiveConsolidator.consolidatePlanAndTimelineRowsInPlace(cols, maps);
-        ResultDispatchPlanningStageSupport.applyActualQtyDisplayQuantities(cols, maps);
-        List<List<String>> out = new ArrayList<>(maps.size());
-        for (Map<String, String> m : maps) {
-            List<String> row = new ArrayList<>(headers.size());
-            for (String h : headers) {
-                row.add(m.getOrDefault(h, ""));
-            }
-            out.add(row);
-        }
-        return out;
     }
 
     // ---- 共通 ------------------------------------------------------------------------------
