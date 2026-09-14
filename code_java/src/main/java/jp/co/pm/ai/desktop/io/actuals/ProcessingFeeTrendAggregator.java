@@ -26,9 +26,10 @@ import jp.co.pm.ai.desktop.ui.PlanInputProcessSequenceRowOrder;
  * <p>AO（受注額）を正とする。円/m = AO ÷ 受注最終工程 m。実績円 = 円/m × 実績 m、
  * 未了（残予定）円 = 円/m × (受注 m − 実績 m) とし、両者の合計は当該依頼の AO に一致する。
  * 依頼NO別の実績 m は表示期間外の日報出来高も含む（日次棒のみ表示期間内）。
+ * KPI の実績円・未了円は依頼配分の合計（表の合計行と一致。AO 正本）。日次チャートは期間内の加工日付のみ。
  * 依頼NO別表の行は集計期間内に限る（期間内に完了実績がある・受注月が期間に含まれる・期間内予定がある）。
  * 複数工程は実績・受注とも最終工程 m のみ。日報の最終工程は加工日付＋終了時間の最遅行の工程名
- * （終了時間が無い行は未完了のため実績に含めない）。予定は受注「加工内容」末尾。
+ * （終了時間が無い行は未完了のため実績に含めない）。予定は受注「加工内容」末尾。当日より前の予定は無効。
  * AO 欠落時は AH × m（未了は受注 m があれば同様）。
  */
 public final class ProcessingFeeTrendAggregator {
@@ -274,8 +275,6 @@ public final class ProcessingFeeTrendAggregator {
         double actCum = 0;
         double planCum = 0;
         double projCum = 0;
-        double actTotal = 0;
-        double planTotal = 0;
         YearMonth cumMonth = null;
         for (Map.Entry<LocalDate, double[]> e : byDay.entrySet()) {
             LocalDate d = e.getKey();
@@ -290,8 +289,6 @@ public final class ProcessingFeeTrendAggregator {
             double p = periodFullyPast ? 0.0 : e.getValue()[1];
             boolean usesPlan = !periodFullyPast && d.isAfter(t);
             double planForMetrics = usesPlan ? Math.max(0.0, p - a) : p;
-            actTotal += a;
-            planTotal += planForMetrics;
             double projected = usesPlan ? planForMetrics : a;
             if (!d.isAfter(t) || periodFullyPast) {
                 actCum += a;
@@ -302,9 +299,11 @@ public final class ProcessingFeeTrendAggregator {
         }
 
         List<RequestPoint> requests = new ArrayList<>(allocs.size());
+        double allocActualYen = 0;
         double remainYenFromAlloc = 0;
         for (Map.Entry<String, RequestAlloc> e : allocs.entrySet()) {
             RequestAlloc al = e.getValue();
+            allocActualYen += al.actualYen();
             remainYenFromAlloc += al.planYen();
             requests.add(
                     new RequestPoint(
@@ -317,16 +316,12 @@ public final class ProcessingFeeTrendAggregator {
                             al.actualYen(),
                             al.planYen()));
         }
-        // 過去期間は日次未了棒を出さないため、KPI 未了は依頼配分の合計を使う
-        if (periodFullyPast) {
-            planTotal = remainYenFromAlloc;
-        }
-
+        // KPI は依頼配分の合計（表の合計行と一致）。日次チャートの棒合計とは期間外出来高の有無で異なり得る。
         return new Result(
                 List.copyOf(days),
                 List.copyOf(requests),
-                actTotal,
-                planTotal,
+                allocActualYen,
+                remainYenFromAlloc,
                 t,
                 from,
                 to,

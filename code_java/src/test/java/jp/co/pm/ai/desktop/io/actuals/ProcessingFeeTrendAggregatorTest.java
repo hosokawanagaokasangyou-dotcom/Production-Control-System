@@ -206,7 +206,10 @@ class ProcessingFeeTrendAggregatorTest {
         assertEquals(4_000.0, row.actualMeters(), 1e-6);
         assertEquals(0.0, row.remainMeters(), 1e-6);
         assertEquals(112_000.0, row.actualYen(), 1e-6);
+        // 日次棒は期間外0。KPI 実績円は依頼配分（表と同じ）なので期間外出来高も入る
         assertEquals(0.0, r.days().stream().mapToDouble(DayPoint::actualYen).sum(), 1e-9);
+        assertEquals(112_000.0, r.actualTotalYen(), 1e-6);
+        assertEquals(0.0, r.planTotalYen(), 1e-9);
     }
 
     @Test
@@ -461,6 +464,33 @@ class ProcessingFeeTrendAggregatorTest {
                 r.requests().isEmpty()
                         || (r.requests().get(0).actualMeters() == 0.0
                                 && r.requests().get(0).actualYen() == 0.0));
+    }
+
+    @Test
+    void kpiTotalsMatchRequestTableTotalRow() {
+        LocalDate from = LocalDate.of(2026, 7, 1);
+        LocalDate to = LocalDate.of(2026, 7, 31);
+        LocalDate today = LocalDate.of(2026, 9, 14);
+        Map<String, FeeInfo> fees =
+                Map.of(
+                        "A",
+                        new FeeInfo(null, 1_000.0, "最終", 2026, 7, 100.0),
+                        "B",
+                        new FeeInfo(null, 2_000.0, "最終", 2026, 7, 50.0));
+        Result r =
+                ProcessingFeeTrendAggregator.aggregate(
+                        List.of(done(LocalDate.of(2026, 7, 10), "A", 40, "最終", 12, 0)),
+                        List.of(),
+                        fees,
+                        from,
+                        to,
+                        today);
+        var withTotal = ProcessingFeeTrendAggregator.withLeadingTotalRow(r.requests());
+        var tot = withTotal.get(0);
+        assertEquals(tot.actualYen(), r.actualTotalYen(), 1e-6);
+        assertEquals(tot.planYen(), r.planTotalYen(), 1e-6);
+        assertEquals(tot.aoYen(), ProcessingFeeTrendAggregator.sumOrderAoYen(r.requests()), 1e-6);
+        assertEquals(r.actualTotalYen() + r.planTotalYen(), tot.aoYen(), 1e-6);
     }
 
     @Test

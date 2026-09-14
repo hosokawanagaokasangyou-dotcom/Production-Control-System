@@ -110,7 +110,7 @@
                     <Label fx:id="kpiOrderAoYen" styleClass="pm-processing-trend-kpi-value" text="—"/>
                 </VBox>
                 <VBox styleClass="pm-processing-trend-kpi-card">
-                    <Label styleClass="pm-processing-trend-kpi-caption" text="実績円合計（期間）"/>
+                    <Label styleClass="pm-processing-trend-kpi-caption" text="実績円合計（依頼）"/>
                     <Label fx:id="kpiActualYen" styleClass="pm-processing-trend-kpi-value" text="—"/>
                 </VBox>
                 <VBox styleClass="pm-processing-trend-kpi-card">
