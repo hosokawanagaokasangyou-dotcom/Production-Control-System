@@ -34,6 +34,9 @@ class ProcessingFeeTrendTabFxmlTest {
         assertNotNull(elementByFxId("colActualCumYen"));
         assertNotNull(elementByFxId("colPlanCumYen"));
         assertNotNull(elementByFxId("requestPane"));
+        assertNotNull(elementByFxId("aoMismatchPane"));
+        assertNotNull(elementByFxId("aoMismatchTable"));
+        assertNotNull(elementByFxId("colMismatchDiffYen"));
         assertNotNull(elementByFxId("planSourceCombo"));
         assertNotNull(elementByFxId("planSourceMetaLabel"));
         assertNotNull(elementByFxId("sourceSummaryLabel"));
@@ -59,6 +62,8 @@ class ProcessingFeeTrendTabFxmlTest {
         assertEquals("未了 (m)", elementByFxId("colPlanM").getAttribute("text"));
         assertEquals("false", elementByFxId("detailPane").getAttribute("expanded"));
         assertEquals("false", elementByFxId("requestPane").getAttribute("expanded"));
+        assertEquals("false", elementByFxId("aoMismatchPane").getAttribute("expanded"));
+        assertEquals("AOと実績の相違（当日以前）", elementByFxId("aoMismatchPane").getAttribute("text"));
         assertEquals(
                 "jp.co.pm.ai.desktop.ProcessingFeeTrendTabController",
                 rootController());

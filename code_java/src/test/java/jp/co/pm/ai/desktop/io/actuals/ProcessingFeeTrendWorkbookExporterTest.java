@@ -38,11 +38,13 @@ class ProcessingFeeTrendWorkbookExporterTest {
         ProcessingFeeTrendWorkbookExporter.write(r, out);
         assertTrue(Files.isRegularFile(out));
         try (XSSFWorkbook wb = new XSSFWorkbook(Files.newInputStream(out))) {
-            assertEquals(2, wb.getNumberOfSheets());
+            assertEquals(3, wb.getNumberOfSheets());
             Sheet days = wb.getSheet("日別");
             Sheet reqs = wb.getSheet("依頼NO別");
+            Sheet mismatch = wb.getSheet("AO実績相違");
             assertEquals("日付", days.getRow(0).getCell(0).getStringCellValue());
             assertEquals("依頼NO", reqs.getRow(0).getCell(0).getStringCellValue());
+            assertEquals("依頼NO", mismatch.getRow(0).getCell(0).getStringCellValue());
             assertTrue(days.getLastRowNum() >= 1);
             assertTrue(reqs.getLastRowNum() >= 1);
         }

@@ -52,7 +52,7 @@
                 <Button fx:id="thisMonthButton" mnemonicParsing="false" onAction="#onThisMonthAction" text="今月"/>
                 <Separator orientation="VERTICAL"/>
                 <Button fx:id="exportExcelButton" mnemonicParsing="false" onAction="#onExportExcelAction" text="Excel出力">
-                    <tooltip><Tooltip text="表示中の日別集計と依頼NO別を固定フォルダへ Excel 出力します（最新1件のみ残します）。"/></tooltip>
+                    <tooltip><Tooltip text="表示中の日別集計・依頼NO別・AOと実績の相違を固定フォルダへ Excel 出力します（最新1件のみ残します）。"/></tooltip>
                 </Button>
                 <Button fx:id="openExcelButton" mnemonicParsing="false" onAction="#onOpenExcelAction" text="Excelを開く" disable="true">
                     <tooltip><Tooltip text="出力フォルダ内の最新の加工賃トレンド Excel を開きます。"/></tooltip>
@@ -195,6 +195,22 @@
                         <TableColumn fx:id="colPlanM" prefWidth="100.0" sortable="true" text="未了 (m)"/>
                         <TableColumn fx:id="colReqActualYen" prefWidth="120.0" sortable="true" text="実績円"/>
                         <TableColumn fx:id="colReqPlanYen" prefWidth="120.0" sortable="true" text="未了円"/>
+                        </columns>
+                    </TableView>
+                </content>
+            </TitledPane>
+            <TitledPane fx:id="aoMismatchPane" animated="false" collapsible="true" expanded="false" maxWidth="1300.0"
+                        text="AOと実績の相違（当日以前）">
+                <content>
+                    <TableView fx:id="aoMismatchTable" prefHeight="200.0">
+                        <columns>
+                        <TableColumn fx:id="colMismatchRequestNo" prefWidth="100.0" sortable="true" text="依頼NO"/>
+                        <TableColumn fx:id="colMismatchAoYen" prefWidth="120.0" sortable="true" text="AO(受注額)"/>
+                        <TableColumn fx:id="colMismatchActualYen" prefWidth="120.0" sortable="true" text="実績円"/>
+                        <TableColumn fx:id="colMismatchDiffYen" prefWidth="120.0" sortable="true" text="差額"/>
+                        <TableColumn fx:id="colMismatchActualM" prefWidth="100.0" sortable="true" text="実績 (m)"/>
+                        <TableColumn fx:id="colMismatchRemainM" prefWidth="100.0" sortable="true" text="未了 (m)"/>
+                        <TableColumn fx:id="colMismatchRemainYen" prefWidth="120.0" sortable="true" text="未了円"/>
                         </columns>
                     </TableView>
                 </content>

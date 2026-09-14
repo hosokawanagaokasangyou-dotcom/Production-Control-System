@@ -194,6 +194,15 @@ public class ProcessingFeeTrendTabController {
     @FXML private TableColumn<RequestPoint, Number> colPlanM;
     @FXML private TableColumn<RequestPoint, Number> colReqActualYen;
     @FXML private TableColumn<RequestPoint, Number> colReqPlanYen;
+    @FXML private TitledPane aoMismatchPane;
+    @FXML private TableView<RequestPoint> aoMismatchTable;
+    @FXML private TableColumn<RequestPoint, String> colMismatchRequestNo;
+    @FXML private TableColumn<RequestPoint, Number> colMismatchAoYen;
+    @FXML private TableColumn<RequestPoint, Number> colMismatchActualYen;
+    @FXML private TableColumn<RequestPoint, Number> colMismatchDiffYen;
+    @FXML private TableColumn<RequestPoint, Number> colMismatchActualM;
+    @FXML private TableColumn<RequestPoint, Number> colMismatchRemainM;
+    @FXML private TableColumn<RequestPoint, Number> colMismatchRemainYen;
 
     private MainShellController shell;
     private boolean suppressFilterEvents;
@@ -385,6 +394,7 @@ public class ProcessingFeeTrendTabController {
         sourceSummaryLabel.setText("円/m = AO ÷ 受注最終工程 m。実績＋未了＝受注額。");
         initDetailTable();
         initRequestTable();
+        initAoMismatchTable();
         syncChartPadding();
         renderEmpty();
     }
@@ -537,6 +547,48 @@ public class ProcessingFeeTrendTabController {
                 new Tooltip(
                         "円/m = AO ÷ 受注最終工程 m。実績円 = 円/m × 実績 m、未了円 = 円/m × (受注 m − 実績 m)。\n"
                                 + "実績円＋未了円 = AO（受注額）。日報は製品加工終了時間がある最遅工程のみ（終了時間なし＝未完了）。"));
+    }
+
+    private void initAoMismatchTable() {
+        if (aoMismatchTable == null) {
+            return;
+        }
+        colMismatchRequestNo.setCellValueFactory(
+                cd -> new ReadOnlyObjectWrapper<>(cd.getValue().requestNo()));
+        colMismatchAoYen.setCellValueFactory(
+                cd ->
+                        new ReadOnlyObjectWrapper<>(
+                                cd.getValue().aoYen() > 0 ? cd.getValue().aoYen() : null));
+        colMismatchAoYen.setCellFactory(col -> yenNumberCell());
+        colMismatchAoYen.setStyle("-fx-alignment: CENTER-RIGHT;");
+        colMismatchActualYen.setCellValueFactory(
+                cd -> new ReadOnlyObjectWrapper<>(cd.getValue().actualYen()));
+        colMismatchActualYen.setCellFactory(col -> requestYenCell());
+        colMismatchActualYen.setStyle("-fx-alignment: CENTER-RIGHT;");
+        colMismatchDiffYen.setCellValueFactory(
+                cd ->
+                        new ReadOnlyObjectWrapper<>(
+                                cd.getValue().aoYen() - cd.getValue().actualYen()));
+        colMismatchDiffYen.setCellFactory(col -> requestYenCell());
+        colMismatchDiffYen.setStyle("-fx-alignment: CENTER-RIGHT;");
+        colMismatchActualM.setCellValueFactory(
+                cd -> new ReadOnlyObjectWrapper<>(cd.getValue().actualMeters()));
+        colMismatchRemainM.setCellValueFactory(
+                cd -> new ReadOnlyObjectWrapper<>(cd.getValue().planMeters()));
+        for (TableColumn<RequestPoint, Number> c : List.of(colMismatchActualM, colMismatchRemainM)) {
+            c.setCellFactory(col -> metersCell());
+            c.setStyle("-fx-alignment: CENTER-RIGHT;");
+        }
+        colMismatchRemainYen.setCellValueFactory(
+                cd -> new ReadOnlyObjectWrapper<>(cd.getValue().planYen()));
+        colMismatchRemainYen.setCellFactory(col -> requestYenCell());
+        colMismatchRemainYen.setStyle("-fx-alignment: CENTER-RIGHT;");
+        aoMismatchTable.setPlaceholder(new Label("当日以前で AO と実績円が異なる依頼はありません"));
+        aoMismatchTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
+        Tooltip.install(
+                aoMismatchTable,
+                new Tooltip(
+                        "表示終了日が当日以前のとき、AO（受注額）と実績円が一致しない依頼です。差額 = AO − 実績円。"));
     }
 
     private TableCell<RequestPoint, Number> yenNumberCell() {
@@ -1307,6 +1359,17 @@ public class ProcessingFeeTrendTabController {
         if (requestPane != null) {
             requestPane.setText("依頼NO別 加工賃（" + r.requests().size() + " 件）");
         }
+        List<RequestPoint> mismatches =
+                ProcessingFeeTrendAggregator.aoActualMismatchesOnOrBeforeToday(
+                        r.requests(), r.to(), r.today());
+        if (aoMismatchTable != null) {
+            aoMismatchTable.getItems().setAll(mismatches);
+            aoMismatchTable.refresh();
+        }
+        if (aoMismatchPane != null) {
+            aoMismatchPane.setText("AOと実績の相違（当日以前）（" + mismatches.size() + " 件）");
+            aoMismatchPane.setExpanded(!mismatches.isEmpty());
+        }
 
         settleOverlayLayout();
     }
@@ -1698,6 +1761,13 @@ public class ProcessingFeeTrendTabController {
         }
         if (requestPane != null) {
             requestPane.setText("依頼NO別 加工賃");
+        }
+        if (aoMismatchTable != null) {
+            aoMismatchTable.getItems().clear();
+        }
+        if (aoMismatchPane != null) {
+            aoMismatchPane.setText("AOと実績の相違（当日以前）");
+            aoMismatchPane.setExpanded(false);
         }
     }
 

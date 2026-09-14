@@ -178,6 +178,27 @@ public final class ProcessingFeeTrendAggregator {
         return ao;
     }
 
+    /**
+     * 表示終了日が当日以前のとき、AO（受注額）と実績円が一致しない依頼。
+     * 今月など終了日が今日より後なら空（未了は通常あり得るため）。
+     */
+    public static List<RequestPoint> aoActualMismatchesOnOrBeforeToday(
+            List<RequestPoint> requests, LocalDate to, LocalDate today) {
+        if (to == null || today == null || to.isAfter(today) || requests == null) {
+            return List.of();
+        }
+        List<RequestPoint> out = new ArrayList<>();
+        for (RequestPoint r : requests) {
+            if (r == null || r.isTotalRow()) {
+                continue;
+            }
+            if (Math.abs(r.aoYen() - r.actualYen()) > 0.5) {
+                out.add(r);
+            }
+        }
+        return List.copyOf(out);
+    }
+
     public record Result(
             List<DayPoint> days,
             List<RequestPoint> requests,

@@ -43,6 +43,10 @@ public final class ProcessingFeeTrendWorkbookExporter {
             writeRequests(
                     wb.createSheet("依頼NO別"),
                     ProcessingFeeTrendAggregator.withLeadingTotalRow(r.requests()));
+            writeMismatches(
+                    wb.createSheet("AO実績相違"),
+                    ProcessingFeeTrendAggregator.aoActualMismatchesOnOrBeforeToday(
+                            r.requests(), r.to(), r.today()));
             try (OutputStream out = Files.newOutputStream(target)) {
                 wb.write(out);
             }
@@ -103,6 +107,33 @@ public final class ProcessingFeeTrendWorkbookExporter {
                 r.createCell(3).setCellValue(p.actualMeters());
                 r.createCell(4).setCellValue(p.planMeters());
                 r.createCell(5).setCellValue(p.actualYen());
+                r.createCell(6).setCellValue(p.planYen());
+            }
+        }
+    }
+
+    private static void writeMismatches(Sheet sh, List<RequestPoint> requests) {
+        Row h = sh.createRow(0);
+        h.createCell(0).setCellValue("依頼NO");
+        h.createCell(1).setCellValue("AO(受注額)");
+        h.createCell(2).setCellValue("実績円");
+        h.createCell(3).setCellValue("差額");
+        h.createCell(4).setCellValue("実績(m)");
+        h.createCell(5).setCellValue("未了(m)");
+        h.createCell(6).setCellValue("未了円");
+        int row = 1;
+        if (requests != null) {
+            for (RequestPoint p : requests) {
+                if (p == null) {
+                    continue;
+                }
+                Row r = sh.createRow(row++);
+                r.createCell(0).setCellValue(p.requestNo());
+                r.createCell(1).setCellValue(p.aoYen());
+                r.createCell(2).setCellValue(p.actualYen());
+                r.createCell(3).setCellValue(p.aoYen() - p.actualYen());
+                r.createCell(4).setCellValue(p.actualMeters());
+                r.createCell(5).setCellValue(p.planMeters());
                 r.createCell(6).setCellValue(p.planYen());
             }
         }

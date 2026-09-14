@@ -33,6 +33,9 @@ public final class MainShellInnerTabCatalog {
                     "\u64cd\u4f5c\u30fb\u30bd\u30fc\u30b9",
                     "\u30c7\u30fc\u30bf\u8868");
         }
+        if (parent == MainShellTabId.PROCESSING_TREND && innerTabIndex == 1) {
+            return List.of("日別集計（円）", "依頼NO別 加工賃", "AOと実績の相違（当日以前）");
+        }
         return List.of();
     }
 

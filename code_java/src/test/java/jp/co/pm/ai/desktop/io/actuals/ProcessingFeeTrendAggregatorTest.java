@@ -582,4 +582,56 @@ class ProcessingFeeTrendAggregatorTest {
         assertEquals(0.0, r.requests().get(0).actualMeters(), 1e-9);
         assertEquals(211_200.0, r.requests().get(0).planYen(), 1e-6);
     }
+
+    @Test
+    void pastPeriod_aoNotEqualActualYen_isListedAsMismatch() {
+        LocalDate from = LocalDate.of(2026, 8, 1);
+        LocalDate to = LocalDate.of(2026, 8, 31);
+        LocalDate today = LocalDate.of(2026, 9, 15);
+        Map<String, FeeInfo> fees =
+                Map.of(
+                        "T8-3",
+                        new FeeInfo(null, 10_200.0, "最終", 2026, 8, 600.0),
+                        "T8-4",
+                        new FeeInfo(null, 5_372.0, "最終", 2026, 8, 316.0));
+        Result r =
+                ProcessingFeeTrendAggregator.aggregate(
+                        List.of(
+                                done(LocalDate.of(2026, 8, 10), "T8-3", 598, "最終", 12, 0),
+                                done(LocalDate.of(2026, 8, 11), "T8-4", 316, "最終", 13, 0)),
+                        List.of(),
+                        fees,
+                        from,
+                        to,
+                        today);
+        List<RequestPoint> mismatch =
+                ProcessingFeeTrendAggregator.aoActualMismatchesOnOrBeforeToday(
+                        r.requests(), r.to(), r.today());
+        assertEquals(1, mismatch.size());
+        assertEquals("T8-3", mismatch.get(0).requestNo());
+        assertEquals(10_200.0, mismatch.get(0).aoYen(), 1e-6);
+        assertEquals(10_166.0, mismatch.get(0).actualYen(), 1e-6);
+    }
+
+    @Test
+    void currentMonthRangeEndingAfterToday_mismatchListIsEmpty() {
+        LocalDate from = LocalDate.of(2026, 9, 1);
+        LocalDate to = LocalDate.of(2026, 9, 30);
+        LocalDate today = LocalDate.of(2026, 9, 15);
+        Map<String, FeeInfo> fees =
+                Map.of("T9-1", new FeeInfo(null, 10_200.0, "最終", 2026, 9, 600.0));
+        Result r =
+                ProcessingFeeTrendAggregator.aggregate(
+                        List.of(done(LocalDate.of(2026, 9, 10), "T9-1", 598, "最終", 12, 0)),
+                        List.of(),
+                        fees,
+                        from,
+                        to,
+                        today);
+        assertEquals(1, r.requests().size());
+        assertTrue(
+                ProcessingFeeTrendAggregator.aoActualMismatchesOnOrBeforeToday(
+                                r.requests(), r.to(), r.today())
+                        .isEmpty());
+    }
 }
