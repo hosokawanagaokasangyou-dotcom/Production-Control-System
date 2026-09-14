@@ -227,6 +227,10 @@ public final class ProcessingFeeTrendQuantityExtractor {
                 if (day == null || day.isBefore(from) || day.isAfter(to)) {
                     continue;
                 }
+                // 当日より前の予定残は無効（実績との混在・古い計画の取り残し）
+                if (today != null && day.isBefore(today)) {
+                    continue;
+                }
                 if (Math.abs(e.getValue()) <= EPS) {
                     continue;
                 }

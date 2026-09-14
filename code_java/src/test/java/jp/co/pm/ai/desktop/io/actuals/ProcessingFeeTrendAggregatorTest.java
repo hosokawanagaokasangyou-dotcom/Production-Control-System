@@ -462,4 +462,51 @@ class ProcessingFeeTrendAggregatorTest {
                         || (r.requests().get(0).actualMeters() == 0.0
                                 && r.requests().get(0).actualYen() == 0.0));
     }
+
+    @Test
+    void leftoverPlanBeforeToday_doesNotListRequest() {
+        LocalDate from = LocalDate.of(2026, 8, 1);
+        LocalDate to = LocalDate.of(2026, 8, 31);
+        LocalDate today = LocalDate.of(2026, 9, 14);
+        Map<String, FeeInfo> fees = Map.of("STALE", ao(1_000.0, 100.0, "最終"));
+        Result r =
+                ProcessingFeeTrendAggregator.aggregate(
+                        List.of(),
+                        List.of(new QuantityLine(LocalDate.of(2026, 8, 20), "STALE", 100, "最終")),
+                        fees,
+                        from,
+                        to,
+                        today);
+        assertTrue(r.requests().isEmpty());
+        assertEquals(0.0, r.planTotalYen(), 1e-9);
+    }
+
+    @Test
+    void planOnAndAfterToday_isUsedForDailyRemain() {
+        LocalDate from = LocalDate.of(2026, 9, 1);
+        LocalDate to = LocalDate.of(2026, 9, 30);
+        LocalDate today = LocalDate.of(2026, 9, 14);
+        Map<String, FeeInfo> fees = Map.of("R", ao(1_000.0, 100.0, "最終"));
+        Result r =
+                ProcessingFeeTrendAggregator.aggregate(
+                        List.of(done(LocalDate.of(2026, 9, 5), "R", 60, "最終", 12, 0)),
+                        List.of(
+                                new QuantityLine(LocalDate.of(2026, 9, 10), "R", 40, "最終"),
+                                new QuantityLine(today, "R", 40, "最終")),
+                        fees,
+                        from,
+                        to,
+                        today);
+        DayPoint todayPt =
+                r.days().stream().filter(d -> d.date().equals(today)).findFirst().orElseThrow();
+        assertEquals(400.0, todayPt.planYen(), 1e-6);
+        assertEquals(
+                0.0,
+                r.days().stream()
+                        .filter(d -> d.date().equals(LocalDate.of(2026, 9, 10)))
+                        .findFirst()
+                        .orElseThrow()
+                        .planYen(),
+                1e-9);
+    }
 }

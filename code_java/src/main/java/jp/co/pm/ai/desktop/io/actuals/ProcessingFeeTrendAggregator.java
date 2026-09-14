@@ -223,7 +223,8 @@ public final class ProcessingFeeTrendAggregator {
         Map<String, FeeInfo> feeMap = normalizeFeeKeys(fees);
 
         List<QuantityLine> actFiltered = filterActualToCompletedFinalProcess(actualLines);
-        List<QuantityLine> planFiltered = filterPlanToFinalProcess(planLines, feeMap);
+        List<QuantityLine> planFiltered =
+                dropPlanBeforeToday(filterPlanToFinalProcess(planLines, feeMap), t);
 
         // 依頼NO別の実績 m は期間外の完了出来高も含む（AO 正本の受注残）。
         // 表に載せる依頼は集計期間内のみ（期間内実績・受注月・期間内予定）。
@@ -497,7 +498,7 @@ public final class ProcessingFeeTrendAggregator {
                     if (line == null || !req.equals(line.requestNo())) {
                         continue;
                     }
-                    if (!line.date().isAfter(today)) {
+                    if (line.date().isBefore(today)) {
                         continue;
                     }
                     if (!byDay.containsKey(line.date())) {
@@ -573,6 +574,21 @@ public final class ProcessingFeeTrendAggregator {
                     out.add(line);
                 }
             }
+        }
+        return out;
+    }
+
+    /** 当日より前の予定行は無効。当日以降のみ残す。 */
+    static List<QuantityLine> dropPlanBeforeToday(List<QuantityLine> lines, LocalDate today) {
+        if (lines == null || lines.isEmpty() || today == null) {
+            return lines == null ? List.of() : lines;
+        }
+        List<QuantityLine> out = new ArrayList<>();
+        for (QuantityLine line : lines) {
+            if (line == null || line.date().isBefore(today)) {
+                continue;
+            }
+            out.add(line);
         }
         return out;
     }

@@ -250,4 +250,37 @@ class ProcessingFeeTrendQuantityExtractorTest {
         assertTrue(plan.get(0).meters() <= 100.0 + 1e-9);
         assertEquals(80.0, plan.get(0).meters(), 1e-9);
     }
+
+    @Test
+    void extractAladdin_skipsPlanDatesBeforeToday() {
+        LocalDate today = LocalDate.of(2026, 9, 14);
+        AladdinSnapshot aladdin =
+                new AladdinSnapshot(
+                        List.of(
+                                "倉庫",
+                                "機械名",
+                                "工程名",
+                                "依頼NO",
+                                "2026/09/10",
+                                "2026/09/14",
+                                "2026/09/15"),
+                        List.of(
+                                List.of("W", "M1", "P1", "R1", "100", "200", "300")));
+        Filter filter =
+                new Filter(
+                        LocalDate.of(2026, 9, 1),
+                        LocalDate.of(2026, 9, 30),
+                        ProcessingTrendAggregator.ActualSource.DAILY_REPORT,
+                        PlanSource.ALADDIN,
+                        null,
+                        null,
+                        7);
+        List<QuantityLine> plan =
+                ProcessingFeeTrendQuantityExtractor.extractPlan(aladdin, null, filter, today);
+        assertEquals(2, plan.size());
+        assertEquals(LocalDate.of(2026, 9, 14), plan.get(0).date());
+        assertEquals(200.0, plan.get(0).meters(), 1e-9);
+        assertEquals(LocalDate.of(2026, 9, 15), plan.get(1).date());
+        assertEquals(300.0, plan.get(1).meters(), 1e-9);
+    }
 }
