@@ -387,6 +387,25 @@
     -fx-opacity: 1.0;
 }
 
+/* 未保存の保存ボタン。ミッドナイトブルーではシアン強調が埋もれるためオレンジで点灯する。 */
+.button.pm-unsaved-save-attention {
+    -fx-background-color: #ea580c;
+    -fx-border-color: #fb923c;
+    -fx-border-width: 2;
+    -fx-border-radius: 6;
+    -fx-background-radius: 6;
+    -fx-text-fill: #ffffff;
+}
+.button.pm-unsaved-save-attention .text {
+    -fx-fill: #ffffff;
+}
+.button.pm-unsaved-save-attention:hover {
+    -fx-background-color: #c2410c;
+}
+.button.pm-unsaved-save-attention:disabled {
+    -fx-opacity: 1.0;
+}
+
 .button.pm-aladdin-entry-open-button {
     -fx-font-weight: bold;
 }

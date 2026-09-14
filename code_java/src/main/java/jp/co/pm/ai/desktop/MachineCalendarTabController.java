@@ -111,7 +111,7 @@ public class MachineCalendarTabController {
             undoButton.setDisable(true);
         }
         if (saveButton != null && saveButtonGlow == null) {
-            saveButtonGlow = new ButtonAttentionGlow(saveButton);
+            saveButtonGlow = ButtonAttentionGlow.forUnsavedSave(saveButton);
         }
         installCellSizeSpinner();
         installColumnWidthSpinner();
@@ -723,11 +723,7 @@ public class MachineCalendarTabController {
     private void applyGridDirtyState(boolean dirty) {
         gridDirty = dirty;
         if (saveButtonGlow != null) {
-            if (dirty) {
-                saveButtonGlow.ensureActive();
-            } else {
-                saveButtonGlow.stop();
-            }
+            saveButtonGlow.apply(dirty);
         }
         if (shell != null) {
             shell.onMachineCalendarDirtyChanged(dirty);

@@ -177,7 +177,7 @@ public class MemberAttendanceTabController {
             gridHost.getChildren().add(gridPane);
         }
         if (saveButton != null && saveButtonGlow == null) {
-            saveButtonGlow = new ButtonAttentionGlow(saveButton);
+            saveButtonGlow = ButtonAttentionGlow.forUnsavedSave(saveButton);
         }
         if (setupButton != null && setupButtonGlow == null) {
             setupButtonGlow = new ButtonAttentionGlow(setupButton);
@@ -443,11 +443,7 @@ public class MemberAttendanceTabController {
 
     private void applyGridDirtyState(boolean dirty) {
         if (saveButtonGlow != null) {
-            if (dirty) {
-                saveButtonGlow.startIfIdle();
-            } else {
-                saveButtonGlow.stop();
-            }
+            saveButtonGlow.apply(dirty);
         }
         if (shell != null) {
             shell.onMemberAttendanceDirtyChanged(dirty);

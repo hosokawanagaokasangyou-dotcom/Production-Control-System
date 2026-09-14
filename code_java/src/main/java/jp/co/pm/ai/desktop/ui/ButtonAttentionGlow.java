@@ -12,17 +12,32 @@ import javafx.util.Duration;
 public final class ButtonAttentionGlow {
 
     static final String STYLE_CLASS = "pm-aladdin-entry-export-attention";
+    static final String UNSAVED_SAVE_STYLE_CLASS = "pm-unsaved-save-attention";
 
     private static final Color GLOW_COLOR = Color.web("#38bdf8");
+    private static final Color UNSAVED_SAVE_GLOW_COLOR = Color.web("#fb923c");
     private static final double RADIUS_MIN = 6.0;
     private static final double RADIUS_MAX = 22.0;
 
     private final Button target;
+    private final Color glowColor;
+    private final String styleClass;
     private Timeline timeline;
     private DropShadow shadow;
 
     public ButtonAttentionGlow(Button target) {
+        this(target, GLOW_COLOR, STYLE_CLASS);
+    }
+
+    private ButtonAttentionGlow(Button target, Color glowColor, String styleClass) {
         this.target = target;
+        this.glowColor = glowColor;
+        this.styleClass = styleClass;
+    }
+
+    /** 未保存の保存ボタン向け（テーマの青系ボタンと区別できるオレンジ）。 */
+    public static ButtonAttentionGlow forUnsavedSave(Button target) {
+        return new ButtonAttentionGlow(target, UNSAVED_SAVE_GLOW_COLOR, UNSAVED_SAVE_STYLE_CLASS);
     }
 
     /** 未起動ならグローアニメーションを開始する。 */
@@ -42,12 +57,21 @@ public final class ButtonAttentionGlow {
         startGlowTimeline();
     }
 
+    /** 未保存なら点灯、保存済みなら消灯。 */
+    public void apply(boolean dirty) {
+        if (dirty) {
+            ensureActive();
+        } else {
+            stop();
+        }
+    }
+
     private void startGlowTimeline() {
-        if (!target.getStyleClass().contains(STYLE_CLASS)) {
-            target.getStyleClass().add(STYLE_CLASS);
+        if (!target.getStyleClass().contains(styleClass)) {
+            target.getStyleClass().add(styleClass);
         }
         shadow = new DropShadow();
-        shadow.setColor(GLOW_COLOR);
+        shadow.setColor(glowColor);
         shadow.setRadius(RADIUS_MIN);
         shadow.setSpread(0.35);
         target.setEffect(shadow);
@@ -72,7 +96,7 @@ public final class ButtonAttentionGlow {
         }
         if (target != null) {
             target.setEffect(null);
-            target.getStyleClass().remove(STYLE_CLASS);
+            target.getStyleClass().remove(styleClass);
         }
         shadow = null;
     }
