@@ -28,6 +28,7 @@ import jp.co.pm.ai.desktop.ui.PlanInputProcessSequenceRowOrder;
  * 依頼NO別の実績 m は表示期間外の日報出来高も含む（日次棒のみ表示期間内）。
  * KPI の実績円・未了円は依頼配分の合計（表の合計行と一致。AO 正本）。日次チャートは期間内の加工日付のみ。
  * 依頼NO別表の行は集計期間内に限る（期間内に完了実績がある・受注月が期間に含まれる・期間内予定がある）。
+ * 表示期間がすべて過去のとき、AO が 0 より大きいのに実績 m が 0 の依頼はキャンセルとして載せない。
  * 複数工程は実績・受注とも最終工程 m のみ。日報の最終工程は加工日付＋終了時間の最遅行の工程名
  * （終了時間が無い行は未完了のため実績に含めない）。予定は受注「加工内容」末尾。当日より前の予定は無効。
  * AO 欠落時は AH × m（未了は受注 m があれば同様）。
@@ -252,6 +253,9 @@ public final class ProcessingFeeTrendAggregator {
                 continue;
             }
             double actM = actualMetersByReq.getOrDefault(req, 0.0);
+            if (isCanceledZeroActualInPastPeriod(to, t, info, actM)) {
+                continue;
+            }
             RequestAlloc alloc = allocateRequest(info, actM, planFiltered, req);
             allocs.put(req, alloc);
             if (alloc.rateMissing()) {
@@ -425,6 +429,21 @@ public final class ProcessingFeeTrendAggregator {
             return true;
         }
         return info.totalAoYen() != null && info.totalAoYen() <= EPS;
+    }
+
+    /**
+     * 表示期間がすべて過去で、AO が残っているのに実績 m が 0 ならキャンセル。
+     * 当月は未加工の可能性があるため除外しない。
+     */
+    static boolean isCanceledZeroActualInPastPeriod(
+            LocalDate to, LocalDate today, FeeInfo info, double actualMeters) {
+        if (today == null || to == null || !to.isBefore(today)) {
+            return false;
+        }
+        if (actualMeters > EPS) {
+            return false;
+        }
+        return info != null && info.hasAo();
     }
 
     /** 実績日次円。受注 m を超えないよう依頼ごとにクリップ。 */

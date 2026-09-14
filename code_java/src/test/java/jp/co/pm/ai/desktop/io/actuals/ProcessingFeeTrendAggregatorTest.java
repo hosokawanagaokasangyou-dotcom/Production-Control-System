@@ -101,11 +101,9 @@ class ProcessingFeeTrendAggregatorTest {
                         from,
                         to,
                         LocalDate.of(2026, 9, 11));
-        // 終了時間なし＝未完了 → 実績0。受注月があるので未了に AO 全額
-        assertEquals(1, r.requests().size());
-        assertEquals(0.0, r.requests().get(0).actualMeters(), 1e-6);
-        assertEquals(0.0, r.requests().get(0).actualYen(), 1e-6);
-        assertEquals(112_000.0, r.requests().get(0).planYen(), 1e-6);
+        // 終了時間なし＝未完了 → 実績0。過去期間かつ AO>0 なのでキャンセル扱い
+        assertTrue(r.requests().isEmpty());
+        assertEquals(0.0, r.planTotalYen(), 1e-9);
     }
 
     @Test
@@ -491,6 +489,8 @@ class ProcessingFeeTrendAggregatorTest {
         assertEquals(tot.planYen(), r.planTotalYen(), 1e-6);
         assertEquals(tot.aoYen(), ProcessingFeeTrendAggregator.sumOrderAoYen(r.requests()), 1e-6);
         assertEquals(r.actualTotalYen() + r.planTotalYen(), tot.aoYen(), 1e-6);
+        assertEquals(1, r.requests().size());
+        assertEquals("A", r.requests().get(0).requestNo());
     }
 
     @Test
@@ -538,5 +538,48 @@ class ProcessingFeeTrendAggregatorTest {
                         .orElseThrow()
                         .planYen(),
                 1e-9);
+    }
+
+    @Test
+    void pastMonth_aoPositiveZeroActual_excludedAsCanceled() {
+        // 先月など過去期間: W7-22 は AO>0・実績0 → キャンセル。子番 W7-22-1 の実績は残す
+        LocalDate from = LocalDate.of(2026, 8, 1);
+        LocalDate to = LocalDate.of(2026, 8, 31);
+        LocalDate today = LocalDate.of(2026, 9, 15);
+        Map<String, FeeInfo> fees =
+                Map.of(
+                        "W7-22",
+                        new FeeInfo(null, 211_200.0, "最終", 2026, 8, 3_300.0),
+                        "W7-22-1",
+                        new FeeInfo(null, null, "最終", 2026, 8, 3_300.0));
+        Result r =
+                ProcessingFeeTrendAggregator.aggregate(
+                        List.of(done(LocalDate.of(2026, 8, 10), "W7-22-1", 3_300, "最終", 15, 0)),
+                        List.of(),
+                        fees,
+                        from,
+                        to,
+                        today);
+        assertEquals(1, r.requests().size());
+        assertEquals("W7-22-1", r.requests().get(0).requestNo());
+        assertEquals(3_300.0, r.requests().get(0).actualMeters(), 1e-6);
+        assertTrue(r.requests().stream().noneMatch(x -> "W7-22".equals(x.requestNo())));
+        assertEquals(0.0, r.planTotalYen(), 1e-9);
+    }
+
+    @Test
+    void currentMonth_aoPositiveZeroActual_keptAsRemain() {
+        LocalDate from = LocalDate.of(2026, 9, 1);
+        LocalDate to = LocalDate.of(2026, 9, 30);
+        LocalDate today = LocalDate.of(2026, 9, 15);
+        Map<String, FeeInfo> fees =
+                Map.of("W9-1", new FeeInfo(null, 211_200.0, "最終", 2026, 9, 3_300.0));
+        Result r =
+                ProcessingFeeTrendAggregator.aggregate(
+                        List.of(), List.of(), fees, from, to, today);
+        assertEquals(1, r.requests().size());
+        assertEquals("W9-1", r.requests().get(0).requestNo());
+        assertEquals(0.0, r.requests().get(0).actualMeters(), 1e-9);
+        assertEquals(211_200.0, r.requests().get(0).planYen(), 1e-6);
     }
 }
