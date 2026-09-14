@@ -57,8 +57,12 @@ class ProcessingFeeTrendTabFxmlTest {
         assertNotNull(elementByFxId("viewCumulativeToggle"));
         assertEquals("AO(受注額)", elementByFxId("colAoYen").getAttribute("text"));
         assertEquals("円/m", elementByFxId("colRateYen").getAttribute("text"));
-        assertEquals("未了円", elementByFxId("colPlanYen").getAttribute("text"));
-        assertEquals("未了円", elementByFxId("colReqPlanYen").getAttribute("text"));
+        assertEquals("実績", elementByFxId("colActualYen").getAttribute("text"));
+        assertEquals("未了", elementByFxId("colPlanYen").getAttribute("text"));
+        assertEquals("実績", elementByFxId("colReqActualYen").getAttribute("text"));
+        assertEquals("未了", elementByFxId("colReqPlanYen").getAttribute("text"));
+        assertEquals("実績", elementByFxId("colMismatchActualYen").getAttribute("text"));
+        assertEquals("未了", elementByFxId("colMismatchRemainYen").getAttribute("text"));
         assertEquals("未了 (m)", elementByFxId("colPlanM").getAttribute("text"));
         assertEquals("false", elementByFxId("detailPane").getAttribute("expanded"));
         assertEquals("false", elementByFxId("requestPane").getAttribute("expanded"));

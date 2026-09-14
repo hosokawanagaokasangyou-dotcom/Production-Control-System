@@ -263,8 +263,8 @@ public class ProcessingFeeTrendTabController {
 
     @FXML
     private void initialize() {
-        actualSeries.setName("実績円");
-        planSeries.setName("未了円");
+        actualSeries.setName("実績");
+        planSeries.setName("未了");
         dailyChart.getData().setAll(actualSeries, planSeries);
         dailyChart.setAnimated(false);
 
@@ -461,7 +461,7 @@ public class ProcessingFeeTrendTabController {
         Tooltip.install(
                 detailTable,
                 new Tooltip(
-                        "単位は円。円/m＝AO÷受注最終工程m。日次は実績円／未了円。累計列は月初でリセット。"));
+                        "単位は円。円/m＝AO÷受注最終工程m。日次は実績／未了。累計列は月初でリセット。"));
     }
 
     private void initRequestTable() {
@@ -545,8 +545,8 @@ public class ProcessingFeeTrendTabController {
         Tooltip.install(
                 requestTable,
                 new Tooltip(
-                        "円/m = AO ÷ 受注最終工程 m。実績円 = 円/m × 実績 m、未了円 = 円/m × (受注 m − 実績 m)。\n"
-                                + "実績円＋未了円 = AO（受注額）。日報は製品加工終了時間がある最遅工程のみ（終了時間なし＝未完了）。"));
+                        "円/m = AO ÷ 受注最終工程 m。実績 = 円/m × 実績 m、未了 = 円/m × (受注 m − 実績 m)。\n"
+                                + "実績＋未了 = AO（受注額）。日報は製品加工終了時間がある最遅工程のみ（終了時間なし＝未完了）。"));
     }
 
     private void initAoMismatchTable() {
@@ -583,12 +583,12 @@ public class ProcessingFeeTrendTabController {
                 cd -> new ReadOnlyObjectWrapper<>(cd.getValue().planYen()));
         colMismatchRemainYen.setCellFactory(col -> requestYenCell());
         colMismatchRemainYen.setStyle("-fx-alignment: CENTER-RIGHT;");
-        aoMismatchTable.setPlaceholder(new Label("当日以前で AO と実績円が異なる依頼はありません"));
+        aoMismatchTable.setPlaceholder(new Label("当日以前で AO と実績が異なる依頼はありません"));
         aoMismatchTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
         Tooltip.install(
                 aoMismatchTable,
                 new Tooltip(
-                        "表示終了日が当日以前のとき、AO（受注額）と実績円が一致しない依頼です。差額 = AO − 実績円。"));
+                        "表示終了日が当日以前のとき、AO（受注額）と実績が一致しない依頼です。差額 = AO − 実績。"));
     }
 
     private TableCell<RequestPoint, Number> yenNumberCell() {
@@ -709,8 +709,8 @@ public class ProcessingFeeTrendTabController {
             return;
         }
         legendBox.getChildren().setAll(
-                legendItem("実績円", "#2563eb", false),
-                legendItem("未了円", "#64748b", false),
+                legendItem("実績", "#2563eb", false),
+                legendItem("未了", "#64748b", false),
                 legendItem("実績累計", "#1e3a8a", false),
                 legendItem("見込累計", "#0f766e", true),
                 legendItem("今日", "#0f766e", true));
@@ -1252,7 +1252,7 @@ public class ProcessingFeeTrendTabController {
                         if (notice.length() > 0) {
                             notice.append(' ');
                         }
-                        notice.append("受注額と実績円＋未了円に差があります（単価欠落や受注 m 欠落を確認）。");
+                        notice.append("受注額と実績＋未了に差があります（単価欠落や受注 m 欠落を確認）。");
                     }
                     if (notice.length() > 0) {
                         showNotice(notice.toString());

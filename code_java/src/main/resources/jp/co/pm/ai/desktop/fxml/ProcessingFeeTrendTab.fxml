@@ -110,11 +110,11 @@
                     <Label fx:id="kpiOrderAoYen" styleClass="pm-processing-trend-kpi-value" text="—"/>
                 </VBox>
                 <VBox styleClass="pm-processing-trend-kpi-card">
-                    <Label styleClass="pm-processing-trend-kpi-caption" text="実績円合計（依頼）"/>
+                    <Label styleClass="pm-processing-trend-kpi-caption" text="実績合計（依頼）"/>
                     <Label fx:id="kpiActualYen" styleClass="pm-processing-trend-kpi-value" text="—"/>
                 </VBox>
                 <VBox styleClass="pm-processing-trend-kpi-card">
-                    <Label styleClass="pm-processing-trend-kpi-caption" text="未了円合計（受注残）"/>
+                    <Label styleClass="pm-processing-trend-kpi-caption" text="未了合計（受注残）"/>
                     <Label fx:id="kpiPlanYen" styleClass="pm-processing-trend-kpi-value" text="—"/>
                 </VBox>
             </FlowPane>
@@ -176,8 +176,8 @@
                     <TableView fx:id="detailTable" prefHeight="220.0">
                         <columns>
                         <TableColumn fx:id="colDate" prefWidth="120.0" sortable="false" text="日付"/>
-                        <TableColumn fx:id="colActualYen" prefWidth="120.0" sortable="false" text="実績円"/>
-                        <TableColumn fx:id="colPlanYen" prefWidth="120.0" sortable="false" text="未了円"/>
+                        <TableColumn fx:id="colActualYen" prefWidth="120.0" sortable="false" text="実績"/>
+                        <TableColumn fx:id="colPlanYen" prefWidth="120.0" sortable="false" text="未了"/>
                         <TableColumn fx:id="colActualCumYen" prefWidth="130.0" sortable="false" text="実績累計円"/>
                         <TableColumn fx:id="colPlanCumYen" prefWidth="130.0" sortable="false" text="未了累計円"/>
                         </columns>
@@ -193,8 +193,8 @@
                         <TableColumn fx:id="colRateYen" prefWidth="90.0" sortable="true" text="円/m"/>
                         <TableColumn fx:id="colActualM" prefWidth="100.0" sortable="true" text="実績 (m)"/>
                         <TableColumn fx:id="colPlanM" prefWidth="100.0" sortable="true" text="未了 (m)"/>
-                        <TableColumn fx:id="colReqActualYen" prefWidth="120.0" sortable="true" text="実績円"/>
-                        <TableColumn fx:id="colReqPlanYen" prefWidth="120.0" sortable="true" text="未了円"/>
+                        <TableColumn fx:id="colReqActualYen" prefWidth="120.0" sortable="true" text="実績"/>
+                        <TableColumn fx:id="colReqPlanYen" prefWidth="120.0" sortable="true" text="未了"/>
                         </columns>
                     </TableView>
                 </content>
@@ -206,11 +206,11 @@
                         <columns>
                         <TableColumn fx:id="colMismatchRequestNo" prefWidth="100.0" sortable="true" text="依頼NO"/>
                         <TableColumn fx:id="colMismatchAoYen" prefWidth="120.0" sortable="true" text="AO(受注額)"/>
-                        <TableColumn fx:id="colMismatchActualYen" prefWidth="120.0" sortable="true" text="実績円"/>
+                        <TableColumn fx:id="colMismatchActualYen" prefWidth="120.0" sortable="true" text="実績"/>
                         <TableColumn fx:id="colMismatchDiffYen" prefWidth="120.0" sortable="true" text="差額"/>
                         <TableColumn fx:id="colMismatchActualM" prefWidth="100.0" sortable="true" text="実績 (m)"/>
                         <TableColumn fx:id="colMismatchRemainM" prefWidth="100.0" sortable="true" text="未了 (m)"/>
-                        <TableColumn fx:id="colMismatchRemainYen" prefWidth="120.0" sortable="true" text="未了円"/>
+                        <TableColumn fx:id="colMismatchRemainYen" prefWidth="120.0" sortable="true" text="未了"/>
                         </columns>
                     </TableView>
                 </content>

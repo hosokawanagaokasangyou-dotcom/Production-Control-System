@@ -61,8 +61,8 @@ public final class ProcessingFeeTrendWorkbookExporter {
     private static void writeDays(Sheet sh, List<DayPoint> days) {
         Row h = sh.createRow(0);
         h.createCell(0).setCellValue("日付");
-        h.createCell(1).setCellValue("実績円");
-        h.createCell(2).setCellValue("未了円");
+        h.createCell(1).setCellValue("実績");
+        h.createCell(2).setCellValue("未了");
         h.createCell(3).setCellValue("実績累計円");
         h.createCell(4).setCellValue("未了累計円");
         h.createCell(5).setCellValue("見込累計円");
@@ -90,8 +90,8 @@ public final class ProcessingFeeTrendWorkbookExporter {
         h.createCell(2).setCellValue("円/m");
         h.createCell(3).setCellValue("実績(m)");
         h.createCell(4).setCellValue("未了(m)");
-        h.createCell(5).setCellValue("実績円");
-        h.createCell(6).setCellValue("未了円");
+        h.createCell(5).setCellValue("実績");
+        h.createCell(6).setCellValue("未了");
         int row = 1;
         if (requests != null) {
             for (RequestPoint p : requests) {
@@ -116,11 +116,11 @@ public final class ProcessingFeeTrendWorkbookExporter {
         Row h = sh.createRow(0);
         h.createCell(0).setCellValue("依頼NO");
         h.createCell(1).setCellValue("AO(受注額)");
-        h.createCell(2).setCellValue("実績円");
+        h.createCell(2).setCellValue("実績");
         h.createCell(3).setCellValue("差額");
         h.createCell(4).setCellValue("実績(m)");
         h.createCell(5).setCellValue("未了(m)");
-        h.createCell(6).setCellValue("未了円");
+        h.createCell(6).setCellValue("未了");
         int row = 1;
         if (requests != null) {
             for (RequestPoint p : requests) {
