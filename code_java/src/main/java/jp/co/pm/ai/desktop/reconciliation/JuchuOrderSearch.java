@@ -17,6 +17,16 @@ public final class JuchuOrderSearch {
 
     public static final int DATE_ONLY_RESULT_LIMIT = 200;
 
+    public record FilterResult(List<OrderRecord> records, int matchCount) {
+        public FilterResult {
+            records = records != null ? List.copyOf(records) : List.of();
+        }
+
+        public boolean truncated() {
+            return matchCount > records.size();
+        }
+    }
+
     private JuchuOrderSearch() {}
 
     public static LocalDate defaultDeliveryFrom(LocalDate today) {
@@ -30,22 +40,24 @@ public final class JuchuOrderSearch {
 
     public static List<OrderRecord> filter(
             Collection<OrderRecord> records, JuchuOrderSearchCriteria criteria) {
-        Objects.requireNonNull(criteria, "criteria");
-        var validationError = criteria.validationError();
-        if (validationError.isPresent()) {
-            throw new IllegalArgumentException(validationError.get());
-        }
-        if (records == null) {
-            return List.of();
-        }
-        return finishHits(
-                records.stream()
-                        .filter(record -> matches(record, criteria, "", ""))
-                        .toList(),
-                criteria);
+        return filterDetailed(records, criteria).records();
     }
 
     public static List<OrderRecord> filter(
+            Collection<OrderRecord> records,
+            JuchuOrderSearchCriteria criteria,
+            Function<OrderRecord, String> extraMachineHaystack,
+            Function<OrderRecord, String> extraProcessHaystack) {
+        return filterDetailed(records, criteria, extraMachineHaystack, extraProcessHaystack)
+                .records();
+    }
+
+    public static FilterResult filterDetailed(
+            Collection<OrderRecord> records, JuchuOrderSearchCriteria criteria) {
+        return filterDetailed(records, criteria, null, null);
+    }
+
+    public static FilterResult filterDetailed(
             Collection<OrderRecord> records,
             JuchuOrderSearchCriteria criteria,
             Function<OrderRecord, String> extraMachineHaystack,
@@ -56,7 +68,7 @@ public final class JuchuOrderSearch {
             throw new IllegalArgumentException(validationError.get());
         }
         if (records == null) {
-            return List.of();
+            return new FilterResult(List.of(), 0);
         }
         Function<OrderRecord, String> machines =
                 extraMachineHaystack != null ? extraMachineHaystack : r -> "";
@@ -93,20 +105,21 @@ public final class JuchuOrderSearch {
         return keywordMatches(record, criteria, extraMachineHaystack, extraProcessHaystack);
     }
 
-    private static List<OrderRecord> finishHits(
+    private static FilterResult finishHits(
             List<OrderRecord> hits, JuchuOrderSearchCriteria criteria) {
         if (hits == null || hits.isEmpty()) {
-            return List.of();
+            return new FilterResult(List.of(), 0);
         }
         if (criteria.hasKeyword()) {
-            return List.copyOf(hits);
+            return new FilterResult(hits, hits.size());
         }
         List<OrderRecord> sorted = new ArrayList<>(hits);
         sorted.sort(recencyComparator());
+        int matchCount = sorted.size();
         if (sorted.size() > DATE_ONLY_RESULT_LIMIT) {
             sorted = new ArrayList<>(sorted.subList(0, DATE_ONLY_RESULT_LIMIT));
         }
-        return List.copyOf(sorted);
+        return new FilterResult(sorted, matchCount);
     }
 
     private static Comparator<OrderRecord> recencyComparator() {

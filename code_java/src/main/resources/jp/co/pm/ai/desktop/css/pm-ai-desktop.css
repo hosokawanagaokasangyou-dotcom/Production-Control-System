@@ -3811,3 +3811,19 @@
     -fx-text-fill: white;
     -fx-font-weight: bold;
 }
+
+.juchu-order-search-placeholder {
+    -fx-text-fill: #94A3B8;
+    -fx-font-size: 13px;
+    -fx-alignment: CENTER;
+    -fx-text-alignment: center;
+}
+
+.table-view.juchu-order-search-table .placeholder {
+    -fx-alignment: CENTER;
+}
+
+.juchu-order-search-count-warn {
+    -fx-text-fill: #FBBF24;
+    -fx-font-weight: bold;
+}

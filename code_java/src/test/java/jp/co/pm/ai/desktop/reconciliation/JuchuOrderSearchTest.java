@@ -171,6 +171,9 @@ class JuchuOrderSearchTest {
         assertEquals("R201", out.get(0).getReqNo());
         assertEquals("R2", out.get(199).getReqNo());
         assertTrue(out.stream().noneMatch(r -> "R1".equals(r.getReqNo())));
+        JuchuOrderSearch.FilterResult detailed = JuchuOrderSearch.filterDetailed(recs, c);
+        assertEquals(201, detailed.matchCount());
+        assertTrue(detailed.truncated());
     }
 
     @Test

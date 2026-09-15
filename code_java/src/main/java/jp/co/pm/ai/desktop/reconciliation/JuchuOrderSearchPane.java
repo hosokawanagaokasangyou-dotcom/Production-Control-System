@@ -21,6 +21,7 @@ import javafx.collections.ObservableList;
 import javafx.concurrent.Task;
 import javafx.geometry.Insets;
 import javafx.geometry.Orientation;
+import javafx.geometry.Pos;
 import javafx.scene.Parent;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Alert.AlertType;
@@ -30,17 +31,20 @@ import javafx.scene.control.ComboBox;
 import javafx.scene.control.DatePicker;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
+import javafx.scene.control.Separator;
 import javafx.scene.control.SplitPane;
 import javafx.scene.control.TableCell;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableRow;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextField;
+import javafx.scene.control.Tooltip;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.MouseButton;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
+import javafx.scene.text.TextAlignment;
 import javafx.stage.Window;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
@@ -73,29 +77,48 @@ public final class JuchuOrderSearchPane {
         LocalDate today = LocalDate.now();
         DatePicker from = new DatePicker(JuchuOrderSearch.defaultDeliveryFrom(today));
         DatePicker to = new DatePicker(JuchuOrderSearch.defaultDeliveryTo(today));
-        ComboBox<String> product = keywordCombo("製品名（部分一致・候補から選択可）");
-        ComboBox<String> raw = keywordCombo("投入原反（部分一致・候補から選択可）");
-        ComboBox<String> machine = keywordCombo("機械名（部分一致・候補から選択可）");
-        ComboBox<String> process = keywordCombo("工程名（部分一致・候補から選択可）");
+        ComboBox<String> product = keywordCombo("部分一致");
+        ComboBox<String> raw = keywordCombo("部分一致");
+        ComboBox<String> machine = keywordCombo("部分一致");
+        ComboBox<String> process = keywordCombo("部分一致");
         Button search = new Button("検索");
+        search.getStyleClass().add("btn-reload");
+        search.setMaxWidth(Double.MAX_VALUE);
         Button openKensa = new Button("検査表を開く");
+        openKensa.getStyleClass().add("btn-copy");
+        openKensa.setMaxWidth(Double.MAX_VALUE);
         Button rebuildIndex = new Button("検査表索引を更新");
+        rebuildIndex.getStyleClass().add("btn-save-local");
+        rebuildIndex.setMaxWidth(Double.MAX_VALUE);
         Label statusMessage = new Label("");
         statusMessage.setWrapText(true);
+        statusMessage.getStyleClass().add("top-status");
 
+        Label leftTitle = new Label("検索条件");
+        leftTitle.getStyleClass().add("pane-title-left");
+        Label hint =
+                new Label("キーワードは部分一致。空欄なら納期期間のみ（最新200件）。");
+        hint.setWrapText(true);
+        hint.getStyleClass().add("paper-main-subtitle");
+        HBox dateRow =
+                new HBox(8, labeledGrow("納期 From", from), labeledGrow("納期 To", to));
+        HBox actionRow = new HBox(8, search, openKensa);
+        HBox.setHgrow(search, Priority.ALWAYS);
+        HBox.setHgrow(openKensa, Priority.ALWAYS);
         VBox conditions = new VBox(8);
         conditions.setPadding(new Insets(12));
         conditions
                 .getChildren()
                 .addAll(
-                        labeled("納期 From", from),
-                        labeled("納期 To", to),
+                        leftTitle,
+                        hint,
+                        dateRow,
                         labeled("製品", product),
                         labeled("投入原反", raw),
                         labeled("機械名", machine),
                         labeled("工程名", process),
-                        search,
-                        openKensa,
+                        actionRow,
+                        new Separator(),
                         rebuildIndex,
                         statusMessage);
 
@@ -103,10 +126,14 @@ public final class JuchuOrderSearchPane {
         leftScroll.setFitToWidth(true);
         leftScroll.getStyleClass().add("form-scroll-pane");
 
-        Label countLabel = new Label("0 件");
+        Label countLabel = new Label("未検索");
+        countLabel.getStyleClass().add("top-status");
+        countLabel.setWrapText(true);
         ObservableList<OrderRecord> items = FXCollections.observableArrayList();
         TableView<OrderRecord> table = new TableView<>(items);
-        BooleanProperty indexBusy = new SimpleBooleanProperty(false);
+        table.getStyleClass().add("juchu-order-search-table");
+        BooleanProperty rebuildBusy = new SimpleBooleanProperty(false);
+        BooleanProperty openBusy = new SimpleBooleanProperty(false);
         PipelineScanIndex[] planIndex = {PipelineScanIndex.empty()};
         AtomicReference<List<InspectionSheetIndexStore.Row>> kensaIndex =
                 new AtomicReference<>(List.of());
@@ -146,7 +173,13 @@ public final class JuchuOrderSearchPane {
         installKeywordFilter(machine, refreshKeywordCandidates);
         installKeywordFilter(process, refreshKeywordCandidates);
         table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
-        table.setPlaceholder(new Label("条件を指定して検索してください"));
+        Label placeholder = new Label("条件を指定して検索してください");
+        placeholder.getStyleClass().add("juchu-order-search-placeholder");
+        placeholder.setWrapText(true);
+        placeholder.setMaxWidth(420);
+        placeholder.setAlignment(Pos.CENTER);
+        placeholder.setTextAlignment(TextAlignment.CENTER);
+        table.setPlaceholder(placeholder);
         table.getColumns()
                 .addAll(
                         kensaPresenceCol(kensaIndex),
@@ -176,8 +209,8 @@ public final class JuchuOrderSearchPane {
                         table.getSelectionModel()
                                 .selectedItemProperty()
                                 .isNull()
-                                .or(indexBusy));
-        rebuildIndex.disableProperty().bind(indexBusy);
+                                .or(openBusy));
+        rebuildIndex.disableProperty().bind(rebuildBusy);
 
         table.setRowFactory(
                 tv -> {
@@ -190,7 +223,7 @@ public final class JuchuOrderSearchPane {
                                     return;
                                 }
                                 openInspectionSheet(
-                                        row.getItem(), env, owner, statusMessage, indexBusy);
+                                        row.getItem(), env, owner, statusMessage, openBusy);
                             });
                     return row;
                 });
@@ -204,7 +237,7 @@ public final class JuchuOrderSearchPane {
                             env,
                             owner,
                             statusMessage,
-                            indexBusy);
+                            openBusy);
                     e.consume();
                 });
 
@@ -226,26 +259,41 @@ public final class JuchuOrderSearchPane {
                     if (err.isPresent()) {
                         statusMessage.setText(err.get());
                         items.clear();
-                        countLabel.setText("0 件");
+                        countLabel.getStyleClass().remove("juchu-order-search-count-warn");
+                        countLabel.setText("未検索");
+                        placeholder.setText("条件を指定して検索してください");
                         return;
                     }
                     planIndex[0] = loadPlanIndex(env.get());
                     PipelineScanIndex index = planIndex[0];
                     refreshKeywordCandidates.run();
                     reloadKensaIndex.run();
-                    List<OrderRecord> hits =
-                            JuchuOrderSearch.filter(
+                    JuchuOrderSearch.FilterResult result =
+                            JuchuOrderSearch.filterDetailed(
                                     recordsSupplier.get(),
                                     c,
                                     r -> planHaystack(index, r, true),
                                     r -> planHaystack(index, r, false));
-                    items.setAll(hits);
-                    String countText = hits.size() + " 件";
-                    if (!c.hasKeyword() && hits.size() == JuchuOrderSearch.DATE_ONLY_RESULT_LIMIT) {
-                        countText = countText + "（期間のみのため最新200件）";
+                    items.setAll(result.records());
+                    countLabel.getStyleClass().remove("juchu-order-search-count-warn");
+                    if (result.records().isEmpty()) {
+                        placeholder.setText("該当する受注はありません");
+                        countLabel.setText("0 件");
+                    } else if (result.truncated()) {
+                        countLabel.getStyleClass().add("juchu-order-search-count-warn");
+                        countLabel.setText(
+                                result.records().size()
+                                        + " 件（期間のみ・全 "
+                                        + result.matchCount()
+                                        + " 件中の最新）");
+                    } else {
+                        countLabel.setText(result.records().size() + " 件");
                     }
-                    statusMessage.setText(countText);
-                    countLabel.setText(countText);
+                    statusMessage.setText("");
+                    if (!result.records().isEmpty()) {
+                        table.getSelectionModel().selectFirst();
+                        table.requestFocus();
+                    }
                 });
 
         openKensa.setOnAction(
@@ -255,11 +303,18 @@ public final class JuchuOrderSearchPane {
                                 env,
                                 owner,
                                 statusMessage,
-                                indexBusy));
+                                openBusy));
         rebuildIndex.setOnAction(
                 e ->
                         rebuildInspectionIndex(
-                                env, owner, statusMessage, indexBusy, kensaIndex, table));
+                                env, owner, statusMessage, rebuildBusy, kensaIndex, table));
+        bindEnterToSearch(from, search);
+        bindEnterToSearch(to, search);
+        bindEnterToSearch(product, search);
+        bindEnterToSearch(raw, search);
+        bindEnterToSearch(machine, search);
+        bindEnterToSearch(process, search);
+        Tooltip.install(rebuildIndex, new Tooltip("検査表フォルダを再走査して索引を作り直します"));
 
         SplitPane split = new SplitPane(leftScroll, right);
         split.setOrientation(Orientation.HORIZONTAL);
@@ -269,6 +324,7 @@ public final class JuchuOrderSearchPane {
 
         VBox root = new VBox(split);
         VBox.setVgrow(split, Priority.ALWAYS);
+        root.getStyleClass().add("form-tab-container");
         root.setMaxWidth(Double.MAX_VALUE);
         root.setMaxHeight(Double.MAX_VALUE);
         return root;
@@ -579,6 +635,44 @@ public final class JuchuOrderSearchPane {
         return List.copyOf(names);
     }
 
+    private static VBox labeledGrow(String caption, javafx.scene.Node field) {
+        VBox box = labeled(caption, field);
+        HBox.setHgrow(box, Priority.ALWAYS);
+        return box;
+    }
+
+    private static void bindEnterToSearch(DatePicker picker, Button search) {
+        if (picker == null || search == null) {
+            return;
+        }
+        javafx.event.EventHandler<javafx.scene.input.KeyEvent> fire =
+                e -> {
+                    if (e.getCode() == KeyCode.ENTER) {
+                        search.fire();
+                        e.consume();
+                    }
+                };
+        picker.setOnKeyPressed(fire);
+        if (picker.getEditor() != null) {
+            picker.getEditor().setOnKeyPressed(fire);
+        }
+    }
+
+    private static void bindEnterToSearch(ComboBox<String> combo, Button search) {
+        if (combo == null || search == null || combo.getEditor() == null) {
+            return;
+        }
+        combo.getEditor()
+                .setOnKeyPressed(
+                        e -> {
+                            if (e.getCode() != KeyCode.ENTER || combo.isShowing()) {
+                                return;
+                            }
+                            search.fire();
+                            e.consume();
+                        });
+    }
+
     private static VBox labeled(String caption, javafx.scene.Node field) {
         Label label = new Label(caption);
         VBox box = new VBox(4, label, field);
@@ -602,9 +696,10 @@ public final class JuchuOrderSearchPane {
                                 InspectionSheetLookup.presenceLabel(
                                         InspectionSheetLookup.hasSheet(
                                                 kensaIndex.get(), r.getReqNo())));
-        column.setMinWidth(56);
-        column.setPrefWidth(64);
-        column.setMaxWidth(80);
+        column.setMinWidth(72);
+        column.setPrefWidth(80);
+        column.setMaxWidth(96);
+        column.setResizable(false);
         column.setStyle("-fx-alignment: CENTER;");
         column.setCellFactory(
                 col ->
