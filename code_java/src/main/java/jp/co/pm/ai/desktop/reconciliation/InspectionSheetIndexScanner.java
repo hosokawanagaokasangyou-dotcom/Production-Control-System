@@ -15,6 +15,9 @@ import java.util.stream.Stream;
 /** 検査表フォルダを再帰走査し CSV 索引を増分更新する。 */
 public final class InspectionSheetIndexScanner {
 
+    static final int COOPERATIVE_YIELD_EVERY = 16;
+    static final int CHECKPOINT_EVERY_FILES = 32;
+
     public record Result(List<InspectionSheetIndexStore.Row> rows, List<String> warnings, int readExcelCount) {}
 
     @FunctionalInterface
@@ -86,6 +89,8 @@ public final class InspectionSheetIndexScanner {
         for (Path file : files) {
             processed++;
             notifyProgress(progress, InspectionSheetIndexProgress.PHASE_INDEX, processed, total);
+            maybeYield(processed);
+            boolean excelRead = false;
             try {
                 String abs = file.toAbsolutePath().normalize().toString();
                 long mtime = Files.getLastModifiedTime(file).toMillis();
@@ -93,33 +98,37 @@ public final class InspectionSheetIndexScanner {
                 InspectionSheetIndexStore.Row prev = prevByPath.get(abs);
                 if (prev != null && prev.fileMtimeEpoch() == mtime && prev.fileSize() == size) {
                     out.add(prev);
-                    notifyCheckpoint(checkpoint, out, readExcel);
-                    continue;
+                } else {
+                    InspectionSheetHeaderReader.Header header = InspectionSheetHeaderReader.read(file);
+                    readExcel++;
+                    excelRead = true;
+                    LocalDate date = header.processingDate();
+                    String irai = header.iraiNo() != null ? header.iraiNo() : "";
+                    if (irai.isBlank()) {
+                        irai = InspectionSheetIraiNo.extractFromFileName(file.getFileName().toString()).orElse("");
+                    }
+                    if (irai.isBlank()) {
+                        warnings.add("依頼NOを読めません: " + file.getFileName());
+                    } else {
+                        out.add(
+                                new InspectionSheetIndexStore.Row(
+                                        irai,
+                                        date,
+                                        InspectionSheetProcessingDate.yearMonth(date),
+                                        abs,
+                                        file.getFileName().toString(),
+                                        mtime,
+                                        size,
+                                        indexedAt));
+                    }
                 }
-                InspectionSheetHeaderReader.Header header = InspectionSheetHeaderReader.read(file);
-                readExcel++;
-                LocalDate date = header.processingDate();
-                String irai = header.iraiNo() != null ? header.iraiNo() : "";
-                if (irai.isBlank()) {
-                    irai = InspectionSheetIraiNo.extractFromFileName(file.getFileName().toString()).orElse("");
-                }
-                if (irai.isBlank()) {
-                    warnings.add("依頼NOを読めません: " + file.getFileName());
-                    continue;
-                }
-                out.add(
-                        new InspectionSheetIndexStore.Row(
-                                irai,
-                                date,
-                                InspectionSheetProcessingDate.yearMonth(date),
-                                abs,
-                                file.getFileName().toString(),
-                                mtime,
-                                size,
-                                indexedAt));
-                notifyCheckpoint(checkpoint, out, readExcel);
             } catch (Exception ex) {
                 warnings.add("読込エラー " + file.getFileName() + ": " + ex.getMessage());
+            }
+            if (excelRead
+                    || processed % CHECKPOINT_EVERY_FILES == 0
+                    || processed == total) {
+                notifyCheckpoint(checkpoint, out, readExcel);
             }
         }
         return new Result(List.copyOf(out), List.copyOf(warnings), readExcel);
@@ -142,6 +151,7 @@ public final class InspectionSheetIndexScanner {
                                         InspectionSheetIndexProgress.PHASE_WALK,
                                         files.size(),
                                         0);
+                                maybeYield(files.size());
                             });
         }
         files.sort(Path::compareTo);
@@ -153,6 +163,12 @@ public final class InspectionSheetIndexScanner {
             return;
         }
         progress.onProgress(phase, processed, total);
+    }
+
+    private static void maybeYield(int count) {
+        if (count > 0 && count % COOPERATIVE_YIELD_EVERY == 0) {
+            Thread.yield();
+        }
     }
 
     private static void notifyCheckpoint(

@@ -87,6 +87,7 @@ public final class RemoteDesktopTabController {
                         },
                         "remote-desktop-tab-preload");
         preload.setDaemon(true);
+        preload.setPriority(Thread.MIN_PRIORITY);
         preload.start();
     }
 

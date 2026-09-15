@@ -11,9 +11,15 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
+
+import javafx.application.Platform;
 
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -26,6 +32,15 @@ class InspectionSheetOpenServiceTest {
 
     private String priorHome;
     private String priorUserHome;
+
+    @BeforeAll
+    static void initJavaFx() {
+        try {
+            Platform.startup(() -> {});
+        } catch (IllegalStateException ignored) {
+            // already started
+        }
+    }
 
     @BeforeEach
     void setUp(@TempDir Path tmp) {
@@ -214,8 +229,66 @@ class InspectionSheetOpenServiceTest {
         }
     }
 
+    @Test
+    void startBackgroundRebuild_runsAtMinPriority(@TempDir Path root) throws Exception {
+        Map<String, String> ui = uiWithSheet(writeSampleWorkbook(root));
+        AtomicInteger priority = new AtomicInteger(-1);
+        InspectionSheetOpenService.startBackgroundRebuild(
+                        ui, (phase, done, total) -> priority.set(Thread.currentThread().getPriority()))
+                .get(20, TimeUnit.SECONDS);
+        assertEquals(Thread.MIN_PRIORITY, priority.get());
+    }
+
+    @Test
+    void find_emptyIndex_onFxThread_doesNotJoinWarmup(@TempDir Path root) throws Exception {
+        Map<String, String> ui = uiWithSheet(writeSampleWorkbook(root));
+        CountDownLatch inScan = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        InspectionSheetIndexScanner.Progress hold =
+                (phase, done, total) -> {
+                    inScan.countDown();
+                    try {
+                        assertTrue(release.await(20, TimeUnit.SECONDS));
+                    } catch (InterruptedException ex) {
+                        Thread.currentThread().interrupt();
+                    }
+                };
+        try {
+            CompletableFuture<InspectionSheetOpenService.RebuildResult> warmup =
+                    InspectionSheetOpenService.startBackgroundRebuild(ui, hold);
+            assertTrue(inScan.await(20, TimeUnit.SECONDS));
+            CountDownLatch fxDone = new CountDownLatch(1);
+            AtomicReference<List<InspectionSheetIndexStore.Row>> hits =
+                    new AtomicReference<>();
+            AtomicBoolean fxThread = new AtomicBoolean(false);
+            Platform.runLater(
+                    () -> {
+                        try {
+                            fxThread.set(Platform.isFxApplicationThread());
+                            hits.set(InspectionSheetOpenService.find(ui, "c8-9"));
+                        } catch (Exception ex) {
+                            throw new RuntimeException(ex);
+                        } finally {
+                            fxDone.countDown();
+                        }
+                    });
+            assertTrue(fxDone.await(3, TimeUnit.SECONDS), "FX スレッドの find は索引完了を待たない");
+            assertTrue(fxThread.get());
+            assertTrue(hits.get() == null || hits.get().isEmpty());
+            release.countDown();
+            assertEquals(1, warmup.get(20, TimeUnit.SECONDS).rows().size());
+        } finally {
+            release.countDown();
+        }
+    }
+
     private static Map<String, String> uiWithSheet(Path root) {
-        return Map.of(AppPaths.KEY_PM_AI_INSPECTION_SHEET_DIR, root.toString());
+        Path noShare = root.resolve("inspection-index-share-absent");
+        return Map.of(
+                AppPaths.KEY_PM_AI_INSPECTION_SHEET_DIR,
+                root.toString(),
+                AppPaths.KEY_PM_AI_INSPECTION_SHEET_INDEX_SHARE_DIR,
+                noShare.toString());
     }
 
     private static Path writeSampleWorkbook(Path root) throws Exception {

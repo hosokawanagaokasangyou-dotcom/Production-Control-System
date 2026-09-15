@@ -775,6 +775,10 @@ public final class MainShellController
     private volatile String inspectionIndexStatus = "";
     private volatile Double inspectionIndexProgress;
     private final AtomicLong lastInspectionIndexUiNs = new AtomicLong(0);
+    private final AtomicBoolean inspectionIndexUiPending = new AtomicBoolean(false);
+    private volatile String pendingInspectionIndexPhase = "";
+    private final AtomicInteger pendingInspectionIndexDone = new AtomicInteger();
+    private final AtomicInteger pendingInspectionIndexTotal = new AtomicInteger();
     private volatile boolean startupTabBackgroundLoadActive;
     private String lastGlobalLogLine = "";
 
@@ -5846,9 +5850,6 @@ public final class MainShellController
     /** 起動・工場切替・フォルダ確定後に、検査表索引 CSV をバックグラウンドで増分更新する。 */
     private void startInspectionSheetIndexWarmup() {
         Map<String, String> ui = collectUiEnv();
-        if (!InspectionSheetOpenService.dirReachable(ui)) {
-            return;
-        }
         appendLog("[inspection-sheet] 索引CSVをバックグラウンドで更新します");
         publishInspectionIndexProgress(InspectionSheetIndexProgress.PHASE_WALK, 0, 0);
         InspectionSheetOpenService.startBackgroundRebuild(
@@ -5882,30 +5883,47 @@ public final class MainShellController
     }
 
     private void onInspectionSheetIndexProgress(String phase, int done, int total) {
-        long now = System.nanoTime();
+        pendingInspectionIndexPhase = phase != null ? phase : "";
+        pendingInspectionIndexDone.set(done);
+        pendingInspectionIndexTotal.set(total);
         boolean force = total > 0 && done >= total;
-        if (!force && now - lastInspectionIndexUiNs.get() < 80_000_000L) {
+        long now = System.nanoTime();
+        if (!InspectionSheetIndexProgress.shouldPublishUi(
+                lastInspectionIndexUiNs.get(), now, force)) {
             return;
         }
         lastInspectionIndexUiNs.set(now);
-        publishInspectionIndexProgress(phase, done, total);
+        scheduleInspectionIndexUi();
     }
 
     private void publishInspectionIndexProgress(String phase, int done, int total) {
-        String text = InspectionSheetIndexProgress.format(phase, done, total);
-        double frac = InspectionSheetIndexProgress.fraction(done, total);
+        pendingInspectionIndexPhase = phase != null ? phase : "";
+        pendingInspectionIndexDone.set(done);
+        pendingInspectionIndexTotal.set(total);
+        lastInspectionIndexUiNs.set(System.nanoTime());
+        scheduleInspectionIndexUi();
+    }
+
+    private void scheduleInspectionIndexUi() {
+        if (!inspectionIndexUiPending.compareAndSet(false, true)) {
+            return;
+        }
         Platform.runLater(
                 () -> {
-                    inspectionIndexStatus = text;
-                    inspectionIndexProgress = frac;
-                    refreshGlobalStatusBar();
+                    inspectionIndexUiPending.set(false);
+                    String phase = pendingInspectionIndexPhase;
+                    int done = pendingInspectionIndexDone.get();
+                    int total = pendingInspectionIndexTotal.get();
+                    inspectionIndexStatus = InspectionSheetIndexProgress.format(phase, done, total);
+                    inspectionIndexProgress = InspectionSheetIndexProgress.fraction(done, total);
+                    refreshGlobalStatusBarTaskChrome();
                 });
     }
 
     private void clearInspectionIndexProgress() {
         inspectionIndexStatus = "";
         inspectionIndexProgress = null;
-        refreshGlobalStatusBar();
+        refreshGlobalStatusBarTaskChrome();
     }
 
     /** BOX 同期フォルダ（{@code %USERPROFILE%\\Box} 等）があれば DirectoryChooser の初期ディレクトリ候補にする。 */
@@ -6780,18 +6798,33 @@ public final class MainShellController
         globalAppStatusBar.setMessage(resolveGlobalStatusMessage());
     }
 
+    /** 進捗バーとメッセージのみ。工場設定ファイルの再読込はしない。 */
+    private void refreshGlobalStatusBarTaskChrome() {
+        if (!Platform.isFxApplicationThread()) {
+            Platform.runLater(this::refreshGlobalStatusBarTaskChrome);
+            return;
+        }
+        if (globalAppStatusBar == null) {
+            return;
+        }
+        Double progress =
+                globalLongTaskProgress != null ? globalLongTaskProgress : inspectionIndexProgress;
+        globalAppStatusBar.setTaskProgress(progress);
+        globalAppStatusBar.setMessage(resolveGlobalStatusMessage());
+    }
+
     @Override
     public void setGlobalLongTaskProgress(double fraction, String detail) {
         globalLongTaskProgress = fraction;
         globalLongTaskDetail = detail != null ? detail : "";
-        refreshGlobalStatusBar();
+        refreshGlobalStatusBarTaskChrome();
     }
 
     @Override
     public void clearGlobalLongTaskProgress() {
         globalLongTaskProgress = null;
         globalLongTaskDetail = "";
-        refreshGlobalStatusBar();
+        refreshGlobalStatusBarTaskChrome();
     }
 
     private static final int STARTUP_BACKGROUND_LOAD_STEP_COUNT = 6;

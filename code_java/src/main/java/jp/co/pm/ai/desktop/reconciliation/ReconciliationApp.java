@@ -194,7 +194,7 @@ public class ReconciliationApp {
     private final AtomicLong dataReloadGeneration = new AtomicLong(0);
     private Consumer<Boolean> initialDataReloadCompleteListener;
     private Consumer<String> reloadProgressReporter;
-    private static final long RELOAD_PROGRESS_UI_INTERVAL_MS = 300L;
+    private static final long RELOAD_PROGRESS_UI_INTERVAL_MS = 400L;
     private volatile long lastReloadProgressUiAt;
     private volatile String latestReloadProgressText = "";
     /** TPI PDF 本文の依頼Ｎｏ → 束ね原本 PDF（照合マージ時の全文走査を避ける）。 */
@@ -4062,7 +4062,6 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                         String.format(
                                 "TPI PDF 索引 (%d / %d)\n%s",
                                 pdfIdx, totalPdf, pdf.getName()));
-                requestReloadUiPulse();
             }
             Optional<List<Map<String, String>>> cached =
                     RequestFormSourceCache.loadParseEntries(parseCacheRoot, pdf);
@@ -4394,12 +4393,6 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         }
         lastReloadProgressUiAt = now;
         flushReloadProgressUiNow();
-        requestReloadUiPulse();
-    }
-
-    /** バックグラウンド読込中に JavaFX スレッドへ制御を戻し、スピナーが止まって見えるのを抑える。 */
-    private void requestReloadUiPulse() {
-        Platform.runLater(() -> {});
     }
 
     private void flushReloadProgressUiNow() {
@@ -4478,7 +4471,6 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
             File pdf = pdfFiles[i];
             final String pdfName = pdf.getName();
             final int pdfIdx = i + 1;
-            requestReloadUiPulse();
             updateReloadProgressTextForced(
                     String.format("TPI PDF (%d / %d)\n%s", pdfIdx, totalPdf, pdfName));
             String normKey =

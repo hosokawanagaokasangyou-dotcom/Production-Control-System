@@ -67,12 +67,16 @@ public final class GlobalAppStatusBar {
         boolean showIndeterminate = fraction != null && fraction.isNaN();
         boolean showBar = fraction != null && !showIndeterminate;
         if (progressIndicator != null) {
-            progressIndicator.setVisible(showIndeterminate);
-            progressIndicator.setManaged(showIndeterminate);
+            if (progressIndicator.isVisible() != showIndeterminate) {
+                progressIndicator.setVisible(showIndeterminate);
+                progressIndicator.setManaged(showIndeterminate);
+            }
         }
         if (progressBar != null) {
-            progressBar.setVisible(showBar);
-            progressBar.setManaged(showBar);
+            if (progressBar.isVisible() != showBar) {
+                progressBar.setVisible(showBar);
+                progressBar.setManaged(showBar);
+            }
             if (showBar) {
                 double clamped = Math.max(0.0, Math.min(1.0, fraction));
                 progressBar.setProgress(clamped);

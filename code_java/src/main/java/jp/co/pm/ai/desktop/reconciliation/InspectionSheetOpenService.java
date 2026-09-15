@@ -12,6 +12,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import javafx.application.Platform;
+
 import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.config.FactorySite;
 import jp.co.pm.ai.desktop.config.GlobalInitSettingTarget;
@@ -78,11 +80,6 @@ public final class InspectionSheetOpenService {
     public static CompletableFuture<RebuildResult> startBackgroundRebuild(
             Map<String, String> ui, InspectionSheetIndexScanner.Progress progress) {
         Map<String, String> snap = snapshotUi(ui);
-        if (!dirReachable(snap)) {
-            Path dir = resolveDir(snap);
-            return CompletableFuture.completedFuture(
-                    new RebuildResult(List.of(), List.of("検査表フォルダにアクセスできません: " + dir), 0));
-        }
         String key = rebuildKey(snap);
         synchronized (IN_FLIGHT_LOCK) {
             if (inFlight != null && !inFlight.isDone() && key.equals(inFlightKey)) {
@@ -102,6 +99,17 @@ public final class InspectionSheetOpenService {
                     new Thread(
                             () -> {
                                 try {
+                                    if (!dirReachable(snap)) {
+                                        Path dir = resolveDir(snap);
+                                        future.complete(
+                                                new RebuildResult(
+                                                        List.of(),
+                                                        List.of(
+                                                                "検査表フォルダにアクセスできません: "
+                                                                        + dir),
+                                                        0));
+                                        return;
+                                    }
                                     future.complete(
                                             rebuild(snap, InspectionSheetOpenService::fanOutProgress));
                                 } catch (Throwable ex) {
@@ -114,6 +122,7 @@ public final class InspectionSheetOpenService {
                             },
                             "inspection-sheet-index-warmup");
             t.setDaemon(true);
+            t.setPriority(Thread.MIN_PRIORITY);
             t.start();
             return future;
         }
@@ -201,6 +210,10 @@ public final class InspectionSheetOpenService {
         if (!rows.isEmpty()) {
             return hits;
         }
+        if (isJavaFxApplicationThread()) {
+            startBackgroundRebuild(ui);
+            return hits;
+        }
         RebuildResult rebuilt = joinRebuild(ui);
         return InspectionSheetLookup.find(rebuilt.rows(), iraiNo);
     }
@@ -210,6 +223,20 @@ public final class InspectionSheetOpenService {
             throw new IOException("検査表ファイルパスが空です");
         }
         DesktopFileOpener.openFile(Path.of(row.filePath()));
+    }
+
+    static boolean isRebuildInFlight() {
+        synchronized (IN_FLIGHT_LOCK) {
+            return inFlight != null && !inFlight.isDone();
+        }
+    }
+
+    private static boolean isJavaFxApplicationThread() {
+        try {
+            return Platform.isFxApplicationThread();
+        } catch (IllegalStateException ignored) {
+            return false;
+        }
     }
 
     private static RebuildResult joinRebuild(Map<String, String> ui) throws IOException {
@@ -272,7 +299,7 @@ public final class InspectionSheetOpenService {
             if (csv == null || !csv.equals(inFlightCsv)) {
                 return;
             }
-            inFlightRows = rows != null ? List.copyOf(rows) : List.of();
+            inFlightRows = rows != null ? rows : List.of();
         }
     }
 

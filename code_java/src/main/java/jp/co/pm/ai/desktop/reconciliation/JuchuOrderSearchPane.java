@@ -9,6 +9,9 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 
@@ -137,18 +140,11 @@ public final class JuchuOrderSearchPane {
         TableView<OrderRecord> table = new TableView<>(items);
         table.getStyleClass().add("juchu-order-search-table");
         BooleanProperty rebuildBusy = new SimpleBooleanProperty(false);
+        BooleanProperty searchBusy = new SimpleBooleanProperty(false);
         BooleanProperty openBusy = new SimpleBooleanProperty(false);
         PipelineScanIndex[] planIndex = {PipelineScanIndex.empty()};
         AtomicReference<List<InspectionSheetIndexStore.Row>> kensaIndex =
                 new AtomicReference<>(List.of());
-        Runnable reloadKensaIndex =
-                () -> {
-                    try {
-                        kensaIndex.set(InspectionSheetOpenService.loadIndex(env.get()));
-                    } catch (Exception ex) {
-                        kensaIndex.set(List.of());
-                    }
-                };
         Runnable refreshKeywordCandidates =
                 () -> {
                     List<OrderRecord> recs = recordsSupplier.get();
@@ -223,6 +219,7 @@ public final class JuchuOrderSearchPane {
                                 table.getSelectionModel().selectedItemProperty(),
                                 openBusy));
         rebuildIndex.disableProperty().bind(rebuildBusy);
+        search.disableProperty().bind(searchBusy);
 
         table.setRowFactory(
                 tv -> {
@@ -277,36 +274,76 @@ public final class JuchuOrderSearchPane {
                         placeholder.setText("条件を指定して検索してください");
                         return;
                     }
-                    planIndex[0] = loadPlanIndex(env.get());
-                    PipelineScanIndex index = planIndex[0];
-                    refreshKeywordCandidates.run();
-                    reloadKensaIndex.run();
-                    JuchuOrderSearch.FilterResult result =
-                            JuchuOrderSearch.filterDetailed(
-                                    recordsSupplier.get(),
-                                    c,
-                                    r -> planHaystack(index, r, true),
-                                    r -> planHaystack(index, r, false));
-                    items.setAll(result.records());
-                    countLabel.getStyleClass().remove("juchu-order-search-count-warn");
-                    if (result.records().isEmpty()) {
-                        placeholder.setText("該当する受注はありません");
-                        countLabel.setText("0 件");
-                    } else if (result.truncated()) {
-                        countLabel.getStyleClass().add("juchu-order-search-count-warn");
-                        countLabel.setText(
-                                result.records().size()
-                                        + " 件（期間のみ・全 "
-                                        + result.matchCount()
-                                        + " 件中の最新）");
-                    } else {
-                        countLabel.setText(result.records().size() + " 件");
-                    }
-                    statusMessage.setText("");
-                    if (!result.records().isEmpty()) {
-                        table.getSelectionModel().selectFirst();
-                        table.requestFocus();
-                    }
+                    List<OrderRecord> src = recordsSupplier.get();
+                    List<OrderRecord> snapshot =
+                            src == null ? List.of() : new java.util.ArrayList<>(src);
+                    Map<String, String> uiSnap = env.get();
+                    searchBusy.set(true);
+                    statusMessage.setText("検索中…");
+                    Task<SearchOutcome> task =
+                            new Task<>() {
+                                @Override
+                                protected SearchOutcome call() {
+                                    PipelineScanIndex index = loadPlanIndex(uiSnap);
+                                    List<InspectionSheetIndexStore.Row> kensa = List.of();
+                                    try {
+                                        kensa = InspectionSheetOpenService.loadIndex(uiSnap);
+                                    } catch (Exception ignored) {
+                                        kensa = List.of();
+                                    }
+                                    JuchuOrderSearch.FilterResult result =
+                                            JuchuOrderSearch.filterDetailed(
+                                                    snapshot,
+                                                    c,
+                                                    r -> planHaystack(index, r, true),
+                                                    r -> planHaystack(index, r, false));
+                                    return new SearchOutcome(result, index, kensa);
+                                }
+                            };
+                    task.setOnSucceeded(
+                            ev -> {
+                                searchBusy.set(false);
+                                SearchOutcome outcome = task.getValue();
+                                planIndex[0] =
+                                        outcome.index() != null
+                                                ? outcome.index()
+                                                : PipelineScanIndex.empty();
+                                kensaIndex.set(
+                                        outcome.kensa() != null ? outcome.kensa() : List.of());
+                                refreshKeywordCandidates.run();
+                                JuchuOrderSearch.FilterResult result = outcome.result();
+                                items.setAll(result.records());
+                                countLabel.getStyleClass().remove("juchu-order-search-count-warn");
+                                if (result.records().isEmpty()) {
+                                    placeholder.setText("該当する受注はありません");
+                                    countLabel.setText("0 件");
+                                } else if (result.truncated()) {
+                                    countLabel.getStyleClass().add("juchu-order-search-count-warn");
+                                    countLabel.setText(
+                                            result.records().size()
+                                                    + " 件（期間のみ・全 "
+                                                    + result.matchCount()
+                                                    + " 件中の最新）");
+                                } else {
+                                    countLabel.setText(result.records().size() + " 件");
+                                }
+                                statusMessage.setText("");
+                                if (!result.records().isEmpty()) {
+                                    table.getSelectionModel().selectFirst();
+                                    table.requestFocus();
+                                }
+                            });
+                    task.setOnFailed(
+                            ev -> {
+                                searchBusy.set(false);
+                                Throwable ex = task.getException();
+                                statusMessage.setText(
+                                        "検索に失敗: " + (ex != null ? ex.getMessage() : ""));
+                            });
+                    Thread worker = new Thread(task, "juchu-order-search");
+                    worker.setDaemon(true);
+                    worker.setPriority(Thread.MIN_PRIORITY);
+                    worker.start();
                 });
 
         openKensa.setOnAction(
@@ -344,6 +381,11 @@ public final class JuchuOrderSearchPane {
         return root;
     }
 
+    private record SearchOutcome(
+            JuchuOrderSearch.FilterResult result,
+            PipelineScanIndex index,
+            List<InspectionSheetIndexStore.Row> kensa) {}
+
     static boolean shouldDisableOpenInspectionSheet(int selectedIndex, boolean openBusy) {
         return selectedIndex < 0 || openBusy;
     }
@@ -356,23 +398,41 @@ public final class JuchuOrderSearchPane {
             AtomicReference<List<InspectionSheetIndexStore.Row>> kensaIndex,
             TableView<OrderRecord> table) {
         Map<String, String> ui = uiEnv.get();
-        Path dir = InspectionSheetOpenService.resolveDir(ui);
-        if (!InspectionSheetOpenService.dirReachable(ui)) {
-            status.setText("検査表フォルダにアクセスできません: " + dir);
-            return;
-        }
         busy.set(true);
         status.setText(
                 InspectionSheetIndexProgress.format(
                         InspectionSheetIndexProgress.PHASE_WALK, 0, 0));
+        AtomicLong lastUiNs = new AtomicLong(0);
+        AtomicBoolean uiPending = new AtomicBoolean(false);
+        AtomicReference<String> latestPhase = new AtomicReference<>(InspectionSheetIndexProgress.PHASE_WALK);
+        AtomicInteger latestDone = new AtomicInteger(0);
+        AtomicInteger latestTotal = new AtomicInteger(0);
         InspectionSheetOpenService.startBackgroundRebuild(
                         ui,
-                        (phase, done, total) ->
-                                Platform.runLater(
-                                        () ->
-                                                status.setText(
-                                                        InspectionSheetIndexProgress.format(
-                                                                phase, done, total))))
+                        (phase, done, total) -> {
+                            latestPhase.set(phase);
+                            latestDone.set(done);
+                            latestTotal.set(total);
+                            boolean force = total > 0 && done >= total;
+                            long now = System.nanoTime();
+                            if (!InspectionSheetIndexProgress.shouldPublishUi(
+                                    lastUiNs.get(), now, force)) {
+                                return;
+                            }
+                            lastUiNs.set(now);
+                            if (!uiPending.compareAndSet(false, true)) {
+                                return;
+                            }
+                            Platform.runLater(
+                                    () -> {
+                                        uiPending.set(false);
+                                        status.setText(
+                                                InspectionSheetIndexProgress.format(
+                                                        latestPhase.get(),
+                                                        latestDone.get(),
+                                                        latestTotal.get()));
+                                    });
+                        })
                 .whenComplete(
                         (r, ex) ->
                                 Platform.runLater(
@@ -388,6 +448,10 @@ public final class JuchuOrderSearchPane {
                                             }
                                             if (table != null) {
                                                 table.refresh();
+                                            }
+                                            if (r.rows().isEmpty() && !r.warnings().isEmpty()) {
+                                                status.setText(r.warnings().get(0));
+                                                return;
                                             }
                                             status.setText(
                                                     "検査表索引 "
@@ -413,21 +477,19 @@ public final class JuchuOrderSearchPane {
             return;
         }
         Map<String, String> ui = uiEnv.get();
-        Path dir = InspectionSheetOpenService.resolveDir(ui);
-        if (!InspectionSheetOpenService.dirReachable(ui)) {
-            status.setText(
-                    "検査表フォルダ未設定または未到達です。環境変数 "
-                            + AppPaths.KEY_PM_AI_INSPECTION_SHEET_DIR
-                            + " を設定してください: "
-                            + dir);
-            return;
-        }
         busy.set(true);
         status.setText("検査表を検索中…");
         Task<List<InspectionSheetIndexStore.Row>> task =
                 new Task<>() {
                     @Override
                     protected List<InspectionSheetIndexStore.Row> call() throws Exception {
+                        if (!InspectionSheetOpenService.dirReachable(ui)) {
+                            throw new java.io.IOException(
+                                    "検査表フォルダ未設定または未到達です。環境変数 "
+                                            + AppPaths.KEY_PM_AI_INSPECTION_SHEET_DIR
+                                            + " を設定してください: "
+                                            + InspectionSheetOpenService.resolveDir(ui));
+                        }
                         return InspectionSheetOpenService.find(ui, irai);
                     }
                 };
@@ -436,6 +498,10 @@ public final class JuchuOrderSearchPane {
                     busy.set(false);
                     List<InspectionSheetIndexStore.Row> hits = task.getValue();
                     if (hits == null || hits.isEmpty()) {
+                        if (InspectionSheetOpenService.isRebuildInFlight()) {
+                            status.setText("検査表索引を更新中です。完了後に再検索してください: " + irai);
+                            return;
+                        }
                         status.setText("検査表が見つかりません: " + irai);
                         return;
                     }
@@ -460,6 +526,7 @@ public final class JuchuOrderSearchPane {
                 });
         Thread t = new Thread(task, "inspection-sheet-open");
         t.setDaemon(true);
+        t.setPriority(Thread.MIN_PRIORITY);
         t.start();
     }
 

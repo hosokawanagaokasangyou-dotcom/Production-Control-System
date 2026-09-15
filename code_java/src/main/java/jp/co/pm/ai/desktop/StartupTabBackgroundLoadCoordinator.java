@@ -57,7 +57,7 @@ final class StartupTabBackgroundLoadCoordinator {
     private static final int STEP_COUNT = 6;
 
     /** ユーザーがモーダルを閉じたあとのステップ間待機（UI 操作を優先）。 */
-    static final long DEFERRED_STEP_YIELD_MS = 150L;
+    static final long DEFERRED_STEP_YIELD_MS = 400L;
 
     private final Host host;
     private final AtomicBoolean runScheduled = new AtomicBoolean(false);

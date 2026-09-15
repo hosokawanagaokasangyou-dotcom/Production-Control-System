@@ -6,7 +6,17 @@ public final class InspectionSheetIndexProgress {
     public static final String PHASE_WALK = "フォルダ走査中";
     public static final String PHASE_INDEX = "索引更新中";
 
+    /** ステータスバー更新の最短間隔。FX スレッドを他タブ操作に譲る。 */
+    public static final long UI_THROTTLE_NS = 250_000_000L;
+
     private InspectionSheetIndexProgress() {}
+
+    public static boolean shouldPublishUi(long lastPublishedNs, long nowNs, boolean force) {
+        if (force) {
+            return true;
+        }
+        return nowNs - lastPublishedNs >= UI_THROTTLE_NS;
+    }
 
     public static String format(String phase, int processed, int total) {
         String p = phase != null && !phase.isBlank() ? phase : PHASE_INDEX;

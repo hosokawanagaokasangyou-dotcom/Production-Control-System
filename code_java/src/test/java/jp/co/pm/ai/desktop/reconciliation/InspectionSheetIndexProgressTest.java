@@ -1,6 +1,7 @@
 package jp.co.pm.ai.desktop.reconciliation;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
@@ -37,5 +38,19 @@ class InspectionSheetIndexProgressTest {
     void fraction_knownTotal_isRatio() {
         assertEquals(0.3, InspectionSheetIndexProgress.fraction(3, 10), 1e-9);
         assertEquals(1.0, InspectionSheetIndexProgress.fraction(10, 10), 1e-9);
+    }
+
+    @Test
+    void shouldPublishUi_throttlesUntilIntervalOrForce() {
+        long last = 1_000_000_000L;
+        assertFalse(
+                InspectionSheetIndexProgress.shouldPublishUi(
+                        last, last + InspectionSheetIndexProgress.UI_THROTTLE_NS - 1, false));
+        assertTrue(
+                InspectionSheetIndexProgress.shouldPublishUi(
+                        last, last + InspectionSheetIndexProgress.UI_THROTTLE_NS, false));
+        assertTrue(
+                InspectionSheetIndexProgress.shouldPublishUi(
+                        last, last + 1, true));
     }
 }

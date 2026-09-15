@@ -167,6 +167,7 @@ public final class RequestFormInputTabController {
                         },
                         "request-form-embed-prep");
         prep.setDaemon(true);
+        prep.setPriority(Thread.MIN_PRIORITY);
         prep.start();
     }
 
