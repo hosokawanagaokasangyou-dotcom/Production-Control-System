@@ -73,6 +73,38 @@ class EditableMemberAttendanceGridPaneTransferTest {
         assertFalse(pane.cellInactiveForTest(LocalDate.of(2026, 9, 15), "在籍"));
     }
 
+    @Test
+    void returnDateBringsMemberBackAndKeepsGap() throws Exception {
+        EditableMemberAttendanceGridPane pane = runOnFx(() -> {
+            EditableMemberAttendanceGridPane p = new EditableMemberAttendanceGridPane();
+            p.loadFromMemberGridJson(octoberJson());
+            p.setMemberReturnedOn("異動", LocalDate.of(2026, 11, 1));
+            return p;
+        });
+        assertEquals(1, pane.memberRowCountForTest());
+        assertTrue(pane.transferredMemberNames().contains("異動"));
+        Map<String, Object> patch = pane.exportPatchJson();
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> roster = (List<Map<String, Object>>) patch.get("member_roster");
+        Map<String, Object> transferred =
+                roster.stream()
+                        .filter(e -> "異動".equals(e.get("name")))
+                        .findFirst()
+                        .orElseThrow();
+        assertEquals("2026-11-01", transferred.get("returned_on"));
+
+        EditableMemberAttendanceGridPane november = runOnFx(() -> {
+            EditableMemberAttendanceGridPane p = new EditableMemberAttendanceGridPane();
+            ObjectNode json = monthJson(2026, 11, true);
+            ((ObjectNode) json.path("member_roster").get(1)).put("returned_on", "2026-11-01");
+            p.loadFromMemberGridJson(json);
+            return p;
+        });
+        assertEquals(2, november.memberRowCountForTest());
+        assertTrue(november.cellInactiveForTest(LocalDate.of(2026, 10, 31), "異動"));
+        assertFalse(november.cellInactiveForTest(LocalDate.of(2026, 11, 1), "異動"));
+    }
+
     private static EditableMemberAttendanceGridPane runOnFx(
             java.util.function.Supplier<EditableMemberAttendanceGridPane> factory)
             throws Exception {

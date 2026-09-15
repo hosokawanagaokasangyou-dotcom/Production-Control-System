@@ -55,6 +55,7 @@ import jp.co.pm.ai.desktop.ui.FiscalYearPeriod;
 import jp.co.pm.ai.desktop.ui.FourDigitConfirmationDialog;
 import jp.co.pm.ai.desktop.ui.InlineMonthCalendarPane;
 import jp.co.pm.ai.desktop.ui.MemberAttendanceMemberEditDialog;
+import jp.co.pm.ai.desktop.ui.MemberAttendanceReturnDialog;
 import jp.co.pm.ai.desktop.ui.MemberAttendanceTransferDialog;
 import jp.co.pm.ai.desktop.ui.MemberHourlyAttendanceDialog;
 
@@ -106,6 +107,9 @@ public class MemberAttendanceTabController {
 
     @FXML
     private Button transferMemberButton;
+
+    @FXML
+    private Button returnMemberButton;
 
     @FXML
     private Button removeMemberButton;
@@ -242,6 +246,9 @@ public class MemberAttendanceTabController {
         installTooltip(
                 transferMemberButton,
                 "選択したメンバーを職場異動します。異動日以降は名簿・配台から外れ、過去の勤怠は残ります");
+        installTooltip(
+                returnMemberButton,
+                "異動したメンバーを復帰日以降に名簿・配台へ戻します（行が表示されていなくても選べます）");
         installTooltip(
                 removeMemberButton,
                 "選択したメンバーを名簿から削除します（氏名列をクリックして選択）");
@@ -889,6 +896,37 @@ public class MemberAttendanceTabController {
                                 gridPane.setMemberInactiveFrom(selected, null);
                             } else {
                                 gridPane.setMemberInactiveFrom(selected, r.inactiveFrom());
+                            }
+                        });
+    }
+
+    @FXML
+    private void onReturnMember() {
+        if (gridPane == null || shell == null) {
+            return;
+        }
+        List<String> transferred = gridPane.transferredMemberNames();
+        if (transferred.isEmpty()) {
+            shell.showWarningDialog("職場復帰", "職場異動中のメンバーがいません。");
+            return;
+        }
+        String selected = gridPane.selectedMemberName();
+        if (selected == null || !transferred.contains(selected)) {
+            selected = transferred.get(0);
+        }
+        MemberAttendanceReturnDialog.show(
+                        shell.primaryStageForDialogs(),
+                        transferred,
+                        selected,
+                        gridPane.returnedOnFor(selected),
+                        gridPane.inactiveFromFor(selected))
+                .ifPresent(
+                        r -> {
+                            clearMemberGridCache();
+                            if (r.cancelledTransfer()) {
+                                gridPane.setMemberInactiveFrom(r.name(), null);
+                            } else {
+                                gridPane.setMemberReturnedOn(r.name(), r.returnedOn());
                             }
                         });
     }

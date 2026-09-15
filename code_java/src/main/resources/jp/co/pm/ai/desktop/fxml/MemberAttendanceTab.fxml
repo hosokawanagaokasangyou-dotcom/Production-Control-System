@@ -24,6 +24,7 @@
                 <Button fx:id="addMemberButton" text="メンバー追加" onAction="#onAddMember"/>
                 <Button fx:id="editMemberButton" text="メンバー編集" onAction="#onEditMember"/>
                 <Button fx:id="transferMemberButton" text="職場異動" onAction="#onTransferMember"/>
+                <Button fx:id="returnMemberButton" text="職場復帰" onAction="#onReturnMember"/>
                 <Button fx:id="removeMemberButton" text="メンバー削除" onAction="#onRemoveMember"/>
                 <Separator/>
                 <Button fx:id="saveButton" text="保存" onAction="#onSave"/>

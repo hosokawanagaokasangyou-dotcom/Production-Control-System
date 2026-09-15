@@ -80,4 +80,25 @@ class AttendanceConflictDiffSummarizerTest {
         assertTrue(summary.contains("異動") || summary.contains("inactive"), summary);
         assertTrue(!summary.contains("削除"), summary);
     }
+
+    @Test
+    void summarizesReturnedOnChange() {
+        Path json = Path.of("attendance-data.json").toAbsolutePath().normalize();
+        String base =
+                """
+                {"member_roster":[{"name":"菅沼　めぐみ","primary_role":"後加工","inactive_from":"2026-09-15"}],"member_attendance":{},"company_calendar":{"days":{}}}
+                """;
+        String disk =
+                """
+                {"member_roster":[{"name":"菅沼　めぐみ","primary_role":"後加工","inactive_from":"2026-09-15","returned_on":"2026-11-01"}],"member_attendance":{},"company_calendar":{"days":{}}}
+                """;
+        String summary =
+                new AttendanceConflictDiffSummarizer()
+                        .summarize(
+                                Map.of(json, base.getBytes(StandardCharsets.UTF_8)),
+                                Map.of(json, disk.getBytes(StandardCharsets.UTF_8)),
+                                List.of(json));
+        assertTrue(summary.contains("復帰"), summary);
+        assertTrue(summary.contains("2026-11-01"), summary);
+    }
 }

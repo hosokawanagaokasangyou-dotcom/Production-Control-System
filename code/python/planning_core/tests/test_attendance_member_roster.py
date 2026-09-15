@@ -148,3 +148,57 @@ def test_apply_member_roster_patch_clears_inactive_from_on_cancel():
         store, [{"name": "菅沼　めぐみ", "primary_role": "後加工"}]
     )
     assert "inactive_from" not in ensure_member_roster(store)[0]
+
+
+def test_ensure_member_roster_keeps_returned_on():
+    store = empty_store(2026)
+    store["member_roster"] = [
+        {
+            "name": "菅沼　めぐみ",
+            "primary_role": "後加工",
+            "inactive_from": "2026-09-15",
+            "returned_on": "2026-11-01",
+        }
+    ]
+    roster = ensure_member_roster(store)
+    assert roster[0]["inactive_from"] == "2026-09-15"
+    assert roster[0]["returned_on"] == "2026-11-01"
+
+
+def test_member_active_on_after_returned_on():
+    entry = {
+        "name": "A",
+        "primary_role": "後加工",
+        "inactive_from": "2026-09-15",
+        "returned_on": "2026-11-01",
+    }
+    assert member_active_on(entry, date(2026, 9, 14))
+    assert not member_active_on(entry, date(2026, 9, 15))
+    assert not member_active_on(entry, date(2026, 10, 31))
+    assert member_active_on(entry, date(2026, 11, 1))
+
+
+def test_member_visible_in_month_after_return():
+    entry = {
+        "name": "A",
+        "primary_role": "後加工",
+        "inactive_from": "2026-09-15",
+        "returned_on": "2026-11-01",
+    }
+    assert member_visible_in_month(entry, 2026, 9)
+    assert not member_visible_in_month(entry, 2026, 10)
+    assert member_visible_in_month(entry, 2026, 11)
+
+
+def test_attendance_grid_member_names_includes_returned_month():
+    store = empty_store(2026)
+    store["member_roster"] = [
+        {
+            "name": "異動",
+            "primary_role": "物流",
+            "inactive_from": "2026-09-15",
+            "returned_on": "2026-11-01",
+        }
+    ]
+    assert attendance_grid_member_names(store, 2026, 10) == []
+    assert attendance_grid_member_names(store, 2026, 11) == ["異動"]

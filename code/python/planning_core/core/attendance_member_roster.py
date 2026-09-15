@@ -97,27 +97,43 @@ def _normalize_entry(raw: dict[str, Any]) -> dict[str, str] | None:
     inactive = _normalize_inactive_from(raw.get("inactive_from"))
     if inactive:
         out["inactive_from"] = inactive
+        returned = _normalize_inactive_from(raw.get("returned_on"))
+        if returned and date.fromisoformat(returned) >= date.fromisoformat(inactive):
+            out["returned_on"] = returned
     return out
 
 
 def member_active_on(entry: dict[str, Any] | None, d: date) -> bool:
-    """異動日が空、または ``d < inactive_from`` のとき在籍。"""
+    """異動日が空、または ``d < inactive_from``、または復帰日以降のとき在籍。"""
     if not isinstance(entry, dict):
         return True
     inactive = _normalize_inactive_from(entry.get("inactive_from"))
     if not inactive:
+        return True
+    returned = _normalize_inactive_from(entry.get("returned_on"))
+    if returned and d >= date.fromisoformat(returned):
         return True
     return d < date.fromisoformat(inactive)
 
 
 def member_visible_in_month(entry: dict[str, Any] | None, year: int, month: int) -> bool:
-    """異動日が空、または異動日が当該月1日より後ならその月のグリッドに出す。"""
+    """当該月に在籍日が1日でもあればグリッドに出す。"""
     if not isinstance(entry, dict):
         return True
     inactive = _normalize_inactive_from(entry.get("inactive_from"))
     if not inactive:
         return True
-    return date.fromisoformat(inactive) > date(year, month, 1)
+    inactive_d = date.fromisoformat(inactive)
+    if inactive_d > date(year, month, 1):
+        return True
+    returned = _normalize_inactive_from(entry.get("returned_on"))
+    if returned:
+        import calendar as cal_mod
+
+        last = date(year, month, cal_mod.monthrange(year, month)[1])
+        if date.fromisoformat(returned) <= last:
+            return True
+    return False
 
 
 def roster_entry_by_name(store: dict, name: str) -> dict[str, str] | None:

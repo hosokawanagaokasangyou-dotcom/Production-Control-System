@@ -96,6 +96,31 @@ public final class AttendanceConflictDiffSummarizer implements ConflictDiffSumma
             }
         }
         lines.addAll(diffInactiveFrom(base, disk));
+        lines.addAll(diffReturnedOn(base, disk));
+        return lines;
+    }
+
+    private static List<String> diffReturnedOn(JsonNode base, JsonNode disk) {
+        Map<String, String> b = rosterField(base, "returned_on");
+        Map<String, String> d = rosterField(disk, "returned_on");
+        List<String> lines = new ArrayList<>();
+        Set<String> names = new LinkedHashSet<>();
+        names.addAll(b.keySet());
+        names.addAll(d.keySet());
+        for (String n : names) {
+            String was = b.getOrDefault(n, "");
+            String now = d.getOrDefault(n, "");
+            if (was.equals(now)) {
+                continue;
+            }
+            if (now.isEmpty()) {
+                lines.add("・メンバー「" + n + "」の職場復帰が取り消されています");
+            } else if (was.isEmpty()) {
+                lines.add("・メンバー「" + n + "」が " + now + " 付で職場復帰になっています");
+            } else {
+                lines.add("・メンバー「" + n + "」の復帰日が " + was + " から " + now + " に変更されています");
+            }
+        }
         return lines;
     }
 
@@ -124,6 +149,10 @@ public final class AttendanceConflictDiffSummarizer implements ConflictDiffSumma
     }
 
     private static Map<String, String> rosterInactiveFrom(JsonNode root) {
+        return rosterField(root, "inactive_from");
+    }
+
+    private static Map<String, String> rosterField(JsonNode root, String field) {
         Map<String, String> out = new LinkedHashMap<>();
         JsonNode roster = root.path("member_roster");
         if (!roster.isArray()) {
@@ -137,9 +166,9 @@ public final class AttendanceConflictDiffSummarizer implements ConflictDiffSumma
             if (n.isEmpty()) {
                 continue;
             }
-            String from = m.path("inactive_from").asText("").trim();
-            if (!from.isEmpty()) {
-                out.put(n, from);
+            String v = m.path(field).asText("").trim();
+            if (!v.isEmpty()) {
+                out.put(n, v);
             }
         }
         return out;

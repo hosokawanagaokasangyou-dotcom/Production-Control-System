@@ -109,6 +109,7 @@ public final class EditableMemberAttendanceGridPane extends VBox {
     private List<String> members = List.of();
     private Map<String, String> primaryRoles = new HashMap<>();
     private final Map<String, LocalDate> inactiveFrom = new HashMap<>();
+    private final Map<String, LocalDate> returnedOn = new HashMap<>();
     private String selectedMember = null;
     private List<LocalDate> dates = List.of();
     private final Map<String, Map<String, CellState>> cells = new HashMap<>();
@@ -540,6 +541,7 @@ public final class EditableMemberAttendanceGridPane extends VBox {
         rosterOrder = new ArrayList<>();
         primaryRoles = new HashMap<>();
         inactiveFrom.clear();
+        returnedOn.clear();
         node.path("members").forEach(m -> members.add(m.asText("")));
         JsonNode rosterNode = node.path("member_roster");
         if (rosterNode.isArray() && rosterNode.size() > 0) {
@@ -561,6 +563,8 @@ public final class EditableMemberAttendanceGridPane extends VBox {
                         primaryRoles.put(name, role);
                         MemberRosterInactiveFrom.parse(ent.path("inactive_from").asText(""))
                                 .ifPresent(d -> inactiveFrom.put(name, d));
+                        MemberRosterInactiveFrom.parse(ent.path("returned_on").asText(""))
+                                .ifPresent(d -> returnedOn.put(name, d));
                     });
             refreshVisibleMembers();
         } else {
@@ -701,6 +705,10 @@ public final class EditableMemberAttendanceGridPane extends VBox {
             if (from != null) {
                 row.put("inactive_from", from.toString());
             }
+            LocalDate returned = returnedOn.get(member);
+            if (from != null && returned != null) {
+                row.put("returned_on", returned.toString());
+            }
             roster.add(row);
         }
         return roster;
@@ -710,7 +718,8 @@ public final class EditableMemberAttendanceGridPane extends VBox {
         List<String> visible = new ArrayList<>();
         List<String> names = rosterOrder.isEmpty() ? members : rosterOrder;
         for (String name : names) {
-            if (MemberRosterInactiveFrom.visibleInMonth(inactiveFrom.get(name), year, month)) {
+            if (MemberRosterInactiveFrom.visibleInMonth(
+                    inactiveFrom.get(name), returnedOn.get(name), year, month)) {
                 visible.add(name);
             }
         }
@@ -736,6 +745,7 @@ public final class EditableMemberAttendanceGridPane extends VBox {
         rosterOrder.add(n);
         primaryRoles.put(n, role);
         inactiveFrom.remove(n);
+        returnedOn.remove(n);
         selectedMember = n;
         refreshVisibleMembers();
         rebuildGrid();
@@ -769,6 +779,10 @@ public final class EditableMemberAttendanceGridPane extends VBox {
         if (from != null) {
             inactiveFrom.put(newN, from);
         }
+        LocalDate returned = returnedOn.remove(oldN);
+        if (returned != null) {
+            returnedOn.put(newN, returned);
+        }
         if (!oldN.equals(newN)) {
             migrateMemberCells(oldN, newN);
         }
@@ -791,6 +805,7 @@ public final class EditableMemberAttendanceGridPane extends VBox {
         rosterOrder.remove(n);
         primaryRoles.remove(n);
         inactiveFrom.remove(n);
+        returnedOn.remove(n);
         for (Map<String, CellState> day : cells.values()) {
             day.remove(n);
         }
@@ -809,8 +824,10 @@ public final class EditableMemberAttendanceGridPane extends VBox {
         String n = name.trim();
         if (from == null) {
             inactiveFrom.remove(n);
+            returnedOn.remove(n);
         } else {
             inactiveFrom.put(n, from);
+            returnedOn.remove(n);
         }
         refreshVisibleMembers();
         if (selectedMember != null && !members.contains(selectedMember)) {
@@ -825,6 +842,46 @@ public final class EditableMemberAttendanceGridPane extends VBox {
             return null;
         }
         return inactiveFrom.get(member);
+    }
+
+    public LocalDate returnedOnFor(String member) {
+        if (member == null) {
+            return null;
+        }
+        return returnedOn.get(member);
+    }
+
+    public List<String> transferredMemberNames() {
+        List<String> names = new ArrayList<>();
+        List<String> order = rosterOrder.isEmpty() ? members : rosterOrder;
+        for (String name : order) {
+            if (inactiveFrom.get(name) != null) {
+                names.add(name);
+            }
+        }
+        return names;
+    }
+
+    public void setMemberReturnedOn(String name, LocalDate returned) {
+        if (name == null || name.isBlank() || !rosterContains(name.trim())) {
+            return;
+        }
+        String n = name.trim();
+        LocalDate from = inactiveFrom.get(n);
+        if (from == null) {
+            return;
+        }
+        if (returned == null || returned.isBefore(from)) {
+            returnedOn.remove(n);
+        } else {
+            returnedOn.put(n, returned);
+        }
+        refreshVisibleMembers();
+        if (selectedMember != null && !members.contains(selectedMember)) {
+            selectedMember = null;
+        }
+        rebuildGrid();
+        notifyDirtyChanged();
     }
 
     private boolean rosterContains(String name) {
@@ -1030,7 +1087,7 @@ public final class EditableMemberAttendanceGridPane extends VBox {
                 StackPane cellWrap = new StackPane(cell, commentMark);
                 AttendanceGridCellSizing.applyMemberCellWrap(cellWrap, cellSizePx);
                 boolean locked =
-                        !MemberRosterInactiveFrom.activeOn(inactiveFrom.get(member), d);
+                        !MemberRosterInactiveFrom.activeOn(inactiveFrom.get(member), returnedOn.get(member), d);
                 if (locked) {
                     cell.setDisable(true);
                     cell.getStyleClass().add("pm-member-att-cell-inactive");
@@ -1065,7 +1122,7 @@ public final class EditableMemberAttendanceGridPane extends VBox {
     }
 
     boolean cellInactiveForTest(LocalDate date, String member) {
-        return !MemberRosterInactiveFrom.activeOn(inactiveFrom.get(member), date);
+        return !MemberRosterInactiveFrom.activeOn(inactiveFrom.get(member), returnedOn.get(member), date);
     }
 
     double leftBodyPrefHeightForTest() {
@@ -1126,7 +1183,7 @@ public final class EditableMemberAttendanceGridPane extends VBox {
     }
 
     private void cyclePreset(LocalDate date, String member) {
-        if (!MemberRosterInactiveFrom.activeOn(inactiveFrom.get(member), date)) {
+        if (!MemberRosterInactiveFrom.activeOn(inactiveFrom.get(member), returnedOn.get(member), date)) {
             return;
         }
         String dKey = date.toString();
@@ -1140,7 +1197,7 @@ public final class EditableMemberAttendanceGridPane extends VBox {
         if (preset == null || preset.isBlank()) {
             return;
         }
-        if (!MemberRosterInactiveFrom.activeOn(inactiveFrom.get(member), date)) {
+        if (!MemberRosterInactiveFrom.activeOn(inactiveFrom.get(member), returnedOn.get(member), date)) {
             return;
         }
         singleClickDelay.stop();
@@ -1306,7 +1363,7 @@ public final class EditableMemberAttendanceGridPane extends VBox {
 
     public void applyHourlyEdit(
             LocalDate date, String member, Map<String, String> hourly, String dayPreset) {
-        if (!MemberRosterInactiveFrom.activeOn(inactiveFrom.get(member), date)) {
+        if (!MemberRosterInactiveFrom.activeOn(inactiveFrom.get(member), returnedOn.get(member), date)) {
             return;
         }
         String dKey = date.toString();
@@ -1461,7 +1518,7 @@ public final class EditableMemberAttendanceGridPane extends VBox {
     }
 
     private void applyComment(LocalDate date, String member, String comment) {
-        if (!MemberRosterInactiveFrom.activeOn(inactiveFrom.get(member), date)) {
+        if (!MemberRosterInactiveFrom.activeOn(inactiveFrom.get(member), returnedOn.get(member), date)) {
             return;
         }
         String dKey = date.toString();

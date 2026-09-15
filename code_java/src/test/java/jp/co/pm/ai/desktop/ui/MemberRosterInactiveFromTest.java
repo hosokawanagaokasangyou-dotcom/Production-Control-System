@@ -38,4 +38,23 @@ class MemberRosterInactiveFromTest {
         assertFalse(MemberRosterInactiveFrom.visibleInMonth(first, 2026, 9));
         assertTrue(MemberRosterInactiveFrom.visibleInMonth(null, 2026, 10));
     }
+
+    @Test
+    void activeOnAgainFromReturnedOn() {
+        LocalDate from = LocalDate.of(2026, 9, 15);
+        LocalDate returned = LocalDate.of(2026, 11, 1);
+        assertTrue(MemberRosterInactiveFrom.activeOn(from, returned, LocalDate.of(2026, 9, 14)));
+        assertFalse(MemberRosterInactiveFrom.activeOn(from, returned, LocalDate.of(2026, 9, 15)));
+        assertFalse(MemberRosterInactiveFrom.activeOn(from, returned, LocalDate.of(2026, 10, 31)));
+        assertTrue(MemberRosterInactiveFrom.activeOn(from, returned, LocalDate.of(2026, 11, 1)));
+    }
+
+    @Test
+    void visibleInMonthAfterReturn() {
+        LocalDate from = LocalDate.of(2026, 9, 15);
+        LocalDate returned = LocalDate.of(2026, 11, 1);
+        assertTrue(MemberRosterInactiveFrom.visibleInMonth(from, returned, 2026, 9));
+        assertFalse(MemberRosterInactiveFrom.visibleInMonth(from, returned, 2026, 10));
+        assertTrue(MemberRosterInactiveFrom.visibleInMonth(from, returned, 2026, 11));
+    }
 }
