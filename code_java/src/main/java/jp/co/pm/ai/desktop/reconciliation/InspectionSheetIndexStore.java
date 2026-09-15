@@ -67,7 +67,7 @@ public final class InspectionSheetIndexStore {
                             cols.get(0),
                             parseDate(cols.get(1)),
                             cols.get(2),
-                            cols.get(3),
+                            InspectionSheetIndexUserPaths.relocateBoxHome(cols.get(3)),
                             cols.get(4),
                             parseLong(cols.get(5)),
                             parseLong(cols.get(6)),

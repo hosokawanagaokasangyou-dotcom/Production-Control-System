@@ -266,6 +266,7 @@ public final class EnvVarDocs {
                         + "空のとき湖南は共有DATA/inspection-sheet-index、国分は配台AI DATA/inspection-sheet-index。"
                         + "環境変数タブの「検査表索引を共有フォルダへ複写」でローカル本索引をここに置く。"
                         + "他PCはローカル未作成、または共有より明らかに小さいとき起動時に複写してから増分更新する。"
+                        + "CSV 内の C:\\Users\\<名前>\\Box は読込時に現在のユーザーホームへ付け替える。"
                         + "フォルダ配下へ書くのは索引 CSV のみ。環境変数タブのフォルダ選択可。");
         put(
                 "PM_AI_REQUEST_FORM_TPI_PDF_DIR",
