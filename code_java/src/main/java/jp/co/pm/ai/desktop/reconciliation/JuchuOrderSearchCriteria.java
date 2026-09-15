@@ -23,13 +23,14 @@ public record JuchuOrderSearchCriteria(
         if (from.isAfter(to)) {
             return Optional.of("開始日が終了日より後です");
         }
-        if (isBlankKeyword(productKeyword)
-                && isBlankKeyword(rawMaterialKeyword)
-                && isBlankKeyword(machineKeyword)
-                && isBlankKeyword(processKeyword)) {
-            return Optional.of("製品名・投入原反・機械名・工程名のいずれかを入力してください");
-        }
         return Optional.empty();
+    }
+
+    public boolean hasKeyword() {
+        return !isBlankKeyword(productKeyword)
+                || !isBlankKeyword(rawMaterialKeyword)
+                || !isBlankKeyword(machineKeyword)
+                || !isBlankKeyword(processKeyword);
     }
 
     private static boolean isBlankKeyword(String value) {

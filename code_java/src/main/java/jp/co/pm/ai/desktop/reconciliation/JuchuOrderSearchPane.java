@@ -241,6 +241,9 @@ public final class JuchuOrderSearchPane {
                                     r -> planHaystack(index, r, false));
                     items.setAll(hits);
                     String countText = hits.size() + " 件";
+                    if (!c.hasKeyword() && hits.size() == JuchuOrderSearch.DATE_ONLY_RESULT_LIMIT) {
+                        countText = countText + "（期間のみのため最新200件）";
+                    }
                     statusMessage.setText(countText);
                     countLabel.setText(countText);
                 });

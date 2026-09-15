@@ -4,6 +4,7 @@ import java.text.Collator;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -13,6 +14,8 @@ import java.util.Set;
 import java.util.function.Function;
 
 public final class JuchuOrderSearch {
+
+    public static final int DATE_ONLY_RESULT_LIMIT = 200;
 
     private JuchuOrderSearch() {}
 
@@ -35,9 +38,11 @@ public final class JuchuOrderSearch {
         if (records == null) {
             return List.of();
         }
-        return records.stream()
-                .filter(record -> matches(record, criteria, "", ""))
-                .toList();
+        return finishHits(
+                records.stream()
+                        .filter(record -> matches(record, criteria, "", ""))
+                        .toList(),
+                criteria);
     }
 
     public static List<OrderRecord> filter(
@@ -57,15 +62,17 @@ public final class JuchuOrderSearch {
                 extraMachineHaystack != null ? extraMachineHaystack : r -> "";
         Function<OrderRecord, String> processes =
                 extraProcessHaystack != null ? extraProcessHaystack : r -> "";
-        return records.stream()
-                .filter(
-                        record ->
-                                matches(
-                                        record,
-                                        criteria,
-                                        machines.apply(record),
-                                        processes.apply(record)))
-                .toList();
+        return finishHits(
+                records.stream()
+                        .filter(
+                                record ->
+                                        matches(
+                                                record,
+                                                criteria,
+                                                machines.apply(record),
+                                                processes.apply(record)))
+                        .toList(),
+                criteria);
     }
 
     public static boolean matches(OrderRecord record, JuchuOrderSearchCriteria criteria) {
@@ -84,6 +91,47 @@ public final class JuchuOrderSearch {
             return false;
         }
         return keywordMatches(record, criteria, extraMachineHaystack, extraProcessHaystack);
+    }
+
+    private static List<OrderRecord> finishHits(
+            List<OrderRecord> hits, JuchuOrderSearchCriteria criteria) {
+        if (hits == null || hits.isEmpty()) {
+            return List.of();
+        }
+        if (criteria.hasKeyword()) {
+            return List.copyOf(hits);
+        }
+        List<OrderRecord> sorted = new ArrayList<>(hits);
+        sorted.sort(recencyComparator());
+        if (sorted.size() > DATE_ONLY_RESULT_LIMIT) {
+            sorted = new ArrayList<>(sorted.subList(0, DATE_ONLY_RESULT_LIMIT));
+        }
+        return List.copyOf(sorted);
+    }
+
+    private static Comparator<OrderRecord> recencyComparator() {
+        return Comparator.comparing(
+                        JuchuOrderSearch::recencyDate,
+                        Comparator.nullsLast(Comparator.reverseOrder()))
+                .thenComparing(
+                        r -> r != null ? nullToEmpty(r.getReqNo()) : "",
+                        Comparator.reverseOrder());
+    }
+
+    static LocalDate recencyDate(OrderRecord record) {
+        if (record == null || record.getDbValues() == null) {
+            return null;
+        }
+        Map<String, String> db = record.getDbValues();
+        LocalDate input = JuchuTransferValueNormalizer.parseLocalDate(db.get("入力日"));
+        if (input != null) {
+            return input;
+        }
+        LocalDate adjust = JuchuTransferValueNormalizer.parseLocalDate(db.get("調整納期"));
+        if (adjust != null) {
+            return adjust;
+        }
+        return JuchuTransferValueNormalizer.parseLocalDate(db.get("希望納期"));
     }
 
     public static String displayRawMaterial(Map<String, String> dbValues) {

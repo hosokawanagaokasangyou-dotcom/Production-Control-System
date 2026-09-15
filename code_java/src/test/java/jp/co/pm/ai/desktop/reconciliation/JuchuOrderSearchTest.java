@@ -19,7 +19,7 @@ class JuchuOrderSearchTest {
     }
 
     @Test
-    void validation_requiresDateRangeAndAtLeastOneKeyword() {
+    void validation_requiresDateRange_keywordsOptional() {
         assertTrue(
                 new JuchuOrderSearchCriteria(null, LocalDate.of(2026, 6, 1), "A", "")
                         .validationError()
@@ -33,11 +33,11 @@ class JuchuOrderSearchTest {
                                 LocalDate.of(2026, 6, 2), LocalDate.of(2026, 6, 1), "A", "")
                         .validationError()
                         .isPresent());
-        assertTrue(
+        assertEquals(
+                Optional.empty(),
                 new JuchuOrderSearchCriteria(
                                 LocalDate.of(2026, 6, 1), LocalDate.of(2026, 6, 30), "", "  ")
-                        .validationError()
-                        .isPresent());
+                        .validationError());
         assertEquals(
                 Optional.empty(),
                 new JuchuOrderSearchCriteria(
@@ -139,15 +139,59 @@ class JuchuOrderSearchTest {
     }
 
     @Test
-    void filter_rejectsInvalidCriteria() {
+    void filter_rejectsInvalidDateRange() {
         var invalid =
                 new JuchuOrderSearchCriteria(
-                        LocalDate.of(2026, 6, 1), LocalDate.of(2026, 6, 30), "", "");
+                        LocalDate.of(2026, 6, 30), LocalDate.of(2026, 6, 1), "", "");
         IllegalArgumentException ex =
                 assertThrows(
                         IllegalArgumentException.class,
                         () -> JuchuOrderSearch.filter(List.of(), invalid));
-        assertEquals("製品名・投入原反・機械名・工程名のいずれかを入力してください", ex.getMessage());
+        assertEquals("開始日が終了日より後です", ex.getMessage());
+    }
+
+    @Test
+    void filter_dateOnly_keepsLatest200ByInputDate() {
+        java.util.ArrayList<OrderRecord> recs = new java.util.ArrayList<>();
+        for (int i = 1; i <= 201; i++) {
+            recs.add(
+                    rec(
+                            "R" + i,
+                            Map.of(
+                                    "希望納期",
+                                    "2026-06-10",
+                                    "入力日",
+                                    LocalDate.of(2026, 1, 1).plusDays(i - 1).toString())));
+        }
+        var c =
+                new JuchuOrderSearchCriteria(
+                        LocalDate.of(2026, 6, 1), LocalDate.of(2026, 6, 30), "", "");
+        List<OrderRecord> out = JuchuOrderSearch.filter(recs, c);
+        assertEquals(JuchuOrderSearch.DATE_ONLY_RESULT_LIMIT, out.size());
+        assertEquals("R201", out.get(0).getReqNo());
+        assertEquals("R2", out.get(199).getReqNo());
+        assertTrue(out.stream().noneMatch(r -> "R1".equals(r.getReqNo())));
+    }
+
+    @Test
+    void filter_withKeyword_doesNotCapAt200() {
+        java.util.ArrayList<OrderRecord> recs = new java.util.ArrayList<>();
+        for (int i = 1; i <= 201; i++) {
+            recs.add(
+                    rec(
+                            "K" + i,
+                            Map.of(
+                                    "希望納期",
+                                    "2026-06-10",
+                                    "製品",
+                                    "HIT",
+                                    "入力日",
+                                    LocalDate.of(2026, 1, 1).plusDays(i - 1).toString())));
+        }
+        var c =
+                new JuchuOrderSearchCriteria(
+                        LocalDate.of(2026, 6, 1), LocalDate.of(2026, 6, 30), "HIT", "");
+        assertEquals(201, JuchuOrderSearch.filter(recs, c).size());
     }
 
     @Test
