@@ -13,6 +13,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 
 import javafx.application.Platform;
+import javafx.beans.binding.Bindings;
 import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.SimpleBooleanProperty;
 import javafx.beans.property.SimpleStringProperty;
@@ -85,8 +86,9 @@ public final class JuchuOrderSearchPane {
         search.getStyleClass().add("btn-reload");
         search.setMaxWidth(Double.MAX_VALUE);
         Button openKensa = new Button("検査表を開く");
-        openKensa.getStyleClass().add("btn-copy");
+        openKensa.getStyleClass().add("btn-reload");
         openKensa.setMaxWidth(Double.MAX_VALUE);
+        Tooltip.install(openKensa, new Tooltip("選択した行の検査表を開きます"));
         Button rebuildIndex = new Button("検査表索引を更新");
         rebuildIndex.getStyleClass().add("btn-save-local");
         rebuildIndex.setMaxWidth(Double.MAX_VALUE);
@@ -206,10 +208,14 @@ public final class JuchuOrderSearchPane {
         openKensa
                 .disableProperty()
                 .bind(
-                        table.getSelectionModel()
-                                .selectedItemProperty()
-                                .isNull()
-                                .or(openBusy));
+                        Bindings.createBooleanBinding(
+                                () ->
+                                        shouldDisableOpenInspectionSheet(
+                                                table.getSelectionModel().getSelectedIndex(),
+                                                openBusy.get()),
+                                table.getSelectionModel().selectedIndexProperty(),
+                                table.getSelectionModel().selectedItemProperty(),
+                                openBusy));
         rebuildIndex.disableProperty().bind(rebuildBusy);
 
         table.setRowFactory(
@@ -328,6 +334,10 @@ public final class JuchuOrderSearchPane {
         root.setMaxWidth(Double.MAX_VALUE);
         root.setMaxHeight(Double.MAX_VALUE);
         return root;
+    }
+
+    static boolean shouldDisableOpenInspectionSheet(int selectedIndex, boolean openBusy) {
+        return selectedIndex < 0 || openBusy;
     }
 
     private static void rebuildInspectionIndex(
