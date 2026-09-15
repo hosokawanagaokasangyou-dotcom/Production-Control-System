@@ -1425,9 +1425,18 @@
     -fx-background-insets: 2;
 }
 
-.pm-member-attendance-grid-member-selected {
-    -fx-background-color: rgba(56, 189, 248, 0.22);
+.pm-member-attendance-grid .pm-member-attendance-grid-member-selected,
+.pm-member-attendance-grid .pm-member-attendance-grid-role-selected {
+    -fx-background-color: #38bdf8;
+    -fx-text-fill: #0f172a;
+    -fx-font-weight: bold;
     -fx-background-radius: 4;
+}
+
+.pm-member-attendance-grid .pm-member-attendance-row-selected {
+    -fx-background-color: rgba(56, 189, 248, 0.38);
+    -fx-border-color: #38bdf8;
+    -fx-border-width: 2 0 2 0;
 }
 
 .pm-member-attendance-grid-role {

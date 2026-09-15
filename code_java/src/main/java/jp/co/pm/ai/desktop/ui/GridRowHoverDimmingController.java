@@ -22,10 +22,20 @@ public final class GridRowHoverDimmingController {
 
   private final List<Row> rows = new ArrayList<>();
   private int hoveredRow = -1;
+  private int pinnedRow = -1;
 
   public void clear() {
     rows.clear();
     hoveredRow = -1;
+    pinnedRow = -1;
+  }
+
+  public void setPinnedRow(int rowIndex) {
+    if (pinnedRow == rowIndex) {
+      return;
+    }
+    pinnedRow = rowIndex;
+    applyStyles();
   }
 
   public void addRow(Region band, Label nameLabel, List<Node> cellNodes) {
@@ -76,7 +86,8 @@ public final class GridRowHoverDimmingController {
     for (int i = 0; i < rows.size(); i++) {
       Row row = rows.get(i);
       boolean focused = en && i == hoveredRow;
-      boolean dim = en && hoveredRow >= 0 && !focused;
+      boolean pinned = i == pinnedRow;
+      boolean dim = en && hoveredRow >= 0 && !focused && !pinned;
       if (row.band() != null) {
         toggleStyleClass(row.band(), STYLE_BAND_FOCUSED, focused);
         toggleStyleClass(row.band(), STYLE_BAND_DIMMED, dim);

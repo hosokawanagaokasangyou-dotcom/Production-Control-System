@@ -925,26 +925,50 @@ public final class EditableMemberAttendanceGridPane extends VBox {
     }
 
     private void refreshMemberSelectionStyles() {
-        leftBodyGrid.getChildren().stream()
-                .filter(n -> n instanceof Label)
-                .map(n -> (Label) n)
-                .filter(l -> l.getStyleClass().contains("pm-member-attendance-grid-member"))
-                .forEach(
-                        l -> {
-                            boolean sel =
-                                    selectedMember != null
-                                            && selectedMember.equals(l.getText());
-                            if (sel) {
-                                if (!l.getStyleClass()
-                                        .contains("pm-member-attendance-grid-member-selected")) {
-                                    l.getStyleClass()
-                                            .add("pm-member-attendance-grid-member-selected");
-                                }
-                            } else {
-                                l.getStyleClass()
-                                        .remove("pm-member-attendance-grid-member-selected");
-                            }
-                        });
+        for (int row = 0; row < members.size(); row++) {
+            String member = members.get(row);
+            boolean sel = selectedMember != null && selectedMember.equals(member);
+            toggleStyleClass(
+                    childAt(leftBodyGrid, 1, row),
+                    "pm-member-attendance-grid-member-selected",
+                    sel);
+            toggleStyleClass(
+                    childAt(leftBodyGrid, 0, row),
+                    "pm-member-attendance-grid-role-selected",
+                    sel);
+            toggleStyleClass(rowBandAt(row), "pm-member-attendance-row-selected", sel);
+        }
+        rowDimming.setPinnedRow(selectedMember == null ? -1 : members.indexOf(selectedMember));
+    }
+
+    private Region rowBandAt(int row) {
+        for (Node child : bodyDateGrid.getChildren()) {
+            if (!(child instanceof Region region)) {
+                continue;
+            }
+            if (!region.getStyleClass().contains(GridRowHoverDimmingController.STYLE_BAND)) {
+                continue;
+            }
+            Integer r = GridPane.getRowIndex(child);
+            int rr = r == null ? 0 : r;
+            if (rr == row) {
+                return region;
+            }
+        }
+        return null;
+    }
+
+    private static void toggleStyleClass(Node node, String styleClass, boolean add) {
+        if (node == null) {
+            return;
+        }
+        if (add) {
+            if (!node.getStyleClass().contains(styleClass)) {
+                node.getStyleClass().add(styleClass);
+            }
+        } else {
+            node.getStyleClass().remove(styleClass);
+        }
     }
 
     private void rebuildGrid() {
@@ -1041,14 +1065,12 @@ public final class EditableMemberAttendanceGridPane extends VBox {
             AttendanceGridCellSizing.applyMemberRoleLabel(roleLabel, cellSizePx);
             GridPane.setHalignment(roleLabel, HPos.CENTER);
             GridPane.setValignment(roleLabel, VPos.CENTER);
+            roleLabel.setOnMouseClicked(e -> selectMember(member));
             leftBodyGrid.add(roleLabel, 0, row);
             rowDimming.installHover(roleLabel, row);
 
             Label name = new Label(member);
             name.getStyleClass().add("pm-member-attendance-grid-member");
-            if (selectedMember != null && selectedMember.equals(member)) {
-                name.getStyleClass().add("pm-member-attendance-grid-member-selected");
-            }
             AttendanceGridCellSizing.applyMemberNameLabel(name, cellSizePx);
             GridPane.setHalignment(name, HPos.CENTER);
             GridPane.setValignment(name, VPos.CENTER);
@@ -1101,6 +1123,7 @@ public final class EditableMemberAttendanceGridPane extends VBox {
             }
             rowDimming.addRow(rowBand, name, new ArrayList<>(rowWraps));
         }
+        refreshMemberSelectionStyles();
         javafx.application.Platform.runLater(this::syncHeaderDateViewportWidth);
     }
 
@@ -1111,6 +1134,49 @@ public final class EditableMemberAttendanceGridPane extends VBox {
         bodyDateGrid.autosize();
         leftBodyGrid.layout();
         bodyDateGrid.layout();
+    }
+
+    void selectMemberForTest(String member) {
+        selectMember(member);
+    }
+
+    boolean memberNameHasSelectedStyleForTest(String member) {
+        Label name = memberNameLabelForTest(member);
+        return name != null
+                && name.getStyleClass().contains("pm-member-attendance-grid-member-selected");
+    }
+
+    boolean memberRoleHasSelectedStyleForTest(String member) {
+        Label role = memberRoleLabelForTest(member);
+        return role != null
+                && role.getStyleClass().contains("pm-member-attendance-grid-role-selected");
+    }
+
+    boolean memberRowBandHasSelectedStyleForTest(String member) {
+        int row = members.indexOf(member);
+        if (row < 0) {
+            return false;
+        }
+        Region band = rowBandAt(row);
+        return band != null && band.getStyleClass().contains("pm-member-attendance-row-selected");
+    }
+
+    private Label memberNameLabelForTest(String member) {
+        int row = members.indexOf(member);
+        if (row < 0) {
+            return null;
+        }
+        Node n = childAt(leftBodyGrid, 1, row);
+        return n instanceof Label label ? label : null;
+    }
+
+    private Label memberRoleLabelForTest(String member) {
+        int row = members.indexOf(member);
+        if (row < 0) {
+            return null;
+        }
+        Node n = childAt(leftBodyGrid, 0, row);
+        return n instanceof Label label ? label : null;
     }
 
     int memberRowCountForTest() {
