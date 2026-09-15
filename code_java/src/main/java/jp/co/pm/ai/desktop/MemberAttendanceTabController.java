@@ -55,6 +55,7 @@ import jp.co.pm.ai.desktop.ui.FiscalYearPeriod;
 import jp.co.pm.ai.desktop.ui.FourDigitConfirmationDialog;
 import jp.co.pm.ai.desktop.ui.InlineMonthCalendarPane;
 import jp.co.pm.ai.desktop.ui.MemberAttendanceMemberEditDialog;
+import jp.co.pm.ai.desktop.ui.MemberAttendanceTransferDialog;
 import jp.co.pm.ai.desktop.ui.MemberHourlyAttendanceDialog;
 
 /** メンバー勤怠（カレンダー方式）編集タブ。 */
@@ -102,6 +103,9 @@ public class MemberAttendanceTabController {
 
     @FXML
     private Button editMemberButton;
+
+    @FXML
+    private Button transferMemberButton;
 
     @FXML
     private Button removeMemberButton;
@@ -235,6 +239,9 @@ public class MemberAttendanceTabController {
                 "JSON 正本から再読込します（未保存の変更がある場合は破棄確認します）");
         installTooltip(addMemberButton, "名簿にメンバーを追加します（保存で JSON に反映）");
         installTooltip(editMemberButton, "選択したメンバー行の氏名・主担当を編集します");
+        installTooltip(
+                transferMemberButton,
+                "選択したメンバーを職場異動します。異動日以降は名簿・配台から外れ、過去の勤怠は残ります");
         installTooltip(
                 removeMemberButton,
                 "選択したメンバーを名簿から削除します（氏名列をクリックして選択）");
@@ -858,6 +865,31 @@ public class MemberAttendanceTabController {
                             clearMemberGridCache();
                             gridPane.updateMember(
                                     selected, r.name(), r.primaryRole());
+                        });
+    }
+
+    @FXML
+    private void onTransferMember() {
+        if (gridPane == null || shell == null) {
+            return;
+        }
+        String selected = gridPane.selectedMemberName();
+        if (selected == null || selected.isBlank()) {
+            shell.showWarningDialog("職場異動", "異動するメンバー行（氏名列）をクリックして選択してください。");
+            return;
+        }
+        MemberAttendanceTransferDialog.show(
+                        shell.primaryStageForDialogs(),
+                        selected,
+                        gridPane.inactiveFromFor(selected))
+                .ifPresent(
+                        r -> {
+                            clearMemberGridCache();
+                            if (r.cancelledTransfer()) {
+                                gridPane.setMemberInactiveFrom(selected, null);
+                            } else {
+                                gridPane.setMemberInactiveFrom(selected, r.inactiveFrom());
+                            }
                         });
     }
 

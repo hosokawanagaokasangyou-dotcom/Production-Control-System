@@ -105,8 +105,10 @@ public final class EditableMemberAttendanceGridPane extends VBox {
 
     private int year;
     private int month;
+    private List<String> rosterOrder = new ArrayList<>();
     private List<String> members = List.of();
     private Map<String, String> primaryRoles = new HashMap<>();
+    private final Map<String, LocalDate> inactiveFrom = new HashMap<>();
     private String selectedMember = null;
     private List<LocalDate> dates = List.of();
     private final Map<String, Map<String, CellState>> cells = new HashMap<>();
@@ -535,7 +537,9 @@ public final class EditableMemberAttendanceGridPane extends VBox {
         year = node.path("year").asInt(LocalDate.now().getYear());
         month = node.path("month").asInt(LocalDate.now().getMonthValue());
         members = new ArrayList<>();
+        rosterOrder = new ArrayList<>();
         primaryRoles = new HashMap<>();
+        inactiveFrom.clear();
         node.path("members").forEach(m -> members.add(m.asText("")));
         JsonNode rosterNode = node.path("member_roster");
         if (rosterNode.isArray() && rosterNode.size() > 0) {
@@ -546,7 +550,7 @@ public final class EditableMemberAttendanceGridPane extends VBox {
                         if (name.isEmpty()) {
                             return;
                         }
-                        members.add(name);
+                        rosterOrder.add(name);
                         String role =
                                 ent.path("primary_role")
                                         .asText(MemberAttendanceMemberEditDialog.ROLE_POST)
@@ -555,7 +559,10 @@ public final class EditableMemberAttendanceGridPane extends VBox {
                             role = MemberAttendanceMemberEditDialog.ROLE_POST;
                         }
                         primaryRoles.put(name, role);
+                        MemberRosterInactiveFrom.parse(ent.path("inactive_from").asText(""))
+                                .ifPresent(d -> inactiveFrom.put(name, d));
                     });
+            refreshVisibleMembers();
         } else {
             JsonNode rolesNode = node.path("primary_roles");
             if (rolesNode.isObject()) {
@@ -574,6 +581,8 @@ public final class EditableMemberAttendanceGridPane extends VBox {
                 primaryRoles.putIfAbsent(
                         member, MemberAttendanceMemberEditDialog.ROLE_POST);
             }
+            rosterOrder = new ArrayList<>(members);
+            refreshVisibleMembers();
         }
         dates = new ArrayList<>();
         node.path("dates").forEach(d -> {
@@ -680,16 +689,32 @@ public final class EditableMemberAttendanceGridPane extends VBox {
 
     private List<Map<String, Object>> exportMemberRoster() {
         List<Map<String, Object>> roster = new ArrayList<>();
-        for (String member : members) {
+        List<String> names = rosterOrder.isEmpty() ? members : rosterOrder;
+        for (String member : names) {
             Map<String, Object> row = new HashMap<>();
             row.put("name", member);
             row.put(
                     "primary_role",
                     primaryRoles.getOrDefault(
                             member, MemberAttendanceMemberEditDialog.ROLE_POST));
+            LocalDate from = inactiveFrom.get(member);
+            if (from != null) {
+                row.put("inactive_from", from.toString());
+            }
             roster.add(row);
         }
         return roster;
+    }
+
+    private void refreshVisibleMembers() {
+        List<String> visible = new ArrayList<>();
+        List<String> names = rosterOrder.isEmpty() ? members : rosterOrder;
+        for (String name : names) {
+            if (MemberRosterInactiveFrom.visibleInMonth(inactiveFrom.get(name), year, month)) {
+                visible.add(name);
+            }
+        }
+        members = visible;
     }
 
     public String selectedMemberName() {
@@ -698,16 +723,21 @@ public final class EditableMemberAttendanceGridPane extends VBox {
 
     public void addMember(String name, String primaryRole) {
         String n = name != null ? name.trim() : "";
-        if (n.isEmpty() || members.contains(n)) {
+        if (n.isEmpty() || rosterContains(n)) {
             return;
         }
         String role =
                 MemberAttendanceMemberEditDialog.ROLE_LOGISTICS.equals(primaryRole)
                         ? MemberAttendanceMemberEditDialog.ROLE_LOGISTICS
                         : MemberAttendanceMemberEditDialog.ROLE_POST;
-        members.add(n);
+        if (rosterOrder.isEmpty() && members instanceof ArrayList) {
+            rosterOrder = new ArrayList<>(members);
+        }
+        rosterOrder.add(n);
         primaryRoles.put(n, role);
+        inactiveFrom.remove(n);
         selectedMember = n;
+        refreshVisibleMembers();
         rebuildGrid();
         notifyDirtyChanged();
     }
@@ -721,26 +751,31 @@ public final class EditableMemberAttendanceGridPane extends VBox {
         if (oldN.isEmpty() || newN.isEmpty()) {
             return;
         }
-        int idx = members.indexOf(oldN);
+        int idx = rosterIndexOf(oldN);
         if (idx < 0) {
             return;
         }
-        if (!oldN.equals(newN) && members.contains(newN)) {
+        if (!oldN.equals(newN) && rosterContains(newN)) {
             return;
         }
         String role =
                 MemberAttendanceMemberEditDialog.ROLE_LOGISTICS.equals(primaryRole)
                         ? MemberAttendanceMemberEditDialog.ROLE_LOGISTICS
                         : MemberAttendanceMemberEditDialog.ROLE_POST;
-        members.set(idx, newN);
+        rosterOrder.set(idx, newN);
         primaryRoles.remove(oldN);
         primaryRoles.put(newN, role);
+        LocalDate from = inactiveFrom.remove(oldN);
+        if (from != null) {
+            inactiveFrom.put(newN, from);
+        }
         if (!oldN.equals(newN)) {
             migrateMemberCells(oldN, newN);
         }
         if (selectedMember != null && selectedMember.equals(oldN)) {
             selectedMember = newN;
         }
+        refreshVisibleMembers();
         rebuildGrid();
         notifyDirtyChanged();
     }
@@ -750,19 +785,60 @@ public final class EditableMemberAttendanceGridPane extends VBox {
             return;
         }
         String n = name.trim();
-        if (!members.contains(n)) {
+        if (!rosterContains(n)) {
             return;
         }
-        members.remove(n);
+        rosterOrder.remove(n);
         primaryRoles.remove(n);
+        inactiveFrom.remove(n);
         for (Map<String, CellState> day : cells.values()) {
             day.remove(n);
         }
         if (selectedMember != null && selectedMember.equals(n)) {
             selectedMember = null;
         }
+        refreshVisibleMembers();
         rebuildGrid();
         notifyDirtyChanged();
+    }
+
+    public void setMemberInactiveFrom(String name, LocalDate from) {
+        if (name == null || name.isBlank() || !rosterContains(name.trim())) {
+            return;
+        }
+        String n = name.trim();
+        if (from == null) {
+            inactiveFrom.remove(n);
+        } else {
+            inactiveFrom.put(n, from);
+        }
+        refreshVisibleMembers();
+        if (selectedMember != null && !members.contains(selectedMember)) {
+            selectedMember = null;
+        }
+        rebuildGrid();
+        notifyDirtyChanged();
+    }
+
+    public LocalDate inactiveFromFor(String member) {
+        if (member == null) {
+            return null;
+        }
+        return inactiveFrom.get(member);
+    }
+
+    private boolean rosterContains(String name) {
+        return rosterIndexOf(name) >= 0;
+    }
+
+    private int rosterIndexOf(String name) {
+        if (name == null) {
+            return -1;
+        }
+        if (!rosterOrder.isEmpty()) {
+            return rosterOrder.indexOf(name);
+        }
+        return members.indexOf(name);
     }
 
     private void migrateMemberCells(String oldName, String newName) {
@@ -953,7 +1029,14 @@ public final class EditableMemberAttendanceGridPane extends VBox {
                 commentMark.setVisible(hasComment(st.comment));
                 StackPane cellWrap = new StackPane(cell, commentMark);
                 AttendanceGridCellSizing.applyMemberCellWrap(cellWrap, cellSizePx);
-                installCellInteractions(cell, d, member, dKey);
+                boolean locked =
+                        !MemberRosterInactiveFrom.activeOn(inactiveFrom.get(member), d);
+                if (locked) {
+                    cell.setDisable(true);
+                    cell.getStyleClass().add("pm-member-att-cell-inactive");
+                } else {
+                    installCellInteractions(cell, d, member, dKey);
+                }
                 cellUiMap.put(cellKey(dKey, member), new CellUi(cell, commentMark));
                 rowDimming.installHover(cellWrap, row);
                 rowWraps.add(cellWrap);
@@ -975,6 +1058,14 @@ public final class EditableMemberAttendanceGridPane extends VBox {
 
     int memberRowCountForTest() {
         return members.size();
+    }
+
+    int rosterCountForTest() {
+        return rosterOrder.isEmpty() ? members.size() : rosterOrder.size();
+    }
+
+    boolean cellInactiveForTest(LocalDate date, String member) {
+        return !MemberRosterInactiveFrom.activeOn(inactiveFrom.get(member), date);
     }
 
     double leftBodyPrefHeightForTest() {
@@ -1035,6 +1126,9 @@ public final class EditableMemberAttendanceGridPane extends VBox {
     }
 
     private void cyclePreset(LocalDate date, String member) {
+        if (!MemberRosterInactiveFrom.activeOn(inactiveFrom.get(member), date)) {
+            return;
+        }
         String dKey = date.toString();
         Map<String, CellState> row = cells.get(dKey);
         CellState prev = row != null ? row.get(member) : null;
@@ -1044,6 +1138,9 @@ public final class EditableMemberAttendanceGridPane extends VBox {
 
     private void applyPreset(LocalDate date, String member, String preset) {
         if (preset == null || preset.isBlank()) {
+            return;
+        }
+        if (!MemberRosterInactiveFrom.activeOn(inactiveFrom.get(member), date)) {
             return;
         }
         singleClickDelay.stop();
@@ -1209,6 +1306,9 @@ public final class EditableMemberAttendanceGridPane extends VBox {
 
     public void applyHourlyEdit(
             LocalDate date, String member, Map<String, String> hourly, String dayPreset) {
+        if (!MemberRosterInactiveFrom.activeOn(inactiveFrom.get(member), date)) {
+            return;
+        }
         String dKey = date.toString();
         CellState prev =
                 cells.computeIfAbsent(dKey, k -> new HashMap<>())
@@ -1361,6 +1461,9 @@ public final class EditableMemberAttendanceGridPane extends VBox {
     }
 
     private void applyComment(LocalDate date, String member, String comment) {
+        if (!MemberRosterInactiveFrom.activeOn(inactiveFrom.get(member), date)) {
+            return;
+        }
         String dKey = date.toString();
         String norm = comment != null ? comment.strip() : "";
         CellState prev =

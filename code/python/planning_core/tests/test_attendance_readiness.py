@@ -51,6 +51,28 @@ def test_readiness_ready_with_members_synced(tmp_path, monkeypatch):
     assert not any("未登録" in issue for issue in result["issues"])
 
 
+def test_readiness_expected_cells_exclude_days_after_inactive_from(tmp_path, monkeypatch):
+    store = empty_store(2026)
+    store["meta"]["company_calendar_revision"] = 1
+    store["member_roster"] = [
+        {"name": "在籍", "primary_role": "後加工"},
+        {"name": "異動", "primary_role": "後加工", "inactive_from": "2026-10-01"},
+    ]
+    from planning_core.core.attendance_store import apply_company_calendar_to_members
+
+    apply_company_calendar_to_members(store, ["在籍", "異動"], 2026, 10)
+    att = tmp_path / "attendance-data.json"
+    monkeypatch.setenv(ENV_ATTENDANCE_JSON, str(att))
+    from planning_core.core.attendance_store import save_attendance_store
+
+    save_attendance_store(store, att)
+    result = build_attendance_readiness(
+        store=store, members=["在籍", "異動"], year=2026, month=10
+    )
+    assert result["member_cells_expected_in_month"] == 31
+    assert result["member_cells_in_month"] == 31
+
+
 def test_readiness_not_empty_after_company_calendar_initialize(tmp_path, monkeypatch):
     """明示日次エントリが無くても JSON 正本があれば既定の平日／週末解釈が有効。"""
     from planning_core.core.attendance_paths import ENV_ATTENDANCE_JSON

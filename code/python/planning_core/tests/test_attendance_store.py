@@ -22,10 +22,12 @@ from planning_core.core.attendance_store import (
     apply_company_calendar_to_members,
     apply_company_calendar_to_members_fiscal,
     apply_member_attendance_patch,
+    build_editor_payload,
     company_day_kind,
     day_preset_from_company,
     empty_store,
     initialize_company_calendar,
+    member_attendance_to_dataframe_records,
     preset_to_leave_and_times,
     _cell_symbol,
 )
@@ -489,3 +491,58 @@ def test_write_app_company_sheet_grid_layout(tmp_path, monkeypatch):
                 found_public = True
     assert found_day
     assert found_public
+
+
+def _transferred_store() -> dict:
+    store = empty_store(2026)
+    store["member_roster"] = [
+        {"name": "在籍", "primary_role": "後加工"},
+        {"name": "異動", "primary_role": "物流", "inactive_from": "2026-09-15"},
+    ]
+    store["member_attendance"]["2026-09-14"] = {
+        "在籍": {"day_preset": PRESET_WORK, "manual_edit": True},
+        "異動": {"day_preset": PRESET_WORK, "manual_edit": True},
+    }
+    store["member_attendance"]["2026-09-15"] = {
+        "在籍": {"day_preset": PRESET_WORK, "manual_edit": True},
+        "異動": {"day_preset": PRESET_WORK, "manual_edit": True},
+    }
+    store["member_attendance"]["2026-10-01"] = {
+        "在籍": {"day_preset": PRESET_WORK, "manual_edit": True},
+        "異動": {"day_preset": PRESET_WORK, "manual_edit": True},
+    }
+    return store
+
+
+def test_build_editor_payload_filters_visible_members_but_returns_full_roster():
+    store = _transferred_store()
+    oct_payload = build_editor_payload(store, ["在籍", "異動"], 2026, 10)
+    assert oct_payload["members"] == ["在籍"]
+    names = [e["name"] for e in oct_payload["member_roster"]]
+    assert names == ["在籍", "異動"]
+    by_name = {e["name"]: e for e in oct_payload["member_roster"]}
+    assert by_name["異動"]["inactive_from"] == "2026-09-15"
+    assert "異動" not in oct_payload["cells"]["2026-10-01"]
+
+    sep_payload = build_editor_payload(store, ["在籍", "異動"], 2026, 9)
+    assert sep_payload["members"] == ["在籍", "異動"]
+
+
+def test_dataframe_records_skip_days_on_or_after_inactive_from():
+    store = _transferred_store()
+    recs = member_attendance_to_dataframe_records(store, ["在籍", "異動"])
+    keys = {(r["日付"], r["メンバー"]) for r in recs}
+    assert ("2026-09-14", "異動") in keys
+    assert ("2026-09-15", "異動") not in keys
+    assert ("2026-10-01", "異動") not in keys
+    assert ("2026-09-15", "在籍") in keys
+
+
+def test_company_calendar_sync_skips_inactive_days():
+    store = empty_store(2026)
+    store["member_roster"] = [
+        {"name": "異動", "primary_role": "後加工", "inactive_from": "2026-09-15"}
+    ]
+    apply_company_calendar_to_members(store, ["異動"], 2026, 9)
+    assert "異動" in store["member_attendance"]["2026-09-14"]
+    assert "異動" not in store["member_attendance"].get("2026-09-15", {})

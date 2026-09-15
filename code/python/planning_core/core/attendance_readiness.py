@@ -38,12 +38,30 @@ def _member_cells_for_month(store: dict, members: list[str], year: int, month: i
     ma = store.get("member_attendance", {})
     count = 0
     for day_num in range(1, ym_days + 1):
-        d_key = date(year, month, day_num).isoformat()
+        d = date(year, month, day_num)
+        d_key = d.isoformat()
         bucket = ma.get(d_key, {})
         for m in members:
-            if m in bucket:
+            if m in bucket and _member_counts_for_readiness(store, m, d):
                 count += 1
     return count
+
+
+def _expected_member_cells_for_month(store: dict, members: list[str], year: int, month: int) -> int:
+    ym_days = calendar.monthrange(year, month)[1]
+    count = 0
+    for day_num in range(1, ym_days + 1):
+        d = date(year, month, day_num)
+        for m in members:
+            if _member_counts_for_readiness(store, m, d):
+                count += 1
+    return count
+
+
+def _member_counts_for_readiness(store: dict, member: str, d: date) -> bool:
+    from planning_core.core.attendance_member_roster import member_active_on_date
+
+    return member_active_on_date(store, member, d)
 
 
 _skills_load_for_readiness = False
@@ -58,10 +76,10 @@ def _attendance_json_ready_for_legacy_skip(store: dict, year: int, month: int) -
         return False
     from planning_core.core.attendance_member_roster import attendance_grid_member_names
 
-    roster = attendance_grid_member_names(store)
+    roster = attendance_grid_member_names(store, year, month)
     if not roster:
         return False
-    expected = len(roster) * calendar.monthrange(year, month)[1]
+    expected = _expected_member_cells_for_month(store, roster, year, month)
     cells = _member_cells_for_month(store, roster, year, month)
     if expected <= 0 or cells < expected:
         return False
@@ -145,7 +163,9 @@ def build_attendance_readiness(
             if fy_start <= d_val <= fy_end:
                 cc_days += 1
     member_cells_month = _member_cells_for_month(store, members, y, m) if store and members else 0
-    expected_cells = len(members) * calendar.monthrange(y, m)[1] if members else 0
+    expected_cells = (
+        _expected_member_cells_for_month(store, members, y, m) if store and members else 0
+    )
     company_calendar_revision = int(meta.get("company_calendar_revision") or 0)
     company_calendar_ready = json_exists and company_calendar_revision > 0
     member_attendance_ready = (

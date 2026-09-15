@@ -4,6 +4,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -94,7 +95,54 @@ public final class AttendanceConflictDiffSummarizer implements ConflictDiffSumma
                 lines.add("・メンバー「" + n + "」が削除されています");
             }
         }
+        lines.addAll(diffInactiveFrom(base, disk));
         return lines;
+    }
+
+    private static List<String> diffInactiveFrom(JsonNode base, JsonNode disk) {
+        Map<String, String> b = rosterInactiveFrom(base);
+        Map<String, String> d = rosterInactiveFrom(disk);
+        List<String> lines = new ArrayList<>();
+        Set<String> names = new LinkedHashSet<>();
+        names.addAll(b.keySet());
+        names.addAll(d.keySet());
+        for (String n : names) {
+            String was = b.getOrDefault(n, "");
+            String now = d.getOrDefault(n, "");
+            if (was.equals(now)) {
+                continue;
+            }
+            if (now.isEmpty()) {
+                lines.add("・メンバー「" + n + "」の職場異動が取り消されています");
+            } else if (was.isEmpty()) {
+                lines.add("・メンバー「" + n + "」が " + now + " 付で職場異動になっています");
+            } else {
+                lines.add("・メンバー「" + n + "」の異動日が " + was + " から " + now + " に変更されています");
+            }
+        }
+        return lines;
+    }
+
+    private static Map<String, String> rosterInactiveFrom(JsonNode root) {
+        Map<String, String> out = new LinkedHashMap<>();
+        JsonNode roster = root.path("member_roster");
+        if (!roster.isArray()) {
+            return out;
+        }
+        for (JsonNode m : roster) {
+            if (m.isTextual()) {
+                continue;
+            }
+            String n = m.path("name").asText("").trim();
+            if (n.isEmpty()) {
+                continue;
+            }
+            String from = m.path("inactive_from").asText("").trim();
+            if (!from.isEmpty()) {
+                out.put(n, from);
+            }
+        }
+        return out;
     }
 
     /** member_attendance: { yyyy-MM-dd: { memberName: entry } } */

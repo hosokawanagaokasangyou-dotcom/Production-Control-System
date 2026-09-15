@@ -1330,6 +1330,10 @@
     -fx-faint-focus-color: transparent;
 }
 
+.pm-member-att-cell-inactive {
+    -fx-opacity: 0.4;
+}
+
 .pm-member-att-cell-hourly {
     -fx-border-color: #2563eb;
     -fx-border-width: 2;

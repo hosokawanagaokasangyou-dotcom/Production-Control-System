@@ -339,6 +339,12 @@ def _skip_company_calendar_member_sync(existing: dict | None, only_unedited: boo
     return False
 
 
+def _member_active_on_store_date(store: dict, member: str, d: date) -> bool:
+    from planning_core.core.attendance_member_roster import member_active_on_date
+
+    return member_active_on_date(store, member, d)
+
+
 def apply_company_calendar_to_members(
     store: dict,
     members: list[str],
@@ -357,6 +363,9 @@ def apply_company_calendar_to_members(
         kind = company_day_kind(store, d)
         day_bucket = ma.setdefault(d_key, {})
         for member in members:
+            if not _member_active_on_store_date(store, member, d):
+                skipped += 1
+                continue
             existing = day_bucket.get(member)
             if _skip_company_calendar_member_sync(existing, only_unedited):
                 skipped += 1
@@ -389,6 +398,9 @@ def apply_company_calendar_to_members_fiscal(
         kind = company_day_kind(store, d)
         day_bucket = ma.setdefault(d_key, {})
         for member in members:
+            if not _member_active_on_store_date(store, member, d):
+                skipped += 1
+                continue
             existing = day_bucket.get(member)
             if _skip_company_calendar_member_sync(existing, only_unedited):
                 skipped += 1
@@ -473,6 +485,21 @@ def build_editor_payload(store: dict, members: list[str], year: int, month: int)
     dates: list[str] = []
     for day_num in range(1, ym_days + 1):
         dates.append(date(year, month, day_num).isoformat())
+    from planning_core.core.attendance_member_roster import (
+        attendance_grid_member_names,
+        ensure_member_roster,
+        primary_roles_map,
+    )
+
+    roster = ensure_member_roster(store)
+    visible = attendance_grid_member_names(store, year, month)
+    roster_names = {e["name"] for e in roster}
+    extras = [
+        str(m).strip()
+        for m in members
+        if str(m or "").strip() and str(m).strip() not in roster_names
+    ]
+    display_members = visible + extras
     cells: dict[str, dict[str, dict]] = {}
     ma = store.get("member_attendance", {})
     cc_days = store.get("company_calendar", {}).get("days", {})
@@ -482,7 +509,9 @@ def build_editor_payload(store: dict, members: list[str], year: int, month: int)
         cc = cc_days.get(d_key, {})
         company_kind = str(cc.get("kind") or company_day_kind(store, d))
         default_preset = day_preset_from_company(store, d)
-        for m in members:
+        for m in display_members:
+            if m in roster_names and not _member_active_on_store_date(store, m, d):
+                continue
             entry = ma.get(d_key, {}).get(m) or preset_to_leave_and_times(
                 default_preset, d, company_kind=company_kind
             )
@@ -496,18 +525,12 @@ def build_editor_payload(store: dict, members: list[str], year: int, month: int)
                 "hourly": entry.get("hourly") or {},
                 "comment": entry.get("comment") or "",
             }
-    from planning_core.core.attendance_member_roster import (
-        ensure_member_roster,
-        primary_roles_map,
-    )
-
-    roster = ensure_member_roster(store)
     return {
         "format_version": 1,
         "ok": True,
         "year": year,
         "month": month,
-        "members": members,
+        "members": display_members,
         "member_roster": roster,
         "primary_roles": primary_roles_map(store),
         "dates": dates,
@@ -735,8 +758,14 @@ def member_attendance_to_dataframe_records(store: dict, members: list[str]) -> l
     records: list[dict] = []
     ma = store.get("member_attendance", {})
     for d_key, per_member in sorted(ma.items()):
+        try:
+            d = date.fromisoformat(str(d_key))
+        except ValueError:
+            continue
         for member, entry in per_member.items():
             if member not in members:
+                continue
+            if not _member_active_on_store_date(store, member, d):
                 continue
             rec = {
                 "日付": d_key,
@@ -1070,7 +1099,7 @@ def populate_member_calendar_worksheet(ws, store: dict, year: int, month: int) -
 
     from planning_core.core.attendance_member_roster import attendance_grid_member_names
 
-    members = attendance_grid_member_names(store)
+    members = attendance_grid_member_names(store, year, month)
     if not members:
         try:
             from planning_core.core.master_data import load_skills_and_needs
@@ -1095,6 +1124,12 @@ def populate_member_calendar_worksheet(ws, store: dict, year: int, month: int) -
         name_cell.alignment = name_align
         for idx, d in enumerate(date_cols):
             d_key = d.isoformat()
+            col = 2 + idx
+            cell = ws.cell(row, col)
+            cell.alignment = align
+            cell.border = _GRID_BORDER
+            if not _member_active_on_store_date(store, member, d):
+                continue
             entry = ma.get(d_key, {}).get(member)
             dense_entry = dense_days.get(d_key, {})
             kind = str(dense_entry.get("kind") or company_day_kind(store, d))
@@ -1102,14 +1137,11 @@ def populate_member_calendar_worksheet(ws, store: dict, year: int, month: int) -
                 preset = day_preset_from_company(store, d)
                 entry = preset_to_leave_and_times(preset, d, company_kind=kind)
             symbol = _cell_symbol(entry)
-            col = 2 + idx
-            cell = ws.cell(row, col, symbol)
+            cell.value = symbol
             fill, font = member_symbol_style(symbol, kind)
             if fill is not None:
                 cell.fill = fill
             cell.font = font
-            cell.alignment = align
-            cell.border = _GRID_BORDER
         ws.row_dimensions[row].height = 18
         row += 1
 

@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+from datetime import date
+
 from planning_core.core.attendance_member_roster import (
     DEFAULT_MEMBER_ROSTER,
     KOKUBU_DEFAULT_MEMBER_ROSTER,
@@ -10,6 +12,8 @@ from planning_core.core.attendance_member_roster import (
     attendance_grid_member_names,
     default_member_roster_for_factory,
     ensure_member_roster,
+    member_active_on,
+    member_visible_in_month,
     members_for_attendance_analysis,
 )
 from planning_core.core.attendance_store import apply_member_attendance_patch, empty_store
@@ -73,3 +77,74 @@ def test_merge_patch_includes_roster():
     )
     assert result["roster_count"] == 1
     assert attendance_grid_member_names(store) == ["新規　メンバー"]
+
+
+def test_ensure_member_roster_keeps_inactive_from():
+    store = empty_store(2026)
+    store["member_roster"] = [
+        {"name": "菅沼　めぐみ", "primary_role": "後加工", "inactive_from": "2026-09-15"},
+        {"name": "細川　守", "primary_role": "後加工", "inactive_from": ""},
+    ]
+    roster = ensure_member_roster(store)
+    by_name = {e["name"]: e for e in roster}
+    assert by_name["菅沼　めぐみ"]["inactive_from"] == "2026-09-15"
+    assert "inactive_from" not in by_name["細川　守"]
+
+
+def test_member_active_on_is_false_from_transfer_date():
+    entry = {"name": "A", "primary_role": "後加工", "inactive_from": "2026-09-15"}
+    assert member_active_on(entry, date(2026, 9, 14))
+    assert not member_active_on(entry, date(2026, 9, 15))
+    assert member_active_on({"name": "B", "primary_role": "後加工"}, date(2026, 9, 15))
+
+
+def test_member_visible_in_month_uses_first_of_month():
+    mid = {"name": "A", "primary_role": "後加工", "inactive_from": "2026-09-15"}
+    first = {"name": "B", "primary_role": "後加工", "inactive_from": "2026-09-01"}
+    assert member_visible_in_month(mid, 2026, 8)
+    assert member_visible_in_month(mid, 2026, 9)
+    assert not member_visible_in_month(mid, 2026, 10)
+    assert member_visible_in_month(first, 2026, 8)
+    assert not member_visible_in_month(first, 2026, 9)
+
+
+def test_attendance_grid_member_names_filters_by_month():
+    store = empty_store(2026)
+    store["member_roster"] = [
+        {"name": "在籍", "primary_role": "後加工"},
+        {"name": "異動", "primary_role": "物流", "inactive_from": "2026-09-15"},
+    ]
+    assert attendance_grid_member_names(store, 2026, 9) == ["在籍", "異動"]
+    assert attendance_grid_member_names(store, 2026, 10) == ["在籍"]
+    assert attendance_grid_member_names(store) == ["在籍", "異動"]
+
+
+def test_apply_member_roster_patch_keeps_attendance_when_inactive_from_set():
+    store = empty_store(2026)
+    store["member_roster"] = [{"name": "菅沼　めぐみ", "primary_role": "後加工"}]
+    store["member_attendance"]["2026-08-01"] = {
+        "菅沼　めぐみ": {"day_preset": "WORK", "manual_edit": True}
+    }
+    apply_member_roster_patch(
+        store,
+        [
+            {
+                "name": "菅沼　めぐみ",
+                "primary_role": "後加工",
+                "inactive_from": "2026-09-15",
+            }
+        ],
+    )
+    assert store["member_attendance"]["2026-08-01"]["菅沼　めぐみ"]["day_preset"] == "WORK"
+    assert ensure_member_roster(store)[0]["inactive_from"] == "2026-09-15"
+
+
+def test_apply_member_roster_patch_clears_inactive_from_on_cancel():
+    store = empty_store(2026)
+    store["member_roster"] = [
+        {"name": "菅沼　めぐみ", "primary_role": "後加工", "inactive_from": "2026-09-15"}
+    ]
+    apply_member_roster_patch(
+        store, [{"name": "菅沼　めぐみ", "primary_role": "後加工"}]
+    )
+    assert "inactive_from" not in ensure_member_roster(store)[0]

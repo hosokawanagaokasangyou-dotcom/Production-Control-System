@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import os
+from datetime import date
 from typing import Any
 
 PRIMARY_ROLE_POST = "後加工"
@@ -72,13 +73,69 @@ def _normalize_role(role: str) -> str:
     return PRIMARY_ROLE_POST
 
 
+def _normalize_inactive_from(raw: Any) -> str | None:
+    text = str(raw or "").strip()
+    if not text:
+        return None
+    try:
+        date.fromisoformat(text)
+    except ValueError:
+        return None
+    return text
+
+
 def _normalize_entry(raw: dict[str, Any]) -> dict[str, str] | None:
     if not isinstance(raw, dict):
         return None
     name = str(raw.get("name") or "").strip()
     if not name:
         return None
-    return {"name": name, "primary_role": _normalize_role(str(raw.get("primary_role") or ""))}
+    out: dict[str, str] = {
+        "name": name,
+        "primary_role": _normalize_role(str(raw.get("primary_role") or "")),
+    }
+    inactive = _normalize_inactive_from(raw.get("inactive_from"))
+    if inactive:
+        out["inactive_from"] = inactive
+    return out
+
+
+def member_active_on(entry: dict[str, Any] | None, d: date) -> bool:
+    """異動日が空、または ``d < inactive_from`` のとき在籍。"""
+    if not isinstance(entry, dict):
+        return True
+    inactive = _normalize_inactive_from(entry.get("inactive_from"))
+    if not inactive:
+        return True
+    return d < date.fromisoformat(inactive)
+
+
+def member_visible_in_month(entry: dict[str, Any] | None, year: int, month: int) -> bool:
+    """異動日が空、または異動日が当該月1日より後ならその月のグリッドに出す。"""
+    if not isinstance(entry, dict):
+        return True
+    inactive = _normalize_inactive_from(entry.get("inactive_from"))
+    if not inactive:
+        return True
+    return date.fromisoformat(inactive) > date(year, month, 1)
+
+
+def roster_entry_by_name(store: dict, name: str) -> dict[str, str] | None:
+    target = str(name or "").strip()
+    if not target:
+        return None
+    for ent in ensure_member_roster(store):
+        if ent["name"] == target:
+            return ent
+    return None
+
+
+def member_active_on_date(store: dict, name: str, d: date) -> bool:
+    """名簿に無い名前（技能者など）は在籍扱い。"""
+    ent = roster_entry_by_name(store, name)
+    if ent is None:
+        return True
+    return member_active_on(ent, d)
 
 
 def ensure_member_roster(store: dict) -> list[dict[str, str]]:
@@ -100,8 +157,13 @@ def ensure_member_roster(store: dict) -> list[dict[str, str]]:
     return out
 
 
-def attendance_grid_member_names(store: dict) -> list[str]:
-    return [e["name"] for e in ensure_member_roster(store)]
+def attendance_grid_member_names(
+    store: dict, year: int | None = None, month: int | None = None
+) -> list[str]:
+    roster = ensure_member_roster(store)
+    if year is None or month is None:
+        return [e["name"] for e in roster]
+    return [e["name"] for e in roster if member_visible_in_month(e, year, month)]
 
 
 def primary_roles_map(store: dict) -> dict[str, str]:
