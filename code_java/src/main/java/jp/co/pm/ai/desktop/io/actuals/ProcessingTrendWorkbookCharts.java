@@ -48,6 +48,34 @@ final class ProcessingTrendWorkbookCharts {
             String[] seriesTitles,
             int firstDataRow,
             int lastDataRow) {
+        addLineChart(
+                sheet,
+                title,
+                anchorCol1,
+                anchorRow1,
+                anchorCol2,
+                anchorRow2,
+                categoryCol,
+                seriesCols,
+                seriesTitles,
+                firstDataRow,
+                lastDataRow,
+                "加工長 (m)");
+    }
+
+    static void addLineChart(
+            XSSFSheet sheet,
+            String title,
+            int anchorCol1,
+            int anchorRow1,
+            int anchorCol2,
+            int anchorRow2,
+            int categoryCol,
+            int[] seriesCols,
+            String[] seriesTitles,
+            int firstDataRow,
+            int lastDataRow,
+            String valueAxisTitle) {
         if (sheet == null || seriesCols == null || seriesTitles == null) {
             return;
         }
@@ -81,7 +109,7 @@ final class ProcessingTrendWorkbookCharts {
         XDDFCategoryAxis bottom = chart.createCategoryAxis(AxisPosition.BOTTOM);
         bottom.setTitle("");
         XDDFValueAxis left = chart.createValueAxis(AxisPosition.LEFT);
-        left.setTitle("加工長 (m)");
+        left.setTitle(valueAxisTitle != null && !valueAxisTitle.isBlank() ? valueAxisTitle : "値");
         left.setCrosses(AxisCrosses.AUTO_ZERO);
 
         XDDFCategoryDataSource cats =

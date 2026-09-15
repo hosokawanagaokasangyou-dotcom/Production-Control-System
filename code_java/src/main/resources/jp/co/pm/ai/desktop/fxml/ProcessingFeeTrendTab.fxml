@@ -178,8 +178,8 @@
                         <TableColumn fx:id="colDate" prefWidth="120.0" sortable="false" text="日付"/>
                         <TableColumn fx:id="colActualYen" prefWidth="120.0" sortable="false" text="実績"/>
                         <TableColumn fx:id="colPlanYen" prefWidth="120.0" sortable="false" text="未了"/>
-                        <TableColumn fx:id="colActualCumYen" prefWidth="130.0" sortable="false" text="実績累計円"/>
-                        <TableColumn fx:id="colPlanCumYen" prefWidth="130.0" sortable="false" text="未了累計円"/>
+                        <TableColumn fx:id="colActualCumYen" prefWidth="130.0" sortable="false" text="実績累計"/>
+                        <TableColumn fx:id="colPlanCumYen" prefWidth="130.0" sortable="false" text="未了累計"/>
                         </columns>
                     </TableView>
                 </content>
