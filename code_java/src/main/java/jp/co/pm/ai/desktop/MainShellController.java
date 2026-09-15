@@ -2331,6 +2331,7 @@ public final class MainShellController
         } catch (LinkageError ignored) {
             // 増分 compile で target/classes が欠けると NoClassDefFoundError になるため終了自体は続行する
         }
+        InspectionSheetOpenService.flushInFlightCheckpoint();
         if (geminiFreeTierModelsRefreshService != null) {
             geminiFreeTierModelsRefreshService.shutdown();
         }

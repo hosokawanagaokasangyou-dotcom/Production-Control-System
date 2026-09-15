@@ -136,6 +136,44 @@ class InspectionSheetOpenServiceTest {
     }
 
     @Test
+    void rebuild_abortKeepsCompleteAndResumesFromPartial(@TempDir Path root) throws Exception {
+        Path month = root.resolve("2026年").resolve("9月");
+        Files.createDirectories(month);
+        writeWorkbook(month.resolve("2026_A8-1(SEC済)完了.xlsx"), "A8-1");
+        writeWorkbook(month.resolve("2026_C8-9(SEC済)完了.xlsx"), "C8-9");
+        Map<String, String> ui = uiWithSheet(root);
+        Path csv = InspectionSheetIndexStore.indexFile(FactorySite.KONAN);
+
+        RuntimeException abort =
+                org.junit.jupiter.api.Assertions.assertThrows(
+                        RuntimeException.class,
+                        () ->
+                                InspectionSheetOpenService.rebuild(
+                                        ui,
+                                        (phase, done, total) -> {
+                                            if (InspectionSheetIndexProgress.PHASE_INDEX.equals(
+                                                            phase)
+                                                    && done == 2) {
+                                                throw new RuntimeException("abort-after-first");
+                                            }
+                                        }));
+        assertEquals("abort-after-first", abort.getMessage());
+        assertTrue(InspectionSheetIndexStore.load(csv).isEmpty(), "本索引は完走するまで書かない");
+        List<InspectionSheetIndexStore.Row> merged = InspectionSheetIndexStore.loadMerged(csv);
+        assertEquals(1, merged.size());
+        assertEquals("A8-1", merged.get(0).iraiNo());
+
+        InspectionSheetOpenService.RebuildResult second =
+                InspectionSheetOpenService.rebuild(ui, null);
+        assertEquals(2, second.rows().size());
+        assertEquals(1, second.readExcelCount());
+        assertTrue(InspectionSheetIndexStore.load(csv).size() == 2);
+        assertTrue(
+                !Files.isRegularFile(InspectionSheetIndexStore.partialFile(csv)),
+                "完走後は sidecar を消す");
+    }
+
+    @Test
     void find_emptyIndex_joinsBackgroundRebuild(@TempDir Path root) throws Exception {
         Map<String, String> ui = uiWithSheet(writeSampleWorkbook(root));
         CountDownLatch inScan = new CountDownLatch(1);
@@ -183,7 +221,11 @@ class InspectionSheetOpenServiceTest {
     private static Path writeSampleWorkbook(Path root) throws Exception {
         Path month = root.resolve("2026年").resolve("9月");
         Files.createDirectories(month);
-        Path xlsx = month.resolve("2026_C8-9(SEC済)完了.xlsx");
+        writeWorkbook(month.resolve("2026_C8-9(SEC済)完了.xlsx"), "C8-9");
+        return root;
+    }
+
+    private static void writeWorkbook(Path xlsx, String irai) throws Exception {
         try (XSSFWorkbook wb = new XSSFWorkbook()) {
             var sh = wb.createSheet("検査表");
             var r2 = sh.createRow(1);
@@ -191,11 +233,10 @@ class InspectionSheetOpenServiceTest {
             r2.createCell(28).setCellValue(46261);
             var r3 = sh.createRow(2);
             r3.createCell(0).setCellValue("加工依頼№");
-            r3.createCell(3).setCellValue("C8-9");
+            r3.createCell(3).setCellValue(irai);
             try (var out = Files.newOutputStream(xlsx)) {
                 wb.write(out);
             }
         }
-        return root;
     }
 }

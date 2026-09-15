@@ -10,6 +10,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.config.FactorySite;
@@ -23,11 +24,24 @@ public final class InspectionSheetOpenService {
     public record RebuildResult(
             List<InspectionSheetIndexStore.Row> rows, List<String> warnings, int readExcelCount) {}
 
+    public static final int PARTIAL_SAVE_EVERY_EXCEL_READS = 20;
+
     private static final Object IN_FLIGHT_LOCK = new Object();
     private static String inFlightKey;
     private static CompletableFuture<RebuildResult> inFlight;
     private static final CopyOnWriteArrayList<InspectionSheetIndexScanner.Progress> inFlightProgress =
             new CopyOnWriteArrayList<>();
+    private static final Object CHECKPOINT_LOCK = new Object();
+    private static Path inFlightCsv;
+    private static List<InspectionSheetIndexStore.Row> inFlightRows;
+
+    static {
+        Runtime.getRuntime()
+                .addShutdownHook(
+                        new Thread(
+                                InspectionSheetOpenService::flushInFlightCheckpoint,
+                                "inspection-sheet-index-checkpoint"));
+    }
 
     private InspectionSheetOpenService() {}
 
@@ -113,11 +127,43 @@ public final class InspectionSheetOpenService {
         List<Path> dirs = AppPaths.resolveInspectionSheetDirs(ui);
         FactorySite site = factorySite(ui);
         Path csv = InspectionSheetIndexStore.indexFile(site);
-        List<InspectionSheetIndexStore.Row> previous = InspectionSheetIndexStore.load(csv);
-        InspectionSheetIndexScanner.Result scanned =
-                InspectionSheetIndexScanner.scan(dirs, previous, progress);
-        InspectionSheetIndexStore.save(csv, scanned.rows());
-        return new RebuildResult(scanned.rows(), scanned.warnings(), scanned.readExcelCount());
+        List<InspectionSheetIndexStore.Row> previous = InspectionSheetIndexStore.loadMerged(csv);
+        AtomicInteger lastSavedExcel = new AtomicInteger(0);
+        beginCheckpoint(csv);
+        try {
+            InspectionSheetIndexScanner.Result scanned =
+                    InspectionSheetIndexScanner.scan(
+                            dirs,
+                            previous,
+                            progress,
+                            (rows, excel) -> {
+                                rememberCheckpoint(csv, rows);
+                                if (excel > 0
+                                        && excel - lastSavedExcel.get()
+                                                >= PARTIAL_SAVE_EVERY_EXCEL_READS) {
+                                    savePartialQuiet(csv, rows);
+                                    lastSavedExcel.set(excel);
+                                }
+                            });
+            InspectionSheetIndexStore.save(csv, scanned.rows());
+            InspectionSheetIndexStore.clearPartial(csv);
+            return new RebuildResult(scanned.rows(), scanned.warnings(), scanned.readExcelCount());
+        } catch (IOException | RuntimeException ex) {
+            flushInFlightCheckpoint();
+            throw ex;
+        } finally {
+            endCheckpoint(csv);
+        }
+    }
+
+    public static void flushInFlightCheckpoint() {
+        Path csv;
+        List<InspectionSheetIndexStore.Row> rows;
+        synchronized (CHECKPOINT_LOCK) {
+            csv = inFlightCsv;
+            rows = inFlightRows;
+        }
+        savePartialQuiet(csv, rows);
     }
 
     public static List<InspectionSheetIndexStore.Row> loadIndex(Map<String, String> ui) throws IOException {
@@ -190,6 +236,42 @@ public final class InspectionSheetOpenService {
     private static void fanOutProgress(String phase, int processed, int total) {
         for (InspectionSheetIndexScanner.Progress listener : inFlightProgress) {
             listener.onProgress(phase, processed, total);
+        }
+    }
+
+    private static void beginCheckpoint(Path csv) {
+        synchronized (CHECKPOINT_LOCK) {
+            inFlightCsv = csv;
+            inFlightRows = List.of();
+        }
+    }
+
+    private static void rememberCheckpoint(Path csv, List<InspectionSheetIndexStore.Row> rows) {
+        synchronized (CHECKPOINT_LOCK) {
+            if (csv == null || !csv.equals(inFlightCsv)) {
+                return;
+            }
+            inFlightRows = rows != null ? List.copyOf(rows) : List.of();
+        }
+    }
+
+    private static void endCheckpoint(Path csv) {
+        synchronized (CHECKPOINT_LOCK) {
+            if (csv != null && csv.equals(inFlightCsv)) {
+                inFlightCsv = null;
+                inFlightRows = null;
+            }
+        }
+    }
+
+    private static void savePartialQuiet(Path csv, List<InspectionSheetIndexStore.Row> rows) {
+        if (csv == null || rows == null || rows.isEmpty()) {
+            return;
+        }
+        try {
+            InspectionSheetIndexStore.savePartial(csv, rows);
+        } catch (IOException ignored) {
+            // 途中保存の失敗で本走査を止めない
         }
     }
 }

@@ -2,11 +2,15 @@ package jp.co.pm.ai.desktop.reconciliation;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.config.FactorySite;
@@ -72,8 +76,35 @@ public final class InspectionSheetIndexStore {
         return List.copyOf(out);
     }
 
+    public static Path partialFile(Path csv) {
+        if (csv == null) {
+            throw new IllegalArgumentException("csv");
+        }
+        return csv.resolveSibling(csv.getFileName().toString() + ".partial");
+    }
+
+    public static List<Row> loadMerged(Path csv) throws IOException {
+        Map<String, Row> byPath = new LinkedHashMap<>();
+        putRows(byPath, load(csv));
+        putRows(byPath, load(partialFile(csv)));
+        return List.copyOf(byPath.values());
+    }
+
+    public static void savePartial(Path csv, List<Row> rows) throws IOException {
+        save(partialFile(csv), rows);
+    }
+
+    public static void clearPartial(Path csv) throws IOException {
+        Files.deleteIfExists(partialFile(csv));
+    }
+
     public static void save(Path csv, List<Row> rows) throws IOException {
-        Files.createDirectories(csv.getParent());
+        if (csv == null) {
+            throw new IllegalArgumentException("csv");
+        }
+        if (csv.getParent() != null) {
+            Files.createDirectories(csv.getParent());
+        }
         StringBuilder sb = new StringBuilder();
         sb.append(HEADER).append('\n');
         if (rows != null) {
@@ -81,7 +112,25 @@ public final class InspectionSheetIndexStore {
                 sb.append(toCsvLine(row)).append('\n');
             }
         }
-        Files.writeString(csv, sb.toString(), StandardCharsets.UTF_8);
+        Path tmp = csv.resolveSibling(csv.getFileName().toString() + ".tmp");
+        Files.writeString(tmp, sb.toString(), StandardCharsets.UTF_8);
+        try {
+            Files.move(tmp, csv, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+        } catch (AtomicMoveNotSupportedException ex) {
+            Files.move(tmp, csv, StandardCopyOption.REPLACE_EXISTING);
+        }
+    }
+
+    private static void putRows(Map<String, Row> byPath, List<Row> rows) {
+        if (byPath == null || rows == null) {
+            return;
+        }
+        for (Row row : rows) {
+            if (row == null || row.filePath() == null || row.filePath().isBlank()) {
+                continue;
+            }
+            byPath.put(row.filePath(), row);
+        }
     }
 
     static String toCsvLine(Row row) {

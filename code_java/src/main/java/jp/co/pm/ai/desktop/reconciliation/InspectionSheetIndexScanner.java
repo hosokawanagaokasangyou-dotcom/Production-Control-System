@@ -22,6 +22,11 @@ public final class InspectionSheetIndexScanner {
         void onProgress(String phase, int processed, int total);
     }
 
+    @FunctionalInterface
+    public interface Checkpoint {
+        void onRows(List<InspectionSheetIndexStore.Row> rowsSoFar, int readExcelCount);
+    }
+
     private InspectionSheetIndexScanner() {}
 
     public static Result scan(Path root, List<InspectionSheetIndexStore.Row> previous, Progress progress)
@@ -31,6 +36,15 @@ public final class InspectionSheetIndexScanner {
 
     public static Result scan(
             List<Path> roots, List<InspectionSheetIndexStore.Row> previous, Progress progress)
+            throws IOException {
+        return scan(roots, previous, progress, null);
+    }
+
+    public static Result scan(
+            List<Path> roots,
+            List<InspectionSheetIndexStore.Row> previous,
+            Progress progress,
+            Checkpoint checkpoint)
             throws IOException {
         List<String> warnings = new ArrayList<>();
         List<Path> usable = new ArrayList<>();
@@ -79,6 +93,7 @@ public final class InspectionSheetIndexScanner {
                 InspectionSheetIndexStore.Row prev = prevByPath.get(abs);
                 if (prev != null && prev.fileMtimeEpoch() == mtime && prev.fileSize() == size) {
                     out.add(prev);
+                    notifyCheckpoint(checkpoint, out, readExcel);
                     continue;
                 }
                 InspectionSheetHeaderReader.Header header = InspectionSheetHeaderReader.read(file);
@@ -102,6 +117,7 @@ public final class InspectionSheetIndexScanner {
                                 mtime,
                                 size,
                                 indexedAt));
+                notifyCheckpoint(checkpoint, out, readExcel);
             } catch (Exception ex) {
                 warnings.add("読込エラー " + file.getFileName() + ": " + ex.getMessage());
             }
@@ -137,6 +153,14 @@ public final class InspectionSheetIndexScanner {
             return;
         }
         progress.onProgress(phase, processed, total);
+    }
+
+    private static void notifyCheckpoint(
+            Checkpoint checkpoint, List<InspectionSheetIndexStore.Row> rows, int readExcelCount) {
+        if (checkpoint == null) {
+            return;
+        }
+        checkpoint.onRows(List.copyOf(rows), readExcelCount);
     }
 
     static boolean isInspectionExcel(Path path) {
