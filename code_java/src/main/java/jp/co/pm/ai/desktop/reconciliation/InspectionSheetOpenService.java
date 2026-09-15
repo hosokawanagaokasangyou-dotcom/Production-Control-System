@@ -22,7 +22,21 @@ import jp.co.pm.ai.desktop.io.DesktopFileOpener;
 public final class InspectionSheetOpenService {
 
     public record RebuildResult(
-            List<InspectionSheetIndexStore.Row> rows, List<String> warnings, int readExcelCount) {}
+            List<InspectionSheetIndexStore.Row> rows,
+            List<String> warnings,
+            int readExcelCount,
+            InspectionSheetIndexShare.PullResult sharePull) {
+        public RebuildResult {
+            rows = rows != null ? List.copyOf(rows) : List.of();
+            warnings = warnings != null ? List.copyOf(warnings) : List.of();
+            sharePull = sharePull != null ? sharePull : InspectionSheetIndexShare.PullResult.SKIPPED;
+        }
+
+        public RebuildResult(
+                List<InspectionSheetIndexStore.Row> rows, List<String> warnings, int readExcelCount) {
+            this(rows, warnings, readExcelCount, InspectionSheetIndexShare.PullResult.SKIPPED);
+        }
+    }
 
     public static final int PARTIAL_SAVE_EVERY_EXCEL_READS = 20;
 
@@ -127,6 +141,12 @@ public final class InspectionSheetOpenService {
         List<Path> dirs = AppPaths.resolveInspectionSheetDirs(ui);
         FactorySite site = factorySite(ui);
         Path csv = InspectionSheetIndexStore.indexFile(site);
+        InspectionSheetIndexShare.PullResult sharePull = InspectionSheetIndexShare.PullResult.SKIPPED;
+        try {
+            sharePull = InspectionSheetIndexShare.pullIfNeeded(ui);
+        } catch (IOException ignored) {
+            // 共有が届かないときはローカルのまま増分更新する
+        }
         List<InspectionSheetIndexStore.Row> previous = InspectionSheetIndexStore.loadMerged(csv);
         AtomicInteger lastSavedExcel = new AtomicInteger(0);
         beginCheckpoint(csv);
@@ -147,7 +167,8 @@ public final class InspectionSheetOpenService {
                             });
             InspectionSheetIndexStore.save(csv, scanned.rows());
             InspectionSheetIndexStore.clearPartial(csv);
-            return new RebuildResult(scanned.rows(), scanned.warnings(), scanned.readExcelCount());
+            return new RebuildResult(
+                    scanned.rows(), scanned.warnings(), scanned.readExcelCount(), sharePull);
         } catch (IOException | RuntimeException ex) {
             flushInFlightCheckpoint();
             throw ex;

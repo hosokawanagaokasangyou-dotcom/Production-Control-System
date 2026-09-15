@@ -135,6 +135,7 @@ import jp.co.pm.ai.desktop.config.FactorySiteWorkspaceRestorePlan;
 import jp.co.pm.ai.desktop.config.FactorySiteWorkspaceSnapshot;
 import jp.co.pm.ai.desktop.config.FactorySiteWorkspaceStore;
 import jp.co.pm.ai.desktop.reconciliation.InspectionSheetIndexProgress;
+import jp.co.pm.ai.desktop.reconciliation.InspectionSheetIndexShare;
 import jp.co.pm.ai.desktop.reconciliation.InspectionSheetOpenService;
 import jp.co.pm.ai.desktop.config.PortableBundleUpgradeUiSnapshot;
 import jp.co.pm.ai.desktop.config.GeminiDispatchModelTryOrderDefaults;
@@ -315,6 +316,7 @@ public final class MainShellController
                     AppPaths.KEY_PM_AI_ALADDIN_MASTER_DIR,
                     AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR,
                     AppPaths.KEY_PM_AI_INSPECTION_SHEET_DIR,
+                    AppPaths.KEY_PM_AI_INSPECTION_SHEET_INDEX_SHARE_DIR,
                     AppPaths.KEY_PM_AI_REQUEST_FORM_JUCHU_FILE,
                     AppPaths.KEY_PM_AI_MACHINE_DELIVERY_MANAGEMENT_XLSM,
                     AppPaths.KEY_PM_AI_REQUEST_FORM_TPI_PDF_DIR,
@@ -5862,12 +5864,20 @@ public final class MainShellController
                                                                 + ex.getMessage());
                                                 return;
                                             }
+                                            String pullNote =
+                                                    r.sharePull()
+                                                                    == InspectionSheetIndexShare
+                                                                            .PullResult
+                                                                            .COPIED
+                                                            ? "（共有から複写）"
+                                                            : "";
                                             appendLog(
                                                     "[inspection-sheet] 索引CSV "
                                                             + r.rows().size()
                                                             + " 件（Excel読込 "
                                                             + r.readExcelCount()
-                                                            + "）");
+                                                            + "）"
+                                                            + pullNote);
                                         }));
     }
 
@@ -12328,6 +12338,10 @@ public final class MainShellController
             }
             case AppPaths.KEY_PM_AI_INSPECTION_SHEET_DIR -> {
                 return AppPaths.defaultInspectionSheetDirForFactory(GlobalInitSettingTarget.load());
+            }
+            case AppPaths.KEY_PM_AI_INSPECTION_SHEET_INDEX_SHARE_DIR -> {
+                return AppPaths.defaultInspectionSheetIndexShareDirForFactory(
+                        GlobalInitSettingTarget.load());
             }
             case AppPaths.KEY_PM_AI_REQUEST_FORM_TPI_PDF_DIR -> {
                 return AppPaths.defaultRequestFormTpiPdfDirForFactory(GlobalInitSettingTarget.load());

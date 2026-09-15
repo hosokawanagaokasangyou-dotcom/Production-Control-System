@@ -167,6 +167,12 @@ public final class AppPaths {
     public static final String KEY_PM_AI_INSPECTION_SHEET_DIR = "PM_AI_INSPECTION_SHEET_DIR";
 
     /**
+     * 検査表索引 CSV の共有配布フォルダ（工場別 {@code KONAN.csv} / {@code KOKUBU.csv}）。
+     */
+    public static final String KEY_PM_AI_INSPECTION_SHEET_INDEX_SHARE_DIR =
+            "PM_AI_INSPECTION_SHEET_INDEX_SHARE_DIR";
+
+    /**
      * TPI（東レペフ加工品）依頼書 PDF のスキャン先フォルダ（{@code *.pdf}）。
      */
     public static final String KEY_PM_AI_REQUEST_FORM_TPI_PDF_DIR = "PM_AI_REQUEST_FORM_TPI_PDF_DIR";
@@ -736,6 +742,7 @@ public final class AppPaths {
             KEY_PM_AI_ALADDIN_MASTER_DIR,
             KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR,
             KEY_PM_AI_INSPECTION_SHEET_DIR,
+            KEY_PM_AI_INSPECTION_SHEET_INDEX_SHARE_DIR,
             KEY_PM_AI_REQUEST_FORM_TPI_PDF_DIR,
             KEY_PM_AI_TESSERACT_TESSDATA_DIR,
             KEY_PM_AI_OUTPUT_DIR,
@@ -761,6 +768,7 @@ public final class AppPaths {
                     KEY_PM_AI_ALADDIN_MASTER_DIR,
                     KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR,
                     KEY_PM_AI_INSPECTION_SHEET_DIR,
+                    KEY_PM_AI_INSPECTION_SHEET_INDEX_SHARE_DIR,
                     KEY_PM_AI_REQUEST_FORM_TPI_PDF_DIR,
                     KEY_PM_AI_OUTPUT_DIR,
                     KEY_PM_AI_RESULT_DISPATCH_TABLE_DIR,
@@ -1859,6 +1867,13 @@ public final class AppPaths {
         return DEFAULT_PM_AI_INSPECTION_SHEET_DIR_KONAN;
     }
 
+    public static String defaultInspectionSheetIndexShareDirForFactory(FactorySite site) {
+        if (site == FactorySite.KOKUBU) {
+            return DEFAULT_PM_AI_INSPECTION_SHEET_INDEX_SHARE_DIR_KOKUBU;
+        }
+        return DEFAULT_PM_AI_INSPECTION_SHEET_INDEX_SHARE_DIR_KONAN;
+    }
+
     public static String defaultBoxInspectionSheetDirForFactory(FactorySite site) {
         FactorySite effective = site != null ? site : FactorySite.KONAN;
         String leaf = inspectionSheetDirLeafForFactory(effective);
@@ -2347,6 +2362,14 @@ public final class AppPaths {
 
     /** 国分工場 {@code DATA} フォルダ（UNC）。{@link FactorySite#KOKUBU} のマスタ／サマリ既定の親。 */
     public static final String DEFAULT_KOKUBU_DATA_DIR = DEFAULT_KOKUBU_SHARED_DATA_DIR + "\\DATA";
+
+    public static final String INSPECTION_SHEET_INDEX_SHARE_DIR_LEAF = "inspection-sheet-index";
+
+    public static final String DEFAULT_PM_AI_INSPECTION_SHEET_INDEX_SHARE_DIR_KONAN =
+            DEFAULT_KONAN_SHARED_DATA_DIR + "\\" + INSPECTION_SHEET_INDEX_SHARE_DIR_LEAF;
+
+    public static final String DEFAULT_PM_AI_INSPECTION_SHEET_INDEX_SHARE_DIR_KOKUBU =
+            DEFAULT_KOKUBU_DATA_DIR + "\\" + INSPECTION_SHEET_INDEX_SHARE_DIR_LEAF;
 
     /** {@link FactorySite#KOKUBU} の {@link #KEY_PM_AI_MASTER_WORKBOOK} 既定（UNC）。 */
     public static final String DEFAULT_PM_AI_MASTER_WORKBOOK_KOKUBU =
@@ -3230,6 +3253,11 @@ public final class AppPaths {
                 || factoryPathHintConflictsWithSite(inspectionDir, site)
                 || isStaleKonanBoxInspectionSheetDir(inspectionDir, site)) {
             putFactoryManagedEnv(map, KEY_PM_AI_INSPECTION_SHEET_DIR, inspectionDefault);
+        }
+        String indexShareDir = trim(map.get(KEY_PM_AI_INSPECTION_SHEET_INDEX_SHARE_DIR));
+        String indexShareDefault = defaultInspectionSheetIndexShareDirForFactory(site);
+        if (indexShareDir.isEmpty() || factoryPathHintConflictsWithSite(indexShareDir, site)) {
+            putFactoryManagedEnv(map, KEY_PM_AI_INSPECTION_SHEET_INDEX_SHARE_DIR, indexShareDefault);
         }
         String tpiPdf = trim(map.get(KEY_PM_AI_REQUEST_FORM_TPI_PDF_DIR));
         String tpiDefault = defaultRequestFormTpiPdfDirForFactory(site);

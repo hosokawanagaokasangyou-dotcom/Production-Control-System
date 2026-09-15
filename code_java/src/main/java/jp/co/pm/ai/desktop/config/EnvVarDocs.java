@@ -258,7 +258,15 @@ public final class EnvVarDocs {
                         + "配下の年・工程サブフォルダを再帰走査する。"
                         + "起動時にフォルダ選択ダイアログは出さない。"
                         + "環境変数タブのフォルダ選択時は kensa 入力が必要。"
-                        + "フォルダ配下は読取専用。索引 CSV はユーザーホームへ保存。");
+                        + "フォルダ配下は読取専用。索引 CSV はユーザーホームへ保存。"
+                        + "共有配布は PM_AI_INSPECTION_SHEET_INDEX_SHARE_DIR。");
+        put(
+                "PM_AI_INSPECTION_SHEET_INDEX_SHARE_DIR",
+                "検査表索引 CSV の共有配布フォルダ（フルパス）。"
+                        + "空のとき湖南は共有DATA/inspection-sheet-index、国分は配台AI DATA/inspection-sheet-index。"
+                        + "環境変数タブの「検査表索引を共有フォルダへ複写」でローカル本索引をここに置く。"
+                        + "他PCはローカル未作成、または共有より明らかに小さいとき起動時に複写してから増分更新する。"
+                        + "フォルダ配下へ書くのは索引 CSV のみ。環境変数タブのフォルダ選択可。");
         put(
                 "PM_AI_REQUEST_FORM_TPI_PDF_DIR",
                 "TPI（東レペフ加工品）依頼書 PDF のスキャン先フォルダ（フルパス）。"

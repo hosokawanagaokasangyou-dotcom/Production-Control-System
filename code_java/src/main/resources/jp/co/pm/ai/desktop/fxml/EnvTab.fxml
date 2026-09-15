@@ -51,6 +51,8 @@
                                         onAction="#onResetEnvDefaultsButtonAction"/>
                                 <Button fx:id="encryptGeminiCredentialsButton" mnemonicParsing="false"
                                         onAction="#onEncryptGeminiCredentialsAction"/>
+                                <Button fx:id="copyInspectionIndexShareButton" mnemonicParsing="false"
+                                        onAction="#onCopyInspectionIndexShareAction"/>
                             </HBox>
                         </VBox>
                     </content>

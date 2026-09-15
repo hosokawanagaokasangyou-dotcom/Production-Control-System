@@ -53,6 +53,7 @@ import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.config.GeminiDispatchModelTryOrderDefaults;
 import jp.co.pm.ai.desktop.config.GlobalInitSettingTarget;
 import jp.co.pm.ai.desktop.reconciliation.InspectionSheetDirPicker;
+import jp.co.pm.ai.desktop.reconciliation.InspectionSheetIndexShare;
 import jp.co.pm.ai.desktop.reconciliation.InspectionSheetOpenService;
 import jp.co.pm.ai.desktop.gemini.GeminiFreeTierModelsCache;
 import jp.co.pm.ai.desktop.gemini.GeminiFreeTierModelsRefreshService;
@@ -196,6 +197,9 @@ public final class EnvTabController {
     @FXML
     private Button encryptGeminiCredentialsButton;
 
+    @FXML
+    private Button copyInspectionIndexShareButton;
+
     private FingerprintBaseline geminiCredentialsConflictBaseline;
     private final ConflictDiffSummarizer geminiCredentialsConflictSummarizer =
             new GeminiCredentialsConflictDiffSummarizer();
@@ -242,6 +246,9 @@ public final class EnvTabController {
         if (encryptGeminiCredentialsButton != null) {
             encryptGeminiCredentialsButton.setText("Gemini API キーを暗号化保存");
         }
+        if (copyInspectionIndexShareButton != null) {
+            copyInspectionIndexShareButton.setText("検査表索引を共有フォルダへ複写");
+        }
         applyShellSpecificEnvTabFeatures();
         wireTable();
         wireDispatchGeminiModelEditorOnce();
@@ -270,6 +277,29 @@ public final class EnvTabController {
         EnvVarRow r = new EnvVarRow();
         r.setDescription("");
         envRows.add(r);
+    }
+
+    @FXML
+    private void onCopyInspectionIndexShareAction() {
+        if (shell == null) {
+            return;
+        }
+        try {
+            Map<String, String> ui = shell.snapshotUiEnv();
+            InspectionSheetIndexShare.publish(ui);
+            Path dest =
+                    InspectionSheetIndexShare.shareIndexFile(
+                            ui, InspectionSheetOpenService.factorySite(ui));
+            alertFolderOpen(
+                    ownerStage,
+                    AlertType.INFORMATION,
+                    "検査表索引を共有フォルダへ複写しました:\n" + dest);
+        } catch (IOException ex) {
+            alertFolderOpen(
+                    ownerStage,
+                    AlertType.ERROR,
+                    "検査表索引の共有複写に失敗しました: " + ex.getMessage());
+        }
     }
 
     @FXML

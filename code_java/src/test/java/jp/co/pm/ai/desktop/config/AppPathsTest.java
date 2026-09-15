@@ -104,6 +104,18 @@ class AppPathsTest {
     }
 
     @Test
+    void inspectionSheetIndexShareDir_usesFolderPickerNotFile() {
+        assertTrue(AppPaths.isFolderPathEnvKey(AppPaths.KEY_PM_AI_INSPECTION_SHEET_INDEX_SHARE_DIR));
+        assertFalse(AppPaths.isFilePathEnvKey(AppPaths.KEY_PM_AI_INSPECTION_SHEET_INDEX_SHARE_DIR));
+        assertEquals(
+                AppPaths.DEFAULT_KONAN_SHARED_DATA_DIR + "\\inspection-sheet-index",
+                AppPaths.defaultInspectionSheetIndexShareDirForFactory(FactorySite.KONAN));
+        assertEquals(
+                AppPaths.DEFAULT_KOKUBU_DATA_DIR + "\\inspection-sheet-index",
+                AppPaths.defaultInspectionSheetIndexShareDirForFactory(FactorySite.KOKUBU));
+    }
+
+    @Test
     void requestFormTpiPdfDir_usesFolderPickerNotFile() {
         assertTrue(AppPaths.isFolderPathEnvKey(AppPaths.KEY_PM_AI_REQUEST_FORM_TPI_PDF_DIR));
         assertFalse(AppPaths.isFilePathEnvKey(AppPaths.KEY_PM_AI_REQUEST_FORM_TPI_PDF_DIR));

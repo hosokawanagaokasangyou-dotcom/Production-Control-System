@@ -36,6 +36,7 @@ public final class DesktopUiEnvBootstrap {
                     AppPaths.KEY_PM_AI_ALADDIN_MASTER_DIR,
                     AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR,
                     AppPaths.KEY_PM_AI_INSPECTION_SHEET_DIR,
+                    AppPaths.KEY_PM_AI_INSPECTION_SHEET_INDEX_SHARE_DIR,
                     AppPaths.KEY_PM_AI_REQUEST_FORM_JUCHU_FILE,
                     AppPaths.KEY_PM_AI_MACHINE_DELIVERY_MANAGEMENT_XLSM,
                     AppPaths.KEY_PM_AI_REQUEST_FORM_TPI_PDF_DIR,
@@ -117,6 +118,10 @@ public final class DesktopUiEnvBootstrap {
             }
             case AppPaths.KEY_PM_AI_INSPECTION_SHEET_DIR -> {
                 return AppPaths.defaultInspectionSheetDirForFactory(GlobalInitSettingTarget.load());
+            }
+            case AppPaths.KEY_PM_AI_INSPECTION_SHEET_INDEX_SHARE_DIR -> {
+                return AppPaths.defaultInspectionSheetIndexShareDirForFactory(
+                        GlobalInitSettingTarget.load());
             }
             case AppPaths.KEY_PM_AI_REQUEST_FORM_TPI_PDF_DIR -> {
                 return AppPaths.defaultRequestFormTpiPdfDirForFactory(GlobalInitSettingTarget.load());
