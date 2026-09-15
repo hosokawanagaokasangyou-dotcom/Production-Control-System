@@ -51,6 +51,9 @@ import jp.co.pm.ai.desktop.dispatch.AladdinShapedPlanQtyLookup.PipelineScanIndex
  */
 public final class JuchuOrderSearchPane {
 
+    private static final String PROP_ALL_CANDIDATES = "juchuOrderSearch.allCandidates";
+    private static final String PROP_UPDATING_FILTER = "juchuOrderSearch.updatingFilter";
+
     private JuchuOrderSearchPane() {}
 
     public static Parent build(Supplier<List<OrderRecord>> recordsSupplier) {
@@ -126,6 +129,10 @@ public final class JuchuOrderSearchPane {
         raw.setOnShowing(e -> refreshKeywordCandidates.run());
         machine.setOnShowing(e -> refreshKeywordCandidates.run());
         process.setOnShowing(e -> refreshKeywordCandidates.run());
+        installKeywordFilter(product, refreshKeywordCandidates);
+        installKeywordFilter(raw, refreshKeywordCandidates);
+        installKeywordFilter(machine, refreshKeywordCandidates);
+        installKeywordFilter(process, refreshKeywordCandidates);
         table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
         table.setPlaceholder(new Label("条件を指定して検索してください"));
         table.getColumns()
@@ -429,7 +436,38 @@ public final class JuchuOrderSearchPane {
         combo.setVisibleRowCount(12);
         combo.setPromptText(prompt);
         HBox.setHgrow(combo, Priority.ALWAYS);
+        combo.getProperties().put(PROP_ALL_CANDIDATES, FXCollections.observableArrayList());
         return combo;
+    }
+
+    private static void installKeywordFilter(
+            ComboBox<String> combo, Runnable ensureCandidates) {
+        combo.getEditor()
+                .textProperty()
+                .addListener(
+                        (obs, oldText, newText) -> {
+                            if (Boolean.TRUE.equals(
+                                    combo.getProperties().get(PROP_UPDATING_FILTER))) {
+                                return;
+                            }
+                            if (ensureCandidates != null && allCandidates(combo).isEmpty()) {
+                                ensureCandidates.run();
+                            }
+                            applyCandidateFilter(combo);
+                            if (!combo.isFocused()) {
+                                return;
+                            }
+                            String typed = newText != null ? newText : "";
+                            if (typed.isBlank()) {
+                                return;
+                            }
+                            Platform.runLater(
+                                    () -> {
+                                        if (combo.isFocused() && !combo.isShowing()) {
+                                            combo.show();
+                                        }
+                                    });
+                        });
     }
 
     private static String comboText(ComboBox<String> combo) {
@@ -449,10 +487,44 @@ public final class JuchuOrderSearchPane {
         if (combo == null) {
             return;
         }
+        allCandidates(combo).setAll(names != null ? names : List.of());
+        applyCandidateFilter(combo);
+    }
+
+    private static ObservableList<String> allCandidates(ComboBox<String> combo) {
+        Object existing = combo.getProperties().get(PROP_ALL_CANDIDATES);
+        if (existing instanceof ObservableList<?> list) {
+            @SuppressWarnings("unchecked")
+            ObservableList<String> typed = (ObservableList<String>) list;
+            return typed;
+        }
+        ObservableList<String> created = FXCollections.observableArrayList();
+        combo.getProperties().put(PROP_ALL_CANDIDATES, created);
+        return created;
+    }
+
+    private static void applyCandidateFilter(ComboBox<String> combo) {
+        if (combo == null) {
+            return;
+        }
         String typed = comboText(combo);
-        combo.getItems().setAll(names != null ? names : List.of());
-        if (combo.getEditor() != null) {
-            combo.getEditor().setText(typed);
+        List<String> shown = JuchuOrderSearch.filterCandidates(allCandidates(combo), typed);
+        TextField editor = combo.getEditor();
+        int caret = editor != null ? editor.getCaretPosition() : 0;
+        boolean showing = combo.isShowing();
+        combo.getProperties().put(PROP_UPDATING_FILTER, Boolean.TRUE);
+        try {
+            combo.getItems().setAll(shown);
+            if (editor != null) {
+                editor.setText(typed);
+                int pos = typed == null ? 0 : Math.min(Math.max(caret, 0), typed.length());
+                editor.positionCaret(pos);
+            }
+        } finally {
+            combo.getProperties().put(PROP_UPDATING_FILTER, Boolean.FALSE);
+        }
+        if (showing && !combo.isShowing()) {
+            combo.show();
         }
     }
 

@@ -146,6 +146,26 @@ public final class JuchuOrderSearch {
         return distinctSorted(values);
     }
 
+    /**
+     * コンボ候補をキーワードで部分一致絞り込みする。空・空白キーワードは全件を返す。
+     */
+    public static List<String> filterCandidates(Collection<String> names, String keyword) {
+        if (names == null || names.isEmpty()) {
+            return List.of();
+        }
+        String nk = normalizedKeyword(keyword);
+        List<String> out = new ArrayList<>();
+        for (String name : names) {
+            if (name == null) {
+                continue;
+            }
+            if (nk.isEmpty() || containsNormalized(name, nk)) {
+                out.add(name);
+            }
+        }
+        return List.copyOf(out);
+    }
+
     static List<String> distinctSorted(Collection<String> values) {
         Set<String> unique = new LinkedHashSet<>();
         addAllCandidates(unique, values);

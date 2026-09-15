@@ -302,4 +302,39 @@ class JuchuOrderSearchTest {
                 LocalDate.of(2026, 2, 28),
                 JuchuOrderSearch.defaultDeliveryFrom(LocalDate.of(2026, 8, 31)));
     }
+
+    @Test
+    void filterCandidates_emptyKeyword_returnsAllInOrder() {
+        List<String> all =
+                List.of("05020-AY00-630X100", "JXSR", "OR040-BY0B-250X197");
+        assertEquals(all, JuchuOrderSearch.filterCandidates(all, ""));
+        assertEquals(all, JuchuOrderSearch.filterCandidates(all, "   "));
+        assertEquals(all, JuchuOrderSearch.filterCandidates(all, null));
+    }
+
+    @Test
+    void filterCandidates_partialContains_ignoresCaseAndWidth() {
+        List<String> all =
+                List.of(
+                        "05020-AY00-630X100",
+                        "JXSR",
+                        "ABC-JXSR-99",
+                        "OR040-BY0B-250X197",
+                        "ｊｘｓｒフィルム");
+        assertEquals(
+                List.of("JXSR", "ABC-JXSR-99", "ｊｘｓｒフィルム"),
+                JuchuOrderSearch.filterCandidates(all, "jxsr"));
+    }
+
+    @Test
+    void filterCandidates_noMatch_returnsEmpty() {
+        assertEquals(
+                List.of(),
+                JuchuOrderSearch.filterCandidates(List.of("05020-AY00-630X100"), "JXSR"));
+    }
+
+    @Test
+    void filterCandidates_nullNames_returnsEmpty() {
+        assertEquals(List.of(), JuchuOrderSearch.filterCandidates(null, "JXSR"));
+    }
 }
