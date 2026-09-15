@@ -52,6 +52,11 @@ public final class InspectionSheetDirPicker {
 
     public static final int KENSA_WARNING_FONT_SIZE_PX = 16;
 
+    /** クリーム背景向け。親ウィンドウのダークテーマ文字色は使わない。 */
+    public static final String KENSA_CONFIRM_TEXT_FILL = "#1a1a1a";
+
+    public static final String KENSA_CONFIRM_WARNING_FILL = "#6b140c";
+
     /** 誤指定判定で見るファイル数の上限。見つかった時点で打ち切る。 */
     static final int MAX_PROBE_ENTRIES = 8_000;
 
@@ -94,7 +99,7 @@ public final class InspectionSheetDirPicker {
 
         Label header = new Label(KENSA_CONFIRM_HEADER);
         header.setWrapText(true);
-        header.setStyle("-fx-font-size: 20px; -fx-font-weight: bold;");
+        header.setStyle(kensaLabelStyle(20, true, KENSA_CONFIRM_TEXT_FILL));
 
         Alert iconSource = new Alert(AlertType.WARNING);
         Node graphic = iconSource.getGraphic();
@@ -108,28 +113,29 @@ public final class InspectionSheetDirPicker {
         Label warning = new Label(KENSA_CONFIRM_WARNING);
         warning.setWrapText(true);
         warning.setStyle(
-                "-fx-font-size: "
-                        + KENSA_WARNING_FONT_SIZE_PX
-                        + "px; -fx-font-weight: bold; -fx-text-fill: #8a1f11;");
+                kensaLabelStyle(KENSA_WARNING_FONT_SIZE_PX, true, KENSA_CONFIRM_WARNING_FILL));
 
         Label tokenHint = new Label(KENSA_CONFIRM_TOKEN_HINT);
         tokenHint.setWrapText(true);
-        tokenHint.setStyle("-fx-font-size: 15px;");
+        tokenHint.setStyle(kensaLabelStyle(15, true, KENSA_CONFIRM_TEXT_FILL));
 
         Label token = new Label(KENSA_TOKEN);
         token.setStyle(
-                "-fx-font-size: "
-                        + KENSA_TOKEN_FONT_SIZE_PX
-                        + "px; -fx-font-weight: bold; -fx-font-family: Consolas, 'Courier New', monospace;");
+                kensaLabelStyle(KENSA_TOKEN_FONT_SIZE_PX, true, KENSA_CONFIRM_TEXT_FILL)
+                        + " -fx-font-family: Consolas, 'Courier New', monospace;");
 
         TextField input = new TextField();
         input.setPromptText(KENSA_TOKEN);
-        input.setStyle("-fx-font-size: 22px;");
+        input.setStyle(
+                "-fx-font-size: 22px; -fx-font-weight: bold; -fx-text-fill: "
+                        + KENSA_CONFIRM_TEXT_FILL
+                        + " !important; -fx-prompt-text-fill: #4a4a4a !important;"
+                        + " -fx-control-inner-background: #ffffff; -fx-background-color: #ffffff;");
         input.setPrefColumnCount(12);
 
         Label mismatch = new Label();
         mismatch.setWrapText(true);
-        mismatch.setStyle("-fx-font-size: 14px; -fx-font-weight: bold; -fx-text-fill: #b00020;");
+        mismatch.setStyle(kensaLabelStyle(14, true, "#b00020"));
 
         VBox body = new VBox(12, headerRow, warning, tokenHint, token, input, mismatch);
         body.setPadding(new Insets(4, 0, 0, 0));
@@ -163,12 +169,19 @@ public final class InspectionSheetDirPicker {
                     }
                 });
 
-        if (owner != null && owner.getScene() != null) {
-            dialog.getDialogPane().getStylesheets().setAll(owner.getScene().getStylesheets());
-        }
         dialog.setOnShown(e -> input.requestFocus());
         dialog.setResultConverter(bt -> bt == proceed);
         return dialog.showAndWait().orElse(false);
+    }
+
+    private static String kensaLabelStyle(int fontPx, boolean bold, String fill) {
+        return "-fx-font-size: "
+                + fontPx
+                + "px;"
+                + (bold ? " -fx-font-weight: bold;" : "")
+                + " -fx-text-fill: "
+                + fill
+                + " !important;";
     }
 
     /**

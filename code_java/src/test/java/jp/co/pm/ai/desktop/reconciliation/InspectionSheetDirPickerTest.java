@@ -37,6 +37,8 @@ class InspectionSheetDirPickerTest {
         assertTrue(InspectionSheetDirPicker.KENSA_CONFIRM_MISMATCH.contains("kensa"));
         assertTrue(InspectionSheetDirPicker.KENSA_TOKEN_FONT_SIZE_PX >= 32);
         assertTrue(InspectionSheetDirPicker.KENSA_WARNING_FONT_SIZE_PX >= 16);
+        assertEquals("#1a1a1a", InspectionSheetDirPicker.KENSA_CONFIRM_TEXT_FILL);
+        assertEquals("#6b140c", InspectionSheetDirPicker.KENSA_CONFIRM_WARNING_FILL);
     }
 
     @Test
