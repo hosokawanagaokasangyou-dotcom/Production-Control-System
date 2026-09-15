@@ -1571,6 +1571,22 @@ class AppPathsTest {
     }
 
     @Test
+    void overlayFactorySiteRequestFormPaths_replacesKonanBoxInspectionDirWithAladdinUnc() {
+        LinkedHashMap<String, String> map = new LinkedHashMap<>();
+        map.put(AppPaths.KEY_PM_AI_FACTORY_SITE, "KONAN");
+        map.put(
+                AppPaths.KEY_PM_AI_INSPECTION_SHEET_DIR,
+                Path.of(System.getProperty("user.home"), "Box", "長岡産業", "後加工検査表", "湖南工場")
+                        .toString());
+
+        AppPaths.overlayFactorySiteRequestFormPaths(map, FactorySite.KONAN);
+
+        assertEquals(
+                AppPaths.DEFAULT_PM_AI_INSPECTION_SHEET_DIR_KONAN,
+                map.get(AppPaths.KEY_PM_AI_INSPECTION_SHEET_DIR));
+    }
+
+    @Test
     void defaultInspectionSheetDirForFactory_konanUsesAladdinUnc() {
         String konan = AppPaths.defaultInspectionSheetDirForFactory(FactorySite.KONAN);
         String kokubu = AppPaths.defaultInspectionSheetDirForFactory(FactorySite.KOKUBU);
@@ -1589,5 +1605,24 @@ class AppPathsTest {
                 custom.toAbsolutePath().normalize(),
                 AppPaths.resolveInspectionSheetDir(
                         Map.of(AppPaths.KEY_PM_AI_INSPECTION_SHEET_DIR, custom.toString())));
+    }
+
+    @Test
+    void resolveInspectionSheetDir_ignoresKonanBoxLegacyAndUsesAladdinUnc() {
+        String box =
+                Path.of(System.getProperty("user.home"), "Box", "長岡産業", "後加工検査表", "湖南工場")
+                        .toString();
+        Path resolved =
+                AppPaths.resolveInspectionSheetDir(
+                        Map.of(
+                                AppPaths.KEY_PM_AI_FACTORY_SITE,
+                                "KONAN",
+                                AppPaths.KEY_PM_AI_INSPECTION_SHEET_DIR,
+                                box));
+        assertEquals(
+                Path.of(AppPaths.DEFAULT_PM_AI_INSPECTION_SHEET_DIR_KONAN)
+                        .toAbsolutePath()
+                        .normalize(),
+                resolved);
     }
 }

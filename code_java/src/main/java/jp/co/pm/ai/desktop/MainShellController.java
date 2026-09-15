@@ -4926,6 +4926,8 @@ public final class MainShellController
     private String captureReachableInspectionSheetDir() {
         String configured = envTabValueTrimmed(AppPaths.KEY_PM_AI_INSPECTION_SHEET_DIR);
         if (configured.isEmpty()
+                || AppPaths.isStaleKonanBoxInspectionSheetDir(
+                        configured, GlobalInitSettingTarget.load())
                 || !NetworkSourceDirResolver.isInspectionSheetDirReachable(
                         Map.of(AppPaths.KEY_PM_AI_INSPECTION_SHEET_DIR, configured))) {
             return "";
@@ -4948,7 +4950,7 @@ public final class MainShellController
         if (dir.isBlank() && fallbackDir != null) {
             dir = fallbackDir.strip();
         }
-        if (dir.isBlank()) {
+        if (dir.isBlank() || AppPaths.isStaleKonanBoxInspectionSheetDir(dir, site)) {
             return false;
         }
         updateEnvTabValue(AppPaths.KEY_PM_AI_INSPECTION_SHEET_DIR, dir);

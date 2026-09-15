@@ -50,6 +50,41 @@ class InspectionSheetIraiNoTest {
     }
 
     @Test
+    void extractFromFileName_jrSixDigitsAndSuffix() {
+        assertEquals(
+                "JR260901",
+                InspectionSheetIraiNo.extractFromFileName("2026_JR260901(SEC済-ｽﾘｯﾄ済)完了.xlsx")
+                        .orElseThrow());
+        assertEquals(
+                "JR260802-1",
+                InspectionSheetIraiNo.extractFromFileName("2026_JR260802-1(熱融着済)完了.xlsx")
+                        .orElseThrow());
+    }
+
+    @Test
+    void extractFromFileName_gbDigits() {
+        assertEquals(
+                "GB60804",
+                InspectionSheetIraiNo.extractFromFileName("2026_GB60804(ｽﾗｲｽ済)完了.xlsx")
+                        .orElseThrow());
+        assertEquals(
+                "GB60801",
+                InspectionSheetIraiNo.extractFromFileName("2026_GB60801(EC済)完了.xlsx").orElseThrow());
+    }
+
+    @Test
+    void extractFromCellText_jrAndGb() {
+        assertEquals("JR260901", InspectionSheetIraiNo.extractFromCellText("JR260901").orElseThrow());
+        assertEquals("GB60804", InspectionSheetIraiNo.extractFromCellText("ＧＢ６０８０４").orElseThrow());
+    }
+
+    @Test
+    void matches_jrAndGb() {
+        assertTrue(InspectionSheetIraiNo.matches("JR260802-1", "jr260802-1"));
+        assertTrue(InspectionSheetIraiNo.matches("GB60804", "gb60804"));
+    }
+
+    @Test
     void normalize_collapsesTpiSpaceAndFullwidth() {
         assertEquals("TPI1-1", InspectionSheetIraiNo.normalize("TPI 1-1"));
         assertEquals("C8-9", InspectionSheetIraiNo.normalize("Ｃ８－９"));

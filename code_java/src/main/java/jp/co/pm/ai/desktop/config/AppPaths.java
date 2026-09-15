@@ -1335,15 +1335,25 @@ public final class AppPaths {
      */
     public static Path resolveInspectionSheetDir(Map<String, String> ui) {
         Map<String, String> u = ui != null ? ui : Map.of();
+        FactorySite site = GlobalInitSettingTarget.loadEffective(u);
         String override = trim(u.get(KEY_PM_AI_INSPECTION_SHEET_DIR));
-        if (!override.isEmpty()) {
+        if (!override.isEmpty() && !isStaleKonanBoxInspectionSheetDir(override, site)) {
             return Path.of(override).toAbsolutePath().normalize();
         }
-        return Path.of(
-                        defaultInspectionSheetDirForFactory(
-                                GlobalInitSettingTarget.loadEffective(u)))
-                .toAbsolutePath()
-                .normalize();
+        return Path.of(defaultInspectionSheetDirForFactory(site)).toAbsolutePath().normalize();
+    }
+
+    /**
+     * 湖南の旧既定（{@code Box\長岡産業\後加工検査表\...}）か。TPI 検査表はアラジン UNC が正のため無視する。
+     */
+    public static boolean isStaleKonanBoxInspectionSheetDir(String path, FactorySite site) {
+        if (path == null || path.isBlank() || site == FactorySite.KOKUBU) {
+            return false;
+        }
+        String normalized = path.replace('/', '\\');
+        String lower = normalized.toLowerCase(Locale.ROOT);
+        boolean box = lower.contains("\\box\\") || lower.startsWith("box\\") || normalized.contains("Box\\");
+        return box && normalized.contains("後加工検査表");
     }
 
     /** 環境変数タブで {@link #KEY_PM_AI_INSPECTION_SHEET_DIR} が明示設定されているか。 */
@@ -3171,7 +3181,9 @@ public final class AppPaths {
         String inspectionDefault = defaultInspectionSheetDirForFactory(site);
         if (inspectionDefault.isEmpty()) {
             putFactoryManagedEnv(map, KEY_PM_AI_INSPECTION_SHEET_DIR, "");
-        } else if (inspectionDir.isEmpty() || factoryPathHintConflictsWithSite(inspectionDir, site)) {
+        } else if (inspectionDir.isEmpty()
+                || factoryPathHintConflictsWithSite(inspectionDir, site)
+                || isStaleKonanBoxInspectionSheetDir(inspectionDir, site)) {
             putFactoryManagedEnv(map, KEY_PM_AI_INSPECTION_SHEET_DIR, inspectionDefault);
         }
         String tpiPdf = trim(map.get(KEY_PM_AI_REQUEST_FORM_TPI_PDF_DIR));

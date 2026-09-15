@@ -9,6 +9,8 @@ import java.util.regex.Pattern;
 public final class InspectionSheetIraiNo {
 
     private static final Pattern TPI = Pattern.compile("(?i)TPI\\s*\\d+-\\d+");
+    private static final Pattern JR = Pattern.compile("(?i)(?<![A-Za-z])JR\\s*\\d{5,8}(?:-\\d+)?");
+    private static final Pattern GB = Pattern.compile("(?i)(?<![A-Za-z])GB\\s*\\d{4,6}(?!\\d)");
     private static final Pattern STANDARD = Pattern.compile("[A-Za-z]{1,4}\\d{1,2}-\\d{1,3}");
 
     private InspectionSheetIraiNo() {}
@@ -25,6 +27,14 @@ public final class InspectionSheetIraiNo {
         Matcher tpi = TPI.matcher(half);
         if (tpi.find()) {
             return Optional.of(canonicalTpi(tpi.group()));
+        }
+        Matcher jr = JR.matcher(half);
+        if (jr.find()) {
+            return Optional.of(compactToken(jr.group()));
+        }
+        Matcher gb = GB.matcher(half);
+        if (gb.find()) {
+            return Optional.of(compactToken(gb.group()));
         }
         Matcher std = STANDARD.matcher(half);
         if (std.find()) {
@@ -62,6 +72,10 @@ public final class InspectionSheetIraiNo {
             sb.append(c);
         }
         return sb.toString();
+    }
+
+    private static String compactToken(String matched) {
+        return matched.toUpperCase(Locale.ROOT).replaceAll("\\s+", "");
     }
 
     private static String canonicalTpi(String matched) {
