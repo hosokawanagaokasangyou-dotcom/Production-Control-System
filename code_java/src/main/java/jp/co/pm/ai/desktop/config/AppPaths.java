@@ -20,6 +20,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -1330,21 +1331,60 @@ public final class AppPaths {
     }
 
     /**
-     * 後加工検査表フォルダ。{@link #KEY_PM_AI_INSPECTION_SHEET_DIR} が空のときは
-     * {@link #defaultInspectionSheetDirForFactory(FactorySite)}。
+     * 後加工検査表フォルダ。複数あるときは先頭（湖南は UNC、続けて Box）。
      */
     public static Path resolveInspectionSheetDir(Map<String, String> ui) {
-        Map<String, String> u = ui != null ? ui : Map.of();
-        FactorySite site = GlobalInitSettingTarget.loadEffective(u);
-        String override = trim(u.get(KEY_PM_AI_INSPECTION_SHEET_DIR));
-        if (!override.isEmpty() && !isStaleKonanBoxInspectionSheetDir(override, site)) {
-            return Path.of(override).toAbsolutePath().normalize();
+        List<Path> dirs = resolveInspectionSheetDirs(ui);
+        if (!dirs.isEmpty()) {
+            return dirs.get(0);
         }
-        return Path.of(defaultInspectionSheetDirForFactory(site)).toAbsolutePath().normalize();
+        return Path.of(
+                        defaultInspectionSheetDirForFactory(
+                                GlobalInitSettingTarget.loadEffective(ui != null ? ui : Map.of())))
+                .toAbsolutePath()
+                .normalize();
     }
 
     /**
-     * 湖南の旧既定（{@code Box\長岡産業\後加工検査表\...}）か。TPI 検査表はアラジン UNC が正のため無視する。
+     * 検査表の走査先。湖南はアラジン UNC（003 検査表）と Box 後加工検査表の両方。
+     * 環境変数がそれら以外のパスなら、そのパスのみ（テスト・手動指定）。
+     */
+    public static List<Path> resolveInspectionSheetDirs(Map<String, String> ui) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        FactorySite site = GlobalInitSettingTarget.loadEffective(u);
+        String override = trim(u.get(KEY_PM_AI_INSPECTION_SHEET_DIR));
+        Path overridePath = override.isEmpty() ? null : Path.of(override).toAbsolutePath().normalize();
+        if (site == FactorySite.KOKUBU) {
+            if (overridePath != null) {
+                return List.of(overridePath);
+            }
+            return List.of(Path.of(defaultBoxInspectionSheetDirForFactory(FactorySite.KOKUBU)));
+        }
+        if (overridePath != null && !isKonanInspectionSheetDefaultDir(overridePath)) {
+            return List.of(overridePath);
+        }
+        LinkedHashSet<Path> out = new LinkedHashSet<>();
+        out.add(Path.of(DEFAULT_PM_AI_INSPECTION_SHEET_DIR_KONAN).toAbsolutePath().normalize());
+        out.add(Path.of(defaultBoxInspectionSheetDirForFactory(FactorySite.KONAN)));
+        return List.copyOf(out);
+    }
+
+    /**
+     * 湖南の検査表既定か（アラジン UNC または Box\\後加工検査表\\湖南工場）。
+     */
+    public static boolean isKonanInspectionSheetDefaultDir(Path path) {
+        if (path == null) {
+            return false;
+        }
+        Path normalized = path.toAbsolutePath().normalize();
+        Path unc =
+                Path.of(DEFAULT_PM_AI_INSPECTION_SHEET_DIR_KONAN).toAbsolutePath().normalize();
+        Path box = Path.of(defaultBoxInspectionSheetDirForFactory(FactorySite.KONAN));
+        return normalized.equals(unc) || normalized.equals(box);
+    }
+
+    /**
+     * 湖南の環境変数に残った Box 検査表パスか。タブ表示の正は UNC。検索対象からは外さない。
      */
     public static boolean isStaleKonanBoxInspectionSheetDir(String path, FactorySite site) {
         if (path == null || path.isBlank() || site == FactorySite.KOKUBU) {
@@ -1819,8 +1859,9 @@ public final class AppPaths {
         return DEFAULT_PM_AI_INSPECTION_SHEET_DIR_KONAN;
     }
 
-    private static String boxInspectionSheetDir(FactorySite site) {
-        String leaf = inspectionSheetDirLeafForFactory(site);
+    public static String defaultBoxInspectionSheetDirForFactory(FactorySite site) {
+        FactorySite effective = site != null ? site : FactorySite.KONAN;
+        String leaf = inspectionSheetDirLeafForFactory(effective);
         if (leaf.isEmpty()) {
             leaf = inspectionSheetDirLeafForFactory(FactorySite.KONAN);
         }
@@ -1828,6 +1869,10 @@ public final class AppPaths {
                 .toAbsolutePath()
                 .normalize()
                 .toString();
+    }
+
+    private static String boxInspectionSheetDir(FactorySite site) {
+        return defaultBoxInspectionSheetDirForFactory(site);
     }
 
     /** {@link FactorySite} 別の {@link #KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR} 既定（受注ファイルの親フォルダ）。 */

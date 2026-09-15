@@ -26,12 +26,35 @@ public final class InspectionSheetIndexScanner {
 
     public static Result scan(Path root, List<InspectionSheetIndexStore.Row> previous, Progress progress)
             throws IOException {
+        return scan(root == null ? List.of() : List.of(root), previous, progress);
+    }
+
+    public static Result scan(
+            List<Path> roots, List<InspectionSheetIndexStore.Row> previous, Progress progress)
+            throws IOException {
         List<String> warnings = new ArrayList<>();
-        if (root == null || !Files.isDirectory(root)) {
-            return new Result(List.of(), List.of("検査表フォルダにアクセスできません: " + root), 0);
+        List<Path> usable = new ArrayList<>();
+        if (roots != null) {
+            for (Path root : roots) {
+                if (root != null && Files.isDirectory(root)) {
+                    usable.add(root);
+                }
+            }
+        }
+        if (usable.isEmpty()) {
+            return new Result(List.of(), List.of("検査表フォルダにアクセスできません: " + roots), 0);
         }
         notifyProgress(progress, InspectionSheetIndexProgress.PHASE_WALK, 0, 0);
-        List<Path> files = listExcelFiles(root, progress);
+        List<Path> files = new ArrayList<>();
+        java.util.LinkedHashSet<String> seen = new java.util.LinkedHashSet<>();
+        for (Path root : usable) {
+            for (Path file : listExcelFiles(root, progress)) {
+                String abs = file.toAbsolutePath().normalize().toString();
+                if (seen.add(abs)) {
+                    files.add(file);
+                }
+            }
+        }
         Map<String, InspectionSheetIndexStore.Row> prevByPath = new HashMap<>();
         if (previous != null) {
             for (InspectionSheetIndexStore.Row row : previous) {

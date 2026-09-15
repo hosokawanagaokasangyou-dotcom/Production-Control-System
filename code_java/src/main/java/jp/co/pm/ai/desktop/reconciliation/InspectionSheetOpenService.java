@@ -110,11 +110,12 @@ public final class InspectionSheetOpenService {
 
     public static RebuildResult rebuild(
             Map<String, String> ui, InspectionSheetIndexScanner.Progress progress) throws IOException {
-        Path dir = resolveDir(ui);
+        List<Path> dirs = AppPaths.resolveInspectionSheetDirs(ui);
         FactorySite site = factorySite(ui);
         Path csv = InspectionSheetIndexStore.indexFile(site);
         List<InspectionSheetIndexStore.Row> previous = InspectionSheetIndexStore.load(csv);
-        InspectionSheetIndexScanner.Result scanned = InspectionSheetIndexScanner.scan(dir, previous, progress);
+        InspectionSheetIndexScanner.Result scanned =
+                InspectionSheetIndexScanner.scan(dirs, previous, progress);
         InspectionSheetIndexStore.save(csv, scanned.rows());
         return new RebuildResult(scanned.rows(), scanned.warnings(), scanned.readExcelCount());
     }
@@ -161,9 +162,14 @@ public final class InspectionSheetOpenService {
 
     private static String rebuildKey(Map<String, String> ui) {
         FactorySite site = factorySite(ui);
-        Path dir = resolveDir(ui);
         String siteKey = site != null ? site.name() : "";
-        String dirKey = dir != null ? dir.toAbsolutePath().normalize().toString() : "";
+        StringBuilder dirKey = new StringBuilder();
+        for (Path dir : AppPaths.resolveInspectionSheetDirs(ui)) {
+            if (dirKey.length() > 0) {
+                dirKey.append(";");
+            }
+            dirKey.append(dir.toAbsolutePath().normalize());
+        }
         return siteKey + "|" + dirKey;
     }
 

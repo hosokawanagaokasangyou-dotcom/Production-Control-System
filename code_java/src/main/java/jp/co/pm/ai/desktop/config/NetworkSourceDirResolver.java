@@ -108,7 +108,12 @@ public final class NetworkSourceDirResolver {
 
     /** {@link AppPaths#KEY_PM_AI_INSPECTION_SHEET_DIR} で解決される後加工検査表フォルダの一覧可否。 */
     public static boolean isInspectionSheetDirReachable(Map<String, String> ui) {
-        return isDirectoryListingReachable(AppPaths.resolveInspectionSheetDir(ui != null ? ui : Map.of()));
+        for (Path dir : AppPaths.resolveInspectionSheetDirs(ui != null ? ui : Map.of())) {
+            if (isDirectoryListingReachable(dir)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

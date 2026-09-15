@@ -1625,4 +1625,43 @@ class AppPathsTest {
                         .normalize(),
                 resolved);
     }
+
+    @Test
+    void resolveInspectionSheetDirs_konanIncludesUncAndBox() {
+        List<Path> dirs =
+                AppPaths.resolveInspectionSheetDirs(Map.of(AppPaths.KEY_PM_AI_FACTORY_SITE, "KONAN"));
+        Path unc =
+                Path.of(AppPaths.DEFAULT_PM_AI_INSPECTION_SHEET_DIR_KONAN)
+                        .toAbsolutePath()
+                        .normalize();
+        Path box =
+                Path.of(AppPaths.defaultBoxInspectionSheetDirForFactory(FactorySite.KONAN));
+        assertEquals(2, dirs.size());
+        assertEquals(unc, dirs.get(0));
+        assertEquals(box, dirs.get(1));
+    }
+
+    @Test
+    void resolveInspectionSheetDirs_konanKeepsBothWhenEnvIsUnc() {
+        List<Path> dirs =
+                AppPaths.resolveInspectionSheetDirs(
+                        Map.of(
+                                AppPaths.KEY_PM_AI_FACTORY_SITE,
+                                "KONAN",
+                                AppPaths.KEY_PM_AI_INSPECTION_SHEET_DIR,
+                                AppPaths.DEFAULT_PM_AI_INSPECTION_SHEET_DIR_KONAN));
+        assertEquals(2, dirs.size());
+        assertTrue(
+                dirs.contains(
+                        Path.of(AppPaths.defaultBoxInspectionSheetDirForFactory(FactorySite.KONAN))));
+    }
+
+    @Test
+    void resolveInspectionSheetDirs_customOverrideIsExclusive() {
+        Path custom = Path.of("C:\\custom\\kensa-only");
+        List<Path> dirs =
+                AppPaths.resolveInspectionSheetDirs(
+                        Map.of(AppPaths.KEY_PM_AI_INSPECTION_SHEET_DIR, custom.toString()));
+        assertEquals(List.of(custom.toAbsolutePath().normalize()), dirs);
+    }
 }

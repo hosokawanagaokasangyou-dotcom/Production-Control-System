@@ -64,6 +64,22 @@ class InspectionSheetIndexScannerTest {
         assertEquals(2, lastIndex[1]);
     }
 
+    @Test
+    void scan_mergesTwoRoots(@TempDir Path tmp) throws Exception {
+        Path unc = tmp.resolve("unc");
+        Path box = tmp.resolve("box");
+        Files.createDirectories(unc);
+        Files.createDirectories(box);
+        writeKonan(unc.resolve("2026_C8-9(SEC済)完了.xlsx"), "C8-9", 46261);
+        writeKonan(box.resolve("2026_GB60804(ｽﾗｲｽ済)完了.xlsx"), "GB60804", 46261);
+
+        InspectionSheetIndexScanner.Result merged =
+                InspectionSheetIndexScanner.scan(List.of(unc, box), List.of(), null);
+        assertEquals(2, merged.rows().size());
+        assertTrue(merged.rows().stream().anyMatch(r -> "C8-9".equals(r.iraiNo())));
+        assertTrue(merged.rows().stream().anyMatch(r -> "GB60804".equals(r.iraiNo())));
+    }
+
     private static void writeKonan(Path file, String irai, double serial) throws Exception {
         try (XSSFWorkbook wb = new XSSFWorkbook()) {
             var sh = wb.createSheet("検査表");
