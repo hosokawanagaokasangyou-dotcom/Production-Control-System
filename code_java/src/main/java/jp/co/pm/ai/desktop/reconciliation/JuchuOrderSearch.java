@@ -185,6 +185,11 @@ public final class JuchuOrderSearch {
                 extraHaystack);
     }
 
+    public static List<String> iraiNoCandidates(Collection<OrderRecord> records) {
+        return distinctSorted(
+                collectField(records, r -> r != null ? nullToEmpty(r.getReqNo()) : ""));
+    }
+
     public static List<String> productCandidates(Collection<OrderRecord> records) {
         return distinctSorted(collectField(records, r -> dbField(r, "製品")));
     }
@@ -246,11 +251,18 @@ public final class JuchuOrderSearch {
         if (db == null) {
             return false;
         }
+        String iraiNoKeyword = normalizedKeyword(criteria.iraiNoKeyword());
         String productKeyword = normalizedKeyword(criteria.productKeyword());
         String rawMaterialKeyword = normalizedKeyword(criteria.rawMaterialKeyword());
         String machineKeyword = normalizedKeyword(criteria.machineKeyword());
         String processKeyword = normalizedKeyword(criteria.processKeyword());
 
+        boolean iraiMatch =
+                !iraiNoKeyword.isEmpty()
+                        && (containsNormalized(record.getReqNo(), iraiNoKeyword)
+                                || containsNormalized(db.get("依頼Ｎｏ"), iraiNoKeyword)
+                                || containsNormalized(db.get("依頼No"), iraiNoKeyword)
+                                || containsNormalized(db.get("依頼NO"), iraiNoKeyword));
         boolean productMatch =
                 !productKeyword.isEmpty()
                         && containsNormalized(db.get("製品"), productKeyword);
@@ -273,9 +285,10 @@ public final class JuchuOrderSearch {
                 (productKeyword.isEmpty() && rawMaterialKeyword.isEmpty())
                         || productMatch
                         || rawMaterialMatch;
+        boolean iraiOk = iraiNoKeyword.isEmpty() || iraiMatch;
         boolean machineOk = machineKeyword.isEmpty() || machineMatch;
         boolean processOk = processKeyword.isEmpty() || processMatch;
-        return productOrRawOk && machineOk && processOk;
+        return iraiOk && productOrRawOk && machineOk && processOk;
     }
 
     private static String firstNonBlank(String... values) {

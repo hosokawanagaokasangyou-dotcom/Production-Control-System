@@ -6,6 +6,7 @@ import java.util.Optional;
 public record JuchuOrderSearchCriteria(
         LocalDate from,
         LocalDate to,
+        String iraiNoKeyword,
         String productKeyword,
         String rawMaterialKeyword,
         String machineKeyword,
@@ -14,6 +15,23 @@ public record JuchuOrderSearchCriteria(
     public JuchuOrderSearchCriteria(
             LocalDate from, LocalDate to, String productKeyword, String rawMaterialKeyword) {
         this(from, to, productKeyword, rawMaterialKeyword, "", "");
+    }
+
+    public JuchuOrderSearchCriteria(
+            LocalDate from,
+            LocalDate to,
+            String productKeyword,
+            String rawMaterialKeyword,
+            String machineKeyword,
+            String processKeyword) {
+        this(
+                from,
+                to,
+                "",
+                productKeyword,
+                rawMaterialKeyword,
+                machineKeyword,
+                processKeyword);
     }
 
     public Optional<String> validationError() {
@@ -27,7 +45,8 @@ public record JuchuOrderSearchCriteria(
     }
 
     public boolean hasKeyword() {
-        return !isBlankKeyword(productKeyword)
+        return !isBlankKeyword(iraiNoKeyword)
+                || !isBlankKeyword(productKeyword)
                 || !isBlankKeyword(rawMaterialKeyword)
                 || !isBlankKeyword(machineKeyword)
                 || !isBlankKeyword(processKeyword);

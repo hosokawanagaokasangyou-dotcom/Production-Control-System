@@ -78,6 +78,7 @@ public final class JuchuOrderSearchPane {
         LocalDate today = LocalDate.now();
         DatePicker from = new DatePicker(JuchuOrderSearch.defaultDeliveryFrom(today));
         DatePicker to = new DatePicker(JuchuOrderSearch.defaultDeliveryTo(today));
+        ComboBox<String> irai = keywordCombo("部分一致");
         ComboBox<String> product = keywordCombo("部分一致");
         ComboBox<String> raw = keywordCombo("部分一致");
         ComboBox<String> machine = keywordCombo("部分一致");
@@ -115,6 +116,7 @@ public final class JuchuOrderSearchPane {
                         leftTitle,
                         hint,
                         dateRow,
+                        labeled("依頼NO", irai),
                         labeled("製品", product),
                         labeled("投入原反", raw),
                         labeled("機械名", machine),
@@ -154,6 +156,8 @@ public final class JuchuOrderSearchPane {
                         planIndex[0] = loadPlanIndex(env.get());
                     }
                     setComboCandidates(
+                            irai, JuchuOrderSearch.iraiNoCandidates(recs));
+                    setComboCandidates(
                             product, JuchuOrderSearch.productCandidates(recs));
                     setComboCandidates(
                             raw, JuchuOrderSearch.rawMaterialCandidates(recs));
@@ -166,10 +170,12 @@ public final class JuchuOrderSearchPane {
                             JuchuOrderSearch.processCandidates(
                                     recs, collectPlanNames(planIndex[0], false)));
                 };
+        irai.setOnShowing(e -> refreshKeywordCandidates.run());
         product.setOnShowing(e -> refreshKeywordCandidates.run());
         raw.setOnShowing(e -> refreshKeywordCandidates.run());
         machine.setOnShowing(e -> refreshKeywordCandidates.run());
         process.setOnShowing(e -> refreshKeywordCandidates.run());
+        installKeywordFilter(irai, refreshKeywordCandidates);
         installKeywordFilter(product, refreshKeywordCandidates);
         installKeywordFilter(raw, refreshKeywordCandidates);
         installKeywordFilter(machine, refreshKeywordCandidates);
@@ -257,6 +263,7 @@ public final class JuchuOrderSearchPane {
                             new JuchuOrderSearchCriteria(
                                     from.getValue(),
                                     to.getValue(),
+                                    comboText(irai),
                                     comboText(product),
                                     comboText(raw),
                                     comboText(machine),
@@ -316,6 +323,7 @@ public final class JuchuOrderSearchPane {
                                 env, owner, statusMessage, rebuildBusy, kensaIndex, table));
         bindEnterToSearch(from, search);
         bindEnterToSearch(to, search);
+        bindEnterToSearch(irai, search);
         bindEnterToSearch(product, search);
         bindEnterToSearch(raw, search);
         bindEnterToSearch(machine, search);

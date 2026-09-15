@@ -63,6 +63,17 @@ class JuchuOrderSearchTest {
                                 "",
                                 "SEC")
                         .validationError());
+        var iraiOnly =
+                new JuchuOrderSearchCriteria(
+                        LocalDate.of(2026, 6, 1),
+                        LocalDate.of(2026, 6, 30),
+                        "GB60",
+                        "",
+                        "",
+                        "",
+                        "");
+        assertEquals(Optional.empty(), iraiOnly.validationError());
+        assertTrue(iraiOnly.hasKeyword());
     }
 
     @Test
@@ -270,6 +281,70 @@ class JuchuOrderSearchTest {
                         c);
         assertEquals(1, out.size());
         assertEquals("a", out.get(0).getReqNo());
+    }
+
+    @Test
+    void matches_iraiNo_partialAndNormalized() {
+        var c =
+                new JuchuOrderSearchCriteria(
+                        LocalDate.of(2026, 6, 1),
+                        LocalDate.of(2026, 6, 30),
+                        "gb60",
+                        "",
+                        "",
+                        "",
+                        "");
+        assertTrue(
+                JuchuOrderSearch.matches(
+                        rec("GB60804", Map.of("希望納期", "2026-06-10", "製品", "X")), c));
+        assertTrue(
+                JuchuOrderSearch.matches(
+                        rec("Ｃ８－９", Map.of("希望納期", "2026-06-10")),
+                        new JuchuOrderSearchCriteria(
+                                LocalDate.of(2026, 6, 1),
+                                LocalDate.of(2026, 6, 30),
+                                "c8-9",
+                                "",
+                                "",
+                                "",
+                                "")));
+        assertFalse(
+                JuchuOrderSearch.matches(
+                        rec("JR260901", Map.of("希望納期", "2026-06-10")), c));
+    }
+
+    @Test
+    void iraiNoCandidates_uniqueFromReqNo() {
+        List<String> names =
+                JuchuOrderSearch.iraiNoCandidates(
+                        List.of(
+                                rec("GB60804", Map.of()),
+                                rec("C8-9", Map.of()),
+                                rec("GB60804", Map.of()),
+                                rec("  ", Map.of())));
+        assertEquals(List.of("C8-9", "GB60804"), names);
+    }
+
+    @Test
+    void filter_withIraiKeyword_doesNotCapAt200() {
+        java.util.ArrayList<OrderRecord> recs = new java.util.ArrayList<>();
+        for (int i = 1; i <= 201; i++) {
+            recs.add(
+                    rec(
+                            "HIT-" + i,
+                            Map.of("希望納期", "2026-06-10", "入力日", "2026-01-01")));
+        }
+        recs.add(rec("MISS-1", Map.of("希望納期", "2026-06-10", "入力日", "2026-01-01")));
+        var c =
+                new JuchuOrderSearchCriteria(
+                        LocalDate.of(2026, 6, 1),
+                        LocalDate.of(2026, 6, 30),
+                        "HIT",
+                        "",
+                        "",
+                        "",
+                        "");
+        assertEquals(201, JuchuOrderSearch.filter(recs, c).size());
     }
 
     @Test
