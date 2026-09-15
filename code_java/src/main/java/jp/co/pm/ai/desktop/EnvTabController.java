@@ -392,9 +392,34 @@ public final class EnvTabController {
         valueCol.setOnEditCommit(
                 e -> {
                     EnvVarRow row = rowForEditCommit(e);
-                    if (row != null) {
-                        row.setValue(e.getNewValue());
+                    if (row == null) {
+                        return;
                     }
+                    if (AppPaths.KEY_PM_AI_INSPECTION_SHEET_DIR.equals(row.getName())) {
+                        String nv = e.getNewValue() == null ? "" : e.getNewValue().strip();
+                        if (!nv.isEmpty()) {
+                            try {
+                                Optional<String> err =
+                                        InspectionSheetDirPicker.validateInspectionSheetDir(
+                                                Path.of(nv));
+                                if (err.isPresent()) {
+                                    alertFolderOpen(ownerStage, AlertType.WARNING, err.get());
+                                    row.setValue(e.getOldValue());
+                                    envTable.refresh();
+                                    return;
+                                }
+                            } catch (RuntimeException ex) {
+                                alertFolderOpen(
+                                        ownerStage, AlertType.WARNING, "パスが無効です。");
+                                row.setValue(e.getOldValue());
+                                envTable.refresh();
+                                return;
+                            }
+                        }
+                        row.setValue(nv);
+                        return;
+                    }
+                    row.setValue(e.getNewValue());
                 });
         valueCol.setReorderable(true);
 
