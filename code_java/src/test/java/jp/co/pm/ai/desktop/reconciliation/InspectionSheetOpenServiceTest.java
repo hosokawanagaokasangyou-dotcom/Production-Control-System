@@ -71,7 +71,7 @@ class InspectionSheetOpenServiceTest {
         CountDownLatch inScan = new CountDownLatch(1);
         CountDownLatch release = new CountDownLatch(1);
         InspectionSheetIndexScanner.Progress hold =
-                (done, total) -> {
+                (phase, done, total) -> {
                     inScan.countDown();
                     try {
                         assertTrue(release.await(20, TimeUnit.SECONDS));
@@ -94,6 +94,39 @@ class InspectionSheetOpenServiceTest {
     }
 
     @Test
+    void startBackgroundRebuild_secondCallerReceivesInFlightProgress(@TempDir Path root)
+            throws Exception {
+        Map<String, String> ui = uiWithSheet(writeSampleWorkbook(root));
+        CountDownLatch inScan = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        java.util.concurrent.atomic.AtomicInteger secondSeen =
+                new java.util.concurrent.atomic.AtomicInteger();
+        InspectionSheetIndexScanner.Progress hold =
+                (phase, done, total) -> {
+                    inScan.countDown();
+                    try {
+                        assertTrue(release.await(20, TimeUnit.SECONDS));
+                    } catch (InterruptedException ex) {
+                        Thread.currentThread().interrupt();
+                    }
+                };
+        try {
+            CompletableFuture<InspectionSheetOpenService.RebuildResult> first =
+                    InspectionSheetOpenService.startBackgroundRebuild(ui, hold);
+            assertTrue(inScan.await(20, TimeUnit.SECONDS));
+            CompletableFuture<InspectionSheetOpenService.RebuildResult> second =
+                    InspectionSheetOpenService.startBackgroundRebuild(
+                            ui, (phase, done, total) -> secondSeen.incrementAndGet());
+            assertSame(first, second);
+            release.countDown();
+            assertEquals(1, first.get(20, TimeUnit.SECONDS).rows().size());
+            assertTrue(secondSeen.get() > 0, "後から付いた進捗リスナーにも通知する");
+        } finally {
+            release.countDown();
+        }
+    }
+
+    @Test
     void startBackgroundRebuild_unreachableDir_completesEmpty(@TempDir Path tmp) throws Exception {
         Path missing = tmp.resolve("no-such-inspection-dir");
         Map<String, String> ui = Map.of(AppPaths.KEY_PM_AI_INSPECTION_SHEET_DIR, missing.toString());
@@ -108,7 +141,7 @@ class InspectionSheetOpenServiceTest {
         CountDownLatch inScan = new CountDownLatch(1);
         CountDownLatch release = new CountDownLatch(1);
         InspectionSheetIndexScanner.Progress hold =
-                (done, total) -> {
+                (phase, done, total) -> {
                     inScan.countDown();
                     try {
                         assertTrue(release.await(20, TimeUnit.SECONDS));

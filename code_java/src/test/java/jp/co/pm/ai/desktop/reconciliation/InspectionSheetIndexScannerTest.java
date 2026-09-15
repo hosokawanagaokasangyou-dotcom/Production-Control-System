@@ -1,6 +1,7 @@
 package jp.co.pm.ai.desktop.reconciliation;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -31,6 +32,36 @@ class InspectionSheetIndexScannerTest {
                 InspectionSheetIndexScanner.scan(tmp, first.rows(), null);
         assertEquals(1, second.rows().size());
         assertEquals(0, second.readExcelCount());
+    }
+
+    @Test
+    void scan_reportsWalkThenIndexProgress(@TempDir Path tmp) throws Exception {
+        Path month = tmp.resolve("2026年").resolve("9月");
+        Files.createDirectories(month);
+        writeKonan(month.resolve("2026_C8-9(SEC済)完了.xlsx"), "C8-9", 46261);
+        writeKonan(month.resolve("2026_C8-10(SEC済)完了.xlsx"), "C8-10", 46261);
+
+        java.util.ArrayList<String> phases = new java.util.ArrayList<>();
+        java.util.ArrayList<int[]> counts = new java.util.ArrayList<>();
+        InspectionSheetIndexScanner.scan(
+                tmp,
+                List.of(),
+                (phase, done, total) -> {
+                    phases.add(phase);
+                    counts.add(new int[] {done, total});
+                });
+
+        assertTrue(phases.contains(InspectionSheetIndexProgress.PHASE_WALK));
+        assertTrue(phases.contains(InspectionSheetIndexProgress.PHASE_INDEX));
+        int[] lastIndex = null;
+        for (int i = 0; i < phases.size(); i++) {
+            if (InspectionSheetIndexProgress.PHASE_INDEX.equals(phases.get(i))) {
+                lastIndex = counts.get(i);
+            }
+        }
+        org.junit.jupiter.api.Assertions.assertNotNull(lastIndex);
+        assertEquals(2, lastIndex[0]);
+        assertEquals(2, lastIndex[1]);
     }
 
     private static void writeKonan(Path file, String irai, double serial) throws Exception {

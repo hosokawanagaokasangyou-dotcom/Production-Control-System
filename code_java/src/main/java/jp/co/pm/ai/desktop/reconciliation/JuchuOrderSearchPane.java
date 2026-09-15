@@ -267,12 +267,17 @@ public final class JuchuOrderSearchPane {
             return;
         }
         busy.set(true);
-        status.setText("検査表索引を更新中…");
+        status.setText(
+                InspectionSheetIndexProgress.format(
+                        InspectionSheetIndexProgress.PHASE_WALK, 0, 0));
         InspectionSheetOpenService.startBackgroundRebuild(
                         ui,
-                        (done, total) ->
+                        (phase, done, total) ->
                                 Platform.runLater(
-                                        () -> status.setText("検査表索引を更新中… " + done + " / " + total)))
+                                        () ->
+                                                status.setText(
+                                                        InspectionSheetIndexProgress.format(
+                                                                phase, done, total))))
                 .whenComplete(
                         (r, ex) ->
                                 Platform.runLater(

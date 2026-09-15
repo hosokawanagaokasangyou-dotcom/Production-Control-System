@@ -135,6 +135,7 @@ import jp.co.pm.ai.desktop.config.FactorySiteWorkspaceRestorePlan;
 import jp.co.pm.ai.desktop.config.FactorySiteWorkspaceSnapshot;
 import jp.co.pm.ai.desktop.config.FactorySiteWorkspaceStore;
 import jp.co.pm.ai.desktop.reconciliation.InspectionSheetDirPicker;
+import jp.co.pm.ai.desktop.reconciliation.InspectionSheetIndexProgress;
 import jp.co.pm.ai.desktop.reconciliation.InspectionSheetOpenService;
 import jp.co.pm.ai.desktop.config.PortableBundleUpgradeUiSnapshot;
 import jp.co.pm.ai.desktop.config.GeminiDispatchModelTryOrderDefaults;
@@ -770,6 +771,9 @@ public final class MainShellController
     private volatile String startupBackgroundLoadMessage = "";
     private volatile String globalLongTaskDetail = "";
     private volatile Double globalLongTaskProgress;
+    private volatile String inspectionIndexStatus = "";
+    private volatile Double inspectionIndexProgress;
+    private final AtomicLong lastInspectionIndexUiNs = new AtomicLong(0);
     private volatile boolean startupTabBackgroundLoadActive;
     private String lastGlobalLogLine = "";
 
@@ -5880,11 +5884,14 @@ public final class MainShellController
             return;
         }
         appendLog("[inspection-sheet] 索引CSVをバックグラウンドで更新します");
-        InspectionSheetOpenService.startBackgroundRebuild(ui)
+        publishInspectionIndexProgress(InspectionSheetIndexProgress.PHASE_WALK, 0, 0);
+        InspectionSheetOpenService.startBackgroundRebuild(
+                        ui, this::onInspectionSheetIndexProgress)
                 .whenComplete(
                         (r, ex) ->
                                 Platform.runLater(
                                         () -> {
+                                            clearInspectionIndexProgress();
                                             if (ex != null) {
                                                 appendLog(
                                                         "[inspection-sheet] 索引CSVの更新に失敗: "
@@ -5898,6 +5905,33 @@ public final class MainShellController
                                                             + r.readExcelCount()
                                                             + "）");
                                         }));
+    }
+
+    private void onInspectionSheetIndexProgress(String phase, int done, int total) {
+        long now = System.nanoTime();
+        boolean force = total > 0 && done >= total;
+        if (!force && now - lastInspectionIndexUiNs.get() < 80_000_000L) {
+            return;
+        }
+        lastInspectionIndexUiNs.set(now);
+        publishInspectionIndexProgress(phase, done, total);
+    }
+
+    private void publishInspectionIndexProgress(String phase, int done, int total) {
+        String text = InspectionSheetIndexProgress.format(phase, done, total);
+        double frac = InspectionSheetIndexProgress.fraction(done, total);
+        Platform.runLater(
+                () -> {
+                    inspectionIndexStatus = text;
+                    inspectionIndexProgress = frac;
+                    refreshGlobalStatusBar();
+                });
+    }
+
+    private void clearInspectionIndexProgress() {
+        inspectionIndexStatus = "";
+        inspectionIndexProgress = null;
+        refreshGlobalStatusBar();
     }
 
     /** BOX 同期フォルダ（{@code %USERPROFILE%\\Box} 等）があれば DirectoryChooser の初期ディレクトリ候補にする。 */
@@ -6766,7 +6800,9 @@ public final class MainShellController
         FactorySite site = GlobalInitSettingTarget.load();
         globalAppStatusBar.setFactory(site != null ? site.displayLabelJa() : "—");
         globalAppStatusBar.setAttendanceReady(attendanceStage2Ready, attendanceReadinessTooltip);
-        globalAppStatusBar.setTaskProgress(globalLongTaskProgress);
+        Double progress =
+                globalLongTaskProgress != null ? globalLongTaskProgress : inspectionIndexProgress;
+        globalAppStatusBar.setTaskProgress(progress);
         globalAppStatusBar.setMessage(resolveGlobalStatusMessage());
     }
 
@@ -6944,7 +6980,17 @@ public final class MainShellController
             base = resolveActiveRunStageStatusMessage();
         }
         if (globalLongTaskDetail != null && !globalLongTaskDetail.isBlank()) {
-            return base + " — " + globalLongTaskDetail;
+            String withTask = base + " — " + globalLongTaskDetail;
+            if (inspectionIndexStatus != null && !inspectionIndexStatus.isBlank()) {
+                return withTask + " — " + inspectionIndexStatus;
+            }
+            return withTask;
+        }
+        if (inspectionIndexStatus != null && !inspectionIndexStatus.isBlank()) {
+            if (startupBackgroundLoadMessage != null && !startupBackgroundLoadMessage.isBlank()) {
+                return base + " — " + inspectionIndexStatus;
+            }
+            return inspectionIndexStatus;
         }
         return base;
     }

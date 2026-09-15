@@ -19,7 +19,7 @@ public final class InspectionSheetIndexScanner {
 
     @FunctionalInterface
     public interface Progress {
-        void onProgress(int processed, int total);
+        void onProgress(String phase, int processed, int total);
     }
 
     private InspectionSheetIndexScanner() {}
@@ -30,7 +30,8 @@ public final class InspectionSheetIndexScanner {
         if (root == null || !Files.isDirectory(root)) {
             return new Result(List.of(), List.of("検査表フォルダにアクセスできません: " + root), 0);
         }
-        List<Path> files = listExcelFiles(root);
+        notifyProgress(progress, InspectionSheetIndexProgress.PHASE_WALK, 0, 0);
+        List<Path> files = listExcelFiles(root, progress);
         Map<String, InspectionSheetIndexStore.Row> prevByPath = new HashMap<>();
         if (previous != null) {
             for (InspectionSheetIndexStore.Row row : previous) {
@@ -43,11 +44,11 @@ public final class InspectionSheetIndexScanner {
         int processed = 0;
         int readExcel = 0;
         String indexedAt = Instant.now().toString();
+        int total = files.size();
+        notifyProgress(progress, InspectionSheetIndexProgress.PHASE_INDEX, 0, total);
         for (Path file : files) {
             processed++;
-            if (progress != null) {
-                progress.onProgress(processed, files.size());
-            }
+            notifyProgress(progress, InspectionSheetIndexProgress.PHASE_INDEX, processed, total);
             try {
                 String abs = file.toAbsolutePath().normalize().toString();
                 long mtime = Files.getLastModifiedTime(file).toMillis();
@@ -86,14 +87,33 @@ public final class InspectionSheetIndexScanner {
     }
 
     static List<Path> listExcelFiles(Path root) throws IOException {
+        return listExcelFiles(root, null);
+    }
+
+    static List<Path> listExcelFiles(Path root, Progress progress) throws IOException {
         List<Path> files = new ArrayList<>();
         try (Stream<Path> walk = Files.walk(root)) {
             walk.filter(Files::isRegularFile)
                     .filter(InspectionSheetIndexScanner::isInspectionExcel)
-                    .forEach(files::add);
+                    .forEach(
+                            path -> {
+                                files.add(path);
+                                notifyProgress(
+                                        progress,
+                                        InspectionSheetIndexProgress.PHASE_WALK,
+                                        files.size(),
+                                        0);
+                            });
         }
         files.sort(Path::compareTo);
         return files;
+    }
+
+    private static void notifyProgress(Progress progress, String phase, int processed, int total) {
+        if (progress == null) {
+            return;
+        }
+        progress.onProgress(phase, processed, total);
     }
 
     static boolean isInspectionExcel(Path path) {

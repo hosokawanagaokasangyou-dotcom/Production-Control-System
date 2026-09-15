@@ -6,6 +6,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -25,6 +26,8 @@ public final class InspectionSheetOpenService {
     private static final Object IN_FLIGHT_LOCK = new Object();
     private static String inFlightKey;
     private static CompletableFuture<RebuildResult> inFlight;
+    private static final CopyOnWriteArrayList<InspectionSheetIndexScanner.Progress> inFlightProgress =
+            new CopyOnWriteArrayList<>();
 
     private InspectionSheetOpenService() {}
 
@@ -55,7 +58,14 @@ public final class InspectionSheetOpenService {
         String key = rebuildKey(snap);
         synchronized (IN_FLIGHT_LOCK) {
             if (inFlight != null && !inFlight.isDone() && key.equals(inFlightKey)) {
+                if (progress != null) {
+                    inFlightProgress.add(progress);
+                }
                 return inFlight;
+            }
+            inFlightProgress.clear();
+            if (progress != null) {
+                inFlightProgress.add(progress);
             }
             CompletableFuture<RebuildResult> future = new CompletableFuture<>();
             inFlight = future;
@@ -64,9 +74,14 @@ public final class InspectionSheetOpenService {
                     new Thread(
                             () -> {
                                 try {
-                                    future.complete(rebuild(snap, progress));
+                                    future.complete(
+                                            rebuild(snap, InspectionSheetOpenService::fanOutProgress));
                                 } catch (Throwable ex) {
                                     future.completeExceptionally(ex);
+                                } finally {
+                                    synchronized (IN_FLIGHT_LOCK) {
+                                        inFlightProgress.clear();
+                                    }
                                 }
                             },
                             "inspection-sheet-index-warmup");
@@ -164,5 +179,11 @@ public final class InspectionSheetOpenService {
                     }
                 });
         return Map.copyOf(copy);
+    }
+
+    private static void fanOutProgress(String phase, int processed, int total) {
+        for (InspectionSheetIndexScanner.Progress listener : inFlightProgress) {
+            listener.onProgress(phase, processed, total);
+        }
     }
 }
