@@ -40,7 +40,7 @@ public final class InspectionSheetOpenService {
         }
     }
 
-    public static final int PARTIAL_SAVE_EVERY_EXCEL_READS = 20;
+    public static final int PARTIAL_SAVE_EVERY_EXCEL_READS = 40;
 
     private static final Object IN_FLIGHT_LOCK = new Object();
     private static String inFlightKey;
@@ -122,7 +122,7 @@ public final class InspectionSheetOpenService {
                             },
                             "inspection-sheet-index-warmup");
             t.setDaemon(true);
-            t.setPriority(Thread.MIN_PRIORITY);
+            t.setPriority(Math.max(Thread.MIN_PRIORITY, Thread.NORM_PRIORITY - 1));
             t.start();
             return future;
         }

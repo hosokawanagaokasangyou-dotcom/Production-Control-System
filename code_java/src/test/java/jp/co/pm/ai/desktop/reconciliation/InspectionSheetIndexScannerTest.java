@@ -80,6 +80,22 @@ class InspectionSheetIndexScannerTest {
         assertTrue(merged.rows().stream().anyMatch(r -> "GB60804".equals(r.iraiNo())));
     }
 
+    @Test
+    void scan_manyFiles_keepsPathOrder(@TempDir Path tmp) throws Exception {
+        Path month = tmp.resolve("2026年").resolve("9月");
+        Files.createDirectories(month);
+        String[] irais = {"A1-1", "A1-2", "B2-1", "C3-1", "D4-1", "E5-1", "F6-1", "G7-1"};
+        for (String irai : irais) {
+            writeKonan(month.resolve("2026_" + irai + "(SEC済)完了.xlsx"), irai, 46261);
+        }
+        InspectionSheetIndexScanner.Result result =
+                InspectionSheetIndexScanner.scan(tmp, List.of(), null);
+        assertEquals(irais.length, result.rows().size());
+        assertEquals(irais.length, result.readExcelCount());
+        List<String> got = result.rows().stream().map(r -> r.iraiNo()).toList();
+        assertEquals(List.of(irais), got);
+    }
+
     private static void writeKonan(Path file, String irai, double serial) throws Exception {
         try (XSSFWorkbook wb = new XSSFWorkbook()) {
             var sh = wb.createSheet("検査表");

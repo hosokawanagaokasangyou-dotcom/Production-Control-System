@@ -234,9 +234,12 @@ class InspectionSheetOpenServiceTest {
         Map<String, String> ui = uiWithSheet(writeSampleWorkbook(root));
         AtomicInteger priority = new AtomicInteger(-1);
         InspectionSheetOpenService.startBackgroundRebuild(
-                        ui, (phase, done, total) -> priority.set(Thread.currentThread().getPriority()))
+                        ui,
+                        (phase, done, total) ->
+                                priority.compareAndSet(-1, Thread.currentThread().getPriority()))
                 .get(20, TimeUnit.SECONDS);
-        assertEquals(Thread.MIN_PRIORITY, priority.get());
+        assertEquals(
+                Math.max(Thread.MIN_PRIORITY, Thread.NORM_PRIORITY - 1), priority.get());
     }
 
     @Test
