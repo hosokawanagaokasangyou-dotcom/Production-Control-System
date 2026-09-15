@@ -21,4 +21,12 @@ public final class InspectionSheetLookup {
         }
         return List.copyOf(hits);
     }
+
+    public static boolean hasSheet(List<InspectionSheetIndexStore.Row> rows, String iraiNo) {
+        return !find(rows, iraiNo).isEmpty();
+    }
+
+    public static String presenceLabel(boolean present) {
+        return present ? "有り" : "";
+    }
 }

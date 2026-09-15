@@ -3797,3 +3797,17 @@
 .pm-processing-fee-trend-tab-root .pm-trend-cumulative-chart .axis:right .axis-label {
     -fx-text-fill: #1e3a8a;
 }
+
+.table-view .table-cell.juchu-kensa-present {
+    -fx-background-color: #16a34a;
+    -fx-text-fill: white;
+    -fx-font-weight: bold;
+    -fx-alignment: CENTER;
+}
+
+.table-view .table-row-cell:filled:selected .table-cell.juchu-kensa-present,
+.table-view:focused .table-row-cell:filled:selected .table-cell.juchu-kensa-present {
+    -fx-background-color: #16a34a;
+    -fx-text-fill: white;
+    -fx-font-weight: bold;
+}

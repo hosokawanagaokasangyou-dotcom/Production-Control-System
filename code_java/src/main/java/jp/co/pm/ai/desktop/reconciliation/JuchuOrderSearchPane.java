@@ -9,6 +9,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 
 import javafx.application.Platform;
@@ -30,6 +31,7 @@ import javafx.scene.control.DatePicker;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.SplitPane;
+import javafx.scene.control.TableCell;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableRow;
 import javafx.scene.control.TableView;
@@ -106,6 +108,16 @@ public final class JuchuOrderSearchPane {
         TableView<OrderRecord> table = new TableView<>(items);
         BooleanProperty indexBusy = new SimpleBooleanProperty(false);
         PipelineScanIndex[] planIndex = {PipelineScanIndex.empty()};
+        AtomicReference<List<InspectionSheetIndexStore.Row>> kensaIndex =
+                new AtomicReference<>(List.of());
+        Runnable reloadKensaIndex =
+                () -> {
+                    try {
+                        kensaIndex.set(InspectionSheetOpenService.loadIndex(env.get()));
+                    } catch (Exception ex) {
+                        kensaIndex.set(List.of());
+                    }
+                };
         Runnable refreshKeywordCandidates =
                 () -> {
                     List<OrderRecord> recs = recordsSupplier.get();
@@ -137,6 +149,7 @@ public final class JuchuOrderSearchPane {
         table.setPlaceholder(new Label("条件を指定して検索してください"));
         table.getColumns()
                 .addAll(
+                        kensaPresenceCol(kensaIndex),
                         col("依頼No", r -> nullToEmpty(r.getReqNo())),
                         col("希望納期", r -> dbValue(r, "希望納期")),
                         col("調整納期", r -> dbValue(r, "調整納期")),
@@ -219,6 +232,7 @@ public final class JuchuOrderSearchPane {
                     planIndex[0] = loadPlanIndex(env.get());
                     PipelineScanIndex index = planIndex[0];
                     refreshKeywordCandidates.run();
+                    reloadKensaIndex.run();
                     List<OrderRecord> hits =
                             JuchuOrderSearch.filter(
                                     recordsSupplier.get(),
@@ -240,7 +254,9 @@ public final class JuchuOrderSearchPane {
                                 statusMessage,
                                 indexBusy));
         rebuildIndex.setOnAction(
-                e -> rebuildInspectionIndex(env, owner, statusMessage, indexBusy));
+                e ->
+                        rebuildInspectionIndex(
+                                env, owner, statusMessage, indexBusy, kensaIndex, table));
 
         SplitPane split = new SplitPane(leftScroll, right);
         split.setOrientation(Orientation.HORIZONTAL);
@@ -259,7 +275,9 @@ public final class JuchuOrderSearchPane {
             Supplier<Map<String, String>> uiEnv,
             Supplier<Window> owner,
             Label status,
-            BooleanProperty busy) {
+            BooleanProperty busy,
+            AtomicReference<List<InspectionSheetIndexStore.Row>> kensaIndex,
+            TableView<OrderRecord> table) {
         Map<String, String> ui = uiEnv.get();
         Path dir = InspectionSheetOpenService.resolveDir(ui);
         if (!InspectionSheetOpenService.dirReachable(ui)) {
@@ -287,6 +305,12 @@ public final class JuchuOrderSearchPane {
                                                 status.setText(
                                                         "検査表索引の更新に失敗: " + ex.getMessage());
                                                 return;
+                                            }
+                                            if (kensaIndex != null && r != null) {
+                                                kensaIndex.set(r.rows());
+                                            }
+                                            if (table != null) {
+                                                table.refresh();
                                             }
                                             status.setText(
                                                     "検査表索引 "
@@ -564,6 +588,39 @@ public final class JuchuOrderSearchPane {
             dp.setMaxWidth(Double.MAX_VALUE);
         }
         return box;
+    }
+
+    private static TableColumn<OrderRecord, String> kensaPresenceCol(
+            AtomicReference<List<InspectionSheetIndexStore.Row>> kensaIndex) {
+        TableColumn<OrderRecord, String> column =
+                col(
+                        "検査表",
+                        r ->
+                                InspectionSheetLookup.presenceLabel(
+                                        InspectionSheetLookup.hasSheet(
+                                                kensaIndex.get(), r.getReqNo())));
+        column.setMinWidth(56);
+        column.setPrefWidth(64);
+        column.setMaxWidth(80);
+        column.setStyle("-fx-alignment: CENTER;");
+        column.setCellFactory(
+                col ->
+                        new TableCell<>() {
+                            @Override
+                            protected void updateItem(String item, boolean empty) {
+                                super.updateItem(item, empty);
+                                getStyleClass().remove("juchu-kensa-present");
+                                if (empty || item == null || item.isBlank()) {
+                                    setText(null);
+                                    return;
+                                }
+                                setText(item);
+                                if (!getStyleClass().contains("juchu-kensa-present")) {
+                                    getStyleClass().add("juchu-kensa-present");
+                                }
+                            }
+                        });
+        return column;
     }
 
     private static TableColumn<OrderRecord, String> col(
