@@ -1517,7 +1517,9 @@ class AppPathsTest {
         AppPaths.overlayFactorySiteRequestFormPaths(map, FactorySite.KONAN);
 
         assertEquals("", map.get(AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR));
-        assertEquals("", map.get(AppPaths.KEY_PM_AI_INSPECTION_SHEET_DIR));
+        assertEquals(
+                AppPaths.DEFAULT_PM_AI_INSPECTION_SHEET_DIR_KONAN,
+                map.get(AppPaths.KEY_PM_AI_INSPECTION_SHEET_DIR));
     }
 
     @Test
@@ -1563,15 +1565,19 @@ class AppPathsTest {
 
         AppPaths.overlayFactorySiteRequestFormPaths(map, FactorySite.KONAN);
 
-        assertEquals("", map.get(AppPaths.KEY_PM_AI_INSPECTION_SHEET_DIR));
+        assertEquals(
+                AppPaths.DEFAULT_PM_AI_INSPECTION_SHEET_DIR_KONAN,
+                map.get(AppPaths.KEY_PM_AI_INSPECTION_SHEET_DIR));
     }
 
     @Test
-    void defaultInspectionSheetDirForFactory_usesBoxFactoryRoot() {
+    void defaultInspectionSheetDirForFactory_konanUsesAladdinUnc() {
         String konan = AppPaths.defaultInspectionSheetDirForFactory(FactorySite.KONAN);
         String kokubu = AppPaths.defaultInspectionSheetDirForFactory(FactorySite.KOKUBU);
-        assertTrue(konan.contains("後加工検査表"));
-        assertTrue(konan.contains("湖南工場"));
+        assertEquals(AppPaths.DEFAULT_PM_AI_INSPECTION_SHEET_DIR_KONAN, konan);
+        assertTrue(konan.contains("アラジンオフィスシステムデータ"));
+        assertTrue(konan.contains("003 検査表"));
+        assertTrue(kokubu.contains("後加工検査表"));
         assertTrue(kokubu.contains("国分工場"));
         assertFalse(konan.equals(kokubu));
     }

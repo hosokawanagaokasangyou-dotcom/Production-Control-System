@@ -134,7 +134,6 @@ import jp.co.pm.ai.desktop.config.FactorySiteWorkspaceMigrator;
 import jp.co.pm.ai.desktop.config.FactorySiteWorkspaceRestorePlan;
 import jp.co.pm.ai.desktop.config.FactorySiteWorkspaceSnapshot;
 import jp.co.pm.ai.desktop.config.FactorySiteWorkspaceStore;
-import jp.co.pm.ai.desktop.reconciliation.InspectionSheetDirPicker;
 import jp.co.pm.ai.desktop.reconciliation.InspectionSheetIndexProgress;
 import jp.co.pm.ai.desktop.reconciliation.InspectionSheetOpenService;
 import jp.co.pm.ai.desktop.config.PortableBundleUpgradeUiSnapshot;
@@ -4822,7 +4821,6 @@ public final class MainShellController
         recordEnvInitializationBaseline();
         if (promptAndSelectRunTab) {
             maybePromptRequestFormOriginalDirIfUnset("[env]", effective);
-            maybePromptInspectionSheetDirIfUnset("[env]", effective);
             startInspectionSheetIndexWarmup();
             requireOperatorSelectionForFactory(effective, false);
             ensureMainShellRunTabSelected();
@@ -5773,7 +5771,6 @@ public final class MainShellController
             return;
         }
         maybePromptRequestFormOriginalDirIfUnset("[startup]", null);
-        maybePromptInspectionSheetDirIfUnset("[startup]", GlobalInitSettingTarget.load());
     }
 
     /**
@@ -5839,42 +5836,6 @@ public final class MainShellController
         saveCurrentFactoryWorkspace();
         DesktopSessionStateStore.save(collectDesktopSession());
         appendLog(logPrefix + " " + AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR + " を設定: " + abs);
-    }
-
-    /**
-     * {@link AppPaths#KEY_PM_AI_INSPECTION_SHEET_DIR} が空のとき、後加工検査表フォルダ選択を案内する。
-     * DirectoryChooser の前に {@code kensa} 入力が必要。キャンセル時は Box 工場フォルダへ実行時フォールバック。
-     */
-    private void maybePromptInspectionSheetDirIfUnset(String logPrefix, FactorySite factorySiteHint) {
-        if (primaryStage == null || envRows == null) {
-            return;
-        }
-        String configured = envTabValueTrimmed(AppPaths.KEY_PM_AI_INSPECTION_SHEET_DIR);
-        if (!configured.isEmpty()
-                && NetworkSourceDirResolver.isInspectionSheetDirReachable(
-                        Map.of(AppPaths.KEY_PM_AI_INSPECTION_SHEET_DIR, configured))) {
-            return;
-        }
-        if (!configured.isEmpty()) {
-            updateEnvTabValue(AppPaths.KEY_PM_AI_INSPECTION_SHEET_DIR, "");
-        }
-        FactorySite site =
-                factorySiteHint != null ? factorySiteHint : GlobalInitSettingTarget.load();
-        Optional<File> selected = InspectionSheetDirPicker.pick(primaryStage, site);
-        if (selected.isEmpty()) {
-            appendLog(
-                    logPrefix
-                            + " "
-                            + AppPaths.KEY_PM_AI_INSPECTION_SHEET_DIR
-                            + " は未設定のまま起動します（実行時は Box 工場フォルダを使用）。");
-            return;
-        }
-        String abs = selected.get().toPath().toAbsolutePath().normalize().toString();
-        updateEnvTabValue(AppPaths.KEY_PM_AI_INSPECTION_SHEET_DIR, abs);
-        saveCurrentFactoryWorkspace();
-        DesktopSessionStateStore.save(collectDesktopSession());
-        appendLog(logPrefix + " " + AppPaths.KEY_PM_AI_INSPECTION_SHEET_DIR + " を設定: " + abs);
-        startInspectionSheetIndexWarmup();
     }
 
     /** 起動・工場切替・フォルダ確定後に、検査表索引 CSV をバックグラウンドで増分更新する。 */
@@ -6929,7 +6890,6 @@ public final class MainShellController
             endFactorySiteSwitchBusy();
             selectRunTabAfterBusyProgressIfAllowed();
             maybePromptRequestFormOriginalDirIfUnset("[factory]", switchedFactory);
-            maybePromptInspectionSheetDirIfUnset("[factory]", switchedFactory);
             startInspectionSheetIndexWarmup();
         }
         clearGlobalLongTaskProgress();
@@ -12364,7 +12324,7 @@ public final class MainShellController
                 return "";
             }
             case AppPaths.KEY_PM_AI_INSPECTION_SHEET_DIR -> {
-                return "";
+                return AppPaths.defaultInspectionSheetDirForFactory(GlobalInitSettingTarget.load());
             }
             case AppPaths.KEY_PM_AI_REQUEST_FORM_TPI_PDF_DIR -> {
                 return AppPaths.defaultRequestFormTpiPdfDirForFactory(GlobalInitSettingTarget.load());

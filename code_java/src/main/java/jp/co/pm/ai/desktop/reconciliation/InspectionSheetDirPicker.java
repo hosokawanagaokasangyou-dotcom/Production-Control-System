@@ -60,13 +60,22 @@ public final class InspectionSheetDirPicker {
     }
 
     public static List<Path> initialDirectoryCandidates(FactorySite factorySiteHint) {
+        List<Path> out = new ArrayList<>();
+        FactorySite site =
+                factorySiteHint != null && factorySiteHint != FactorySite.RDP_LAUNCHER
+                        ? factorySiteHint
+                        : FactorySite.KONAN;
+        String factoryDefault = AppPaths.defaultInspectionSheetDirForFactory(site);
+        if (!factoryDefault.isEmpty()) {
+            out.add(Path.of(factoryDefault));
+        }
         Path box = Path.of(System.getProperty("user.home"), "Box");
         Path nagaoka = box.resolve("長岡産業").resolve("後加工検査表");
-        List<Path> out = new ArrayList<>();
-        if (factorySiteHint != null && factorySiteHint != FactorySite.RDP_LAUNCHER) {
-            String leaf = AppPaths.inspectionSheetDirLeafForFactory(factorySiteHint);
-            if (!leaf.isEmpty()) {
-                out.add(nagaoka.resolve(leaf));
+        String leaf = AppPaths.inspectionSheetDirLeafForFactory(site);
+        if (!leaf.isEmpty()) {
+            Path boxFactory = nagaoka.resolve(leaf);
+            if (out.stream().noneMatch(p -> p.equals(boxFactory))) {
+                out.add(boxFactory);
             }
         }
         out.add(nagaoka);

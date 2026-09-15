@@ -116,7 +116,7 @@ public final class DesktopUiEnvBootstrap {
                 return "";
             }
             case AppPaths.KEY_PM_AI_INSPECTION_SHEET_DIR -> {
-                return "";
+                return AppPaths.defaultInspectionSheetDirForFactory(GlobalInitSettingTarget.load());
             }
             case AppPaths.KEY_PM_AI_REQUEST_FORM_TPI_PDF_DIR -> {
                 return AppPaths.defaultRequestFormTpiPdfDirForFactory(GlobalInitSettingTarget.load());

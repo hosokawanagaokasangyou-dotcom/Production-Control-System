@@ -161,7 +161,7 @@ public final class AppPaths {
     public static final String KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR = "PM_AI_REQUEST_FORM_ORIGINAL_DIR";
 
     /**
-     * 後加工検査表フォルダ（湖南: {@code Box\長岡産業\後加工検査表\湖南工場}、国分: 同\\国分工場）。
+     * 後加工検査表フォルダ（湖南既定: アラジンオフィスシステムデータ\\003 検査表 UNC、国分: Box\\後加工検査表\\国分工場）。
      */
     public static final String KEY_PM_AI_INSPECTION_SHEET_DIR = "PM_AI_INSPECTION_SHEET_DIR";
 
@@ -1331,7 +1331,7 @@ public final class AppPaths {
 
     /**
      * 後加工検査表フォルダ。{@link #KEY_PM_AI_INSPECTION_SHEET_DIR} が空のときは
-     * {@link #defaultInspectionSheetDirForFactory(FactorySite)}（Box 上の工場ルート）。
+     * {@link #defaultInspectionSheetDirForFactory(FactorySite)}。
      */
     public static Path resolveInspectionSheetDir(Map<String, String> ui) {
         Map<String, String> u = ui != null ? ui : Map.of();
@@ -1800,11 +1800,17 @@ public final class AppPaths {
 
     /**
      * {@link FactorySite} 別の {@link #KEY_PM_AI_INSPECTION_SHEET_DIR} 既定。
-     * {@code %USERPROFILE%\Box\長岡産業\後加工検査表\{湖南工場|国分工場}}。
+     * 湖南はアラジン UNC、国分は {@code %USERPROFILE%\Box\長岡産業\後加工検査表\国分工場}。
      */
     public static String defaultInspectionSheetDirForFactory(FactorySite site) {
-        FactorySite effective = site != null ? site : FactorySite.KONAN;
-        String leaf = inspectionSheetDirLeafForFactory(effective);
+        if (site == FactorySite.KOKUBU) {
+            return boxInspectionSheetDir(FactorySite.KOKUBU);
+        }
+        return DEFAULT_PM_AI_INSPECTION_SHEET_DIR_KONAN;
+    }
+
+    private static String boxInspectionSheetDir(FactorySite site) {
+        String leaf = inspectionSheetDirLeafForFactory(site);
         if (leaf.isEmpty()) {
             leaf = inspectionSheetDirLeafForFactory(FactorySite.KONAN);
         }
@@ -2352,6 +2358,16 @@ public final class AppPaths {
                     + "アラジンオフィスシステムデータ\\"
                     + "納期管理\\"
                     + "新 マシン別納期管理表.xlsm";
+
+    /** {@link FactorySite#KONAN} の {@link #KEY_PM_AI_INSPECTION_SHEET_DIR} 既定（TPI 関係検査表 UNC）。 */
+    public static final String DEFAULT_PM_AI_INSPECTION_SHEET_DIR_KONAN =
+            "\\\\192.168.0.101\\"
+                    + "共有フォルダ\\"
+                    + "湖南工場\\"
+                    + "湖南共有\\"
+                    + "生産管理システム\\"
+                    + "アラジンオフィスシステムデータ\\"
+                    + "003 検査表";
 
     /** {@link FactorySite#KOKUBU} の {@link #KEY_PM_AI_REQUEST_FORM_JUCHU_FILE} 既定（UNC）。 */
     public static final String DEFAULT_PM_AI_REQUEST_FORM_JUCHU_FILE_KOKUBU =
@@ -3152,8 +3168,11 @@ public final class AppPaths {
             putFactoryManagedEnv(map, KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR, "");
         }
         String inspectionDir = trim(map.get(KEY_PM_AI_INSPECTION_SHEET_DIR));
-        if (!inspectionDir.isEmpty() && factoryPathHintConflictsWithSite(inspectionDir, site)) {
+        String inspectionDefault = defaultInspectionSheetDirForFactory(site);
+        if (inspectionDefault.isEmpty()) {
             putFactoryManagedEnv(map, KEY_PM_AI_INSPECTION_SHEET_DIR, "");
+        } else if (inspectionDir.isEmpty() || factoryPathHintConflictsWithSite(inspectionDir, site)) {
+            putFactoryManagedEnv(map, KEY_PM_AI_INSPECTION_SHEET_DIR, inspectionDefault);
         }
         String tpiPdf = trim(map.get(KEY_PM_AI_REQUEST_FORM_TPI_PDF_DIR));
         String tpiDefault = defaultRequestFormTpiPdfDirForFactory(site);

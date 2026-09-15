@@ -1,5 +1,6 @@
 package jp.co.pm.ai.desktop.reconciliation;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -7,6 +8,7 @@ import java.nio.file.Path;
 
 import org.junit.jupiter.api.Test;
 
+import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.config.FactorySite;
 
 class InspectionSheetDirPickerTest {
@@ -24,7 +26,7 @@ class InspectionSheetDirPickerTest {
     @Test
     void initialDirectoryCandidates_factoryLeafFirst() {
         var konan = InspectionSheetDirPicker.initialDirectoryCandidates(FactorySite.KONAN);
-        assertTrue(konan.get(0).endsWith(Path.of("後加工検査表", "湖南工場")));
+        assertEquals(Path.of(AppPaths.DEFAULT_PM_AI_INSPECTION_SHEET_DIR_KONAN), konan.get(0));
         var kokubu = InspectionSheetDirPicker.initialDirectoryCandidates(FactorySite.KOKUBU);
         assertTrue(kokubu.get(0).endsWith(Path.of("後加工検査表", "国分工場")));
     }
