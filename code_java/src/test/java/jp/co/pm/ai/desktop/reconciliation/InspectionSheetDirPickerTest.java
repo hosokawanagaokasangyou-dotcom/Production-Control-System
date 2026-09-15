@@ -23,6 +23,20 @@ class InspectionSheetDirPickerTest {
         assertFalse(InspectionSheetDirPicker.matchesKensa(""));
         assertFalse(InspectionSheetDirPicker.matchesKensa(null));
         assertFalse(InspectionSheetDirPicker.matchesKensa("kens"));
+        assertFalse(InspectionSheetDirPicker.matchesKensa("kenasa"));
+    }
+
+    @Test
+    void kensaConfirmCopy_warnsAgainstRequestFormAndShowsTokenLarge() {
+        assertEquals("kensa", InspectionSheetDirPicker.KENSA_TOKEN);
+        assertTrue(InspectionSheetDirPicker.KENSA_CONFIRM_TITLE.contains("後加工検査表"));
+        assertTrue(InspectionSheetDirPicker.KENSA_CONFIRM_HEADER.contains("後加工検査表"));
+        assertTrue(InspectionSheetDirPicker.KENSA_CONFIRM_WARNING.contains("依頼書原本"));
+        assertTrue(InspectionSheetDirPicker.KENSA_CONFIRM_WARNING.contains("後加工検査表"));
+        assertTrue(InspectionSheetDirPicker.KENSA_CONFIRM_TOKEN_HINT.contains("kensa"));
+        assertTrue(InspectionSheetDirPicker.KENSA_CONFIRM_MISMATCH.contains("kensa"));
+        assertTrue(InspectionSheetDirPicker.KENSA_TOKEN_FONT_SIZE_PX >= 32);
+        assertTrue(InspectionSheetDirPicker.KENSA_WARNING_FONT_SIZE_PX >= 16);
     }
 
     @Test
