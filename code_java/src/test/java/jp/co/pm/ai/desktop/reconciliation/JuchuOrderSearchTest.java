@@ -391,6 +391,15 @@ class JuchuOrderSearchTest {
     }
 
     @Test
+    void displayMachine_usesDbThenHaystack() {
+        assertEquals(
+                "スライス機1 湖南",
+                JuchuOrderSearch.displayMachine(Map.of("機械名", "スライス機1 湖南"), "W9-1"));
+        assertEquals("W9-1 湖南", JuchuOrderSearch.displayMachine(Map.of(), "W9-1 湖南"));
+        assertEquals("", JuchuOrderSearch.displayMachine(Map.of("加工内容", "EC"), ""));
+    }
+
+    @Test
     void machineCandidates_mergesDbAndExtras() {
         List<String> names =
                 JuchuOrderSearch.machineCandidates(

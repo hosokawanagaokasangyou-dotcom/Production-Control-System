@@ -42,10 +42,11 @@ public final class AladdinShapedPlanQtyLookup {
      */
     public record PipelineScanIndex(
             Map<String, List<PlanEntry>> planEntriesByTaskId,
-            Map<String, String> rawInputDateDisplayByTaskId) {
+            Map<String, String> rawInputDateDisplayByTaskId,
+            Map<String, List<String>> machineNamesByTaskId) {
 
         public static PipelineScanIndex empty() {
-            return new PipelineScanIndex(Map.of(), Map.of());
+            return new PipelineScanIndex(Map.of(), Map.of(), Map.of());
         }
 
         public List<PlanEntry> planEntriesFor(String taskId) {
@@ -60,6 +61,28 @@ public final class AladdinShapedPlanQtyLookup {
                 return "";
             }
             return rawInputDateDisplayByTaskId.getOrDefault(normalizeTaskIdKey(taskId), "");
+        }
+
+        /** 依頼NO に紐づく機械名（計画数量が 0 でも、日付列が無くても残す）。 */
+        public List<String> machineNamesFor(String taskId) {
+            if (taskId == null || taskId.isBlank()) {
+                return List.of();
+            }
+            String key = normalizeTaskIdKey(taskId);
+            List<String> named =
+                    machineNamesByTaskId != null
+                            ? machineNamesByTaskId.getOrDefault(key, List.of())
+                            : List.of();
+            if (!named.isEmpty()) {
+                return named;
+            }
+            LinkedHashSet<String> fromEntries = new LinkedHashSet<>();
+            for (PlanEntry entry : planEntriesFor(taskId)) {
+                if (entry != null && entry.machineName() != null && !entry.machineName().isBlank()) {
+                    fromEntries.add(entry.machineName().strip());
+                }
+            }
+            return List.copyOf(fromEntries);
         }
     }
 
@@ -423,6 +446,7 @@ public final class AladdinShapedPlanQtyLookup {
         }
         Map<String, List<PlanEntry>> planByTid = new HashMap<>();
         Map<String, LinkedHashSet<String>> rawDatesByTid = new HashMap<>();
+        Map<String, LinkedHashSet<String>> machinesByTid = new HashMap<>();
         for (List<String> row : rows) {
             String tidKey = normalizeTaskIdKey(cellAt(row, tidIdx));
             if (tidKey.isEmpty()) {
@@ -434,10 +458,13 @@ public final class AladdinShapedPlanQtyLookup {
                     rawDatesByTid.computeIfAbsent(tidKey, k -> new LinkedHashSet<>()).add(rawDate);
                 }
             }
+            String machine = cellAt(row, mkIdx).strip();
+            if (!machine.isEmpty()) {
+                machinesByTid.computeIfAbsent(tidKey, k -> new LinkedHashSet<>()).add(machine);
+            }
             if (dateCols.isEmpty()) {
                 continue;
             }
-            String machine = cellAt(row, mkIdx).strip();
             String process = procIdx >= 0 ? cellAt(row, procIdx).strip() : "";
             List<PlanEntry> bucket = planByTid.computeIfAbsent(tidKey, k -> new ArrayList<>());
             for (Map.Entry<Integer, String> e : dateCols.entrySet()) {
@@ -475,7 +502,49 @@ public final class AladdinShapedPlanQtyLookup {
         for (Map.Entry<String, List<PlanEntry>> e : planByTid.entrySet()) {
             frozenPlan.put(e.getKey(), List.copyOf(e.getValue()));
         }
-        return new PipelineScanIndex(Map.copyOf(frozenPlan), Map.copyOf(rawInputByTid));
+        Map<String, List<String>> frozenMachines = new HashMap<>();
+        for (Map.Entry<String, LinkedHashSet<String>> e : machinesByTid.entrySet()) {
+            frozenMachines.put(e.getKey(), List.copyOf(e.getValue()));
+        }
+        return new PipelineScanIndex(
+                Map.copyOf(frozenPlan), Map.copyOf(rawInputByTid), Map.copyOf(frozenMachines));
+    }
+
+    /** 計画 JSON と実績 JSON など、依頼NO 索引を合成する。 */
+    public static PipelineScanIndex merge(PipelineScanIndex left, PipelineScanIndex right) {
+        if (isVacant(left)) {
+            return right != null ? right : PipelineScanIndex.empty();
+        }
+        if (isVacant(right)) {
+            return left;
+        }
+        Map<String, List<PlanEntry>> plans = new HashMap<>(left.planEntriesByTaskId());
+        for (Map.Entry<String, List<PlanEntry>> e : right.planEntriesByTaskId().entrySet()) {
+            List<PlanEntry> cur = new ArrayList<>(plans.getOrDefault(e.getKey(), List.of()));
+            cur.addAll(e.getValue());
+            plans.put(e.getKey(), List.copyOf(cur));
+        }
+        Map<String, String> rawDates = new HashMap<>(left.rawInputDateDisplayByTaskId());
+        rawDates.putAll(right.rawInputDateDisplayByTaskId());
+        Map<String, List<String>> machines = new HashMap<>();
+        Set<String> tids = new LinkedHashSet<>();
+        tids.addAll(left.machineNamesByTaskId().keySet());
+        tids.addAll(right.machineNamesByTaskId().keySet());
+        for (String tid : tids) {
+            LinkedHashSet<String> names = new LinkedHashSet<>();
+            names.addAll(left.machineNamesByTaskId().getOrDefault(tid, List.of()));
+            names.addAll(right.machineNamesByTaskId().getOrDefault(tid, List.of()));
+            machines.put(tid, List.copyOf(names));
+        }
+        return new PipelineScanIndex(
+                Map.copyOf(plans), Map.copyOf(rawDates), Map.copyOf(machines));
+    }
+
+    private static boolean isVacant(PipelineScanIndex index) {
+        return index == null
+                || (index.planEntriesByTaskId().isEmpty()
+                        && index.rawInputDateDisplayByTaskId().isEmpty()
+                        && index.machineNamesByTaskId().isEmpty());
     }
 
     /** shaped 表から依頼NO の計画エントリを収集（表示用の機械名・工程名を保持）。 */

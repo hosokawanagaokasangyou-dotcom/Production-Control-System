@@ -62,6 +62,39 @@ class AladdinShapedPlanQtyLookupCollectEntriesTest {
     }
 
     @Test
+    void buildPipelineScanIndex_recordsMachineNamesWithoutDateQty() {
+        AladdinShapedPlanQtyLookup.PipelineScanIndex zeroQty =
+                AladdinShapedPlanQtyLookup.buildPipelineScanIndex(
+                        HEADERS,
+                        List.of(List.of("スリット機1　湖南", "E6-9", "スリット", "0", "0", "0")));
+        assertTrue(zeroQty.planEntriesFor("E6-9").isEmpty());
+        assertEquals(List.of("スリット機1　湖南"), zeroQty.machineNamesFor("E6-9"));
+
+        AladdinShapedPlanQtyLookup.PipelineScanIndex actuals =
+                AladdinShapedPlanQtyLookup.buildPipelineScanIndex(
+                        List.of("機械名", "依頼NO", "工程名", "加工日", "実加工数"),
+                        List.of(List.of("EC機 湖南", "C1-5", "EC", "2026/06/01", "100")));
+        assertTrue(actuals.planEntriesFor("C1-5").isEmpty());
+        assertEquals(List.of("EC機 湖南"), actuals.machineNamesFor("C1-5"));
+        assertEquals(List.of("EC機 湖南"), actuals.machineNamesFor("c1-5"));
+    }
+
+    @Test
+    void merge_combinesMachineNamesFromPlanAndActuals() {
+        AladdinShapedPlanQtyLookup.PipelineScanIndex plan =
+                AladdinShapedPlanQtyLookup.buildPipelineScanIndex(HEADERS, ROWS);
+        AladdinShapedPlanQtyLookup.PipelineScanIndex actuals =
+                AladdinShapedPlanQtyLookup.buildPipelineScanIndex(
+                        List.of("機械名", "依頼NO", "工程名"),
+                        List.of(List.of("W9-1 湖南", "E6-1", "スリット")));
+        AladdinShapedPlanQtyLookup.PipelineScanIndex merged =
+                AladdinShapedPlanQtyLookup.merge(plan, actuals);
+        assertTrue(merged.machineNamesFor("E6-1").stream().anyMatch(n -> n.contains("スリット機1")));
+        assertTrue(merged.machineNamesFor("E6-1").contains("W9-1 湖南"));
+        assertFalse(merged.planEntriesFor("E6-1").isEmpty());
+    }
+
+    @Test
     void collectEntriesForTaskId_emptyWhenNotFound() {
         Map<String, Map<String, Map<String, Map<String, Double>>>> lookup =
                 AladdinShapedPlanQtyLookup.buildLookup(HEADERS, ROWS);

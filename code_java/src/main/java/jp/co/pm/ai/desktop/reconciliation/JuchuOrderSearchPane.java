@@ -143,12 +143,14 @@ public final class JuchuOrderSearchPane {
         BooleanProperty searchBusy = new SimpleBooleanProperty(false);
         BooleanProperty openBusy = new SimpleBooleanProperty(false);
         PipelineScanIndex[] planIndex = {PipelineScanIndex.empty()};
+        KonanDailyReportLookup[] dailyIndex = {KonanDailyReportLookup.empty()};
         AtomicReference<List<InspectionSheetIndexStore.Row>> kensaIndex =
                 new AtomicReference<>(List.of());
         Runnable refreshKeywordCandidates =
                 () -> {
                     List<OrderRecord> recs = recordsSupplier.get();
-                    if (planIndex[0].planEntriesByTaskId().isEmpty()) {
+                    if (planIndex[0].planEntriesByTaskId().isEmpty()
+                            && planIndex[0].machineNamesByTaskId().isEmpty()) {
                         planIndex[0] = loadPlanIndex(env.get());
                     }
                     setComboCandidates(
@@ -197,7 +199,7 @@ public final class JuchuOrderSearchPane {
                                 r ->
                                         JuchuOrderSearch.displayMachine(
                                                 r.getDbValues(),
-                                                planHaystack(planIndex[0], r, true))),
+                                                machineHaystack(planIndex[0], dailyIndex[0], r))),
                         col(
                                 "工程名",
                                 r ->
@@ -285,6 +287,8 @@ public final class JuchuOrderSearchPane {
                                 @Override
                                 protected SearchOutcome call() {
                                     PipelineScanIndex index = loadPlanIndex(uiSnap);
+                                    KonanDailyReportLookup daily =
+                                            KonanDailyReportLookup.load(uiSnap, null);
                                     List<InspectionSheetIndexStore.Row> kensa = List.of();
                                     try {
                                         kensa = InspectionSheetOpenService.loadIndex(uiSnap);
@@ -295,9 +299,9 @@ public final class JuchuOrderSearchPane {
                                             JuchuOrderSearch.filterDetailed(
                                                     snapshot,
                                                     c,
-                                                    r -> planHaystack(index, r, true),
+                                                    r -> machineHaystack(index, daily, r),
                                                     r -> planHaystack(index, r, false));
-                                    return new SearchOutcome(result, index, kensa);
+                                    return new SearchOutcome(result, index, daily, kensa);
                                 }
                             };
                     task.setOnSucceeded(
@@ -308,6 +312,10 @@ public final class JuchuOrderSearchPane {
                                         outcome.index() != null
                                                 ? outcome.index()
                                                 : PipelineScanIndex.empty();
+                                dailyIndex[0] =
+                                        outcome.daily() != null
+                                                ? outcome.daily()
+                                                : KonanDailyReportLookup.empty();
                                 kensaIndex.set(
                                         outcome.kensa() != null ? outcome.kensa() : List.of());
                                 refreshKeywordCandidates.run();
@@ -384,6 +392,7 @@ public final class JuchuOrderSearchPane {
     private record SearchOutcome(
             JuchuOrderSearch.FilterResult result,
             PipelineScanIndex index,
+            KonanDailyReportLookup daily,
             List<InspectionSheetIndexStore.Row> kensa) {}
 
     static boolean shouldDisableOpenInspectionSheet(int selectedIndex, boolean openBusy) {
@@ -571,22 +580,57 @@ public final class JuchuOrderSearchPane {
 
     private static PipelineScanIndex loadPlanIndex(Map<String, String> ui) {
         try {
-            Path path = AppPaths.resolveShapedAladdinPlanJsonPath(ui);
-            if (path == null || !Files.isRegularFile(path)) {
-                return PipelineScanIndex.empty();
-            }
-            AladdinShapedPlanQtyLookup.ShapedTable table =
-                    AladdinShapedPlanQtyLookup.loadShapedTable(path);
-            return AladdinShapedPlanQtyLookup.buildPipelineScanIndex(table.headers(), table.rows());
+            PipelineScanIndex plan =
+                    indexFromShapedPath(AppPaths.resolveShapedAladdinPlanJsonPath(ui));
+            PipelineScanIndex actuals =
+                    indexFromShapedPath(AppPaths.resolveShapedProcessingActualsJsonPath(ui));
+            return AladdinShapedPlanQtyLookup.merge(plan, actuals);
         } catch (RuntimeException ex) {
             return PipelineScanIndex.empty();
         }
+    }
+
+    private static PipelineScanIndex indexFromShapedPath(Path path) {
+        if (path == null || !Files.isRegularFile(path)) {
+            return PipelineScanIndex.empty();
+        }
+        AladdinShapedPlanQtyLookup.ShapedTable table =
+                AladdinShapedPlanQtyLookup.loadShapedTable(path);
+        return AladdinShapedPlanQtyLookup.buildPipelineScanIndex(table.headers(), table.rows());
+    }
+
+    private static String machineHaystack(
+            PipelineScanIndex index, KonanDailyReportLookup daily, OrderRecord record) {
+        if (record == null) {
+            return "";
+        }
+        Set<String> names = new LinkedHashSet<>();
+        if (index != null) {
+            names.addAll(index.machineNamesFor(record.getReqNo()));
+        }
+        if (daily != null) {
+            for (KonanDailyReportLookup.OrderDailyReportEntry entry :
+                    daily.entriesForOrder(record.getReqNo())) {
+                if (entry != null
+                        && entry.machineName() != null
+                        && !entry.machineName().isBlank()) {
+                    names.add(entry.machineName().strip());
+                }
+            }
+        }
+        return String.join(" ", names);
     }
 
     private static String planHaystack(
             PipelineScanIndex index, OrderRecord record, boolean machine) {
         if (index == null || record == null) {
             return "";
+        }
+        if (machine) {
+            List<String> named = index.machineNamesFor(record.getReqNo());
+            if (named != null && !named.isEmpty()) {
+                return String.join(" ", named);
+            }
         }
         List<PlanEntry> entries = index.planEntriesFor(record.getReqNo());
         if (entries == null || entries.isEmpty()) {
@@ -706,6 +750,18 @@ public final class JuchuOrderSearchPane {
             return List.of();
         }
         Set<String> names = new LinkedHashSet<>();
+        if (machine) {
+            for (List<String> rowNames : index.machineNamesByTaskId().values()) {
+                if (rowNames == null) {
+                    continue;
+                }
+                for (String value : rowNames) {
+                    if (value != null && !value.isBlank()) {
+                        names.add(value.strip());
+                    }
+                }
+            }
+        }
         for (List<PlanEntry> entries : index.planEntriesByTaskId().values()) {
             if (entries == null) {
                 continue;
