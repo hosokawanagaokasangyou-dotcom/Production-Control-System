@@ -30,7 +30,6 @@ public final class UnifiedMailBuilder {
         lines.add("トーレペフ事業部 御中");
         lines.add("");
         lines.add("いつも大変お世話になっております。");
-        lines.add("長岡産業の難波です。");
         lines.add("");
         lines.add("掲題の件、下記にご報告申し上げます。");
         lines.add("");

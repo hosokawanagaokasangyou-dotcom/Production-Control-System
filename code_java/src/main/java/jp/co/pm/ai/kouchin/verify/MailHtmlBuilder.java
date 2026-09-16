@@ -61,7 +61,6 @@ public final class MailHtmlBuilder {
                 + "<div>トーレペフ事業部 御中</div>\n"
                 + "<br>\n"
                 + "<div>いつも大変お世話になっております。</div>\n"
-                + "<div>長岡産業の難波です。</div>\n"
                 + "<br>\n"
                 + "<div>掲題の件、下記にご報告申し上げます。</div>\n"
                 + "<br>\n"
