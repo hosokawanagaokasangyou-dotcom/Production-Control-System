@@ -3,6 +3,7 @@ package jp.co.pm.ai.desktop.kouchin;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
@@ -55,5 +56,19 @@ class KouchinOpenExcelGlowTest {
                 "報告メール_統合_20260916_000000");
         assertTrue(KouchinVerifyTabController.shouldGlowOpenExcel(konanOnly, FactorySite.KONAN));
         assertFalse(KouchinVerifyTabController.shouldGlowOpenExcel(konanOnly, FactorySite.KOKUBU));
+    }
+
+    @Test
+    @DisplayName("国分・湖南のExcelを開くは読み取り専用")
+    void openExcelForUsesReadOnly() throws Exception {
+        String src = Files.readString(Path.of(
+                "src/main/java/jp/co/pm/ai/desktop/kouchin/KouchinVerifyTabController.java"));
+        int start = src.indexOf("private void openExcelFor(");
+        assertTrue(start >= 0, "openExcelFor が無い");
+        int end = src.indexOf("private void onOpenFolder(", start);
+        assertTrue(end > start, "onOpenFolder が無い");
+        String method = src.substring(start, end);
+        assertTrue(method.contains("openFileReadOnly"), method);
+        assertFalse(method.contains("DesktopFileOpener.openFile("), method);
     }
 }

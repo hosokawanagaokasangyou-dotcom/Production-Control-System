@@ -432,8 +432,8 @@ public class KouchinVerifyTabController {
             return;
         }
         try {
-            DesktopFileOpener.openFile(p);
-            setStatus("開いた: " + p.getFileName());
+            DesktopFileOpener.openFileReadOnly(p);
+            setStatus("読み取り専用で開いた: " + p.getFileName());
             stopOpenExcelGlow(site);
         } catch (Exception e) {
             appendLog("Excelを開けません: " + p.getFileName() + " " + e.getMessage());

@@ -37,6 +37,8 @@ class KouchinVerifyTabFxmlTest {
         assertEquals("湖南のExcelを開く", konan.getAttribute("text"));
         assertEquals("#onOpenKokubuExcel", kokubu.getAttribute("onAction"));
         assertEquals("#onOpenKonanExcel", konan.getAttribute("onAction"));
+        assertTrue(tooltipText(kokubu).contains("読み取り専用"), tooltipText(kokubu));
+        assertTrue(tooltipText(konan).contains("読み取り専用"), tooltipText(konan));
     }
 
     @Test
@@ -94,6 +96,14 @@ class KouchinVerifyTabFxmlTest {
         assertTrue(label.getAttribute("wrapText").contains("true") || "true".equals(label.getAttribute("wrapText")));
         assertTrue(label.getAttribute("text").contains("RVSHEET") || label.getAttribute("text").contains("対象月"),
                 label.getAttribute("text"));
+    }
+
+    private static String tooltipText(Element button) {
+        NodeList tips = button.getElementsByTagName("Tooltip");
+        if (tips.getLength() == 0) {
+            return "";
+        }
+        return ((Element) tips.item(0)).getAttribute("text");
     }
 
     private static Element elementByFxId(String id) throws Exception {

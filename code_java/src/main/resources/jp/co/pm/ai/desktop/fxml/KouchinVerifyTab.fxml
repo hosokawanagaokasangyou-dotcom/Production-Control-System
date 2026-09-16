@@ -7,6 +7,7 @@
 <?import javafx.scene.control.TableView?>
 <?import javafx.scene.control.TextArea?>
 <?import javafx.scene.control.TextField?>
+<?import javafx.scene.control.Tooltip?>
 <?import javafx.scene.layout.BorderPane?>
 <?import javafx.scene.layout.FlowPane?>
 <?import javafx.scene.layout.HBox?>
@@ -30,8 +31,12 @@
                 <Label fx:id="outputWriteBlockBadge" managed="false" visible="false"
                        styleClass="pm-kouchin-output-write-block-badge" text="Excel書込不可"/>
                 <Button fx:id="importCsvButton" mnemonicParsing="false" onAction="#onImportCsv" text="CSVを取り込む…"/>
-                <Button fx:id="openKokubuExcelButton" mnemonicParsing="false" onAction="#onOpenKokubuExcel" text="国分のExcelを開く"/>
-                <Button fx:id="openKonanExcelButton" mnemonicParsing="false" onAction="#onOpenKonanExcel" text="湖南のExcelを開く"/>
+                <Button fx:id="openKokubuExcelButton" mnemonicParsing="false" onAction="#onOpenKokubuExcel" text="国分のExcelを開く">
+                    <tooltip><Tooltip text="検証結果Excelを読み取り専用で開く"/></tooltip>
+                </Button>
+                <Button fx:id="openKonanExcelButton" mnemonicParsing="false" onAction="#onOpenKonanExcel" text="湖南のExcelを開く">
+                    <tooltip><Tooltip text="検証結果Excelを読み取り専用で開く"/></tooltip>
+                </Button>
                 <Button fx:id="openFolderButton" mnemonicParsing="false" onAction="#onOpenFolder" text="出力フォルダを開く"/>
                 <Button fx:id="copyMailButton" mnemonicParsing="false" onAction="#onCopyMail" text="メールをコピー"/>
                 <Button fx:id="gotoRdpButton" mnemonicParsing="false" onAction="#onGotoRdp" text="RDPタブへ移動"/>
