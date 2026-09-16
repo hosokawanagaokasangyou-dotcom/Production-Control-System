@@ -55,6 +55,7 @@ import jp.co.pm.ai.kouchin.verify.RecordB;
 import jp.co.pm.ai.kouchin.verify.VerifyResult;
 import jp.co.pm.ai.kouchin.verify.VerifyRunSupport;
 import jp.co.pm.ai.kouchin.verify.VerifyService;
+import jp.co.pm.ai.kouchin.verify.VerifySourceAccess;
 
 /**
  * 後加工工賃の検証タブ。POI/CSV/UNC 一覧は {@link #onMainShellTabSelected} でワーカーに載せる。
@@ -90,6 +91,8 @@ public class KouchinVerifyTabController {
     private final AtomicInteger discoveryGeneration = new AtomicInteger();
     private VerifyRunSupport.Written lastWritten;
     private BothResult lastBoth;
+    private List<KouchinDiscovery.Row> lastKokubuDiscovery = List.of();
+    private List<KouchinDiscovery.Row> lastKonanDiscovery = List.of();
     private ButtonAttentionGlow openKokubuExcelGlow;
     private ButtonAttentionGlow openKonanExcelGlow;
     private final List<ResultLine> allResultLines = new ArrayList<>();
@@ -196,40 +199,69 @@ public class KouchinVerifyTabController {
             statusLabel.setText("検出中…");
         }
         Map<String, String> ui = shell == null ? Map.of() : shell.snapshotUiEnv();
-        FactorySite site = shell == null ? FactorySite.KOKUBU : shell.currentFactorySite();
-        FactoryId first = site == FactorySite.KONAN ? FactoryId.KONAN : FactoryId.KOKUBU;
+        KouchinPaths paths = KouchinPaths.fromEnv(ui);
         int gen = discoveryGeneration.incrementAndGet();
         Thread t = new Thread(() -> {
-            List<KouchinDiscovery.Row> rows;
+            List<KouchinDiscovery.Row> kokubu = List.of();
+            List<KouchinDiscovery.Row> konan = List.of();
             String error = null;
             try {
-                rows = new ArrayList<>(KouchinDiscovery.scan(first, KouchinPaths.fromEnv(ui)));
+                kokubu = new ArrayList<>(KouchinDiscovery.scan(FactoryId.KOKUBU, paths));
             } catch (RuntimeException e) {
-                rows = List.of();
                 error = e.getMessage();
             }
-            List<KouchinDiscovery.Row> result = rows;
+            try {
+                konan = new ArrayList<>(KouchinDiscovery.scan(FactoryId.KONAN, paths));
+            } catch (RuntimeException e) {
+                String k = e.getMessage();
+                error = error == null ? k : error + " / " + k;
+            }
+            List<KouchinDiscovery.Row> kokubuRows = kokubu;
+            List<KouchinDiscovery.Row> konanRows = konan;
             String err = error;
-            Platform.runLater(() -> applyDiscoveryResult(gen, result, err));
+            Platform.runLater(() -> applyDiscoveryResult(gen, kokubuRows, konanRows, err));
         }, "kouchin-discovery");
         t.setDaemon(true);
         t.start();
     }
 
-    private void applyDiscoveryResult(int gen, List<KouchinDiscovery.Row> rows, String error) {
+    private void applyDiscoveryResult(
+            int gen,
+            List<KouchinDiscovery.Row> kokubu,
+            List<KouchinDiscovery.Row> konan,
+            String error) {
         if (gen != discoveryGeneration.get()) {
             return;
         }
+        lastKokubuDiscovery = kokubu == null ? List.of() : List.copyOf(kokubu);
+        lastKonanDiscovery = konan == null ? List.of() : List.copyOf(konan);
+        FactorySite site = shell == null ? FactorySite.KOKUBU : shell.currentFactorySite();
+        List<KouchinDiscovery.Row> shown =
+                site == FactorySite.KONAN ? lastKonanDiscovery : lastKokubuDiscovery;
         if (discoveryTable != null) {
-            discoveryTable.getItems().setAll(rows);
+            discoveryTable.getItems().setAll(shown);
         }
         if (statusLabel != null && lastBoth == null) {
-            statusLabel.setText(error == null
-                    ? "検出完了。未実行なら「まだ検証していません」。"
-                    : "検出失敗: " + error);
+            statusLabel.setText(error == null ? discoveryStatusText() : "検出失敗: " + error);
         }
         refreshDropTargetLabel();
         refreshRunEnabled();
+    }
+
+    private String discoveryStatusText() {
+        String kokubu = VerifySourceAccess.blockReason(lastKokubuDiscovery);
+        String konan = VerifySourceAccess.blockReason(lastKonanDiscovery);
+        StringBuilder sb = new StringBuilder("検出完了。");
+        if (kokubu != null) {
+            sb.append(" 国分検証不可: ").append(kokubu).append("。");
+        }
+        if (konan != null) {
+            sb.append(" 湖南検証不可: ").append(konan).append("。");
+        }
+        if (kokubu == null && konan == null) {
+            sb.append(" 未実行なら「まだ検証していません」。");
+        }
+        return sb.toString();
     }
 
     @FXML
@@ -331,6 +363,20 @@ public class KouchinVerifyTabController {
         }
         if (host != null && host.hasUnappliedSourceEdits()) {
             setStatus("参照先が未適用のため実行できません");
+            return;
+        }
+        if (both) {
+            if (!VerifySourceAccess.bothFactoriesReady(lastKokubuDiscovery, lastKonanDiscovery)) {
+                setStatus("関連ファイルにアクセスできないためまとめて検証できません");
+                return;
+            }
+        } else if (one == FactoryId.KONAN) {
+            if (!VerifySourceAccess.factorySourcesReady(lastKonanDiscovery)) {
+                setStatus("湖南の関連ファイルにアクセスできないため検証できません");
+                return;
+            }
+        } else if (!VerifySourceAccess.factorySourcesReady(lastKokubuDiscovery)) {
+            setStatus("国分の関連ファイルにアクセスできないため検証できません");
             return;
         }
         String label = both ? "後加工工賃 まとめて検証中…"
@@ -564,15 +610,17 @@ public class KouchinVerifyTabController {
     void refreshRunEnabled() {
         boolean unapplied = host != null && host.hasUnappliedSourceEdits();
         boolean busy = shell != null && (shell.isKouchinRunBusy() || shell.isPlanningPipelineStageRunning());
-        boolean en = !unapplied && !busy;
+        boolean base = !unapplied && !busy;
+        boolean kokubuReady = VerifySourceAccess.factorySourcesReady(lastKokubuDiscovery);
+        boolean konanReady = VerifySourceAccess.factorySourcesReady(lastKonanDiscovery);
         if (runKokubuButton != null) {
-            runKokubuButton.setDisable(!en);
+            runKokubuButton.setDisable(!(base && kokubuReady));
         }
         if (runKonanButton != null) {
-            runKonanButton.setDisable(!en);
+            runKonanButton.setDisable(!(base && konanReady));
         }
         if (runBothButton != null) {
-            runBothButton.setDisable(!en);
+            runBothButton.setDisable(!(base && kokubuReady && konanReady));
         }
         FactorySite site = shell == null ? FactorySite.KOKUBU : shell.currentFactorySite();
         if (runKokubuButton != null) {
