@@ -124,6 +124,7 @@ public class KouchinVerifyTabController {
         public String getFactory() { return factory; }
         public String getRole() { return row == null ? "" : row.role(); }
         public String getPath() { return row == null ? "" : row.path(); }
+        public String getPathCss() { return isMissing() ? "pm-kouchin-missing-path" : ""; }
         public String getYm() { return row == null ? "" : row.ym(); }
         public String getNote() { return row == null ? "" : row.note(); }
         public String getReadStatus() { return access.readLabel(); }
@@ -832,7 +833,10 @@ public class KouchinVerifyTabController {
                 super.updateItem(item, empty);
                 setText(empty ? null : item);
                 DiscoveryLine line = empty ? null : getTableRow().getItem();
-                setStyle(line != null && line.isMissing() ? "-fx-text-fill: #c00000;" : "");
+                getStyleClass().remove("pm-kouchin-missing-path");
+                if (line != null && line.isMissing()) {
+                    getStyleClass().add(line.getPathCss());
+                }
                 KouchinDiscovery.Row src = line == null ? null : line.source();
                 if (src == null || src.fullPath() == null || src.fullPath().isBlank()) {
                     setTooltip(null);

@@ -540,6 +540,12 @@
     -fx-alignment: center;
 }
 
+.table-cell.pm-kouchin-missing-path {
+    -fx-background-color: rgba(127, 29, 29, 0.55);
+    -fx-text-fill: #ffe4e6;
+    -fx-font-weight: bold;
+}
+
 .button.pm-stage-run-button {
     -fx-cursor: hand;
     -fx-font-size: 15px;
