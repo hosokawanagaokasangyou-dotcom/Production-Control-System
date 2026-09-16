@@ -5,6 +5,7 @@ import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -101,8 +102,25 @@ public final class VerifyRunSupport {
         return new Written(xlsxOut, txtOut, htmlOut, stamp, mailName);
     }
 
+    /**
+     * 「Excelを開く」対象。同一ファイル名の二重書きは1つにまとめ、国分と湖南があれば両方返す。
+     */
+    public static List<Path> excelFilesToOpen(Written written) {
+        if (written == null || written.xlsx() == null) {
+            return List.of();
+        }
+        LinkedHashMap<String, Path> unique = new LinkedHashMap<>();
+        for (Path p : written.xlsx().succeeded()) {
+            if (p == null) {
+                continue;
+            }
+            unique.putIfAbsent(p.getFileName().toString(), p);
+        }
+        return List.copyOf(unique.values());
+    }
+
     public static Path preferredOpenExcel(Written written, FactorySite site) {
-        List<Path> ok = written.xlsx() == null ? List.of() : written.xlsx().succeeded();
+        List<Path> ok = excelFilesToOpen(written);
         if (ok.isEmpty()) {
             return null;
         }

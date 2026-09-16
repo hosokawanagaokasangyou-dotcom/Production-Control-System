@@ -262,19 +262,25 @@ public class KouchinVerifyTabController {
 
     @FXML
     private void onOpenExcel() {
-        Path p = lastWritten == null || shell == null
-                ? null
-                : VerifyRunSupport.preferredOpenExcel(lastWritten, shell.currentFactorySite());
-        if (p == null) {
+        List<Path> files = VerifyRunSupport.excelFilesToOpen(lastWritten);
+        if (files.isEmpty()) {
             appendLog("開く Excel がありません（書込成功側が候補）");
             return;
         }
-        try {
-            DesktopFileOpener.openFile(p);
-            setStatus("開いた: " + p.toAbsolutePath());
+        int opened = 0;
+        for (Path p : files) {
+            try {
+                DesktopFileOpener.openFile(p);
+                opened++;
+            } catch (Exception e) {
+                appendLog("Excelを開けません: " + p.getFileName() + " " + e.getMessage());
+            }
+        }
+        if (opened > 0) {
+            setStatus("開いた: " + files.stream()
+                    .map(p -> p.getFileName().toString())
+                    .collect(Collectors.joining(" / ")));
             stopOpenExcelGlow();
-        } catch (Exception e) {
-            appendLog("Excelを開けません: " + e.getMessage());
         }
     }
 
@@ -631,7 +637,7 @@ public class KouchinVerifyTabController {
         if (written == null || site == null) {
             return false;
         }
-        return VerifyRunSupport.preferredOpenExcel(written, site) != null;
+        return !VerifyRunSupport.excelFilesToOpen(written).isEmpty();
     }
 
     private void refreshOpenExcelGlow() {
