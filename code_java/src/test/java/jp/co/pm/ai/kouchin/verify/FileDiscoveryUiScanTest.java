@@ -100,10 +100,29 @@ class FileDiscoveryUiScanTest {
                 tmp.resolve("out"),
                 tmp.resolve("judge"));
         List<KouchinDiscovery.Row> rows = KouchinDiscovery.scan(FactoryId.KONAN, paths);
-        assertEquals(july.toString(), row(rows, "②加工賃試算").path());
-        assertEquals(aladdin.toString(), row(rows, "③アラジン").path());
+        assertEquals("2026年度試算　湖南/7月度加工賃試算.xlsm", row(rows, "②加工賃試算").path());
+        assertEquals(july.toString(), row(rows, "②加工賃試算").fullPath());
+        assertEquals("依頼NO別問合せ_20260731_120000.xlsx", row(rows, "③アラジン").path());
+        assertEquals(aladdin.toString(), row(rows, "③アラジン").fullPath());
+        assertEquals("RVSHEET202607.csv", row(rows, "①東レCSV").path());
         assertEquals(false, row(rows, "②加工賃試算").missing());
         assertEquals(false, row(rows, "③アラジン").missing());
+    }
+
+    @Test
+    @DisplayName("UIパスは参照フォルダからの相対で、区切りは /")
+    void uiDisplayPathUsesRelativeSlash() {
+        Path root = tmp.resolve("shisan");
+        Path file = root.resolve("2026年度試算　湖南").resolve("7月度加工賃試算.xlsm");
+        assertEquals("2026年度試算　湖南/7月度加工賃試算.xlsm", FileDiscovery.uiDisplayPath(root, file));
+        assertEquals("RVSHEET202608.csv", FileDiscovery.uiDisplayPath(tmp.resolve("csv"), tmp.resolve("csv").resolve("RVSHEET202608.csv")));
+    }
+
+    @Test
+    @DisplayName("見つからないときは末尾2段のフォルダ名を / で出す")
+    void uiDisplayFolderKeepsLastTwoSegments() {
+        Path dir = tmp.resolve("湖南工場").resolve("2 後加工試算");
+        assertEquals("湖南工場/2 後加工試算", FileDiscovery.uiDisplayFolder(dir));
     }
 
     private static KouchinDiscovery.Row row(List<KouchinDiscovery.Row> rows, String role) {

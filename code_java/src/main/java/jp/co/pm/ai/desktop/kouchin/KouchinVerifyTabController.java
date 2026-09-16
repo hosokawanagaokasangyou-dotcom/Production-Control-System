@@ -18,11 +18,13 @@ import javafx.fxml.FXML;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
+import javafx.scene.control.OverrunStyle;
 import javafx.scene.control.TableCell;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
+import javafx.scene.control.Tooltip;
 import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.input.Clipboard;
 import javafx.scene.input.ClipboardContent;
@@ -565,9 +567,10 @@ public class KouchinVerifyTabController {
         TableColumn<KouchinDiscovery.Row, String> roleCol = new TableColumn<>("区分");
         roleCol.setCellValueFactory(cd -> new SimpleStringProperty(cd.getValue() == null ? "" : cd.getValue().role()));
         roleCol.setPrefWidth(120);
-        TableColumn<KouchinDiscovery.Row, String> pathCol = new TableColumn<>("パス");
+        TableColumn<KouchinDiscovery.Row, String> pathCol = new TableColumn<>("ファイル");
         pathCol.setCellValueFactory(cd -> new SimpleStringProperty(cd.getValue() == null ? "" : cd.getValue().path()));
-        pathCol.setPrefWidth(480);
+        pathCol.setPrefWidth(420);
+        pathCol.setMinWidth(180);
         TableColumn<KouchinDiscovery.Row, String> ymCol = new TableColumn<>("対象月");
         ymCol.setCellValueFactory(cd -> new SimpleStringProperty(cd.getValue() == null ? "" : cd.getValue().ym()));
         ymCol.setPrefWidth(120);
@@ -576,12 +579,26 @@ public class KouchinVerifyTabController {
         noteCol.setPrefWidth(280);
         discoveryTable.getColumns().addAll(roleCol, pathCol, ymCol, noteCol);
         pathCol.setCellFactory(c -> new TableCell<>() {
+            private final Tooltip tip = new Tooltip();
+
+            {
+                setTextOverrun(OverrunStyle.LEADING_ELLIPSIS);
+                tip.setWrapText(true);
+                tip.setMaxWidth(720);
+            }
+
             @Override
             protected void updateItem(String item, boolean empty) {
                 super.updateItem(item, empty);
                 setText(empty ? null : item);
                 KouchinDiscovery.Row row = empty ? null : getTableRow().getItem();
                 setStyle(row != null && row.missing() ? "-fx-text-fill: #c00000;" : "");
+                if (row == null || row.fullPath() == null || row.fullPath().isBlank()) {
+                    setTooltip(null);
+                } else {
+                    tip.setText(row.fullPath().replace('\\', '/'));
+                    setTooltip(tip);
+                }
             }
         });
     }

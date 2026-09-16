@@ -8,10 +8,11 @@ import java.util.List;
 /**
  * 検証実行前の①②③検出（UI表用）。欠落は {@code missing=true}。
  * 湖南②はファイル名から当月を特定し、作業中 xlsm を開かない。
+ * {@link Row#path()} は表の短縮表示、{@link Row#fullPath()} はツールチップ用の絶対パス。
  */
 public final class KouchinDiscovery {
 
-    public record Row(String role, String path, String ym, boolean missing, String note) {}
+    public record Row(String role, String path, String fullPath, String ym, boolean missing, String note) {}
 
     private KouchinDiscovery() {}
 
@@ -25,36 +26,56 @@ public final class KouchinDiscovery {
             if (Files.isDirectory(dir1)) {
                 toray = FileDiscovery.findTorayCsv(dir1);
                 ym = FileDiscovery.torayTargetYm(toray).orElse(null);
-                rows.add(new Row("①東レCSV", toray.toString(), ym == null ? "" : ym.gatsudoLabel(), false, ""));
+                rows.add(found("①東レCSV", dir1, toray, ym));
             } else {
-                rows.add(new Row("①東レCSV", dir1.toString(), "", true, "フォルダなし"));
+                rows.add(missing("①東レCSV", dir1, "フォルダなし"));
             }
         } catch (RuntimeException e) {
-            rows.add(new Row("①東レCSV", dir1.toString(), "", true, e.getMessage()));
+            rows.add(missing("①東レCSV", dir1, e.getMessage()));
         }
         Path dir2 = paths.source2Dir(factory);
         try {
             Path current2 = FileDiscovery.findSource2CurrentForUi(profile, dir2, ym);
-            rows.add(new Row("②" + profile.name2(), current2.toString(),
-                    ym == null ? "" : ym.gatsudoLabel(), false, ""));
+            rows.add(found("②" + profile.name2(), dir2, current2, ym));
         } catch (RuntimeException e) {
-            rows.add(new Row("②" + profile.name2(), dir2.toString(), "", true, e.getMessage()));
+            rows.add(missing("②" + profile.name2(), dir2, e.getMessage()));
         }
         Path dir3 = paths.source3Dir(factory);
         try {
             Path a = FileDiscovery.findAladdin(dir3, ym);
-            rows.add(new Row("③アラジン", a.toString(), ym == null ? "" : ym.gatsudoLabel(), false, ""));
+            rows.add(found("③アラジン", dir3, a, ym));
         } catch (RuntimeException e) {
-            rows.add(new Row("③アラジン", dir3.toString(), "", true, e.getMessage()));
+            rows.add(missing("③アラジン", dir3, e.getMessage()));
         }
         if (factory == FactoryId.KONAN) {
-            Path monthly = CheckVerifyC.findMonthlyFile(paths.konanMonthlyDir(), ym);
+            Path monthlyDir = paths.konanMonthlyDir();
+            Path monthly = CheckVerifyC.findMonthlyFile(monthlyDir, ym);
             if (monthly == null) {
-                rows.add(new Row("湖南 月次処理", String.valueOf(paths.konanMonthlyDir()), "", true, "見つかりません"));
+                rows.add(missing("湖南 月次処理", monthlyDir, "見つかりません"));
             } else {
-                rows.add(new Row("湖南 月次処理", monthly.toString(), ym == null ? "" : ym.gatsudoLabel(), false, ""));
+                rows.add(found("湖南 月次処理", monthlyDir, monthly, ym));
             }
         }
         return List.copyOf(rows);
+    }
+
+    private static Row found(String role, Path dir, Path file, YearMonthKey ym) {
+        return new Row(
+                role,
+                FileDiscovery.uiDisplayPath(dir, file),
+                file.toString(),
+                ym == null ? "" : ym.gatsudoLabel(),
+                false,
+                "");
+    }
+
+    private static Row missing(String role, Path dir, String note) {
+        return new Row(
+                role,
+                FileDiscovery.uiDisplayFolder(dir),
+                dir == null ? "" : dir.toString(),
+                "",
+                true,
+                note == null ? "" : note);
     }
 }

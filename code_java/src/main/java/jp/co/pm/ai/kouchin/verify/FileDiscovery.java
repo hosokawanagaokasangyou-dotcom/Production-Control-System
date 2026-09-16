@@ -443,6 +443,41 @@ public final class FileDiscovery {
         }
     }
 
+    /**
+     * 検出表のパス表示。参照フォルダからの相対。区切りは {@code /}
+     * （日本語 Windows で {@code \} が ¥ に見えるため）。
+     */
+    public static String uiDisplayPath(Path dir, Path file) {
+        if (file == null) {
+            return "";
+        }
+        if (dir == null) {
+            return toUiSeparators(file.getFileName() == null ? file.toString() : file.getFileName().toString());
+        }
+        return toUiSeparators(displayName(dir, file));
+    }
+
+    /** 見つからないときのフォルダ表示（末尾2段）。 */
+    public static String uiDisplayFolder(Path dir) {
+        if (dir == null) {
+            return "";
+        }
+        Path name = dir.getFileName();
+        if (name == null) {
+            return toUiSeparators(dir.toString());
+        }
+        Path parent = dir.getParent();
+        Path parentName = parent == null ? null : parent.getFileName();
+        if (parentName == null) {
+            return name.toString();
+        }
+        return parentName + "/" + name;
+    }
+
+    private static String toUiSeparators(String path) {
+        return path == null ? "" : path.replace('\\', '/');
+    }
+
     /** 表示名の一覧をカンマ区切りで返す。 */
     public static String displayNames(Path dir, List<DatedFile> files) {
         if (files.isEmpty()) {
