@@ -98,6 +98,15 @@ class KouchinVerifyTabFxmlTest {
                 label.getAttribute("text"));
     }
 
+    @Test
+    @DisplayName("③の案内は月次実績とする")
+    void source3HintSaysMonthlyActual() throws Exception {
+        Element hint = elementByFxId("diffHintLabel");
+        assertNotNull(hint, "diffHintLabel が無い");
+        assertTrue(hint.getAttribute("text").contains("③月次実績"), hint.getAttribute("text"));
+        assertTrue(!hint.getAttribute("text").contains("③アラジン"), hint.getAttribute("text"));
+    }
+
     private static String tooltipText(Element button) {
         NodeList tips = button.getElementsByTagName("Tooltip");
         if (tips.getLength() == 0) {

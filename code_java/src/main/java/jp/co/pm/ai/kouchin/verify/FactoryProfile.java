@@ -9,7 +9,7 @@ import java.util.List;
  * @param label       自工場名（国分工場 / 湖南工場）
  * @param otherLabel  他工場名（メール文面の並びに使う）
  * @param basho       ①東レCSVの対象入庫場所（A010 / A010P）
- * @param customer3   ③アラジンの得意先絞り込みコード（湖南のみ 049006・国分は null）
+ * @param customer3   ③月次実績の得意先絞り込みコード（湖南のみ 049006・国分は null）
  * @param hasCheckD   検証D（②まとめの内部整合性）の対象か
  * @param name2       ②の名称（長岡明細 / 加工賃試算）
  * @param desc2       ②の説明（シート構成）

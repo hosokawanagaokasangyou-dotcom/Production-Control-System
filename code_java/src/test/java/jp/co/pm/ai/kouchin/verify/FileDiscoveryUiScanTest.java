@@ -102,10 +102,10 @@ class FileDiscoveryUiScanTest {
         List<KouchinDiscovery.Row> rows = KouchinDiscovery.scan(FactoryId.KONAN, paths);
         assertEquals("2026年度試算　湖南/7月度加工賃試算.xlsm", row(rows, "②加工賃試算").path());
         assertEquals(july.toString(), row(rows, "②加工賃試算").fullPath());
-        assertTrue(row(rows, "③アラジン").path().endsWith("依頼NO別問合せ_20260731_120000.xlsx"), row(rows, "③アラジン").path());
+        assertTrue(row(rows, "③月次実績").path().endsWith("依頼NO別問合せ_20260731_120000.xlsx"), row(rows, "③月次実績").path());
         assertTrue(row(rows, "①東レCSV").path().endsWith("RVSHEET202607.csv"), row(rows, "①東レCSV").path());
         assertEquals(false, row(rows, "②加工賃試算").missing());
-        assertEquals(false, row(rows, "③アラジン").missing());
+        assertEquals(false, row(rows, "③月次実績").missing());
     }
 
     @Test

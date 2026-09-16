@@ -638,7 +638,7 @@ public final class EnvVarDocs {
                 "国分② 長岡後加工賃明細フォルダ。空なら 工賃明細2026年度（令和8年度）。●自動検証配下のコピーではない。");
         put(
                 AppPaths.KEY_PM_AI_KOUCHIN_KOKUBU_ALADDIN_DIR,
-                "国分③ アラジン依頼NO別問合せフォルダ。");
+                "国分③ 月次実績（依頼NO別問合せフォルダ）。");
         put(
                 AppPaths.KEY_PM_AI_KOUCHIN_KONAN_SHISAN_DIR,
                 "湖南② 後加工試算ルート。検証と月次トレンドで同一。空白は半角2つ。");

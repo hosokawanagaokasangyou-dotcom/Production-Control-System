@@ -21,7 +21,7 @@
                 <Insets bottom="8.0" left="12.0" right="12.0" top="8.0"/>
             </padding>
             <Label fx:id="diffHintLabel" wrapText="true"
-                   text="後加工工賃＝①東レCSV・②明細・③アラジンの月次突合です。加工トレンド（日次の加工量・加工賃）とは別機能です。"/>
+                   text="後加工工賃＝①東レCSV・②明細・③月次実績の月次突合です。加工トレンド（日次の加工量・加工賃）とは別機能です。"/>
             <Label fx:id="dropTargetLabel" wrapText="true"
                    text="①東レCSVの取り込み先: （参照先タブで指定）"/>
             <FlowPane hgap="8.0" vgap="6.0">

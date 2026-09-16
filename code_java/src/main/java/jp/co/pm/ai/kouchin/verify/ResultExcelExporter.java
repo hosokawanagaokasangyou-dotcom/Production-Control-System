@@ -190,7 +190,7 @@ public final class ResultExcelExporter {
         rowIndex = section(ws, rowIndex, "総額");
         rowIndex = kv(ws, rowIndex, "① 東レ検収 (お支払データ・" + r.str("入庫場所") + ")", r.num("①総額"));
         rowIndex = kv(ws, rowIndex, "② " + r.str("②名称") + " " + r.str("②金額列") + "合計", r.num("②総額"));
-        rowIndex = kv(ws, rowIndex, "③ アラジン 加工金額合計", r.num("③総額"));
+        rowIndex = kv(ws, rowIndex, "③ 月次実績 加工金額合計", r.num("③総額"));
         rowIndex++;
 
         rowIndex = section(ws, rowIndex, "検証A　① vs ② (契約NO突合)");
@@ -251,7 +251,7 @@ public final class ResultExcelExporter {
         rowIndex = kv(ws, rowIndex, "② " + r.str("②名称"), r.str("②ファイル"));
         rowIndex = kv(ws, rowIndex, "　過去月明細", r.str("前月ファイル"));
         rowIndex = kv(ws, rowIndex, "　翌月明細", r.str("翌月ファイル"));
-        rowIndex = kv(ws, rowIndex, "③ アラジン", r.str("③ファイル") + " (対象年月: " + r.str("対象年月") + ")");
+        rowIndex = kv(ws, rowIndex, "③ 月次実績", r.str("③ファイル") + " (対象年月: " + r.str("対象年月") + ")");
         rowIndex = kv(ws, rowIndex, "　他月照会", r.str("③他月照会"));
         rowIndex = kv(ws, rowIndex, "①の対象外入庫場所",
                 r.str("対象外入庫場所").isEmpty() ? "なし" : r.str("対象外入庫場所"));
@@ -304,7 +304,7 @@ public final class ResultExcelExporter {
     }
 
     private void writeSheetB(VerifyResult r) {
-        List<String> headers = List.of("依頼NO", "②金額", "③アラジン金額", "差額(②-③)", "判定", "備考");
+        List<String> headers = List.of("依頼NO", "②金額", "③月次実績金額", "差額(②-③)", "判定", "備考");
         XSSFSheet ws = createDetailSheet(SHEET_B, headers, "ED7D31");
         int rowIndex = 1;
         for (RecordB rec : r.recordsB()) {
@@ -445,7 +445,7 @@ public final class ResultExcelExporter {
         int rowIndex = 2;
         String[][] items = {
                 {"データの突合構造", "① 東レ検収CSV ─ 検証A(契約NO) ─ ② " + r.str("②名称")
-                        + " ─ 検証B(依頼NO) ─ ③ アラジン"},
+                        + " ─ 検証B(依頼NO) ─ ③ 月次実績"},
                 {"検証Aのキー", r.profile().keyA()},
                 {"検証Bのキー", r.profile().keyB()},
                 {"不一致 (赤)", "両方に存在するが金額が異なる。最優先で原因確認。差額計が東レへ報告する「当月差異」"},

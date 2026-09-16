@@ -63,16 +63,16 @@ class VerifySourceAccessTest {
         Files.writeString(csv, "a");
         Files.writeString(x2, "b");
         Files.writeString(x3, "c");
-        List<KouchinDiscovery.Row> ok = List.of(found("①東レCSV", csv), found("②長岡明細", x2), found("③アラジン", x3));
+        List<KouchinDiscovery.Row> ok = List.of(found("①東レCSV", csv), found("②長岡明細", x2), found("③月次実績", x3));
         assertTrue(VerifySourceAccess.factorySourcesReady(ok));
         assertFalse(VerifySourceAccess.factorySourcesReady(List.of()));
         assertFalse(VerifySourceAccess.factorySourcesReady(null));
 
         KouchinDiscovery.Row missing = new KouchinDiscovery.Row(
                 "②長岡明細", tmp.toString(), tmp.toString(), "", true, "見つかりません");
-        assertFalse(VerifySourceAccess.factorySourcesReady(List.of(found("①東レCSV", csv), missing, found("③アラジン", x3))));
+        assertFalse(VerifySourceAccess.factorySourcesReady(List.of(found("①東レCSV", csv), missing, found("③月次実績", x3))));
         assertFalse(VerifySourceAccess.factorySourcesReady(
-                List.of(found("①東レCSV", csv), found("②長岡明細", tmp.resolve("gone.xlsx")), found("③アラジン", x3))));
+                List.of(found("①東レCSV", csv), found("②長岡明細", tmp.resolve("gone.xlsx")), found("③月次実績", x3))));
     }
 
     @Test
@@ -112,7 +112,7 @@ class VerifySourceAccessTest {
         KouchinDiscovery.Row monthlyGone = new KouchinDiscovery.Row(
                 "湖南 月次処理", tmp.toString(), tmp.toString(), "", true, "見つかりません");
         List<KouchinDiscovery.Row> konan = List.of(
-                found("①東レCSV", csv), found("②試算", n2), found("③アラジン", n3), monthlyGone);
+                found("①東レCSV", csv), found("②試算", n2), found("③月次実績", n3), monthlyGone);
         assertTrue(VerifySourceAccess.factorySourcesReady(konan));
         assertEquals(null, VerifySourceAccess.blockReason(konan));
     }

@@ -207,7 +207,7 @@ public final class CheckVerifyC {
         } else {
             addCompare(rows, monthly, ITEM_SHUKEI, total2Irai, "②加工賃試算 東レ3シート合計", tol);
         }
-        addCompare(rows, monthly, ITEM_JISSEKI2, total3, "③アラジン 東レ(049006)合計", tol);
+        addCompare(rows, monthly, ITEM_JISSEKI2, total3, "③月次実績 東レ(049006)合計", tol);
 
         Double mv = monthly.get(ITEM_URIAGE3);
         if (mv == null) {

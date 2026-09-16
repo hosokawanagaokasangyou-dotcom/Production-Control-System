@@ -269,7 +269,7 @@ public class KouchinSourcesTabController {
                 AppPaths.DEFAULT_KOUCHIN_TORAY_CSV_DIR, true));
         list.add(new FolderSpec(AppPaths.KEY_PM_AI_KOUCHIN_KOKUBU_NAGAOKA_DIR, "国分② 長岡後加工賃明細",
                 AppPaths.DEFAULT_KOUCHIN_KOKUBU_NAGAOKA_DIR, true));
-        list.add(new FolderSpec(AppPaths.KEY_PM_AI_KOUCHIN_KOKUBU_ALADDIN_DIR, "国分③ アラジン",
+        list.add(new FolderSpec(AppPaths.KEY_PM_AI_KOUCHIN_KOKUBU_ALADDIN_DIR, "国分③ 月次実績",
                 AppPaths.DEFAULT_KOUCHIN_KOKUBU_ALADDIN_DIR, true));
         list.add(new FolderSpec(AppPaths.KEY_PM_AI_KOUCHIN_KONAN_SHISAN_DIR, "湖南② 後加工試算（検証と月次トレンドで同一）",
                 AppPaths.DEFAULT_KOUCHIN_KONAN_SHISAN_DIR, false));

@@ -12,6 +12,9 @@ import java.util.List;
  */
 public final class KouchinDiscovery {
 
+    /** ③の検出表・案内の表示名（依頼NO別問合せ＝月次実績）。 */
+    public static final String ROLE_3 = "③月次実績";
+
     public record Row(String role, String path, String fullPath, String ym, boolean missing, String note) {}
 
     private KouchinDiscovery() {}
@@ -43,9 +46,9 @@ public final class KouchinDiscovery {
         Path dir3 = paths.source3Dir(factory);
         try {
             Path a = FileDiscovery.findAladdin(dir3, ym);
-            rows.add(found("③アラジン", dir3, a, ym));
+            rows.add(found(ROLE_3, dir3, a, ym));
         } catch (RuntimeException e) {
-            rows.add(missing("③アラジン", dir3, e.getMessage()));
+            rows.add(missing(ROLE_3, dir3, e.getMessage()));
         }
         if (factory == FactoryId.KONAN) {
             Path monthlyDir = paths.konanMonthlyDir();

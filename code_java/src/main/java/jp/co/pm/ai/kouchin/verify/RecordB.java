@@ -5,7 +5,7 @@ package jp.co.pm.ai.kouchin.verify;
  *
  * @param irai    依頼NO
  * @param amount2 ②金額
- * @param amount3 ③アラジン金額
+ * @param amount3 ③月次実績金額
  * @param diff    差額(②-③)
  * @param judge   判定
  * @param note    備考

@@ -160,7 +160,7 @@ public final class VerifyEngine {
 
         Path dir3 = paths.source3Dir(profile.id());
         if (!Files.isDirectory(dir3)) {
-            throw new VerifyException("③アラジンのフォルダにアクセスできません: " + dir3);
+            throw new VerifyException("③月次実績のフォルダにアクセスできません: " + dir3);
         }
         aladdinFile = FileDiscovery.findAladdin(dir3, targetYm);
 
@@ -210,7 +210,7 @@ public final class VerifyEngine {
 
         if (targetYm != null && aladdinData.taishoYm() != null && !aladdinData.taishoYm().equals(targetYm)) {
             warnings.add("③の対象年月(" + aladdinData.taishoYm().ymLabel() + ")が①の対象月("
-                    + targetYm.ymLabel() + ")と不一致です。アラジンの照会条件を確認してください");
+                    + targetYm.ymLabel() + ")と不一致です。月次実績の照会条件を確認してください");
         }
 
         buildSubtotalHints();
@@ -767,7 +767,7 @@ public final class VerifyEngine {
         }
         for (String k : nonzero) {
             recordsB.add(new RecordB(k, amounts.get(k), null, null, Judge.ONLY_2,
-                    FileDiscovery.joinNonEmpty(" / ", "③アラジンに計上なし(他月にも累計一致なし)", noteB(k))));
+                    FileDiscovery.joinNonEmpty(" / ", "③月次実績に計上なし(他月にも累計一致なし)", noteB(k))));
         }
         return List.copyOf(nonzero);
     }

@@ -61,7 +61,7 @@ public final class SourceRawSheets {
         }
         if (p3 != null && Files.isRegularFile(p3)) {
             try (Workbook src = ExcelValues.open(p3)) {
-                writeObjects(wb, "③アラジン原本", ExcelValues.readFirstSheet(src), attKeiyaku, attIrai, style);
+                writeObjects(wb, "③月次実績原本", ExcelValues.readFirstSheet(src), attKeiyaku, attIrai, style);
             } catch (Exception ignored) {
             }
         }

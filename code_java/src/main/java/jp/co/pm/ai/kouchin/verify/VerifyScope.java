@@ -5,7 +5,7 @@ package jp.co.pm.ai.kouchin.verify;
  */
 public final class VerifyScope {
 
-    /** ③アラジンの TPI 得意先コード（東ﾚﾍﾟﾌ加工品）。 */
+    /** ③月次実績の TPI 得意先コード（東ﾚﾍﾟﾌ加工品）。 */
     public static final String TPI_CUSTOMER = "049052";
 
     private VerifyScope() {}
