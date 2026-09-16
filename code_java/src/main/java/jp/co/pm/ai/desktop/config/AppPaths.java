@@ -72,6 +72,40 @@ public final class AppPaths {
      */
     public static final String KEY_PM_AI_OUTPUT_DIR = "PM_AI_OUTPUT_DIR";
 
+    /** 後加工工賃: 国分 ●自動検証ルート（①CSV 既定の親・手動判定.csv 既定）。 */
+    public static final String KEY_PM_AI_KOUCHIN_BASE_DIR = "PM_AI_KOUCHIN_BASE_DIR";
+
+    public static final String KEY_PM_AI_KOUCHIN_TORAY_CSV_DIR = "PM_AI_KOUCHIN_TORAY_CSV_DIR";
+    public static final String KEY_PM_AI_KOUCHIN_KOKUBU_NAGAOKA_DIR = "PM_AI_KOUCHIN_KOKUBU_NAGAOKA_DIR";
+    public static final String KEY_PM_AI_KOUCHIN_KOKUBU_ALADDIN_DIR = "PM_AI_KOUCHIN_KOKUBU_ALADDIN_DIR";
+    public static final String KEY_PM_AI_KOUCHIN_KONAN_SHISAN_DIR = "PM_AI_KOUCHIN_KONAN_SHISAN_DIR";
+    public static final String KEY_PM_AI_KOUCHIN_KONAN_ALADDIN_DIR = "PM_AI_KOUCHIN_KONAN_ALADDIN_DIR";
+    public static final String KEY_PM_AI_KOUCHIN_KONAN_MONTHLY_DIR = "PM_AI_KOUCHIN_KONAN_MONTHLY_DIR";
+    /** トレンド用・国分年度フォルダ。セミコロン区切り。フォルダピッカー集合には入れない。 */
+    public static final String KEY_PM_AI_KOUCHIN_KOKUBU_YEAR_DIRS = "PM_AI_KOUCHIN_KOKUBU_YEAR_DIRS";
+    /** 任意の第3コピー先。空なら使わない。 */
+    public static final String KEY_PM_AI_KOUCHIN_OUTPUT_DIR = "PM_AI_KOUCHIN_OUTPUT_DIR";
+    /** 手動判定.csv / 前月過不足.csv のフォルダ。既定は国分固定 ●自動検証。BASE に自動追従しない。 */
+    public static final String KEY_PM_AI_KOUCHIN_JUDGMENT_DIR = "PM_AI_KOUCHIN_JUDGMENT_DIR";
+
+    public static final String DEFAULT_KOUCHIN_BASE_DIR =
+            "\\\\192.168.0.101\\共有フォルダ\\国分工場\\国分管理\\後加工\\後加工工賃明細\\●自動検証";
+    public static final String DEFAULT_KOUCHIN_TORAY_CSV_DIR = DEFAULT_KOUCHIN_BASE_DIR + "\\東レ送付CSV";
+    public static final String DEFAULT_KOUCHIN_KOKUBU_NAGAOKA_DIR =
+            DEFAULT_KOUCHIN_BASE_DIR + "\\国分工場\\長岡後加工賃明細";
+    public static final String DEFAULT_KOUCHIN_KOKUBU_ALADDIN_DIR =
+            DEFAULT_KOUCHIN_BASE_DIR + "\\国分工場\\アラジン";
+    public static final String DEFAULT_KOUCHIN_KONAN_SHISAN_DIR =
+            "\\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\002  加工G\\000  後加工業務\\2 後加工試算";
+    public static final String DEFAULT_KOUCHIN_KONAN_ALADDIN_DIR =
+            "\\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\生産管理システム\\管理システム\\●DATA\\月次実績";
+    public static final String DEFAULT_KOUCHIN_KONAN_MONTHLY_DIR =
+            "\\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\生産管理システム\\アラジンオフィスシステムデータ\\月次実績表\\0 東レ月次処理ファイル";
+    public static final String DEFAULT_KOUCHIN_KOKUBU_YEAR_DIRS =
+            "\\\\192.168.0.101\\共有フォルダ\\国分工場\\国分管理\\後加工\\後加工工賃明細\\工賃明細2026年度（令和8年度）"
+                    + ";"
+                    + "\\\\192.168.0.101\\共有フォルダ\\国分工場\\国分管理\\後加工\\後加工工賃明細\\工賃明細２０２５年度　(R7年度)";
+
     /**
      * 配台システム起動時に選択した操作者名（{@link FactoryOperatorUserStore}）。子プロセス env に載せる。
      */
@@ -583,6 +617,10 @@ public final class AppPaths {
                     + "●配台AIシステム\\"
                     + "共有DATA";
 
+    /** 湖南工場の後加工工賃結果出力（{@link #DEFAULT_KONAN_SHARED_DATA_DIR} 配下。無ければ書き出し直前に作成）。 */
+    public static final String DEFAULT_KOUCHIN_KONAN_OUTPUT_DIR =
+            DEFAULT_KONAN_SHARED_DATA_DIR + "\\●自動検証";
+
     /**
      * 配台 PMD（{@link #KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR}）未設定時の配備先。
      * 湖南工場・配台AI {@code 共有DATA}（UNC）。
@@ -752,7 +790,16 @@ public final class AppPaths {
             KEY_PM_AI_RDP_OPERATOR_USERS_STORE_DIR,
             KEY_PM_AI_RPA_LAUNCHER_DEPLOY_DIR,
             KEY_PM_AI_RPA_LAUNCHER_OPERATOR_USERS_STORE_DIR,
-            KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK);
+            KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK,
+            KEY_PM_AI_KOUCHIN_BASE_DIR,
+            KEY_PM_AI_KOUCHIN_TORAY_CSV_DIR,
+            KEY_PM_AI_KOUCHIN_KOKUBU_NAGAOKA_DIR,
+            KEY_PM_AI_KOUCHIN_KOKUBU_ALADDIN_DIR,
+            KEY_PM_AI_KOUCHIN_KONAN_SHISAN_DIR,
+            KEY_PM_AI_KOUCHIN_KONAN_ALADDIN_DIR,
+            KEY_PM_AI_KOUCHIN_KONAN_MONTHLY_DIR,
+            KEY_PM_AI_KOUCHIN_OUTPUT_DIR,
+            KEY_PM_AI_KOUCHIN_JUDGMENT_DIR);
 
     /**
      * {@link #normalizedFolderEnvOverrides(Map)} の処理順（{@link #KEY_PM_AI_REPO_ROOT} を先に確定）。
@@ -2597,6 +2644,24 @@ public final class AppPaths {
         return Paths.get(System.getProperty("user.home"), desktopAppHomeDirName)
                 .toAbsolutePath()
                 .normalize();
+    }
+
+    /** 後加工工賃の直近メール数字キャッシュ（国分）。 */
+    public static Path resolveKouchinLastResultKokubuPath() {
+        return resolveDesktopAppHomeDir().resolve("kouchin-last-result-kokubu.json");
+    }
+
+    /** 後加工工賃の直近メール数字キャッシュ（湖南）。 */
+    public static Path resolveKouchinLastResultKonanPath() {
+        return resolveDesktopAppHomeDir().resolve("kouchin-last-result-konan.json");
+    }
+
+    /** 工場ワークスペースから除外する後加工工賃キー（グローバル session のみ）。 */
+    public static boolean isKouchinEnvKey(String key) {
+        if (key == null || key.isBlank()) {
+            return false;
+        }
+        return key.trim().startsWith("PM_AI_KOUCHIN_");
     }
 
     /** セッション永続化 JSON（{@code session-state.json}）。 */

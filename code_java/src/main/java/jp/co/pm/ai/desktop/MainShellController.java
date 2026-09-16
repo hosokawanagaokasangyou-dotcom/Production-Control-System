@@ -125,6 +125,7 @@ import jp.co.pm.ai.desktop.config.DispatchTrialLogUiStore;
 import jp.co.pm.ai.desktop.config.JvmMemoryLogStore;
 import jp.co.pm.ai.desktop.config.MainShellTabLayoutDefaults;
 import jp.co.pm.ai.desktop.config.MainShellTabLayoutNode;
+import jp.co.pm.ai.desktop.config.MainShellKouchinTabPlacement;
 import jp.co.pm.ai.desktop.config.FactoryOperatorUserStore;
 import jp.co.pm.ai.desktop.config.OperatorActionLogStore;
 import jp.co.pm.ai.desktop.config.OperatorUserPaths;
@@ -516,10 +517,16 @@ public final class MainShellController
     private ProcessingTrendHostTabController processingTrendHostTabController;
 
     @FXML
+    private jp.co.pm.ai.desktop.kouchin.KouchinHostTabController kouchinHostTabController;
+
+    @FXML
     private CodeDispatchLookupTablesTabController codeDispatchLookupTablesTabController;
 
     @FXML
     private Tab mainShellTabEquipmentStatusDashboard;
+
+    @FXML
+    private Tab mainShellTabKouchin;
 
     @FXML
     private Tab mainShellTabProcessingTrend;
@@ -672,6 +679,10 @@ public final class MainShellController
 
     /** 「中断」ボタンで {@link Process#destroyForcibly()} した直後は true（子の exit=1 を cancel 扱いにする）。 */
     private final AtomicBoolean activeStageRunUserCancelled = new AtomicBoolean(false);
+
+    private volatile boolean kouchinRunBusy;
+    private volatile String kouchinBusyLabel = "";
+    private final AtomicBoolean kouchinCancelRequested = new AtomicBoolean(false);
 
     /** {@link #childEnvForPython(Map)} の直近結果（実行タブのキャッシュ表示・ログ用）。 */
     private NetworkSourceDirResolver.Result lastNetworkSourceResolution;
@@ -883,6 +894,9 @@ public final class MainShellController
             if (processingTrendHostTabController != null) {
                 processingTrendHostTabController.bindShell(this);
             }
+            if (kouchinHostTabController != null) {
+                kouchinHostTabController.bindShell(this);
+            }
             envTabController.bindShell(this);
             memorySettingsTabController.bindShell(this);
             if (globalSettingsTabController != null) {
@@ -1081,6 +1095,7 @@ public final class MainShellController
                                                 refreshMainShellTabHeaderChromeFromStoredColors();
                                                 scheduleEquipmentStatusDashboardInitialReloadIfSelected();
                                                 scheduleProcessingTrendInitialReloadIfSelected();
+                                                scheduleKouchinInitialReloadIfSelected();
                                                 scheduleRequestFormPipelineCheckInitialRefreshIfSelected();
                                             }));
                 });
@@ -1140,6 +1155,9 @@ public final class MainShellController
                             if (newTab == mainShellTabProcessingTrend
                                     && processingTrendHostTabController != null) {
                                 processingTrendHostTabController.onMainShellTabSelected();
+                            }
+                            if (newTab == mainShellTabKouchin && kouchinHostTabController != null) {
+                                kouchinHostTabController.onMainShellTabSelected();
                             }
                             if (newTab == mainShellTabRequestFormInput
                                     && requestFormInputTabController != null
@@ -1206,6 +1224,9 @@ public final class MainShellController
                             if (prevTab == mainShellTabProcessingTrend
                                     && processingTrendHostTabController != null) {
                                 processingTrendHostTabController.onMainShellTabDeselected();
+                            }
+                            if (prevTab == mainShellTabKouchin && kouchinHostTabController != null) {
+                                kouchinHostTabController.onMainShellTabDeselected();
                             }
                             if (prevTab == mainShellTabRequestFormInput
                                     && requestFormInputTabController != null) {
@@ -1880,6 +1901,63 @@ public final class MainShellController
         DesktopSessionStateStore.save(collectDesktopSession());
     }
 
+    public boolean isKouchinRunBusy() {
+        return kouchinRunBusy;
+    }
+
+    public AtomicBoolean kouchinCancelRequested() {
+        return kouchinCancelRequested;
+    }
+
+    public boolean tryBeginKouchinRun(String label) {
+        if (isPlanningPipelineStageRunning() || kouchinRunBusy) {
+            return false;
+        }
+        kouchinRunBusy = true;
+        kouchinBusyLabel = label == null || label.isBlank() ? "後加工工賃 検証中…" : label;
+        kouchinCancelRequested.set(false);
+        Platform.runLater(
+                () -> {
+                    updateShellStageProgressOverlay(activeRunStageScript, null);
+                    setGlobalLongTaskProgress(-1, kouchinBusyLabel);
+                });
+        return true;
+    }
+
+    public void endKouchinRun() {
+        kouchinRunBusy = false;
+        kouchinBusyLabel = "";
+        Platform.runLater(
+                () -> {
+                    updateShellStageProgressOverlay(activeRunStageScript, null);
+                    clearGlobalLongTaskProgress();
+                });
+    }
+
+    public void setUiEnvRowValue(String key, String value) {
+        if (key == null || key.isBlank() || envRows == null) {
+            return;
+        }
+        for (EnvVarRow r : envRows) {
+            String n = r.getName() != null ? r.getName().strip() : "";
+            if (key.equals(n)) {
+                r.setValue(value != null ? value : "");
+                persistDesktopSessionNow();
+                return;
+            }
+        }
+        EnvVarRow row = new EnvVarRow();
+        row.setName(key);
+        row.setValue(value != null ? value : "");
+        row.setDescription(EnvVarDocs.mergeDescriptions("", key));
+        envRows.add(row);
+        persistDesktopSessionNow();
+    }
+
+    public FactorySite currentFactorySite() {
+        return AppPaths.currentDispatchFactorySite(snapshotUiEnv());
+    }
+
     /** 配台ワークスペース用スナップショットに書き出す現在の配台表ドキュメント（未初期化時は {@code null}）。 */
     public ResultDispatchDocument snapshotDispatchDocumentForPlanWorkspace() {
         Path json = AppPaths.resolveResultDispatchTableJsonPath(collectUiEnv());
@@ -2443,6 +2521,9 @@ public final class MainShellController
         if (t == mainShellTabProcessingTrend) {
             return MainShellTabId.PROCESSING_TREND;
         }
+        if (t == mainShellTabKouchin) {
+            return MainShellTabId.KOUCHIN;
+        }
         if (t == mainShellTabPipelineExecutionTiming) {
             return MainShellTabId.PIPELINE_EXECUTION_TIMING;
         }
@@ -2560,6 +2641,7 @@ public final class MainShellController
         }
         return switch (id) {
             case EQUIPMENT_STATUS_DASHBOARD -> mainShellTabEquipmentStatusDashboard;
+            case KOUCHIN -> mainShellTabKouchin;
             case PROCESSING_TREND -> mainShellTabProcessingTrend;
             case RUN -> mainShellTabRun;
             case PIPELINE_EXECUTION_TIMING -> mainShellTabPipelineExecutionTiming;
@@ -3327,6 +3409,15 @@ public final class MainShellController
         }
     }
 
+    private void scheduleKouchinInitialReloadIfSelected() {
+        if (tabPane == null || mainShellTabKouchin == null || kouchinHostTabController == null) {
+            return;
+        }
+        if (tabPane.getSelectionModel().getSelectedItem() == mainShellTabKouchin) {
+            kouchinHostTabController.onMainShellTabSelected();
+        }
+    }
+
     private void scheduleRequestFormPipelineCheckInitialRefreshIfSelected() {
         if (tabPane == null
                 || mainShellTabRequestFormPipelineCheck == null
@@ -4005,8 +4096,9 @@ public final class MainShellController
                 keys.add(key);
             }
         }
+        List<String> ordered = MainShellKouchinTabPlacement.insertMissingKey(new ArrayList<>(keys));
         List<MainShellTabLayoutNode> out = new ArrayList<>();
-        for (String key : keys) {
+        for (String key : ordered) {
             out.add(MainShellTabLayoutNode.tabNode(key, ""));
         }
         return List.copyOf(out);
@@ -4101,6 +4193,9 @@ public final class MainShellController
             return List.copyOf(top);
         }
         List<MainShellTabLayoutNode> out = new ArrayList<>(top);
+        if (missing.remove(MainShellKouchinTabPlacement.KOUCHIN)) {
+            out = new ArrayList<>(MainShellKouchinTabPlacement.insertMissingLeaf(out));
+        }
         for (String key : MainShellTabLayoutDefaults.DEFAULT_FLAT_TAB_KEY_ORDER) {
             if (missing.remove(key)) {
                 out.add(MainShellTabLayoutNode.tabNode(key, ""));
@@ -4417,7 +4512,17 @@ public final class MainShellController
 
     private FactorySiteWorkspaceSnapshot buildFactorySiteWorkspaceSnapshot() {
         return new FactorySiteWorkspaceSnapshot(
-                snapshotUiEnvRows(), collectDesktopSession().extractFactoryScopedFields());
+                snapshotFactoryWorkspaceEnvRows(), collectDesktopSession().extractFactoryScopedFields());
+    }
+
+    private List<UiEnvRowSnapshot> snapshotFactoryWorkspaceEnvRows() {
+        List<UiEnvRowSnapshot> out = new ArrayList<>();
+        for (UiEnvRowSnapshot r : snapshotUiEnvRows()) {
+            if (!AppPaths.isKouchinEnvKey(r.name())) {
+                out.add(r);
+            }
+        }
+        return List.copyOf(out);
     }
 
     /**
@@ -4484,7 +4589,20 @@ public final class MainShellController
         if (snapshot == null || !snapshot.hasUiEnvRows()) {
             return;
         }
-        applyUiEnvRowSnapshots(snapshot.uiEnvRows());
+        List<UiEnvRowSnapshot> preservedKouchin = new ArrayList<>();
+        for (UiEnvRowSnapshot r : snapshotUiEnvRows()) {
+            if (AppPaths.isKouchinEnvKey(r.name())) {
+                preservedKouchin.add(r);
+            }
+        }
+        List<UiEnvRowSnapshot> incoming = new ArrayList<>();
+        for (UiEnvRowSnapshot r : snapshot.uiEnvRows()) {
+            if (!AppPaths.isKouchinEnvKey(r.name())) {
+                incoming.add(r);
+            }
+        }
+        incoming.addAll(preservedKouchin);
+        applyUiEnvRowSnapshots(incoming);
         mergeMissingBootstrapEnvRows();
         stripRemovedEnvVarRows(envRows);
         ensureBootstrapDefaultValuesVisible(collectUiEnv());
@@ -4553,6 +4671,9 @@ public final class MainShellController
         }
         if (effective == mainShellTabProcessingTrend && processingTrendHostTabController != null) {
             processingTrendHostTabController.onMainShellTabSelected();
+        }
+        if (effective == mainShellTabKouchin && kouchinHostTabController != null) {
+            kouchinHostTabController.onMainShellTabSelected();
         }
         if (effective == mainShellTabRequestFormInput && requestFormInputTabController != null) {
             requestFormInputTabController.onMainShellTabSelected();
@@ -6653,6 +6774,11 @@ public final class MainShellController
 
     @FXML
     private void onCancelStageRunAction() {
+        if (kouchinRunBusy) {
+            kouchinCancelRequested.set(true);
+            appendLog("[interrupt] 後加工工賃の中断を要求しました…");
+            return;
+        }
         cancelActiveStageRun();
     }
 
@@ -7187,11 +7313,13 @@ public final class MainShellController
         }
         boolean stageScriptBusy = pipelineTimingKindForStageScript(script) != null;
         boolean dispatchTrialBusy = dispatchTrialKind != null;
-        boolean show = stageScriptBusy || dispatchTrialBusy;
+        boolean kouchinBusy = kouchinRunBusy;
+        boolean show = stageScriptBusy || dispatchTrialBusy || kouchinBusy;
         if (show
                 && stageRunBusyDialog != null
                 && stageRunBusyDialog.isShowing()
-                && (STAGE1.equals(script) || STAGE2.equals(script))) {
+                && (STAGE1.equals(script) || STAGE2.equals(script))
+                && !kouchinBusy) {
             show = false;
         }
         if (show) {
@@ -7213,10 +7341,15 @@ public final class MainShellController
                     shellStageProgressLabel.setText("段階2.0 実行中…");
                 } else if (STAGE2_1.equals(script)) {
                     shellStageProgressLabel.setText("段階2.1 実行中…");
+                } else if (kouchinBusy) {
+                    shellStageProgressLabel.setText(
+                            kouchinBusyLabel == null || kouchinBusyLabel.isBlank()
+                                    ? "後加工工賃 検証中…"
+                                    : kouchinBusyLabel);
                 }
             }
             if (shellStageCancelButton != null) {
-                boolean showCancel = stageScriptBusy;
+                boolean showCancel = stageScriptBusy || kouchinBusy;
                 shellStageCancelButton.setManaged(showCancel);
                 shellStageCancelButton.setVisible(showCancel);
             }

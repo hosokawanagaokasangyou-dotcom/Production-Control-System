@@ -624,6 +624,39 @@ public final class EnvVarDocs {
                 "COMPARE_GANTT_SNAPSHOT_DIR",
                 "plan_compare_gantt_from_snapshot.py: 比較元の日時フォルダ"
                         + "（pdf 配下の最新を選択可）。");
+        put(
+                AppPaths.KEY_PM_AI_KOUCHIN_BASE_DIR,
+                "後加工工賃の国分 ●自動検証ルート。手動判定.csv の既定親ではない（PM_AI_KOUCHIN_JUDGMENT_DIR）。"
+                        + " 工場切替では差し替えない。結果の二重保存先（国分・湖南固定 UNC）とは別。"
+                        + " 依頼書原本フォルダへは向けない。");
+        put(
+                AppPaths.KEY_PM_AI_KOUCHIN_TORAY_CSV_DIR,
+                "①東レ送付CSVフォルダ。メール添付は検証タブへドロップしてここにコピー。"
+                        + " 結果の両工場保存とは別。空なら ●自動検証\\東レ送付CSV。");
+        put(
+                AppPaths.KEY_PM_AI_KOUCHIN_KOKUBU_NAGAOKA_DIR,
+                "国分② 長岡後加工賃明細フォルダ。空なら ●自動検証\\国分工場\\長岡後加工賃明細。");
+        put(
+                AppPaths.KEY_PM_AI_KOUCHIN_KOKUBU_ALADDIN_DIR,
+                "国分③ アラジン依頼NO別問合せフォルダ。");
+        put(
+                AppPaths.KEY_PM_AI_KOUCHIN_KONAN_SHISAN_DIR,
+                "湖南② 後加工試算ルート。検証と月次トレンドで同一。空白は半角2つ。");
+        put(
+                AppPaths.KEY_PM_AI_KOUCHIN_KONAN_ALADDIN_DIR,
+                "湖南③ 月次実績（アラジン）。得意先 049006 のみ。");
+        put(
+                AppPaths.KEY_PM_AI_KOUCHIN_KONAN_MONTHLY_DIR,
+                "湖南 検証C用・東レ月次処理ファイルルート。");
+        put(
+                AppPaths.KEY_PM_AI_KOUCHIN_KOKUBU_YEAR_DIRS,
+                "月次トレンド用の国分年度フォルダ。セミコロン区切り。フォルダピッカー対象外。");
+        put(
+                AppPaths.KEY_PM_AI_KOUCHIN_OUTPUT_DIR,
+                "任意の第3コピー先。空なら使わない。国分・湖南の固定 ●自動検証へは常に書く。");
+        put(
+                AppPaths.KEY_PM_AI_KOUCHIN_JUDGMENT_DIR,
+                "手動判定.csv / 前月過不足.csv のフォルダ。既定は国分 ●自動検証。BASE 変更に自動追従しない。");
     }
 
     private EnvVarDocs() {}

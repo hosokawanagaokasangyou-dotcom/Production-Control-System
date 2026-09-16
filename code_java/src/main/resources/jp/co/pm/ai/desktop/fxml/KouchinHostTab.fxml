@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.Tab?>
+<?import javafx.scene.control.TabPane?>
+<?import javafx.scene.layout.BorderPane?>
+
+<BorderPane xmlns="http://javafx.com/javafx/26" xmlns:fx="http://javafx.com/fxml/1"
+            fx:controller="jp.co.pm.ai.desktop.kouchin.KouchinHostTabController"
+            styleClass="pm-kouchin-host-root">
+    <center>
+        <TabPane fx:id="innerTabPane" tabClosingPolicy="UNAVAILABLE">
+            <tabs>
+                <Tab closable="false" text="検証">
+                    <content>
+                        <fx:include fx:id="verifyTab" source="KouchinVerifyTab.fxml"/>
+                    </content>
+                </Tab>
+                <Tab closable="false" text="月次トレンド">
+                    <content>
+                        <fx:include fx:id="trendTab" source="KouchinTrendTab.fxml"/>
+                    </content>
+                </Tab>
+                <Tab closable="false" text="参照先">
+                    <content>
+                        <fx:include fx:id="sourcesTab" source="KouchinSourcesTab.fxml"/>
+                    </content>
+                </Tab>
+            </tabs>
+        </TabPane>
+    </center>
+</BorderPane>

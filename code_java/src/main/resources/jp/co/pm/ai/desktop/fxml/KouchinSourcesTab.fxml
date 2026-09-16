@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ScrollPane?>
+<?import javafx.scene.control.TextField?>
+<?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.layout.ColumnConstraints?>
+<?import javafx.scene.layout.GridPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.VBox?>
+
+<BorderPane xmlns="http://javafx.com/javafx/26" xmlns:fx="http://javafx.com/fxml/1"
+            fx:controller="jp.co.pm.ai.desktop.kouchin.KouchinSourcesTabController">
+    <center>
+        <ScrollPane fitToWidth="true">
+            <VBox spacing="10.0">
+                <padding>
+                    <Insets bottom="12.0" left="12.0" right="12.0" top="12.0"/>
+                </padding>
+                <Label wrapText="true"
+                       text="参照先は環境変数タブと同じキー（グローバル session-state）です。適用するまで検証・月次トレンドは実行できません。両工場への結果保存先は固定で、ここからは変えません。"/>
+                <Label fx:id="judgmentPathLabel" wrapText="true" text="手動判定.csv / 前月過不足.csv:"/>
+                <GridPane fx:id="folderGrid" hgap="8.0" vgap="8.0">
+                    <columnConstraints>
+                        <ColumnConstraints minWidth="220.0"/>
+                        <ColumnConstraints hgrow="ALWAYS"/>
+                        <ColumnConstraints minWidth="90.0"/>
+                        <ColumnConstraints minWidth="90.0"/>
+                    </columnConstraints>
+                </GridPane>
+                <HBox spacing="8.0">
+                    <Button fx:id="applyButton" mnemonicParsing="false" onAction="#onApply" text="適用"/>
+                    <Button fx:id="resetDefaultsButton" mnemonicParsing="false" onAction="#onResetUnchanged"
+                            text="既定に戻す"/>
+                    <Button fx:id="alignFromBaseButton" mnemonicParsing="false" onAction="#onAlignFromBase"
+                            text="BASEから派生を既定に揃える"/>
+                </HBox>
+                <Label fx:id="statusLabel" wrapText="true" text=""/>
+            </VBox>
+        </ScrollPane>
+    </center>
+</BorderPane>

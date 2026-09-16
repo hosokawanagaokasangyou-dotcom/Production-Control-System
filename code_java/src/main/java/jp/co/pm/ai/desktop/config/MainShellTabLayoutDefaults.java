@@ -13,6 +13,7 @@ import jp.co.pm.ai.desktop.MainShellTabId;
  * {@code .cursor/rules/main-shell-tab-management.mdc}; it is not duplicated here as a normative catalog.
  *
  * <p>Add new {@link MainShellTabId} keys at the end of {@link #DEFAULT_FLAT_TAB_KEY_ORDER} (before tab organizer).
+ * 例外: {@code kouchin} は加工トレンド直前（ルール末尾追加の意図的例外）。
  *
  * <p>Rulebook: {@code .cursor/rules/main-shell-tab-management.mdc}
  *
@@ -62,6 +63,7 @@ public final class MainShellTabLayoutDefaults {
                     MainShellTabId.GLOBAL_SETTINGS.key(),
                     MainShellTabId.USER_PROFILES.key(),
                     MainShellTabId.OPERATOR_USER_MANAGEMENT.key(),
+                    MainShellTabId.KOUCHIN.key(),
                     MainShellTabId.PROCESSING_TREND.key());
 
     /**
@@ -82,6 +84,7 @@ public final class MainShellTabLayoutDefaults {
     public static List<MainShellTabLayoutNode> groupedLayout() {
         List<MainShellTabLayoutNode> top = new ArrayList<>();
         top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.EQUIPMENT_STATUS_DASHBOARD.key(), "#994d66"));
+        top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.KOUCHIN.key(), "#c0504d"));
         top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.PROCESSING_TREND.key(), "#2f6fb3"));
         top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.REMOTE_DESKTOP.key(), "#0000ff"));
         top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.REQUEST_FORM_INPUT.key(), "#336633"));

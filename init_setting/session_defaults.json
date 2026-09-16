@@ -1707,6 +1707,7 @@
   ],
   "mainShellTabOrder": [
     "equipmentStatusDashboard",
+    "kouchin",
     "processingTrend",
     "remoteDesktop",
     "requestFormInput",
@@ -1748,6 +1749,11 @@
       "kind": "tab",
       "color": "#994d66",
       "id": "equipmentStatusDashboard"
+    },
+    {
+      "kind": "tab",
+      "color": "#c0504d",
+      "id": "kouchin"
     },
     {
       "kind": "tab",

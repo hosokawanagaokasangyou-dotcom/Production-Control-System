@@ -82,6 +82,14 @@
                         <fx:include fx:id="equipmentStatusDashboardTab" source="EquipmentStatusDashboardTab.fxml"/>
                     </content>
                 </Tab>
+                <Tab fx:id="mainShellTabKouchin" closable="false" text="後加工工賃">
+                    <tooltip>
+                        <Tooltip text="後加工工賃＝①東レCSV・②明細・③アラジンの月次突合。加工トレンド（日次加工量・加工賃）とは別です。"/>
+                    </tooltip>
+                    <content>
+                        <fx:include fx:id="kouchinHostTab" source="KouchinHostTab.fxml"/>
+                    </content>
+                </Tab>
                 <Tab fx:id="mainShellTabProcessingTrend" closable="false" text="加工トレンド">
                     <content>
                         <fx:include fx:id="processingTrendHostTab" source="ProcessingTrendHostTab.fxml"/>
