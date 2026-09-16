@@ -37,6 +37,12 @@
                 <Button fx:id="openKonanExcelButton" mnemonicParsing="false" onAction="#onOpenKonanExcel" text="湖南のExcelを開く">
                     <tooltip><Tooltip text="検証結果Excelを読み取り専用で開く"/></tooltip>
                 </Button>
+                <Button fx:id="openKokubuSource2Button" mnemonicParsing="false" onAction="#onOpenKokubuSource2" text="国分の②を開く" disable="true">
+                    <tooltip><Tooltip text="対象月の②を読み書き可で開く"/></tooltip>
+                </Button>
+                <Button fx:id="openKonanSource2Button" mnemonicParsing="false" onAction="#onOpenKonanSource2" text="湖南の②を開く" disable="true">
+                    <tooltip><Tooltip text="対象月の②を読み書き可で開く"/></tooltip>
+                </Button>
                 <Button fx:id="openFolderButton" mnemonicParsing="false" onAction="#onOpenFolder" text="出力フォルダを開く"/>
                 <Button fx:id="copyMailButton" mnemonicParsing="false" onAction="#onCopyMail" text="メールをコピー"/>
                 <Button fx:id="gotoRdpButton" mnemonicParsing="false" onAction="#onGotoRdp" text="RDPタブへ移動"/>

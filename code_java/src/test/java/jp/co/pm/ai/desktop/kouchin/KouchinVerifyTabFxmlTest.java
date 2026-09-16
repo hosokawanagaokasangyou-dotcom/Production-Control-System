@@ -42,6 +42,21 @@ class KouchinVerifyTabFxmlTest {
     }
 
     @Test
+    @DisplayName("対象月の②を読み書き可で開くボタンがある")
+    void openSource2ButtonsAreSplitByFactory() throws Exception {
+        Element kokubu = elementByFxId("openKokubuSource2Button");
+        Element konan = elementByFxId("openKonanSource2Button");
+        assertNotNull(kokubu, "openKokubuSource2Button が無い");
+        assertNotNull(konan, "openKonanSource2Button が無い");
+        assertEquals("国分の②を開く", kokubu.getAttribute("text"));
+        assertEquals("湖南の②を開く", konan.getAttribute("text"));
+        assertEquals("#onOpenKokubuSource2", kokubu.getAttribute("onAction"));
+        assertEquals("#onOpenKonanSource2", konan.getAttribute("onAction"));
+        assertTrue(tooltipText(kokubu).contains("読み書き可"), tooltipText(kokubu));
+        assertTrue(tooltipText(konan).contains("読み書き可"), tooltipText(konan));
+    }
+
+    @Test
     @DisplayName("ツールバーは折り返し、判定フィルタは結果表の直前")
     void toolbarWrapsAndFilterSitsAboveResults() throws Exception {
         try (InputStream in = KouchinVerifyTabFxmlTest.class.getResourceAsStream(

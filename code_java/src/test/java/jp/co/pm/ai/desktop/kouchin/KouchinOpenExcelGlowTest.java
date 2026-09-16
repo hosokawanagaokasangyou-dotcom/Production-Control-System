@@ -73,6 +73,20 @@ class KouchinOpenExcelGlowTest {
     }
 
     @Test
+    @DisplayName("対象月の②を開くは読み書き可")
+    void openSource2ForUsesReadWrite() throws Exception {
+        String src = Files.readString(Path.of(
+                "src/main/java/jp/co/pm/ai/desktop/kouchin/KouchinVerifyTabController.java"));
+        int start = src.indexOf("private void openSource2For(");
+        assertTrue(start >= 0, "openSource2For が無い");
+        int end = src.indexOf("private void onOpenKokubuExcel(", start);
+        assertTrue(end > start, "onOpenKokubuExcel が無い");
+        String method = src.substring(start, end);
+        assertTrue(method.contains("DesktopFileOpener.openFile("), method);
+        assertFalse(method.contains("openFileReadOnly"), method);
+    }
+
+    @Test
     @DisplayName("検証未了かつ実行可なら検証ボタンを光らせる")
     void glowsRunWhenUnverifiedAndEnabled() {
         assertTrue(KouchinVerifyTabController.shouldGlowRunButton(true, false));

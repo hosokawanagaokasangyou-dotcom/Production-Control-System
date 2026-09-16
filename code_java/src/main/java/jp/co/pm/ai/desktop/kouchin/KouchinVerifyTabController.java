@@ -78,6 +78,8 @@ public class KouchinVerifyTabController {
     @FXML private Button importCsvButton;
     @FXML private Button openKokubuExcelButton;
     @FXML private Button openKonanExcelButton;
+    @FXML private Button openKokubuSource2Button;
+    @FXML private Button openKonanSource2Button;
     @FXML private Button openFolderButton;
     @FXML private Button copyMailButton;
     @FXML private Button gotoRdpButton;
@@ -447,6 +449,34 @@ public class KouchinVerifyTabController {
             return;
         }
         copyDropped(files.stream().map(File::toPath).toList());
+    }
+
+    @FXML
+    private void onOpenKokubuSource2() {
+        openSource2For(FactorySite.KOKUBU);
+    }
+
+    @FXML
+    private void onOpenKonanSource2() {
+        openSource2For(FactorySite.KONAN);
+    }
+
+    private void openSource2For(FactorySite site) {
+        List<KouchinDiscovery.Row> discovery = site == FactorySite.KONAN ? lastKonanDiscovery : lastKokubuDiscovery;
+        VerifyResult verified = lastBoth == null
+                ? null
+                : (site == FactorySite.KONAN ? lastBoth.konan() : lastBoth.kokubu());
+        Path p = source2FileToOpen(verified, discovery);
+        if (p == null) {
+            appendLog((site == FactorySite.KONAN ? "湖南" : "国分") + "の対象月②がありません");
+            return;
+        }
+        try {
+            DesktopFileOpener.openFile(p);
+            setStatus("読み書き可で開いた: " + p.getFileName());
+        } catch (Exception e) {
+            appendLog("②を開けません: " + p.getFileName() + " " + e.getMessage());
+        }
     }
 
     @FXML
@@ -823,6 +853,18 @@ public class KouchinVerifyTabController {
             runKonanButton.setStyle(site == FactorySite.KONAN ? "-fx-font-weight: bold;" : "");
         }
         refreshRunGlow();
+        refreshOpenSource2();
+    }
+
+    private void refreshOpenSource2() {
+        if (openKokubuSource2Button != null) {
+            VerifyResult verified = lastBoth == null ? null : lastBoth.kokubu();
+            openKokubuSource2Button.setDisable(source2FileToOpen(verified, lastKokubuDiscovery) == null);
+        }
+        if (openKonanSource2Button != null) {
+            VerifyResult verified = lastBoth == null ? null : lastBoth.konan();
+            openKonanSource2Button.setDisable(source2FileToOpen(verified, lastKonanDiscovery) == null);
+        }
     }
 
     private void setupDiscoveryTable() {
@@ -936,6 +978,37 @@ public class KouchinVerifyTabController {
 
     static boolean shouldGlowOpenExcel(VerifyRunSupport.Written written, FactorySite site) {
         return VerifyRunSupport.excelFileToOpen(written, site) != null;
+    }
+
+    static Path source2FileToOpen(VerifyResult verified, List<KouchinDiscovery.Row> discovery) {
+        if (verified != null) {
+            Path fromVerify = openablePath(verified.str("②パス"));
+            if (fromVerify != null) {
+                return fromVerify;
+            }
+        }
+        if (discovery != null) {
+            for (KouchinDiscovery.Row row : discovery) {
+                if (row != null && row.role() != null && row.role().startsWith("②")) {
+                    Path found = openableDiscoveryFile(row);
+                    if (found != null) {
+                        return found;
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    static Path openablePath(String full) {
+        if (full == null || full.isBlank()) {
+            return null;
+        }
+        Path p = Path.of(full);
+        if (!Files.isRegularFile(p)) {
+            return null;
+        }
+        return p.toAbsolutePath().normalize();
     }
 
     static boolean shouldGlowRunButton(boolean enabled, boolean verified) {
@@ -1060,15 +1133,7 @@ public class KouchinVerifyTabController {
         if (row == null || row.missing()) {
             return null;
         }
-        String full = row.fullPath();
-        if (full == null || full.isBlank()) {
-            return null;
-        }
-        Path p = Path.of(full);
-        if (!Files.isRegularFile(p)) {
-            return null;
-        }
-        return p.toAbsolutePath().normalize();
+        return openablePath(row.fullPath());
     }
 
     private void openDiscoveryRow(KouchinDiscovery.Row row) {
