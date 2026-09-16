@@ -43,6 +43,7 @@ import jp.co.pm.ai.desktop.MainShellTabId;
 import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.config.FactorySite;
 import jp.co.pm.ai.desktop.io.DesktopFileOpener;
+import jp.co.pm.ai.desktop.ui.ButtonAttentionGlow;
 import jp.co.pm.ai.kouchin.verify.BothResult;
 import jp.co.pm.ai.kouchin.verify.FactoryId;
 import jp.co.pm.ai.kouchin.verify.FileDiscovery;
@@ -88,6 +89,7 @@ public class KouchinVerifyTabController {
     private final AtomicInteger discoveryGeneration = new AtomicInteger();
     private VerifyRunSupport.Written lastWritten;
     private BothResult lastBoth;
+    private ButtonAttentionGlow openExcelGlow;
     private final List<ResultLine> allResultLines = new ArrayList<>();
 
     public static final class ResultLine {
@@ -148,6 +150,9 @@ public class KouchinVerifyTabController {
             searchField.textProperty().addListener((o, a, b) -> applyResultFilter());
         }
         installDropHandlers();
+        if (openExcelButton != null) {
+            openExcelGlow = new ButtonAttentionGlow(openExcelButton);
+        }
         refreshRunEnabled();
     }
 
@@ -267,6 +272,7 @@ public class KouchinVerifyTabController {
         try {
             DesktopFileOpener.openFile(p);
             setStatus("開いた: " + p.toAbsolutePath());
+            stopOpenExcelGlow();
         } catch (Exception e) {
             appendLog("Excelを開けません: " + e.getMessage());
         }
@@ -321,6 +327,7 @@ public class KouchinVerifyTabController {
             appendLog("他の実行中のため開始できません");
             return;
         }
+        stopOpenExcelGlow();
         refreshRunEnabled();
         Map<String, String> ui = shell.snapshotUiEnv();
         KouchinPaths paths = KouchinPaths.fromEnv(ui);
@@ -359,6 +366,7 @@ public class KouchinVerifyTabController {
             Throwable err = task.getException();
             setStatus("失敗: " + (err == null ? "" : err.getMessage()));
             appendLog(String.valueOf(err == null ? "" : err.getMessage()));
+            stopOpenExcelGlow();
             refreshRunEnabled();
         });
         Thread t = new Thread(task, "kouchin-verify");
@@ -406,6 +414,7 @@ public class KouchinVerifyTabController {
         }
         setStatus(st.toString());
         appendLog(st.toString());
+        refreshOpenExcelGlow();
         reloadDiscovery();
     }
 
@@ -616,6 +625,32 @@ public class KouchinVerifyTabController {
                 }
             }
         });
+    }
+
+    static boolean shouldGlowOpenExcel(VerifyRunSupport.Written written, FactorySite site) {
+        if (written == null || site == null) {
+            return false;
+        }
+        return VerifyRunSupport.preferredOpenExcel(written, site) != null;
+    }
+
+    private void refreshOpenExcelGlow() {
+        if (openExcelButton == null) {
+            return;
+        }
+        if (openExcelGlow == null) {
+            openExcelGlow = new ButtonAttentionGlow(openExcelButton);
+        }
+        FactorySite site = shell == null ? FactorySite.KOKUBU : shell.currentFactorySite();
+        if (shouldGlowOpenExcel(lastWritten, site)) {
+            openExcelGlow.ensureActive();
+        } else {
+            openExcelGlow.stop();
+        }
+    }
+
+    private void stopOpenExcelGlow() {
+        ButtonAttentionGlow.stopAll(openExcelGlow);
     }
 
     static Path openableDiscoveryFile(KouchinDiscovery.Row row) {
