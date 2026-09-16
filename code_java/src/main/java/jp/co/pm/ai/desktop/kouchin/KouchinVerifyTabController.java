@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 import javafx.application.Platform;
@@ -50,7 +51,8 @@ import jp.co.pm.ai.kouchin.verify.VerifyRunSupport;
 import jp.co.pm.ai.kouchin.verify.VerifyService;
 
 /**
- * 後加工工賃の検証タブ。POI/CSV/UNC 一覧は {@link #onMainShellTabSelected} でのみ走査する。
+ * 後加工工賃の検証タブ。POI/CSV/UNC 一覧は {@link #onMainShellTabSelected} でワーカーに載せる。
+ * UI 更新は {@link Platform#runLater} のみ。
  */
 public class KouchinVerifyTabController {
 
@@ -78,6 +80,7 @@ public class KouchinVerifyTabController {
     private KouchinHostTabController host;
     private boolean selected;
     private boolean discoveryLoaded;
+    private final AtomicInteger discoveryGeneration = new AtomicInteger();
     private VerifyRunSupport.Written lastWritten;
     private BothResult lastBoth;
     private final List<ResultLine> allResultLines = new ArrayList<>();
@@ -174,17 +177,41 @@ public class KouchinVerifyTabController {
             return;
         }
         discoveryLoaded = true;
+        if (statusLabel != null && lastBoth == null) {
+            statusLabel.setText("検出中…");
+        }
         Map<String, String> ui = shell == null ? Map.of() : shell.snapshotUiEnv();
-        KouchinPaths paths = KouchinPaths.fromEnv(ui);
         FactorySite site = shell == null ? FactorySite.KOKUBU : shell.currentFactorySite();
         FactoryId first = site == FactorySite.KONAN ? FactoryId.KONAN : FactoryId.KOKUBU;
-        List<KouchinDiscovery.Row> rows = new ArrayList<>();
-        rows.addAll(KouchinDiscovery.scan(first, paths));
+        int gen = discoveryGeneration.incrementAndGet();
+        Thread t = new Thread(() -> {
+            List<KouchinDiscovery.Row> rows;
+            String error = null;
+            try {
+                rows = new ArrayList<>(KouchinDiscovery.scan(first, KouchinPaths.fromEnv(ui)));
+            } catch (RuntimeException e) {
+                rows = List.of();
+                error = e.getMessage();
+            }
+            List<KouchinDiscovery.Row> result = rows;
+            String err = error;
+            Platform.runLater(() -> applyDiscoveryResult(gen, result, err));
+        }, "kouchin-discovery");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    private void applyDiscoveryResult(int gen, List<KouchinDiscovery.Row> rows, String error) {
+        if (gen != discoveryGeneration.get()) {
+            return;
+        }
         if (discoveryTable != null) {
             discoveryTable.getItems().setAll(rows);
         }
         if (statusLabel != null && lastBoth == null) {
-            statusLabel.setText("検出完了。未実行なら「まだ検証していません」。");
+            statusLabel.setText(error == null
+                    ? "検出完了。未実行なら「まだ検証していません」。"
+                    : "検出失敗: " + error);
         }
         refreshDropTargetLabel();
         refreshRunEnabled();

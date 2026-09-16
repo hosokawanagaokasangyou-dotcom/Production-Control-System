@@ -28,6 +28,8 @@ public final class FileDiscovery {
 
     /** 「2026年度試算　湖南」（暦年。H30年度等の旧フォルダは対象外） */
     private static final Pattern NENDO_DIR_PATTERN = Pattern.compile("^(\\d{4})年度試算");
+    /** 「7月度加工賃試算.xlsm」のように年がファイル名に無い表記 */
+    private static final Pattern MONTH_ONLY_SHISAN = Pattern.compile("(\\d{1,2})月度");
     /** アラジンのファイル名 {@code _yyyymmdd_hhmmss} */
     private static final Pattern ALADDIN_STAMP_PATTERN = Pattern.compile("_(\\d{8})_(\\d{6})");
     private static final Pattern YEAR_DIR_PATTERN = Pattern.compile("^\\d{4}年$");
@@ -72,6 +74,13 @@ public final class FileDiscovery {
                 : findShisanFiles(folder, targetYm);
     }
 
+    /** UI 検出用の当月②。湖南はファイル名優先で POI しない。 */
+    public static Path findSource2CurrentForUi(FactoryProfile profile, Path folder, YearMonthKey targetYm) {
+        return profile.id() == FactoryId.KOKUBU
+                ? findNagaokaFiles(folder, targetYm).current()
+                : findShisanCurrentForUi(folder, targetYm);
+    }
+
     /** ②ファイル1件の年月（国分=ファイル名 / 湖南=シート内）。 */
     public static Optional<YearMonthKey> ymOfSource2(FactoryProfile profile, Path file) {
         return profile.id() == FactoryId.KOKUBU ? ymFromFilename(file) : ShisanReader.targetYm(file);
@@ -80,6 +89,39 @@ public final class FileDiscovery {
     /** ファイル名の「yyyy年m月度」。 */
     public static Optional<YearMonthKey> ymFromFilename(Path path) {
         return YearMonthKey.parseGatsudo(path.getFileName().toString());
+    }
+
+    /**
+     * 湖南②の対象年月をパスから推定する（POI しない）。
+     * ファイル名「yyyy年m月度」、または親フォルダ「yyyy年度試算」+「m月度加工賃試算」。
+     * 作業中の {@code 月度加工賃試算.xlsm} は空。
+     */
+    public static Optional<YearMonthKey> guessShisanYmFromPath(Path path) {
+        if (path == null) {
+            return Optional.empty();
+        }
+        String name = path.getFileName().toString();
+        Optional<YearMonthKey> fromName = YearMonthKey.parseGatsudo(name);
+        if (fromName.isPresent()) {
+            return fromName;
+        }
+        Matcher monthOnly = MONTH_ONLY_SHISAN.matcher(Norm.norm(name));
+        if (!monthOnly.find()) {
+            return Optional.empty();
+        }
+        int month = Integer.parseInt(monthOnly.group(1));
+        if (month < 1 || month > 12) {
+            return Optional.empty();
+        }
+        Path parent = path.getParent();
+        if (parent == null) {
+            return Optional.empty();
+        }
+        Matcher nendo = NENDO_DIR_PATTERN.matcher(Norm.norm(parent.getFileName().toString()));
+        if (!nendo.find()) {
+            return Optional.empty();
+        }
+        return Optional.of(new YearMonthKey(Integer.parseInt(nendo.group(1)), month));
     }
 
     /** 国分② 後加工工賃明細*.xlsx をファイル名の年月で振り分ける。 */
@@ -94,17 +136,60 @@ public final class FileDiscovery {
         return pickByYm(dated, targetYm, folder);
     }
 
-    /** 湖南② *加工賃試算*.xlsm をシート内の年月で振り分ける。 */
+    /** 湖南② *加工賃試算*.xlsm をパス推定、足りなければシート内の年月で振り分ける。 */
     public static MonthlyFileSet findShisanFiles(Path root, YearMonthKey targetYm) {
         Map<YearMonthKey, List<Path>> dated = new TreeMap<>();
         for (Path f : shisanCandidates(root, targetYm)) {
-            ShisanReader.targetYm(f).ifPresent(ym -> dated.computeIfAbsent(ym, k -> new ArrayList<>()).add(f));
+            guessShisanYmFromPath(f)
+                    .or(() -> ShisanReader.targetYm(f))
+                    .ifPresent(ym -> dated.computeIfAbsent(ym, k -> new ArrayList<>()).add(f));
         }
         if (dated.isEmpty()) {
             throw new VerifyException("東レシートに「yyyy年m月度」を持つ *加工賃試算*.xlsm が見つかりません: "
                     + root + " (直下および「yyyy年度試算　湖南」フォルダ)");
         }
         return pickByYm(dated, targetYm, root);
+    }
+
+    /**
+     * UI 検出用。対象月がファイル名から分かる試算があればそれを使い、作業中 xlsm は開かない。
+     */
+    public static Path findShisanCurrentForUi(Path root, YearMonthKey targetYm) {
+        List<Path> namedHits = new ArrayList<>();
+        List<Path> unnamed = new ArrayList<>();
+        YearMonthKey bestNamedYm = null;
+        Path bestNamed = null;
+        for (Path f : shisanCandidates(root, targetYm)) {
+            Optional<YearMonthKey> guessed = guessShisanYmFromPath(f);
+            if (guessed.isEmpty()) {
+                unnamed.add(f);
+                continue;
+            }
+            YearMonthKey ym = guessed.get();
+            if (targetYm != null) {
+                if (ym.equals(targetYm)) {
+                    namedHits.add(f);
+                }
+            } else if (bestNamedYm == null || ym.compareTo(bestNamedYm) > 0
+                    || (ym.equals(bestNamedYm) && lastModified(f) > lastModified(bestNamed))) {
+                bestNamedYm = ym;
+                bestNamed = f;
+            }
+        }
+        if (targetYm != null && !namedHits.isEmpty()) {
+            return newest(namedHits);
+        }
+        if (targetYm == null && bestNamed != null) {
+            return bestNamed;
+        }
+        for (Path f : unnamed) {
+            Optional<YearMonthKey> ym = ShisanReader.targetYm(f);
+            if (ym.isPresent() && (targetYm == null || ym.get().equals(targetYm))) {
+                return f;
+            }
+        }
+        throw new VerifyException("東レシートに「yyyy年m月度」を持つ *加工賃試算*.xlsm が見つかりません: "
+                + root + " (直下および「yyyy年度試算　湖南」フォルダ)");
     }
 
     /**
@@ -210,22 +295,34 @@ public final class FileDiscovery {
         return result;
     }
 
-    /** 対象年月が①の対象月と一致する③を選ぶ。 */
+    /** 対象年月が①の対象月と一致する③を選ぶ。一致したら新しいファイルから開くのを止める。 */
     public static Path findAladdin(Path folder, YearMonthKey targetYm) {
-        Map<YearMonthKey, Path> all = findAladdinAll(folder);
         if (targetYm == null) {
+            Map<YearMonthKey, Path> all = findAladdinAll(folder);
             YearMonthKey last = null;
             for (YearMonthKey k : all.keySet()) {
                 last = k;
             }
             return all.get(last);
         }
-        Path hit = all.get(targetYm);
-        if (hit != null) {
-            return hit;
+        List<Path> files = list(folder, "依頼NO別問合せ*.xlsx");
+        if (files.isEmpty()) {
+            throw new VerifyException("依頼NO別問合せ*.xlsx が見つかりません: " + folder);
+        }
+        files.sort(Comparator.comparing(FileDiscovery::aladdinSortKey).reversed());
+        Map<YearMonthKey, Path> seen = new TreeMap<>();
+        for (Path f : files) {
+            AladdinReader.targetYm(f).ifPresent(ym -> seen.putIfAbsent(ym, f));
+            Path hit = seen.get(targetYm);
+            if (hit != null) {
+                return hit;
+            }
+        }
+        if (seen.isEmpty()) {
+            throw new VerifyException("③のシート内「対象年月」を読めるファイルがありません: " + folder);
         }
         StringBuilder listing = new StringBuilder();
-        for (Map.Entry<YearMonthKey, Path> e : all.entrySet()) {
+        for (Map.Entry<YearMonthKey, Path> e : seen.entrySet()) {
             if (listing.length() > 0) {
                 listing.append(", ");
             }

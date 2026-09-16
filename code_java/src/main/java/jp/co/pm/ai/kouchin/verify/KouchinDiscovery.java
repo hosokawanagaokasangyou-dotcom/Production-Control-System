@@ -7,6 +7,7 @@ import java.util.List;
 
 /**
  * 検証実行前の①②③検出（UI表用）。欠落は {@code missing=true}。
+ * 湖南②はファイル名から当月を特定し、作業中 xlsm を開かない。
  */
 public final class KouchinDiscovery {
 
@@ -33,8 +34,8 @@ public final class KouchinDiscovery {
         }
         Path dir2 = paths.source2Dir(factory);
         try {
-            MonthlyFileSet set = FileDiscovery.findSource2(profile, dir2, ym);
-            rows.add(new Row("②" + profile.name2(), set.current().toString(),
+            Path current2 = FileDiscovery.findSource2CurrentForUi(profile, dir2, ym);
+            rows.add(new Row("②" + profile.name2(), current2.toString(),
                     ym == null ? "" : ym.gatsudoLabel(), false, ""));
         } catch (RuntimeException e) {
             rows.add(new Row("②" + profile.name2(), dir2.toString(), "", true, e.getMessage()));
