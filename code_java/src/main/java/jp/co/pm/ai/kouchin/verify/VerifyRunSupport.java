@@ -119,18 +119,29 @@ public final class VerifyRunSupport {
         return List.copyOf(unique.values());
     }
 
-    public static Path preferredOpenExcel(Written written, FactorySite site) {
-        List<Path> ok = excelFilesToOpen(written);
-        if (ok.isEmpty()) {
+    /**
+     * 指定工場の検証Excel（同一ファイル名の二重書きは1つ）。無ければ null。他工場へはフォールバックしない。
+     */
+    public static Path excelFileToOpen(Written written, FactorySite site) {
+        if (written == null || site == null) {
             return null;
         }
-        String prefer = site == FactorySite.KOKUBU ? "国分工場" : "湖南工場";
-        for (Path p : ok) {
-            if (p.getFileName().toString().contains(prefer)) {
+        String marker = site == FactorySite.KOKUBU ? "国分工場" : "湖南工場";
+        for (Path p : excelFilesToOpen(written)) {
+            if (p.getFileName().toString().contains(marker)) {
                 return p;
             }
         }
-        return ok.get(0);
+        return null;
+    }
+
+    public static Path preferredOpenExcel(Written written, FactorySite site) {
+        Path exact = excelFileToOpen(written, site);
+        if (exact != null) {
+            return exact;
+        }
+        List<Path> ok = excelFilesToOpen(written);
+        return ok.isEmpty() ? null : ok.get(0);
     }
 
     public static Path preferredOpenDir(Written written, FactorySite site) {

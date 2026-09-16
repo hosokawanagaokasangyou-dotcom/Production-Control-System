@@ -6,6 +6,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.nio.file.Path;
 import java.util.List;
 
+import jp.co.pm.ai.desktop.config.FactorySite;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -41,6 +43,35 @@ class VerifyRunSupportOpenExcelTest {
         List<Path> open = VerifyRunSupport.excelFilesToOpen(written(xlsx));
         assertEquals(1, open.size());
         assertEquals("検証結果_国分工場_1.xlsx", open.get(0).getFileName().toString());
+    }
+
+    @Test
+    @DisplayName("工場指定は自工場のExcelだけを返す")
+    void excelFileToOpenIsFactorySpecific() {
+        DualWriteFiles.WriteOutcome xlsx = new DualWriteFiles.WriteOutcome(
+                List.of(
+                        Path.of("C:/out/kokubu/検証結果_国分工場_1.xlsx"),
+                        Path.of("C:/out/konan/検証結果_国分工場_1.xlsx"),
+                        Path.of("C:/out/kokubu/検証結果_湖南工場_1.xlsx"),
+                        Path.of("C:/out/konan/検証結果_湖南工場_1.xlsx")),
+                List.of());
+        VerifyRunSupport.Written written = written(xlsx);
+        Path kokubu = VerifyRunSupport.excelFileToOpen(written, FactorySite.KOKUBU);
+        Path konan = VerifyRunSupport.excelFileToOpen(written, FactorySite.KONAN);
+        assertEquals("検証結果_国分工場_1.xlsx", kokubu.getFileName().toString());
+        assertEquals("検証結果_湖南工場_1.xlsx", konan.getFileName().toString());
+    }
+
+    @Test
+    @DisplayName("他工場のExcelしか無いときは自工場指定は空")
+    void excelFileToOpenDoesNotFallBackToOtherFactory() {
+        DualWriteFiles.WriteOutcome xlsx = new DualWriteFiles.WriteOutcome(
+                List.of(Path.of("C:/out/kokubu/検証結果_湖南工場_1.xlsx")),
+                List.of());
+        VerifyRunSupport.Written written = written(xlsx);
+        assertTrue(VerifyRunSupport.excelFileToOpen(written, FactorySite.KOKUBU) == null);
+        assertEquals("検証結果_湖南工場_1.xlsx",
+                VerifyRunSupport.excelFileToOpen(written, FactorySite.KONAN).getFileName().toString());
     }
 
     @Test

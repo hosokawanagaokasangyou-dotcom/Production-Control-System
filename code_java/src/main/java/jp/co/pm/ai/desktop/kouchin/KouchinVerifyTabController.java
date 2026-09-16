@@ -69,7 +69,8 @@ public class KouchinVerifyTabController {
     @FXML private Button runKonanButton;
     @FXML private Button runBothButton;
     @FXML private Button importCsvButton;
-    @FXML private Button openExcelButton;
+    @FXML private Button openKokubuExcelButton;
+    @FXML private Button openKonanExcelButton;
     @FXML private Button openFolderButton;
     @FXML private Button copyMailButton;
     @FXML private Button gotoRdpButton;
@@ -89,7 +90,8 @@ public class KouchinVerifyTabController {
     private final AtomicInteger discoveryGeneration = new AtomicInteger();
     private VerifyRunSupport.Written lastWritten;
     private BothResult lastBoth;
-    private ButtonAttentionGlow openExcelGlow;
+    private ButtonAttentionGlow openKokubuExcelGlow;
+    private ButtonAttentionGlow openKonanExcelGlow;
     private final List<ResultLine> allResultLines = new ArrayList<>();
 
     public static final class ResultLine {
@@ -150,8 +152,11 @@ public class KouchinVerifyTabController {
             searchField.textProperty().addListener((o, a, b) -> applyResultFilter());
         }
         installDropHandlers();
-        if (openExcelButton != null) {
-            openExcelGlow = new ButtonAttentionGlow(openExcelButton);
+        if (openKokubuExcelButton != null) {
+            openKokubuExcelGlow = new ButtonAttentionGlow(openKokubuExcelButton);
+        }
+        if (openKonanExcelButton != null) {
+            openKonanExcelGlow = new ButtonAttentionGlow(openKonanExcelButton);
         }
         refreshRunEnabled();
     }
@@ -261,26 +266,27 @@ public class KouchinVerifyTabController {
     }
 
     @FXML
-    private void onOpenExcel() {
-        List<Path> files = VerifyRunSupport.excelFilesToOpen(lastWritten);
-        if (files.isEmpty()) {
-            appendLog("開く Excel がありません（書込成功側が候補）");
+    private void onOpenKokubuExcel() {
+        openExcelFor(FactorySite.KOKUBU);
+    }
+
+    @FXML
+    private void onOpenKonanExcel() {
+        openExcelFor(FactorySite.KONAN);
+    }
+
+    private void openExcelFor(FactorySite site) {
+        Path p = VerifyRunSupport.excelFileToOpen(lastWritten, site);
+        if (p == null) {
+            appendLog((site == FactorySite.KONAN ? "湖南" : "国分") + "のExcelがありません（書込成功側が候補）");
             return;
         }
-        int opened = 0;
-        for (Path p : files) {
-            try {
-                DesktopFileOpener.openFile(p);
-                opened++;
-            } catch (Exception e) {
-                appendLog("Excelを開けません: " + p.getFileName() + " " + e.getMessage());
-            }
-        }
-        if (opened > 0) {
-            setStatus("開いた: " + files.stream()
-                    .map(p -> p.getFileName().toString())
-                    .collect(Collectors.joining(" / ")));
-            stopOpenExcelGlow();
+        try {
+            DesktopFileOpener.openFile(p);
+            setStatus("開いた: " + p.getFileName());
+            stopOpenExcelGlow(site);
+        } catch (Exception e) {
+            appendLog("Excelを開けません: " + p.getFileName() + " " + e.getMessage());
         }
     }
 
@@ -634,29 +640,44 @@ public class KouchinVerifyTabController {
     }
 
     static boolean shouldGlowOpenExcel(VerifyRunSupport.Written written, FactorySite site) {
-        if (written == null || site == null) {
-            return false;
-        }
-        return !VerifyRunSupport.excelFilesToOpen(written).isEmpty();
+        return VerifyRunSupport.excelFileToOpen(written, site) != null;
     }
 
     private void refreshOpenExcelGlow() {
-        if (openExcelButton == null) {
+        applyOpenExcelGlow(FactorySite.KOKUBU, openKokubuExcelButton);
+        applyOpenExcelGlow(FactorySite.KONAN, openKonanExcelButton);
+    }
+
+    private void applyOpenExcelGlow(FactorySite site, Button button) {
+        if (button == null) {
             return;
         }
-        if (openExcelGlow == null) {
-            openExcelGlow = new ButtonAttentionGlow(openExcelButton);
+        ButtonAttentionGlow glow = site == FactorySite.KONAN ? openKonanExcelGlow : openKokubuExcelGlow;
+        if (glow == null) {
+            glow = new ButtonAttentionGlow(button);
+            if (site == FactorySite.KONAN) {
+                openKonanExcelGlow = glow;
+            } else {
+                openKokubuExcelGlow = glow;
+            }
         }
-        FactorySite site = shell == null ? FactorySite.KOKUBU : shell.currentFactorySite();
         if (shouldGlowOpenExcel(lastWritten, site)) {
-            openExcelGlow.ensureActive();
+            glow.ensureActive();
         } else {
-            openExcelGlow.stop();
+            glow.stop();
         }
     }
 
     private void stopOpenExcelGlow() {
-        ButtonAttentionGlow.stopAll(openExcelGlow);
+        ButtonAttentionGlow.stopAll(openKokubuExcelGlow, openKonanExcelGlow);
+    }
+
+    private void stopOpenExcelGlow(FactorySite site) {
+        if (site == FactorySite.KONAN) {
+            ButtonAttentionGlow.stopAll(openKonanExcelGlow);
+        } else {
+            ButtonAttentionGlow.stopAll(openKokubuExcelGlow);
+        }
     }
 
     static Path openableDiscoveryFile(KouchinDiscovery.Row row) {

@@ -1,5 +1,6 @@
 package jp.co.pm.ai.desktop.kouchin;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -13,6 +14,19 @@ import org.w3c.dom.Element;
 import org.w3c.dom.NodeList;
 
 class KouchinVerifyTabFxmlTest {
+
+    @Test
+    @DisplayName("Excelを開くは国分と湖南でボタンが分かれている")
+    void openExcelButtonsAreSplitByFactory() throws Exception {
+        Element kokubu = elementByFxId("openKokubuExcelButton");
+        Element konan = elementByFxId("openKonanExcelButton");
+        assertNotNull(kokubu, "openKokubuExcelButton が無い");
+        assertNotNull(konan, "openKonanExcelButton が無い");
+        assertEquals("国分のExcelを開く", kokubu.getAttribute("text"));
+        assertEquals("湖南のExcelを開く", konan.getAttribute("text"));
+        assertEquals("#onOpenKokubuExcel", kokubu.getAttribute("onAction"));
+        assertEquals("#onOpenKonanExcel", konan.getAttribute("onAction"));
+    }
 
     @Test
     @DisplayName("検出表は①②③＋湖南月次の4行がヘッダごと見切れない高さ")

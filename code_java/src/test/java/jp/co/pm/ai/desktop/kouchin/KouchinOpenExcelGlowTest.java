@@ -46,5 +46,14 @@ class KouchinOpenExcelGlowTest {
                 "20260916_000000",
                 "報告メール_統合_20260916_000000");
         assertFalse(KouchinVerifyTabController.shouldGlowOpenExcel(noXlsx, FactorySite.KONAN));
+        VerifyRunSupport.Written konanOnly = new VerifyRunSupport.Written(
+                new DualWriteFiles.WriteOutcome(
+                        List.of(Path.of("検証結果_湖南工場_20260916.xlsx")), List.of()),
+                new DualWriteFiles.WriteOutcome(List.of(), List.of()),
+                new DualWriteFiles.WriteOutcome(List.of(), List.of()),
+                "20260916_000000",
+                "報告メール_統合_20260916_000000");
+        assertTrue(KouchinVerifyTabController.shouldGlowOpenExcel(konanOnly, FactorySite.KONAN));
+        assertFalse(KouchinVerifyTabController.shouldGlowOpenExcel(konanOnly, FactorySite.KOKUBU));
     }
 }
