@@ -9,6 +9,7 @@ import org.apache.poi.ss.usermodel.HorizontalAlignment;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.VerticalAlignment;
 import org.apache.poi.ss.util.CellRangeAddress;
+import org.apache.poi.xssf.usermodel.XSSFCell;
 import org.apache.poi.xssf.usermodel.XSSFCellStyle;
 import org.apache.poi.xssf.usermodel.XSSFColor;
 import org.apache.poi.xssf.usermodel.XSSFFont;
@@ -47,6 +48,11 @@ public final class ResultExcelExporter {
     private static final String HEADER_FILL = "4472C4";
     private static final String ACCENT = "1F4E79";
     private static final String GRAY = "595959";
+    private static final String SECTION_LINE = "4472C4";
+    private static final String KV_LINE = "BFBFBF";
+    /** サマリ本文（B〜G）。結合セルの罫線もこの範囲に引く。 */
+    private static final int SUMMARY_FIRST = 1;
+    private static final int SUMMARY_LAST = 6;
     private static final DateTimeFormatter FILE_STAMP = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss");
 
     /** 見出し・本文フォント（無ければ游ゴシック） */
@@ -176,6 +182,7 @@ public final class ResultExcelExporter {
             put(ws, 3, col, cards[i][0], style("kpiLabel" + cards[i][3], palette[1], palette[0], true, 10, true, null));
             put(ws, 4, col, cards[i][1], style("kpiValue" + cards[i][3], palette[1], palette[0], true, 16, true, null));
             put(ws, 5, col, cards[i][2], style("kpiSub" + cards[i][3], palette[1], palette[0], false, 8.5, true, null));
+            boxRange(ws, 3, col, 5, col, BorderStyle.THIN, palette[1]);
         }
         row(ws, 4).setHeightInPoints(24f);
 
@@ -233,7 +240,7 @@ public final class ResultExcelExporter {
             CellStyle warnStyle = style("warn", "9C0006", "FDE9E9", false, 10, false, null);
             for (String warning : r.warnings()) {
                 put(ws, rowIndex, 1, "⚠ " + warning, warnStyle);
-                merge(ws, rowIndex, 1, 7);
+                merge(ws, rowIndex, SUMMARY_FIRST, SUMMARY_LAST);
                 rowIndex++;
             }
             rowIndex++;
@@ -253,22 +260,24 @@ public final class ResultExcelExporter {
     }
 
     private int section(XSSFSheet ws, int rowIndex, String title) {
-        put(ws, rowIndex, 1, title, style("section", ACCENT, null, true, 12, false, BorderStyle.MEDIUM));
-        merge(ws, rowIndex, 1, 7);
+        put(ws, rowIndex, SUMMARY_FIRST, title, style("section", ACCENT, null, true, 12, false, null));
+        merge(ws, rowIndex, SUMMARY_FIRST, SUMMARY_LAST);
+        underlineRange(ws, rowIndex, SUMMARY_FIRST, SUMMARY_LAST, BorderStyle.MEDIUM, SECTION_LINE);
         return rowIndex + 1;
     }
 
     private int kv(XSSFSheet ws, int rowIndex, String label, Object value) {
-        put(ws, rowIndex, 1, label, style("kvLabel", null, null, false, 10, false, null));
+        put(ws, rowIndex, SUMMARY_FIRST, label, style("kvLabel", null, null, false, 10, false, null));
         Cell cell = row(ws, rowIndex).createCell(2);
         if (value instanceof Number n) {
             cell.setCellValue(n.doubleValue());
-            cell.setCellStyle(numberStyle(null, false, true));
+            cell.setCellStyle(numberStyle(null, false, true, false));
         } else {
             cell.setCellValue(String.valueOf(value));
             cell.setCellStyle(style("kvValue", null, null, false, 10, false, null));
         }
-        merge(ws, rowIndex, 2, 7);
+        merge(ws, rowIndex, 2, SUMMARY_LAST);
+        boxRange(ws, rowIndex, SUMMARY_FIRST, rowIndex, SUMMARY_LAST, BorderStyle.THIN, KV_LINE);
         return rowIndex + 1;
     }
 
@@ -509,7 +518,11 @@ public final class ResultExcelExporter {
     }
 
     private CellStyle numberStyle(String fill, boolean bold, boolean integral) {
-        String key = "num/" + fill + "/" + bold + "/" + integral;
+        return numberStyle(fill, bold, integral, true);
+    }
+
+    private CellStyle numberStyle(String fill, boolean bold, boolean integral, boolean border) {
+        String key = "num/" + fill + "/" + bold + "/" + integral + "/" + border;
         return styles.computeIfAbsent(key, k -> {
             XSSFCellStyle cs = wb.createCellStyle();
             cs.setFont(font(bold, null, 10.5, true));
@@ -517,9 +530,66 @@ public final class ResultExcelExporter {
             cs.setAlignment(HorizontalAlignment.RIGHT);
             cs.setVerticalAlignment(VerticalAlignment.CENTER);
             applyFill(cs, fill);
-            applyBorder(cs, BorderStyle.THIN);
+            if (border) {
+                applyBorder(cs, BorderStyle.THIN);
+            }
             return cs;
         });
+    }
+
+    private void underlineRange(XSSFSheet ws, int rowIndex, int firstCol, int lastCol,
+            BorderStyle style, String colorHex) {
+        XSSFColor color = new XSSFColor(rgb(colorHex), null);
+        for (int c = firstCol; c <= lastCol; c++) {
+            XSSFCell cell = cellAt(ws, rowIndex, c);
+            XSSFCellStyle cs = copyStyle(cell);
+            cs.setBorderBottom(style);
+            cs.setBottomBorderColor(color);
+            cell.setCellStyle(cs);
+        }
+    }
+
+    private void boxRange(XSSFSheet ws, int r1, int c1, int r2, int c2, BorderStyle style, String colorHex) {
+        XSSFColor color = new XSSFColor(rgb(colorHex), null);
+        for (int r = r1; r <= r2; r++) {
+            for (int c = c1; c <= c2; c++) {
+                XSSFCell cell = cellAt(ws, r, c);
+                XSSFCellStyle cs = copyStyle(cell);
+                if (r == r1) {
+                    cs.setBorderTop(style);
+                    cs.setTopBorderColor(color);
+                }
+                if (r == r2) {
+                    cs.setBorderBottom(style);
+                    cs.setBottomBorderColor(color);
+                }
+                if (c == c1) {
+                    cs.setBorderLeft(style);
+                    cs.setLeftBorderColor(color);
+                }
+                if (c == c2) {
+                    cs.setBorderRight(style);
+                    cs.setRightBorderColor(color);
+                }
+                cell.setCellStyle(cs);
+            }
+        }
+    }
+
+    private XSSFCell cellAt(XSSFSheet ws, int rowIndex, int col) {
+        Cell existing = row(ws, rowIndex).getCell(col);
+        if (existing instanceof XSSFCell xc) {
+            return xc;
+        }
+        return (XSSFCell) row(ws, rowIndex).createCell(col);
+    }
+
+    private XSSFCellStyle copyStyle(Cell cell) {
+        XSSFCellStyle cs = wb.createCellStyle();
+        if (cell != null && cell.getCellStyle() != null) {
+            cs.cloneStyleFrom(cell.getCellStyle());
+        }
+        return cs;
     }
 
     private CellStyle style(String key, String fontColor, String fill, boolean bold,
