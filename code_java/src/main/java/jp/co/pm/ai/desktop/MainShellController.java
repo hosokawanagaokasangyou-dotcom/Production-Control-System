@@ -1920,6 +1920,9 @@ public final class MainShellController
                 () -> {
                     updateShellStageProgressOverlay(activeRunStageScript, null);
                     setGlobalLongTaskProgress(-1, kouchinBusyLabel);
+                    if (kouchinHostTabController != null) {
+                        kouchinHostTabController.setRunBusy(true, kouchinBusyLabel);
+                    }
                 });
         return true;
     }
@@ -1931,7 +1934,19 @@ public final class MainShellController
                 () -> {
                     updateShellStageProgressOverlay(activeRunStageScript, null);
                     clearGlobalLongTaskProgress();
+                    if (kouchinHostTabController != null) {
+                        kouchinHostTabController.setRunBusy(false, "");
+                    }
                 });
+    }
+
+    /** 後加工工賃の実行中断。ツールバー中断とタブ中央モーダルの中断で共用する。 */
+    public void requestKouchinCancel() {
+        if (!kouchinRunBusy) {
+            return;
+        }
+        kouchinCancelRequested.set(true);
+        appendLog("[interrupt] 後加工工賃の中断を要求しました…");
     }
 
     public void setUiEnvRowValue(String key, String value) {
@@ -6775,8 +6790,7 @@ public final class MainShellController
     @FXML
     private void onCancelStageRunAction() {
         if (kouchinRunBusy) {
-            kouchinCancelRequested.set(true);
-            appendLog("[interrupt] 後加工工賃の中断を要求しました…");
+            requestKouchinCancel();
             return;
         }
         cancelActiveStageRun();

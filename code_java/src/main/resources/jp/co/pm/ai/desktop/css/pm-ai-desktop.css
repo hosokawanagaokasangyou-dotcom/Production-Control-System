@@ -1251,6 +1251,39 @@
     -fx-font-weight: bold;
 }
 
+.pm-kouchin-busy-overlay {
+    -fx-alignment: center;
+}
+
+.pm-kouchin-busy-backdrop {
+    -fx-background-color: rgba(0, 0, 0, 0.48);
+}
+
+.pm-kouchin-busy-card {
+    -fx-alignment: center;
+    -fx-background-color: derive(-fx-base, 12%);
+    -fx-background-radius: 12;
+    -fx-border-color: derive(-fx-base, -18%);
+    -fx-border-radius: 12;
+    -fx-border-width: 1;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.28), 14, 0, 0, 3);
+}
+
+.pm-kouchin-busy-message {
+    -fx-font-size: 15px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -fx-text-base-color;
+    -fx-alignment: center;
+    -fx-text-alignment: center;
+    -fx-wrap-text: true;
+}
+
+.pm-kouchin-busy-elapsed {
+    -fx-font-size: 12px;
+    -fx-text-fill: -fx-accent;
+    -fx-font-weight: bold;
+}
+
 .pm-company-calendar-grid-loading-label {
     -fx-font-size: 13px;
     -fx-font-weight: bold;

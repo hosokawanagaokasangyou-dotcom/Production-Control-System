@@ -37,6 +37,16 @@ class KouchinHostTabFxmlTest {
         assertEquals(List.of("検証", "月次トレンド", "参照先"), MainShellInnerTabCatalog.labelsFor(MainShellTabId.KOUCHIN));
     }
 
+    @Test
+    void hostHasCenteredBusyOverlay() throws Exception {
+        assertEquals("StackPane", rootTagName());
+        assertNotNull(elementByFxId("busyOverlay"));
+        assertNotNull(elementByFxId("busyIndicator"));
+        assertNotNull(elementByFxId("busyBar"));
+        assertNotNull(elementByFxId("busyLabel"));
+        assertNotNull(elementByFxId("busyCancelButton"));
+    }
+
     private static String rootController() throws Exception {
         try (InputStream in =
                 KouchinHostTabFxmlTest.class.getResourceAsStream(
@@ -44,6 +54,16 @@ class KouchinHostTabFxmlTest {
             assertNotNull(in);
             var doc = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(in);
             return doc.getDocumentElement().getAttribute("fx:controller");
+        }
+    }
+
+    private static String rootTagName() throws Exception {
+        try (InputStream in =
+                KouchinHostTabFxmlTest.class.getResourceAsStream(
+                        "/jp/co/pm/ai/desktop/fxml/KouchinHostTab.fxml")) {
+            assertNotNull(in);
+            var doc = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(in);
+            return doc.getDocumentElement().getTagName();
         }
     }
 
