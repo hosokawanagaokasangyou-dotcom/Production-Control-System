@@ -43,6 +43,65 @@ class CheckVerifyCTest {
     }
 
     @Test
+    void gokei1MatchesShisanEvenWhenShukeiDropsYs() throws Exception {
+        Map<String, Double> monthly = new LinkedHashMap<>();
+        monthly.put(CheckVerifyC.ITEM_JISSEKI1, 6_430_409.0);
+        monthly.put(CheckVerifyC.ITEM_GOKEI1, 6_430_409.0);
+        monthly.put(CheckVerifyC.ITEM_SHUKEI, 5_713_409.0);
+        monthly.put(CheckVerifyC.ITEM_JISSEKI2, 6_430_409.0);
+        monthly.put(CheckVerifyC.ITEM_URIAGE3, 6_430_409.0);
+        Path f = tmp.resolve("2026年7月度 月次処理ファイル.xlsx");
+        Files.write(f, new byte[] {1});
+        CheckCResult r = CheckVerifyC.evaluate(f, monthly, 6_430_409.0, 6_430_409.0, 6_430_409.0, 0, 0.5);
+        assertEquals(CheckCResult.MATCH, row(r, CheckVerifyC.ITEM_GOKEI1).judge());
+        assertEquals(0, r.needCheckCount());
+        CheckCResult.Row shukei = row(r, CheckVerifyC.ITEM_SHUKEI);
+        assertEquals(CheckCResult.SHEET_INTERNAL, shukei.judge());
+        assertTrue(shukei.note().contains("後加工集計"));
+    }
+
+    @Test
+    void readMonthlyFileGokei1FromAtogakoSheet() throws Exception {
+        Path f = tmp.resolve("2026年7月度 月次処理ファイル.xlsx");
+        try (XSSFWorkbook wb = new XSSFWorkbook()) {
+            var gokei = wb.createSheet("Excel 後加工集計①");
+            var r4 = gokei.createRow(3);
+            r4.createCell(4).setCellValue("合計");
+            var ys = gokei.createRow(4);
+            ys.createCell(1).setCellValue("東レ　Ｙ.S");
+            ys.createCell(4).setCellValue(717_000);
+            var tvc = gokei.createRow(5);
+            tvc.createCell(1).setCellValue("東レ T.V.C");
+            tvc.createCell(4).setCellValue(4_059_163);
+            var we = gokei.createRow(6);
+            we.createCell(1).setCellValue("東レ W.E");
+            we.createCell(4).setCellValue(1_654_246);
+            var tot = gokei.createRow(7);
+            tot.createCell(1).setCellValue("東レ 合計");
+            tot.createCell(4).setCellValue(6_430_409);
+            var sen = gokei.createRow(8);
+            sen.createCell(4).setCellValue(6_430.409);
+            var shukei = wb.createSheet("集計表");
+            var sh = shukei.createRow(0);
+            sh.createCell(0).setCellValue("区分");
+            sh.createCell(1).setCellValue("加工金額");
+            var sr = shukei.createRow(1);
+            sr.createCell(0).setCellValue("東レ合計");
+            sr.createCell(1).setCellValue(5_713_409);
+            try (var out = Files.newOutputStream(f)) {
+                wb.write(out);
+            }
+        }
+        Map<String, Double> m = CheckVerifyC.readMonthlyFile(f);
+        assertEquals(6_430_409.0, m.get(CheckVerifyC.ITEM_GOKEI1), 0.001);
+        assertEquals(5_713_409.0, m.get(CheckVerifyC.ITEM_SHUKEI), 0.001);
+    }
+
+    private static CheckCResult.Row row(CheckCResult r, String item) {
+        return r.rows().stream().filter(x -> item.equals(x.item())).findFirst().orElseThrow();
+    }
+
+    @Test
     void readMonthlyFileColumns() throws Exception {
         Path f = tmp.resolve("2026年8月度 月次処理ファイル.xlsx");
         try (XSSFWorkbook wb = new XSSFWorkbook()) {

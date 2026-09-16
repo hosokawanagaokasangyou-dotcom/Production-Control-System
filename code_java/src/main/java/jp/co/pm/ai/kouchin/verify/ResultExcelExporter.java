@@ -367,7 +367,11 @@ public final class ResultExcelExporter {
                         ? "C6EFCE"
                         : CheckCResult.EXPLAINABLE.equals(cr.judge())
                                 ? "DDEBF7"
-                                : CheckCResult.UNREADABLE.equals(cr.judge()) ? "F8CBAD" : "FFC7CE";
+                                : CheckCResult.UNREADABLE.equals(cr.judge())
+                                        ? "F8CBAD"
+                                        : CheckCResult.SHEET_INTERNAL.equals(cr.judge())
+                                                ? "FFF2CC"
+                                                : "FFC7CE";
                 text(row, 0, cr.item(), fill);
                 number(row, 1, cr.monthlyValue(), fill, false);
                 number(row, 2, cr.ours(), fill, false);

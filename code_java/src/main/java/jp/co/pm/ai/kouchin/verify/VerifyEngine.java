@@ -608,7 +608,8 @@ public final class VerifyEngine {
         for (CheckCResult.Row row : checkC.rows()) {
             if (CheckCResult.MISMATCH.equals(row.judge())
                     || CheckCResult.NEED_CHECK.equals(row.judge())
-                    || CheckCResult.UNREADABLE.equals(row.judge())) {
+                    || CheckCResult.UNREADABLE.equals(row.judge())
+                    || CheckCResult.SHEET_INTERNAL.equals(row.judge())) {
                 warnings.add("検証C " + row.item() + " " + row.judge()
                         + (row.note() == null ? "" : " (" + row.note() + ")"));
             }

@@ -14,10 +14,15 @@ import org.apache.poi.ss.usermodel.Workbook;
 
 /**
  * 検証C（湖南）: 月次処理ファイルの東レ合計 vs 本検証の総額。
+ *
+ * <p>②試算との照合正本は「Excel 後加工集計①」の東レ合計（E列・円）。
+ * 「集計表」東レ合計は Y.S 欠落などで後加工集計①とずれることがあるため、
+ * 試算不一致にはせず集計表内部の指摘にする。シートが無い旧ブックは集計表へフォールバックする。
  */
 public final class CheckVerifyC {
 
     public static final String ITEM_JISSEKI1 = "月次検証: 月次実績①(Excel)";
+    public static final String ITEM_GOKEI1 = "Excel 後加工集計①: 東レ合計";
     public static final String ITEM_SHUKEI = "集計表: 東レ合計 加工金額";
     public static final String ITEM_JISSEKI2 = "月次検証: 月次実績表②(アラジン)";
     public static final String ITEM_URIAGE3 = "月次検証: 売上明細③";
@@ -170,6 +175,10 @@ public final class CheckVerifyC {
                     }
                 }
             }
+            Double gokei1 = readGokei1TorayTotal(wb);
+            if (gokei1 != null) {
+                res.put(ITEM_GOKEI1, gokei1);
+            }
         } finally {
             try {
                 wb.close();
@@ -192,7 +201,12 @@ public final class CheckVerifyC {
         }
         List<CheckCResult.Row> rows = new ArrayList<>();
         addCompare(rows, monthly, ITEM_JISSEKI1, total2Irai, "②加工賃試算 東レ3シート合計", tol);
-        addCompare(rows, monthly, ITEM_SHUKEI, total2Irai, "②加工賃試算 東レ3シート合計", tol);
+        if (monthly.get(ITEM_GOKEI1) != null) {
+            addCompare(rows, monthly, ITEM_GOKEI1, total2Irai, "②加工賃試算 東レ3シート合計", tol);
+            addShukeiInternal(rows, monthly, tol);
+        } else {
+            addCompare(rows, monthly, ITEM_SHUKEI, total2Irai, "②加工賃試算 東レ3シート合計", tol);
+        }
         addCompare(rows, monthly, ITEM_JISSEKI2, total3, "③アラジン 東レ(049006)合計", tol);
 
         Double mv = monthly.get(ITEM_URIAGE3);
@@ -216,6 +230,56 @@ public final class CheckVerifyC {
             rows.add(new CheckCResult.Row(ITEM_URIAGE3, mv, total1, d, judge, note));
         }
         return new CheckCResult(monthlyFile, null, List.copyOf(rows));
+    }
+
+    /**
+     * 「Excel 後加工集計①」（シート名に後加工集計を含む）の東レ合計・E列（円）。
+     * 千円行はラベルが無いので採らない。
+     */
+    static Double readGokei1TorayTotal(Workbook wb) {
+        String sheetName = null;
+        for (String name : ExcelValues.sheetNames(wb)) {
+            if (Norm.norm(name).contains("後加工集計")) {
+                sheetName = name;
+                break;
+            }
+        }
+        if (sheetName == null) {
+            return null;
+        }
+        List<List<Object>> rows = ExcelValues.readSheet(wb, sheetName);
+        for (int i = 0; i < rows.size(); i++) {
+            String labelB = Norm.norm(ExcelValues.at(rows, i, 1));
+            String labelA = Norm.norm(ExcelValues.at(rows, i, 0));
+            if (!"東レ合計".equals(labelB) && !"東レ合計".equals(labelA)) {
+                continue;
+            }
+            Double yen = Norm.number(ExcelValues.at(rows, i, 4));
+            if (yen != null) {
+                return yen;
+            }
+        }
+        return null;
+    }
+
+    /** 集計表東レ合計が後加工集計①とずれるときだけ出す。KPI 要確認には入れない。 */
+    private static void addShukeiInternal(List<CheckCResult.Row> rows, Map<String, Double> monthly, double tol) {
+        Double gokei1 = monthly.get(ITEM_GOKEI1);
+        Double shukei = monthly.get(ITEM_SHUKEI);
+        if (gokei1 == null || shukei == null) {
+            return;
+        }
+        double d = gokei1 - shukei;
+        if (Math.abs(d) <= tol) {
+            return;
+        }
+        rows.add(new CheckCResult.Row(
+                ITEM_SHUKEI,
+                shukei,
+                gokei1,
+                d,
+                CheckCResult.SHEET_INTERNAL,
+                "集計表の東レ合計が後加工集計①と不一致（Y.S欠落の可能性）。試算照合の正本は後加工集計①"));
     }
 
     private static void addCompare(

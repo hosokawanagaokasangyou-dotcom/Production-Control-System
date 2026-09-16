@@ -8,7 +8,7 @@ import java.util.List;
  *
  * @param file    使用した月次処理ファイル（無ければ null）
  * @param skipped スキップ理由（実施できたときは null）
- * @param rows    4項目の照合行
+ * @param rows    照合行（月次検証①②③・後加工集計①。集計表の内部不整合は任意）
  */
 public record CheckCResult(Path file, String skipped, List<Row> rows) {
 
@@ -17,6 +17,8 @@ public record CheckCResult(Path file, String skipped, List<Row> rows) {
     public static final String MISMATCH = "不一致";
     public static final String NEED_CHECK = "要確認";
     public static final String UNREADABLE = "読取不可";
+    /** 集計表の東レ合計が後加工集計①と合わない（試算との照合には使わない）。 */
+    public static final String SHEET_INTERNAL = "集計表内部";
 
     public record Row(
             String item, Double monthlyValue, Double ours, Double diff, String judge, String note) {}
@@ -29,7 +31,7 @@ public record CheckCResult(Path file, String skipped, List<Row> rows) {
         return skipped != null;
     }
 
-    /** KPI の要確認件数。「内訳で説明可」は入れない。 */
+    /** KPI の要確認件数。「内訳で説明可」と集計表内部不整合は入れない。 */
     public int needCheckCount() {
         return (int)
                 rows.stream()
