@@ -2,6 +2,7 @@ package jp.co.pm.ai.desktop.kouchin;
 
 import java.awt.Desktop;
 import java.io.File;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -21,6 +22,7 @@ import javafx.scene.control.Label;
 import javafx.scene.control.OverrunStyle;
 import javafx.scene.control.TableCell;
 import javafx.scene.control.TableColumn;
+import javafx.scene.control.TableRow;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
@@ -30,6 +32,7 @@ import javafx.scene.input.Clipboard;
 import javafx.scene.input.ClipboardContent;
 import javafx.scene.input.DragEvent;
 import javafx.scene.input.Dragboard;
+import javafx.scene.input.MouseButton;
 import javafx.scene.input.TransferMode;
 import javafx.scene.layout.BorderPane;
 import javafx.stage.FileChooser;
@@ -578,6 +581,18 @@ public class KouchinVerifyTabController {
         noteCol.setCellValueFactory(cd -> new SimpleStringProperty(cd.getValue() == null ? "" : cd.getValue().note()));
         noteCol.setPrefWidth(280);
         discoveryTable.getColumns().addAll(roleCol, pathCol, ymCol, noteCol);
+        discoveryTable.setRowFactory(tv -> {
+            TableRow<KouchinDiscovery.Row> row = new TableRow<>();
+            row.setOnMouseClicked(e -> {
+                if (e.getClickCount() != 2
+                        || e.getButton() != MouseButton.PRIMARY
+                        || row.isEmpty()) {
+                    return;
+                }
+                openDiscoveryRow(row.getItem());
+            });
+            return row;
+        });
         pathCol.setCellFactory(c -> new TableCell<>() {
             private final Tooltip tip = new Tooltip();
 
@@ -601,6 +616,35 @@ public class KouchinVerifyTabController {
                 }
             }
         });
+    }
+
+    static Path openableDiscoveryFile(KouchinDiscovery.Row row) {
+        if (row == null || row.missing()) {
+            return null;
+        }
+        String full = row.fullPath();
+        if (full == null || full.isBlank()) {
+            return null;
+        }
+        Path p = Path.of(full);
+        if (!Files.isRegularFile(p)) {
+            return null;
+        }
+        return p.toAbsolutePath().normalize();
+    }
+
+    private void openDiscoveryRow(KouchinDiscovery.Row row) {
+        Path p = openableDiscoveryFile(row);
+        if (p == null) {
+            appendLog("開けるファイルがありません");
+            return;
+        }
+        try {
+            DesktopFileOpener.openFile(p);
+            setStatus("開いた: " + p.toAbsolutePath());
+        } catch (Exception e) {
+            appendLog("ファイルを開けません: " + e.getMessage());
+        }
     }
 
     private void setupResultTable() {
