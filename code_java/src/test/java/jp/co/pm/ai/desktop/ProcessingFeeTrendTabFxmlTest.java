@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.InputStream;
 import java.util.List;
@@ -55,7 +56,8 @@ class ProcessingFeeTrendTabFxmlTest {
         assertNotNull(elementByFxId("viewComboToggle"));
         assertNotNull(elementByFxId("viewDailyToggle"));
         assertNotNull(elementByFxId("viewCumulativeToggle"));
-        assertEquals("AO(受注額)", elementByFxId("colAoYen").getAttribute("text"));
+        assertEquals("受注額", elementByFxId("colAoYen").getAttribute("text"));
+        assertEquals("受注額", elementByFxId("colMismatchAoYen").getAttribute("text"));
         assertEquals("円/m", elementByFxId("colRateYen").getAttribute("text"));
         assertEquals("実績", elementByFxId("colActualYen").getAttribute("text"));
         assertEquals("未了", elementByFxId("colPlanYen").getAttribute("text"));
@@ -69,7 +71,13 @@ class ProcessingFeeTrendTabFxmlTest {
         assertEquals("false", elementByFxId("detailPane").getAttribute("expanded"));
         assertEquals("false", elementByFxId("requestPane").getAttribute("expanded"));
         assertEquals("false", elementByFxId("aoMismatchPane").getAttribute("expanded"));
-        assertEquals("AOと実績の相違（当日以前）", elementByFxId("aoMismatchPane").getAttribute("text"));
+        assertEquals("受注額と実績の相違（当日以前）", elementByFxId("aoMismatchPane").getAttribute("text"));
+        assertTrue(fxmlContains("受注額合計（受注月）"));
+        assertTrue(fxmlContains("単位: 円（受注額÷最終工程m）"));
+        assertFalse(fxmlContains("AO(受注額)"));
+        assertFalse(fxmlContains("AOと実績"));
+        assertFalse(fxmlContains("AO・受注月"));
+        assertFalse(fxmlContains("AO÷"));
         assertEquals(
                 "jp.co.pm.ai.desktop.ProcessingFeeTrendTabController",
                 rootController());
@@ -148,6 +156,16 @@ class ProcessingFeeTrendTabFxmlTest {
                             .newDocumentBuilder()
                             .parse(in);
             return doc.getDocumentElement().getAttribute("fx:controller");
+        }
+    }
+
+    private static boolean fxmlContains(String needle) throws Exception {
+        try (InputStream in =
+                ProcessingFeeTrendTabFxmlTest.class.getResourceAsStream(
+                        "/jp/co/pm/ai/desktop/fxml/ProcessingFeeTrendTab.fxml")) {
+            assertNotNull(in);
+            String xml = new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+            return xml.contains(needle);
         }
     }
 

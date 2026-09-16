@@ -33,7 +33,7 @@ import jp.co.pm.ai.desktop.io.actuals.ProcessingFeeTrendAggregator.RequestPoint;
 import jp.co.pm.ai.desktop.io.actuals.ProcessingFeeTrendAggregator.Result;
 
 /**
- * 加工賃トレンド画面の日別・依頼NO別・AO実績相違を Excel 出力する。
+ * 加工賃トレンド画面の日別・依頼NO別・受注額と実績の相違を Excel 出力する。
  *
  * <p>加工量トレンド出力と同系の書式（BIZ UDPゴシック、見出し色、土日色、カンマ区切り、列幅）。
  */
@@ -69,7 +69,7 @@ public final class ProcessingFeeTrendWorkbookExporter {
                     s,
                     ProcessingFeeTrendAggregator.withLeadingTotalRow(r.requests()));
             writeMismatches(
-                    wb.createSheet("AO実績相違"),
+                    wb.createSheet("受注額と実績の相違"),
                     s,
                     ProcessingFeeTrendAggregator.aoActualMismatchesOnOrBeforeToday(
                             r.requests(), r.to(), r.today()));
@@ -155,7 +155,7 @@ public final class ProcessingFeeTrendWorkbookExporter {
     private static void writeRequests(Sheet sh, Styles s, List<RequestPoint> requests) {
         configureSheet(sh);
         sh.createFreezePane(0, 1);
-        String[] headers = {"依頼NO", "AO(受注額)", "円/m", "実績 (m)", "未了 (m)", "実績", "未了"};
+        String[] headers = {"依頼NO", "受注額", "円/m", "実績 (m)", "未了 (m)", "実績", "未了"};
         Row head = sh.createRow(0);
         head.setHeightInPoints(22);
         writeHeader(head, s, headers);
@@ -196,7 +196,7 @@ public final class ProcessingFeeTrendWorkbookExporter {
     private static void writeMismatches(Sheet sh, Styles s, List<RequestPoint> requests) {
         configureSheet(sh);
         sh.createFreezePane(0, 1);
-        String[] headers = {"依頼NO", "AO(受注額)", "実績", "差額", "実績 (m)", "未了 (m)", "未了"};
+        String[] headers = {"依頼NO", "受注額", "実績", "差額", "実績 (m)", "未了 (m)", "未了"};
         Row head = sh.createRow(0);
         head.setHeightInPoints(22);
         writeHeader(head, s, headers);

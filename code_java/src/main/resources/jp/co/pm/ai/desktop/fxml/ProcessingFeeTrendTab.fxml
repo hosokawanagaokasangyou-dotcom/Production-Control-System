@@ -52,7 +52,7 @@
                 <Button fx:id="thisMonthButton" mnemonicParsing="false" onAction="#onThisMonthAction" text="今月"/>
                 <Separator orientation="VERTICAL"/>
                 <Button fx:id="exportExcelButton" mnemonicParsing="false" onAction="#onExportExcelAction" text="Excel出力">
-                    <tooltip><Tooltip text="表示中の日別集計・依頼NO別・AOと実績の相違を固定フォルダへ Excel 出力します（最新1件のみ残します）。"/></tooltip>
+                    <tooltip><Tooltip text="表示中の日別集計・依頼NO別・受注額と実績の相違を固定フォルダへ Excel 出力します（最新1件のみ残します）。"/></tooltip>
                 </Button>
                 <Button fx:id="openExcelButton" mnemonicParsing="false" onAction="#onOpenExcelAction" text="Excelを開く" disable="true">
                     <tooltip><Tooltip text="出力フォルダ内の最新の加工賃トレンド Excel を開きます。"/></tooltip>
@@ -106,7 +106,7 @@
                     <Insets bottom="4.0" left="8.0" right="8.0" top="0.0"/>
                 </padding>
                 <VBox styleClass="pm-processing-trend-kpi-card">
-                    <Label styleClass="pm-processing-trend-kpi-caption" text="受注額合計（AO・受注月）"/>
+                    <Label styleClass="pm-processing-trend-kpi-caption" text="受注額合計（受注月）"/>
                     <Label fx:id="kpiOrderAoYen" styleClass="pm-processing-trend-kpi-value" text="—"/>
                 </VBox>
                 <VBox styleClass="pm-processing-trend-kpi-card">
@@ -135,7 +135,7 @@
                 <Label fx:id="chartTitleLabel" styleClass="pm-processing-trend-chart-title" text="加工賃トレンド（円）"/>
                 <HBox fx:id="legendBox" alignment="CENTER_LEFT" spacing="16.0" styleClass="pm-processing-trend-legend"/>
                 <Pane HBox.hgrow="ALWAYS"/>
-                <Label styleClass="pm-processing-trend-muted" text="単位: 円（AO÷最終工程m）"/>
+                <Label styleClass="pm-processing-trend-muted" text="単位: 円（受注額÷最終工程m）"/>
             </HBox>
             <StackPane fx:id="chartStack" VBox.vgrow="ALWAYS" maxWidth="1300.0" maxHeight="600.0"
                        styleClass="pm-processing-trend-chart-stack">
@@ -189,7 +189,7 @@
                     <TableView fx:id="requestTable" prefHeight="260.0">
                         <columns>
                         <TableColumn fx:id="colRequestNo" prefWidth="100.0" sortable="true" text="依頼NO"/>
-                        <TableColumn fx:id="colAoYen" prefWidth="120.0" sortable="true" text="AO(受注額)"/>
+                        <TableColumn fx:id="colAoYen" prefWidth="120.0" sortable="true" text="受注額"/>
                         <TableColumn fx:id="colRateYen" prefWidth="90.0" sortable="true" text="円/m"/>
                         <TableColumn fx:id="colActualM" prefWidth="100.0" sortable="true" text="実績 (m)"/>
                         <TableColumn fx:id="colPlanM" prefWidth="100.0" sortable="true" text="未了 (m)"/>
@@ -200,12 +200,12 @@
                 </content>
             </TitledPane>
             <TitledPane fx:id="aoMismatchPane" animated="false" collapsible="true" expanded="false" maxWidth="1300.0"
-                        text="AOと実績の相違（当日以前）">
+                        text="受注額と実績の相違（当日以前）">
                 <content>
                     <TableView fx:id="aoMismatchTable" prefHeight="200.0">
                         <columns>
                         <TableColumn fx:id="colMismatchRequestNo" prefWidth="100.0" sortable="true" text="依頼NO"/>
-                        <TableColumn fx:id="colMismatchAoYen" prefWidth="120.0" sortable="true" text="AO(受注額)"/>
+                        <TableColumn fx:id="colMismatchAoYen" prefWidth="120.0" sortable="true" text="受注額"/>
                         <TableColumn fx:id="colMismatchActualYen" prefWidth="120.0" sortable="true" text="実績"/>
                         <TableColumn fx:id="colMismatchDiffYen" prefWidth="120.0" sortable="true" text="差額"/>
                         <TableColumn fx:id="colMismatchActualM" prefWidth="100.0" sortable="true" text="実績 (m)"/>

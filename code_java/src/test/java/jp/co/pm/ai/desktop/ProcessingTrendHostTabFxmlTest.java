@@ -34,7 +34,7 @@ class ProcessingTrendHostTabFxmlTest {
     void innerTabCatalogListsChildren() {
         assertEquals(List.of("加工量", "加工賃"), MainShellInnerTabCatalog.labelsFor(MainShellTabId.PROCESSING_TREND));
         assertEquals(
-                List.of("日別集計（円）", "依頼NO別 加工賃", "AOと実績の相違（当日以前）"),
+                List.of("日別集計（円）", "依頼NO別 加工賃", "受注額と実績の相違（当日以前）"),
                 MainShellInnerTabCatalog.titledPaneLabelsUnderInnerTab(
                         MainShellTabId.PROCESSING_TREND, 1));
     }

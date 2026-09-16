@@ -47,7 +47,7 @@ class ProcessingFeeTrendWorkbookExporterTest {
             assertEquals(3, wb.getNumberOfSheets());
             XSSFSheet days = wb.getSheet("日別");
             Sheet reqs = wb.getSheet("依頼NO別");
-            Sheet mismatch = wb.getSheet("AO実績相違");
+            Sheet mismatch = wb.getSheet("受注額と実績の相違");
             assertNotNull(days);
             assertNotNull(reqs);
             assertNotNull(mismatch);
@@ -82,12 +82,13 @@ class ProcessingFeeTrendWorkbookExporterTest {
             assertFalse(days.getDrawingPatriarch().getCharts().isEmpty());
 
             assertEquals("依頼NO", reqs.getRow(0).getCell(0).getStringCellValue());
-            assertEquals("AO(受注額)", reqs.getRow(0).getCell(1).getStringCellValue());
+            assertEquals("受注額", reqs.getRow(0).getCell(1).getStringCellValue());
             assertEquals("実績", reqs.getRow(0).getCell(5).getStringCellValue());
             assertEquals("未了", reqs.getRow(0).getCell(6).getStringCellValue());
             assertEquals("合計", reqs.getRow(1).getCell(0).getStringCellValue());
 
             assertEquals("依頼NO", mismatch.getRow(0).getCell(0).getStringCellValue());
+            assertEquals("受注額", mismatch.getRow(0).getCell(1).getStringCellValue());
             assertEquals("差額", mismatch.getRow(0).getCell(3).getStringCellValue());
         }
     }

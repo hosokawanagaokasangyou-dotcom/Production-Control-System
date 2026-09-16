@@ -93,7 +93,7 @@ import jp.co.pm.ai.desktop.io.actuals.ProcessingTrendAggregator.PlanSource;
 import jp.co.pm.ai.desktop.io.actuals.ProcessingTrendExcelExportStore;
 
 /**
- * 「加工賃」子タブ: AO÷受注最終工程m の実績円・未了円・累計折れ線（加工量トレンドと同系の軸デザイン）。
+ * 「加工賃」子タブ: 受注額÷受注最終工程m の実績円・未了円・累計折れ線（加工量トレンドと同系の軸デザイン）。
  */
 public class ProcessingFeeTrendTabController {
 
@@ -391,7 +391,7 @@ public class ProcessingFeeTrendTabController {
         dailyXAxis.categorySpacingProperty().addListener((o, a, n) -> requestOverlayLayout());
         markerPane.sceneProperty().addListener((o, a, n) -> requestOverlayLayout());
 
-        sourceSummaryLabel.setText("円/m = AO ÷ 受注最終工程 m。実績＋未了＝受注額。");
+        sourceSummaryLabel.setText("円/m = 受注額 ÷ 受注最終工程 m。実績＋未了＝受注額。");
         initDetailTable();
         initRequestTable();
         initAoMismatchTable();
@@ -461,7 +461,7 @@ public class ProcessingFeeTrendTabController {
         Tooltip.install(
                 detailTable,
                 new Tooltip(
-                        "単位は円。円/m＝AO÷受注最終工程m。日次は実績／未了。累計列は月初でリセット。"));
+                        "単位は円。円/m＝受注額÷受注最終工程m。日次は実績／未了。累計列は月初でリセット。"));
     }
 
     private void initRequestTable() {
@@ -545,8 +545,8 @@ public class ProcessingFeeTrendTabController {
         Tooltip.install(
                 requestTable,
                 new Tooltip(
-                        "円/m = AO ÷ 受注最終工程 m。実績 = 円/m × 実績 m、未了 = 円/m × (受注 m − 実績 m)。\n"
-                                + "実績＋未了 = AO（受注額）。日報は製品加工終了時間がある最遅工程のみ（終了時間なし＝未完了）。"));
+                        "円/m = 受注額 ÷ 受注最終工程 m。実績 = 円/m × 実績 m、未了 = 円/m × (受注 m − 実績 m)。\n"
+                                + "実績＋未了 = 受注額。日報は製品加工終了時間がある最遅工程のみ（終了時間なし＝未完了）。"));
     }
 
     private void initAoMismatchTable() {
@@ -583,12 +583,12 @@ public class ProcessingFeeTrendTabController {
                 cd -> new ReadOnlyObjectWrapper<>(cd.getValue().planYen()));
         colMismatchRemainYen.setCellFactory(col -> requestYenCell());
         colMismatchRemainYen.setStyle("-fx-alignment: CENTER-RIGHT;");
-        aoMismatchTable.setPlaceholder(new Label("当日以前で AO と実績が異なる依頼はありません"));
+        aoMismatchTable.setPlaceholder(new Label("当日以前で受注額と実績が異なる依頼はありません"));
         aoMismatchTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
         Tooltip.install(
                 aoMismatchTable,
                 new Tooltip(
-                        "表示終了日が当日以前のとき、AO（受注額）と実績が一致しない依頼です。差額 = AO − 実績。"));
+                        "表示終了日が当日以前のとき、受注額と実績が一致しない依頼です。差額 = 受注額 − 実績。"));
     }
 
     private TableCell<RequestPoint, Number> yenNumberCell() {
@@ -1175,7 +1175,7 @@ public class ProcessingFeeTrendTabController {
                     sourceSummaryLabel.setText(
                             "受注: "
                                     + b.juchuNote()
-                                    + " ／ 実績m: 日報は実製品出来高 ／ 単位: 円（AO÷最終工程m）");
+                                    + " ／ 実績m: 日報は実製品出来高 ／ 単位: 円（受注額÷最終工程m）");
                     updatePlanSourceMeta();
                     if (userInitiated || sourcesChanged || currentResult == null) {
                         hideNotice();
@@ -1244,7 +1244,7 @@ public class ProcessingFeeTrendTabController {
                     double allocated = r.actualTotalYen() + r.planTotalYen();
                     StringBuilder notice = new StringBuilder();
                     if (r.missingRateLines() > 0) {
-                        notice.append("AO/AH 単価が無い行が ")
+                        notice.append("受注額・加工賃の単価が無い行が ")
                                 .append(r.missingRateLines())
                                 .append(" 件あります（当該行の按分円は 0）。");
                     }
@@ -1367,7 +1367,7 @@ public class ProcessingFeeTrendTabController {
             aoMismatchTable.refresh();
         }
         if (aoMismatchPane != null) {
-            aoMismatchPane.setText("AOと実績の相違（当日以前）（" + mismatches.size() + " 件）");
+            aoMismatchPane.setText("受注額と実績の相違（当日以前）（" + mismatches.size() + " 件）");
             aoMismatchPane.setExpanded(!mismatches.isEmpty());
         }
 
@@ -1766,7 +1766,7 @@ public class ProcessingFeeTrendTabController {
             aoMismatchTable.getItems().clear();
         }
         if (aoMismatchPane != null) {
-            aoMismatchPane.setText("AOと実績の相違（当日以前）");
+            aoMismatchPane.setText("受注額と実績の相違（当日以前）");
             aoMismatchPane.setExpanded(false);
         }
     }
