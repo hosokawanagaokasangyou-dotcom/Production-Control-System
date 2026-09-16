@@ -16,6 +16,17 @@ import org.w3c.dom.NodeList;
 class KouchinVerifyTabFxmlTest {
 
     @Test
+    @DisplayName("結果Excelが書けないときは書込不可バッジがある")
+    void outputWriteBlockBadgeExists() throws Exception {
+        Element badge = elementByFxId("outputWriteBlockBadge");
+        assertNotNull(badge, "outputWriteBlockBadge が無い");
+        assertTrue(
+                badge.getAttribute("styleClass").contains("pm-kouchin-output-write-block-badge"),
+                badge.getAttribute("styleClass"));
+        assertEquals("Excel書込不可", badge.getAttribute("text"));
+    }
+
+    @Test
     @DisplayName("Excelを開くは国分と湖南でボタンが分かれている")
     void openExcelButtonsAreSplitByFactory() throws Exception {
         Element kokubu = elementByFxId("openKokubuExcelButton");

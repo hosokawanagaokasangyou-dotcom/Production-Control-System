@@ -501,6 +501,18 @@
     -fx-alignment: center;
 }
 
+.label.pm-kouchin-output-write-block-badge {
+    -fx-font-size: 11px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #fde68a;
+    -fx-background-color: rgba(251, 191, 36, 0.22);
+    -fx-border-color: rgba(251, 191, 36, 0.75);
+    -fx-border-radius: 4;
+    -fx-background-radius: 4;
+    -fx-border-width: 1;
+    -fx-padding: 3 8 3 8;
+}
+
 .button.pm-stage-run-button {
     -fx-cursor: hand;
     -fx-font-size: 15px;

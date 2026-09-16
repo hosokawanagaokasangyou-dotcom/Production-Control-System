@@ -49,9 +49,11 @@ import jp.co.pm.ai.kouchin.verify.FactoryId;
 import jp.co.pm.ai.kouchin.verify.FileDiscovery;
 import jp.co.pm.ai.kouchin.verify.Judge;
 import jp.co.pm.ai.kouchin.verify.KouchinDiscovery;
+import jp.co.pm.ai.kouchin.verify.KouchinOutputDirs;
 import jp.co.pm.ai.kouchin.verify.KouchinPaths;
 import jp.co.pm.ai.kouchin.verify.RecordA;
 import jp.co.pm.ai.kouchin.verify.RecordB;
+import jp.co.pm.ai.kouchin.verify.VerifyOutputAccess;
 import jp.co.pm.ai.kouchin.verify.VerifyResult;
 import jp.co.pm.ai.kouchin.verify.VerifyRunSupport;
 import jp.co.pm.ai.kouchin.verify.VerifyService;
@@ -69,6 +71,7 @@ public class KouchinVerifyTabController {
     @FXML private Button runKokubuButton;
     @FXML private Button runKonanButton;
     @FXML private Button runBothButton;
+    @FXML private Label outputWriteBlockBadge;
     @FXML private Button importCsvButton;
     @FXML private Button openKokubuExcelButton;
     @FXML private Button openKonanExcelButton;
@@ -93,6 +96,7 @@ public class KouchinVerifyTabController {
     private BothResult lastBoth;
     private List<KouchinDiscovery.Row> lastKokubuDiscovery = List.of();
     private List<KouchinDiscovery.Row> lastKonanDiscovery = List.of();
+    private boolean lastOutputWritable;
     private ButtonAttentionGlow openKokubuExcelGlow;
     private ButtonAttentionGlow openKonanExcelGlow;
     private final List<ResultLine> allResultLines = new ArrayList<>();
@@ -219,7 +223,8 @@ public class KouchinVerifyTabController {
             List<KouchinDiscovery.Row> kokubuRows = kokubu;
             List<KouchinDiscovery.Row> konanRows = konan;
             String err = error;
-            Platform.runLater(() -> applyDiscoveryResult(gen, kokubuRows, konanRows, err));
+            boolean outputWritable = VerifyOutputAccess.anyOutputWritable(KouchinOutputDirs.resolveAll(ui));
+            Platform.runLater(() -> applyDiscoveryResult(gen, kokubuRows, konanRows, err, outputWritable));
         }, "kouchin-discovery");
         t.setDaemon(true);
         t.start();
@@ -229,12 +234,14 @@ public class KouchinVerifyTabController {
             int gen,
             List<KouchinDiscovery.Row> kokubu,
             List<KouchinDiscovery.Row> konan,
-            String error) {
+            String error,
+            boolean outputWritable) {
         if (gen != discoveryGeneration.get()) {
             return;
         }
         lastKokubuDiscovery = kokubu == null ? List.of() : List.copyOf(kokubu);
         lastKonanDiscovery = konan == null ? List.of() : List.copyOf(konan);
+        lastOutputWritable = outputWritable;
         FactorySite site = shell == null ? FactorySite.KOKUBU : shell.currentFactorySite();
         List<KouchinDiscovery.Row> shown =
                 site == FactorySite.KONAN ? lastKonanDiscovery : lastKokubuDiscovery;
@@ -252,13 +259,16 @@ public class KouchinVerifyTabController {
         String kokubu = VerifySourceAccess.blockReason(lastKokubuDiscovery);
         String konan = VerifySourceAccess.blockReason(lastKonanDiscovery);
         StringBuilder sb = new StringBuilder("検出完了。");
+        if (!lastOutputWritable) {
+            sb.append(" 結果Excelを書き込めません。");
+        }
         if (kokubu != null) {
             sb.append(" 国分検証不可: ").append(kokubu).append("。");
         }
         if (konan != null) {
             sb.append(" 湖南検証不可: ").append(konan).append("。");
         }
-        if (kokubu == null && konan == null) {
+        if (lastOutputWritable && kokubu == null && konan == null) {
             sb.append(" 未実行なら「まだ検証していません」。");
         }
         return sb.toString();
@@ -377,6 +387,10 @@ public class KouchinVerifyTabController {
             }
         } else if (!VerifySourceAccess.factorySourcesReady(lastKokubuDiscovery)) {
             setStatus("国分の関連ファイルにアクセスできないため検証できません");
+            return;
+        }
+        if (!lastOutputWritable) {
+            setStatus("結果Excelを書き込めないため検証できません");
             return;
         }
         String label = both ? "後加工工賃 まとめて検証中…"
@@ -610,7 +624,7 @@ public class KouchinVerifyTabController {
     void refreshRunEnabled() {
         boolean unapplied = host != null && host.hasUnappliedSourceEdits();
         boolean busy = shell != null && (shell.isKouchinRunBusy() || shell.isPlanningPipelineStageRunning());
-        boolean base = !unapplied && !busy;
+        boolean base = !unapplied && !busy && lastOutputWritable;
         boolean kokubuReady = VerifySourceAccess.factorySourcesReady(lastKokubuDiscovery);
         boolean konanReady = VerifySourceAccess.factorySourcesReady(lastKonanDiscovery);
         if (runKokubuButton != null) {
@@ -621,6 +635,14 @@ public class KouchinVerifyTabController {
         }
         if (runBothButton != null) {
             runBothButton.setDisable(!(base && kokubuReady && konanReady));
+        }
+        if (outputWriteBlockBadge != null) {
+            boolean show = !lastOutputWritable && discoveryLoaded;
+            outputWriteBlockBadge.setVisible(show);
+            outputWriteBlockBadge.setManaged(show);
+            if (show) {
+                outputWriteBlockBadge.setTooltip(new Tooltip("結果Excelの出力先に書き込めません。Excelで開いているファイルを閉じるか、フォルダ権限を確認してください。"));
+            }
         }
         FactorySite site = shell == null ? FactorySite.KOKUBU : shell.currentFactorySite();
         if (runKokubuButton != null) {
