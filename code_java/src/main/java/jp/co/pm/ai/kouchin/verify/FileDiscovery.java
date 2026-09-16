@@ -454,7 +454,11 @@ public final class FileDiscovery {
         if (dir == null) {
             return toUiSeparators(file.getFileName() == null ? file.toString() : file.getFileName().toString());
         }
-        return toUiSeparators(displayName(dir, file));
+        String rel = toUiSeparators(displayName(dir, file));
+        if (!rel.contains("/") && dir.getFileName() != null) {
+            return dir.getFileName() + "/" + rel;
+        }
+        return rel;
     }
 
     /** 見つからないときのフォルダ表示（末尾2段）。 */

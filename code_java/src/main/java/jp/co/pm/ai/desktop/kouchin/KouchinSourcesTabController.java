@@ -131,7 +131,7 @@ public class KouchinSourcesTabController {
         String b = base == null || base.getText() == null || base.getText().isBlank()
                 ? AppPaths.DEFAULT_KOUCHIN_BASE_DIR : base.getText().trim();
         setField(AppPaths.KEY_PM_AI_KOUCHIN_TORAY_CSV_DIR, b + "\\東レ送付CSV");
-        setField(AppPaths.KEY_PM_AI_KOUCHIN_KOKUBU_NAGAOKA_DIR, b + "\\国分工場\\長岡後加工賃明細");
+        setField(AppPaths.KEY_PM_AI_KOUCHIN_KOKUBU_NAGAOKA_DIR, AppPaths.DEFAULT_KOUCHIN_KOKUBU_NAGAOKA_DIR);
         setField(AppPaths.KEY_PM_AI_KOUCHIN_KOKUBU_ALADDIN_DIR, b + "\\国分工場\\アラジン");
         refreshStatus();
     }

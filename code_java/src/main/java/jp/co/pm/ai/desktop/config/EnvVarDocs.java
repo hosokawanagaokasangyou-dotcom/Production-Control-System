@@ -635,7 +635,7 @@ public final class EnvVarDocs {
                         + " 結果の両工場保存とは別。空なら ●自動検証\\東レ送付CSV。");
         put(
                 AppPaths.KEY_PM_AI_KOUCHIN_KOKUBU_NAGAOKA_DIR,
-                "国分② 長岡後加工賃明細フォルダ。空なら ●自動検証\\国分工場\\長岡後加工賃明細。");
+                "国分② 長岡後加工賃明細フォルダ。空なら 工賃明細2026年度（令和8年度）。●自動検証配下のコピーではない。");
         put(
                 AppPaths.KEY_PM_AI_KOUCHIN_KOKUBU_ALADDIN_DIR,
                 "国分③ アラジン依頼NO別問合せフォルダ。");

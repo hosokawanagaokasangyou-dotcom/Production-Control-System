@@ -42,4 +42,20 @@ class KouchinEnvKeysTest {
             assertTrue(EnvVarDocs.logicOnly(key) != null && !EnvVarDocs.logicOnly(key).isBlank(), key);
         }
     }
+
+    @Test
+    void kokubuNagaokaDefaultIsYearFolderNotAutoVerifyCopy() throws Exception {
+        assertTrue(AppPaths.DEFAULT_KOUCHIN_KOKUBU_NAGAOKA_DIR.contains("工賃明細2026年度"));
+        assertFalse(AppPaths.DEFAULT_KOUCHIN_KOKUBU_NAGAOKA_DIR.contains("●自動検証"));
+        String json;
+        try (var in = KouchinEnvKeysTest.class.getResourceAsStream(
+                "/jp/co/pm/ai/desktop/ui_ref_env_defaults.json")) {
+            assertTrue(in != null);
+            json = new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+        }
+        int keyAt = json.indexOf("\"PM_AI_KOUCHIN_KOKUBU_NAGAOKA_DIR\"");
+        assertTrue(keyAt >= 0);
+        String around = json.substring(keyAt, Math.min(json.length(), keyAt + 400));
+        assertTrue(around.contains("工賃明細2026年度"), around);
+    }
 }

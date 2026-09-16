@@ -94,6 +94,7 @@ public class KouchinVerifyTabController {
     private KouchinHostTabController host;
     private boolean selected;
     private boolean discoveryLoaded;
+    private boolean pendingSourceReload;
     private final AtomicInteger discoveryGeneration = new AtomicInteger();
     private VerifyRunSupport.Written lastWritten;
     private BothResult lastBoth;
@@ -267,7 +268,7 @@ public class KouchinVerifyTabController {
         selected = true;
         refreshDropTargetLabel();
         refreshRunEnabled();
-        if (!discoveryLoaded) {
+        if (!discoveryLoaded || pendingSourceReload) {
             if (statusLabel != null && lastBoth == null) {
                 statusLabel.setText("検出中…");
             }
@@ -280,12 +281,12 @@ public class KouchinVerifyTabController {
     }
 
     public void reloadDiscovery() {
-        if (!selected && discoveryLoaded) {
+        if (!shouldReloadDiscovery(selected, discoveryLoaded)) {
+            pendingSourceReload = true;
             discoveryLoaded = false;
-        }
-        if (!selected) {
             return;
         }
+        pendingSourceReload = false;
         discoveryLoaded = true;
         if (statusLabel != null && lastBoth == null) {
             statusLabel.setText("検出中…");
@@ -927,6 +928,10 @@ public class KouchinVerifyTabController {
         } else {
             ButtonAttentionGlow.stopAll(openKokubuExcelGlow);
         }
+    }
+
+    static boolean shouldReloadDiscovery(boolean selected, boolean alreadyLoaded) {
+        return true;
     }
 
     static Path openableDiscoveryFile(KouchinDiscovery.Row row) {

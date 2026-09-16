@@ -92,7 +92,7 @@ public final class AppPaths {
             "\\\\192.168.0.101\\共有フォルダ\\国分工場\\国分管理\\後加工\\後加工工賃明細\\●自動検証";
     public static final String DEFAULT_KOUCHIN_TORAY_CSV_DIR = DEFAULT_KOUCHIN_BASE_DIR + "\\東レ送付CSV";
     public static final String DEFAULT_KOUCHIN_KOKUBU_NAGAOKA_DIR =
-            DEFAULT_KOUCHIN_BASE_DIR + "\\国分工場\\長岡後加工賃明細";
+            "\\\\192.168.0.101\\共有フォルダ\\国分工場\\国分管理\\後加工\\後加工工賃明細\\工賃明細2026年度（令和8年度）";
     public static final String DEFAULT_KOUCHIN_KOKUBU_ALADDIN_DIR =
             DEFAULT_KOUCHIN_BASE_DIR + "\\国分工場\\アラジン";
     public static final String DEFAULT_KOUCHIN_KONAN_SHISAN_DIR =
@@ -102,7 +102,7 @@ public final class AppPaths {
     public static final String DEFAULT_KOUCHIN_KONAN_MONTHLY_DIR =
             "\\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\生産管理システム\\アラジンオフィスシステムデータ\\月次実績表\\0 東レ月次処理ファイル";
     public static final String DEFAULT_KOUCHIN_KOKUBU_YEAR_DIRS =
-            "\\\\192.168.0.101\\共有フォルダ\\国分工場\\国分管理\\後加工\\後加工工賃明細\\工賃明細2026年度（令和8年度）"
+            DEFAULT_KOUCHIN_KOKUBU_NAGAOKA_DIR
                     + ";"
                     + "\\\\192.168.0.101\\共有フォルダ\\国分工場\\国分管理\\後加工\\後加工工賃明細\\工賃明細２０２５年度　(R7年度)";
 
