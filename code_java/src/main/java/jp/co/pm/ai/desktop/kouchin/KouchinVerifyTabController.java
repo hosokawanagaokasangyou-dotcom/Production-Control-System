@@ -104,6 +104,11 @@ public class KouchinVerifyTabController {
     private String lastKokubuBlock = "検出未完了";
     private String lastKonanBlock = "検出未完了";
     private boolean lastOutputWritable;
+    private boolean kokubuVerified;
+    private boolean konanVerified;
+    private ButtonAttentionGlow runKokubuGlow;
+    private ButtonAttentionGlow runKonanGlow;
+    private ButtonAttentionGlow runBothGlow;
     private ButtonAttentionGlow openKokubuExcelGlow;
     private ButtonAttentionGlow openKonanExcelGlow;
     private final List<ResultLine> allResultLines = new ArrayList<>();
@@ -268,6 +273,15 @@ public class KouchinVerifyTabController {
             searchField.textProperty().addListener((o, a, b) -> applyResultFilter());
         }
         installDropHandlers();
+        if (runKokubuButton != null) {
+            runKokubuGlow = new ButtonAttentionGlow(runKokubuButton);
+        }
+        if (runKonanButton != null) {
+            runKonanGlow = new ButtonAttentionGlow(runKonanButton);
+        }
+        if (runBothButton != null) {
+            runBothGlow = new ButtonAttentionGlow(runBothButton);
+        }
         if (openKokubuExcelButton != null) {
             openKokubuExcelGlow = new ButtonAttentionGlow(openKokubuExcelButton);
         }
@@ -559,6 +573,14 @@ public class KouchinVerifyTabController {
             VerifyTaskOutcome outcome = task.getValue();
             lastBoth = outcome == null ? null : outcome.both();
             lastWritten = outcome == null ? null : outcome.written();
+            if (lastBoth != null) {
+                if (lastBoth.kokubu() != null) {
+                    kokubuVerified = true;
+                }
+                if (lastBoth.konan() != null) {
+                    konanVerified = true;
+                }
+            }
             showResults();
             refreshRunEnabled();
         });
@@ -720,6 +742,7 @@ public class KouchinVerifyTabController {
             if (o.copiedAny()) {
                 FileDiscovery.invalidateListingCache();
                 appendLog("同名上書きで保存: " + o.copied().size() + "件 → " + dest);
+                markUnverified();
                 reloadDiscovery();
             } else {
                 appendLog("取り込みなし（検出は更新していません）");
@@ -799,6 +822,7 @@ public class KouchinVerifyTabController {
         if (runKonanButton != null) {
             runKonanButton.setStyle(site == FactorySite.KONAN ? "-fx-font-weight: bold;" : "");
         }
+        refreshRunGlow();
     }
 
     private void setupDiscoveryTable() {
@@ -912,6 +936,44 @@ public class KouchinVerifyTabController {
 
     static boolean shouldGlowOpenExcel(VerifyRunSupport.Written written, FactorySite site) {
         return VerifyRunSupport.excelFileToOpen(written, site) != null;
+    }
+
+    static boolean shouldGlowRunButton(boolean enabled, boolean verified) {
+        return enabled && !verified;
+    }
+
+    static boolean shouldGlowRunBoth(boolean enabled, boolean kokubuDone, boolean konanDone) {
+        return enabled && (!kokubuDone || !konanDone);
+    }
+
+    void markUnverified() {
+        kokubuVerified = false;
+        konanVerified = false;
+        refreshRunGlow();
+    }
+
+    private void refreshRunGlow() {
+        applyRunGlow(runKokubuButton, runKokubuGlow,
+                shouldGlowRunButton(enabled(runKokubuButton), kokubuVerified));
+        applyRunGlow(runKonanButton, runKonanGlow,
+                shouldGlowRunButton(enabled(runKonanButton), konanVerified));
+        applyRunGlow(runBothButton, runBothGlow,
+                shouldGlowRunBoth(enabled(runBothButton), kokubuVerified, konanVerified));
+    }
+
+    private static boolean enabled(Button button) {
+        return button != null && !button.isDisable();
+    }
+
+    private static void applyRunGlow(Button button, ButtonAttentionGlow glow, boolean on) {
+        if (button == null || glow == null) {
+            return;
+        }
+        if (on) {
+            glow.startIfIdle();
+        } else {
+            glow.stop();
+        }
     }
 
     private void refreshOpenExcelGlow() {

@@ -97,6 +97,7 @@ public class KouchinHostTabController {
 
     public void onSourcesApplied() {
         if (verifyTabController != null) {
+            verifyTabController.markUnverified();
             verifyTabController.reloadDiscovery();
         }
     }

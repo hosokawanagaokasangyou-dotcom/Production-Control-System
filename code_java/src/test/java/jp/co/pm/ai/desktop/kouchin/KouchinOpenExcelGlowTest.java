@@ -71,4 +71,17 @@ class KouchinOpenExcelGlowTest {
         assertTrue(method.contains("openFileReadOnly"), method);
         assertFalse(method.contains("DesktopFileOpener.openFile("), method);
     }
+
+    @Test
+    @DisplayName("検証未了かつ実行可なら検証ボタンを光らせる")
+    void glowsRunWhenUnverifiedAndEnabled() {
+        assertTrue(KouchinVerifyTabController.shouldGlowRunButton(true, false));
+        assertFalse(KouchinVerifyTabController.shouldGlowRunButton(false, false));
+        assertFalse(KouchinVerifyTabController.shouldGlowRunButton(true, true));
+        assertTrue(KouchinVerifyTabController.shouldGlowRunBoth(true, false, false));
+        assertTrue(KouchinVerifyTabController.shouldGlowRunBoth(true, true, false));
+        assertTrue(KouchinVerifyTabController.shouldGlowRunBoth(true, false, true));
+        assertFalse(KouchinVerifyTabController.shouldGlowRunBoth(true, true, true));
+        assertFalse(KouchinVerifyTabController.shouldGlowRunBoth(false, false, false));
+    }
 }
