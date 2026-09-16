@@ -99,6 +99,9 @@ public final class ShisanReader {
                 continue;
             }
             sheetSum += amt;
+            if (VerifyScope.outOfScopeIrai(irai)) {
+                continue;
+            }
             if (!irai.isEmpty()) {
                 maps.addIrai(irai, amt);
             }

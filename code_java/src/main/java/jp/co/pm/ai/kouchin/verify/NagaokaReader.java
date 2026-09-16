@@ -64,6 +64,9 @@ public final class NagaokaReader {
             }
 
             String irai = a + "-" + b;
+            if (VerifyScope.outOfScopeIrai(irai)) {
+                continue;
+            }
             maps.addIrai(irai, aa);
             String c = Norm.keiyaku(ExcelValues.at(rows, i, 2));
             if (Norm.isKeiyaku(c)) {

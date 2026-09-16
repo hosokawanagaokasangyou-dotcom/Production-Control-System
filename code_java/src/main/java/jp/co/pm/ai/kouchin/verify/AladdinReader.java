@@ -17,6 +17,7 @@ import java.util.Optional;
  *   <li>「依頼NO」と「項目」を含む行がヘッダー。</li>
  *   <li>項目=「加工金額」の行の「--合計--」列が依頼NO別加工金額。</li>
  *   <li>得意先コードを指定するとその行だけを集計する（湖南は 049006 東ﾚ自材部のみ）。</li>
+ *   <li>TPI（得意先 049052 / 依頼NO先頭 TPI）と自社加工（依頼NO先頭 2）は常に対象外。</li>
  * </ul>
  */
 public final class AladdinReader {
@@ -79,9 +80,8 @@ public final class AladdinReader {
         if (iIrai < 0 || iItem < 0 || iTotal < 0) {
             throw new VerifyException("③のヘッダーに想定列が見つかりません(依頼NO/項目/--合計--): " + source);
         }
-        int iCustomer = -1;
+        int iCustomer = header.indexOf("得意先");
         if (customer != null && !customer.isEmpty()) {
-            iCustomer = header.indexOf("得意先");
             if (iCustomer < 0) {
                 throw new VerifyException("③のヘッダーに「得意先」列が無いため得意先 " + customer
                         + " で絞り込めません: " + source);
@@ -98,12 +98,17 @@ public final class AladdinReader {
             if (!"加工金額".equals(Norm.norm(ExcelValues.at(rows, i, iItem)))) {
                 continue;
             }
-            if (iCustomer >= 0 && !customerKey.equals(Norm.norm(ExcelValues.at(rows, i, iCustomer)))) {
+            String rowCustomer = iCustomer >= 0 ? Norm.norm(ExcelValues.at(rows, i, iCustomer)) : "";
+            if (!customerKey.isEmpty() && !customerKey.equals(rowCustomer)) {
+                continue;
+            }
+            String irai = Norm.norm(ExcelValues.at(rows, i, iIrai));
+            if (VerifyScope.outOfScope(irai, rowCustomer)) {
                 continue;
             }
             Double v = Norm.number(ExcelValues.at(rows, i, iTotal));
             if (v != null) {
-                result.merge(Norm.norm(ExcelValues.at(rows, i, iIrai)), v, Double::sum);
+                result.merge(irai, v, Double::sum);
             }
         }
         if (result.isEmpty()) {
