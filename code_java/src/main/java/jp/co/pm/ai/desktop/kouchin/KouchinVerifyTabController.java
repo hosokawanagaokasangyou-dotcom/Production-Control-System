@@ -109,6 +109,8 @@ public class KouchinVerifyTabController {
     private final List<ResultLine> allResultLines = new ArrayList<>();
 
     public static final class DiscoveryLine {
+        static final String FACTORY_SHARED = "国分/湖南共通";
+
         private final String factory;
         private final KouchinDiscovery.Row row;
         private final VerifySourceAccess.FileAccess access;
@@ -188,12 +190,12 @@ public class KouchinVerifyTabController {
         List<DiscoveryLine> lines = new ArrayList<>();
         if (kokubu != null) {
             for (KouchinDiscovery.Row r : kokubu) {
-                lines.add(new DiscoveryLine("国分", r, accessFor(r, memo)));
+                lines.add(new DiscoveryLine(factoryLabelFor("国分", r), r, accessFor(r, memo)));
             }
         }
         if (konan != null) {
             for (KouchinDiscovery.Row r : konan) {
-                lines.add(new DiscoveryLine("湖南", r, accessFor(r, memo)));
+                lines.add(new DiscoveryLine(factoryLabelFor("湖南", r), r, accessFor(r, memo)));
             }
         }
         return lines;
@@ -211,12 +213,30 @@ public class KouchinVerifyTabController {
         return memo.computeIfAbsent(key, k -> VerifySourceAccess.FileAccess.ofRow(row));
     }
 
+    static String factoryLabelFor(String site, KouchinDiscovery.Row row) {
+        if (row != null && KouchinDiscovery.ROLE_3.equals(row.role())) {
+            return DiscoveryLine.FACTORY_SHARED;
+        }
+        return site == null ? "" : site;
+    }
+
+    static boolean factoryMatches(String wanted, String lineFactory) {
+        if (wanted == null || lineFactory == null) {
+            return false;
+        }
+        if (wanted.equals(lineFactory)) {
+            return true;
+        }
+        return DiscoveryLine.FACTORY_SHARED.equals(lineFactory)
+                && ("国分".equals(wanted) || "湖南".equals(wanted));
+    }
+
     private static Function<KouchinDiscovery.Row, VerifySourceAccess.FileAccess> accessLookup(
             List<DiscoveryLine> lines, String factory) {
         Map<String, VerifySourceAccess.FileAccess> byRole = new HashMap<>();
         if (lines != null) {
             for (DiscoveryLine line : lines) {
-                if (line != null && factory.equals(line.getFactory()) && line.source() != null) {
+                if (line != null && factoryMatches(factory, line.getFactory()) && line.source() != null) {
                     byRole.put(line.getRole(), line.access());
                 }
             }
@@ -788,7 +808,8 @@ public class KouchinVerifyTabController {
         discoveryTable.getColumns().clear();
         TableColumn<DiscoveryLine, String> factoryCol = new TableColumn<>("工場");
         factoryCol.setCellValueFactory(cd -> new SimpleStringProperty(cd.getValue() == null ? "" : cd.getValue().getFactory()));
-        factoryCol.setPrefWidth(72);
+        factoryCol.setPrefWidth(128);
+        factoryCol.setMinWidth(110);
         TableColumn<DiscoveryLine, String> roleCol = new TableColumn<>("区分");
         roleCol.setCellValueFactory(cd -> new SimpleStringProperty(cd.getValue() == null ? "" : cd.getValue().getRole()));
         roleCol.setPrefWidth(120);
