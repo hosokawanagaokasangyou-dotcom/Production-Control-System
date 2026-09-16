@@ -83,6 +83,7 @@ public class KouchinVerifyTabController {
     @FXML private Button gotoRdpButton;
     @FXML private Label statusLabel;
     @FXML private Label kpiLabel;
+    @FXML private Label targetYmReasonLabel;
     @FXML private ComboBox<String> judgeFilterCombo;
     @FXML private TextField searchField;
     @FXML private TableView<DiscoveryLine> discoveryTable;
@@ -354,6 +355,7 @@ public class KouchinVerifyTabController {
         if (discoveryTable != null) {
             discoveryTable.getItems().setAll(lines == null ? List.of() : lines);
         }
+        refreshTargetYmReason();
         if (statusLabel != null && lastBoth == null) {
             statusLabel.setText(error == null ? discoveryStatusText() : "検出失敗: " + error);
         }
@@ -932,6 +934,43 @@ public class KouchinVerifyTabController {
 
     static boolean shouldReloadDiscovery(boolean selected, boolean alreadyLoaded) {
         return true;
+    }
+
+    static String targetYmReasonText(
+            List<KouchinDiscovery.Row> kokubu, List<KouchinDiscovery.Row> konan) {
+        KouchinDiscovery.Row toray = firstToray(kokubu);
+        if (toray == null) {
+            toray = firstToray(konan);
+        }
+        String rule = "対象月はカレンダーではなく、①東レCSVのファイル名（RVSHEETyyyymm.csv）で決まります。"
+                + "フォルダ内で年月が最新のCSVを使い、②③もその月に合わせます。国分と湖南は同じ①です。";
+        if (toray == null || toray.missing()) {
+            return rule + " いまは該当CSVが見つかりません。";
+        }
+        String name = toray.fullPath() == null || toray.fullPath().isBlank()
+                ? toray.path()
+                : Path.of(toray.fullPath()).getFileName().toString();
+        String ym = toray.ym() == null || toray.ym().isBlank() ? "年月不明" : toray.ym();
+        return rule + " いまは " + name + " → " + ym + "。";
+    }
+
+    private static KouchinDiscovery.Row firstToray(List<KouchinDiscovery.Row> rows) {
+        if (rows == null) {
+            return null;
+        }
+        for (KouchinDiscovery.Row row : rows) {
+            if (row != null && row.role() != null && row.role().startsWith("①")) {
+                return row;
+            }
+        }
+        return null;
+    }
+
+    private void refreshTargetYmReason() {
+        if (targetYmReasonLabel == null) {
+            return;
+        }
+        targetYmReasonLabel.setText(targetYmReasonText(lastKokubuDiscovery, lastKonanDiscovery));
     }
 
     static Path openableDiscoveryFile(KouchinDiscovery.Row row) {

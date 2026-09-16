@@ -546,6 +546,11 @@
     -fx-font-weight: bold;
 }
 
+.label.pm-kouchin-target-ym-reason {
+    -fx-font-size: 12px;
+    -fx-text-fill: #e2e8f0;
+}
+
 .button.pm-stage-run-button {
     -fx-cursor: hand;
     -fx-font-size: 15px;

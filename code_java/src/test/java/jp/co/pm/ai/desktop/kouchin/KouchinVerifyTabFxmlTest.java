@@ -86,6 +86,16 @@ class KouchinVerifyTabFxmlTest {
         assertTrue(min >= 220.0, "minHeight が両工場分より低い: " + min);
     }
 
+    @Test
+    @DisplayName("対象月の自動選択理由を出すラベルがある")
+    void targetYmReasonLabelExists() throws Exception {
+        Element label = elementByFxId("targetYmReasonLabel");
+        assertNotNull(label, "targetYmReasonLabel が無い");
+        assertTrue(label.getAttribute("wrapText").contains("true") || "true".equals(label.getAttribute("wrapText")));
+        assertTrue(label.getAttribute("text").contains("RVSHEET") || label.getAttribute("text").contains("対象月"),
+                label.getAttribute("text"));
+    }
+
     private static Element elementByFxId(String id) throws Exception {
         try (InputStream in =
                 KouchinVerifyTabFxmlTest.class.getResourceAsStream(
