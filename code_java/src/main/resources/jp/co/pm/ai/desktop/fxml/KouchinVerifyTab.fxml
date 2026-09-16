@@ -30,7 +30,7 @@
                 <Button fx:id="runBothButton" mnemonicParsing="false" onAction="#onRunBoth" text="まとめて検証（国分→湖南）"/>
                 <Label fx:id="outputWriteBlockBadge" managed="false" visible="false"
                        styleClass="pm-kouchin-output-write-block-badge" text="Excel書込不可"/>
-                <Button fx:id="importCsvButton" mnemonicParsing="false" onAction="#onImportCsv" text="CSVを取り込む…"/>
+                <Button fx:id="importCsvButton" mnemonicParsing="false" onAction="#onImportCsv" text="東レ提供CSVを取り込む…"/>
                 <Button fx:id="openKokubuExcelButton" mnemonicParsing="false" onAction="#onOpenKokubuExcel" text="国分のExcelを開く">
                     <tooltip><Tooltip text="検証結果Excelを読み取り専用で開く"/></tooltip>
                 </Button>

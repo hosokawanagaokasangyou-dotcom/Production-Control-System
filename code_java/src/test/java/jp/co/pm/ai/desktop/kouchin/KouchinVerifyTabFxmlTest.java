@@ -99,6 +99,14 @@ class KouchinVerifyTabFxmlTest {
     }
 
     @Test
+    @DisplayName("取込ボタンは東レ提供CSVと分かる")
+    void importCsvButtonNamesTorayCsv() throws Exception {
+        Element button = elementByFxId("importCsvButton");
+        assertNotNull(button, "importCsvButton が無い");
+        assertEquals("東レ提供CSVを取り込む…", button.getAttribute("text"));
+    }
+
+    @Test
     @DisplayName("③の案内は月次実績とする")
     void source3HintSaysMonthlyActual() throws Exception {
         Element hint = elementByFxId("diffHintLabel");
