@@ -7,6 +7,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.List;
+import java.util.function.Function;
 
 /**
  * 検証実行前のソース到達判定。Excel が開いていても読み取り専用で開けば可。
@@ -64,23 +65,45 @@ public final class VerifySourceAccess {
         }
 
         public String readCss() {
-            return css(present, readable);
+            return css(present, readable, true);
         }
 
         public String writeCss() {
-            return css(present, writable);
+            return css(present, writable, false);
         }
 
-        private static String css(boolean present, boolean ok) {
+        public String readHint() {
+            if (!present) {
+                return "ファイルなし";
+            }
+            return readable ? "検証に必要。読取可" : "検証不可。読取できない";
+        }
+
+        public String writeHint() {
+            if (!present) {
+                return "ファイルなし";
+            }
+            return writable ? "書込可（検証には不要）" : "Excelで開いている等。検証は読取できれば可";
+        }
+
+        private static String css(boolean present, boolean ok, boolean readColumn) {
             if (!present) {
                 return "pm-kouchin-access-na";
             }
-            return ok ? "pm-kouchin-access-ok" : "pm-kouchin-access-ng";
+            if (ok) {
+                return "pm-kouchin-access-ok";
+            }
+            return readColumn ? "pm-kouchin-access-ng" : "pm-kouchin-access-warn";
         }
     }
 
     public static boolean factorySourcesReady(List<KouchinDiscovery.Row> rows) {
         return blockReason(rows) == null;
+    }
+
+    public static boolean factorySourcesReady(
+            List<KouchinDiscovery.Row> rows, Function<KouchinDiscovery.Row, FileAccess> accessOf) {
+        return blockReason(rows, accessOf) == null;
     }
 
     public static boolean bothFactoriesReady(
@@ -90,17 +113,25 @@ public final class VerifySourceAccess {
 
     /** 検証不可の理由。許可するときは {@code null}。 */
     public static String blockReason(List<KouchinDiscovery.Row> rows) {
+        return blockReason(rows, FileAccess::ofRow);
+    }
+
+    public static String blockReason(
+            List<KouchinDiscovery.Row> rows, Function<KouchinDiscovery.Row, FileAccess> accessOf) {
         if (rows == null || rows.isEmpty()) {
             return "検出未完了";
         }
+        Function<KouchinDiscovery.Row, FileAccess> fn = accessOf == null ? FileAccess::ofRow : accessOf;
         for (KouchinDiscovery.Row row : rows) {
+            if (optionalSource(row == null ? null : row.role())) {
+                continue;
+            }
             if (row == null || row.missing()) {
                 String role = row == null || row.role() == null || row.role().isBlank() ? "ファイル" : row.role();
                 return "見つかりません: " + role;
             }
-            String full = row.fullPath();
-            Path path = full == null || full.isBlank() ? null : Path.of(full);
-            if (!canReadAtLeastReadOnly(path)) {
+            FileAccess acc = fn.apply(row);
+            if (acc == null || !acc.present() || !acc.readable()) {
                 return "読み取れません: " + row.role();
             }
         }
@@ -121,5 +152,9 @@ public final class VerifySourceAccess {
             return "検出未完了";
         }
         return null;
+    }
+
+    static boolean optionalSource(String role) {
+        return role != null && role.contains("月次処理");
     }
 }

@@ -40,6 +40,40 @@ class KouchinVerifyTabFxmlTest {
     }
 
     @Test
+    @DisplayName("ツールバーは折り返し、判定フィルタは結果表の直前")
+    void toolbarWrapsAndFilterSitsAboveResults() throws Exception {
+        try (InputStream in = KouchinVerifyTabFxmlTest.class.getResourceAsStream(
+                "/jp/co/pm/ai/desktop/fxml/KouchinVerifyTab.fxml")) {
+            assertNotNull(in);
+            var doc = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(in);
+            boolean hasFlow = false;
+            NodeList all = doc.getElementsByTagName("*");
+            int discovery = -1;
+            int search = -1;
+            int result = -1;
+            for (int i = 0; i < all.getLength(); i++) {
+                if (!(all.item(i) instanceof Element el)) {
+                    continue;
+                }
+                if ("FlowPane".equals(el.getTagName()) && el.getElementsByTagName("Button").getLength() > 0) {
+                    hasFlow = true;
+                }
+                String id = el.getAttribute("fx:id");
+                if ("discoveryTable".equals(id)) {
+                    discovery = i;
+                } else if ("searchField".equals(id)) {
+                    search = i;
+                } else if ("resultTable".equals(id)) {
+                    result = i;
+                }
+            }
+            assertTrue(hasFlow, "ツールバーが FlowPane ではない");
+            assertTrue(discovery >= 0 && search > discovery && result > search,
+                    "判定フィルタが結果表の直前にない discovery=" + discovery + " search=" + search + " result=" + result);
+        }
+    }
+
+    @Test
     @DisplayName("検出表は国分と湖南の行が切れない高さ")
     void discoveryTableFitsFourRows() throws Exception {
         Element table = elementByFxId("discoveryTable");

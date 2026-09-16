@@ -527,6 +527,13 @@
     -fx-font-weight: bold;
 }
 
+.table-cell.pm-kouchin-access-warn {
+    -fx-background-color: rgba(245, 158, 11, 0.38);
+    -fx-text-fill: #fde68a;
+    -fx-alignment: center;
+    -fx-font-weight: bold;
+}
+
 .table-cell.pm-kouchin-access-na {
     -fx-background-color: rgba(100, 116, 139, 0.28);
     -fx-text-fill: #cbd5e1;

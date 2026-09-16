@@ -5,9 +5,12 @@ import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
@@ -41,7 +44,6 @@ import javafx.stage.Window;
 
 import jp.co.pm.ai.desktop.MainShellController;
 import jp.co.pm.ai.desktop.MainShellTabId;
-import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.config.FactorySite;
 import jp.co.pm.ai.desktop.io.DesktopFileOpener;
 import jp.co.pm.ai.desktop.ui.ButtonAttentionGlow;
@@ -97,6 +99,8 @@ public class KouchinVerifyTabController {
     private BothResult lastBoth;
     private List<KouchinDiscovery.Row> lastKokubuDiscovery = List.of();
     private List<KouchinDiscovery.Row> lastKonanDiscovery = List.of();
+    private String lastKokubuBlock = "検出未完了";
+    private String lastKonanBlock = "検出未完了";
     private boolean lastOutputWritable;
     private ButtonAttentionGlow openKokubuExcelGlow;
     private ButtonAttentionGlow openKonanExcelGlow;
@@ -126,8 +130,11 @@ public class KouchinVerifyTabController {
         public String getWriteStatus() { return access.writeLabel(); }
         public String getReadCss() { return access.readCss(); }
         public String getWriteCss() { return access.writeCss(); }
+        public String getReadHint() { return access.readHint(); }
+        public String getWriteHint() { return access.writeHint(); }
         public boolean isMissing() { return row != null && row.missing(); }
         public KouchinDiscovery.Row source() { return row; }
+        public VerifySourceAccess.FileAccess access() { return access; }
     }
 
     public static final class ResultLine {
@@ -170,6 +177,56 @@ public class KouchinVerifyTabController {
         }
     }
 
+    private record VerifyTaskOutcome(BothResult both, VerifyRunSupport.Written written) {}
+
+    static List<DiscoveryLine> buildDiscoveryLines(
+            List<KouchinDiscovery.Row> kokubu, List<KouchinDiscovery.Row> konan) {
+        Map<String, VerifySourceAccess.FileAccess> memo = new HashMap<>();
+        List<DiscoveryLine> lines = new ArrayList<>();
+        if (kokubu != null) {
+            for (KouchinDiscovery.Row r : kokubu) {
+                lines.add(new DiscoveryLine("国分", r, accessFor(r, memo)));
+            }
+        }
+        if (konan != null) {
+            for (KouchinDiscovery.Row r : konan) {
+                lines.add(new DiscoveryLine("湖南", r, accessFor(r, memo)));
+            }
+        }
+        return lines;
+    }
+
+    private static VerifySourceAccess.FileAccess accessFor(
+            KouchinDiscovery.Row row, Map<String, VerifySourceAccess.FileAccess> memo) {
+        if (row == null || row.missing()) {
+            return VerifySourceAccess.FileAccess.ofRow(row);
+        }
+        String key = row.fullPath();
+        if (key == null || key.isBlank()) {
+            return VerifySourceAccess.FileAccess.ofRow(row);
+        }
+        return memo.computeIfAbsent(key, k -> VerifySourceAccess.FileAccess.ofRow(row));
+    }
+
+    private static Function<KouchinDiscovery.Row, VerifySourceAccess.FileAccess> accessLookup(
+            List<DiscoveryLine> lines, String factory) {
+        Map<String, VerifySourceAccess.FileAccess> byRole = new HashMap<>();
+        if (lines != null) {
+            for (DiscoveryLine line : lines) {
+                if (line != null && factory.equals(line.getFactory()) && line.source() != null) {
+                    byRole.put(line.getRole(), line.access());
+                }
+            }
+        }
+        return row -> {
+            if (row == null) {
+                return VerifySourceAccess.FileAccess.of(null);
+            }
+            VerifySourceAccess.FileAccess acc = byRole.get(row.role());
+            return acc == null ? VerifySourceAccess.FileAccess.ofRow(row) : acc;
+        };
+    }
+
     @FXML
     private void initialize() {
         if (statusLabel != null) {
@@ -195,6 +252,7 @@ public class KouchinVerifyTabController {
             openKonanExcelGlow = new ButtonAttentionGlow(openKonanExcelButton);
         }
         refreshRunEnabled();
+        refreshOpenExcelGlow();
     }
 
     public void bindShell(MainShellController shell, KouchinHostTabController host) {
@@ -235,32 +293,37 @@ public class KouchinVerifyTabController {
         KouchinPaths paths = KouchinPaths.fromEnv(ui);
         int gen = discoveryGeneration.incrementAndGet();
         Thread t = new Thread(() -> {
+            CompletableFuture<List<KouchinDiscovery.Row>> kokubuFut = CompletableFuture.supplyAsync(
+                    () -> new ArrayList<>(KouchinDiscovery.scan(FactoryId.KOKUBU, paths)));
+            CompletableFuture<List<KouchinDiscovery.Row>> konanFut = CompletableFuture.supplyAsync(
+                    () -> new ArrayList<>(KouchinDiscovery.scan(FactoryId.KONAN, paths)));
             List<KouchinDiscovery.Row> kokubu = List.of();
             List<KouchinDiscovery.Row> konan = List.of();
             String error = null;
             try {
-                kokubu = new ArrayList<>(KouchinDiscovery.scan(FactoryId.KOKUBU, paths));
-            } catch (RuntimeException e) {
-                error = e.getMessage();
+                kokubu = kokubuFut.join();
+            } catch (CompletionException e) {
+                Throwable c = e.getCause() == null ? e : e.getCause();
+                error = c.getMessage();
+                kokubu = List.of();
             }
             try {
-                konan = new ArrayList<>(KouchinDiscovery.scan(FactoryId.KONAN, paths));
-            } catch (RuntimeException e) {
-                String k = e.getMessage();
+                konan = konanFut.join();
+            } catch (CompletionException e) {
+                Throwable c = e.getCause() == null ? e : e.getCause();
+                String k = c.getMessage();
                 error = error == null ? k : error + " / " + k;
+                konan = List.of();
             }
             List<KouchinDiscovery.Row> kokubuRows = kokubu;
             List<KouchinDiscovery.Row> konanRows = konan;
             String err = error;
             boolean outputWritable = VerifyOutputAccess.anyOutputWritable(KouchinOutputDirs.resolveAll(ui));
-            List<DiscoveryLine> lines = new ArrayList<>();
-            for (KouchinDiscovery.Row r : kokubuRows) {
-                lines.add(DiscoveryLine.of("国分", r));
-            }
-            for (KouchinDiscovery.Row r : konanRows) {
-                lines.add(DiscoveryLine.of("湖南", r));
-            }
-            Platform.runLater(() -> applyDiscoveryResult(gen, kokubuRows, konanRows, err, outputWritable, lines));
+            List<DiscoveryLine> lines = buildDiscoveryLines(kokubuRows, konanRows);
+            String kokubuBlock = VerifySourceAccess.blockReason(kokubuRows, accessLookup(lines, "国分"));
+            String konanBlock = VerifySourceAccess.blockReason(konanRows, accessLookup(lines, "湖南"));
+            Platform.runLater(() -> applyDiscoveryResult(
+                    gen, kokubuRows, konanRows, err, outputWritable, lines, kokubuBlock, konanBlock));
         }, "kouchin-discovery");
         t.setDaemon(true);
         t.start();
@@ -272,13 +335,20 @@ public class KouchinVerifyTabController {
             List<KouchinDiscovery.Row> konan,
             String error,
             boolean outputWritable,
-            List<DiscoveryLine> lines) {
+            List<DiscoveryLine> lines,
+            String kokubuBlock,
+            String konanBlock) {
         if (gen != discoveryGeneration.get()) {
             return;
         }
         lastKokubuDiscovery = kokubu == null ? List.of() : List.copyOf(kokubu);
         lastKonanDiscovery = konan == null ? List.of() : List.copyOf(konan);
-        lastOutputWritable = outputWritable;
+        lastKokubuBlock = kokubuBlock;
+        lastKonanBlock = konanBlock;
+        boolean busy = shell != null && shell.isKouchinRunBusy();
+        if (!busy) {
+            lastOutputWritable = outputWritable;
+        }
         if (discoveryTable != null) {
             discoveryTable.getItems().setAll(lines == null ? List.of() : lines);
         }
@@ -286,24 +356,24 @@ public class KouchinVerifyTabController {
             statusLabel.setText(error == null ? discoveryStatusText() : "検出失敗: " + error);
         }
         refreshDropTargetLabel();
-        refreshRunEnabled();
+        if (!busy) {
+            refreshRunEnabled();
+        }
     }
 
     private String discoveryStatusText() {
-        String kokubu = VerifySourceAccess.blockReason(lastKokubuDiscovery);
-        String konan = VerifySourceAccess.blockReason(lastKonanDiscovery);
         StringBuilder sb = new StringBuilder("検出完了。");
         if (!lastOutputWritable) {
             sb.append(" 結果Excelを書き込めません。");
         }
-        if (kokubu != null) {
-            sb.append(" 国分検証不可: ").append(kokubu).append("。");
+        if (lastKokubuBlock != null) {
+            sb.append(" 国分検証不可: ").append(lastKokubuBlock).append("。");
         }
-        if (konan != null) {
-            sb.append(" 湖南検証不可: ").append(konan).append("。");
+        if (lastKonanBlock != null) {
+            sb.append(" 湖南検証不可: ").append(lastKonanBlock).append("。");
         }
-        if (lastOutputWritable && kokubu == null && konan == null) {
-            sb.append(" 未実行なら「まだ検証していません」。");
+        if (lastOutputWritable && lastKokubuBlock == null && lastKonanBlock == null) {
+            sb.append(" 検証できます。");
         }
         return sb.toString();
     }
@@ -410,16 +480,16 @@ public class KouchinVerifyTabController {
             return;
         }
         if (both) {
-            if (!VerifySourceAccess.bothFactoriesReady(lastKokubuDiscovery, lastKonanDiscovery)) {
+            if (lastKokubuBlock != null || lastKonanBlock != null) {
                 setStatus("関連ファイルにアクセスできないためまとめて検証できません");
                 return;
             }
         } else if (one == FactoryId.KONAN) {
-            if (!VerifySourceAccess.factorySourcesReady(lastKonanDiscovery)) {
+            if (lastKonanBlock != null) {
                 setStatus("湖南の関連ファイルにアクセスできないため検証できません");
                 return;
             }
-        } else if (!VerifySourceAccess.factorySourcesReady(lastKokubuDiscovery)) {
+        } else if (lastKokubuBlock != null) {
             setStatus("国分の関連ファイルにアクセスできないため検証できません");
             return;
         }
@@ -438,9 +508,9 @@ public class KouchinVerifyTabController {
         Map<String, String> ui = shell.snapshotUiEnv();
         KouchinPaths paths = KouchinPaths.fromEnv(ui);
         AtomicBoolean cancel = shell.kouchinCancelRequested();
-        Task<Void> task = new Task<>() {
+        Task<VerifyTaskOutcome> task = new Task<>() {
             @Override
-            protected Void call() throws Exception {
+            protected VerifyTaskOutcome call() throws Exception {
                 FileDiscovery.invalidateListingCache();
                 BothResult bothResult;
                 if (both) {
@@ -457,13 +527,14 @@ public class KouchinVerifyTabController {
                 }
                 VerifyRunSupport.Written written = VerifyRunSupport.writeBoth(
                         bothResult.kokubu(), bothResult.konan(), bothResult, ui, cancel);
-                lastBoth = bothResult;
-                lastWritten = written;
-                return null;
+                return new VerifyTaskOutcome(bothResult, written);
             }
         };
         task.setOnSucceeded(e -> {
             shell.endKouchinRun();
+            VerifyTaskOutcome outcome = task.getValue();
+            lastBoth = outcome == null ? null : outcome.both();
+            lastWritten = outcome == null ? null : outcome.written();
             showResults();
             refreshRunEnabled();
         });
@@ -574,14 +645,32 @@ public class KouchinVerifyTabController {
         }
         String judge = judgeFilterCombo == null ? "すべて" : judgeFilterCombo.getValue();
         String q = searchField == null || searchField.getText() == null
-                ? "" : searchField.getText().trim().toUpperCase(Locale.ROOT);
+                ? "" : searchField.getText();
         List<ResultLine> filtered = allResultLines.stream()
-                .filter(r -> judge == null || "すべて".equals(judge) || judge.equals(r.getJudge()))
-                .filter(r -> q.isEmpty()
-                        || (r.getKey() != null && r.getKey().toUpperCase(Locale.ROOT).contains(q))
-                        || (r.getNote() != null && r.getNote().toUpperCase(Locale.ROOT).contains(q)))
+                .filter(r -> matchesResultFilter(r, judge, q))
                 .collect(Collectors.toList());
         resultTable.getItems().setAll(filtered);
+    }
+
+    static boolean matchesResultFilter(ResultLine r, String judge, String qRaw) {
+        if (r == null) {
+            return false;
+        }
+        if (judge != null && !"すべて".equals(judge) && !judge.equals(r.getJudge())) {
+            return false;
+        }
+        String q = qRaw == null ? "" : qRaw.trim().toUpperCase(Locale.ROOT);
+        if (q.isEmpty()) {
+            return true;
+        }
+        return containsIgnoreCase(r.getKey(), q)
+                || containsIgnoreCase(r.getNote(), q)
+                || containsIgnoreCase(r.getKind(), q)
+                || containsIgnoreCase(r.getJudge(), q);
+    }
+
+    private static boolean containsIgnoreCase(String value, String q) {
+        return value != null && value.toUpperCase(Locale.ROOT).contains(q);
     }
 
     private void copyDropped(List<Path> files) {
@@ -592,7 +681,8 @@ public class KouchinVerifyTabController {
         Task<KouchinTorayCsvDropSupport.Outcome> task = new Task<>() {
             @Override
             protected KouchinTorayCsvDropSupport.Outcome call() {
-                return KouchinTorayCsvDropSupport.copyCsvFiles(files, dest, shell.kouchinCancelRequested());
+                AtomicBoolean cancel = shell.isKouchinRunBusy() ? shell.kouchinCancelRequested() : null;
+                return KouchinTorayCsvDropSupport.copyCsvFiles(files, dest, cancel);
             }
         };
         task.setOnSucceeded(e -> {
@@ -659,8 +749,8 @@ public class KouchinVerifyTabController {
         boolean unapplied = host != null && host.hasUnappliedSourceEdits();
         boolean busy = shell != null && (shell.isKouchinRunBusy() || shell.isPlanningPipelineStageRunning());
         boolean base = !unapplied && !busy && lastOutputWritable;
-        boolean kokubuReady = VerifySourceAccess.factorySourcesReady(lastKokubuDiscovery);
-        boolean konanReady = VerifySourceAccess.factorySourcesReady(lastKonanDiscovery);
+        boolean kokubuReady = lastKokubuBlock == null;
+        boolean konanReady = lastKonanBlock == null;
         if (runKokubuButton != null) {
             runKokubuButton.setDisable(!(base && kokubuReady));
         }
@@ -700,14 +790,14 @@ public class KouchinVerifyTabController {
         roleCol.setPrefWidth(120);
         TableColumn<DiscoveryLine, String> pathCol = new TableColumn<>("ファイル");
         pathCol.setCellValueFactory(cd -> new SimpleStringProperty(cd.getValue() == null ? "" : cd.getValue().getPath()));
-        pathCol.setPrefWidth(360);
-        pathCol.setMinWidth(160);
+        pathCol.setPrefWidth(280);
+        pathCol.setMinWidth(140);
         TableColumn<DiscoveryLine, String> ymCol = new TableColumn<>("対象月");
         ymCol.setCellValueFactory(cd -> new SimpleStringProperty(cd.getValue() == null ? "" : cd.getValue().getYm()));
         ymCol.setPrefWidth(110);
         TableColumn<DiscoveryLine, String> noteCol = new TableColumn<>("備考");
         noteCol.setCellValueFactory(cd -> new SimpleStringProperty(cd.getValue() == null ? "" : cd.getValue().getNote()));
-        noteCol.setPrefWidth(200);
+        noteCol.setPrefWidth(140);
         discoveryTable.getColumns().add(factoryCol);
         discoveryTable.getColumns().add(roleCol);
         discoveryTable.getColumns().add(pathCol);
@@ -768,18 +858,25 @@ public class KouchinVerifyTabController {
             protected void updateItem(String item, boolean empty) {
                 super.updateItem(item, empty);
                 getStyleClass().removeAll(
-                        "pm-kouchin-access-ok", "pm-kouchin-access-ng", "pm-kouchin-access-na");
+                        "pm-kouchin-access-ok",
+                        "pm-kouchin-access-ng",
+                        "pm-kouchin-access-na",
+                        "pm-kouchin-access-warn");
                 if (empty) {
                     setText(null);
+                    setTooltip(null);
                     return;
                 }
                 DiscoveryLine line = getTableRow() == null ? null : getTableRow().getItem();
                 if (line == null) {
                     setText(item);
+                    setTooltip(null);
                     return;
                 }
                 setText(text.apply(line));
                 getStyleClass().add(css.apply(line));
+                String tip = "読取".equals(title) ? line.getReadHint() : line.getWriteHint();
+                setTooltip(new Tooltip(tip));
             }
         });
         discoveryTable.getColumns().add(col);
@@ -807,7 +904,9 @@ public class KouchinVerifyTabController {
                 openKokubuExcelGlow = glow;
             }
         }
-        if (shouldGlowOpenExcel(lastWritten, site)) {
+        boolean openable = shouldGlowOpenExcel(lastWritten, site);
+        button.setDisable(!openable);
+        if (openable) {
             glow.ensureActive();
         } else {
             glow.stop();

@@ -24,6 +24,19 @@ import java.util.regex.Pattern;
  */
 public final class VerifyEngine {
 
+    /** Python 正本どおり手動①正を内訳に含める。 */
+    static double reportResidual(
+            double total1,
+            double total2,
+            double adjTotal,
+            double nextTotal,
+            double diffTotal,
+            double manual1Total,
+            double only1Total,
+            double only2Total) {
+        return total1 - (total2 + adjTotal + nextTotal + diffTotal + manual1Total + only1Total - only2Total);
+    }
+
     /** 依頼NOの月番号（例 Y7-52 → 7） */
     private static final Pattern IRAI_MONTH_PATTERN = Pattern.compile("^[A-Z]+(\\d{1,2})-");
     /** 枝番（例 C8-3-1 の末尾 -1） */
@@ -878,7 +891,8 @@ public final class VerifyEngine {
         double diffTotal = mismatchTotal + manual2Total;
         double only1Total = sumOf(only1, t1);
         double only2Total = sumOf(only2, t2);
-        double residual = total1 - (total2 + adjTotal + nextTotal + diffTotal + only1Total - only2Total);
+        double residual = reportResidual(
+                total1, total2, adjTotal, nextTotal, diffTotal, manual1Total, only1Total, only2Total);
         double mailTougetsu = diffTotal + nextTotal + only1Total - only2Total;
         double tougetsu = mailTougetsu + priorTotal;
 

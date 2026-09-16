@@ -8,6 +8,7 @@
 <?import javafx.scene.control.TextArea?>
 <?import javafx.scene.control.TextField?>
 <?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.layout.FlowPane?>
 <?import javafx.scene.layout.HBox?>
 <?import javafx.scene.layout.VBox?>
 
@@ -22,7 +23,7 @@
                    text="後加工工賃＝①東レCSV・②明細・③アラジンの月次突合です。加工トレンド（日次の加工量・加工賃）とは別機能です。"/>
             <Label fx:id="dropTargetLabel" wrapText="true"
                    text="①東レCSVの取り込み先: （参照先タブで指定）"/>
-            <HBox spacing="8.0">
+            <FlowPane hgap="8.0" vgap="6.0">
                 <Button fx:id="runKokubuButton" mnemonicParsing="false" onAction="#onRunKokubu" text="国分工場を検証"/>
                 <Button fx:id="runKonanButton" mnemonicParsing="false" onAction="#onRunKonan" text="湖南工場を検証"/>
                 <Button fx:id="runBothButton" mnemonicParsing="false" onAction="#onRunBoth" text="まとめて検証（国分→湖南）"/>
@@ -34,15 +35,9 @@
                 <Button fx:id="openFolderButton" mnemonicParsing="false" onAction="#onOpenFolder" text="出力フォルダを開く"/>
                 <Button fx:id="copyMailButton" mnemonicParsing="false" onAction="#onCopyMail" text="メールをコピー"/>
                 <Button fx:id="gotoRdpButton" mnemonicParsing="false" onAction="#onGotoRdp" text="RDPタブへ移動"/>
-            </HBox>
+            </FlowPane>
             <Label fx:id="statusLabel" text="まだ検証していません"/>
             <Label fx:id="kpiLabel" wrapText="true" text=""/>
-            <HBox spacing="8.0">
-                <Label text="判定フィルタ"/>
-                <ComboBox fx:id="judgeFilterCombo" prefWidth="160.0"/>
-                <Label text="検索"/>
-                <TextField fx:id="searchField" prefWidth="220.0"/>
-            </HBox>
         </VBox>
     </top>
     <center>
@@ -50,9 +45,15 @@
             <padding>
                 <Insets left="12.0" right="12.0"/>
             </padding>
-            <Label text="検出した①②③（工場別・読取/書込）"/>
-            <TableView fx:id="discoveryTable" prefHeight="232.0" minHeight="232.0" fixedCellSize="24.0"/>
+            <Label text="検出した①②③（工場別・読取/書込・ダブルクリックで開く）"/>
+            <TableView fx:id="discoveryTable" prefHeight="248.0" minHeight="232.0" fixedCellSize="24.0"/>
             <Label text="検証A（契約NO） / 検証B（依頼NO）"/>
+            <HBox spacing="8.0">
+                <Label text="判定フィルタ"/>
+                <ComboBox fx:id="judgeFilterCombo" prefWidth="160.0"/>
+                <Label text="検索"/>
+                <TextField fx:id="searchField" prefWidth="220.0" promptText="契約NO・依頼NO・判定・工場"/>
+            </HBox>
             <TableView fx:id="resultTable" VBox.vgrow="ALWAYS"/>
         </VBox>
     </center>

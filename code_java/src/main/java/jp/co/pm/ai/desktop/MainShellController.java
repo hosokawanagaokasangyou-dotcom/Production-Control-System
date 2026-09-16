@@ -1930,6 +1930,7 @@ public final class MainShellController
     public void endKouchinRun() {
         kouchinRunBusy = false;
         kouchinBusyLabel = "";
+        kouchinCancelRequested.set(false);
         Platform.runLater(
                 () -> {
                     updateShellStageProgressOverlay(activeRunStageScript, null);

@@ -100,6 +100,43 @@ class VerifySourceAccessTest {
                 new KouchinDiscovery.Row("②長岡明細", tmp.toString(), tmp.toString(), "", true, "見つかりません"))));
     }
 
+    @Test
+    @DisplayName("湖南の月次処理が無くても①②③が読めれば検証可（Cはスキップ）")
+    void monthlyMissingDoesNotBlockKonan() throws Exception {
+        Path csv = tmp.resolve("csv.csv");
+        Path n2 = tmp.resolve("n2.xlsm");
+        Path n3 = tmp.resolve("n3.xlsx");
+        Files.writeString(csv, "1");
+        Files.writeString(n2, "2");
+        Files.writeString(n3, "3");
+        KouchinDiscovery.Row monthlyGone = new KouchinDiscovery.Row(
+                "湖南 月次処理", tmp.toString(), tmp.toString(), "", true, "見つかりません");
+        List<KouchinDiscovery.Row> konan = List.of(
+                found("①東レCSV", csv), found("②試算", n2), found("③アラジン", n3), monthlyGone);
+        assertTrue(VerifySourceAccess.factorySourcesReady(konan));
+        assertEquals(null, VerifySourceAccess.blockReason(konan));
+    }
+
+    @Test
+    @DisplayName("読取可・書込不可でも検証は許可し、書込は警告色")
+    void readableUnwritableStillReadyAndWarnsOnWrite() throws Exception {
+        VerifySourceAccess.FileAccess acc = new VerifySourceAccess.FileAccess(true, true, false);
+        assertEquals("可", acc.readLabel());
+        assertEquals("不可", acc.writeLabel());
+        assertEquals("pm-kouchin-access-ok", acc.readCss());
+        assertEquals("pm-kouchin-access-warn", acc.writeCss());
+        assertTrue(acc.writeHint().contains("検証は読取できれば可"));
+        Path csv = tmp.resolve("c.csv");
+        Path x2 = tmp.resolve("x2.xlsx");
+        Path x3 = tmp.resolve("x3.xlsx");
+        Files.writeString(csv, "a");
+        Files.writeString(x2, "b");
+        Files.writeString(x3, "c");
+        List<KouchinDiscovery.Row> rows = List.of(found("①", csv), found("②", x2), found("③", x3));
+        assertEquals(null, VerifySourceAccess.blockReason(rows, r -> acc));
+        assertTrue(VerifySourceAccess.factorySourcesReady(rows, r -> acc));
+    }
+
     private static KouchinDiscovery.Row found(String role, Path file) {
         return new KouchinDiscovery.Row(role, file.getFileName().toString(), file.toString(), "2026年8月度", false, "");
     }
