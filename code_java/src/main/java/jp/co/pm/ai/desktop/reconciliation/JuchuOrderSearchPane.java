@@ -194,7 +194,7 @@ public final class JuchuOrderSearchPane {
                         col("調整納期", r -> dbValue(r, "調整納期")),
                         col("製品", r -> dbValue(r, "製品")),
                         col("原反", r -> JuchuOrderSearch.displayRawMaterial(r.getDbValues())),
-                        col(
+                        wrappingCol(
                                 "機械名",
                                 r ->
                                         JuchuOrderSearch.displayMachine(
@@ -618,7 +618,7 @@ public final class JuchuOrderSearchPane {
                 }
             }
         }
-        return String.join(" ", names);
+        return JuchuOrderSearch.formatMachineNames(names);
     }
 
     private static String planHaystack(
@@ -857,6 +857,38 @@ public final class JuchuOrderSearchPane {
                                 if (!getStyleClass().contains("juchu-kensa-present")) {
                                     getStyleClass().add("juchu-kensa-present");
                                 }
+                            }
+                        });
+        return column;
+    }
+
+    private static TableColumn<OrderRecord, String> wrappingCol(
+            String title, java.util.function.Function<OrderRecord, String> value) {
+        TableColumn<OrderRecord, String> column = col(title, value);
+        column.setCellFactory(
+                col ->
+                        new TableCell<>() {
+                            private final Label label = new Label();
+
+                            {
+                                label.setWrapText(true);
+                                label.setMaxWidth(Double.MAX_VALUE);
+                                label.setAlignment(Pos.TOP_LEFT);
+                                label.maxWidthProperty().bind(col.widthProperty().subtract(14));
+                                setAlignment(Pos.TOP_LEFT);
+                            }
+
+                            @Override
+                            protected void updateItem(String item, boolean empty) {
+                                super.updateItem(item, empty);
+                                if (empty || item == null || item.isBlank()) {
+                                    setGraphic(null);
+                                    setText(null);
+                                    return;
+                                }
+                                label.setText(item);
+                                setText(null);
+                                setGraphic(label);
                             }
                         });
         return column;

@@ -391,6 +391,19 @@ class JuchuOrderSearchTest {
     }
 
     @Test
+    void formatMachineNames_joinsWithNewlinesAndDropsSpacingDupes() {
+        assertEquals("", JuchuOrderSearch.formatMachineNames(List.of()));
+        assertEquals("", JuchuOrderSearch.formatMachineNames(null));
+        assertEquals(
+                "SEC機 湖南",
+                JuchuOrderSearch.formatMachineNames(List.of("SEC機湖南", "SEC機 湖南", "")));
+        assertEquals(
+                "EC機 湖南\nスリット機1 湖南",
+                JuchuOrderSearch.formatMachineNames(
+                        List.of("EC機 湖南", "スリット機1 湖南", "EC機湖南")));
+    }
+
+    @Test
     void displayMachine_usesDbThenHaystack() {
         assertEquals(
                 "スライス機1 湖南",

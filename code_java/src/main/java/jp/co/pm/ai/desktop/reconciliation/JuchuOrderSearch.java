@@ -5,6 +5,7 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -176,6 +177,39 @@ public final class JuchuOrderSearch {
                 dbValues != null ? dbValues.get("機械名") : null,
                 dbValues != null ? dbValues.get("機械") : null,
                 extraHaystack);
+    }
+
+    /** 複数機械名を改行表示。空白差だけの重複は1件にまとめる。 */
+    public static String formatMachineNames(Collection<String> names) {
+        if (names == null || names.isEmpty()) {
+            return "";
+        }
+        Map<String, String> unique = new LinkedHashMap<>();
+        for (String raw : names) {
+            if (raw == null || raw.isBlank()) {
+                continue;
+            }
+            String stripped = raw.strip();
+            String key = JuchuTransferValueNormalizer.normalizeText(stripped);
+            if (key.isEmpty()) {
+                continue;
+            }
+            String existing = unique.get(key);
+            if (existing == null || machineNameDisplayScore(stripped) > machineNameDisplayScore(existing)) {
+                unique.put(key, stripped);
+            }
+        }
+        return String.join("\n", unique.values());
+    }
+
+    private static int machineNameDisplayScore(String name) {
+        int spaces = 0;
+        for (int i = 0; i < name.length(); i++) {
+            if (Character.isWhitespace(name.charAt(i))) {
+                spaces++;
+            }
+        }
+        return spaces * 1_000 + name.length();
     }
 
     public static String displayProcess(Map<String, String> dbValues, String extraHaystack) {
