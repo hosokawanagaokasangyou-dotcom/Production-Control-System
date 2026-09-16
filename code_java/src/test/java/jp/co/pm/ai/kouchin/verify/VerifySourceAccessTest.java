@@ -18,6 +18,32 @@ class VerifySourceAccessTest {
     Path tmp;
 
     @Test
+    @DisplayName("実在ファイルの読取・書込可否を判定する")
+    void fileAccessReadAndWrite() throws Exception {
+        Path file = tmp.resolve("明細.xlsx");
+        Files.writeString(file, "xlsx");
+        VerifySourceAccess.FileAccess ok = VerifySourceAccess.FileAccess.of(file);
+        assertTrue(ok.present());
+        assertTrue(ok.readable());
+        assertTrue(ok.writable());
+        assertEquals("可", ok.readLabel());
+        assertEquals("可", ok.writeLabel());
+        assertEquals("pm-kouchin-access-ok", ok.readCss());
+        assertEquals("pm-kouchin-access-ok", ok.writeCss());
+        assertTrue(VerifySourceAccess.canWriteFile(file));
+        assertFalse(VerifySourceAccess.canWriteFile(null));
+        assertFalse(VerifySourceAccess.canWriteFile(tmp));
+        VerifySourceAccess.FileAccess missing = VerifySourceAccess.FileAccess.of(tmp.resolve("gone.xlsx"));
+        assertFalse(missing.present());
+        assertEquals("—", missing.readLabel());
+        assertEquals("—", missing.writeLabel());
+        assertEquals("pm-kouchin-access-na", missing.readCss());
+        KouchinDiscovery.Row absent = new KouchinDiscovery.Row(
+                "②長岡明細", tmp.toString(), tmp.toString(), "", true, "見つかりません");
+        assertEquals("—", VerifySourceAccess.FileAccess.ofRow(absent).writeLabel());
+    }
+
+    @Test
     @DisplayName("実在ファイルは読み取り専用でアクセス可")
     void canReadRegularFile() throws Exception {
         Path file = tmp.resolve("RVSHEET202608.csv");

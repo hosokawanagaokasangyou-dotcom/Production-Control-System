@@ -40,7 +40,7 @@ class KouchinVerifyTabFxmlTest {
     }
 
     @Test
-    @DisplayName("検出表は①②③＋湖南月次の4行がヘッダごと見切れない高さ")
+    @DisplayName("検出表は国分と湖南の行が切れない高さ")
     void discoveryTableFitsFourRows() throws Exception {
         Element table = elementByFxId("discoveryTable");
         assertNotNull(table, "discoveryTable が無い");
@@ -48,8 +48,8 @@ class KouchinVerifyTabFxmlTest {
         double min = table.getAttribute("minHeight").isBlank()
                 ? pref
                 : Double.parseDouble(table.getAttribute("minHeight"));
-        assertTrue(pref >= 148.0, "prefHeight が4行分より低い: " + pref);
-        assertTrue(min >= 148.0, "minHeight が4行分より低い: " + min);
+        assertTrue(pref >= 220.0, "prefHeight が両工場分より低い: " + pref);
+        assertTrue(min >= 220.0, "minHeight が両工場分より低い: " + min);
     }
 
     private static Element elementByFxId(String id) throws Exception {

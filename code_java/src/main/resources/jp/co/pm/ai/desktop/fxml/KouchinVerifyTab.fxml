@@ -50,8 +50,8 @@
             <padding>
                 <Insets left="12.0" right="12.0"/>
             </padding>
-            <Label text="検出した①②③"/>
-            <TableView fx:id="discoveryTable" prefHeight="160.0" minHeight="160.0" fixedCellSize="24.0"/>
+            <Label text="検出した①②③（工場別・読取/書込）"/>
+            <TableView fx:id="discoveryTable" prefHeight="232.0" minHeight="232.0" fixedCellSize="24.0"/>
             <Label text="検証A（契約NO） / 検証B（依頼NO）"/>
             <TableView fx:id="resultTable" VBox.vgrow="ALWAYS"/>
         </VBox>

@@ -10,6 +10,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import javafx.application.Platform;
@@ -82,7 +83,7 @@ public class KouchinVerifyTabController {
     @FXML private Label kpiLabel;
     @FXML private ComboBox<String> judgeFilterCombo;
     @FXML private TextField searchField;
-    @FXML private TableView<KouchinDiscovery.Row> discoveryTable;
+    @FXML private TableView<DiscoveryLine> discoveryTable;
     @FXML private TableView<ResultLine> resultTable;
     @FXML private TextArea mailArea;
     @FXML private TextArea logArea;
@@ -100,6 +101,34 @@ public class KouchinVerifyTabController {
     private ButtonAttentionGlow openKokubuExcelGlow;
     private ButtonAttentionGlow openKonanExcelGlow;
     private final List<ResultLine> allResultLines = new ArrayList<>();
+
+    public static final class DiscoveryLine {
+        private final String factory;
+        private final KouchinDiscovery.Row row;
+        private final VerifySourceAccess.FileAccess access;
+
+        DiscoveryLine(String factory, KouchinDiscovery.Row row, VerifySourceAccess.FileAccess access) {
+            this.factory = factory == null ? "" : factory;
+            this.row = row;
+            this.access = access == null ? VerifySourceAccess.FileAccess.of(null) : access;
+        }
+
+        static DiscoveryLine of(String factory, KouchinDiscovery.Row row) {
+            return new DiscoveryLine(factory, row, VerifySourceAccess.FileAccess.ofRow(row));
+        }
+
+        public String getFactory() { return factory; }
+        public String getRole() { return row == null ? "" : row.role(); }
+        public String getPath() { return row == null ? "" : row.path(); }
+        public String getYm() { return row == null ? "" : row.ym(); }
+        public String getNote() { return row == null ? "" : row.note(); }
+        public String getReadStatus() { return access.readLabel(); }
+        public String getWriteStatus() { return access.writeLabel(); }
+        public String getReadCss() { return access.readCss(); }
+        public String getWriteCss() { return access.writeCss(); }
+        public boolean isMissing() { return row != null && row.missing(); }
+        public KouchinDiscovery.Row source() { return row; }
+    }
 
     public static final class ResultLine {
         private final String kind;
@@ -224,7 +253,14 @@ public class KouchinVerifyTabController {
             List<KouchinDiscovery.Row> konanRows = konan;
             String err = error;
             boolean outputWritable = VerifyOutputAccess.anyOutputWritable(KouchinOutputDirs.resolveAll(ui));
-            Platform.runLater(() -> applyDiscoveryResult(gen, kokubuRows, konanRows, err, outputWritable));
+            List<DiscoveryLine> lines = new ArrayList<>();
+            for (KouchinDiscovery.Row r : kokubuRows) {
+                lines.add(DiscoveryLine.of("国分", r));
+            }
+            for (KouchinDiscovery.Row r : konanRows) {
+                lines.add(DiscoveryLine.of("湖南", r));
+            }
+            Platform.runLater(() -> applyDiscoveryResult(gen, kokubuRows, konanRows, err, outputWritable, lines));
         }, "kouchin-discovery");
         t.setDaemon(true);
         t.start();
@@ -235,18 +271,16 @@ public class KouchinVerifyTabController {
             List<KouchinDiscovery.Row> kokubu,
             List<KouchinDiscovery.Row> konan,
             String error,
-            boolean outputWritable) {
+            boolean outputWritable,
+            List<DiscoveryLine> lines) {
         if (gen != discoveryGeneration.get()) {
             return;
         }
         lastKokubuDiscovery = kokubu == null ? List.of() : List.copyOf(kokubu);
         lastKonanDiscovery = konan == null ? List.of() : List.copyOf(konan);
         lastOutputWritable = outputWritable;
-        FactorySite site = shell == null ? FactorySite.KOKUBU : shell.currentFactorySite();
-        List<KouchinDiscovery.Row> shown =
-                site == FactorySite.KONAN ? lastKonanDiscovery : lastKokubuDiscovery;
         if (discoveryTable != null) {
-            discoveryTable.getItems().setAll(shown);
+            discoveryTable.getItems().setAll(lines == null ? List.of() : lines);
         }
         if (statusLabel != null && lastBoth == null) {
             statusLabel.setText(error == null ? discoveryStatusText() : "検出失敗: " + error);
@@ -658,29 +692,39 @@ public class KouchinVerifyTabController {
             return;
         }
         discoveryTable.getColumns().clear();
-        TableColumn<KouchinDiscovery.Row, String> roleCol = new TableColumn<>("区分");
-        roleCol.setCellValueFactory(cd -> new SimpleStringProperty(cd.getValue() == null ? "" : cd.getValue().role()));
+        TableColumn<DiscoveryLine, String> factoryCol = new TableColumn<>("工場");
+        factoryCol.setCellValueFactory(cd -> new SimpleStringProperty(cd.getValue() == null ? "" : cd.getValue().getFactory()));
+        factoryCol.setPrefWidth(72);
+        TableColumn<DiscoveryLine, String> roleCol = new TableColumn<>("区分");
+        roleCol.setCellValueFactory(cd -> new SimpleStringProperty(cd.getValue() == null ? "" : cd.getValue().getRole()));
         roleCol.setPrefWidth(120);
-        TableColumn<KouchinDiscovery.Row, String> pathCol = new TableColumn<>("ファイル");
-        pathCol.setCellValueFactory(cd -> new SimpleStringProperty(cd.getValue() == null ? "" : cd.getValue().path()));
-        pathCol.setPrefWidth(420);
-        pathCol.setMinWidth(180);
-        TableColumn<KouchinDiscovery.Row, String> ymCol = new TableColumn<>("対象月");
-        ymCol.setCellValueFactory(cd -> new SimpleStringProperty(cd.getValue() == null ? "" : cd.getValue().ym()));
-        ymCol.setPrefWidth(120);
-        TableColumn<KouchinDiscovery.Row, String> noteCol = new TableColumn<>("備考");
-        noteCol.setCellValueFactory(cd -> new SimpleStringProperty(cd.getValue() == null ? "" : cd.getValue().note()));
-        noteCol.setPrefWidth(280);
-        discoveryTable.getColumns().addAll(roleCol, pathCol, ymCol, noteCol);
+        TableColumn<DiscoveryLine, String> pathCol = new TableColumn<>("ファイル");
+        pathCol.setCellValueFactory(cd -> new SimpleStringProperty(cd.getValue() == null ? "" : cd.getValue().getPath()));
+        pathCol.setPrefWidth(360);
+        pathCol.setMinWidth(160);
+        TableColumn<DiscoveryLine, String> ymCol = new TableColumn<>("対象月");
+        ymCol.setCellValueFactory(cd -> new SimpleStringProperty(cd.getValue() == null ? "" : cd.getValue().getYm()));
+        ymCol.setPrefWidth(110);
+        TableColumn<DiscoveryLine, String> noteCol = new TableColumn<>("備考");
+        noteCol.setCellValueFactory(cd -> new SimpleStringProperty(cd.getValue() == null ? "" : cd.getValue().getNote()));
+        noteCol.setPrefWidth(200);
+        discoveryTable.getColumns().add(factoryCol);
+        discoveryTable.getColumns().add(roleCol);
+        discoveryTable.getColumns().add(pathCol);
+        discoveryTable.getColumns().add(ymCol);
+        addAccessColumn("読取", DiscoveryLine::getReadStatus, DiscoveryLine::getReadCss, 64);
+        addAccessColumn("書込", DiscoveryLine::getWriteStatus, DiscoveryLine::getWriteCss, 64);
+        discoveryTable.getColumns().add(noteCol);
         discoveryTable.setRowFactory(tv -> {
-            TableRow<KouchinDiscovery.Row> row = new TableRow<>();
+            TableRow<DiscoveryLine> row = new TableRow<>();
             row.setOnMouseClicked(e -> {
                 if (e.getClickCount() != 2
                         || e.getButton() != MouseButton.PRIMARY
                         || row.isEmpty()) {
                     return;
                 }
-                openDiscoveryRow(row.getItem());
+                DiscoveryLine line = row.getItem();
+                openDiscoveryRow(line == null ? null : line.source());
             });
             return row;
         });
@@ -697,16 +741,48 @@ public class KouchinVerifyTabController {
             protected void updateItem(String item, boolean empty) {
                 super.updateItem(item, empty);
                 setText(empty ? null : item);
-                KouchinDiscovery.Row row = empty ? null : getTableRow().getItem();
-                setStyle(row != null && row.missing() ? "-fx-text-fill: #c00000;" : "");
-                if (row == null || row.fullPath() == null || row.fullPath().isBlank()) {
+                DiscoveryLine line = empty ? null : getTableRow().getItem();
+                setStyle(line != null && line.isMissing() ? "-fx-text-fill: #c00000;" : "");
+                KouchinDiscovery.Row src = line == null ? null : line.source();
+                if (src == null || src.fullPath() == null || src.fullPath().isBlank()) {
                     setTooltip(null);
                 } else {
-                    tip.setText(row.fullPath().replace('\\', '/'));
+                    tip.setText(src.fullPath().replace('\\', '/'));
                     setTooltip(tip);
                 }
             }
         });
+    }
+
+    private void addAccessColumn(
+            String title,
+            Function<DiscoveryLine, String> text,
+            Function<DiscoveryLine, String> css,
+            int width) {
+        TableColumn<DiscoveryLine, String> col = new TableColumn<>(title);
+        col.setCellValueFactory(cd -> new SimpleStringProperty(
+                cd.getValue() == null ? "" : text.apply(cd.getValue())));
+        col.setPrefWidth(width);
+        col.setCellFactory(c -> new TableCell<>() {
+            @Override
+            protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                getStyleClass().removeAll(
+                        "pm-kouchin-access-ok", "pm-kouchin-access-ng", "pm-kouchin-access-na");
+                if (empty) {
+                    setText(null);
+                    return;
+                }
+                DiscoveryLine line = getTableRow() == null ? null : getTableRow().getItem();
+                if (line == null) {
+                    setText(item);
+                    return;
+                }
+                setText(text.apply(line));
+                getStyleClass().add(css.apply(line));
+            }
+        });
+        discoveryTable.getColumns().add(col);
     }
 
     static boolean shouldGlowOpenExcel(VerifyRunSupport.Written written, FactorySite site) {

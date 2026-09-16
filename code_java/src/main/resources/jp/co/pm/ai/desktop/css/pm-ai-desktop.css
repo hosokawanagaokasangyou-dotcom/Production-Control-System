@@ -513,6 +513,26 @@
     -fx-padding: 3 8 3 8;
 }
 
+.table-cell.pm-kouchin-access-ok {
+    -fx-background-color: rgba(22, 163, 74, 0.35);
+    -fx-text-fill: #bbf7d0;
+    -fx-alignment: center;
+    -fx-font-weight: bold;
+}
+
+.table-cell.pm-kouchin-access-ng {
+    -fx-background-color: rgba(220, 38, 38, 0.38);
+    -fx-text-fill: #fecaca;
+    -fx-alignment: center;
+    -fx-font-weight: bold;
+}
+
+.table-cell.pm-kouchin-access-na {
+    -fx-background-color: rgba(100, 116, 139, 0.28);
+    -fx-text-fill: #cbd5e1;
+    -fx-alignment: center;
+}
+
 .button.pm-stage-run-button {
     -fx-cursor: hand;
     -fx-font-size: 15px;

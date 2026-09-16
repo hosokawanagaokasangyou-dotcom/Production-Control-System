@@ -1,6 +1,7 @@
 package jp.co.pm.ai.kouchin.verify;
 
 import java.io.IOException;
+import java.io.RandomAccessFile;
 import java.nio.channels.SeekableByteChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -22,6 +23,59 @@ public final class VerifySourceAccess {
             return true;
         } catch (IOException e) {
             return false;
+        }
+    }
+
+    public static boolean canWriteFile(Path path) {
+        if (path == null || !Files.isRegularFile(path)) {
+            return false;
+        }
+        try (RandomAccessFile raf = new RandomAccessFile(path.toFile(), "rw")) {
+            return true;
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
+    /** 検出行／実ファイルの読取・書込表示。欠落は {@code —}。 */
+    public record FileAccess(boolean present, boolean readable, boolean writable) {
+
+        public static FileAccess of(Path path) {
+            if (path == null || !Files.isRegularFile(path)) {
+                return new FileAccess(false, false, false);
+            }
+            return new FileAccess(true, canReadAtLeastReadOnly(path), canWriteFile(path));
+        }
+
+        public static FileAccess ofRow(KouchinDiscovery.Row row) {
+            if (row == null || row.missing()) {
+                return new FileAccess(false, false, false);
+            }
+            String full = row.fullPath();
+            return of(full == null || full.isBlank() ? null : Path.of(full));
+        }
+
+        public String readLabel() {
+            return present ? (readable ? "可" : "不可") : "—";
+        }
+
+        public String writeLabel() {
+            return present ? (writable ? "可" : "不可") : "—";
+        }
+
+        public String readCss() {
+            return css(present, readable);
+        }
+
+        public String writeCss() {
+            return css(present, writable);
+        }
+
+        private static String css(boolean present, boolean ok) {
+            if (!present) {
+                return "pm-kouchin-access-na";
+            }
+            return ok ? "pm-kouchin-access-ok" : "pm-kouchin-access-ng";
         }
     }
 
