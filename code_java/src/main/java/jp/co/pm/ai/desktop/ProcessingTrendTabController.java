@@ -78,6 +78,8 @@ import javafx.util.StringConverter;
 import jp.co.pm.ai.desktop.ProcessingTrendChartSupport.MonthBand;
 import jp.co.pm.ai.desktop.ProcessingTrendChartSupport.NiceRange;
 import jp.co.pm.ai.desktop.config.AppPaths;
+import jp.co.pm.ai.desktop.config.FactorySite;
+import jp.co.pm.ai.desktop.config.GlobalInitSettingTarget;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchProvenance;
 import jp.co.pm.ai.desktop.io.DesktopFileOpener;
 import jp.co.pm.ai.desktop.io.actuals.DashboardLoadErrorFormatter;
@@ -1397,7 +1399,11 @@ public class ProcessingTrendTabController {
                         return new ReloadOutcome(
                                 decision,
                                 ProcessingTrendAggregator.machineNames(
-                                        s.dailyReportActuals(), s.actuals(), s.aladdin(), s.dispatch()),
+                                        s.dailyReportActuals(),
+                                        s.actuals(),
+                                        s.aladdin(),
+                                        s.dispatch(),
+                                        factorySiteOf(ui)),
                                 ProcessingTrendAggregator.processNames(
                                         s.dailyReportActuals(), s.actuals(), s.aladdin(), s.dispatch()));
                     }
@@ -2672,7 +2678,8 @@ public class ProcessingTrendTabController {
                                         src.dailyReportActuals(),
                                         src.actuals(),
                                         src.aladdin(),
-                                        src.dispatch());
+                                        src.dispatch(),
+                                        factorySiteOf(uiEnv));
                         List<String> processes =
                                 ProcessingTrendAggregator.processNames(
                                         src.dailyReportActuals(),
@@ -2818,5 +2825,9 @@ public class ProcessingTrendTabController {
         Map<String, String> ui = shell != null ? shell.snapshotUiEnv() : Map.of();
         return ProcessingTrendExcelExportStore.findNewestXlsx(
                 ProcessingTrendExcelExportStore.resolveDirectory(ui));
+    }
+
+    private static FactorySite factorySiteOf(Map<String, String> ui) {
+        return FactorySite.inferFromUiEnv(ui).orElseGet(GlobalInitSettingTarget::load);
     }
 }

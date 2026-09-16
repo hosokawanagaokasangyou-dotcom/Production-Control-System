@@ -112,4 +112,22 @@ class TaskInputSourceRawGridIoProcessingActualsTest {
 
         Assertions.assertEquals(1, out.rows().size());
     }
+
+    @Test
+    void dateTimeColumns_parseKokubuExcelSerialProcessingDate() {
+        List<String> headers =
+                List.of("工程名", "機械名", "加工日", "開始時間", "開始分", "終了時間", "終了分");
+        List<List<String>> rows =
+                List.of(List.of("スライス", "スライス機1", "46259", "08", "30", "11", "28"));
+        PlanInputTabularIo.TabularSheet out =
+                TaskInputSourceRawGridIo.applyProcessingActualsDateTimeColumns(
+                        new PlanInputTabularIo.TabularSheet(headers, rows));
+
+        Assertions.assertTrue(out.headers().contains("加工開始日時"));
+        Assertions.assertTrue(out.headers().contains("加工終了日時"));
+        int iStart = out.headers().indexOf("加工開始日時");
+        int iEnd = out.headers().indexOf("加工終了日時");
+        Assertions.assertEquals("2026/08/25 08:30", out.rows().get(0).get(iStart));
+        Assertions.assertEquals("2026/08/25 11:28", out.rows().get(0).get(iEnd));
+    }
 }

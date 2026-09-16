@@ -12,12 +12,15 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.regex.Pattern;
 
+import jp.co.pm.ai.desktop.config.FactorySite;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchPlanningStageSupport;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchSchema;
+import jp.co.pm.ai.desktop.io.ExcelSerialDates;
 
 /**
  * 加工実績（加工実績明細）と加工予定（アラジン加工計画または配台結果）を日別に集計し、
@@ -582,6 +585,10 @@ public final class ProcessingTrendAggregator {
     private static final Pattern ZERO_WIDTH = Pattern.compile("[\u200b\u200c\u200d\ufeff]");
     private static final Pattern DASH_LIKE = Pattern.compile("[\u2010-\u2015\u2212\u30fc\uff0d]");
     private static final Pattern WHITESPACE = Pattern.compile("\\s+");
+    private static final Pattern TRAILING_PAREN = Pattern.compile("\\s*[（(][^）)]*[）)]\\s*$");
+    /** 国分実機名のうち「機」もサイト接尾も無いもの（{@link #normKey} 済み）。 */
+    private static final Set<String> KOKUBU_BARE_EQUIPMENT_KEYS =
+            Set.of(normKey("バーチカルカット"), normKey("打抜き"), normKey("目抜き"));
     private static final Collator JA = Collator.getInstance(Locale.JAPAN);
     /**
      * 機械コンボに載せるラベルの上限。実機名（例: {@code スライス機1 湖南}）より十分長く、
@@ -953,7 +960,30 @@ public final class ProcessingTrendAggregator {
             ActualsSnapshot detailActuals,
             AladdinSnapshot aladdin,
             DispatchSnapshot dispatch) {
-        return distinctColumnValues(dailyReport, detailActuals, aladdin, dispatch, COL_MACHINE);
+        return machineNames(dailyReport, detailActuals, aladdin, dispatch, null);
+    }
+
+    /**
+     * 工場サイトを指定すると、他工場のサイト接尾（湖南／湘南／国分）が付いた機械名を除く。
+     * {@code site} が {@code null} のときはフィルタしない。
+     */
+    public static List<String> machineNames(
+            ActualsSnapshot dailyReport,
+            ActualsSnapshot detailActuals,
+            AladdinSnapshot aladdin,
+            DispatchSnapshot dispatch,
+            FactorySite site) {
+        List<String> all = distinctColumnValues(dailyReport, detailActuals, aladdin, dispatch, COL_MACHINE);
+        if (site == null || site == FactorySite.RDP_LAUNCHER) {
+            return all;
+        }
+        List<String> out = new ArrayList<>();
+        for (String label : all) {
+            if (keepMachineForFactory(label, site)) {
+                out.add(label);
+            }
+        }
+        return List.copyOf(out);
     }
 
     /** 3 ソースに現れる機械名の和集合（従来互換）。 */
@@ -1369,9 +1399,6 @@ public final class ProcessingTrendAggregator {
         if (s.indexOf(',') >= 0 || s.indexOf(':') >= 0 || s.indexOf('：') >= 0) {
             return false;
         }
-        if (s.indexOf('(') >= 0 || s.indexOf('（') >= 0 || s.indexOf(')') >= 0 || s.indexOf('）') >= 0) {
-            return false;
-        }
         if (s.contains("株式会社") || s.contains("（株）") || s.contains("(株)")) {
             return false;
         }
@@ -1388,14 +1415,42 @@ public final class ProcessingTrendAggregator {
         if (key.isEmpty()) {
             return false;
         }
-        // 実機名: サイト接尾・「機」を含む・短い設備コード（W9-1 / EC-2 等）
-        if (key.endsWith("湖南") || key.endsWith("湘南") || key.endsWith("国分")) {
+        String core = TRAILING_PAREN.matcher(s).replaceFirst("").strip();
+        String coreKey = normKey(core);
+        // 実機名: サイト接尾・「機」を含む・短い設備コード（W9-1 / EC-2 等）・国分の括弧付き／無接尾名
+        if (containsFactorySiteToken(key) || containsFactorySiteToken(coreKey)) {
             return true;
         }
-        if (key.contains("機")) {
+        if (key.contains("機") || coreKey.contains("機")) {
             return true;
         }
-        return EQUIPMENT_CODE.matcher(key).matches();
+        if (EQUIPMENT_CODE.matcher(key).matches()
+                || (!coreKey.isEmpty() && EQUIPMENT_CODE.matcher(coreKey).matches())) {
+            return true;
+        }
+        return KOKUBU_BARE_EQUIPMENT_KEYS.contains(key)
+                || KOKUBU_BARE_EQUIPMENT_KEYS.contains(coreKey);
+    }
+
+    static boolean keepMachineForFactory(String raw, FactorySite site) {
+        if (!isPlausibleMachineLabel(raw)) {
+            return false;
+        }
+        if (site == null || site == FactorySite.RDP_LAUNCHER) {
+            return true;
+        }
+        String key = normKey(raw);
+        if (site == FactorySite.KOKUBU && (key.contains("湖南") || key.contains("湘南"))) {
+            return false;
+        }
+        if (site == FactorySite.KONAN && key.contains("国分")) {
+            return false;
+        }
+        return true;
+    }
+
+    private static boolean containsFactorySiteToken(String key) {
+        return key.contains("湖南") || key.contains("湘南") || key.contains("国分");
     }
 
     /**
@@ -1479,7 +1534,7 @@ public final class ProcessingTrendAggregator {
         }
         String[] parts = s.split("[/\\-]");
         if (parts.length != 3 || parts[0].strip().length() != 4) {
-            return null;
+            return ExcelSerialDates.parse(raw);
         }
         try {
             int y = Integer.parseInt(parts[0].strip());
@@ -1487,7 +1542,7 @@ public final class ProcessingTrendAggregator {
             int d = Integer.parseInt(parts[2].strip());
             return LocalDate.of(y, mo, d);
         } catch (NumberFormatException | DateTimeException e) {
-            return null;
+            return ExcelSerialDates.parse(raw);
         }
     }
 

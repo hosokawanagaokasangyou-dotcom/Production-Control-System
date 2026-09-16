@@ -671,7 +671,11 @@ public final class TaskInputSourceRawGridIo {
         if (d != null) {
             return d;
         }
-        return tryParseFlexibleDate(trimmed);
+        d = tryParseFlexibleDate(trimmed);
+        if (d != null) {
+            return d;
+        }
+        return ExcelSerialDates.parse(trimmed);
     }
 
     private static int parseHourMinutePart(String raw) {
@@ -771,7 +775,8 @@ public final class TaskInputSourceRawGridIo {
                 return -1;
             }
         }
-        return -1;
+        LocalDate serial = ExcelSerialDates.parse(s);
+        return serial != null ? serial.getYear() : -1;
     }
 
     private static LocalDate tryParseFlexibleDate(String t) {

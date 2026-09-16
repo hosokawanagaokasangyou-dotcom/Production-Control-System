@@ -8,6 +8,7 @@ import java.util.List;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
+import jp.co.pm.ai.desktop.config.FactorySite;
 import jp.co.pm.ai.desktop.io.actuals.ProcessingTrendAggregator.ActualSource;
 import jp.co.pm.ai.desktop.io.actuals.ProcessingTrendAggregator.DayPoint;
 import jp.co.pm.ai.desktop.io.actuals.ProcessingTrendAggregator.Filter;
@@ -446,6 +447,13 @@ class ProcessingTrendAggregatorTest {
         Assertions.assertTrue(ProcessingTrendAggregator.isPlausibleMachineLabel("SEC機\u3000湖南"));
         Assertions.assertTrue(ProcessingTrendAggregator.isPlausibleMachineLabel("エンボス 湖南"));
         Assertions.assertTrue(ProcessingTrendAggregator.isPlausibleMachineLabel("W9-1"));
+        Assertions.assertTrue(ProcessingTrendAggregator.isPlausibleMachineLabel("EC"));
+        Assertions.assertTrue(ProcessingTrendAggregator.isPlausibleMachineLabel("LAC/EC機"));
+        Assertions.assertTrue(ProcessingTrendAggregator.isPlausibleMachineLabel("融着機"));
+        Assertions.assertTrue(ProcessingTrendAggregator.isPlausibleMachineLabel("フィルム挿入機(間紙)"));
+        Assertions.assertTrue(ProcessingTrendAggregator.isPlausibleMachineLabel("目抜き(国分)"));
+        Assertions.assertTrue(ProcessingTrendAggregator.isPlausibleMachineLabel("バーチカルカット"));
+        Assertions.assertTrue(ProcessingTrendAggregator.isPlausibleMachineLabel("打抜き"));
         Assertions.assertFalse(
                 ProcessingTrendAggregator.isPlausibleMachineLabel(
                         "(原反4mm→1mm3mmスライス),東レ株式会社,自動車材料事業部,2026/06/08"));
@@ -453,6 +461,57 @@ class ProcessingTrendAggregatorTest {
         Assertions.assertFalse(ProcessingTrendAggregator.isPlausibleMachineLabel("2026/06/08"));
         Assertions.assertFalse(ProcessingTrendAggregator.isPlausibleMachineLabel("欠点数合計:接続点数含まず"));
         Assertions.assertFalse(ProcessingTrendAggregator.isPlausibleMachineLabel("難燃品種(FR4)"));
+    }
+
+    @Test
+    void machineNames_kokubuDropsKonanSiteLabels() {
+        AladdinSnapshot al =
+                new AladdinSnapshot(
+                        List.of("機械名", "依頼NO", "工程名", "2026/09/01"),
+                        List.of(
+                                List.of("スライス機1", "R1", "スライス", "100"),
+                                List.of("EC機 湖南", "R2", "EC", "50"),
+                                List.of("SEC機 湖南", "R3", "SEC", "10"),
+                                List.of("目抜き(国分)", "R4", "目抜き", "20")));
+        List<String> kokubu =
+                ProcessingTrendAggregator.machineNames(null, null, al, null, FactorySite.KOKUBU);
+        Assertions.assertEquals(List.of("スライス機1", "目抜き(国分)"), kokubu);
+        List<String> konan =
+                ProcessingTrendAggregator.machineNames(null, null, al, null, FactorySite.KONAN);
+        Assertions.assertEquals(List.of("EC機 湖南", "SEC機 湖南", "スライス機1"), konan);
+    }
+
+    @Test
+    void parseDate_acceptsExcelSerialUsedByKokubuExports() {
+        Assertions.assertEquals(LocalDate.of(2026, 8, 25), ProcessingTrendAggregator.parseDate("46259"));
+        Assertions.assertEquals(LocalDate.of(2026, 8, 25), ProcessingTrendAggregator.parseDate("46259.0"));
+        Assertions.assertNull(ProcessingTrendAggregator.parseDate("800"));
+        Assertions.assertEquals(LocalDate.of(2026, 9, 1), ProcessingTrendAggregator.parseDate("2026/09/01"));
+    }
+
+    @Test
+    void aggregate_detailActuals_usesExcelSerialProcessingDate() {
+        ActualsSnapshot detail =
+                new ActualsSnapshot(
+                        List.of("機械名", "依頼NO", "工程名", "加工日", "実加工数"),
+                        List.of(List.of("スライス機1", "R1", "スライス", "46259", "800")));
+        Result r =
+                ProcessingTrendAggregator.aggregate(
+                        new ActualsSnapshot(List.of(), List.of()),
+                        detail,
+                        new AladdinSnapshot(List.of(), List.of()),
+                        new DispatchSnapshot(List.of(), List.of()),
+                        new Filter(
+                                LocalDate.of(2026, 8, 25),
+                                LocalDate.of(2026, 8, 25),
+                                ActualSource.DETAIL,
+                                PlanSource.ALADDIN,
+                                null,
+                                null),
+                        LocalDate.of(2026, 9, 16));
+        Assertions.assertEquals(800.0, r.actualTotalM(), 1e-9);
+        Assertions.assertEquals(1, r.actualRowsCounted());
+        Assertions.assertEquals(LocalDate.of(2026, 8, 25), r.actualMinDate());
     }
 
     @Test
