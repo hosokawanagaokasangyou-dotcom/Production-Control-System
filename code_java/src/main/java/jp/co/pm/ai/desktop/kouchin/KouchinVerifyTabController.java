@@ -125,6 +125,7 @@ public class KouchinVerifyTabController {
     private boolean pendingSourceReload;
     private boolean pendingVerifyAfterImport;
     private boolean firstOpenDropHintShown;
+    private long lastDropHandledNanos;
     private final AtomicInteger discoveryGeneration = new AtomicInteger();
     private final AtomicBoolean discoveryInFlight = new AtomicBoolean();
     private Timeline discoveryPoll;
@@ -1094,11 +1095,26 @@ public class KouchinVerifyTabController {
     }
 
     private void handleHintDialogDrop(DragEvent e, Alert alert) {
+        if (e != null) {
+            e.setDropCompleted(true);
+            e.consume();
+        }
+        if (!takeDropEvent()) {
+            return;
+        }
         List<Path> files = droppedFilePaths(e == null ? null : e.getDragboard());
-        boolean ok = !files.isEmpty();
-        e.setDropCompleted(ok);
-        e.consume();
-        if (!ok) {
+        if (files.isEmpty()) {
+            Platform.runLater(() -> finishDroppedImport(
+                    KouchinOutlookDropSupport.resolveAfterDropCompleted(
+                            e == null ? null : e.getDragboard()),
+                    alert));
+            return;
+        }
+        finishDroppedImport(files, alert);
+    }
+
+    private void finishDroppedImport(List<Path> files, Alert alert) {
+        if (files == null || files.isEmpty()) {
             appendLog("ドロップされたファイルがありません（Outlookの添付はファイルとしてドロップしてください）");
             return;
         }
@@ -1109,11 +1125,21 @@ public class KouchinVerifyTabController {
         copyDropped(files);
     }
 
-    static List<Path> droppedFilePaths(Dragboard db) {
-        if (db == null || !db.hasFiles() || db.getFiles() == null || db.getFiles().isEmpty()) {
-            return List.of();
+    private boolean takeDropEvent() {
+        long now = System.nanoTime();
+        if (shouldIgnoreDuplicateDrop(lastDropHandledNanos, now)) {
+            return false;
         }
-        return db.getFiles().stream().map(File::toPath).toList();
+        lastDropHandledNanos = now;
+        return true;
+    }
+
+    static boolean shouldIgnoreDuplicateDrop(long lastNanos, long nowNanos) {
+        return lastNanos > 0 && nowNanos - lastNanos >= 0 && nowNanos - lastNanos < 400_000_000L;
+    }
+
+    static List<Path> droppedFilePaths(Dragboard db) {
+        return KouchinOutlookDropSupport.resolveDroppedFiles(db);
     }
 
     private void startCsvCopy(List<Path> files, Path dest, boolean overwrite) {
@@ -1170,15 +1196,21 @@ public class KouchinVerifyTabController {
     }
 
     private void onDragDropped(DragEvent e) {
-        List<Path> files = droppedFilePaths(e.getDragboard());
-        boolean ok = !files.isEmpty();
-        if (ok) {
-            copyDropped(files);
-        } else {
-            appendLog("ドロップされたファイルがありません（Outlookの添付はファイルとしてドロップしてください）");
+        if (e != null) {
+            e.setDropCompleted(true);
+            e.consume();
         }
-        e.setDropCompleted(ok);
-        e.consume();
+        if (!takeDropEvent()) {
+            return;
+        }
+        Dragboard db = e == null ? null : e.getDragboard();
+        List<Path> files = droppedFilePaths(db);
+        if (files.isEmpty()) {
+            Platform.runLater(() -> finishDroppedImport(
+                    KouchinOutlookDropSupport.resolveAfterDropCompleted(db), null));
+            return;
+        }
+        finishDroppedImport(files, null);
     }
 
     private void refreshDropTargetLabel() {
