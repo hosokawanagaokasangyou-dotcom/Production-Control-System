@@ -168,7 +168,16 @@ public class KouchinVerifyTabController {
 
         public String getFactory() { return factory; }
         public String getRole() { return row == null ? "" : row.role(); }
-        public String getPath() { return row == null ? "" : row.path(); }
+        public String getPath() {
+            if (row == null) {
+                return "";
+            }
+            String full = row.fullPath();
+            if (full != null && !full.isBlank()) {
+                return full.replace('\\', '/');
+            }
+            return row.path() == null ? "" : row.path();
+        }
         public String getPathCss() { return isMissing() ? "pm-kouchin-missing-path" : ""; }
         public String getRowCss() { return unused ? "pm-kouchin-unused-row" : ""; }
         public String getNoteCss() {
@@ -1129,8 +1138,8 @@ public class KouchinVerifyTabController {
         roleCol.setPrefWidth(120);
         TableColumn<DiscoveryLine, String> pathCol = new TableColumn<>("ファイル");
         pathCol.setCellValueFactory(cd -> new SimpleStringProperty(cd.getValue() == null ? "" : cd.getValue().getPath()));
-        pathCol.setPrefWidth(280);
-        pathCol.setMinWidth(140);
+        pathCol.setPrefWidth(520);
+        pathCol.setMinWidth(220);
         TableColumn<DiscoveryLine, String> modifiedCol = new TableColumn<>("ファイル更新日時");
         modifiedCol.setCellValueFactory(cd -> new SimpleStringProperty(cd.getValue() == null ? "" : cd.getValue().getModifiedAt()));
         modifiedCol.setPrefWidth(150);
