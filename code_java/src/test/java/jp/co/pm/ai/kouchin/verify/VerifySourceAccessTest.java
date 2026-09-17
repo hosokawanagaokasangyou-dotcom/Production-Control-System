@@ -118,6 +118,20 @@ class VerifySourceAccessTest {
     }
 
     @Test
+    @DisplayName("③月次実績が無くても①②が読めれば検証可（Bはスキップ）")
+    void source3MissingDoesNotBlock() throws Exception {
+        Path csv = tmp.resolve("csv.csv");
+        Path x2 = tmp.resolve("x2.xlsx");
+        Files.writeString(csv, "1");
+        Files.writeString(x2, "2");
+        KouchinDiscovery.Row missing3 = new KouchinDiscovery.Row(
+                "③月次実績", tmp.toString(), tmp.toString(), "", true, "対象月なし");
+        List<KouchinDiscovery.Row> rows = List.of(found("①東レCSV", csv), found("②長岡明細", x2), missing3);
+        assertTrue(VerifySourceAccess.factorySourcesReady(rows));
+        assertEquals(null, VerifySourceAccess.blockReason(rows));
+    }
+
+    @Test
     @DisplayName("読取可・書込不可でも検証は許可し、書込は警告色")
     void readableUnwritableStillReadyAndWarnsOnWrite() throws Exception {
         VerifySourceAccess.FileAccess acc = new VerifySourceAccess.FileAccess(true, true, false);

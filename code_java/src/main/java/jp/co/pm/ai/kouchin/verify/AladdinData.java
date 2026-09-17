@@ -18,4 +18,19 @@ public record AladdinData(Map<String, Double> byIrai, String taishoText, YearMon
     public int count() {
         return byIrai.size();
     }
+
+    /** 対象月の加工金額が1件以上あるか。①の対象月が不明なら行の有無だけ見る。 */
+    public boolean coversTargetMonth(YearMonthKey targetYm) {
+        return coversTargetMonth(this, targetYm);
+    }
+
+    public static boolean coversTargetMonth(AladdinData data, YearMonthKey targetYm) {
+        if (data == null || data.count() == 0) {
+            return false;
+        }
+        if (targetYm == null) {
+            return true;
+        }
+        return targetYm.equals(data.taishoYm());
+    }
 }

@@ -551,6 +551,18 @@
     -fx-text-fill: #e2e8f0;
 }
 
+.label.pm-kouchin-skip-b-banner {
+    -fx-font-size: 14px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #1a0505;
+    -fx-background-color: #fbbf24;
+    -fx-border-color: #b91c1c;
+    -fx-border-width: 3;
+    -fx-border-radius: 4;
+    -fx-background-radius: 4;
+    -fx-padding: 10 12 10 12;
+}
+
 .button.pm-stage-run-button {
     -fx-cursor: hand;
     -fx-font-size: 15px;

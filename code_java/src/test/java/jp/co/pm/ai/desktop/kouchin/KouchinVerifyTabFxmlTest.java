@@ -122,6 +122,17 @@ class KouchinVerifyTabFxmlTest {
     }
 
     @Test
+    @DisplayName("検証Bスキップ警告バナーがある")
+    void skipBBannerExists() throws Exception {
+        Element banner = elementByFxId("skipBBanner");
+        assertNotNull(banner, "skipBBanner が無い");
+        assertTrue(
+                banner.getAttribute("styleClass").contains("pm-kouchin-skip-b-banner"),
+                banner.getAttribute("styleClass"));
+        assertEquals("true", banner.getAttribute("wrapText"));
+    }
+
+    @Test
     @DisplayName("③の案内は月次実績とする")
     void source3HintSaysMonthlyActual() throws Exception {
         Element hint = elementByFxId("diffHintLabel");

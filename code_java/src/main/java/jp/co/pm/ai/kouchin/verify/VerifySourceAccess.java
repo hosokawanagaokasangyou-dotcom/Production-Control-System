@@ -155,6 +155,6 @@ public final class VerifySourceAccess {
     }
 
     static boolean optionalSource(String role) {
-        return role != null && role.contains("月次処理");
+        return role != null && (role.contains("月次処理") || role.startsWith("③"));
     }
 }

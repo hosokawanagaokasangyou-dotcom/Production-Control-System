@@ -163,17 +163,19 @@ public final class ResultExcelExporter {
         long tougetsu = r.num("報告する過不足");
         int warnCount = r.warnings().size();
         long zansa = r.num("報告残差");
+        boolean skipB = r.skippedB();
         String[][] cards = {
                 {"検証A 要確認 (①vs②)", r.requiredCheckA() + " 件",
                         "不一致" + r.num("A不一致") + "・翌月記載" + r.num("A翌月記載件数")
                                 + "・片側のみ" + (r.num("A①のみ") + r.num("A②のみ")),
                         r.requiredCheckA() > 0 ? "bad" : "ok"},
-                {"検証B 要確認 (②vs③)", r.requiredCheckB() + " 件",
-                        "不一致" + r.num("B不一致") + "・片側のみ" + (r.num("B②のみ") + r.num("B③のみ")),
-                        r.requiredCheckB() > 0 ? "bad" : "ok"},
+                {"検証B 要確認 (②vs③)", skipB ? "スキップ" : r.requiredCheckB() + " 件",
+                        skipB ? "③に対象月データなし" : ("不一致" + r.num("B不一致")
+                                + "・片側のみ" + (r.num("B②のみ") + r.num("B③のみ"))),
+                        skipB ? "skip" : (r.requiredCheckB() > 0 ? "bad" : "ok")},
                 {"報告する過不足(当月)", Fmt.s0(tougetsu) + " 円", "検証A「報告計上額」列の合計", "neutral"},
                 {"判明済み", r.knownCount() + " 件", "前月調整・翌月記載・月ずれ解消・枝番統合", "known"},
-                {"警告", warnCount + " 件", "データ品質の注意", warnCount > 0 ? "bad" : "ok"},
+                {"警告", warnCount + " 件", skipB ? "検証Bスキップを含む" : "データ品質の注意", warnCount > 0 ? "bad" : "ok"},
                 {"検算残差", Fmt.n0(zansa) + " 円", "0なら内訳の整合OK", zansa != 0 ? "bad" : "ok"},
         };
         for (int i = 0; i < cards.length; i++) {
@@ -187,6 +189,9 @@ public final class ResultExcelExporter {
         row(ws, 4).setHeightInPoints(24f);
 
         int rowIndex = 7;
+        if (r.skippedB()) {
+            rowIndex = writeSkipBBanner(ws, rowIndex, r);
+        }
         rowIndex = section(ws, rowIndex, "総額");
         rowIndex = kv(ws, rowIndex, "① 東レ検収 (お支払データ・" + r.str("入庫場所") + ")", r.num("①総額"));
         rowIndex = kv(ws, rowIndex, "② " + r.str("②名称") + " " + r.str("②金額列") + "合計", r.num("②総額"));
@@ -203,12 +208,17 @@ public final class ResultExcelExporter {
         rowIndex = kv(ws, rowIndex, "①のみ / ②のみ (金額あり)", r.num("A①のみ") + " / " + r.num("A②のみ"));
         rowIndex++;
 
-        rowIndex = section(ws, rowIndex, "検証B　② vs ③ (依頼NO突合)");
-        rowIndex = kv(ws, rowIndex, "共通依頼NO", r.num("B共通") + " 件");
-        rowIndex = kv(ws, rowIndex, "　不一致(要確認)", String.valueOf(r.num("B不一致")));
-        rowIndex = kv(ws, rowIndex, "月ずれ解消 (複数月累計一致・対象外)", r.num("B月ずれ解消") + "件");
-        rowIndex = kv(ws, rowIndex, "枝番統合一致 (③枝番を親に合算して一致・対象外)", r.num("B枝番統合") + "件");
-        rowIndex = kv(ws, rowIndex, "②のみ / ③のみ (金額あり)", r.num("B②のみ") + " / " + r.num("B③のみ"));
+        if (r.skippedB()) {
+            rowIndex = section(ws, rowIndex, "検証B　② vs ③ (依頼NO突合) 【スキップ】");
+            rowIndex = kv(ws, rowIndex, "理由", r.str("検証Bスキップ理由"));
+        } else {
+            rowIndex = section(ws, rowIndex, "検証B　② vs ③ (依頼NO突合)");
+            rowIndex = kv(ws, rowIndex, "共通依頼NO", r.num("B共通") + " 件");
+            rowIndex = kv(ws, rowIndex, "　不一致(要確認)", String.valueOf(r.num("B不一致")));
+            rowIndex = kv(ws, rowIndex, "月ずれ解消 (複数月累計一致・対象外)", r.num("B月ずれ解消") + "件");
+            rowIndex = kv(ws, rowIndex, "枝番統合一致 (③枝番を親に合算して一致・対象外)", r.num("B枝番統合") + "件");
+            rowIndex = kv(ws, rowIndex, "②のみ / ③のみ (金額あり)", r.num("B②のみ") + " / " + r.num("B③のみ"));
+        }
         rowIndex++;
 
         MatomeCheckResult d = r.checkD();
@@ -259,6 +269,25 @@ public final class ResultExcelExporter {
         kv(ws, rowIndex, "金額0円の無効行(出力対象外)", r.str("0円除外"));
     }
 
+    private int writeSkipBBanner(XSSFSheet ws, int rowIndex, VerifyResult r) {
+        CellStyle titleStyle = style("skipBTitle", "7F1D1D", "FBBF24", true, 16, true, BorderStyle.MEDIUM);
+        CellStyle bodyStyle = style("skipBBody", "7F1D1D", "FEF3C7", true, 11, false, BorderStyle.THIN, true);
+        put(ws, rowIndex, SUMMARY_FIRST, "【検証Bスキップ】③月次実績に対象月データがありません", titleStyle);
+        merge(ws, rowIndex, SUMMARY_FIRST, SUMMARY_LAST);
+        boxRange(ws, rowIndex, SUMMARY_FIRST, rowIndex, SUMMARY_LAST, BorderStyle.MEDIUM, "B91C1C");
+        row(ws, rowIndex).setHeightInPoints(28f);
+        rowIndex++;
+        String reason = r.str("検証Bスキップ理由");
+        if (reason.isBlank()) {
+            reason = "③の依頼NO別問合せを対象月で再取得して再実行してください。検証AとExcelは出力済みです。";
+        }
+        put(ws, rowIndex, SUMMARY_FIRST, reason, bodyStyle);
+        merge(ws, rowIndex, SUMMARY_FIRST, SUMMARY_LAST);
+        boxRange(ws, rowIndex, SUMMARY_FIRST, rowIndex, SUMMARY_LAST, BorderStyle.MEDIUM, "B91C1C");
+        row(ws, rowIndex).setHeightInPoints(36f);
+        return rowIndex + 2;
+    }
+
     private int section(XSSFSheet ws, int rowIndex, String title) {
         put(ws, rowIndex, SUMMARY_FIRST, title, style("section", ACCENT, null, true, 12, false, null));
         merge(ws, rowIndex, SUMMARY_FIRST, SUMMARY_LAST);
@@ -307,15 +336,22 @@ public final class ResultExcelExporter {
         List<String> headers = List.of("依頼NO", "②金額", "③月次実績金額", "差額(②-③)", "判定", "備考");
         XSSFSheet ws = createDetailSheet(SHEET_B, headers, "ED7D31");
         int rowIndex = 1;
-        for (RecordB rec : r.recordsB()) {
+        if (r.skippedB()) {
             Row row = ws.createRow(rowIndex++);
-            String fill = Judge.fillColor(rec.judge());
-            text(row, 0, rec.irai(), fill);
-            number(row, 1, rec.amount2(), fill, false);
-            number(row, 2, rec.amount3(), fill, false);
-            number(row, 3, rec.diff(), fill, Judge.MISMATCH.equals(rec.judge()));
-            judge(row, 4, rec.judge(), fill);
-            note(row, 5, rec.note(), fill);
+            text(row, 0, "(スキップ)", "FDE68A");
+            judge(row, 4, "検証Bスキップ", "FDE68A");
+            note(row, 5, r.str("検証Bスキップ理由"), "FDE68A");
+        } else {
+            for (RecordB rec : r.recordsB()) {
+                Row row = ws.createRow(rowIndex++);
+                String fill = Judge.fillColor(rec.judge());
+                text(row, 0, rec.irai(), fill);
+                number(row, 1, rec.amount2(), fill, false);
+                number(row, 2, rec.amount3(), fill, false);
+                number(row, 3, rec.diff(), fill, Judge.MISMATCH.equals(rec.judge()));
+                judge(row, 4, rec.judge(), fill);
+                note(row, 5, rec.note(), fill);
+            }
         }
         finishDetailSheet(ws, headers.size(), rowIndex);
     }
@@ -668,6 +704,7 @@ public final class ResultExcelExporter {
     private static String[] palette(String state) {
         return switch (state) {
             case "bad" -> new String[] {"FDE9E9", "9C0006"};
+            case "skip" -> new String[] {"FDE68A", "7F1D1D"};
             case "ok" -> new String[] {"C6EFCE", "375623"};
             case "known" -> new String[] {"E2EFDA", "375623"};
             default -> new String[] {"DDEBF7", ACCENT};

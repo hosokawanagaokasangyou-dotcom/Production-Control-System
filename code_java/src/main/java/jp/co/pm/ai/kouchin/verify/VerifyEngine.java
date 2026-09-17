@@ -116,6 +116,7 @@ public final class VerifyEngine {
     private List<String> only3b = List.of();
     private int commonB;
     private int branchCommonCount;
+    private boolean skipVerifyB;
 
     private VerifyEngine(FactoryProfile profile, KouchinPaths paths, double tol) {
         this.profile = profile;
@@ -159,10 +160,7 @@ public final class VerifyEngine {
         source2File = fileSet2.current();
 
         Path dir3 = paths.source3Dir(profile.id());
-        if (!Files.isDirectory(dir3)) {
-            throw new VerifyException("③月次実績のフォルダにアクセスできません: " + dir3);
-        }
-        aladdinFile = FileDiscovery.findAladdin(dir3, targetYm);
+        loadSource3(dir3);
 
         toray = TorayCsvReader.read(torayFile, profile.basho());
         warnings.addAll(toray.warnings());
@@ -180,7 +178,36 @@ public final class VerifyEngine {
             readOtherMonth(f, nextData);
         }
 
-        aladdinData = AladdinReader.read(aladdinFile, profile.customer3());
+        buildSubtotalHints();
+    }
+
+    /** ③月次実績。対象月データが無い・読めないときは検証BをスキップしてAを続行する。 */
+    private void loadSource3(Path dir3) {
+        if (!Files.isDirectory(dir3)) {
+            markSkipB("③月次実績のフォルダにアクセスできません: " + dir3);
+            return;
+        }
+        try {
+            aladdinFile = FileDiscovery.findAladdin(dir3, targetYm);
+        } catch (VerifyException e) {
+            markSkipB(e.getMessage());
+            return;
+        }
+        try {
+            aladdinData = AladdinReader.read(aladdinFile, profile.customer3());
+        } catch (VerifyException e) {
+            markSkipB(e.getMessage());
+            return;
+        }
+        if (!AladdinData.coversTargetMonth(aladdinData, targetYm)) {
+            String ymText = aladdinData.taishoYm() == null
+                    ? "(不明)"
+                    : aladdinData.taishoYm().ymLabel();
+            markSkipB(aladdinData.count() == 0
+                    ? "加工金額行が0件"
+                    : "シート対象年月=" + ymText);
+            return;
+        }
         aladdin = aladdinData.byIrai();
         warnMidMonth(aladdinFile, aladdinData.taishoYm(), true);
 
@@ -207,13 +234,26 @@ public final class VerifyEngine {
                 warnMidMonth(e.getValue(), e.getKey(), false);
             }
         }
+    }
 
-        if (targetYm != null && aladdinData.taishoYm() != null && !aladdinData.taishoYm().equals(targetYm)) {
-            warnings.add("③の対象年月(" + aladdinData.taishoYm().ymLabel() + ")が①の対象月("
-                    + targetYm.ymLabel() + ")と不一致です。月次実績の照会条件を確認してください");
+    private void markSkipB(String detail) {
+        skipVerifyB = true;
+        if (aladdin == null) {
+            aladdin = Map.of();
         }
+        if (aladdinData == null) {
+            aladdinData = new AladdinData(Map.of(), "", null);
+        }
+        warnings.add(0, skipBWarning(targetYm, detail));
+    }
 
-        buildSubtotalHints();
+    static String skipBWarning(YearMonthKey targetYm, String detail) {
+        String ym = targetYm == null ? "(不明)" : targetYm.gatsudoLabel();
+        String extra = detail == null || detail.isBlank() ? "" : " 詳細: " + detail;
+        return "【検証Bスキップ】③月次実績に対象月（" + ym + "）のデータがありません。"
+                + "検証B（② vs ③ 依頼NO突合）は実施していません。検証AとExcelは出力済みです。"
+                + "③の依頼NO別問合せを対象月で再取得して再実行してください。"
+                + extra;
     }
 
     private void readOtherMonth(DatedFile f, List<MonthData> into) {
@@ -632,6 +672,9 @@ public final class VerifyEngine {
     // ---------------------------------------------------------------- 検証B
 
     private void verifyB() {
+        if (skipVerifyB) {
+            return;
+        }
         Map<String, Double> m2 = source2.byIrai();
         Map<String, Double> m3 = aladdin;
         Set<String> i2 = new TreeSet<>(m2.keySet());
@@ -937,16 +980,16 @@ public final class VerifyEngine {
         info.put("実行者", executor());
         info.put("①ファイル", torayFile.getFileName().toString());
         info.put("②ファイル", FileDiscovery.displayName(dir2, source2File));
-        info.put("③ファイル", aladdinFile.getFileName().toString());
+        info.put("③ファイル", aladdinFile == null ? "(なし)" : aladdinFile.getFileName().toString());
         info.put("前月ファイル", FileDiscovery.displayNames(dir2, fileSet2.prevs()));
         info.put("翌月ファイル", FileDiscovery.displayNames(dir2, fileSet2.nexts()));
         info.put("③他月照会", aladdinOtherFiles.isEmpty() ? "なし" : String.join(", ", aladdinOtherFiles));
-        info.put("対象年月", aladdinData.taishoText());
+        info.put("対象年月", aladdinData == null ? "" : aladdinData.taishoText());
         info.put("①取消行", minusLabel());
         info.put("0円除外", zeroLabel());
         info.put("①総額", Math.round(total1));
         info.put("②総額", Math.round(source2.totalIrai()));
-        info.put("③総額", Math.round(aladdinData.total()));
+        info.put("③総額", Math.round(aladdinData == null ? 0 : aladdinData.total()));
         info.put("A共通", commonA);
         info.put("A不一致", mismatchA.size());
         info.put("A①のみ", only1.size());
@@ -964,7 +1007,7 @@ public final class VerifyEngine {
         info.put("A手動②正額", manual2Total);
         info.put("①パス", torayFile.toAbsolutePath().toString());
         info.put("②パス", source2File.toAbsolutePath().toString());
-        info.put("③パス", aladdinFile.toAbsolutePath().toString());
+        info.put("③パス", aladdinFile == null ? "" : aladdinFile.toAbsolutePath().toString());
         info.put("報告②実売上", Math.round(total2));
         info.put("報告当月差異", Math.round(diffTotal));
         info.put("報告①のみ額", only1Total);
@@ -981,6 +1024,14 @@ public final class VerifyEngine {
         info.put("B枝番統合共通", branchCommonCount);
         info.put("B②のみ", only2b.size());
         info.put("B③のみ", only3b.size());
+        info.put("検証Bスキップ", skipVerifyB);
+        if (skipVerifyB) {
+            String reason = warnings.stream()
+                    .filter(w -> w.contains("【検証Bスキップ】"))
+                    .findFirst()
+                    .orElse("");
+            info.put("検証Bスキップ理由", reason);
+        }
         info.put("要確認", issues);
         info.put("警告", List.copyOf(warnings));
 

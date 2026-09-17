@@ -58,6 +58,15 @@ public record VerifyResult(
         return (int) (num("B不一致") + num("B②のみ") + num("B③のみ"));
     }
 
+    /** ③に対象月データが無く検証Bを実施していない。 */
+    public boolean skippedB() {
+        Object v = info == null ? null : info.get("検証Bスキップ");
+        if (v instanceof Boolean b) {
+            return b;
+        }
+        return "true".equalsIgnoreCase(String.valueOf(v));
+    }
+
     /** 判明済み件数（前月調整・翌月記載・前月過不足・手動判定・月ずれ解消・枝番統合）。 */
     public int knownCount() {
         return (int) (num("A前月調整件数") + num("A翌月記載件数") + num("A前月過不足件数")

@@ -92,6 +92,8 @@ public class KouchinVerifyTabController {
     @FXML private Button gotoRdpButton;
     @FXML private Label statusLabel;
     @FXML private Label kpiLabel;
+    @FXML private Label skipBBanner;
+    @FXML private Label skipBResultBanner;
     @FXML private Label targetYmReasonLabel;
     @FXML private ComboBox<String> judgeFilterCombo;
     @FXML private TextField searchField;
@@ -653,6 +655,7 @@ public class KouchinVerifyTabController {
             addResult(both.konan());
         }
         applyResultFilter();
+        applySkipBBanner(both);
         if (mailArea != null && both != null) {
             mailArea.setText(both.unifiedMail() == null
                     ? (both.kokubu() != null || both.konan() != null
@@ -680,6 +683,10 @@ public class KouchinVerifyTabController {
         if (both != null && both.konanError() != null) {
             st.append(" 湖南失敗: ").append(both.konanError());
         }
+        String skipBanner = skipBBannerText(both);
+        if (!skipBanner.isBlank()) {
+            st.append(" 【検証Bスキップ】③月次実績に対象月データがありません。");
+        }
         setStatus(st.toString());
         appendLog(st.toString());
         refreshOpenExcelGlow();
@@ -694,9 +701,13 @@ public class KouchinVerifyTabController {
             kpi.append("  /  ");
         }
         kpi.append(r.profile().label())
-                .append(" A要確認").append(r.requiredCheckA())
-                .append(" B要確認").append(r.requiredCheckB())
-                .append(" 報告過不足").append(r.num("報告する過不足"))
+                .append(" A要確認").append(r.requiredCheckA());
+        if (r.skippedB()) {
+            kpi.append(" Bスキップ");
+        } else {
+            kpi.append(" B要確認").append(r.requiredCheckB());
+        }
+        kpi.append(" 報告過不足").append(r.num("報告する過不足"))
                 .append(" 警告").append(r.warnings().size());
         if (r.checkD() != null) {
             kpi.append(" D要修正").append(r.checkD().errorCount());
@@ -717,6 +728,14 @@ public class KouchinVerifyTabController {
     }
 
     private void addResult(VerifyResult r) {
+        if (r.skippedB()) {
+            String w = r.warnings().stream()
+                    .filter(x -> x.contains("【検証Bスキップ】"))
+                    .findFirst()
+                    .orElse(r.str("検証Bスキップ理由"));
+            allResultLines.add(new ResultLine("警告:" + r.profile().label(), "—",
+                    null, null, null, null, null, "検証Bスキップ", w));
+        }
         for (RecordA rec : r.recordsA()) {
             allResultLines.add(new ResultLine("A:" + r.profile().label(), rec.keiyaku(), rec.amount1(),
                     rec.amount2(), null, rec.diff(), rec.reportAmount(), rec.judge(), rec.note()));
@@ -1034,6 +1053,49 @@ public class KouchinVerifyTabController {
 
     static boolean shouldGlowOpenExcel(VerifyRunSupport.Written written, FactorySite site) {
         return VerifyRunSupport.excelFileToOpen(written, site) != null;
+    }
+
+    static String skipBBannerText(BothResult both) {
+        if (both == null) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder();
+        appendSkipBanner(sb, both.kokubu());
+        appendSkipBanner(sb, both.konan());
+        return sb.toString().trim();
+    }
+
+    private static void appendSkipBanner(StringBuilder sb, VerifyResult r) {
+        if (r == null || !r.skippedB()) {
+            return;
+        }
+        if (sb.length() > 0) {
+            sb.append("\n\n");
+        }
+        String warning = r.warnings().stream()
+                .filter(w -> w.contains("【検証Bスキップ】"))
+                .findFirst()
+                .orElse(r.str("検証Bスキップ理由"));
+        if (warning == null || warning.isBlank()) {
+            warning = "③月次実績に対象月のデータがありません。検証Bは実施していません。";
+        }
+        sb.append("【").append(r.profile().label()).append("】 ").append(warning);
+    }
+
+    private void applySkipBBanner(BothResult both) {
+        String text = skipBBannerText(both);
+        boolean show = !text.isBlank();
+        applySkipBBanner(skipBBanner, text, show);
+        applySkipBBanner(skipBResultBanner, text, show);
+    }
+
+    private static void applySkipBBanner(Label banner, String text, boolean show) {
+        if (banner == null) {
+            return;
+        }
+        banner.setText(show ? text : "");
+        banner.setVisible(show);
+        banner.setManaged(show);
     }
 
     static Path source2FileToOpen(VerifyResult verified, List<KouchinDiscovery.Row> discovery) {
