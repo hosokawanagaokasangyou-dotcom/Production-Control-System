@@ -2,25 +2,29 @@
 
 <?import javafx.scene.control.Tab?>
 <?import javafx.scene.control.TabPane?>
+<?import javafx.scene.layout.BorderPane?>
 
-<TabPane xmlns="http://javafx.com/javafx/26" xmlns:fx="http://javafx.com/fxml/1"
-         fx:controller="jp.co.pm.ai.desktop.developer.DeveloperHostTabController"
-         fx:id="innerTabPane" tabClosingPolicy="UNAVAILABLE" maxWidth="Infinity" maxHeight="Infinity">
-    <tabs>
-        <Tab closable="false" text="実行時エラー">
-            <content>
-                <fx:include fx:id="runtimeErrorTab" source="DeveloperRuntimeErrorTab.fxml"/>
-            </content>
-        </Tab>
-        <Tab closable="false" text="操作ログ">
-            <content>
-                <fx:include fx:id="operatorActionLogTab" source="OperatorActionLogTab.fxml"/>
-            </content>
-        </Tab>
-        <Tab closable="false" text="バックアップ">
-            <content>
-                <fx:include fx:id="shareBackupTab" source="DeveloperShareBackupTab.fxml"/>
-            </content>
-        </Tab>
-    </tabs>
-</TabPane>
+<BorderPane xmlns="http://javafx.com/javafx/26" xmlns:fx="http://javafx.com/fxml/1"
+            fx:controller="jp.co.pm.ai.desktop.developer.DeveloperHostTabController">
+    <center>
+        <TabPane fx:id="innerTabPane" tabClosingPolicy="UNAVAILABLE" maxWidth="Infinity" maxHeight="Infinity">
+            <tabs>
+                <Tab closable="false" text="実行時エラー">
+                    <content>
+                        <fx:include fx:id="runtimeErrorTab" source="DeveloperRuntimeErrorTab.fxml"/>
+                    </content>
+                </Tab>
+                <Tab closable="false" text="操作ログ">
+                    <content>
+                        <fx:include fx:id="developerOperatorActionLogTab" source="OperatorActionLogTab.fxml"/>
+                    </content>
+                </Tab>
+                <Tab closable="false" text="バックアップ">
+                    <content>
+                        <fx:include fx:id="shareBackupTab" source="DeveloperShareBackupTab.fxml"/>
+                    </content>
+                </Tab>
+            </tabs>
+        </TabPane>
+    </center>
+</BorderPane>

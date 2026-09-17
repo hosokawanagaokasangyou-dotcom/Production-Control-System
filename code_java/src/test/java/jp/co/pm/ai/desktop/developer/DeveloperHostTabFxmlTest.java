@@ -29,8 +29,15 @@ class DeveloperHostTabFxmlTest {
         assertTrue(texts.contains("操作ログ"), texts.toString());
         assertTrue(texts.contains("バックアップ"), texts.toString());
         assertNotNull(elementByFxId("runtimeErrorTab"));
-        assertNotNull(elementByFxId("operatorActionLogTab"));
+        assertNotNull(elementByFxId("developerOperatorActionLogTab"));
         assertNotNull(elementByFxId("shareBackupTab"));
+    }
+
+    @Test
+    void hostRootIsLayoutPaneNotTabPane() throws Exception {
+        assertEquals("BorderPane", rootElementName());
+        assertEquals("innerTabPane", elementByFxId("innerTabPane").getAttribute("fx:id"));
+        assertEquals("TabPane", elementByFxId("innerTabPane").getTagName());
     }
 
     @Test
@@ -116,6 +123,16 @@ class DeveloperHostTabFxmlTest {
             assertNotNull(in);
             var doc = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(in);
             return doc.getDocumentElement().getAttribute("fx:controller");
+        }
+    }
+
+    private static String rootElementName() throws Exception {
+        try (InputStream in =
+                DeveloperHostTabFxmlTest.class.getResourceAsStream(
+                        "/jp/co/pm/ai/desktop/fxml/DeveloperHostTab.fxml")) {
+            assertNotNull(in);
+            var doc = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(in);
+            return doc.getDocumentElement().getTagName();
         }
     }
 
