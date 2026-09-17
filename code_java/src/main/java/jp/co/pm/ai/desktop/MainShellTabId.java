@@ -6,7 +6,7 @@ package jp.co.pm.ai.desktop;
 public enum MainShellTabId {
     /** 加工実績・予定の機械別ダッシュボード（実行・ログの左＝先頭）。 */
     EQUIPMENT_STATUS_DASHBOARD("equipmentStatusDashboard"),
-    /** 後加工工賃の月次突合（検証・月次トレンド）。既定位置は加工トレンドの左。 */
+    /** 東レ後加工賃検証の月次突合（検証・月次トレンド）。既定位置は加工トレンドの左。 */
     KOUCHIN("kouchin"),
     /** 加工実績・予定（加工量）と加工賃のトレンド（子タブ）。 */
     PROCESSING_TREND("processingTrend"),

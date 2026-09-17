@@ -38,6 +38,26 @@ class KouchinHostTabFxmlTest {
     }
 
     @Test
+    void mainShellTabTitleIsTorayKouchinVerify() throws Exception {
+        try (InputStream in =
+                KouchinHostTabFxmlTest.class.getResourceAsStream(
+                        "/jp/co/pm/ai/desktop/fxml/MainShell.fxml")) {
+            assertNotNull(in);
+            var doc = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(in);
+            NodeList tabs = doc.getElementsByTagName("Tab");
+            String title = null;
+            for (int i = 0; i < tabs.getLength(); i++) {
+                if (tabs.item(i) instanceof Element el
+                        && "mainShellTabKouchin".equals(el.getAttribute("fx:id"))) {
+                    title = el.getAttribute("text");
+                    break;
+                }
+            }
+            assertEquals("東レ後加工賃検証", title);
+        }
+    }
+
+    @Test
     void hostHasCenteredBusyOverlay() throws Exception {
         assertEquals("StackPane", rootTagName());
         assertNotNull(elementByFxId("busyOverlay"));

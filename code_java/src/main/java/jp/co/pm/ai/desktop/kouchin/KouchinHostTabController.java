@@ -16,7 +16,7 @@ import javafx.util.Duration;
 import jp.co.pm.ai.desktop.MainShellController;
 
 /**
- * 「後加工工賃」メインタブのホスト。子タブ「検証」「月次トレンド」「参照先」。
+ * 「東レ後加工賃検証」メインタブのホスト。子タブ「検証」「月次トレンド」「参照先」。
  * 検証・トレンド実行中はタブ中央にプログレス付きオーバーレイを出す。
  */
 public class KouchinHostTabController {

@@ -1065,7 +1065,7 @@ public class KouchinVerifyTabController {
             alert.initOwner(shell.primaryStageForDialogs());
             shell.applyAlertStylesheets(alert);
         }
-        alert.setTitle("後加工工賃");
+        alert.setTitle("東レ後加工賃検証");
         alert.setHeaderText(firstOpenDropHintHeader());
         alert.setContentText(firstOpenDropHintBody());
         DialogPane pane = alert.getDialogPane();
