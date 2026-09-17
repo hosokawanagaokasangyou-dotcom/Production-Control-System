@@ -16,6 +16,9 @@ class OperatorActionLogTabControllerTest {
         assertEquals("タブ選択", OperatorActionLogTabController.actionLabel("tab_select"));
         assertEquals("東レCSVドロップ", OperatorActionLogTabController.actionLabel("kouchin_drop"));
         assertEquals("東レ後加工賃検証", OperatorActionLogTabController.actionLabel("kouchin_verify"));
+        assertEquals(
+                "工場共有バックアップ",
+                OperatorActionLogTabController.actionLabel("factory_share_backup"));
         assertEquals("成功", OperatorActionLogTabController.resultLabel("ok"));
         assertEquals("空", OperatorActionLogTabController.resultLabel("empty"));
         assertEquals("警告", OperatorActionLogTabController.resultLabel("warn"));

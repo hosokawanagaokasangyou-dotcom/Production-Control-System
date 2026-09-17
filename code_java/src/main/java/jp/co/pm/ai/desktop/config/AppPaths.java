@@ -3568,6 +3568,12 @@ public final class AppPaths {
     /** 同一化チェック履歴のルートフォルダ名（親は {@link #summaryAiDispatchXlsxPath} と同一）。 */
     public static final String IDENTITY_CHECK_HISTORY_DIR_NAME = "同一化チェック履歴";
 
+    /** 工場共有 DATA のバックアップフォルダ名（各工場共有の直下）。 */
+    public static final String FACTORY_SHARE_BACKUP_DIR_NAME = "バックアップ";
+
+    /** PC ローカルの工場共有バックアップルート名（{@link #resolveDesktopAppHomeDir} 配下）。 */
+    public static final String FACTORY_SHARE_BACKUP_LOCAL_DIR_NAME = "factory-share-backups";
+
     /** Python planning_core が書く実行ログファイル名（{@code code/log/} 配下）。 */
     public static final String EXECUTION_LOG_TXT = "execution_log.txt";
 
@@ -3602,6 +3608,24 @@ public final class AppPaths {
         Map<String, String> u = ui != null ? ui : Map.of();
         return siblingOfSummaryAiDispatchWorkbookForFactory(
                 u, resolveFactorySiteFromUi(u), OPERATOR_ACTION_LOG_DIR_NAME);
+    }
+
+    /**
+     * 工場共有 DATA 直下のバックアップフォルダ（{@link #FACTORY_SHARE_BACKUP_DIR_NAME}）。
+     */
+    public static Path resolveFactoryShareBackupSharedRoot(Map<String, String> ui, FactorySite site) {
+        return summarySharedDataDirForFactory(ui, site)
+                .resolve(FACTORY_SHARE_BACKUP_DIR_NAME)
+                .toAbsolutePath()
+                .normalize();
+    }
+
+    /** PC ローカルの工場共有バックアップルート。 */
+    public static Path resolveFactoryShareBackupLocalRoot() {
+        return resolveDesktopAppHomeDir()
+                .resolve(FACTORY_SHARE_BACKUP_LOCAL_DIR_NAME)
+                .toAbsolutePath()
+                .normalize();
     }
 
     /**

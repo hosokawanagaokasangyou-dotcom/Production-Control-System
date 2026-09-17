@@ -27,14 +27,16 @@ class DeveloperHostTabFxmlTest {
         List<String> texts = tabTexts();
         assertTrue(texts.contains("実行時エラー"), texts.toString());
         assertTrue(texts.contains("操作ログ"), texts.toString());
+        assertTrue(texts.contains("バックアップ"), texts.toString());
         assertNotNull(elementByFxId("runtimeErrorTab"));
         assertNotNull(elementByFxId("operatorActionLogTab"));
+        assertNotNull(elementByFxId("shareBackupTab"));
     }
 
     @Test
     void innerTabCatalogListsChildren() {
         assertEquals(
-                List.of("実行時エラー", "操作ログ"),
+                List.of("実行時エラー", "操作ログ", "バックアップ"),
                 MainShellInnerTabCatalog.labelsFor(MainShellTabId.DEVELOPER));
     }
 

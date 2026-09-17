@@ -17,5 +17,10 @@
                 <fx:include fx:id="operatorActionLogTab" source="OperatorActionLogTab.fxml"/>
             </content>
         </Tab>
+        <Tab closable="false" text="バックアップ">
+            <content>
+                <fx:include fx:id="shareBackupTab" source="DeveloperShareBackupTab.fxml"/>
+            </content>
+        </Tab>
     </tabs>
 </TabPane>

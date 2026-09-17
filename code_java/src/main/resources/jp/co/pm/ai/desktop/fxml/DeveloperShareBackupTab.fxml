@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.Separator?>
+<?import javafx.scene.control.TextArea?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.VBox?>
+
+<VBox xmlns="http://javafx.com/javafx/26" xmlns:fx="http://javafx.com/fxml/1"
+      spacing="10.0"
+      fx:controller="jp.co.pm.ai.desktop.developer.DeveloperShareBackupTabController">
+    <padding>
+        <Insets bottom="12.0" left="12.0" right="12.0" top="12.0"/>
+    </padding>
+    <Label styleClass="pm-section-title" text="工場共有バックアップ" wrapText="true"/>
+    <Label text="湖南・国分の共有 DATA を、このPCのローカルと各工場共有の「バックアップ」フォルダへ同時にコピーします。バックアップフォルダ自身と Excel ロックファイルは除外します。世代は5件まで残します。"
+           wrapText="true"/>
+    <Separator/>
+    <Label fx:id="localPathLabel" styleClass="pm-muted-label" wrapText="true"/>
+    <Label fx:id="konanPathLabel" styleClass="pm-muted-label" wrapText="true"/>
+    <Label fx:id="kokubuPathLabel" styleClass="pm-muted-label" wrapText="true"/>
+    <HBox spacing="8.0" alignment="CENTER_LEFT">
+        <Button fx:id="backupButton" mnemonicParsing="false" onAction="#onBackupAction" text="今すぐバックアップ"/>
+        <Button mnemonicParsing="false" onAction="#onOpenLocalAction" text="ローカルを開く"/>
+        <Button mnemonicParsing="false" onAction="#onOpenKonanSharedAction" text="湖南共有を開く"/>
+        <Button mnemonicParsing="false" onAction="#onOpenKokubuSharedAction" text="国分共有を開く"/>
+    </HBox>
+    <Label fx:id="statusLabel" wrapText="true"/>
+    <TextArea fx:id="logArea" prefHeight="280.0" wrapText="true" editable="false" VBox.vgrow="ALWAYS"/>
+</VBox>

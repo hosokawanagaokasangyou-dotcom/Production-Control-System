@@ -199,6 +199,7 @@ public final class OperatorActionLogTabController {
             case "tab_select" -> "タブ選択";
             case "kouchin_drop" -> "東レCSVドロップ";
             case "kouchin_verify" -> "東レ後加工賃検証";
+            case "factory_share_backup" -> "工場共有バックアップ";
             default -> action;
         };
     }

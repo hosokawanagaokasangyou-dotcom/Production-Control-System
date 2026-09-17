@@ -7,13 +7,14 @@ import jp.co.pm.ai.desktop.MainShellController;
 import jp.co.pm.ai.desktop.OperatorActionLogTabController;
 
 /**
- * 「開発」メインタブ。子タブ「実行時エラー」「操作ログ」。
+ * 「開発」メインタブ。子タブ「実行時エラー」「操作ログ」「バックアップ」。
  */
 public class DeveloperHostTabController {
 
     @FXML private TabPane innerTabPane;
     @FXML private DeveloperRuntimeErrorTabController runtimeErrorTabController;
     @FXML private OperatorActionLogTabController operatorActionLogTabController;
+    @FXML private DeveloperShareBackupTabController shareBackupTabController;
 
     public void bindShell(MainShellController shell) {
         if (runtimeErrorTabController != null) {
@@ -21,6 +22,9 @@ public class DeveloperHostTabController {
         }
         if (operatorActionLogTabController != null) {
             operatorActionLogTabController.bindShell(shell);
+        }
+        if (shareBackupTabController != null) {
+            shareBackupTabController.bindShell(shell);
         }
         if (innerTabPane != null) {
             innerTabPane.setMaxSize(Double.MAX_VALUE, Double.MAX_VALUE);
@@ -37,6 +41,9 @@ public class DeveloperHostTabController {
         }
         if (operatorActionLogTabController != null) {
             operatorActionLogTabController.onMainShellTabSelected();
+        }
+        if (shareBackupTabController != null) {
+            shareBackupTabController.onMainShellTabSelected();
         }
     }
 }
