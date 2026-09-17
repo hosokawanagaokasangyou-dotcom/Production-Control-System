@@ -31,6 +31,7 @@ import javafx.scene.control.Button;
 import javafx.scene.control.ButtonBar;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.ComboBox;
+import javafx.scene.control.DialogPane;
 import javafx.scene.control.Label;
 import javafx.scene.control.OverrunStyle;
 import javafx.scene.control.TableCell;
@@ -83,6 +84,9 @@ import jp.co.pm.ai.kouchin.verify.VerifySourceAccess;
 public class KouchinVerifyTabController {
 
     static final int DISCOVERY_POLL_SECONDS = 3;
+    static final String FIRST_OPEN_DROP_HINT_STYLE = "pm-kouchin-drop-hint-dialog";
+    static final double FIRST_OPEN_DROP_HINT_WIDTH = 560;
+    static final double FIRST_OPEN_DROP_HINT_HEIGHT = 260;
 
     private static final DateTimeFormatter FILE_MODIFIED_AT =
             DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss", Locale.JAPAN);
@@ -120,6 +124,7 @@ public class KouchinVerifyTabController {
     private boolean discoveryLoaded;
     private boolean pendingSourceReload;
     private boolean pendingVerifyAfterImport;
+    private boolean firstOpenDropHintShown;
     private final AtomicInteger discoveryGeneration = new AtomicInteger();
     private final AtomicBoolean discoveryInFlight = new AtomicBoolean();
     private Timeline discoveryPoll;
@@ -443,6 +448,7 @@ public class KouchinVerifyTabController {
         if (!discoveryLoaded || pendingSourceReload) {
             reloadDiscovery();
         }
+        maybeShowFirstOpenDropHint();
     }
 
     public void onMainShellTabDeselected() {
@@ -1028,6 +1034,45 @@ public class KouchinVerifyTabController {
 
     static boolean shouldVerifyAfterImport(boolean copiedAny) {
         return copiedAny;
+    }
+
+    static boolean shouldShowFirstOpenDropHint(boolean alreadyShown) {
+        return !alreadyShown;
+    }
+
+    static String firstOpenDropHintHeader() {
+        return "東レCSVをドラッグ＆ドロップしてください";
+    }
+
+    static String firstOpenDropHintBody() {
+        return "Outlookの添付などから、①東レ提供CSV（RVSHEETyyyyMM.csv）をこのタブへドロップしてください。"
+                + "\n取り込み後、自動でまとめて検証を開始します。";
+    }
+
+    private void maybeShowFirstOpenDropHint() {
+        if (!shouldShowFirstOpenDropHint(firstOpenDropHintShown)) {
+            return;
+        }
+        firstOpenDropHintShown = true;
+        Platform.runLater(this::showFirstOpenDropHint);
+    }
+
+    private void showFirstOpenDropHint() {
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        if (shell != null) {
+            alert.initOwner(shell.primaryStageForDialogs());
+            shell.applyAlertStylesheets(alert);
+        }
+        alert.setTitle("後加工工賃");
+        alert.setHeaderText(firstOpenDropHintHeader());
+        alert.setContentText(firstOpenDropHintBody());
+        DialogPane pane = alert.getDialogPane();
+        pane.getStyleClass().add(FIRST_OPEN_DROP_HINT_STYLE);
+        pane.setPrefWidth(FIRST_OPEN_DROP_HINT_WIDTH);
+        pane.setPrefHeight(FIRST_OPEN_DROP_HINT_HEIGHT);
+        pane.setMinWidth(480);
+        pane.setMinHeight(200);
+        alert.showAndWait();
     }
 
     private void startCsvCopy(List<Path> files, Path dest, boolean overwrite) {

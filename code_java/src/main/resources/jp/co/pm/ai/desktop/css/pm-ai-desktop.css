@@ -573,6 +573,29 @@
     -fx-padding: 10 12 10 12;
 }
 
+.dialog-pane.pm-kouchin-drop-hint-dialog {
+    -fx-font-size: 16px;
+    -fx-background-color: #1e293b;
+}
+
+.pm-kouchin-drop-hint-dialog .header-panel {
+    -fx-padding: 18 20 12 20;
+    -fx-background-color: #0f172a;
+}
+
+.pm-kouchin-drop-hint-dialog .header-panel .label {
+    -fx-font-size: 22px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #facc15;
+}
+
+.pm-kouchin-drop-hint-dialog .content.label,
+.pm-kouchin-drop-hint-dialog .content .label {
+    -fx-font-size: 16px;
+    -fx-text-fill: #f8fafc;
+    -fx-padding: 8 4 8 4;
+}
+
 .button.pm-stage-run-button {
     -fx-cursor: hand;
     -fx-font-size: 15px;
