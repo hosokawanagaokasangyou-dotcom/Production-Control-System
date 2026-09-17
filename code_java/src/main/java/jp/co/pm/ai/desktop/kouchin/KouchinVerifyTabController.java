@@ -1045,7 +1045,8 @@ public class KouchinVerifyTabController {
     }
 
     static String firstOpenDropHintBody() {
-        return "Outlookの添付などから、①東レ提供CSV（RVSHEETyyyyMM.csv）をこのタブへドロップしてください。"
+        return "Outlookの添付などから、①東レ提供CSV（RVSHEETyyyyMM.csv）を"
+                + "このダイアログへドロップしてください。"
                 + "\n取り込み後、自動でまとめて検証を開始します。";
     }
 
@@ -1072,7 +1073,47 @@ public class KouchinVerifyTabController {
         pane.setPrefHeight(FIRST_OPEN_DROP_HINT_HEIGHT);
         pane.setMinWidth(480);
         pane.setMinHeight(200);
+        installHintDialogDropHandlers(alert);
         alert.showAndWait();
+    }
+
+    private void installHintDialogDropHandlers(Alert alert) {
+        if (alert == null) {
+            return;
+        }
+        DialogPane pane = alert.getDialogPane();
+        pane.setOnDragOver(this::onDragOver);
+        pane.setOnDragDropped(e -> handleHintDialogDrop(e, alert));
+        alert.setOnShown(ev -> {
+            if (pane.getScene() == null) {
+                return;
+            }
+            pane.getScene().setOnDragOver(this::onDragOver);
+            pane.getScene().setOnDragDropped(e -> handleHintDialogDrop(e, alert));
+        });
+    }
+
+    private void handleHintDialogDrop(DragEvent e, Alert alert) {
+        List<Path> files = droppedFilePaths(e == null ? null : e.getDragboard());
+        boolean ok = !files.isEmpty();
+        e.setDropCompleted(ok);
+        e.consume();
+        if (!ok) {
+            appendLog("ドロップされたファイルがありません（Outlookの添付はファイルとしてドロップしてください）");
+            return;
+        }
+        if (alert != null) {
+            alert.setResult(ButtonType.OK);
+            alert.close();
+        }
+        copyDropped(files);
+    }
+
+    static List<Path> droppedFilePaths(Dragboard db) {
+        if (db == null || !db.hasFiles() || db.getFiles() == null || db.getFiles().isEmpty()) {
+            return List.of();
+        }
+        return db.getFiles().stream().map(File::toPath).toList();
     }
 
     private void startCsvCopy(List<Path> files, Path dest, boolean overwrite) {
@@ -1129,10 +1170,10 @@ public class KouchinVerifyTabController {
     }
 
     private void onDragDropped(DragEvent e) {
-        Dragboard db = e.getDragboard();
-        boolean ok = db.hasFiles() && db.getFiles() != null && !db.getFiles().isEmpty();
+        List<Path> files = droppedFilePaths(e.getDragboard());
+        boolean ok = !files.isEmpty();
         if (ok) {
-            copyDropped(db.getFiles().stream().map(File::toPath).toList());
+            copyDropped(files);
         } else {
             appendLog("ドロップされたファイルがありません（Outlookの添付はファイルとしてドロップしてください）");
         }
