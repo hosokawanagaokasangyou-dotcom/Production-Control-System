@@ -64,14 +64,20 @@ public final class ResultArchive {
                                         || n.endsWith(".txt"));
                     })
                     .forEach(p -> candidates.add(p.toAbsolutePath().normalize()));
+        } catch (IOException ignored) {
+            return;
         }
         for (Path file : candidates) {
             if (keep.contains(file)) {
                 continue;
             }
-            Files.createDirectories(past);
-            Path dest = uniqueDest(past, file.getFileName().toString());
-            Files.move(file, dest, StandardCopyOption.REPLACE_EXISTING);
+            try {
+                Files.createDirectories(past);
+                Path dest = uniqueDest(past, file.getFileName().toString());
+                Files.move(file, dest, StandardCopyOption.REPLACE_EXISTING);
+            } catch (IOException ignored) {
+                // Excel で開いている等。新規出力は既に成功しているので退避失敗は握りつぶす。
+            }
         }
     }
 

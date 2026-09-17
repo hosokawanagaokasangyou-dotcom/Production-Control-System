@@ -1,5 +1,6 @@
 package jp.co.pm.ai.kouchin.verify;
 
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
@@ -92,15 +93,22 @@ public final class VerifyRunSupport {
         keepAll.addAll(htmlOut.succeeded());
 
         for (Path dir : dirs) {
+            Path dirNorm = dir.toAbsolutePath().normalize();
             List<Path> keepHere = new ArrayList<>();
             for (Path p : keepAll) {
-                if (p != null && p.getParent() != null && p.getParent().equals(dir.toAbsolutePath().normalize())) {
-                    keepHere.add(p);
-                } else if (p != null && p.startsWith(dir.toAbsolutePath().normalize())) {
-                    keepHere.add(p);
+                if (p == null) {
+                    continue;
+                }
+                Path n = p.toAbsolutePath().normalize();
+                if (n.startsWith(dirNorm)) {
+                    keepHere.add(n);
                 }
             }
-            ResultArchive.archiveOldVerifyResults(dir, keepHere);
+            try {
+                ResultArchive.archiveOldVerifyResults(dir, keepHere);
+            } catch (IOException ignored) {
+                // 旧結果が Excel で開かれている等。今回の新規出力は成功とする。
+            }
         }
         return new Written(xlsxOut, txtOut, htmlOut, stamp, mailName);
     }
