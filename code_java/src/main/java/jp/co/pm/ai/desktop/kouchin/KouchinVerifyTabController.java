@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -25,7 +26,10 @@ import javafx.application.Platform;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.concurrent.Task;
 import javafx.fxml.FXML;
+import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
+import javafx.scene.control.ButtonBar;
+import javafx.scene.control.ButtonType;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.OverrunStyle;
@@ -115,6 +119,7 @@ public class KouchinVerifyTabController {
     private boolean selected;
     private boolean discoveryLoaded;
     private boolean pendingSourceReload;
+    private boolean pendingVerifyAfterImport;
     private final AtomicInteger discoveryGeneration = new AtomicInteger();
     private final AtomicBoolean discoveryInFlight = new AtomicBoolean();
     private Timeline discoveryPoll;
@@ -518,7 +523,7 @@ public class KouchinVerifyTabController {
                     } finally {
                         discoveryInFlight.set(false);
                         if (pendingSourceReload && selected) {
-                            reloadDiscovery(silentPoll);
+                            reloadDiscovery(pendingVerifyAfterImport ? false : silentPoll);
                         }
                     }
                 });
@@ -601,6 +606,10 @@ public class KouchinVerifyTabController {
         refreshDropTargetLabel();
         if (!busy) {
             refreshRunEnabled();
+        }
+        if (pendingVerifyAfterImport && !silentPoll) {
+            pendingVerifyAfterImport = false;
+            runVerify(null, true);
         }
     }
 
@@ -976,11 +985,57 @@ public class KouchinVerifyTabController {
             return;
         }
         Path dest = KouchinPaths.fromEnv(shell.snapshotUiEnv()).importTorayCsvDir();
+        Task<List<String>> plan = new Task<>() {
+            @Override
+            protected List<String> call() {
+                return KouchinTorayCsvDropSupport.existingDestFileNames(files, dest);
+            }
+        };
+        plan.setOnSucceeded(e -> {
+            List<String> conflicts = plan.getValue() == null ? List.of() : plan.getValue();
+            boolean overwrite = conflicts.isEmpty() || confirmOverwrite(conflicts);
+            startCsvCopy(files, dest, overwrite);
+        });
+        plan.setOnFailed(e -> {
+            Throwable err = plan.getException();
+            appendLog("取り込み先の確認に失敗: " + (err == null ? "" : err.getMessage()));
+        });
+        Thread t = new Thread(plan, "kouchin-csv-drop-plan");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    private boolean confirmOverwrite(List<String> names) {
+        Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+        if (shell != null) {
+            alert.initOwner(shell.primaryStageForDialogs());
+            shell.applyAlertStylesheets(alert);
+        }
+        alert.setTitle("同名ファイル");
+        alert.setHeaderText(null);
+        alert.setContentText(overwriteConfirmText(names));
+        ButtonType overwrite = new ButtonType("上書きする", ButtonBar.ButtonData.OK_DONE);
+        ButtonType skip = new ButtonType("上書きしない", ButtonBar.ButtonData.CANCEL_CLOSE);
+        alert.getButtonTypes().setAll(overwrite, skip);
+        Optional<ButtonType> ans = alert.showAndWait();
+        return ans.isPresent() && ans.get() == overwrite;
+    }
+
+    static String overwriteConfirmText(List<String> names) {
+        String listed = names == null || names.isEmpty() ? "" : "\n" + String.join("\n", names);
+        return "同じ名前のファイルがあります。上書きしますか？" + listed;
+    }
+
+    static boolean shouldVerifyAfterImport(boolean copiedAny) {
+        return copiedAny;
+    }
+
+    private void startCsvCopy(List<Path> files, Path dest, boolean overwrite) {
         Task<KouchinTorayCsvDropSupport.Outcome> task = new Task<>() {
             @Override
             protected KouchinTorayCsvDropSupport.Outcome call() {
                 AtomicBoolean cancel = shell.isKouchinRunBusy() ? shell.kouchinCancelRequested() : null;
-                return KouchinTorayCsvDropSupport.copyCsvFiles(files, dest, cancel);
+                return KouchinTorayCsvDropSupport.copyCsvFiles(files, dest, cancel, overwrite);
             }
         };
         task.setOnSucceeded(e -> {
@@ -991,10 +1046,11 @@ public class KouchinVerifyTabController {
             for (String err : o.errors()) {
                 appendLog(err);
             }
-            if (o.copiedAny()) {
+            if (shouldVerifyAfterImport(o.copiedAny())) {
                 FileDiscovery.invalidateListingCache();
-                appendLog("同名上書きで保存: " + o.copied().size() + "件 → " + dest);
+                appendLog("取り込み完了: " + o.copied().size() + "件 → " + dest);
                 markUnverified();
+                pendingVerifyAfterImport = true;
                 reloadDiscovery();
             } else {
                 appendLog("取り込みなし（検出は更新していません）");
@@ -1006,6 +1062,11 @@ public class KouchinVerifyTabController {
     }
 
     private void installDropHandlers() {
+        if (root != null) {
+            root.setOnDragOver(this::onDragOver);
+            root.setOnDragDropped(this::onDragDropped);
+            return;
+        }
         if (dropTargetLabel == null) {
             return;
         }
@@ -1018,18 +1079,17 @@ public class KouchinVerifyTabController {
     }
 
     private void onDragOver(DragEvent e) {
-        Dragboard db = e.getDragboard();
-        if (db.hasFiles()) {
-            e.acceptTransferModes(TransferMode.COPY);
-        }
+        e.acceptTransferModes(TransferMode.COPY);
         e.consume();
     }
 
     private void onDragDropped(DragEvent e) {
         Dragboard db = e.getDragboard();
-        boolean ok = db.hasFiles();
+        boolean ok = db.hasFiles() && db.getFiles() != null && !db.getFiles().isEmpty();
         if (ok) {
             copyDropped(db.getFiles().stream().map(File::toPath).toList());
+        } else {
+            appendLog("ドロップされたファイルがありません（Outlookの添付はファイルとしてドロップしてください）");
         }
         e.setDropCompleted(ok);
         e.consume();

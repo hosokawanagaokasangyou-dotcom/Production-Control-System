@@ -14,6 +14,7 @@
 <?import javafx.scene.layout.VBox?>
 
 <BorderPane xmlns="http://javafx.com/javafx/26" xmlns:fx="http://javafx.com/fxml/1"
+            fx:id="root"
             fx:controller="jp.co.pm.ai.desktop.kouchin.KouchinVerifyTabController">
     <top>
         <VBox spacing="8.0">

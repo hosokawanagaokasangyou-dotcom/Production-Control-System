@@ -22,7 +22,8 @@ public final class KouchinTorayCsvDropSupport {
 
     private KouchinTorayCsvDropSupport() {}
 
-    public static Outcome copyCsvFiles(List<Path> dropped, Path destDir, AtomicBoolean cancel) {
+    public static Outcome copyCsvFiles(
+            List<Path> dropped, Path destDir, AtomicBoolean cancel, boolean overwriteExisting) {
         List<Path> copied = new ArrayList<>();
         List<String> warnings = new ArrayList<>();
         List<String> errors = new ArrayList<>();
@@ -46,6 +47,10 @@ public final class KouchinTorayCsvDropSupport {
                 continue;
             }
             Path dest = destDir.resolve(src.getFileName().toString());
+            if (Files.exists(dest) && !overwriteExisting) {
+                warnings.add("上書きせずスキップ: " + src.getFileName());
+                continue;
+            }
             try {
                 Files.copy(src, dest, StandardCopyOption.REPLACE_EXISTING);
                 copied.add(dest);
@@ -58,6 +63,24 @@ public final class KouchinTorayCsvDropSupport {
             }
         }
         return new Outcome(List.copyOf(copied), List.copyOf(warnings), List.copyOf(errors));
+    }
+
+    /** 取り込み先に同名があるCSVファイル名。 */
+    public static List<String> existingDestFileNames(List<Path> dropped, Path destDir) {
+        if (destDir == null || !Files.isDirectory(destDir)) {
+            return List.of();
+        }
+        List<String> names = new ArrayList<>();
+        for (Path src : expandCsv(dropped, new ArrayList<>())) {
+            if (src == null || src.getFileName() == null) {
+                continue;
+            }
+            String name = src.getFileName().toString();
+            if (Files.exists(destDir.resolve(name))) {
+                names.add(name);
+            }
+        }
+        return List.copyOf(names);
     }
 
     static List<Path> expandCsv(List<Path> dropped, List<String> warnings) {
