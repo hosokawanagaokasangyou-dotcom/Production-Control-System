@@ -546,6 +546,10 @@
     -fx-font-weight: bold;
 }
 
+.table-row-cell.pm-kouchin-unused-row {
+    -fx-opacity: 0.38;
+}
+
 .label.pm-kouchin-target-ym-reason {
     -fx-font-size: 12px;
     -fx-text-fill: #e2e8f0;

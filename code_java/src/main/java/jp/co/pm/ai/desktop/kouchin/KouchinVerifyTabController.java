@@ -50,6 +50,7 @@ import javafx.util.Duration;
 
 import jp.co.pm.ai.desktop.MainShellController;
 import jp.co.pm.ai.desktop.MainShellTabId;
+import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.config.FactorySite;
 import jp.co.pm.ai.desktop.io.DesktopFileOpener;
 import jp.co.pm.ai.desktop.ui.ButtonAttentionGlow;
@@ -140,27 +141,48 @@ public class KouchinVerifyTabController {
         private final VerifySourceAccess.FileAccess access;
         private final String modifiedAt;
         private final boolean openable;
+        private final boolean unused;
 
         DiscoveryLine(String factory, KouchinDiscovery.Row row, VerifySourceAccess.FileAccess access) {
+            this(factory, row, access, false);
+        }
+
+        DiscoveryLine(
+                String factory, KouchinDiscovery.Row row, VerifySourceAccess.FileAccess access, boolean unused) {
             this.factory = factory == null ? "" : factory;
             this.row = row;
             this.access = access == null ? VerifySourceAccess.FileAccess.of(null) : access;
             this.modifiedAt = fileModifiedAtText(row);
             this.openable = openableDiscoveryFile(row) != null;
+            this.unused = unused;
         }
 
         static DiscoveryLine of(String factory, KouchinDiscovery.Row row) {
             return new DiscoveryLine(factory, row, VerifySourceAccess.FileAccess.ofRow(row));
         }
 
+        DiscoveryLine withUnused(boolean unusedFlag) {
+            return unusedFlag == unused ? this : new DiscoveryLine(factory, row, access, unusedFlag);
+        }
+
         public String getFactory() { return factory; }
         public String getRole() { return row == null ? "" : row.role(); }
         public String getPath() { return row == null ? "" : row.path(); }
         public String getPathCss() { return isMissing() ? "pm-kouchin-missing-path" : ""; }
+        public String getRowCss() { return unused ? "pm-kouchin-unused-row" : ""; }
         public String getYm() { return row == null ? "" : row.ym(); }
         public String getModifiedAt() { return modifiedAt; }
         public boolean canOpen() { return openable; }
-        public String getNote() { return row == null ? "" : row.note(); }
+        public String getNote() {
+            String n = row == null || row.note() == null ? "" : row.note();
+            if (!unused) {
+                return n;
+            }
+            if (n.isBlank()) {
+                return "現工場以外（不使用）";
+            }
+            return n + " / 現工場以外（不使用）";
+        }
         public String getReadStatus() { return access.readLabel(); }
         public String getWriteStatus() { return access.writeLabel(); }
         public String getReadCss() { return access.readCss(); }
@@ -168,6 +190,7 @@ public class KouchinVerifyTabController {
         public String getReadHint() { return access.readHint(); }
         public String getWriteHint() { return access.writeHint(); }
         public boolean isMissing() { return row != null && row.missing(); }
+        public boolean isUnused() { return unused; }
         public KouchinDiscovery.Row source() { return row; }
         public VerifySourceAccess.FileAccess access() { return access; }
     }
@@ -229,6 +252,62 @@ public class KouchinVerifyTabController {
             }
         }
         return lines;
+    }
+
+    static List<DiscoveryLine> markUnusedSource3(
+            List<DiscoveryLine> lines, FactorySite site, KouchinPaths paths) {
+        if (lines == null || lines.isEmpty()) {
+            return lines == null ? List.of() : lines;
+        }
+        Path preferred = preferredSource3Dir(site, paths);
+        boolean currentHas = false;
+        for (DiscoveryLine line : lines) {
+            if (isPresentSource3(line) && pathUnderDir(line.source().fullPath(), preferred)) {
+                currentHas = true;
+                break;
+            }
+        }
+        if (!currentHas) {
+            return lines;
+        }
+        List<DiscoveryLine> out = new ArrayList<>(lines.size());
+        for (DiscoveryLine line : lines) {
+            boolean unused = isPresentSource3(line) && !pathUnderDir(line.source().fullPath(), preferred);
+            out.add(line == null ? null : line.withUnused(unused));
+        }
+        return out;
+    }
+
+    static Path preferredSource3Dir(FactorySite site, KouchinPaths paths) {
+        if (paths == null) {
+            return null;
+        }
+        return site == FactorySite.KONAN ? paths.konanAladdinDir() : paths.kokubuAladdinDir();
+    }
+
+    private static boolean isPresentSource3(DiscoveryLine line) {
+        return line != null
+                && !line.isMissing()
+                && line.source() != null
+                && KouchinDiscovery.ROLE_3.equals(line.getRole());
+    }
+
+    static boolean pathUnderDir(String fullPath, Path dir) {
+        if (fullPath == null || fullPath.isBlank() || dir == null) {
+            return false;
+        }
+        Path p = Path.of(fullPath).toAbsolutePath().normalize();
+        Path d = dir.toAbsolutePath().normalize();
+        if (p.startsWith(d)) {
+            return true;
+        }
+        String ps = p.toString().replace('/', '\\').toLowerCase(Locale.ROOT);
+        String ds = d.toString().replace('/', '\\').toLowerCase(Locale.ROOT);
+        if (ps.equals(ds)) {
+            return true;
+        }
+        String prefix = ds.endsWith("\\") ? ds : ds + "\\";
+        return ps.startsWith(prefix);
     }
 
     private static VerifySourceAccess.FileAccess accessFor(
@@ -391,7 +470,10 @@ public class KouchinVerifyTabController {
                 List<KouchinDiscovery.Row> konanRows = konan;
                 String err = error;
                 boolean outputWritable = VerifyOutputAccess.anyOutputWritable(KouchinOutputDirs.resolveAll(ui));
-                List<DiscoveryLine> lines = buildDiscoveryLines(kokubuRows, konanRows);
+                List<DiscoveryLine> lines = markUnusedSource3(
+                        buildDiscoveryLines(kokubuRows, konanRows),
+                        AppPaths.currentDispatchFactorySite(ui),
+                        paths);
                 String kokubuBlock = VerifySourceAccess.blockReason(kokubuRows, accessLookup(lines, "国分"));
                 String konanBlock = VerifySourceAccess.blockReason(konanRows, accessLookup(lines, "湖南"));
                 Platform.runLater(() -> {
@@ -1050,18 +1132,27 @@ public class KouchinVerifyTabController {
         addAccessColumn("読取", DiscoveryLine::getReadStatus, DiscoveryLine::getReadCss, 64);
         addAccessColumn("書込", DiscoveryLine::getWriteStatus, DiscoveryLine::getWriteCss, 64);
         discoveryTable.getColumns().add(noteCol);
-        discoveryTable.setRowFactory(tv -> {
-            TableRow<DiscoveryLine> row = new TableRow<>();
-            row.setOnMouseClicked(e -> {
-                if (e.getClickCount() != 2
-                        || e.getButton() != MouseButton.PRIMARY
-                        || row.isEmpty()) {
-                    return;
+        discoveryTable.setRowFactory(tv -> new TableRow<>() {
+            {
+                setOnMouseClicked(e -> {
+                    if (e.getClickCount() != 2
+                            || e.getButton() != MouseButton.PRIMARY
+                            || isEmpty()) {
+                        return;
+                    }
+                    DiscoveryLine line = getItem();
+                    openDiscoveryRow(line == null ? null : line.source());
+                });
+            }
+
+            @Override
+            protected void updateItem(DiscoveryLine item, boolean empty) {
+                super.updateItem(item, empty);
+                getStyleClass().remove("pm-kouchin-unused-row");
+                if (!empty && item != null && item.isUnused()) {
+                    getStyleClass().add(item.getRowCss());
                 }
-                DiscoveryLine line = row.getItem();
-                openDiscoveryRow(line == null ? null : line.source());
-            });
-            return row;
+            }
         });
         pathCol.setCellFactory(c -> new TableCell<>() {
             private final Tooltip tip = new Tooltip();
@@ -1333,7 +1424,8 @@ public class KouchinVerifyTabController {
                 line.getModifiedAt() == null ? "" : line.getModifiedAt(),
                 line.getReadStatus() == null ? "" : line.getReadStatus(),
                 line.getWriteStatus() == null ? "" : line.getWriteStatus(),
-                Boolean.toString(line.canOpen()));
+                Boolean.toString(line.canOpen()),
+                Boolean.toString(line.isUnused()));
     }
 
     static String targetYmReasonText(
