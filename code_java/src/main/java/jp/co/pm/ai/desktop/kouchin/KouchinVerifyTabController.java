@@ -129,12 +129,14 @@ public class KouchinVerifyTabController {
         private final KouchinDiscovery.Row row;
         private final VerifySourceAccess.FileAccess access;
         private final String modifiedAt;
+        private final boolean openable;
 
         DiscoveryLine(String factory, KouchinDiscovery.Row row, VerifySourceAccess.FileAccess access) {
             this.factory = factory == null ? "" : factory;
             this.row = row;
             this.access = access == null ? VerifySourceAccess.FileAccess.of(null) : access;
             this.modifiedAt = fileModifiedAtText(row);
+            this.openable = openableDiscoveryFile(row) != null;
         }
 
         static DiscoveryLine of(String factory, KouchinDiscovery.Row row) {
@@ -147,6 +149,7 @@ public class KouchinVerifyTabController {
         public String getPathCss() { return isMissing() ? "pm-kouchin-missing-path" : ""; }
         public String getYm() { return row == null ? "" : row.ym(); }
         public String getModifiedAt() { return modifiedAt; }
+        public boolean canOpen() { return openable; }
         public String getNote() { return row == null ? "" : row.note(); }
         public String getReadStatus() { return access.readLabel(); }
         public String getWriteStatus() { return access.writeLabel(); }
@@ -884,6 +887,41 @@ public class KouchinVerifyTabController {
             return;
         }
         discoveryTable.getColumns().clear();
+        TableColumn<DiscoveryLine, Void> openCol = new TableColumn<>("開く");
+        openCol.setPrefWidth(64);
+        openCol.setMinWidth(56);
+        openCol.setMaxWidth(80);
+        openCol.setSortable(false);
+        openCol.setReorderable(false);
+        openCol.setCellFactory(c -> new TableCell<>() {
+            private final Button btn = new Button("開く");
+
+            {
+                btn.setFocusTraversable(false);
+                btn.setMaxHeight(22);
+                btn.setStyle("-fx-padding: 1 8 1 8; -fx-font-size: 11px;");
+                btn.setOnAction(e -> {
+                    DiscoveryLine line = getTableRow() == null ? null : getTableRow().getItem();
+                    if (line != null && line.canOpen()) {
+                        openDiscoveryRow(line.source());
+                    }
+                });
+            }
+
+            @Override
+            protected void updateItem(Void item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty) {
+                    setGraphic(null);
+                    return;
+                }
+                DiscoveryLine line = getTableRow() == null ? null : getTableRow().getItem();
+                boolean on = line != null && line.canOpen();
+                btn.setDisable(!on);
+                btn.setTooltip(new Tooltip(on ? "ファイルを開く" : "開けるファイルがありません"));
+                setGraphic(btn);
+            }
+        });
         TableColumn<DiscoveryLine, String> factoryCol = new TableColumn<>("工場");
         factoryCol.setCellValueFactory(cd -> new SimpleStringProperty(cd.getValue() == null ? "" : cd.getValue().getFactory()));
         factoryCol.setPrefWidth(128);
@@ -905,6 +943,7 @@ public class KouchinVerifyTabController {
         TableColumn<DiscoveryLine, String> noteCol = new TableColumn<>("備考");
         noteCol.setCellValueFactory(cd -> new SimpleStringProperty(cd.getValue() == null ? "" : cd.getValue().getNote()));
         noteCol.setPrefWidth(140);
+        discoveryTable.getColumns().add(openCol);
         discoveryTable.getColumns().add(factoryCol);
         discoveryTable.getColumns().add(roleCol);
         discoveryTable.getColumns().add(pathCol);
