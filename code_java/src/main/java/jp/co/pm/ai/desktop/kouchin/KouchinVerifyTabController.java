@@ -56,6 +56,7 @@ import jp.co.pm.ai.kouchin.verify.KouchinOutputDirs;
 import jp.co.pm.ai.kouchin.verify.KouchinPaths;
 import jp.co.pm.ai.kouchin.verify.RecordA;
 import jp.co.pm.ai.kouchin.verify.RecordB;
+import jp.co.pm.ai.kouchin.verify.UnifiedMailBuilder;
 import jp.co.pm.ai.kouchin.verify.VerifyOutputAccess;
 import jp.co.pm.ai.kouchin.verify.VerifyResult;
 import jp.co.pm.ai.kouchin.verify.VerifyRunSupport;
@@ -585,10 +586,12 @@ public class KouchinVerifyTabController {
                     bothResult = VerifyService.runBoth(paths);
                 } else if (one == FactoryId.KONAN) {
                     VerifyResult konan = VerifyService.run(FactoryId.KONAN, paths);
-                    bothResult = new BothResult(null, konan, null, null, null);
+                    bothResult = new BothResult(
+                            null, konan, null, null, UnifiedMailBuilder.buildText(null, konan.mail()));
                 } else {
                     VerifyResult kokubu = VerifyService.run(FactoryId.KOKUBU, paths);
-                    bothResult = new BothResult(kokubu, null, null, null, null);
+                    bothResult = new BothResult(
+                            kokubu, null, null, null, UnifiedMailBuilder.buildText(kokubu.mail(), null));
                 }
                 if (cancel.get()) {
                     throw new IllegalStateException("中断されました");

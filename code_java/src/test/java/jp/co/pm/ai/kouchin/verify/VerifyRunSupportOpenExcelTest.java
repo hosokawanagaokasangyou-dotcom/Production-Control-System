@@ -83,6 +83,19 @@ class VerifyRunSupportOpenExcelTest {
                 written(new DualWriteFiles.WriteOutcome(List.of(), List.of("fail")))).isEmpty());
     }
 
+    @Test
+    @DisplayName("片工場のBothResultでunifiedMailがnullでもメール本文を組み立てる")
+    void mailTextToWriteFallsBackWhenUnifiedMailNull() {
+        String text = VerifyRunSupport.mailTextToWrite(
+                new BothResult(null, null, null, null, null), null, null);
+        assertTrue(text != null && !text.isBlank(), text);
+        assertTrue(text.contains("未検証"), text);
+        assertEquals("固定本文", VerifyRunSupport.mailTextToWrite(
+                new BothResult(null, null, null, null, "固定本文"), null, null));
+        String fromNullBoth = VerifyRunSupport.mailTextToWrite(null, null, null);
+        assertTrue(fromNullBoth.contains("未検証"), fromNullBoth);
+    }
+
     private static VerifyRunSupport.Written written(DualWriteFiles.WriteOutcome xlsx) {
         return new VerifyRunSupport.Written(
                 xlsx,

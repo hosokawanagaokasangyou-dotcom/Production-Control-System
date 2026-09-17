@@ -76,8 +76,11 @@ public final class VerifyRunSupport {
 
         MailSnapshot kMail = kokubu == null ? null : kokubu.mail();
         MailSnapshot nMail = konan == null ? null : konan.mail();
-        String mail = both != null ? both.unifiedMail() : UnifiedMailBuilder.buildText(kMail, nMail);
+        String mail = mailTextToWrite(both, kMail, nMail);
         String html = MailHtmlBuilder.build(kMail, nMail);
+        if (html == null) {
+            html = "";
+        }
         String mailName = "報告メール_統合_" + stamp;
         txtOut = DualWriteFiles.writeBytes(
                 mail.getBytes(StandardCharsets.UTF_8),
@@ -100,6 +103,16 @@ public final class VerifyRunSupport {
             ResultArchive.archiveOldVerifyResults(dir, keepHere);
         }
         return new Written(xlsxOut, txtOut, htmlOut, stamp, mailName);
+    }
+
+    static String mailTextToWrite(BothResult both, MailSnapshot kokubuMail, MailSnapshot konanMail) {
+        if (both != null) {
+            String unified = both.unifiedMail();
+            if (unified != null && !unified.isBlank()) {
+                return unified;
+            }
+        }
+        return UnifiedMailBuilder.buildText(kokubuMail, konanMail);
     }
 
     /**
