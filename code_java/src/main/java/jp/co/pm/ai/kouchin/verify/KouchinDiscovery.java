@@ -46,9 +46,9 @@ public final class KouchinDiscovery {
         Path dir3 = paths.source3Dir(factory);
         try {
             Path a = FileDiscovery.findAladdin(dir3, ym);
-            rows.add(found(ROLE_3, dir3, a, ym));
+            rows.add(found(ROLE_3, dir3, a, ym, Source3TargetMonthCheck.noteIfUncovered(a, ym, profile)));
         } catch (RuntimeException e) {
-            rows.add(missing(ROLE_3, dir3, e.getMessage()));
+            rows.add(missing(ROLE_3, dir3, Source3TargetMonthCheck.warningNote(ym, e.getMessage())));
         }
         if (factory == FactoryId.KONAN) {
             Path monthlyDir = paths.konanMonthlyDir();
@@ -63,13 +63,17 @@ public final class KouchinDiscovery {
     }
 
     private static Row found(String role, Path dir, Path file, YearMonthKey ym) {
+        return found(role, dir, file, ym, "");
+    }
+
+    private static Row found(String role, Path dir, Path file, YearMonthKey ym, String note) {
         return new Row(
                 role,
                 FileDiscovery.uiDisplayPath(dir, file),
                 file.toString(),
                 ym == null ? "" : ym.gatsudoLabel(),
                 false,
-                "");
+                note == null ? "" : note);
     }
 
     private static Row missing(String role, Path dir, String note) {

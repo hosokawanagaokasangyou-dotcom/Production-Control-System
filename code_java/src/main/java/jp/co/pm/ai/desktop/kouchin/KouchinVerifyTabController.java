@@ -64,6 +64,7 @@ import jp.co.pm.ai.kouchin.verify.KouchinOutputDirs;
 import jp.co.pm.ai.kouchin.verify.KouchinPaths;
 import jp.co.pm.ai.kouchin.verify.RecordA;
 import jp.co.pm.ai.kouchin.verify.RecordB;
+import jp.co.pm.ai.kouchin.verify.Source3TargetMonthCheck;
 import jp.co.pm.ai.kouchin.verify.UnifiedMailBuilder;
 import jp.co.pm.ai.kouchin.verify.VerifyOutputAccess;
 import jp.co.pm.ai.kouchin.verify.VerifyResult;
@@ -170,6 +171,9 @@ public class KouchinVerifyTabController {
         public String getPath() { return row == null ? "" : row.path(); }
         public String getPathCss() { return isMissing() ? "pm-kouchin-missing-path" : ""; }
         public String getRowCss() { return unused ? "pm-kouchin-unused-row" : ""; }
+        public String getNoteCss() {
+            return Source3TargetMonthCheck.isWarning(getNote()) ? Source3TargetMonthCheck.NOTE_CSS : "";
+        }
         public String getYm() { return row == null ? "" : row.ym(); }
         public String getModifiedAt() { return modifiedAt; }
         public boolean canOpen() { return openable; }
@@ -1122,7 +1126,28 @@ public class KouchinVerifyTabController {
         ymCol.setPrefWidth(110);
         TableColumn<DiscoveryLine, String> noteCol = new TableColumn<>("備考");
         noteCol.setCellValueFactory(cd -> new SimpleStringProperty(cd.getValue() == null ? "" : cd.getValue().getNote()));
-        noteCol.setPrefWidth(140);
+        noteCol.setPrefWidth(280);
+        noteCol.setMinWidth(140);
+        noteCol.setCellFactory(c -> new TableCell<>() {
+            {
+                setWrapText(true);
+            }
+
+            @Override
+            protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                getStyleClass().remove("pm-kouchin-note-warn");
+                if (empty) {
+                    setText(null);
+                    return;
+                }
+                DiscoveryLine line = getTableRow() == null ? null : getTableRow().getItem();
+                setText(line == null ? item : line.getNote());
+                if (line != null && !line.getNoteCss().isBlank()) {
+                    getStyleClass().add(line.getNoteCss());
+                }
+            }
+        });
         discoveryTable.getColumns().add(openCol);
         discoveryTable.getColumns().add(factoryCol);
         discoveryTable.getColumns().add(roleCol);
@@ -1421,6 +1446,7 @@ public class KouchinVerifyTabController {
                 line.getYm(),
                 Boolean.toString(line.isMissing()),
                 line.getNote() == null ? "" : line.getNote(),
+                line.getNoteCss() == null ? "" : line.getNoteCss(),
                 line.getModifiedAt() == null ? "" : line.getModifiedAt(),
                 line.getReadStatus() == null ? "" : line.getReadStatus(),
                 line.getWriteStatus() == null ? "" : line.getWriteStatus(),

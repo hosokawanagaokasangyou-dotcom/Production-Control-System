@@ -546,6 +546,12 @@
     -fx-font-weight: bold;
 }
 
+.table-cell.pm-kouchin-note-warn {
+    -fx-background-color: #dc2626;
+    -fx-text-fill: #ffffff;
+    -fx-font-weight: bold;
+}
+
 .table-row-cell.pm-kouchin-unused-row {
     -fx-opacity: 0.38;
 }
