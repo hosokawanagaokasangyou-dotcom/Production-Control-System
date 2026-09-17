@@ -102,6 +102,7 @@ public final class MainShellInnerTabCatalog {
                             "マスター一覧");
             case PROCESSING_TREND -> List.of("加工量", "加工賃");
             case KOUCHIN -> List.of("検証", "月次トレンド", "参照先");
+            case DEVELOPER -> List.of("実行時エラー", "操作ログ");
             default -> List.of();
         };
     }

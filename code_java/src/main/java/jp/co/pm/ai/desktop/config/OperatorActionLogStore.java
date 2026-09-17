@@ -1,6 +1,7 @@
 package jp.co.pm.ai.desktop.config;
 
 import java.io.IOException;
+import java.net.InetAddress;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
@@ -17,6 +18,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
@@ -34,7 +36,31 @@ public final class OperatorActionLogStore {
 
     private OperatorActionLogStore() {}
 
-    public record Entry(String ts, String operator, String action, String result, String detail) {}
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record Entry(
+            String ts,
+            String operator,
+            String action,
+            String result,
+            String detail,
+            String appVersion,
+            String factory,
+            String feature,
+            String host,
+            String osUser) {
+        public Entry {
+            ts = ts != null ? ts : "";
+            operator = operator != null ? operator : "";
+            action = action != null ? action : "";
+            result = result != null ? result : "";
+            detail = detail != null ? detail : "";
+            appVersion = appVersion != null ? appVersion : "";
+            factory = factory != null ? factory : "";
+            feature = feature != null ? feature : "";
+            host = host != null ? host : "";
+            osUser = osUser != null ? osUser : "";
+        }
+    }
 
     public static Path resolveRoot(Map<String, String> ui) {
         return AppPaths.resolveOperatorActionLogRoot(ui);
@@ -59,18 +85,35 @@ public final class OperatorActionLogStore {
 
     public static boolean append(
             Map<String, String> ui, String operator, String action, String result, String detail) {
+        return append(ui, operator, "", action, result, detail);
+    }
+
+    public static boolean append(
+            Map<String, String> ui,
+            String operator,
+            String feature,
+            String action,
+            String result,
+            String detail) {
         String name = operator != null ? operator.strip() : "";
         if (name.isEmpty()) {
             name = OperatorUserPaths.UNKNOWN_OPERATOR_DIR;
         }
         Path file = resolveDailyFile(ui, name, LocalDate.now(ZoneId.systemDefault()));
+        Map<String, String> env = ui != null ? ui : Map.of();
         Entry entry =
                 new Entry(
                         OffsetDateTime.now().toString(),
                         name,
                         action != null ? action : "",
                         result != null ? result : "",
-                        sanitizeDetail(detail));
+                        sanitizeDetail(detail),
+                        AppVersionInfo.resolveDisplayedVersion(
+                                Path.of(System.getProperty("user.dir", ".")), env),
+                        GlobalInitSettingTarget.loadEffective(env).name(),
+                        feature != null ? feature : "",
+                        resolveHostNameQuietly(),
+                        nullToEmpty(System.getProperty("user.name")));
         try {
             Files.createDirectories(file.getParent());
             String line = JSON.writeValueAsString(entry) + "\n";
@@ -195,5 +238,17 @@ public final class OperatorActionLogStore {
             newestFirst.add(rows.get(i));
         }
         return newestFirst;
+    }
+
+    private static String resolveHostNameQuietly() {
+        try {
+            return InetAddress.getLocalHost().getHostName();
+        } catch (Exception ex) {
+            return "";
+        }
+    }
+
+    private static String nullToEmpty(String s) {
+        return s != null ? s : "";
     }
 }

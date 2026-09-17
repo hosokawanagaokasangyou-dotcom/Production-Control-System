@@ -282,6 +282,14 @@
                         <fx:include fx:id="operatorActionLogTab" source="OperatorActionLogTab.fxml"/>
                     </content>
                 </Tab>
+                <Tab fx:id="mainShellTabDeveloper" closable="false" text="開発">
+                    <tooltip>
+                        <Tooltip text="実行時エラーの解析一覧と、操作者・版・機能の操作ログ。"/>
+                    </tooltip>
+                    <content>
+                        <fx:include fx:id="developerHostTab" source="DeveloperHostTab.fxml"/>
+                    </content>
+                </Tab>
                 <Tab fx:id="mainShellTabIdentityCheckHistory" closable="false" text="同一化チェック履歴">
                     <content>
                         <fx:include fx:id="identityCheckHistoryTab" source="IdentityCheckHistoryTab.fxml"/>

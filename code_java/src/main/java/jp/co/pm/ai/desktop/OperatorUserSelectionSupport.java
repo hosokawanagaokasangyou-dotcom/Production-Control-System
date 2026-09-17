@@ -35,6 +35,13 @@ public final class OperatorUserSelectionSupport {
         return startup ? "[startup]" : "[operator]";
     }
 
+    private static void recordSessionStart(DesktopShellHost host, String detail) {
+        if (host == null) {
+            return;
+        }
+        host.recordOperatorAction("session", "session_start", "ok", detail);
+    }
+
     /**
      * 現在のセッション操作者が当該工場のログイン一覧に含まれるか。
      * 工場切替の進捗モーダルを操作者ダイアログの前に隠す判定に使う。
@@ -166,6 +173,7 @@ public final class OperatorUserSelectionSupport {
                                             ? " ※ゲスト"
                                             : ""));
                     host.refreshOperatorUserPresentation();
+                    recordSessionStart(host, "前回選択を復元");
                     return;
                 }
             } catch (IOException ex) {
@@ -204,6 +212,7 @@ public final class OperatorUserSelectionSupport {
                                 + name
                                 + operatorSelectionLogContext(factory, dept, "")
                                 + (FactoryOperatorUserStore.isGuestOperator(name) ? " ※ゲスト" : ""));
+                recordSessionStart(host, startup ? "起動" : "選択");
             } catch (Exception ex) {
                 host.showWarningDialog(
                         "操作者名", ex.getMessage() != null ? ex.getMessage() : ex.toString());
@@ -294,6 +303,7 @@ public final class OperatorUserSelectionSupport {
                             + name
                             + operatorSelectionLogContext(factory, dept, "・変更")
                             + (FactoryOperatorUserStore.isGuestOperator(name) ? " ※ゲスト" : ""));
+            recordSessionStart(host, "変更");
         } catch (Exception ex) {
             host.showWarningDialog(
                     "操作者名", ex.getMessage() != null ? ex.getMessage() : ex.toString());
@@ -383,6 +393,7 @@ public final class OperatorUserSelectionSupport {
                             + name
                             + operatorSelectionLogContext(factory, dept, "")
                             + (FactoryOperatorUserStore.isGuestOperator(name) ? " ※ゲスト" : ""));
+            recordSessionStart(host, "変更");
         } catch (Exception ex) {
             host.showWarningDialog(
                     "操作者名", ex.getMessage() != null ? ex.getMessage() : ex.toString());

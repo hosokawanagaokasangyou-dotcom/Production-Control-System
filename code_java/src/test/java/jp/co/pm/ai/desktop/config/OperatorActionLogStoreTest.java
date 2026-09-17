@@ -123,9 +123,58 @@ class OperatorActionLogStoreTest {
         assertEquals(List.of("alpha", "beta"), names);
     }
 
+    @Test
+    void append_recordsVersionFactoryFeatureHost(@TempDir Path tempDir) throws Exception {
+        Map<String, String> ui = testUi(tempDir);
+        assertTrue(
+                OperatorActionLogStore.append(
+                        ui,
+                        "古家",
+                        "kouchin",
+                        "kouchin_drop",
+                        "empty",
+                        "Outlook空"));
+
+        List<OperatorActionLogStore.Entry> entries =
+                OperatorActionLogStore.readOperator(ui, "古家", Instant.now());
+        assertEquals(1, entries.size());
+        OperatorActionLogStore.Entry e = entries.get(0);
+        assertEquals("kouchin", e.feature());
+        assertEquals("kouchin_drop", e.action());
+        assertEquals("empty", e.result());
+        assertEquals(FactorySite.KONAN.name(), e.factory());
+        assertFalse(e.appVersion() == null || e.appVersion().isBlank());
+        assertFalse(e.osUser() == null);
+        assertFalse(e.host() == null);
+    }
+
+    @Test
+    void readOperator_acceptsLegacyFiveFieldJson(@TempDir Path tempDir) throws Exception {
+        Map<String, String> ui = testUi(tempDir);
+        Path file = OperatorActionLogStore.resolveDailyFile(ui, "古家", LocalDate.of(2026, 9, 18));
+        Files.createDirectories(file.getParent());
+        Files.writeString(
+                file,
+                "{\"ts\":\"2026-09-18T07:00:00+09:00\",\"operator\":\"古家\","
+                        + "\"action\":\"stage2_complete\",\"result\":\"ok\",\"detail\":\"段階2完了\"}\n");
+
+        List<OperatorActionLogStore.Entry> entries =
+                OperatorActionLogStore.readOperator(ui, "古家", Instant.now());
+        assertEquals(1, entries.size());
+        assertEquals("stage2_complete", entries.get(0).action());
+        assertEquals("古家", entries.get(0).operator());
+        assertEquals("", nullToEmpty(entries.get(0).feature()));
+    }
+
+    private static String nullToEmpty(String s) {
+        return s != null ? s : "";
+    }
+
     private static Map<String, String> testUi(Path tempDir) {
         return Map.of(
                 AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK,
-                tempDir.resolve("shared").toString());
+                tempDir.resolve("shared").toString(),
+                AppPaths.KEY_PM_AI_FACTORY_SITE,
+                FactorySite.KONAN.name());
     }
 }

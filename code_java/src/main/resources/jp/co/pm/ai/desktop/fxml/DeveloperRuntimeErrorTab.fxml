@@ -7,37 +7,38 @@
 <?import javafx.scene.control.Separator?>
 <?import javafx.scene.control.TableColumn?>
 <?import javafx.scene.control.TableView?>
+<?import javafx.scene.control.TextArea?>
 <?import javafx.scene.layout.HBox?>
 <?import javafx.scene.layout.VBox?>
 
 <VBox xmlns="http://javafx.com/javafx/26" xmlns:fx="http://javafx.com/fxml/1"
       spacing="10.0"
-      fx:controller="jp.co.pm.ai.desktop.OperatorActionLogTabController">
+      fx:controller="jp.co.pm.ai.desktop.developer.DeveloperRuntimeErrorTabController">
     <padding>
         <Insets bottom="12.0" left="12.0" right="12.0" top="12.0"/>
     </padding>
-    <Label styleClass="pm-section-title" text="操作ログ" wrapText="true"/>
-    <Label text="操作者・版・工場・機能ごとの操作履歴です。共有フォルダに90日保存します。"
+    <Label styleClass="pm-section-title" text="実行時エラー" wrapText="true"/>
+    <Label text="現工場の共有フォルダ remote_log を解析し、操作者・版・工場ごとの失敗行を一覧します。段階2未実行の東レ後加工賃検証も含みます。"
            wrapText="true"/>
     <Separator/>
     <HBox spacing="8.0" alignment="CENTER_LEFT">
         <Label text="操作者"/>
         <ComboBox fx:id="operatorCombo" prefWidth="220.0"/>
-        <Button fx:id="refreshButton" mnemonicParsing="false" onAction="#onRefreshAction" text="再読み"/>
+        <Button mnemonicParsing="false" onAction="#onRefreshAction" text="再解析"/>
     </HBox>
     <Label fx:id="pathLabel" styleClass="pm-muted-label" wrapText="true"/>
     <Label fx:id="statusLabel" wrapText="true"/>
-    <TableView fx:id="logTable" prefHeight="420.0" VBox.vgrow="ALWAYS">
+    <TableView fx:id="errorTable" prefHeight="280.0" VBox.vgrow="ALWAYS">
         <columns>
-            <TableColumn fx:id="tsColumn" text="日時" prefWidth="140.0"/>
-            <TableColumn fx:id="operatorNameColumn" text="操作者" prefWidth="80.0"/>
+            <TableColumn fx:id="tsColumn" text="日付" prefWidth="110.0"/>
+            <TableColumn fx:id="operatorColumn" text="操作者" prefWidth="90.0"/>
             <TableColumn fx:id="versionColumn" text="版" prefWidth="70.0"/>
             <TableColumn fx:id="factoryColumn" text="工場" prefWidth="80.0"/>
-            <TableColumn fx:id="featureColumn" text="機能" prefWidth="120.0"/>
-            <TableColumn fx:id="actionColumn" text="操作" prefWidth="130.0"/>
-            <TableColumn fx:id="resultColumn" text="結果" prefWidth="70.0"/>
-            <TableColumn fx:id="osUserColumn" text="Windowsユーザー" prefWidth="110.0"/>
-            <TableColumn fx:id="detailColumn" text="詳細" prefWidth="280.0"/>
+            <TableColumn fx:id="eventColumn" text="種別" prefWidth="100.0"/>
+            <TableColumn fx:id="severityColumn" text="重要度" prefWidth="70.0"/>
+            <TableColumn fx:id="excerptColumn" text="摘要" prefWidth="360.0"/>
         </columns>
     </TableView>
+    <Label text="選択行の詳細"/>
+    <TextArea fx:id="detailArea" prefHeight="120.0" wrapText="true" editable="false"/>
 </VBox>

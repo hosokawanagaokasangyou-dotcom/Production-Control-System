@@ -46,4 +46,9 @@ public interface DesktopShellHost {
 
     /** {@link #setGlobalLongTaskProgress} の表示を消す。 */
     default void clearGlobalLongTaskProgress() {}
+
+    /**
+     * 共有フォルダの操作ログへ追記する（版・工場・機能付き）。未対応ホストは無視。
+     */
+    default void recordOperatorAction(String feature, String action, String result, String detail) {}
 }

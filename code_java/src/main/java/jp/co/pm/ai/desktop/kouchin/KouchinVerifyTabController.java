@@ -1787,7 +1787,7 @@ public class KouchinVerifyTabController {
         if (shell == null) {
             return;
         }
-        shell.recordOperatorAction(action, result, detail);
+        shell.recordOperatorAction("kouchin", action, result, detail);
     }
 
     private void appendLog(String line) {

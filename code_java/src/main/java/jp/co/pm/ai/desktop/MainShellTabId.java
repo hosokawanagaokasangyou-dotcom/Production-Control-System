@@ -67,6 +67,8 @@ public enum MainShellTabId {
     API_MODEL_BENCHMARK("apiModelBenchmark"),
     /** 段階1～3・サマリ Excel・納期管理ビューの実行時間トレンド。 */
     PIPELINE_EXECUTION_TIMING("pipelineExecutionTiming"),
+    /** 実行時エラー解析と操作ログ（開発者向け）。 */
+    DEVELOPER("developer"),
     /** メインシェル末尾の「タブ整理」（入れ子構成・色の編集用）。 */
     TAB_ORGANIZER("tabOrganizer");
 

@@ -44,10 +44,25 @@ public final class OperatorActionLogTabController {
     private TableColumn<OperatorActionLogStore.Entry, String> tsColumn;
 
     @FXML
+    private TableColumn<OperatorActionLogStore.Entry, String> operatorNameColumn;
+
+    @FXML
+    private TableColumn<OperatorActionLogStore.Entry, String> versionColumn;
+
+    @FXML
+    private TableColumn<OperatorActionLogStore.Entry, String> factoryColumn;
+
+    @FXML
+    private TableColumn<OperatorActionLogStore.Entry, String> featureColumn;
+
+    @FXML
     private TableColumn<OperatorActionLogStore.Entry, String> actionColumn;
 
     @FXML
     private TableColumn<OperatorActionLogStore.Entry, String> resultColumn;
+
+    @FXML
+    private TableColumn<OperatorActionLogStore.Entry, String> osUserColumn;
 
     @FXML
     private TableColumn<OperatorActionLogStore.Entry, String> detailColumn;
@@ -65,10 +80,30 @@ public final class OperatorActionLogTabController {
     @FXML
     private void initialize() {
         tsColumn.setCellValueFactory(c -> new ReadOnlyStringWrapper(formatTs(c.getValue().ts())));
+        if (operatorNameColumn != null) {
+            operatorNameColumn.setCellValueFactory(
+                    c -> new ReadOnlyStringWrapper(nz(c.getValue().operator())));
+        }
+        if (versionColumn != null) {
+            versionColumn.setCellValueFactory(
+                    c -> new ReadOnlyStringWrapper(nz(c.getValue().appVersion())));
+        }
+        if (factoryColumn != null) {
+            factoryColumn.setCellValueFactory(
+                    c -> new ReadOnlyStringWrapper(nz(c.getValue().factory())));
+        }
+        if (featureColumn != null) {
+            featureColumn.setCellValueFactory(
+                    c -> new ReadOnlyStringWrapper(featureLabel(c.getValue().feature())));
+        }
         actionColumn.setCellValueFactory(
                 c -> new ReadOnlyStringWrapper(actionLabel(c.getValue().action())));
         resultColumn.setCellValueFactory(
                 c -> new ReadOnlyStringWrapper(resultLabel(c.getValue().result())));
+        if (osUserColumn != null) {
+            osUserColumn.setCellValueFactory(
+                    c -> new ReadOnlyStringWrapper(nz(c.getValue().osUser())));
+        }
         detailColumn.setCellValueFactory(c -> new ReadOnlyStringWrapper(c.getValue().detail()));
         operatorCombo
                 .valueProperty()
@@ -160,7 +195,29 @@ public final class OperatorActionLogTabController {
             case "identity_check" -> "同一化チェック";
             case "excel_export" -> "Excel出力";
             case "close_warning" -> "終了警告";
+            case "session_start" -> "セッション開始";
+            case "tab_select" -> "タブ選択";
+            case "kouchin_drop" -> "東レCSVドロップ";
+            case "kouchin_verify" -> "東レ後加工賃検証";
             default -> action;
+        };
+    }
+
+    static String featureLabel(String feature) {
+        if (feature == null || feature.isBlank()) {
+            return "";
+        }
+        MainShellTabId id = MainShellTabId.fromKey(feature);
+        if (id == null) {
+            return feature;
+        }
+        return switch (id) {
+            case KOUCHIN -> "東レ後加工賃検証";
+            case RUN -> "実行・ログ";
+            case DEVELOPER -> "開発";
+            case OPERATOR_ACTION_LOG -> "操作ログ";
+            case PROCESSING_TREND -> "加工トレンド";
+            default -> feature;
         };
     }
 
@@ -173,7 +230,14 @@ public final class OperatorActionLogTabController {
             case "mismatch" -> "差異";
             case "error" -> "失敗";
             case "shown" -> "表示";
+            case "empty" -> "空";
+            case "none" -> "なし";
+            case "warn" -> "警告";
             default -> result;
         };
+    }
+
+    private static String nz(String s) {
+        return s != null ? s : "";
     }
 }

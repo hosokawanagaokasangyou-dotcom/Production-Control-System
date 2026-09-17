@@ -12,7 +12,13 @@ class OperatorActionLogTabControllerTest {
         assertEquals("同一化チェック", OperatorActionLogTabController.actionLabel("identity_check"));
         assertEquals("Excel出力", OperatorActionLogTabController.actionLabel("excel_export"));
         assertEquals("終了警告", OperatorActionLogTabController.actionLabel("close_warning"));
+        assertEquals("セッション開始", OperatorActionLogTabController.actionLabel("session_start"));
+        assertEquals("タブ選択", OperatorActionLogTabController.actionLabel("tab_select"));
+        assertEquals("東レCSVドロップ", OperatorActionLogTabController.actionLabel("kouchin_drop"));
+        assertEquals("東レ後加工賃検証", OperatorActionLogTabController.actionLabel("kouchin_verify"));
         assertEquals("成功", OperatorActionLogTabController.resultLabel("ok"));
+        assertEquals("空", OperatorActionLogTabController.resultLabel("empty"));
+        assertEquals("警告", OperatorActionLogTabController.resultLabel("warn"));
         assertEquals("差異", OperatorActionLogTabController.resultLabel("mismatch"));
         assertEquals("失敗", OperatorActionLogTabController.resultLabel("error"));
         assertEquals("表示", OperatorActionLogTabController.resultLabel("shown"));

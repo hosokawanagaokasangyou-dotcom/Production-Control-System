@@ -520,6 +520,9 @@ public final class MainShellController
     private jp.co.pm.ai.desktop.kouchin.KouchinHostTabController kouchinHostTabController;
 
     @FXML
+    private jp.co.pm.ai.desktop.developer.DeveloperHostTabController developerHostTabController;
+
+    @FXML
     private CodeDispatchLookupTablesTabController codeDispatchLookupTablesTabController;
 
     @FXML
@@ -527,6 +530,9 @@ public final class MainShellController
 
     @FXML
     private Tab mainShellTabKouchin;
+
+    @FXML
+    private Tab mainShellTabDeveloper;
 
     @FXML
     private Tab mainShellTabProcessingTrend;
@@ -897,6 +903,9 @@ public final class MainShellController
             if (kouchinHostTabController != null) {
                 kouchinHostTabController.bindShell(this);
             }
+            if (developerHostTabController != null) {
+                developerHostTabController.bindShell(this);
+            }
             envTabController.bindShell(this);
             memorySettingsTabController.bindShell(this);
             if (globalSettingsTabController != null) {
@@ -1158,6 +1167,12 @@ public final class MainShellController
                             }
                             if (newTab == mainShellTabKouchin && kouchinHostTabController != null) {
                                 kouchinHostTabController.onMainShellTabSelected();
+                            }
+                            if (newTab == mainShellTabDeveloper && developerHostTabController != null) {
+                                developerHostTabController.onMainShellTabSelected();
+                            }
+                            if (!startupTabBackgroundLoadActive && newTab != null) {
+                                recordMainShellTabSelect(newTab);
                             }
                             if (newTab == mainShellTabRequestFormInput
                                     && requestFormInputTabController != null
@@ -2397,15 +2412,37 @@ public final class MainShellController
 
     /** 配台重要操作を共有フォルダの操作ログへ追記する。失敗時は実行・ログに1行。 */
     public void recordOperatorAction(String action, String result, String detail) {
+        recordOperatorAction(currentOperatorActionFeature(), action, result, detail);
+    }
+
+    @Override
+    public void recordOperatorAction(String feature, String action, String result, String detail) {
         Map<String, String> ui = snapshotUiEnv();
         String operator = FactoryOperatorUserStore.sessionOperatorName();
         if (operator.isBlank()) {
             operator = OperatorUserPaths.resolveOperatorUser(ui);
         }
-        boolean ok = OperatorActionLogStore.append(ui, operator, action, result, detail);
+        boolean ok =
+                OperatorActionLogStore.append(ui, operator, feature, action, result, detail);
         if (!ok) {
             appendLog("[operator-action-log] 書き込みに失敗しました");
         }
+    }
+
+    private String currentOperatorActionFeature() {
+        if (tabPane == null || tabPane.getSelectionModel() == null) {
+            return "";
+        }
+        MainShellTabId id = mainShellTabId(tabPane.getSelectionModel().getSelectedItem());
+        return id != null ? id.key() : "";
+    }
+
+    private void recordMainShellTabSelect(Tab tab) {
+        MainShellTabId id = mainShellTabId(tab);
+        if (id == null || id == MainShellTabId.TAB_ORGANIZER) {
+            return;
+        }
+        recordOperatorAction(id.key(), "tab_select", "ok", id.key());
     }
 
     public void markStage2CompletedThisLaunch(boolean excelExportSucceeded) {
@@ -2550,6 +2587,9 @@ public final class MainShellController
         if (t == mainShellTabKouchin) {
             return MainShellTabId.KOUCHIN;
         }
+        if (t == mainShellTabDeveloper) {
+            return MainShellTabId.DEVELOPER;
+        }
         if (t == mainShellTabPipelineExecutionTiming) {
             return MainShellTabId.PIPELINE_EXECUTION_TIMING;
         }
@@ -2668,6 +2708,7 @@ public final class MainShellController
         return switch (id) {
             case EQUIPMENT_STATUS_DASHBOARD -> mainShellTabEquipmentStatusDashboard;
             case KOUCHIN -> mainShellTabKouchin;
+            case DEVELOPER -> mainShellTabDeveloper;
             case PROCESSING_TREND -> mainShellTabProcessingTrend;
             case RUN -> mainShellTabRun;
             case PIPELINE_EXECUTION_TIMING -> mainShellTabPipelineExecutionTiming;

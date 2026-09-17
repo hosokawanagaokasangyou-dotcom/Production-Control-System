@@ -64,7 +64,8 @@ public final class MainShellTabLayoutDefaults {
                     MainShellTabId.USER_PROFILES.key(),
                     MainShellTabId.OPERATOR_USER_MANAGEMENT.key(),
                     MainShellTabId.KOUCHIN.key(),
-                    MainShellTabId.PROCESSING_TREND.key());
+                    MainShellTabId.PROCESSING_TREND.key(),
+                    MainShellTabId.DEVELOPER.key());
 
     /**
      * All {@link MainShellTabId} keys except {@link MainShellTabId#TAB_ORGANIZER}: DEFAULT order then any enum-only
@@ -139,7 +140,9 @@ public final class MainShellTabLayoutDefaults {
                                 MainShellTabLayoutNode.tabNode(
                                         MainShellTabId.OPERATOR_ACTION_LOG.key(), ""),
                                 MainShellTabLayoutNode.tabNode(
-                                        MainShellTabId.IDENTITY_CHECK_HISTORY.key(), ""))));
+                                        MainShellTabId.IDENTITY_CHECK_HISTORY.key(), ""),
+                                MainShellTabLayoutNode.tabNode(
+                                        MainShellTabId.DEVELOPER.key(), "#994d00"))));
 
         top.add(
                 MainShellTabLayoutNode.groupNode(
