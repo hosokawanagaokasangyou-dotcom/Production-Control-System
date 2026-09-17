@@ -16,6 +16,17 @@ public class DeveloperHostTabController {
     @FXML private OperatorActionLogTabController operatorActionLogTabController;
     @FXML private DeveloperShareBackupTabController shareBackupTabController;
 
+    @FXML
+    private void initialize() {
+        if (innerTabPane != null) {
+            innerTabPane.setMaxSize(Double.MAX_VALUE, Double.MAX_VALUE);
+            innerTabPane
+                    .getSelectionModel()
+                    .selectedIndexProperty()
+                    .addListener((obs, a, b) -> notifyActiveChildSelected());
+        }
+    }
+
     public void bindShell(MainShellController shell) {
         if (runtimeErrorTabController != null) {
             runtimeErrorTabController.bindShell(shell);
@@ -26,23 +37,21 @@ public class DeveloperHostTabController {
         if (shareBackupTabController != null) {
             shareBackupTabController.bindShell(shell);
         }
-        if (innerTabPane != null) {
-            innerTabPane.setMaxSize(Double.MAX_VALUE, Double.MAX_VALUE);
-            innerTabPane
-                    .getSelectionModel()
-                    .selectedIndexProperty()
-                    .addListener((obs, a, b) -> onMainShellTabSelected());
-        }
     }
 
     public void onMainShellTabSelected() {
-        if (runtimeErrorTabController != null) {
+        notifyActiveChildSelected();
+    }
+
+    private void notifyActiveChildSelected() {
+        int idx = innerTabPane != null ? innerTabPane.getSelectionModel().getSelectedIndex() : 0;
+        if (runtimeErrorTabController != null && idx == 0) {
             runtimeErrorTabController.onMainShellTabSelected();
         }
-        if (operatorActionLogTabController != null) {
+        if (operatorActionLogTabController != null && idx == 1) {
             operatorActionLogTabController.onMainShellTabSelected();
         }
-        if (shareBackupTabController != null) {
+        if (shareBackupTabController != null && idx == 2) {
             shareBackupTabController.onMainShellTabSelected();
         }
     }

@@ -4742,6 +4742,9 @@ public final class MainShellController
         if (effective == mainShellTabKouchin && kouchinHostTabController != null) {
             kouchinHostTabController.onMainShellTabSelected();
         }
+        if (effective == mainShellTabDeveloper && developerHostTabController != null) {
+            developerHostTabController.onMainShellTabSelected();
+        }
         if (effective == mainShellTabRequestFormInput && requestFormInputTabController != null) {
             requestFormInputTabController.onMainShellTabSelected();
         }

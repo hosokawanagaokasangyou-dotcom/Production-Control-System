@@ -38,6 +38,32 @@ class DeveloperHostTabFxmlTest {
         assertEquals(
                 List.of("実行時エラー", "操作ログ", "バックアップ"),
                 MainShellInnerTabCatalog.labelsFor(MainShellTabId.DEVELOPER));
+        assertTrue(MainShellInnerTabCatalog.titledPaneLabelsUnderInnerTab(MainShellTabId.DEVELOPER, 0).isEmpty());
+        assertTrue(MainShellInnerTabCatalog.titledPaneLabelsUnderInnerTab(MainShellTabId.DEVELOPER, 1).isEmpty());
+        assertTrue(MainShellInnerTabCatalog.titledPaneLabelsUnderInnerTab(MainShellTabId.DEVELOPER, 2).isEmpty());
+    }
+
+    @Test
+    void shareBackupTabFxml_hasControllerAndPrimaryFxIds() throws Exception {
+        try (InputStream in =
+                DeveloperHostTabFxmlTest.class.getResourceAsStream(
+                        "/jp/co/pm/ai/desktop/fxml/DeveloperShareBackupTab.fxml")) {
+            assertNotNull(in);
+            var doc = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(in);
+            Element root = doc.getDocumentElement();
+            assertEquals(
+                    "jp.co.pm.ai.desktop.developer.DeveloperShareBackupTabController",
+                    root.getAttribute("fx:controller"));
+        }
+        assertNotNull(elementByFxIdInShareBackup("backupButton"));
+        assertNotNull(elementByFxIdInShareBackup("openLocalButton"));
+        assertNotNull(elementByFxIdInShareBackup("openKonanButton"));
+        assertNotNull(elementByFxIdInShareBackup("openKokubuButton"));
+        assertNotNull(elementByFxIdInShareBackup("loadingChip"));
+        assertNotNull(elementByFxIdInShareBackup("konanSourceLabel"));
+        assertNotNull(elementByFxIdInShareBackup("kokubuSharedLabel"));
+        assertNotNull(elementByFxIdInShareBackup("statusLabel"));
+        assertNotNull(elementByFxIdInShareBackup("logArea"));
     }
 
     @Test
@@ -114,9 +140,17 @@ class DeveloperHostTabFxmlTest {
     }
 
     private static Element elementByFxId(String fxId) throws Exception {
-        try (InputStream in =
-                DeveloperHostTabFxmlTest.class.getResourceAsStream(
-                        "/jp/co/pm/ai/desktop/fxml/DeveloperHostTab.fxml")) {
+        return elementByFxIdIn(
+                "/jp/co/pm/ai/desktop/fxml/DeveloperHostTab.fxml", fxId);
+    }
+
+    private static Element elementByFxIdInShareBackup(String fxId) throws Exception {
+        return elementByFxIdIn(
+                "/jp/co/pm/ai/desktop/fxml/DeveloperShareBackupTab.fxml", fxId);
+    }
+
+    private static Element elementByFxIdIn(String resource, String fxId) throws Exception {
+        try (InputStream in = DeveloperHostTabFxmlTest.class.getResourceAsStream(resource)) {
             assertNotNull(in);
             var doc = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(in);
             NodeList all = doc.getElementsByTagName("*");

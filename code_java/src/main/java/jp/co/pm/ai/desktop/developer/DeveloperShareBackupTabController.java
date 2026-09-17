@@ -4,16 +4,20 @@ import java.awt.Desktop;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
+import java.util.Optional;
 
 import javafx.application.Platform;
 import javafx.concurrent.Task;
 import javafx.fxml.FXML;
+import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
+import javafx.scene.control.ButtonType;
 import javafx.scene.control.Label;
+import javafx.scene.control.ProgressIndicator;
 import javafx.scene.control.TextArea;
+import javafx.scene.layout.HBox;
 
 import jp.co.pm.ai.desktop.MainShellController;
-import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.config.FactoryShareBackupStore;
 import jp.co.pm.ai.desktop.config.FactorySite;
 
@@ -24,13 +28,21 @@ public final class DeveloperShareBackupTabController {
 
     private MainShellController shell;
     private boolean running;
+    private int probeSeq;
 
     @FXML private Label localPathLabel;
-    @FXML private Label konanPathLabel;
-    @FXML private Label kokubuPathLabel;
+    @FXML private Label konanSourceLabel;
+    @FXML private Label konanSharedLabel;
+    @FXML private Label kokubuSourceLabel;
+    @FXML private Label kokubuSharedLabel;
     @FXML private Label statusLabel;
     @FXML private TextArea logArea;
     @FXML private Button backupButton;
+    @FXML private Button openLocalButton;
+    @FXML private Button openKonanButton;
+    @FXML private Button openKokubuButton;
+    @FXML private HBox loadingChip;
+    @FXML private ProgressIndicator loadingIndicator;
 
     public void bindShell(MainShellController shell) {
         this.shell = shell;
@@ -39,6 +51,7 @@ public final class DeveloperShareBackupTabController {
 
     public void onMainShellTabSelected() {
         refreshPaths();
+        probeSourceExistence();
     }
 
     @FXML
@@ -46,10 +59,10 @@ public final class DeveloperShareBackupTabController {
         if (running || shell == null) {
             return;
         }
-        running = true;
-        if (backupButton != null) {
-            backupButton.setDisable(true);
+        if (!confirmBackup()) {
+            return;
         }
+        setRunning(true);
         setStatus("バックアップ中…");
         Map<String, String> ui = shell.snapshotUiEnv();
         Task<FactoryShareBackupStore.Result> task =
@@ -61,43 +74,34 @@ public final class DeveloperShareBackupTabController {
                 };
         task.setOnSucceeded(
                 e -> {
-                    running = false;
-                    if (backupButton != null) {
-                        backupButton.setDisable(false);
-                    }
                     FactoryShareBackupStore.Result result = task.getValue();
                     showResult(result);
-                    if (shell != null) {
-                        shell.recordOperatorAction(
-                                "developer",
-                                "factory_share_backup",
-                                result != null && result.ok() ? "ok" : "error",
-                                result == null ? "失敗" : result.generationId());
-                    }
+                    recordBackupAction(result);
+                    setRunning(false);
                 });
         task.setOnFailed(
                 e -> {
-                    running = false;
-                    if (backupButton != null) {
-                        backupButton.setDisable(false);
-                    }
                     Throwable err = task.getException();
                     String msg = err == null ? "失敗" : String.valueOf(err.getMessage());
                     setStatus("失敗: " + msg);
                     appendLog("失敗: " + msg);
-                    if (shell != null) {
-                        shell.recordOperatorAction(
-                                "developer", "factory_share_backup", "error", msg);
-                    }
+                    recordBackupAction(null);
+                    setRunning(false);
                 });
+        task.setOnCancelled(e -> setRunning(false));
         Thread t = new Thread(task, "factory-share-backup");
         t.setDaemon(true);
-        t.start();
+        try {
+            t.start();
+        } catch (RuntimeException ex) {
+            setRunning(false);
+            setStatus("開始できません: " + (ex.getMessage() != null ? ex.getMessage() : ex));
+        }
     }
 
     @FXML
     private void onOpenLocalAction() {
-        openDir(FactoryShareBackupStore.resolveLocalBackupRoot());
+        openDir(FactoryShareBackupStore.resolveLocalBackupRoot(), true, "ローカルバックアップ");
     }
 
     @FXML
@@ -105,7 +109,11 @@ public final class DeveloperShareBackupTabController {
         if (shell == null) {
             return;
         }
-        openDir(FactoryShareBackupStore.resolveSharedBackupRoot(shell.snapshotUiEnv(), FactorySite.KONAN));
+        openDir(
+                FactoryShareBackupStore.resolveSharedBackupRoot(
+                        shell.snapshotUiEnv(), FactorySite.KONAN),
+                false,
+                "湖南共有バックアップ");
     }
 
     @FXML
@@ -115,7 +123,33 @@ public final class DeveloperShareBackupTabController {
         }
         openDir(
                 FactoryShareBackupStore.resolveSharedBackupRoot(
-                        shell.snapshotUiEnv(), FactorySite.KOKUBU));
+                        shell.snapshotUiEnv(), FactorySite.KOKUBU),
+                false,
+                "国分共有バックアップ");
+    }
+
+    private boolean confirmBackup() {
+        Map<String, String> ui = shell.snapshotUiEnv();
+        Path konanSrc = FactoryShareBackupStore.resolveSource(ui, FactorySite.KONAN);
+        Path kokubuSrc = FactoryShareBackupStore.resolveSource(ui, FactorySite.KOKUBU);
+        String message =
+                "湖南と国分の共有 DATA を、このPCと各工場の「バックアップ」へコピーします。\n"
+                        + "世代は"
+                        + FactoryShareBackupStore.MAX_GENERATIONS
+                        + "件まで残し、古いものは削除します。所要時間は共有フォルダの大きさによります。\n\n"
+                        + "湖南ソース: "
+                        + konanSrc
+                        + "\n国分ソース: "
+                        + kokubuSrc
+                        + "\n\n実行しますか？";
+        Alert alert =
+                new Alert(
+                        Alert.AlertType.CONFIRMATION, message, ButtonType.OK, ButtonType.CANCEL);
+        alert.setTitle("工場共有バックアップ");
+        alert.setHeaderText("湖南と国分の共有フォルダをバックアップします");
+        shell.prepareDialogForMainTheme(alert);
+        Optional<ButtonType> ans = alert.showAndWait();
+        return ans.isPresent() && ans.get() == ButtonType.OK;
     }
 
     private void refreshPaths() {
@@ -128,12 +162,61 @@ public final class DeveloperShareBackupTabController {
         if (localPathLabel != null) {
             localPathLabel.setText("ローカル: " + local);
         }
-        if (konanPathLabel != null) {
-            konanPathLabel.setText("湖南 ソース→共有: " + konanSrc + " → " + konanShared);
+        if (konanSourceLabel != null) {
+            konanSourceLabel.setText("湖南ソース: " + konanSrc);
         }
-        if (kokubuPathLabel != null) {
-            kokubuPathLabel.setText("国分 ソース→共有: " + kokubuSrc + " → " + kokubuShared);
+        if (konanSharedLabel != null) {
+            konanSharedLabel.setText("湖南共有先: " + konanShared);
         }
+        if (kokubuSourceLabel != null) {
+            kokubuSourceLabel.setText("国分ソース: " + kokubuSrc);
+        }
+        if (kokubuSharedLabel != null) {
+            kokubuSharedLabel.setText("国分共有先: " + kokubuShared);
+        }
+    }
+
+    private void probeSourceExistence() {
+        if (shell == null) {
+            return;
+        }
+        Map<String, String> ui = shell.snapshotUiEnv();
+        int seq = ++probeSeq;
+        Thread t =
+                new Thread(
+                        () -> {
+                            boolean konan =
+                                    Files.isDirectory(
+                                            FactoryShareBackupStore.resolveSource(
+                                                    ui, FactorySite.KONAN));
+                            boolean kokubu =
+                                    Files.isDirectory(
+                                            FactoryShareBackupStore.resolveSource(
+                                                    ui, FactorySite.KOKUBU));
+                            Platform.runLater(
+                                    () -> {
+                                        if (seq != probeSeq) {
+                                            return;
+                                        }
+                                        appendExistence(konanSourceLabel, konan);
+                                        appendExistence(kokubuSourceLabel, kokubu);
+                                    });
+                        },
+                        "factory-share-backup-probe");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    private static void appendExistence(Label label, boolean exists) {
+        if (label == null) {
+            return;
+        }
+        String text = label.getText();
+        if (text == null) {
+            text = "";
+        }
+        text = text.replace(" （あり）", "").replace(" （なし）", "");
+        label.setText(text + (exists ? " （あり）" : " （なし）"));
     }
 
     private void showResult(FactoryShareBackupStore.Result result) {
@@ -149,24 +232,70 @@ public final class DeveloperShareBackupTabController {
                     .append(" ローカル ")
                     .append(site.copiedToLocal())
                     .append("件");
-            if (site.localError() != null && !site.localError().isBlank()) {
+            if (site.localError() != null) {
                 sb.append(" 失敗: ").append(site.localError());
             }
             sb.append(" / 共有 ").append(site.copiedToShared()).append("件");
-            if (site.sharedError() != null && !site.sharedError().isBlank()) {
+            if (site.sharedError() != null) {
                 sb.append(" 失敗: ").append(site.sharedError());
             }
             sb.append('\n');
             if (site.localDest() != null) {
-                sb.append("  local: ").append(site.localDest()).append('\n');
+                sb.append("  ローカル: ").append(site.localDest()).append('\n');
             }
             if (site.sharedDest() != null) {
-                sb.append("  share: ").append(site.sharedDest()).append('\n');
+                sb.append("  共有: ").append(site.sharedDest()).append('\n');
             }
         }
-        String text = sb.toString();
-        appendLog(text);
-        setStatus(result.ok() ? "完了 世代 " + result.generationId() : "一部失敗 世代 " + result.generationId());
+        appendLog(sb.toString());
+        if (result.ok()) {
+            setStatus("完了 世代 " + result.generationId());
+        } else {
+            String fail = result.failureSummaryJa();
+            setStatus(
+                    "一部失敗 世代 "
+                            + result.generationId()
+                            + (fail.isBlank() ? "" : "（" + fail + "）"));
+        }
+        probeSourceExistence();
+    }
+
+    private void recordBackupAction(FactoryShareBackupStore.Result result) {
+        if (shell == null) {
+            return;
+        }
+        if (result == null) {
+            shell.recordOperatorAction("developer", "factory_share_backup", "error", "失敗");
+            return;
+        }
+        shell.recordOperatorAction(
+                "developer",
+                "factory_share_backup",
+                result.ok() ? "ok" : "error",
+                result.ok() ? result.generationId() : result.generationId() + " " + result.failureSummaryJa());
+    }
+
+    private void setRunning(boolean on) {
+        running = on;
+        if (backupButton != null) {
+            backupButton.setDisable(on);
+        }
+        if (openLocalButton != null) {
+            openLocalButton.setDisable(on);
+        }
+        if (openKonanButton != null) {
+            openKonanButton.setDisable(on);
+        }
+        if (openKokubuButton != null) {
+            openKokubuButton.setDisable(on);
+        }
+        if (loadingChip != null) {
+            loadingChip.setVisible(on);
+            loadingChip.setManaged(on);
+        }
+        if (loadingIndicator != null) {
+            loadingIndicator.setProgress(ProgressIndicator.INDETERMINATE_PROGRESS);
+        }
     }
 
     private void setStatus(String text) {
@@ -179,26 +308,77 @@ public final class DeveloperShareBackupTabController {
         if (logArea == null || text == null) {
             return;
         }
-        Platform.runLater(
+        Runnable add =
                 () -> {
                     if (!logArea.getText().isEmpty()) {
                         logArea.appendText("\n");
                     }
                     logArea.appendText(text);
-                });
+                };
+        if (Platform.isFxApplicationThread()) {
+            add.run();
+        } else {
+            Platform.runLater(add);
+        }
     }
 
-    private void openDir(Path dir) {
+    private void openDir(Path dir, boolean createIfMissing, String kind) {
         if (dir == null) {
             return;
         }
-        try {
-            Files.createDirectories(dir);
-            if (Desktop.isDesktopSupported()) {
-                Desktop.getDesktop().open(dir.toFile());
-            }
-        } catch (Exception ex) {
-            setStatus("フォルダを開けません: " + (ex.getMessage() != null ? ex.getMessage() : ex));
+        setStatus(kind + " を開いています…");
+        Thread t =
+                new Thread(
+                        () -> {
+                            try {
+                                if (createIfMissing) {
+                                    Files.createDirectories(dir);
+                                } else if (!Files.isDirectory(dir)) {
+                                    Platform.runLater(
+                                            () -> {
+                                                setStatus(kind + " がありません");
+                                                warn(
+                                                        kind + " を開けません",
+                                                        "フォルダがありません。先にバックアップを実行してください。\n"
+                                                                + dir);
+                                            });
+                                    return;
+                                }
+                                if (!Desktop.isDesktopSupported()
+                                        || !Desktop.getDesktop().isSupported(Desktop.Action.OPEN)) {
+                                    Platform.runLater(
+                                            () -> {
+                                                setStatus("この環境ではフォルダを開けません");
+                                                warn("開けません", "この環境では外部アプリ起動に対応していません。");
+                                            });
+                                    return;
+                                }
+                                Desktop.getDesktop().open(dir.toFile());
+                                Platform.runLater(() -> setStatus(kind + " を開きました"));
+                            } catch (Exception ex) {
+                                Platform.runLater(
+                                        () -> {
+                                            String msg =
+                                                    ex.getMessage() != null
+                                                            ? ex.getMessage()
+                                                            : ex.toString();
+                                            setStatus(kind + " を開けません: " + msg);
+                                            warn(kind + " を開けません", msg);
+                                        });
+                            }
+                        },
+                        "factory-share-backup-open");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    private void warn(String title, String body) {
+        Alert alert = new Alert(Alert.AlertType.WARNING, body, ButtonType.OK);
+        alert.setTitle(title);
+        alert.setHeaderText(null);
+        if (shell != null) {
+            shell.prepareDialogForMainTheme(alert);
         }
+        alert.showAndWait();
     }
 }

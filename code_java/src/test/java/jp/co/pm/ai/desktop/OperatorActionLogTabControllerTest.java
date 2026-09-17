@@ -19,6 +19,7 @@ class OperatorActionLogTabControllerTest {
         assertEquals(
                 "工場共有バックアップ",
                 OperatorActionLogTabController.actionLabel("factory_share_backup"));
+        assertEquals("開発", OperatorActionLogTabController.featureLabel("developer"));
         assertEquals("成功", OperatorActionLogTabController.resultLabel("ok"));
         assertEquals("空", OperatorActionLogTabController.resultLabel("empty"));
         assertEquals("警告", OperatorActionLogTabController.resultLabel("warn"));
