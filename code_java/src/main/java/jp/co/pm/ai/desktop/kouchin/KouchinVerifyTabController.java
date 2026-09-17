@@ -11,6 +11,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -18,6 +19,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import javafx.animation.KeyFrame;
+import javafx.animation.Timeline;
 import javafx.application.Platform;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.concurrent.Task;
@@ -43,6 +46,7 @@ import javafx.scene.input.TransferMode;
 import javafx.scene.layout.BorderPane;
 import javafx.stage.FileChooser;
 import javafx.stage.Window;
+import javafx.util.Duration;
 
 import jp.co.pm.ai.desktop.MainShellController;
 import jp.co.pm.ai.desktop.MainShellTabId;
@@ -71,6 +75,8 @@ import jp.co.pm.ai.kouchin.verify.VerifySourceAccess;
  * UI 更新は {@link Platform#runLater} のみ。
  */
 public class KouchinVerifyTabController {
+
+    static final int DISCOVERY_POLL_SECONDS = 3;
 
     private static final DateTimeFormatter FILE_MODIFIED_AT =
             DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss", Locale.JAPAN);
@@ -108,6 +114,8 @@ public class KouchinVerifyTabController {
     private boolean discoveryLoaded;
     private boolean pendingSourceReload;
     private final AtomicInteger discoveryGeneration = new AtomicInteger();
+    private final AtomicBoolean discoveryInFlight = new AtomicBoolean();
+    private Timeline discoveryPoll;
     private VerifyRunSupport.Written lastWritten;
     private BothResult lastBoth;
     private List<KouchinDiscovery.Row> lastKokubuDiscovery = List.of();
@@ -320,67 +328,127 @@ public class KouchinVerifyTabController {
         selected = true;
         refreshDropTargetLabel();
         refreshRunEnabled();
+        startDiscoveryPoll();
         if (!discoveryLoaded || pendingSourceReload) {
-            if (statusLabel != null && lastBoth == null) {
-                statusLabel.setText("検出中…");
-            }
             reloadDiscovery();
         }
     }
 
     public void onMainShellTabDeselected() {
         selected = false;
+        stopDiscoveryPoll();
     }
 
     public void reloadDiscovery() {
+        reloadDiscovery(false);
+    }
+
+    void reloadDiscovery(boolean silentPoll) {
         if (!shouldReloadDiscovery(selected, discoveryLoaded)) {
             pendingSourceReload = true;
             discoveryLoaded = false;
             return;
         }
+        if (!shouldStartDiscoveryScan(discoveryInFlight.get())) {
+            pendingSourceReload = true;
+            return;
+        }
         pendingSourceReload = false;
         discoveryLoaded = true;
-        if (statusLabel != null && lastBoth == null) {
+        if (statusLabel != null && shouldShowDetectingStatus(silentPoll, lastBoth != null)) {
             statusLabel.setText("検出中…");
         }
         Map<String, String> ui = shell == null ? Map.of() : shell.snapshotUiEnv();
         KouchinPaths paths = KouchinPaths.fromEnv(ui);
         int gen = discoveryGeneration.incrementAndGet();
+        discoveryInFlight.set(true);
         Thread t = new Thread(() -> {
-            CompletableFuture<List<KouchinDiscovery.Row>> kokubuFut = CompletableFuture.supplyAsync(
-                    () -> new ArrayList<>(KouchinDiscovery.scan(FactoryId.KOKUBU, paths)));
-            CompletableFuture<List<KouchinDiscovery.Row>> konanFut = CompletableFuture.supplyAsync(
-                    () -> new ArrayList<>(KouchinDiscovery.scan(FactoryId.KONAN, paths)));
-            List<KouchinDiscovery.Row> kokubu = List.of();
-            List<KouchinDiscovery.Row> konan = List.of();
-            String error = null;
+            boolean posted = false;
             try {
-                kokubu = kokubuFut.join();
-            } catch (CompletionException e) {
-                Throwable c = e.getCause() == null ? e : e.getCause();
-                error = c.getMessage();
-                kokubu = List.of();
+                CompletableFuture<List<KouchinDiscovery.Row>> kokubuFut = CompletableFuture.supplyAsync(
+                        () -> new ArrayList<>(KouchinDiscovery.scan(FactoryId.KOKUBU, paths)));
+                CompletableFuture<List<KouchinDiscovery.Row>> konanFut = CompletableFuture.supplyAsync(
+                        () -> new ArrayList<>(KouchinDiscovery.scan(FactoryId.KONAN, paths)));
+                List<KouchinDiscovery.Row> kokubu = List.of();
+                List<KouchinDiscovery.Row> konan = List.of();
+                String error = null;
+                try {
+                    kokubu = kokubuFut.join();
+                } catch (CompletionException e) {
+                    Throwable c = e.getCause() == null ? e : e.getCause();
+                    error = c.getMessage();
+                    kokubu = List.of();
+                }
+                try {
+                    konan = konanFut.join();
+                } catch (CompletionException e) {
+                    Throwable c = e.getCause() == null ? e : e.getCause();
+                    String k = c.getMessage();
+                    error = error == null ? k : error + " / " + k;
+                    konan = List.of();
+                }
+                List<KouchinDiscovery.Row> kokubuRows = kokubu;
+                List<KouchinDiscovery.Row> konanRows = konan;
+                String err = error;
+                boolean outputWritable = VerifyOutputAccess.anyOutputWritable(KouchinOutputDirs.resolveAll(ui));
+                List<DiscoveryLine> lines = buildDiscoveryLines(kokubuRows, konanRows);
+                String kokubuBlock = VerifySourceAccess.blockReason(kokubuRows, accessLookup(lines, "国分"));
+                String konanBlock = VerifySourceAccess.blockReason(konanRows, accessLookup(lines, "湖南"));
+                Platform.runLater(() -> {
+                    try {
+                        applyDiscoveryResult(
+                                gen,
+                                kokubuRows,
+                                konanRows,
+                                err,
+                                outputWritable,
+                                lines,
+                                kokubuBlock,
+                                konanBlock,
+                                silentPoll);
+                    } finally {
+                        discoveryInFlight.set(false);
+                        if (pendingSourceReload && selected) {
+                            reloadDiscovery(silentPoll);
+                        }
+                    }
+                });
+                posted = true;
+            } finally {
+                if (!posted) {
+                    discoveryInFlight.set(false);
+                }
             }
-            try {
-                konan = konanFut.join();
-            } catch (CompletionException e) {
-                Throwable c = e.getCause() == null ? e : e.getCause();
-                String k = c.getMessage();
-                error = error == null ? k : error + " / " + k;
-                konan = List.of();
-            }
-            List<KouchinDiscovery.Row> kokubuRows = kokubu;
-            List<KouchinDiscovery.Row> konanRows = konan;
-            String err = error;
-            boolean outputWritable = VerifyOutputAccess.anyOutputWritable(KouchinOutputDirs.resolveAll(ui));
-            List<DiscoveryLine> lines = buildDiscoveryLines(kokubuRows, konanRows);
-            String kokubuBlock = VerifySourceAccess.blockReason(kokubuRows, accessLookup(lines, "国分"));
-            String konanBlock = VerifySourceAccess.blockReason(konanRows, accessLookup(lines, "湖南"));
-            Platform.runLater(() -> applyDiscoveryResult(
-                    gen, kokubuRows, konanRows, err, outputWritable, lines, kokubuBlock, konanBlock));
         }, "kouchin-discovery");
         t.setDaemon(true);
         t.start();
+    }
+
+    private void startDiscoveryPoll() {
+        if (discoveryPoll != null) {
+            return;
+        }
+        discoveryPoll =
+                new Timeline(
+                        new KeyFrame(Duration.seconds(DISCOVERY_POLL_SECONDS), e -> onDiscoveryPollTick()));
+        discoveryPoll.setCycleCount(Timeline.INDEFINITE);
+        discoveryPoll.play();
+    }
+
+    private void stopDiscoveryPoll() {
+        if (discoveryPoll != null) {
+            discoveryPoll.stop();
+            discoveryPoll = null;
+        }
+    }
+
+    private void onDiscoveryPollTick() {
+        boolean busy = shell != null && shell.isKouchinRunBusy();
+        if (!shouldPollDiscovery(selected, busy)) {
+            return;
+        }
+        FileDiscovery.invalidateListingCache();
+        reloadDiscovery(true);
     }
 
     private void applyDiscoveryResult(
@@ -391,24 +459,35 @@ public class KouchinVerifyTabController {
             boolean outputWritable,
             List<DiscoveryLine> lines,
             String kokubuBlock,
-            String konanBlock) {
+            String konanBlock,
+            boolean silentPoll) {
         if (gen != discoveryGeneration.get()) {
             return;
         }
+        List<DiscoveryLine> incoming = lines == null ? List.of() : lines;
+        boolean busy = shell != null && shell.isKouchinRunBusy();
+        boolean sameTable = discoveryTable != null
+                && sameDiscoverySnapshot(discoveryTable.getItems(), incoming);
+        boolean sameBlocks = Objects.equals(lastKokubuBlock, kokubuBlock)
+                && Objects.equals(lastKonanBlock, konanBlock);
+        boolean sameWritable = busy || lastOutputWritable == outputWritable;
         lastKokubuDiscovery = kokubu == null ? List.of() : List.copyOf(kokubu);
         lastKonanDiscovery = konan == null ? List.of() : List.copyOf(konan);
         lastKokubuBlock = kokubuBlock;
         lastKonanBlock = konanBlock;
-        boolean busy = shell != null && shell.isKouchinRunBusy();
         if (!busy) {
             lastOutputWritable = outputWritable;
         }
-        if (discoveryTable != null) {
-            discoveryTable.getItems().setAll(lines == null ? List.of() : lines);
+        if (discoveryTable != null && !sameTable) {
+            discoveryTable.getItems().setAll(incoming);
         }
         refreshTargetYmReason();
         if (statusLabel != null && lastBoth == null) {
-            statusLabel.setText(error == null ? discoveryStatusText() : "検出失敗: " + error);
+            if (error != null) {
+                statusLabel.setText("検出失敗: " + error);
+            } else if (!silentPoll || !sameTable || !sameBlocks || !sameWritable) {
+                statusLabel.setText(discoveryStatusText());
+            }
         }
         refreshDropTargetLabel();
         if (!busy) {
@@ -1208,6 +1287,53 @@ public class KouchinVerifyTabController {
 
     static boolean shouldReloadDiscovery(boolean selected, boolean alreadyLoaded) {
         return true;
+    }
+
+    static boolean shouldPollDiscovery(boolean tabSelected, boolean busy) {
+        return tabSelected && !busy;
+    }
+
+    static boolean shouldShowDetectingStatus(boolean silentPoll, boolean hasVerifyResult) {
+        return !silentPoll && !hasVerifyResult;
+    }
+
+    static boolean shouldStartDiscoveryScan(boolean inFlight) {
+        return !inFlight;
+    }
+
+    static boolean sameDiscoverySnapshot(List<DiscoveryLine> left, List<DiscoveryLine> right) {
+        if (left == right) {
+            return true;
+        }
+        if (left == null || right == null || left.size() != right.size()) {
+            return false;
+        }
+        for (int i = 0; i < left.size(); i++) {
+            if (!Objects.equals(discoveryLineSnapshot(left.get(i)), discoveryLineSnapshot(right.get(i)))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    static String discoveryLineSnapshot(DiscoveryLine line) {
+        if (line == null) {
+            return "";
+        }
+        KouchinDiscovery.Row row = line.source();
+        return String.join(
+                "\u0001",
+                line.getFactory(),
+                line.getRole(),
+                line.getPath(),
+                row == null || row.fullPath() == null ? "" : row.fullPath(),
+                line.getYm(),
+                Boolean.toString(line.isMissing()),
+                line.getNote() == null ? "" : line.getNote(),
+                line.getModifiedAt() == null ? "" : line.getModifiedAt(),
+                line.getReadStatus() == null ? "" : line.getReadStatus(),
+                line.getWriteStatus() == null ? "" : line.getWriteStatus(),
+                Boolean.toString(line.canOpen()));
     }
 
     static String targetYmReasonText(
