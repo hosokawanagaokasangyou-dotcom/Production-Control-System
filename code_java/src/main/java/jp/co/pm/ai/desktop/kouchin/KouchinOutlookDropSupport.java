@@ -17,6 +17,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import javafx.scene.input.DataFormat;
@@ -33,6 +34,8 @@ public final class KouchinOutlookDropSupport {
     private static final Pattern SAFE_NAME = Pattern.compile("[A-Za-z0-9._-]+");
     private static final Pattern NYUKO_YYMMDD =
             Pattern.compile("(?<![0-9])(\\d{2})(0[1-9]|1[0-2])(0[1-9]|[12]\\d|3[01])(?![0-9])");
+    private static final Pattern MIME_FILENAME =
+            Pattern.compile("name\\s*=\\s*\"([^\"]+)\"", Pattern.CASE_INSENSITIVE);
 
     private KouchinOutlookDropSupport() {}
 
@@ -48,6 +51,9 @@ public final class KouchinOutlookDropSupport {
         if (files.isEmpty()) {
             files = recentTempCsvFiles(systemTempDir(), Instant.now());
         }
+        if (files.isEmpty()) {
+            files = tempFilesNamed(systemTempDir(), originals);
+        }
         return applyOriginalName(files, originals);
     }
 
@@ -58,6 +64,10 @@ public final class KouchinOutlookDropSupport {
             return first;
         }
         List<String> originals = db == null ? List.of() : originalNamesFromDragboard(db);
+        List<Path> named = tempFilesNamed(systemTempDir(), originals);
+        if (!named.isEmpty()) {
+            return applyOriginalName(named, originals);
+        }
         return applyOriginalName(recentTempCsvFiles(systemTempDir(), Instant.now()), originals);
     }
 
@@ -98,6 +108,48 @@ public final class KouchinOutlookDropSupport {
         found.sort(Comparator.comparing((Path p) -> datedRvsheet(p.getFileName().toString()) ? 0 : 1)
                 .thenComparing(p -> p.getFileName().toString()));
         return List.copyOf(found);
+    }
+
+    /** Outlook MIME の name= で指名された TEMP ファイル。更新時刻は問わない。 */
+    public static List<Path> tempFilesNamed(Path tempDir, List<String> names) {
+        if (tempDir == null || names == null || names.isEmpty() || !Files.isDirectory(tempDir)) {
+            return List.of();
+        }
+        List<Path> found = new ArrayList<>();
+        for (String raw : names) {
+            if (raw == null || raw.isBlank()) {
+                continue;
+            }
+            String name = Path.of(raw.trim()).getFileName().toString();
+            if (name.isBlank() || !SAFE_NAME.matcher(name).matches()) {
+                continue;
+            }
+            Path p = tempDir.resolve(name);
+            if (Files.isRegularFile(p)) {
+                found.add(p.toAbsolutePath().normalize());
+            }
+        }
+        return List.copyOf(found);
+    }
+
+    public static List<String> fileNamesFromContentTypeIds(Iterable<String> ids) {
+        if (ids == null) {
+            return List.of();
+        }
+        List<String> names = new ArrayList<>();
+        for (String id : ids) {
+            if (id == null || id.isBlank()) {
+                continue;
+            }
+            Matcher m = MIME_FILENAME.matcher(id);
+            while (m.find()) {
+                String name = Path.of(m.group(1).trim()).getFileName().toString();
+                if (!name.isBlank()) {
+                    names.add(name);
+                }
+            }
+        }
+        return List.copyOf(names);
     }
 
     public static Path withOriginalFileName(Path src, String originalName) throws IOException {
@@ -270,6 +322,9 @@ public final class KouchinOutlookDropSupport {
                 return List.of();
             }
             for (DataFormat fmt : types) {
+                if (fmt.getIdentifiers() != null) {
+                    names.addAll(fileNamesFromContentTypeIds(fmt.getIdentifiers()));
+                }
                 Object content = db.getContent(fmt);
                 if (content instanceof byte[] raw) {
                     names.addAll(fileNamesFromDescriptor(raw));

@@ -1102,12 +1102,11 @@ public class KouchinVerifyTabController {
         if (!takeDropEvent()) {
             return;
         }
-        List<Path> files = droppedFilePaths(e == null ? null : e.getDragboard());
+        Dragboard db = e == null ? null : e.getDragboard();
+        List<Path> files = droppedFilePaths(db);
         if (files.isEmpty()) {
             Platform.runLater(() -> finishDroppedImport(
-                    KouchinOutlookDropSupport.resolveAfterDropCompleted(
-                            e == null ? null : e.getDragboard()),
-                    alert));
+                    KouchinOutlookDropSupport.resolveAfterDropCompleted(db), alert));
             return;
         }
         finishDroppedImport(files, alert);

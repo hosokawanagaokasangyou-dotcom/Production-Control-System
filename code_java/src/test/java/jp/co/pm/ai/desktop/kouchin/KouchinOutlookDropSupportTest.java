@@ -74,6 +74,28 @@ class KouchinOutlookDropSupportTest {
                 Files.readString(named.get(0), StandardCharsets.UTF_8));
     }
 
+    @Test
+    @DisplayName("Outlookのexternal-bodyから添付名を読む")
+    void parsesOutlookExternalBodyName() {
+        assertEquals(List.of("RVSHEET.csv"), KouchinOutlookDropSupport.fileNamesFromContentTypeIds(List.of(
+                "message/external-body;access-type=clipboard;index=0;name=\"RVSHEET.csv\"")));
+        assertEquals(List.of("RVSHEET.csv"), KouchinOutlookDropSupport.fileNamesFromContentTypeIds(List.of(
+                "[message/external-body;access-type=clipboard;index=0;name=\"RVSHEET.csv\"]")));
+    }
+
+    @Test
+    @DisplayName("Outlookが指名したTEMPのCSVは古くても使う")
+    void usesStaleTempWhenNamedByOutlook() throws Exception {
+        Path csv = tmp.resolve("RVSHEET.csv");
+        Files.writeString(csv, "stale", StandardCharsets.UTF_8);
+        Files.setLastModifiedTime(csv, FileTime.from(Instant.parse("2026-09-17T01:00:00Z")));
+        assertTrue(KouchinOutlookDropSupport.recentTempCsvFiles(
+                tmp, Instant.parse("2026-09-17T01:58:00Z")).isEmpty());
+        List<Path> found = KouchinOutlookDropSupport.tempFilesNamed(tmp, List.of("RVSHEET.csv"));
+        assertEquals(1, found.size());
+        assertEquals(csv.toAbsolutePath().normalize(), found.get(0).toAbsolutePath().normalize());
+    }
+
     private static byte[] fileGroupDescriptorW(String name) {
         int struct = 592;
         ByteBuffer buf = ByteBuffer.allocate(4 + struct).order(ByteOrder.LITTLE_ENDIAN);
