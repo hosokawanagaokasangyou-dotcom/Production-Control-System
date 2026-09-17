@@ -14,6 +14,7 @@ class KouchinEnvKeysTest {
         assertFalse(AppPaths.isFolderPathEnvKey(AppPaths.KEY_PM_AI_KOUCHIN_KOKUBU_YEAR_DIRS));
         assertTrue(AppPaths.isFolderPathEnvKey(AppPaths.KEY_PM_AI_KOUCHIN_BASE_DIR));
         assertTrue(AppPaths.isFolderPathEnvKey(AppPaths.KEY_PM_AI_KOUCHIN_TORAY_CSV_DIR));
+        assertTrue(AppPaths.isFolderPathEnvKey(AppPaths.KEY_PM_AI_KOUCHIN_KONAN_TORAY_CSV_DIR));
         assertTrue(AppPaths.isKouchinEnvKey(AppPaths.KEY_PM_AI_KOUCHIN_BASE_DIR));
         assertTrue(AppPaths.isKouchinEnvKey(AppPaths.KEY_PM_AI_KOUCHIN_KOKUBU_YEAR_DIRS));
         assertFalse(AppPaths.isKouchinEnvKey("PM_AI_OUTPUT_DIR"));
@@ -30,6 +31,7 @@ class KouchinEnvKeysTest {
         for (String key : List.of(
                 AppPaths.KEY_PM_AI_KOUCHIN_BASE_DIR,
                 AppPaths.KEY_PM_AI_KOUCHIN_TORAY_CSV_DIR,
+                AppPaths.KEY_PM_AI_KOUCHIN_KONAN_TORAY_CSV_DIR,
                 AppPaths.KEY_PM_AI_KOUCHIN_KOKUBU_NAGAOKA_DIR,
                 AppPaths.KEY_PM_AI_KOUCHIN_KOKUBU_ALADDIN_DIR,
                 AppPaths.KEY_PM_AI_KOUCHIN_KONAN_SHISAN_DIR,

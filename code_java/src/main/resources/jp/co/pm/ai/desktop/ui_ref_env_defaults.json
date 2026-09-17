@@ -501,7 +501,11 @@
   }, {
     "key" : "PM_AI_KOUCHIN_TORAY_CSV_DIR",
     "value" : "\\\\192.168.0.101\\共有フォルダ\\国分工場\\国分管理\\後加工\\後加工工賃明細\\●自動検証\\東レ送付CSV",
-    "description" : "①東レ送付CSV。メール添付はドロップしてここにコピー。"
+    "description" : "国分①東レ送付CSV。国分工場の取り込み先。"
+  }, {
+    "key" : "PM_AI_KOUCHIN_KONAN_TORAY_CSV_DIR",
+    "value" : "\\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\002  加工G\\●配台AIシステム\\共有DATA\\東レCSV",
+    "description" : "湖南①東レCSV。湖南工場の取り込み先。"
   }, {
     "key" : "PM_AI_KOUCHIN_KOKUBU_NAGAOKA_DIR",
     "value" : "\\\\192.168.0.101\\共有フォルダ\\国分工場\\国分管理\\後加工\\後加工工賃明細\\工賃明細2026年度（令和8年度）",

@@ -631,8 +631,12 @@ public final class EnvVarDocs {
                         + " 依頼書原本フォルダへは向けない。");
         put(
                 AppPaths.KEY_PM_AI_KOUCHIN_TORAY_CSV_DIR,
-                "①東レ送付CSVフォルダ。メール添付は検証タブへドロップしてここにコピー。"
-                        + " 結果の両工場保存とは別。空なら ●自動検証\\東レ送付CSV。");
+                "国分①東レ送付CSVフォルダ。国分工場で取り込む先。"
+                        + " 湖南工場は PM_AI_KOUCHIN_KONAN_TORAY_CSV_DIR。空なら ●自動検証\\東レ送付CSV。");
+        put(
+                AppPaths.KEY_PM_AI_KOUCHIN_KONAN_TORAY_CSV_DIR,
+                "湖南①東レCSVフォルダ。湖南工場で取り込む先。"
+                        + " 国分共有へアクセスできないため湖南共有DATAへ格納する。空なら 共有DATA\\東レCSV。");
         put(
                 AppPaths.KEY_PM_AI_KOUCHIN_KOKUBU_NAGAOKA_DIR,
                 "国分② 長岡後加工賃明細フォルダ。空なら 工賃明細2026年度（令和8年度）。●自動検証配下のコピーではない。");

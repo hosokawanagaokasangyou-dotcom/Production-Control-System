@@ -12,6 +12,7 @@ import java.util.List;
  */
 public final class KouchinDiscovery {
 
+    public static final String ROLE_1 = "①東レCSV";
     /** ③の検出表・案内の表示名（依頼NO別問合せ＝月次実績）。 */
     public static final String ROLE_3 = "③月次実績";
 
@@ -22,19 +23,18 @@ public final class KouchinDiscovery {
     public static List<Row> scan(FactoryId factory, KouchinPaths paths) {
         FactoryProfile profile = FactoryProfile.of(factory);
         List<Row> rows = new ArrayList<>();
-        Path dir1 = paths.torayCsvDir();
-        Path toray = null;
-        YearMonthKey ym = null;
+        YearMonthKey ym = detectTargetYm(paths);
+        Path dir1 = paths.source1Dir(factory);
         try {
             if (Files.isDirectory(dir1)) {
-                toray = FileDiscovery.findTorayCsv(dir1);
-                ym = FileDiscovery.torayTargetYm(toray).orElse(null);
-                rows.add(found("①東レCSV", dir1, toray, ym));
+                Path toray = FileDiscovery.findTorayCsv(dir1);
+                YearMonthKey fileYm = FileDiscovery.torayTargetYm(toray).orElse(ym);
+                rows.add(found(ROLE_1, dir1, toray, fileYm));
             } else {
-                rows.add(missing("①東レCSV", dir1, "フォルダなし"));
+                rows.add(missing(ROLE_1, dir1, "フォルダなし"));
             }
         } catch (RuntimeException e) {
-            rows.add(missing("①東レCSV", dir1, e.getMessage()));
+            rows.add(missing(ROLE_1, dir1, e.getMessage()));
         }
         Path dir2 = paths.source2Dir(factory);
         try {
@@ -60,6 +60,20 @@ public final class KouchinDiscovery {
             }
         }
         return List.copyOf(rows);
+    }
+
+    static YearMonthKey detectTargetYm(KouchinPaths paths) {
+        if (paths == null) {
+            return null;
+        }
+        try {
+            Path dir = paths.resolveTorayCsvDir();
+            if (dir != null && Files.isDirectory(dir)) {
+                return FileDiscovery.torayTargetYm(FileDiscovery.findTorayCsv(dir)).orElse(null);
+            }
+        } catch (RuntimeException ignored) {
+        }
+        return null;
     }
 
     private static Row found(String role, Path dir, Path file, YearMonthKey ym) {

@@ -76,6 +76,7 @@ public final class AppPaths {
     public static final String KEY_PM_AI_KOUCHIN_BASE_DIR = "PM_AI_KOUCHIN_BASE_DIR";
 
     public static final String KEY_PM_AI_KOUCHIN_TORAY_CSV_DIR = "PM_AI_KOUCHIN_TORAY_CSV_DIR";
+    public static final String KEY_PM_AI_KOUCHIN_KONAN_TORAY_CSV_DIR = "PM_AI_KOUCHIN_KONAN_TORAY_CSV_DIR";
     public static final String KEY_PM_AI_KOUCHIN_KOKUBU_NAGAOKA_DIR = "PM_AI_KOUCHIN_KOKUBU_NAGAOKA_DIR";
     public static final String KEY_PM_AI_KOUCHIN_KOKUBU_ALADDIN_DIR = "PM_AI_KOUCHIN_KOKUBU_ALADDIN_DIR";
     public static final String KEY_PM_AI_KOUCHIN_KONAN_SHISAN_DIR = "PM_AI_KOUCHIN_KONAN_SHISAN_DIR";
@@ -91,6 +92,8 @@ public final class AppPaths {
     public static final String DEFAULT_KOUCHIN_BASE_DIR =
             "\\\\192.168.0.101\\共有フォルダ\\国分工場\\国分管理\\後加工\\後加工工賃明細\\●自動検証";
     public static final String DEFAULT_KOUCHIN_TORAY_CSV_DIR = DEFAULT_KOUCHIN_BASE_DIR + "\\東レ送付CSV";
+    public static final String DEFAULT_KOUCHIN_KONAN_TORAY_CSV_DIR =
+            "\\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\002  加工G\\●配台AIシステム\\共有DATA\\東レCSV";
     public static final String DEFAULT_KOUCHIN_KOKUBU_NAGAOKA_DIR =
             "\\\\192.168.0.101\\共有フォルダ\\国分工場\\国分管理\\後加工\\後加工工賃明細\\工賃明細2026年度（令和8年度）";
     public static final String DEFAULT_KOUCHIN_KOKUBU_ALADDIN_DIR =
@@ -793,6 +796,7 @@ public final class AppPaths {
             KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK,
             KEY_PM_AI_KOUCHIN_BASE_DIR,
             KEY_PM_AI_KOUCHIN_TORAY_CSV_DIR,
+            KEY_PM_AI_KOUCHIN_KONAN_TORAY_CSV_DIR,
             KEY_PM_AI_KOUCHIN_KOKUBU_NAGAOKA_DIR,
             KEY_PM_AI_KOUCHIN_KOKUBU_ALADDIN_DIR,
             KEY_PM_AI_KOUCHIN_KONAN_SHISAN_DIR,

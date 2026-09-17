@@ -160,7 +160,8 @@ public class KouchinSourcesTabController {
             folderGrid.add(browse, 2, r);
             folderGrid.add(def, 3, r);
             fields.put(spec.key(), tf);
-            if (spec.key().equals(AppPaths.KEY_PM_AI_KOUCHIN_TORAY_CSV_DIR)) {
+            if (spec.key().equals(AppPaths.KEY_PM_AI_KOUCHIN_TORAY_CSV_DIR)
+                    || spec.key().equals(AppPaths.KEY_PM_AI_KOUCHIN_KONAN_TORAY_CSV_DIR)) {
                 tf.setOnDragOver(ev -> {
                     if (ev.getDragboard().hasFiles()) {
                         ev.acceptTransferModes(javafx.scene.input.TransferMode.COPY);
@@ -265,8 +266,10 @@ public class KouchinSourcesTabController {
         List<FolderSpec> list = new ArrayList<>();
         list.add(new FolderSpec(AppPaths.KEY_PM_AI_KOUCHIN_BASE_DIR, "自動検証ルート",
                 AppPaths.DEFAULT_KOUCHIN_BASE_DIR, false));
-        list.add(new FolderSpec(AppPaths.KEY_PM_AI_KOUCHIN_TORAY_CSV_DIR, "①東レ送付CSV",
+        list.add(new FolderSpec(AppPaths.KEY_PM_AI_KOUCHIN_TORAY_CSV_DIR, "国分① 東レ送付CSV",
                 AppPaths.DEFAULT_KOUCHIN_TORAY_CSV_DIR, true));
+        list.add(new FolderSpec(AppPaths.KEY_PM_AI_KOUCHIN_KONAN_TORAY_CSV_DIR, "湖南① 東レCSV",
+                AppPaths.DEFAULT_KOUCHIN_KONAN_TORAY_CSV_DIR, false));
         list.add(new FolderSpec(AppPaths.KEY_PM_AI_KOUCHIN_KOKUBU_NAGAOKA_DIR, "国分② 長岡後加工賃明細",
                 AppPaths.DEFAULT_KOUCHIN_KOKUBU_NAGAOKA_DIR, true));
         list.add(new FolderSpec(AppPaths.KEY_PM_AI_KOUCHIN_KOKUBU_ALADDIN_DIR, "国分③ 月次実績",

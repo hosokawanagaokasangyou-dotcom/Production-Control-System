@@ -60,7 +60,7 @@
             </padding>
             <Label text="検出した①②③（工場別・読取/書込・開くボタン）"/>
             <Label fx:id="targetYmReasonLabel" wrapText="true" styleClass="pm-kouchin-target-ym-reason"
-                   text="対象月はカレンダーではなく、①東レCSVのファイル名（RVSHEETyyyymm.csv）で決まります。フォルダ内で年月が最新のCSVを使い、②③もその月に合わせます。国分と湖南は同じ①です。"/>
+                   text="対象月はカレンダーではなく、①東レCSVのファイル名（RVSHEETyyyymm.csv）で決まります。フォルダ内で年月が最新のCSVを使い、②③もその月に合わせます。取り込みと検証は現工場の①フォルダを優先します。"/>
             <TableView fx:id="discoveryTable" prefHeight="268.0" minHeight="252.0" fixedCellSize="28.0"/>
             <Label fx:id="skipBResultBanner" wrapText="true" managed="false" visible="false"
                    styleClass="pm-kouchin-skip-b-banner" text=""/>

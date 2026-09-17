@@ -141,7 +141,7 @@ public final class VerifyEngine {
     // ---------------------------------------------------------------- 読み込み
 
     private void loadSources() {
-        Path dir1 = paths.torayCsvDir();
+        Path dir1 = paths.resolveTorayCsvDir();
         if (!Files.isDirectory(dir1)) {
             throw new VerifyException("①東レ送付CSVのフォルダにアクセスできません: " + dir1);
         }

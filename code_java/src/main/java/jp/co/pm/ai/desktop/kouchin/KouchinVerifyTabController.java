@@ -260,13 +260,18 @@ public class KouchinVerifyTabController {
 
     static List<DiscoveryLine> markUnusedSource3(
             List<DiscoveryLine> lines, FactorySite site, KouchinPaths paths) {
+        List<DiscoveryLine> marked = markUnusedRole(lines, KouchinDiscovery.ROLE_3, preferredSource3Dir(site, paths));
+        return markUnusedRole(marked, KouchinDiscovery.ROLE_1, preferredSource1Dir(site, paths));
+    }
+
+    private static List<DiscoveryLine> markUnusedRole(
+            List<DiscoveryLine> lines, String role, Path preferred) {
         if (lines == null || lines.isEmpty()) {
             return lines == null ? List.of() : lines;
         }
-        Path preferred = preferredSource3Dir(site, paths);
         boolean currentHas = false;
         for (DiscoveryLine line : lines) {
-            if (isPresentSource3(line) && pathUnderDir(line.source().fullPath(), preferred)) {
+            if (isPresentRole(line, role) && pathUnderDir(line.source().fullPath(), preferred)) {
                 currentHas = true;
                 break;
             }
@@ -276,8 +281,8 @@ public class KouchinVerifyTabController {
         }
         List<DiscoveryLine> out = new ArrayList<>(lines.size());
         for (DiscoveryLine line : lines) {
-            boolean unused = isPresentSource3(line) && !pathUnderDir(line.source().fullPath(), preferred);
-            out.add(line == null ? null : line.withUnused(unused));
+            boolean unused = isPresentRole(line, role) && !pathUnderDir(line.source().fullPath(), preferred);
+            out.add(line == null ? null : line.withUnused(line.isUnused() || unused));
         }
         return out;
     }
@@ -289,11 +294,19 @@ public class KouchinVerifyTabController {
         return site == FactorySite.KONAN ? paths.konanAladdinDir() : paths.kokubuAladdinDir();
     }
 
-    private static boolean isPresentSource3(DiscoveryLine line) {
+    static Path preferredSource1Dir(FactorySite site, KouchinPaths paths) {
+        if (paths == null) {
+            return null;
+        }
+        return site == FactorySite.KONAN ? paths.konanTorayCsvDir() : paths.torayCsvDir();
+    }
+
+    private static boolean isPresentRole(DiscoveryLine line, String role) {
         return line != null
                 && !line.isMissing()
                 && line.source() != null
-                && KouchinDiscovery.ROLE_3.equals(line.getRole());
+                && role != null
+                && role.equals(line.getRole());
     }
 
     static boolean pathUnderDir(String fullPath, Path dir) {
@@ -327,7 +340,8 @@ public class KouchinVerifyTabController {
     }
 
     static String factoryLabelFor(String site, KouchinDiscovery.Row row) {
-        if (row != null && KouchinDiscovery.ROLE_3.equals(row.role())) {
+        if (row != null
+                && (KouchinDiscovery.ROLE_3.equals(row.role()) || KouchinDiscovery.ROLE_1.equals(row.role()))) {
             return DiscoveryLine.FACTORY_SHARED;
         }
         return site == null ? "" : site;
@@ -952,7 +966,7 @@ public class KouchinVerifyTabController {
         if (shell == null) {
             return;
         }
-        Path dest = KouchinPaths.fromEnv(shell.snapshotUiEnv()).torayCsvDir();
+        Path dest = KouchinPaths.fromEnv(shell.snapshotUiEnv()).importTorayCsvDir();
         Task<KouchinTorayCsvDropSupport.Outcome> task = new Task<>() {
             @Override
             protected KouchinTorayCsvDropSupport.Outcome call() {
@@ -1017,7 +1031,7 @@ public class KouchinVerifyTabController {
             return;
         }
         Map<String, String> ui = shell == null ? Map.of() : shell.snapshotUiEnv();
-        Path dest = KouchinPaths.fromEnv(ui).torayCsvDir();
+        Path dest = KouchinPaths.fromEnv(ui).importTorayCsvDir();
         dropTargetLabel.setText("①東レCSVの取り込み先: " + dest.toAbsolutePath());
     }
 
@@ -1461,7 +1475,7 @@ public class KouchinVerifyTabController {
             toray = firstToray(konan);
         }
         String rule = "対象月はカレンダーではなく、①東レCSVのファイル名（RVSHEETyyyymm.csv）で決まります。"
-                + "フォルダ内で年月が最新のCSVを使い、②③もその月に合わせます。国分と湖南は同じ①です。";
+                + "フォルダ内で年月が最新のCSVを使い、②③もその月に合わせます。取り込みと検証は現工場の①フォルダを優先します。";
         if (toray == null || toray.missing()) {
             return rule + " いまは該当CSVが見つかりません。";
         }
@@ -1477,7 +1491,7 @@ public class KouchinVerifyTabController {
             return null;
         }
         for (KouchinDiscovery.Row row : rows) {
-            if (row != null && row.role() != null && row.role().startsWith("①")) {
+            if (row != null && row.role() != null && row.role().startsWith("①") && !row.missing()) {
                 return row;
             }
         }

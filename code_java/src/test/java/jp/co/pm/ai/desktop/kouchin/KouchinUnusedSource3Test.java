@@ -61,6 +61,40 @@ class KouchinUnusedSource3Test {
     }
 
     @Test
+    @DisplayName("現工場の①があるとき他工場の①は不使用")
+    void dimOtherFactoryTorayCsvWhenCurrentExists() throws Exception {
+        Path kokubuDir = tmp.resolve("kokubu-csv");
+        Path konanDir = tmp.resolve("konan-csv");
+        Files.createDirectories(kokubuDir);
+        Files.createDirectories(konanDir);
+        Path kFile = kokubuDir.resolve("RVSHEET202608.csv");
+        Path nFile = konanDir.resolve("RVSHEET202609.csv");
+        Files.writeString(kFile, "k");
+        Files.writeString(nFile, "n");
+        KouchinPaths paths = KouchinPaths.fromEnv(Map.of(
+                AppPaths.KEY_PM_AI_KOUCHIN_TORAY_CSV_DIR, kokubuDir.toString(),
+                AppPaths.KEY_PM_AI_KOUCHIN_KONAN_TORAY_CSV_DIR, konanDir.toString()));
+        var k1 = new KouchinDiscovery.Row(
+                KouchinDiscovery.ROLE_1, kFile.getFileName().toString(), kFile.toString(), "2026年8月度", false, "");
+        var n1 = new KouchinDiscovery.Row(
+                KouchinDiscovery.ROLE_1, nFile.getFileName().toString(), nFile.toString(), "2026年9月度", false, "");
+        var lines = KouchinVerifyTabController.markUnusedSource3(
+                KouchinVerifyTabController.buildDiscoveryLines(List.of(k1), List.of(n1)),
+                FactorySite.KONAN,
+                paths);
+        assertTrue(find(lines, kFile).isUnused());
+        assertFalse(find(lines, nFile).isUnused());
+        assertEquals("国分/湖南共通", find(lines, nFile).getFactory());
+
+        var kokubuFirst = KouchinVerifyTabController.markUnusedSource3(
+                KouchinVerifyTabController.buildDiscoveryLines(List.of(k1), List.of(n1)),
+                FactorySite.KOKUBU,
+                paths);
+        assertFalse(find(kokubuFirst, kFile).isUnused());
+        assertTrue(find(kokubuFirst, nFile).isUnused());
+    }
+
+    @Test
     @DisplayName("現工場の③が無いときは他工場の③を暗転しない")
     void doNotDimSoleSource3FromOtherFactory() throws Exception {
         Path kokubuDir = tmp.resolve("kokubu-aladdin");

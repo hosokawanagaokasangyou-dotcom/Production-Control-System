@@ -16,6 +16,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import jp.co.pm.ai.desktop.config.FactorySite;
+
 class FileDiscoveryUiScanTest {
 
     @TempDir
@@ -92,13 +94,15 @@ class FileDiscoveryUiScanTest {
 
         KouchinPaths paths = new KouchinPaths(
                 csvDir,
+                csvDir,
                 tmp.resolve("nagaoka"),
                 tmp.resolve("kokubu3"),
                 shisanDir,
                 aladdinDir,
                 tmp.resolve("monthly"),
                 tmp.resolve("out"),
-                tmp.resolve("judge"));
+                tmp.resolve("judge"),
+                FactorySite.KONAN);
         List<KouchinDiscovery.Row> rows = KouchinDiscovery.scan(FactoryId.KONAN, paths);
         assertEquals("2026年度試算　湖南/7月度加工賃試算.xlsm", row(rows, "②加工賃試算").path());
         assertEquals(july.toString(), row(rows, "②加工賃試算").fullPath());
