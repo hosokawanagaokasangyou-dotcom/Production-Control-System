@@ -384,6 +384,7 @@ public final class PlanInputTabController {
                         }
                     },
                     col -> {
+                        recordDispatchCellEdit(col);
                         if (PlanInputProcessSequenceRowOrder.COL_DISPATCH_TRIAL_ORDER.equals(col)) {
                             renumberDispatchTrialOrderColumn();
                         }
@@ -1527,12 +1528,19 @@ public final class PlanInputTabController {
         }
         int firstData = SpreadsheetTabularSupport.spreadsheetFirstDataRowIndex();
         boolean leading = colIndex >= 0 && colIndex < headerColumnCount.get();
-        boolean ok =
-                PlanInputExcludeToggleSupport.applyToGrid(
-                        currentGrid, firstData, dataIndex, colIndex, newValue, leading);
+        suppressPlanInputDirtyFromGridEvents.set(true);
+        boolean ok;
+        try {
+            ok =
+                    PlanInputExcludeToggleSupport.applyToGrid(
+                            currentGrid, firstData, dataIndex, colIndex, newValue, leading);
+        } finally {
+            suppressPlanInputDirtyFromGridEvents.set(false);
+        }
         if (!ok) {
             return false;
         }
+        recordDispatchCellEdit("配台不要");
         // オフに戻したとき編集マーク薄黄を再適用（yes 赤は applyVisual 側が優先）
         PlanInputEditedCellMarks.applyHighlights(
                 currentGrid, headersRef, rows, firstData, editedCellMarks);
@@ -1540,6 +1548,18 @@ public final class PlanInputTabController {
                 currentGrid, headersRef, rows, firstData);
         refreshEmbossClusterButtonHighlight();
         return true;
+    }
+
+    private void recordDispatchCellEdit(String columnTitle) {
+        if (shell == null) {
+            return;
+        }
+        String col = columnTitle != null ? columnTitle.strip() : "";
+        shell.recordOperatorAction(
+                "planInput",
+                "dispatch_cell_edit",
+                "ok",
+                col.isEmpty() ? "セル編集" : col);
     }
 
     /**
@@ -1614,6 +1634,11 @@ public final class PlanInputTabController {
                         updatePlanInputUnprocessedDispatchRemainingWarning();
                         if (!suppressPlanInputDirtyFromGridEvents.get()) {
                             markPlanInputTableDirtySinceSave();
+                            String col =
+                                    (ev.getColumn() >= 0 && ev.getColumn() < headersRef.size())
+                                            ? headersRef.get(ev.getColumn())
+                                            : "";
+                            recordDispatchCellEdit(col);
                         }
                         refreshEmbossClusterButtonHighlight();
                     };

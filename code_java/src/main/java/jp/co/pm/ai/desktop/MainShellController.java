@@ -4457,6 +4457,7 @@ public final class MainShellController
      */
     public void addMissingReferenceEnvRows() {
         mergeMissingUiRefEnvRows();
+        recordOperatorAction("env", "env_change", "ok", "不足行追加");
     }
 
     /**
@@ -4984,6 +4985,7 @@ public final class MainShellController
             return;
         }
         resetEnvRowsToDefaultsForSite(site, true);
+        recordOperatorAction("env", "env_change", "ok", "初期化 " + site.displayLabelJa());
     }
 
     /**
@@ -6515,6 +6517,11 @@ public final class MainShellController
                         applyRunTabGating();
                         if (stage1) {
                             mainRunTabController.resetDevCheckboxesAfterStage1Run();
+                            recordOperatorAction(
+                                    "run",
+                                    "stage1_complete",
+                                    "error",
+                                    t.getMessage() != null ? t.getMessage() : "起動失敗");
                         }
                         if (stage1 || stage2) {
                             selectMainShellTab(MainShellTabId.RUN);
@@ -6559,6 +6566,7 @@ public final class MainShellController
                     showErrorDialog(
                             "段階1",
                             bundleResult.message() + "\n段階1は完了扱いにしません。再実行してください。");
+                    recordOperatorAction("run", "stage1_complete", "error", "bundle保存失敗");
                     mainRunTabController.flushPendingLogAppends();
                     endStageRunBusyDialog();
                     maybeArchiveRemoteSupportLogAfterStage(script, code, err);
@@ -6611,6 +6619,7 @@ public final class MainShellController
                 String completionMsg = buildStage1CompletionMessage();
                 endStageRunBusyDialog();
                 showStageCompletionDialog("段階1 完了", completionMsg);
+                recordOperatorAction("run", "stage1_complete", "ok", "段階1完了");
             }
             if (STAGE2.equals(script)) {
                 if (c == 0) {
@@ -6789,6 +6798,17 @@ public final class MainShellController
             }
         }
         if (STAGE1.equals(script)) {
+            if (err != null) {
+                recordOperatorAction(
+                        "run",
+                        "stage1_complete",
+                        "error",
+                        err.getMessage() != null ? err.getMessage() : "例外終了");
+            } else if (code != null && code.intValue() == 9) {
+                recordOperatorAction("run", "stage1_complete", "error", "中断");
+            } else if (code != null && code.intValue() != 0) {
+                recordOperatorAction("run", "stage1_complete", "error", "exit=" + code);
+            }
             mainRunTabController.resetDevCheckboxesAfterStage1Run();
         }
         mainRunTabController.flushPendingLogAppends();

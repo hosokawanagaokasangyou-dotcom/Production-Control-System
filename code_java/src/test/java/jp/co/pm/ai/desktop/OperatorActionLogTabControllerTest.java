@@ -19,7 +19,20 @@ class OperatorActionLogTabControllerTest {
         assertEquals(
                 "工場共有バックアップ",
                 OperatorActionLogTabController.actionLabel("factory_share_backup"));
+        assertEquals("段階1完了", OperatorActionLogTabController.actionLabel("stage1_complete"));
+        assertEquals(
+                "手動配台セル編集",
+                OperatorActionLogTabController.actionLabel("dispatch_cell_edit"));
+        assertEquals("環境変数変更", OperatorActionLogTabController.actionLabel("env_change"));
+        assertEquals(
+                "加工トレンド実行",
+                OperatorActionLogTabController.actionLabel("processing_trend_run"));
         assertEquals("開発", OperatorActionLogTabController.featureLabel("developer"));
+        assertEquals("環境変数", OperatorActionLogTabController.featureLabel("env"));
+        assertEquals(
+                "配台計画_タスク入力",
+                OperatorActionLogTabController.featureLabel("planInput"));
+        assertEquals("加工トレンド", OperatorActionLogTabController.featureLabel("processingTrend"));
         assertEquals("成功", OperatorActionLogTabController.resultLabel("ok"));
         assertEquals("空", OperatorActionLogTabController.resultLabel("empty"));
         assertEquals("警告", OperatorActionLogTabController.resultLabel("warn"));

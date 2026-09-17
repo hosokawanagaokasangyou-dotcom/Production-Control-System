@@ -1433,6 +1433,13 @@ public class ProcessingTrendTabController {
                         if (showBusy) {
                             setReloading(false);
                         }
+                        if (userInitiated && shell != null) {
+                            shell.recordOperatorAction(
+                                    "processingTrend",
+                                    "processing_trend_run",
+                                    "ok",
+                                    "加工量 再読込");
+                        }
                         if (currentResult == null || dayRolled || periodMoved) {
                             armPreloadAfterCompute();
                             recomputeNow();
@@ -1457,6 +1464,13 @@ public class ProcessingTrendTabController {
                     }
                     armPreloadAfterCompute();
                     recomputeNow();
+                    if (userInitiated && shell != null) {
+                        shell.recordOperatorAction(
+                                "processingTrend",
+                                "processing_trend_run",
+                                "ok",
+                                "加工量 再読込");
+                    }
                 });
         task.setOnFailed(
                 e -> {
@@ -1478,6 +1492,13 @@ public class ProcessingTrendTabController {
                     if (shell != null) {
                         shell.appendLog("[trend] 読込エラー: " + sourceContext);
                         shell.appendLog("[trend] " + lastLoadErrorDetail.replace('\n', ' '));
+                        if (userInitiated) {
+                            shell.recordOperatorAction(
+                                    "processingTrend",
+                                    "processing_trend_run",
+                                    "error",
+                                    "加工量 読込失敗");
+                        }
                     }
                     if (cachedSources == null) {
                         renderEmpty(

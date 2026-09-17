@@ -1181,6 +1181,13 @@ public class ProcessingFeeTrendTabController {
                         hideNotice();
                         recomputeNow();
                     }
+                    if (userInitiated && shell != null) {
+                        shell.recordOperatorAction(
+                                "processingTrend",
+                                "processing_trend_run",
+                                "ok",
+                                "加工賃 再読込");
+                    }
                 });
         task.setOnFailed(
                 e -> {
@@ -1190,6 +1197,13 @@ public class ProcessingFeeTrendTabController {
                     }
                     Throwable ex = task.getException();
                     showNotice("読込失敗: " + (ex != null ? ex.getMessage() : "不明"));
+                    if (userInitiated && shell != null) {
+                        shell.recordOperatorAction(
+                                "processingTrend",
+                                "processing_trend_run",
+                                "error",
+                                "加工賃 読込失敗");
+                    }
                 });
         Thread th = new Thread(task, "processing-fee-trend-reload");
         th.setDaemon(true);

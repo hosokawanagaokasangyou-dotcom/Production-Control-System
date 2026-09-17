@@ -297,6 +297,9 @@ public final class SpreadsheetPlanInputCellEditSupport {
                                 .ifPresent(
                                         newVal -> {
                                             row.set(colIndex, newVal);
+                                            if (afterColumnEdit != null) {
+                                                afterColumnEdit.accept(columnTitle);
+                                            }
                                             rebuildSpreadsheet.run();
                                         });
                         e.consume();
@@ -322,6 +325,9 @@ public final class SpreadsheetPlanInputCellEditSupport {
                                                                 newVal);
                                             } else {
                                                 row.set(colIndex, newVal);
+                                            }
+                                            if (afterColumnEdit != null) {
+                                                afterColumnEdit.accept(columnTitle);
                                             }
                                             rebuildSpreadsheet.run();
                                         });

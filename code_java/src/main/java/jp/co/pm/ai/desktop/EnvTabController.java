@@ -277,6 +277,9 @@ public final class EnvTabController {
         EnvVarRow r = new EnvVarRow();
         r.setDescription("");
         envRows.add(r);
+        if (shell != null) {
+            shell.recordOperatorAction("env", "env_change", "ok", "行追加");
+        }
     }
 
     @FXML
@@ -345,6 +348,9 @@ public final class EnvTabController {
         if (envRows.isEmpty()) {
             envRows.add(new EnvVarRow());
         }
+        if (shell != null) {
+            shell.recordOperatorAction("env", "env_change", "ok", "行削除");
+        }
     }
 
     private void wireTable() {
@@ -371,7 +377,17 @@ public final class EnvTabController {
                 e -> {
                     EnvVarRow row = rowForEditCommit(e);
                     if (row != null) {
+                        String oldName = row.getName();
                         row.setName(e.getNewValue());
+                        if (shell != null
+                                && java.util.Objects.equals(oldName, e.getNewValue()) == false) {
+                            String key =
+                                    e.getNewValue() != null && !e.getNewValue().isBlank()
+                                            ? e.getNewValue().strip()
+                                            : oldName;
+                            shell.recordOperatorAction(
+                                    "env", "env_change", "ok", "名前 " + (key != null ? key : ""));
+                        }
                     }
                 });
         nameCol.setPrefWidth(220);
@@ -417,9 +433,27 @@ public final class EnvTabController {
                             }
                         }
                         row.setValue(nv);
+                        if (shell != null
+                                && java.util.Objects.equals(e.getOldValue(), nv) == false) {
+                            shell.recordOperatorAction(
+                                    "env",
+                                    "env_change",
+                                    "ok",
+                                    "値変更 " + AppPaths.KEY_PM_AI_INSPECTION_SHEET_DIR);
+                        }
                         return;
                     }
+                    String oldVal = row.getValue();
                     row.setValue(e.getNewValue());
+                    if (shell != null
+                            && java.util.Objects.equals(oldVal, e.getNewValue()) == false) {
+                        String key = row.getName() != null ? row.getName().strip() : "";
+                        shell.recordOperatorAction(
+                                "env",
+                                "env_change",
+                                "ok",
+                                key.isEmpty() ? "値変更" : "値変更 " + key);
+                    }
                 });
         valueCol.setReorderable(true);
 
@@ -939,6 +973,9 @@ public final class EnvTabController {
             return;
         }
         applyDispatchModelsToTryOrderEnvRow();
+        if (shell != null) {
+            shell.recordOperatorAction("env", "env_change", "ok", "値変更 GEMINI_MODEL_TRY_ORDER");
+        }
         alertFolderOpen(ownerStage, AlertType.INFORMATION, "GEMINI_MODEL_TRY_ORDER を環境変数表に書き込みました。");
         if (shell != null) {
             shell.refreshApiModelBenchmarkDerivedLabels();

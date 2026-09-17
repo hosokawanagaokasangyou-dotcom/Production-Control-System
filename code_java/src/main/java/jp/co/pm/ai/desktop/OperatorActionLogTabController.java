@@ -200,6 +200,10 @@ public final class OperatorActionLogTabController {
             case "kouchin_drop" -> "東レCSVドロップ";
             case "kouchin_verify" -> "東レ後加工賃検証";
             case "factory_share_backup" -> "工場共有バックアップ";
+            case "stage1_complete" -> "段階1完了";
+            case "dispatch_cell_edit" -> "手動配台セル編集";
+            case "env_change" -> "環境変数変更";
+            case "processing_trend_run" -> "加工トレンド実行";
             default -> action;
         };
     }
@@ -218,6 +222,8 @@ public final class OperatorActionLogTabController {
             case DEVELOPER -> "開発";
             case OPERATOR_ACTION_LOG -> "操作ログ";
             case PROCESSING_TREND -> "加工トレンド";
+            case ENV -> "環境変数";
+            case PLAN_INPUT -> "配台計画_タスク入力";
             default -> feature;
         };
     }
