@@ -838,8 +838,10 @@ public class KouchinVerifyTabController {
         task.setOnFailed(e -> {
             shell.endKouchinRun();
             Throwable err = task.getException();
+            String msg = String.valueOf(err == null ? "" : err.getMessage());
             setStatus("失敗: " + (err == null ? "" : err.getMessage()));
-            appendLog(String.valueOf(err == null ? "" : err.getMessage()));
+            appendLog(msg);
+            recordKouchinAction("kouchin_verify", operatorResultForVerify(true, msg), msg);
             stopOpenExcelGlow();
             refreshRunEnabled();
         });
@@ -891,8 +893,10 @@ public class KouchinVerifyTabController {
         if (!skipBanner.isBlank()) {
             st.append(" 【検証Bスキップ】③月次実績に対象月データがありません。");
         }
-        setStatus(st.toString());
-        appendLog(st.toString());
+        String status = st.toString();
+        setStatus(status);
+        appendLog(status);
+        recordKouchinAction("kouchin_verify", operatorResultForVerify(false, status), status);
         refreshOpenExcelGlow();
         reloadDiscovery();
     }
@@ -1005,7 +1009,9 @@ public class KouchinVerifyTabController {
         });
         plan.setOnFailed(e -> {
             Throwable err = plan.getException();
-            appendLog("取り込み先の確認に失敗: " + (err == null ? "" : err.getMessage()));
+            String msg = "取り込み先の確認に失敗: " + (err == null ? "" : err.getMessage());
+            appendLog(msg);
+            recordKouchinAction("kouchin_drop", "error", msg);
         });
         Thread t = new Thread(plan, "kouchin-csv-drop-plan");
         t.setDaemon(true);
@@ -1114,7 +1120,9 @@ public class KouchinVerifyTabController {
 
     private void finishDroppedImport(List<Path> files, Alert alert) {
         if (files == null || files.isEmpty()) {
-            appendLog("ドロップされたファイルがありません（Outlookの添付はファイルとしてドロップしてください）");
+            String msg = "ドロップされたファイルがありません（Outlookの添付はファイルとしてドロップしてください）";
+            appendLog(msg);
+            recordKouchinAction("kouchin_drop", operatorResultForDrop(true, false), msg);
             return;
         }
         if (alert != null) {
@@ -1159,12 +1167,16 @@ public class KouchinVerifyTabController {
             }
             if (shouldVerifyAfterImport(o.copiedAny())) {
                 FileDiscovery.invalidateListingCache();
-                appendLog("取り込み完了: " + o.copied().size() + "件 → " + dest);
+                String msg = "取り込み完了: " + o.copied().size() + "件 → " + dest;
+                appendLog(msg);
+                recordKouchinAction("kouchin_drop", operatorResultForDrop(false, true), msg);
                 markUnverified();
                 pendingVerifyAfterImport = true;
                 reloadDiscovery();
             } else {
-                appendLog("取り込みなし（検出は更新していません）");
+                String msg = "取り込みなし（検出は更新していません）";
+                appendLog(msg);
+                recordKouchinAction("kouchin_drop", operatorResultForDrop(false, false), msg);
             }
         });
         Thread t = new Thread(task, "kouchin-csv-drop");
@@ -1754,11 +1766,37 @@ public class KouchinVerifyTabController {
         }
     }
 
-    private void appendLog(String line) {
-        if (logArea == null || line == null || line.isBlank()) {
+    static String operatorResultForDrop(boolean filesEmpty, boolean copiedAny) {
+        if (filesEmpty) {
+            return "empty";
+        }
+        return copiedAny ? "ok" : "none";
+    }
+
+    static String operatorResultForVerify(boolean failed, String status) {
+        if (failed) {
+            return "error";
+        }
+        if (status != null && (status.contains("読取不可") || status.contains("失敗"))) {
+            return "warn";
+        }
+        return "ok";
+    }
+
+    private void recordKouchinAction(String action, String result, String detail) {
+        if (shell == null) {
             return;
         }
-        Platform.runLater(() -> logArea.appendText(line + System.lineSeparator()));
+        shell.recordOperatorAction(action, result, detail);
+    }
+
+    private void appendLog(String line) {
+        if (line == null || line.isBlank()) {
+            return;
+        }
+        if (logArea != null) {
+            Platform.runLater(() -> logArea.appendText(line + System.lineSeparator()));
+        }
         if (shell != null) {
             shell.appendLog("[kouchin] " + line);
         }

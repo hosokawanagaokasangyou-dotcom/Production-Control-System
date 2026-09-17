@@ -2427,6 +2427,16 @@ public final class MainShellController
     /** 終了確認後、または内部終了時のクリーンアップ（セッション保存・ロック解放）。 */
     private void performApplicationShutdownOnClose() {
         try {
+            String uiLog =
+                    mainRunTabController != null ? mainRunTabController.snapshotAllLogText() : "";
+            RemoteSupportLogArchive.flushOnShutdown(
+                    snapshotUiEnv(),
+                    FactoryOperatorUserStore.sessionOperatorName(),
+                    uiLog);
+        } catch (Exception ignored) {
+            // 共有ログの失敗で終了処理を止めない
+        }
+        try {
             ProcessOwnedLockFiles.releaseAllOwnedQuietly();
         } catch (LinkageError ignored) {
             // 増分 compile で target/classes が欠けると NoClassDefFoundError になるため終了自体は続行する
@@ -9043,8 +9053,33 @@ public final class MainShellController
         if (line != null && !line.isBlank()) {
             lastGlobalLogLine = line;
         }
-        mainRunTabController.appendLog(line);
+        if (mainRunTabController != null) {
+            mainRunTabController.appendLog(line);
+        }
         refreshGlobalStatusBar();
+        offerRuntimeSupportLog(line);
+    }
+
+    private void offerRuntimeSupportLog(String line) {
+        if (line == null || line.isEmpty()) {
+            return;
+        }
+        Map<String, String> ui = snapshotUiEnv();
+        RemoteSupportLogArchive.offerDailyUiLogLine(ui, line);
+        if (!RemoteSupportLogArchive.isDiagnosticRuntimeLine(line)) {
+            return;
+        }
+        String eventId = RemoteSupportLogArchive.eventIdForDiagnosticLine(line);
+        RemoteSupportLogArchive.scheduleArchiveAfterEventAsync(
+                ui,
+                eventId,
+                null,
+                null,
+                () ->
+                        mainRunTabController != null
+                                ? mainRunTabController.snapshotAllLogText()
+                                : "",
+                this::appendLog);
     }
 
     void beginPipelineExecutionTiming(PipelineExecutionTimingKind kind) {

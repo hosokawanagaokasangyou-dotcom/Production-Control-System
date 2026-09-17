@@ -3589,7 +3589,9 @@ public final class AppPaths {
      * {@link #REMOTE_LOG_DIR_NAME}）。
      */
     public static Path resolveRemoteLogRoot(Map<String, String> ui) {
-        return siblingOfSummaryAiDispatchWorkbook(ui, REMOTE_LOG_DIR_NAME);
+        Map<String, String> u = ui != null ? ui : Map.of();
+        return siblingOfSummaryAiDispatchWorkbookForFactory(
+                u, resolveFactorySiteFromUi(u), REMOTE_LOG_DIR_NAME);
     }
 
     /**
@@ -3597,7 +3599,9 @@ public final class AppPaths {
      * {@link #OPERATOR_ACTION_LOG_DIR_NAME}）。
      */
     public static Path resolveOperatorActionLogRoot(Map<String, String> ui) {
-        return siblingOfSummaryAiDispatchWorkbook(ui, OPERATOR_ACTION_LOG_DIR_NAME);
+        Map<String, String> u = ui != null ? ui : Map.of();
+        return siblingOfSummaryAiDispatchWorkbookForFactory(
+                u, resolveFactorySiteFromUi(u), OPERATOR_ACTION_LOG_DIR_NAME);
     }
 
     /**

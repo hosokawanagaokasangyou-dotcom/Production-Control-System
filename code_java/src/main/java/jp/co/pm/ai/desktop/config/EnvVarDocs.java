@@ -481,10 +481,10 @@ public final class EnvVarDocs {
                         + " 保存のたびに attendance-calendar-xlsx-history で世代退避（最大20）。");
         put(
                 "PM_AI_REMOTE_LOG",
-                "リモートサポート用ログ（サマリ Excel 同階層の remote_log/操作者/）への"
-                        + "段階1／2／2.1 終了時スナップショット："
-                        + "0/false/no/off/none で無効（空で有効）。"
-                        + " 実行・ログタブ本文と code/log/execution_log.txt を3日世代管理。");
+                "リモートサポート用ログ（現工場の共有 DATA 同階層 remote_log/操作者/）。"
+                        + "日次 ui_daily/yyyy-MM-dd.txt と、段階1／2／2.1・東レ後加工賃検証・終了時の世代フォルダ。"
+                        + "湖南は湖南共有DATA、国分は国分DATA。0/false/no/off/none で無効（空で有効）。"
+                        + " 世代は3日。段階終了時のみ execution_log.txt も同梱。");
         put(
                 "PM_AI_SKIP_WORKBOOK_ENV_SHEET",
                 "1/true 等で workbook_env_bootstrap がマクロブックの"
