@@ -96,6 +96,19 @@ class KouchinOutlookDropSupportTest {
         assertEquals(csv.toAbsolutePath().normalize(), found.get(0).toAbsolutePath().normalize());
     }
 
+    @Test
+    @DisplayName("RVSHEET (1).csv があればより新しい方を使う")
+    void prefersNewerWindowsCopyName() throws Exception {
+        Path orig = tmp.resolve("RVSHEET.csv");
+        Path copy = tmp.resolve("RVSHEET (1).csv");
+        Files.writeString(orig, "old", StandardCharsets.UTF_8);
+        Files.writeString(copy, "new", StandardCharsets.UTF_8);
+        Files.setLastModifiedTime(orig, FileTime.from(Instant.parse("2026-09-17T01:00:00Z")));
+        Files.setLastModifiedTime(copy, FileTime.from(Instant.parse("2026-09-17T01:58:00Z")));
+        Path newest = KouchinOutlookDropSupport.newestTempRvsheetCsv(tmp);
+        assertEquals(copy.toAbsolutePath().normalize(), newest.toAbsolutePath().normalize());
+    }
+
     private static byte[] fileGroupDescriptorW(String name) {
         int struct = 592;
         ByteBuffer buf = ByteBuffer.allocate(4 + struct).order(ByteOrder.LITTLE_ENDIAN);

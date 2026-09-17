@@ -58,15 +58,9 @@ public final class TorayCsvReader {
         String targetBasho = Norm.norm(basho);
         List<List<String>> rows = parseCsv(decodeCp932(path));
 
-        boolean headerOk = false;
-        for (int i = 0; i < Math.min(3, rows.size()); i++) {
-            List<String> row = rows.get(i);
-            if (row.size() > COL_AMOUNT && row.get(COL_AMOUNT).contains("金額")) {
-                headerOk = true;
-                break;
-            }
-        }
-        if (!headerOk) {
+        boolean headerOk = hasKingakuHeader(rows);
+        boolean hostCsv = looksLikeTorayHostCsv(rows);
+        if (!headerOk && !hostCsv) {
             throw new VerifyException("①CSVの10列目に「金額」ヘッダーが見つかりません。フォーマット変更の可能性: " + path);
         }
 
@@ -144,6 +138,40 @@ public final class TorayCsvReader {
 
         List<List<String>> rawRows = List.copyOf(rows);
         return new TorayCsvData(result, byBasho, nyukoDates, minusRows, subtotalErrors, warnings, rawRows);
+    }
+
+    static boolean hasKingakuHeader(List<List<String>> rows) {
+        if (rows == null) {
+            return false;
+        }
+        int limit = Math.min(20, rows.size());
+        for (int i = 0; i < limit; i++) {
+            List<String> row = rows.get(i);
+            if (row.size() > COL_AMOUNT && row.get(COL_AMOUNT).contains("金額")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Outlook添付の帳票CSV（「加工代金(未払費用)」）。金額ヘッダー行が無い。 */
+    static boolean looksLikeTorayHostCsv(List<List<String>> rows) {
+        if (rows == null) {
+            return false;
+        }
+        int limit = Math.min(10, rows.size());
+        for (int i = 0; i < limit; i++) {
+            for (String cell : rows.get(i)) {
+                if (cell == null) {
+                    continue;
+                }
+                if (cell.contains("加工代金") || cell.contains("ｶｺｳﾀﾞｲｷﾝ") || cell.contains("カコウダイキン")
+                        || cell.contains("未払費用") || cell.contains("ﾐﾊﾗｲﾋﾖｳ")) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     private static TorayCsvData.SubtotalError buildSubtotalError(

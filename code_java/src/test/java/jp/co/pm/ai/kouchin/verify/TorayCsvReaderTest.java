@@ -160,6 +160,22 @@ class TorayCsvReaderTest {
     }
 
     @Test
+    @DisplayName("加工代金の帳票CSVは金額ヘッダー無しでも読める")
+    void readsHostReportWithoutKingakuHeader() throws IOException {
+        String csv = String.join("\n",
+                "     ,423   19                  ,        ,      ,      , ,        ,    ,        ,          ,          ,           ",
+                "     ,ｶｺｳﾀﾞｲｷﾝ(ﾐﾊﾗｲﾋﾖｳ)         ,        ,      ,      , ,        ,    ,        ,          ,          ,           ",
+                "     ,(S13H60)  CASH            ,        ,      ,      , ,        ,    ,        ,          ,          ,           ",
+                "A010 ,20025-AX17- 950X300F-A   E,191-352R,260821,929287,M,    2100,    ,      15,     31500,          ,           ",
+                "     ,                          ,191-352R,260821,929347,M,    1200,    ,      15,     18000,          ,           ",
+                "     ,               ｶ ｷ ﾝ      ,   T    ,      ,      , ,        ,    ,        ,     49500,          ,           ",
+                "");
+        TorayCsvData data = TorayCsvReader.read(write("RVSHEET202608.csv", csv), "A010");
+        assertEquals(49500.0, data.total(), 0.001);
+        assertTrue(data.byKeiyaku().containsKey("191352R"));
+    }
+
+    @Test
     @DisplayName("対象入庫場所のデータ行が1件も無ければエラーで停止する")
     void failsWhenNoRowsForBasho() throws IOException {
         VerifyException e = assertThrows(VerifyException.class,

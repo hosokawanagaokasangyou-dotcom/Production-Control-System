@@ -54,6 +54,12 @@ public final class KouchinOutlookDropSupport {
         if (files.isEmpty()) {
             files = tempFilesNamed(systemTempDir(), originals);
         }
+        if (!originals.isEmpty()) {
+            Path newest = newestTempRvsheetCsv(systemTempDir());
+            if (newest != null) {
+                files = List.of(newest);
+            }
+        }
         return applyOriginalName(files, originals);
     }
 
@@ -65,6 +71,10 @@ public final class KouchinOutlookDropSupport {
         }
         List<String> originals = db == null ? List.of() : originalNamesFromDragboard(db);
         List<Path> named = tempFilesNamed(systemTempDir(), originals);
+        Path newest = newestTempRvsheetCsv(systemTempDir());
+        if (newest != null) {
+            return applyOriginalName(List.of(newest), originals);
+        }
         if (!named.isEmpty()) {
             return applyOriginalName(named, originals);
         }
@@ -130,6 +140,36 @@ public final class KouchinOutlookDropSupport {
             }
         }
         return List.copyOf(found);
+    }
+
+    /** TEMP 上の最新 {@code RVSHEET*.csv}（{@code RVSHEET (1).csv} を含む）。 */
+    public static Path newestTempRvsheetCsv(Path tempDir) {
+        if (tempDir == null || !Files.isDirectory(tempDir)) {
+            return null;
+        }
+        Path best = null;
+        Instant bestTime = Instant.EPOCH;
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(tempDir, p -> {
+            Path name = p.getFileName();
+            return name != null && RVSHEET_CSV.matcher(name.toString()).matches();
+        })) {
+            for (Path p : stream) {
+                try {
+                    if (!Files.isRegularFile(p)) {
+                        continue;
+                    }
+                    Instant mt = Files.getLastModifiedTime(p).toInstant();
+                    if (best == null || mt.isAfter(bestTime)) {
+                        best = p;
+                        bestTime = mt;
+                    }
+                } catch (IOException ignored) {
+                }
+            }
+        } catch (IOException ignored) {
+            return null;
+        }
+        return best == null ? null : best.toAbsolutePath().normalize();
     }
 
     public static List<String> fileNamesFromContentTypeIds(Iterable<String> ids) {
