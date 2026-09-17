@@ -17,6 +17,7 @@ import java.util.Optional;
  *   <li>「依頼NO」と「項目」を含む行がヘッダー。</li>
  *   <li>項目=「加工金額」の行の「--合計--」列が依頼NO別加工金額。</li>
  *   <li>得意先コードを指定するとその行だけを集計する（湖南は 049006 東ﾚ自材部のみ）。</li>
+ *   <li>倉庫名キーワードを指定するとその工場の倉庫だけを集計する（湖南③は国分倉庫が混在するため）。</li>
  *   <li>TPI（得意先 049052 / 依頼NO先頭 TPI）と自社加工（依頼NO先頭 2）は常に対象外。</li>
  * </ul>
  */
@@ -32,8 +33,15 @@ public final class AladdinReader {
      * @param customer 得意先コード（絞り込み不要なら null）
      */
     public static AladdinData read(Path path, String customer) {
+        return read(path, customer, null);
+    }
+
+    /**
+     * @param warehouseContains 倉庫名にこの文字列を含む行だけ集計（湖南/国分。列が無ければ無視）
+     */
+    public static AladdinData read(Path path, String customer, String warehouseContains) {
         try (Workbook wb = ExcelValues.open(path)) {
-            return read(ExcelValues.readFirstSheet(wb), customer, path.toString());
+            return read(ExcelValues.readFirstSheet(wb), customer, warehouseContains, path.toString());
         } catch (IOException e) {
             throw new VerifyException("③を閉じられませんでした: " + path + " (" + e.getMessage() + ")", e);
         }
@@ -41,6 +49,10 @@ public final class AladdinReader {
 
     /** 読み込み済みのシート値から集計する（テスト用に公開）。 */
     public static AladdinData read(List<List<Object>> rows, String customer, String source) {
+        return read(rows, customer, null, source);
+    }
+
+    public static AladdinData read(List<List<Object>> rows, String customer, String warehouseContains, String source) {
         String taisho = "";
         int headerIndex = -1;
         for (int i = 0; i < Math.min(HEADER_SEARCH_ROWS, rows.size()); i++) {
@@ -87,6 +99,8 @@ public final class AladdinReader {
                         + " で絞り込めません: " + source);
             }
         }
+        int iWarehouseName = header.indexOf("倉庫名");
+        String warehouseKey = Norm.norm(warehouseContains);
 
         String customerKey = Norm.norm(customer);
         Map<String, Double> result = new LinkedHashMap<>();
@@ -101,6 +115,12 @@ public final class AladdinReader {
             String rowCustomer = iCustomer >= 0 ? Norm.norm(ExcelValues.at(rows, i, iCustomer)) : "";
             if (!customerKey.isEmpty() && !customerKey.equals(rowCustomer)) {
                 continue;
+            }
+            if (!warehouseKey.isEmpty() && iWarehouseName >= 0) {
+                String warehouseName = Norm.norm(ExcelValues.at(rows, i, iWarehouseName));
+                if (!warehouseName.contains(warehouseKey)) {
+                    continue;
+                }
             }
             String irai = Norm.norm(ExcelValues.at(rows, i, iIrai));
             if (VerifyScope.outOfScope(irai, rowCustomer)) {

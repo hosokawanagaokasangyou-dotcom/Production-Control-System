@@ -68,7 +68,7 @@ public record FactoryProfile(
             "加工賃",
             SHISAN_SHEETS,
             "契約NO = ①発注No.のハイフン除去 = ②加工賃試算の東レ3シート C列「契約No.」。ハイフン無し7桁英数字",
-            "依頼NO = ②A列「加工依頼No.」(例 C8-1) = ③依頼NO列(得意先 049006 東ﾚ自材部の行のみ)",
+            "依頼NO = ②A列「加工依頼No.」(例 C8-1) = ③依頼NO列(得意先 049006・倉庫名に湖南を含む行のみ)",
             "② = 東レT.V.C/東レY.S/東レW.E..シートの「加工種類別 加工賃」合計列(V列)を3シート合算");
 
     public static FactoryProfile of(FactoryId id) {
@@ -78,5 +78,13 @@ public record FactoryProfile(
     /** ③の得意先絞り込みがあるか。 */
     public boolean hasCustomerFilter() {
         return customer3 != null && !customer3.isEmpty();
+    }
+
+    /**
+     * ③の倉庫名に含む文字列。湖南の月次実績は国分倉庫が混在するため「湖南」で絞る。
+     * 国分③に倉庫名列が無い形式では読取側が無視する。
+     */
+    public String warehouse3Contains() {
+        return id == FactoryId.KONAN ? "湖南" : "国分";
     }
 }

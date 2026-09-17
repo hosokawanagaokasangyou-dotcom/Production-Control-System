@@ -194,7 +194,7 @@ public final class VerifyEngine {
             return;
         }
         try {
-            aladdinData = AladdinReader.read(aladdinFile, profile.customer3());
+            aladdinData = AladdinReader.read(aladdinFile, profile.customer3(), profile.warehouse3Contains());
         } catch (VerifyException e) {
             markSkipB(e.getMessage());
             return;
@@ -224,7 +224,8 @@ public final class VerifyEngine {
                     continue;
                 }
                 try {
-                    aladdinByYm.put(e.getKey(), AladdinReader.read(e.getValue(), profile.customer3()).byIrai());
+                    aladdinByYm.put(e.getKey(), AladdinReader.read(
+                            e.getValue(), profile.customer3(), profile.warehouse3Contains()).byIrai());
                     aladdinOtherFiles.add(e.getValue().getFileName().toString());
                 } catch (VerifyException ex) {
                     warnings.add("③他月照会 " + e.getValue().getFileName() + " を読めないためスキップしました: "
