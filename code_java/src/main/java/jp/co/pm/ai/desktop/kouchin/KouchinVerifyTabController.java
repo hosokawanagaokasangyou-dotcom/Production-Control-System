@@ -2,8 +2,10 @@ package jp.co.pm.ai.desktop.kouchin;
 
 import java.awt.Desktop;
 import java.io.File;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -47,6 +49,7 @@ import jp.co.pm.ai.desktop.MainShellTabId;
 import jp.co.pm.ai.desktop.config.FactorySite;
 import jp.co.pm.ai.desktop.io.DesktopFileOpener;
 import jp.co.pm.ai.desktop.ui.ButtonAttentionGlow;
+import jp.co.pm.ai.desktop.ui.JapanDateTimeDisplay;
 import jp.co.pm.ai.kouchin.verify.BothResult;
 import jp.co.pm.ai.kouchin.verify.FactoryId;
 import jp.co.pm.ai.kouchin.verify.FileDiscovery;
@@ -68,6 +71,9 @@ import jp.co.pm.ai.kouchin.verify.VerifySourceAccess;
  * UI 更新は {@link Platform#runLater} のみ。
  */
 public class KouchinVerifyTabController {
+
+    private static final DateTimeFormatter FILE_MODIFIED_AT =
+            DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss", Locale.JAPAN);
 
     @FXML private BorderPane root;
     @FXML private Label diffHintLabel;
@@ -122,11 +128,13 @@ public class KouchinVerifyTabController {
         private final String factory;
         private final KouchinDiscovery.Row row;
         private final VerifySourceAccess.FileAccess access;
+        private final String modifiedAt;
 
         DiscoveryLine(String factory, KouchinDiscovery.Row row, VerifySourceAccess.FileAccess access) {
             this.factory = factory == null ? "" : factory;
             this.row = row;
             this.access = access == null ? VerifySourceAccess.FileAccess.of(null) : access;
+            this.modifiedAt = fileModifiedAtText(row);
         }
 
         static DiscoveryLine of(String factory, KouchinDiscovery.Row row) {
@@ -138,6 +146,7 @@ public class KouchinVerifyTabController {
         public String getPath() { return row == null ? "" : row.path(); }
         public String getPathCss() { return isMissing() ? "pm-kouchin-missing-path" : ""; }
         public String getYm() { return row == null ? "" : row.ym(); }
+        public String getModifiedAt() { return modifiedAt; }
         public String getNote() { return row == null ? "" : row.note(); }
         public String getReadStatus() { return access.readLabel(); }
         public String getWriteStatus() { return access.writeLabel(); }
@@ -886,6 +895,10 @@ public class KouchinVerifyTabController {
         pathCol.setCellValueFactory(cd -> new SimpleStringProperty(cd.getValue() == null ? "" : cd.getValue().getPath()));
         pathCol.setPrefWidth(280);
         pathCol.setMinWidth(140);
+        TableColumn<DiscoveryLine, String> modifiedCol = new TableColumn<>("ファイル更新日時");
+        modifiedCol.setCellValueFactory(cd -> new SimpleStringProperty(cd.getValue() == null ? "" : cd.getValue().getModifiedAt()));
+        modifiedCol.setPrefWidth(150);
+        modifiedCol.setMinWidth(130);
         TableColumn<DiscoveryLine, String> ymCol = new TableColumn<>("対象月");
         ymCol.setCellValueFactory(cd -> new SimpleStringProperty(cd.getValue() == null ? "" : cd.getValue().getYm()));
         ymCol.setPrefWidth(110);
@@ -895,6 +908,7 @@ public class KouchinVerifyTabController {
         discoveryTable.getColumns().add(factoryCol);
         discoveryTable.getColumns().add(roleCol);
         discoveryTable.getColumns().add(pathCol);
+        discoveryTable.getColumns().add(modifiedCol);
         discoveryTable.getColumns().add(ymCol);
         addAccessColumn("読取", DiscoveryLine::getReadStatus, DiscoveryLine::getReadCss, 64);
         addAccessColumn("書込", DiscoveryLine::getWriteStatus, DiscoveryLine::getWriteCss, 64);
@@ -1137,6 +1151,19 @@ public class KouchinVerifyTabController {
             return null;
         }
         return openablePath(row.fullPath());
+    }
+
+    static String fileModifiedAtText(KouchinDiscovery.Row row) {
+        Path p = openableDiscoveryFile(row);
+        if (p == null) {
+            return "";
+        }
+        try {
+            return FILE_MODIFIED_AT.format(
+                    Files.getLastModifiedTime(p).toInstant().atZone(JapanDateTimeDisplay.JST));
+        } catch (IOException e) {
+            return "";
+        }
     }
 
     private void openDiscoveryRow(KouchinDiscovery.Row row) {
