@@ -244,6 +244,8 @@ public final class PlanInputTabController {
      * 配台計画_タスク入力タブの表を手動変更したが「保存」または「再読み」でディスクと同期していないとき、段階2を抑止する。
      */
     private boolean stage2BlockedByUnsavedPlanInputTableEdit;
+    /** セル編集など、利用者が表を変えたとき。原反投入日の自動再同期だけでは true にしない。 */
+    private boolean planInputUserEditedSinceLoad;
     private long planInputDirtyGeneration;
 
     /** 勤怠正本が段階2未準備のとき、段階2を抑止する。 */
@@ -508,6 +510,16 @@ public final class PlanInputTabController {
     }
 
     private void markPlanInputTableDirtySinceSave() {
+        planInputUserEditedSinceLoad = true;
+        markPlanInputTableDirtySinceSaveOnly();
+    }
+
+    /** 原反投入日の自動再同期。段階2は確認ダイアログなしで保存して続行できる。 */
+    private void markAutomaticResyncDirty() {
+        markPlanInputTableDirtySinceSaveOnly();
+    }
+
+    private void markPlanInputTableDirtySinceSaveOnly() {
         if (!stage2BlockedByUnsavedPlanInputTableEdit) {
             planInputDirtyGeneration++;
         }
@@ -520,6 +532,7 @@ public final class PlanInputTabController {
             planInputDirtyGeneration++;
         }
         stage2BlockedByUnsavedPlanInputTableEdit = false;
+        planInputUserEditedSinceLoad = false;
         applyStage2RunButtonEnabledState();
     }
 
@@ -527,6 +540,7 @@ public final class PlanInputTabController {
         boolean disable =
                 stage2RunPipelineBusy
                         || deliveryCalendarReloadBlocking
+                        || planInputUserEditedSinceLoad
                         || stage2BlockedByAttendanceNotReady
                         || stage2BlockedBySourceExtension;
         if (stage2RunButton != null) {
@@ -551,10 +565,10 @@ public final class PlanInputTabController {
             if (stage21RunButton != null) {
                 stage21RunButton.setTooltip(blockedTip);
             }
-        } else if (stage2BlockedByUnsavedPlanInputTableEdit) {
+        } else if (planInputUserEditedSinceLoad) {
             Tooltip blockedTip =
                     new Tooltip(
-                            "未保存の画面は、段階2の実行時にファイルの内容へ戻します。確認ダイアログは出しません。");
+                            "配台計画_タスク入力タブの表に未保存の変更があります。「保存」または「再読み」で確定してから実行してください。");
             if (stage2RunButton != null) {
                 stage2RunButton.setTooltip(blockedTip);
             }
@@ -1271,8 +1285,8 @@ public final class PlanInputTabController {
     }
 
     /**
-     * 段階2開始前。未保存の画面は捨ててファイルを読み直す。
-     * 読み直し後に残るのは原反投入日の再同期だけなので、ファイルが読み込み時のままなら確認ダイアログなしで保存する。
+     * 段階2開始前。利用者が編集した未保存は実行しない。
+     * 未保存が原反投入日の自動再同期だけのときは、ファイルが読み込み時のままなら確認ダイアログなしで保存する。
      *
      * @return 段階2を始めてよいとき true
      */
@@ -1281,6 +1295,18 @@ public final class PlanInputTabController {
             return true;
         }
         String label = stageLabel == null || stageLabel.isBlank() ? "stage2" : stageLabel;
+        if (planInputUserEditedSinceLoad) {
+            if (shell != null) {
+                shell.appendLog(
+                        "["
+                                + label
+                                + "] 配台計画_タスク入力タブの表に未保存の変更があります。「保存」または「再読み」で確定してから実行してください。");
+                shell.showWarningDialog(
+                        label,
+                        "配台計画_タスク入力タブの変更を「保存」または「再読み」で確定してから実行してください。");
+            }
+            return false;
+        }
         reloadQuietlyFromDisk();
         if (!isPlanInputTableDirtySinceSave()) {
             if (shell != null) {
@@ -1951,7 +1977,7 @@ public final class PlanInputTabController {
             embossClusterHighlight.resetForLoadedTable();
             applyLoaded();
             if (synced > 0) {
-                markPlanInputTableDirtySinceSave();
+                markAutomaticResyncDirty();
                 shell.appendLog(
                         "[plan-input] 原反投入日編集に追従し配台可能日時を "
                                 + synced
