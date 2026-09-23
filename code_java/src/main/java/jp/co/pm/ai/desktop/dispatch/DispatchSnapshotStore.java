@@ -61,11 +61,11 @@ public final class DispatchSnapshotStore {
             throws IOException {
         Map<String, String> u = ui != null ? ui : Map.of();
         Path localDir = AppPaths.defaultPlanningOutputDir(u);
-        Path plan = null;
-        Path member = null;
+        Path plan;
+        Path member;
         try {
             plan = Stage2OutputNaming.newestPrimaryPlanJson(localDir);
-            member = Stage2OutputNaming.newestPrimaryMemberJson(localDir);
+            member = Stage2OutputNaming.pairedMemberJson(plan);
         } catch (IOException ex) {
             throw ex;
         }
@@ -112,7 +112,13 @@ public final class DispatchSnapshotStore {
             List<String> copied = new ArrayList<>();
             List<String> missing = new ArrayList<>();
             copyIfPresent(planJson, genDir, copied, missing);
-            copyIfPresent(memberJson, genDir, copied, missing);
+            Path memberSameRun = memberOnSameStamp(planJson, memberJson);
+            if (memberSameRun == null) {
+                String expected = Stage2OutputNaming.expectedMemberFileName(planJson);
+                missing.add(expected != null ? expected : "(none)");
+            } else {
+                copyIfPresent(memberSameRun, genDir, copied, missing);
+            }
             copyNamed(dispatchJson, genDir, AppPaths.RESULT_DISPATCH_TABLE_JSON_BASENAME, copied, missing);
             copyNamed(shapedAladdin, genDir, AppPaths.SHAPED_ALADDIN_PLAN_JSON_BASENAME, copied, missing);
             copyNamed(
@@ -326,6 +332,21 @@ public final class DispatchSnapshotStore {
         } catch (IOException | RuntimeException ex) {
             return null;
         }
+    }
+
+    /** ファイル名のスタンプが計画と一致する人員だけ。別スタンプは隣にあっても使わない。 */
+    private static Path memberOnSameStamp(Path planJson, Path memberJson) {
+        String expected = Stage2OutputNaming.expectedMemberFileName(planJson);
+        if (expected == null) {
+            return null;
+        }
+        if (memberJson != null
+                && memberJson.getFileName() != null
+                && expected.equals(memberJson.getFileName().toString())
+                && Files.isRegularFile(memberJson, LinkOption.NOFOLLOW_LINKS)) {
+            return memberJson;
+        }
+        return Stage2OutputNaming.pairedMemberJson(planJson);
     }
 
     private static void copyIfPresent(Path source, Path genDir, List<String> copied, List<String> missing)

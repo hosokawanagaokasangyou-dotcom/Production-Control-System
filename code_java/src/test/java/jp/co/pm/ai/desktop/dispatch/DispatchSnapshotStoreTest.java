@@ -59,6 +59,37 @@ class DispatchSnapshotStoreTest {
     }
 
     @Test
+    void publishKeepsPlanAndMemberOnTheSameStamp() throws Exception {
+        Path planOld = temp.resolve("計画2609230900000001.json");
+        Path planNew = temp.resolve("計画2609230900000002.json");
+        Path memberOld = temp.resolve("人員2609230900000001.json");
+        Path memberNew = temp.resolve("人員2609230900000002.json");
+        Files.writeString(planOld, "{}", StandardCharsets.UTF_8);
+        Files.writeString(planNew, "{}", StandardCharsets.UTF_8);
+        Files.writeString(memberOld, "{}", StandardCharsets.UTF_8);
+        Files.writeString(memberNew, "{}", StandardCharsets.UTF_8);
+        Files.setLastModifiedTime(planNew, java.nio.file.attribute.FileTime.fromMillis(2_000));
+        Files.setLastModifiedTime(memberOld, java.nio.file.attribute.FileTime.fromMillis(9_000));
+
+        DispatchSnapshotStore.PublishResult published =
+                DispatchSnapshotStore.publish(
+                        temp.resolve("share"),
+                        "森岡",
+                        "stage2",
+                        LocalDateTime.of(2026, 9, 23, 9, 30),
+                        planNew,
+                        memberOld,
+                        null,
+                        null,
+                        null);
+
+        assertTrue(Files.isRegularFile(published.generationDir().resolve("計画2609230900000002.json")));
+        assertFalse(Files.exists(published.generationDir().resolve("人員2609230900000001.json")));
+        assertTrue(Files.isRegularFile(published.generationDir().resolve("人員2609230900000002.json")));
+        assertFalse(published.missing().contains("人員2609230900000002.json"));
+    }
+
+    @Test
     void listSkipsUnknownFormatAndCorruptMeta() throws Exception {
         Path root = temp.resolve("share");
         Path future = root.resolve("森岡").resolve("20260923-090000-001_pc_stage2");

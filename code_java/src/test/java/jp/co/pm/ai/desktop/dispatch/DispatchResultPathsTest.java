@@ -70,4 +70,22 @@ class DispatchResultPathsTest {
         Path dispatch = DispatchResultPaths.dispatchJson(ui, selection);
         assertEquals(dispatchFile.toAbsolutePath().normalize(), dispatch);
     }
+
+    @Test
+    void localMemberFollowsPlanStampNotNewestMember() throws Exception {
+        Path local = temp.resolve("local");
+        Files.createDirectories(local);
+        Path plan = local.resolve("計画2609230900000002.json");
+        Path memberSame = local.resolve("人員2609230900000002.json");
+        Path memberOther = local.resolve("人員2609230900000001.json");
+        Files.writeString(plan, "{}", StandardCharsets.UTF_8);
+        Files.writeString(memberSame, "{}", StandardCharsets.UTF_8);
+        Files.writeString(memberOther, "{}", StandardCharsets.UTF_8);
+        Files.setLastModifiedTime(memberOther, java.nio.file.attribute.FileTime.fromMillis(9_000));
+        Files.setLastModifiedTime(plan, java.nio.file.attribute.FileTime.fromMillis(5_000));
+        Map<String, String> ui = Map.of(AppPaths.KEY_PM_AI_OUTPUT_DIR, local.toString());
+        DispatchResultSelection selection = new DispatchResultSelection();
+
+        assertEquals(memberSame.toAbsolutePath().normalize(), DispatchResultPaths.memberJson(ui, selection));
+    }
 }

@@ -2,6 +2,7 @@ package jp.co.pm.ai.desktop.io;
 
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -141,6 +142,47 @@ public final class Stage2OutputNaming {
         Path a = newestMatching(dir, p -> matchesPrimary(p, PLAN_PREFIX, ".json"));
         Path b = newestMatching(dir, Stage2OutputNaming::isLegacyPlanJson);
         return newerOf(a, b);
+    }
+
+    /**
+     * 計画 JSON と同じ実行の人員 JSON ファイル名。計画が primary でなければ null。
+     * 新命名は 16 桁スタンプ、旧命名は {@code production_plan_multi_day_} の後ろを共有する。
+     */
+    public static String expectedMemberFileName(Path planJson) {
+        if (planJson == null) {
+            return null;
+        }
+        Path fn = planJson.getFileName();
+        if (fn == null) {
+            return null;
+        }
+        String n = fn.toString();
+        if (matchesPrimary(planJson, PLAN_PREFIX, ".json")) {
+            String stamp = n.substring(PLAN_PREFIX.length(), n.length() - ".json".length());
+            return MEMBER_PREFIX + stamp + ".json";
+        }
+        if (isLegacyPlanJson(planJson)) {
+            String stem = n.substring(0, n.length() - ".json".length());
+            String suffix = stem.substring("production_plan_multi_day_".length());
+            if (suffix.isEmpty()) {
+                return null;
+            }
+            return "member_schedule_" + suffix + ".json";
+        }
+        return null;
+    }
+
+    /** 計画 JSON と同じディレクトリにある、同一実行スタンプの人員 JSON。無ければ null。 */
+    public static Path pairedMemberJson(Path planJson) {
+        String name = expectedMemberFileName(planJson);
+        if (name == null || planJson.getParent() == null) {
+            return null;
+        }
+        Path member = planJson.getParent().resolve(name);
+        if (!Files.isRegularFile(member, LinkOption.NOFOLLOW_LINKS)) {
+            return null;
+        }
+        return member;
     }
 
     /** 計画系 primary JSON（新命名・旧命名）か。 */

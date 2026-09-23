@@ -7,7 +7,7 @@ import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.io.Stage2OutputNaming;
 
 /**
- * 表示専用のパス。選択が自分のローカル最新のときは、従来の {@link AppPaths} 解決と同一。
+ * 表示専用のパス。計画と人員は同じ実行スタンプの組だけを返す。
  * スナップショット中に解決が壊れても、書き込み用のローカル正本は変えない。
  */
 public final class DispatchResultPaths {
@@ -43,10 +43,7 @@ public final class DispatchResultPaths {
     }
 
     public static Path memberJson(Map<String, String> ui, DispatchResultSelection selection) {
-        if (useLocal(selection)) {
-            return localMember(ui);
-        }
-        return newestInSnapshot(ui, selection, Stage2OutputNaming::acceptsPrimaryMemberJson);
+        return Stage2OutputNaming.pairedMemberJson(planJson(ui, selection));
     }
 
     public static Path dispatchJson(Map<String, String> ui, DispatchResultSelection selection) {
@@ -129,14 +126,6 @@ public final class DispatchResultPaths {
     private static Path localPlan(Map<String, String> ui) {
         try {
             return Stage2OutputNaming.newestPrimaryPlanJson(AppPaths.defaultPlanningOutputDir(ui));
-        } catch (Exception ex) {
-            return null;
-        }
-    }
-
-    private static Path localMember(Map<String, String> ui) {
-        try {
-            return Stage2OutputNaming.newestPrimaryMemberJson(AppPaths.defaultPlanningOutputDir(ui));
         } catch (Exception ex) {
             return null;
         }
