@@ -506,6 +506,7 @@ public final class MainShellController
             new CopyOnWriteArrayList<>();
     private final CopyOnWriteArrayList<Runnable> dispatchSelectionReloads = new CopyOnWriteArrayList<>();
     private volatile List<DispatchSnapshotStore.SnapshotRef> dispatchSnapshotCatalog = List.of();
+    private volatile String dispatchSnapshotCatalogError = "";
     private ExecutorService dispatchSnapshotExecutor;
     private static final String DISPATCH_TAB_MARK_OTHER = " ［他者の結果］";
     private static final String DISPATCH_TAB_MARK_PAST = " ［過去の結果］";
@@ -11662,7 +11663,7 @@ public final class MainShellController
             if (reload != null) {
                 dispatchSelectionReloads.add(reload);
             }
-            bar.setCatalog(dispatchSnapshotCatalog);
+            bar.setCatalog(dispatchSnapshotCatalog, dispatchSnapshotCatalogError);
         } catch (Exception ex) {
             appendLog(
                     "[dispatch-snapshot] 選択バーを置けません。従来の表示のままにします: "
@@ -11761,7 +11762,7 @@ public final class MainShellController
                     .execute(
                             () -> {
                                 List<DispatchSnapshotStore.SnapshotRef> listed;
-                                String error = null;
+                                String error = "";
                                 try {
                                     listed =
                                             DispatchSnapshotStore.list(
@@ -11776,7 +11777,8 @@ public final class MainShellController
                                 Platform.runLater(
                                         () -> {
                                             dispatchSnapshotCatalog = found;
-                                            if (err != null) {
+                                            dispatchSnapshotCatalogError = err;
+                                            if (!err.isBlank()) {
                                                 appendLog(
                                                         "[dispatch-snapshot] 一覧を読めません。表示中の結果は維持します: "
                                                                 + err);
@@ -11920,7 +11922,7 @@ public final class MainShellController
     private void syncDispatchSelectorBars() {
         for (DispatchResultSelectorBar bar : dispatchSelectorBars) {
             try {
-                bar.setCatalog(dispatchSnapshotCatalog);
+                bar.setCatalog(dispatchSnapshotCatalog, dispatchSnapshotCatalogError);
             } catch (Exception ex) {
                 appendLog("[dispatch-snapshot] 選択バーの同期に失敗: " + ex.getMessage());
             }

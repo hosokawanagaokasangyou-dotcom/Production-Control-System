@@ -34,7 +34,7 @@ public final class DispatchResultPaths {
         }
         Path dir = snapshotDir(ui, selection);
         if (dir == null) {
-            return localDispatch(ui);
+            return null;
         }
         return dir.resolve(AppPaths.RESULT_DISPATCH_TABLE_JSON_BASENAME);
     }
@@ -45,7 +45,7 @@ public final class DispatchResultPaths {
         }
         Path dir = snapshotDir(ui, selection);
         if (dir == null) {
-            return AppPaths.resolveShapedAladdinPlanJsonPath(ui);
+            return null;
         }
         return dir.resolve(AppPaths.SHAPED_ALADDIN_PLAN_JSON_BASENAME);
     }
@@ -56,7 +56,7 @@ public final class DispatchResultPaths {
         }
         Path dir = snapshotDir(ui, selection);
         if (dir == null) {
-            return AppPaths.resolveShapedProcessingActualsJsonPath(ui);
+            return null;
         }
         return dir.resolve(AppPaths.SHAPED_PROCESSING_ACTUALS_JSON_BASENAME);
     }

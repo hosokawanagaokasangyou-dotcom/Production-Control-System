@@ -23,9 +23,11 @@ public final class DispatchResultSelectorBar extends HBox {
     private final ComboBox<String> operatorCombo = new ComboBox<>();
     private final ComboBox<String> generationCombo = new ComboBox<>();
     private final Label badge = new Label();
+    private final Label catalogNote = new Label();
     private final Button removeButton = new Button("共有から外す");
     private boolean suppress;
     private List<DispatchSnapshotStore.SnapshotRef> catalog = List.of();
+    private String catalogError = "";
     private final Map<String, String> operatorDirByLabel = new LinkedHashMap<>();
     private final Map<String, DispatchSnapshotStore.SnapshotRef> refByLabel = new LinkedHashMap<>();
 
@@ -39,17 +41,25 @@ public final class DispatchResultSelectorBar extends HBox {
         badge.getStyleClass().add("pm-dispatch-result-badge");
         badge.setVisible(false);
         badge.setManaged(false);
+        catalogNote.getStyleClass().add("pm-dispatch-result-badge");
+        catalogNote.setVisible(false);
+        catalogNote.setManaged(false);
         Button refresh = new Button("一覧を更新");
         refresh.setOnAction(e -> shell.refreshDispatchSnapshotCatalogAsync());
         removeButton.setOnAction(e -> shell.deleteSelectedOwnDispatchSnapshotAsync());
         operatorCombo.setOnAction(e -> onOperatorChosen());
         generationCombo.setOnAction(e -> onGenerationChosen());
-        getChildren().addAll(caption, operatorCombo, generationCombo, refresh, removeButton, badge);
+        getChildren().addAll(caption, operatorCombo, generationCombo, refresh, removeButton, badge, catalogNote);
         syncFromSelection();
     }
 
     public void setCatalog(List<DispatchSnapshotStore.SnapshotRef> refs) {
+        setCatalog(refs, catalogError);
+    }
+
+    public void setCatalog(List<DispatchSnapshotStore.SnapshotRef> refs, String error) {
         catalog = refs == null ? List.of() : List.copyOf(refs);
+        catalogError = error == null ? "" : error.strip();
         syncFromSelection();
     }
 
@@ -87,6 +97,10 @@ public final class DispatchResultSelectorBar extends HBox {
                 badge.setManaged(!text.isBlank());
                 removeButton.setDisable(!selection.ownPast());
             }
+            boolean failed = !catalogError.isBlank();
+            catalogNote.setText(failed ? "一覧失敗: " + catalogError : "");
+            catalogNote.setVisible(failed);
+            catalogNote.setManaged(failed);
         } catch (RuntimeException ex) {
             shell.appendLog("[dispatch-snapshot] 選択表示を更新できません: " + ex.getMessage());
         } finally {

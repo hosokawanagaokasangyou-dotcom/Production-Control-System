@@ -1791,8 +1791,9 @@ public final class EquipmentGanttGraphicTabController {
         boolean hasMeta =
                 loadedAssignmentMetadata != null
                         && !loadedAssignmentMetadata.barUnits().isEmpty();
-        personBadgeAssignmentEditRadio.setDisable(!hasMeta);
-        if (!hasMeta
+        boolean viewOnly = shell != null && shell.isViewingNonLocalDispatchResult();
+        personBadgeAssignmentEditRadio.setDisable(!hasMeta || viewOnly);
+        if ((!hasMeta || viewOnly)
                 && personBadgeAssignmentEditRadio.isSelected()
                 && personBadgeInteractionNoneRadio != null) {
             personBadgeInteractionNoneRadio.setSelected(true);
@@ -2039,6 +2040,9 @@ public final class EquipmentGanttGraphicTabController {
         if (planJsonField == null) {
             return;
         }
+        if (shell != null && shell.isViewingNonLocalDispatchResult()) {
+            return;
+        }
         String cur = planJsonField.getText().strip();
         if (!cur.isEmpty() && Files.isRegularFile(Path.of(cur))) {
             return;
@@ -2162,9 +2166,23 @@ public final class EquipmentGanttGraphicTabController {
             }
         } finally {
             refreshPlanningStageBadgeFromDispatchJson();
+            noteViewOnlyStatus();
             reloadButton.setDisable(false);
             syncLatestButton.setDisable(false);
         }
+    }
+
+    private void noteViewOnlyStatus() {
+        if (statusLabel == null || shell == null || !shell.isViewingNonLocalDispatchResult()) {
+            return;
+        }
+        String cur = statusLabel.getText() == null ? "" : statusLabel.getText().strip();
+        if (cur.contains("参照のみ")) {
+            return;
+        }
+        String badge = shell.currentDispatchBadgeText();
+        String mark = badge.isBlank() ? "参照のみ" : "参照のみ " + badge;
+        statusLabel.setText(cur.isEmpty() ? mark : cur + " / " + mark);
     }
 
     private void refreshPlanningStageBadgeFromDispatchJson() {
