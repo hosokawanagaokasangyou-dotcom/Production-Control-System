@@ -12,7 +12,28 @@ import jp.co.pm.ai.desktop.io.Stage2OutputNaming;
  */
 public final class DispatchResultPaths {
 
+    /**
+     * トレンド読込へ渡す表示用配台 JSON。キーが無いときはローカル正本。
+     * キーがあり値が空なら、スナップショット側にファイルが無い。
+     */
+    public static final String DISPLAY_DISPATCH_JSON_KEY = "PM_AI_DISPLAY_DISPATCH_JSON";
+
     private DispatchResultPaths() {}
+
+    public static Path dispatchJsonForLoader(Map<String, String> ui) {
+        if (ui != null && ui.containsKey(DISPLAY_DISPATCH_JSON_KEY)) {
+            String raw = ui.get(DISPLAY_DISPATCH_JSON_KEY);
+            if (raw == null || raw.isBlank()) {
+                return null;
+            }
+            try {
+                return Path.of(raw);
+            } catch (RuntimeException ex) {
+                return null;
+            }
+        }
+        return AppPaths.resolveResultDispatchTableJsonPath(ui);
+    }
 
     public static Path planJson(Map<String, String> ui, DispatchResultSelection selection) {
         if (useLocal(selection)) {

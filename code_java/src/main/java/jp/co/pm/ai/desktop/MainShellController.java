@@ -9560,6 +9560,19 @@ public final class MainShellController
         return Map.copyOf(merged);
     }
 
+    /** トレンド読込用。他者・過去の結果を見ているときは配台 JSON だけ表示中の世代を指す。 */
+    public Map<String, String> snapshotUiEnvForResultDisplay() {
+        Map<String, String> ui = new HashMap<>(snapshotUiEnv());
+        if (!isViewingNonLocalDispatchResult()) {
+            return ui;
+        }
+        Path shown = displayDispatchJsonPath();
+        ui.put(
+                jp.co.pm.ai.desktop.dispatch.DispatchResultPaths.DISPLAY_DISPATCH_JSON_KEY,
+                shown == null ? "" : shown.toString());
+        return ui;
+    }
+
     @Override
     public void refreshOperatorUserPresentation() {
         refreshMainRunTabOperatorLabel();
@@ -11884,7 +11897,10 @@ public final class MainShellController
         Platform.runLater(
                 () -> {
                     try {
-                        useLocalLatestDispatchResult();
+                        DispatchResultSelection selection = dispatchResultSelection();
+                        if (!selection.isLocalLatest()) {
+                            selection.selectLocal();
+                        }
                     } catch (Exception ex) {
                         appendLog("[dispatch-snapshot] 自分の最新表示へ戻せません: " + ex.getMessage());
                     }

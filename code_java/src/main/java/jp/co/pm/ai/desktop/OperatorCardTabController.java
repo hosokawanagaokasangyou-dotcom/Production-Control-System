@@ -447,6 +447,9 @@ public final class OperatorCardTabController {
         if (memberJsonField == null) {
             return;
         }
+        if (shell != null && shell.isViewingNonLocalDispatchResult()) {
+            return;
+        }
         String m = memberSchedulePath != null ? memberSchedulePath.strip() : "";
         if (m.isEmpty()) {
             return;

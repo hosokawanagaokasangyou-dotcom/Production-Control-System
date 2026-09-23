@@ -49,6 +49,8 @@ public final class DispatchResultSelectorBar extends HBox {
         removeButton.setOnAction(e -> shell.deleteSelectedOwnDispatchSnapshotAsync());
         operatorCombo.setOnAction(e -> onOperatorChosen());
         generationCombo.setOnAction(e -> onGenerationChosen());
+        operatorCombo.setOnShowing(e -> shell.refreshDispatchSnapshotCatalogAsync());
+        generationCombo.setOnShowing(e -> shell.refreshDispatchSnapshotCatalogAsync());
         getChildren().addAll(caption, operatorCombo, generationCombo, refresh, removeButton, badge, catalogNote);
         syncFromSelection();
     }

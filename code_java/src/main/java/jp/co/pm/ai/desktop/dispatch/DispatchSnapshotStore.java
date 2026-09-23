@@ -5,6 +5,7 @@ import java.net.InetAddress;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.time.LocalDate;
@@ -104,32 +105,45 @@ public final class DispatchSnapshotStore {
         String host = sanitizeToken(hostName());
         String genName = GEN_TS.format(t) + "_" + host + "_" + stage;
         Path genDir = snapshotRoot.resolve(operatorDir).resolve(genName);
-        Files.createDirectories(genDir);
+        boolean committed = false;
+        try {
+            Files.createDirectories(genDir);
 
-        List<String> copied = new ArrayList<>();
-        List<String> missing = new ArrayList<>();
-        copyIfPresent(planJson, genDir, copied, missing);
-        copyIfPresent(memberJson, genDir, copied, missing);
-        copyNamed(dispatchJson, genDir, AppPaths.RESULT_DISPATCH_TABLE_JSON_BASENAME, copied, missing);
-        copyNamed(shapedAladdin, genDir, AppPaths.SHAPED_ALADDIN_PLAN_JSON_BASENAME, copied, missing);
-        copyNamed(
-                shapedActuals, genDir, AppPaths.SHAPED_PROCESSING_ACTUALS_JSON_BASENAME, copied, missing);
+            List<String> copied = new ArrayList<>();
+            List<String> missing = new ArrayList<>();
+            copyIfPresent(planJson, genDir, copied, missing);
+            copyIfPresent(memberJson, genDir, copied, missing);
+            copyNamed(dispatchJson, genDir, AppPaths.RESULT_DISPATCH_TABLE_JSON_BASENAME, copied, missing);
+            copyNamed(shapedAladdin, genDir, AppPaths.SHAPED_ALADDIN_PLAN_JSON_BASENAME, copied, missing);
+            copyNamed(
+                    shapedActuals,
+                    genDir,
+                    AppPaths.SHAPED_PROCESSING_ACTUALS_JSON_BASENAME,
+                    copied,
+                    missing);
 
-        Map<String, Object> meta = new LinkedHashMap<>();
-        meta.put("format_version", FORMAT_VERSION);
-        meta.put("operator", operatorName == null ? "" : operatorName.strip());
-        meta.put("operator_dir", operatorDir);
-        meta.put("stage", stage);
-        meta.put("host", host);
-        meta.put("saved_at", t.toString());
-        meta.put("copied", copied);
-        meta.put("missing", missing);
-        Files.writeString(
-                genDir.resolve(META_JSON),
-                JSON.writerWithDefaultPrettyPrinter().writeValueAsString(meta) + "\n",
-                StandardCharsets.UTF_8);
-        pruneExpired(snapshotRoot, t.toLocalDate(), RETENTION_DAYS);
-        return new PublishResult(genDir, List.copyOf(copied), List.copyOf(missing));
+            Map<String, Object> meta = new LinkedHashMap<>();
+            meta.put("format_version", FORMAT_VERSION);
+            meta.put("operator", operatorName == null ? "" : operatorName.strip());
+            meta.put("operator_dir", operatorDir);
+            meta.put("stage", stage);
+            meta.put("host", host);
+            meta.put("saved_at", t.toString());
+            meta.put("copied", copied);
+            meta.put("missing", missing);
+            Files.writeString(
+                    genDir.resolve(META_JSON),
+                    JSON.writerWithDefaultPrettyPrinter().writeValueAsString(meta) + "\n",
+                    StandardCharsets.UTF_8);
+            committed = true;
+            pruneExpired(snapshotRoot, t.toLocalDate(), RETENTION_DAYS);
+            return new PublishResult(genDir, List.copyOf(copied), List.copyOf(missing));
+        } catch (IOException ex) {
+            if (!committed) {
+                deleteTreeQuiet(genDir);
+            }
+            throw ex;
+        }
     }
 
     /** 読める世代だけ返す。壊れた meta や未知の format_version は飛ばす。 */
@@ -225,7 +239,16 @@ public final class DispatchSnapshotStore {
         if (!isGenerationDirName(generationDir)) {
             return null;
         }
-        return snapshotRoot.resolve(operatorDir).resolve(generationDir).normalize();
+        String operator = operatorDir.strip();
+        if (!operator.equals(OperatorUserPaths.sanitizeOperatorDirName(operator))) {
+            return null;
+        }
+        Path root = snapshotRoot.toAbsolutePath().normalize();
+        Path dir = root.resolve(operator).resolve(generationDir).normalize();
+        if (!dir.startsWith(root)) {
+            return null;
+        }
+        return dir;
     }
 
     static boolean isGenerationDirName(String name) {
@@ -307,7 +330,7 @@ public final class DispatchSnapshotStore {
 
     private static void copyIfPresent(Path source, Path genDir, List<String> copied, List<String> missing)
             throws IOException {
-        if (source == null || !Files.isRegularFile(source)) {
+        if (source == null || !Files.isRegularFile(source, LinkOption.NOFOLLOW_LINKS)) {
             missing.add(source == null ? "(none)" : source.getFileName().toString());
             return;
         }
@@ -323,7 +346,7 @@ public final class DispatchSnapshotStore {
     private static void copyNamed(
             Path source, Path genDir, String name, List<String> copied, List<String> missing)
             throws IOException {
-        if (source == null || !Files.isRegularFile(source)) {
+        if (source == null || !Files.isRegularFile(source, LinkOption.NOFOLLOW_LINKS)) {
             missing.add(name);
             return;
         }
@@ -337,6 +360,19 @@ public final class DispatchSnapshotStore {
             return host == null || host.isBlank() ? "pc" : host.strip();
         } catch (Exception ex) {
             return "pc";
+        }
+    }
+
+    private static void deleteTreeQuiet(Path dir) {
+        if (dir == null || !Files.exists(dir)) {
+            return;
+        }
+        try (var walk = Files.walk(dir)) {
+            for (Path p : walk.sorted((a, b) -> b.getNameCount() - a.getNameCount()).toList()) {
+                Files.deleteIfExists(p);
+            }
+        } catch (IOException ex) {
+            // 残骸が残っても公開失敗としては呼び出し側に返す
         }
     }
 

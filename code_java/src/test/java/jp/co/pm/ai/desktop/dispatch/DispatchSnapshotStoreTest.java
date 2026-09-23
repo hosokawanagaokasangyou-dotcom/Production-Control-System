@@ -2,6 +2,7 @@ package jp.co.pm.ai.desktop.dispatch;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.charset.StandardCharsets;
@@ -171,5 +172,16 @@ class DispatchSnapshotStoreTest {
                 selection.selectSnapshot(
                         "細川", "20260923-090000-001_pc_stage2", "他者の結果", "x", false));
         assertFalse(selection.isLocalLatest());
+    }
+
+    @Test
+    void generationDirStaysInsideSnapshotRoot() {
+        Path root = temp.resolve("share");
+        String gen = "20260923-090000-001_pc_stage2";
+        Path ok = DispatchSnapshotStore.generationDir(root, "森岡", gen);
+        assertTrue(ok.startsWith(root.toAbsolutePath().normalize()));
+        assertNull(DispatchSnapshotStore.generationDir(root, "..", gen));
+        assertNull(DispatchSnapshotStore.generationDir(root, "a/../../etc", gen));
+        assertNull(DispatchSnapshotStore.generationDir(root, "森岡", "../20260923-090000-001_pc_stage2"));
     }
 }

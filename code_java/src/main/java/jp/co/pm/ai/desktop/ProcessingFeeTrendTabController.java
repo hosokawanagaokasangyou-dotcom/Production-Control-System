@@ -741,7 +741,11 @@ public class ProcessingFeeTrendTabController {
         this.shell = shell;
         try {
             shell.installDispatchResultSelector(
-                    dispatchResultSelectorHost, this::updatePlanSourceMeta);
+                    dispatchResultSelectorHost,
+                    () -> {
+                        updatePlanSourceMeta();
+                        reloadFromSources(false);
+                    });
         } catch (Exception ex) {
             // 選択バーなしでもトレンド自体は従来どおり
         }
@@ -1137,7 +1141,7 @@ public class ProcessingFeeTrendTabController {
             return;
         }
         reloadInFlight = true;
-        final Map<String, String> ui = shell.snapshotUiEnv();
+        final Map<String, String> ui = shell.snapshotUiEnvForResultDisplay();
         final SourceFingerprint previous = loadedFingerprint;
         final boolean haveCache = cachedSources != null;
         final boolean showBusy = userInitiated || !haveCache;

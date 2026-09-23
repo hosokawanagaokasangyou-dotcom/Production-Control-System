@@ -1332,6 +1332,9 @@ public final class EquipmentGanttGraphicTabController {
      * アコーディオン「閲覧モード」では担当割当編集を無効にする。位置調整と同様。
      */
     private boolean effectivePersonBadgeAssignmentEditEnabled() {
+        if (shell != null && shell.isViewingNonLocalDispatchResult()) {
+            return false;
+        }
         if (personBadgeAssignmentEditRadio == null
                 || !personBadgeAssignmentEditRadio.isSelected()) {
             return false;
@@ -1928,6 +1931,9 @@ public final class EquipmentGanttGraphicTabController {
         if (planJsonField == null) {
             return;
         }
+        if (shell != null && shell.isViewingNonLocalDispatchResult()) {
+            return;
+        }
         String p = productionPlanPath != null ? productionPlanPath.strip() : "";
         if (p.isEmpty()) {
             return;
@@ -1965,6 +1971,10 @@ public final class EquipmentGanttGraphicTabController {
      */
     void syncLatestPlanJsonFromOutputDirAndReload(boolean userCompletionDialog) {
         if (shell == null) {
+            return;
+        }
+        if (shell.isViewingNonLocalDispatchResult()) {
+            reloadForSharedDispatchSelection();
             return;
         }
         Map<String, String> ui = shell.snapshotUiEnv();

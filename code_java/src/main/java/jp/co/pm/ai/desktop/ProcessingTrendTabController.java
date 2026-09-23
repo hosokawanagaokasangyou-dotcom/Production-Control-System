@@ -390,7 +390,11 @@ public class ProcessingTrendTabController {
         this.shell = shell;
         try {
             shell.installDispatchResultSelector(
-                    dispatchResultSelectorHost, this::updatePlanSourceMeta);
+                    dispatchResultSelectorHost,
+                    () -> {
+                        updatePlanSourceMeta();
+                        reloadFromSources(false);
+                    });
         } catch (Exception ex) {
             // 選択バーなしでもトレンド自体は従来どおり
         }
@@ -1393,7 +1397,7 @@ public class ProcessingTrendTabController {
         if (showBusy) {
             setReloading(true);
         }
-        final Map<String, String> ui = shell.snapshotUiEnv();
+        final Map<String, String> ui = shell.snapshotUiEnvForResultDisplay();
         Task<ReloadOutcome> task =
                 new Task<>() {
                     @Override

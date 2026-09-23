@@ -358,6 +358,9 @@ public final class PlanResultViewerTabController {
         if (planJsonField == null || memberJsonField == null) {
             return;
         }
+        if (shell != null && shell.isViewingNonLocalDispatchResult()) {
+            return;
+        }
         String p = productionPlanPath != null ? productionPlanPath.strip() : "";
         String m = memberSchedulePath != null ? memberSchedulePath.strip() : "";
         boolean touched = false;

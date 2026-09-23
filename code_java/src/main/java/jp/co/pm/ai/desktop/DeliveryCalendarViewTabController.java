@@ -563,45 +563,44 @@ public final class DeliveryCalendarViewTabController {
     }
 
     private Path dispatchJsonForDisplay(Map<String, String> ui) {
-        if (shell != null) {
-            try {
-                Path path = shell.displayDispatchJsonPath();
-                if (path != null) {
-                    return path;
-                }
-            } catch (RuntimeException ex) {
-                // 従来解決へ
-            }
-        }
-        return AppPaths.resolveResultDispatchTableJsonPath(ui);
+        return pathForDisplay(
+                () -> shell.displayDispatchJsonPath(),
+                () -> AppPaths.resolveResultDispatchTableJsonPath(ui));
     }
 
     private Path shapedAladdinForDisplay(Map<String, String> ui) {
-        if (shell != null) {
-            try {
-                Path path = shell.displayShapedAladdinJsonPath();
-                if (path != null) {
-                    return path;
-                }
-            } catch (RuntimeException ex) {
-                // 従来解決へ
-            }
-        }
-        return AppPaths.resolveShapedAladdinPlanJsonPath(ui);
+        return pathForDisplay(
+                () -> shell.displayShapedAladdinJsonPath(),
+                () -> AppPaths.resolveShapedAladdinPlanJsonPath(ui));
     }
 
     private Path shapedActualsForDisplay(Map<String, String> ui) {
+        return pathForDisplay(
+                () -> shell.displayShapedActualsJsonPath(),
+                () -> AppPaths.resolveShapedProcessingActualsJsonPath(ui));
+    }
+
+    private Path pathForDisplay(
+            java.util.function.Supplier<Path> display,
+            java.util.function.Supplier<Path> local) {
+        if (shell != null && shell.isViewingNonLocalDispatchResult()) {
+            try {
+                return display.get();
+            } catch (RuntimeException ex) {
+                return null;
+            }
+        }
         if (shell != null) {
             try {
-                Path path = shell.displayShapedActualsJsonPath();
+                Path path = display.get();
                 if (path != null) {
                     return path;
                 }
             } catch (RuntimeException ex) {
-                // 従来解決へ
+                // ローカル最新の従来解決へ
             }
         }
-        return AppPaths.resolveShapedProcessingActualsJsonPath(ui);
+        return local.get();
     }
 
     void applySharedDispatchSelection() {
@@ -1987,7 +1986,8 @@ public final class DeliveryCalendarViewTabController {
         List<String> planHeaders;
         List<List<String>> planRows;
         Path aladdinJsonPath = shapedAladdinForDisplay(ui);
-        if (Files.isRegularFile(aladdinJsonPath)) {
+        boolean viewOnly = shell != null && shell.isViewingNonLocalDispatchResult();
+        if (aladdinJsonPath != null && Files.isRegularFile(aladdinJsonPath)) {
             try {
                 JsonTableIo.ArrayTable t = JsonTableIo.loadArrayTable(aladdinJsonPath);
                 planHeaders = t.columns();
@@ -1997,9 +1997,12 @@ public final class DeliveryCalendarViewTabController {
                     shell.appendLog(
                             "[delivery-calendar] aladdin shaped JSON load failed: " + ex.getMessage());
                 }
-                planHeaders = aladdinProcessingPlanDataTabController.getShapedHeaders();
-                planRows = aladdinProcessingPlanDataTabController.getShapedRows();
+                planHeaders = viewOnly ? List.of() : aladdinProcessingPlanDataTabController.getShapedHeaders();
+                planRows = viewOnly ? List.of() : aladdinProcessingPlanDataTabController.getShapedRows();
             }
+        } else if (viewOnly) {
+            planHeaders = List.of();
+            planRows = List.of();
         } else {
             planHeaders = aladdinProcessingPlanDataTabController.getShapedHeaders();
             planRows = aladdinProcessingPlanDataTabController.getShapedRows();
@@ -2009,7 +2012,7 @@ public final class DeliveryCalendarViewTabController {
         List<String> actHeaders;
         List<List<String>> actRows;
         Path actualsJsonPath = shapedActualsForDisplay(ui);
-        if (Files.isRegularFile(actualsJsonPath)) {
+        if (actualsJsonPath != null && Files.isRegularFile(actualsJsonPath)) {
             try {
                 JsonTableIo.ArrayTable t = JsonTableIo.loadArrayTable(actualsJsonPath);
                 actHeaders = t.columns();
@@ -2019,9 +2022,13 @@ public final class DeliveryCalendarViewTabController {
                     shell.appendLog(
                             "[delivery-calendar] actuals shaped JSON load failed: " + ex.getMessage());
                 }
-                actHeaders = processingActualsDataTabController.getUnfilteredShapedHeaders();
-                actRows = processingActualsDataTabController.getUnfilteredShapedRows();
+                actHeaders =
+                        viewOnly ? List.of() : processingActualsDataTabController.getUnfilteredShapedHeaders();
+                actRows = viewOnly ? List.of() : processingActualsDataTabController.getUnfilteredShapedRows();
             }
+        } else if (viewOnly) {
+            actHeaders = List.of();
+            actRows = List.of();
         } else {
             actHeaders = processingActualsDataTabController.getUnfilteredShapedHeaders();
             actRows = processingActualsDataTabController.getUnfilteredShapedRows();
@@ -2278,15 +2285,16 @@ public final class DeliveryCalendarViewTabController {
 
     private DispatchTableSnapshot loadDispatchTableSnapshot(Map<String, String> ui) {
         Path dispatchJsonPath = dispatchJsonForDisplay(ui);
+        boolean viewOnly = shell != null && shell.isViewingNonLocalDispatchResult();
         List<String> disHeaders =
-                deliveryCalendarResultDispatchTableTabController != null
+                !viewOnly && deliveryCalendarResultDispatchTableTabController != null
                         ? deliveryCalendarResultDispatchTableTabController.getShapedHeaders()
                         : List.of();
         List<List<String>> disRows =
-                deliveryCalendarResultDispatchTableTabController != null
+                !viewOnly && deliveryCalendarResultDispatchTableTabController != null
                         ? deliveryCalendarResultDispatchTableTabController.getShapedRows()
                         : List.of();
-        if (Files.isRegularFile(dispatchJsonPath)) {
+        if (dispatchJsonPath != null && Files.isRegularFile(dispatchJsonPath)) {
             try {
                 JsonTableIo.SheetTable st = JsonTableIo.loadFlatTable(dispatchJsonPath);
                 if (!st.columns().isEmpty() && !st.rows().isEmpty()) {

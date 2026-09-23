@@ -222,6 +222,13 @@ public final class DeliveryCalendarDispatchTaskSummaryTabController {
     }
 
     private Path dispatchJsonForDisplay(Map<String, String> ui) {
+        if (shell != null && shell.isViewingNonLocalDispatchResult()) {
+            try {
+                return shell.displayDispatchJsonPath();
+            } catch (RuntimeException ex) {
+                return null;
+            }
+        }
         if (shell != null) {
             try {
                 Path path = shell.displayDispatchJsonPath();
@@ -229,7 +236,7 @@ public final class DeliveryCalendarDispatchTaskSummaryTabController {
                     return path;
                 }
             } catch (RuntimeException ex) {
-                // 従来解決へ
+                // ローカル最新の従来解決へ
             }
         }
         return AppPaths.resolveResultDispatchTableJsonPath(ui);
@@ -287,9 +294,9 @@ public final class DeliveryCalendarDispatchTaskSummaryTabController {
         Map<String, String> ui = shell.snapshotUiEnv();
         Path path = dispatchJsonForDisplay(ui);
         if (pathLabel != null) {
-            pathLabel.setText(path.toString());
+            pathLabel.setText(path == null ? "" : path.toString());
         }
-        if (!Files.isRegularFile(path)) {
+        if (path == null || !Files.isRegularFile(path)) {
             if (statusLabel != null) {
                 statusLabel.setText("ファイルなし");
             }

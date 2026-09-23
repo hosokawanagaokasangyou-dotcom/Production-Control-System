@@ -12,6 +12,7 @@ import java.util.Optional;
 import java.util.Set;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
+import jp.co.pm.ai.desktop.dispatch.DispatchResultPaths;
 import jp.co.pm.ai.desktop.config.NetworkSourceDirResolver;
 import jp.co.pm.ai.desktop.io.JsonTableIo;
 import jp.co.pm.ai.desktop.io.NetworkSourceFileReloadCache;
@@ -177,7 +178,7 @@ public final class EquipmentStatusDashboardSourceLoader {
         return new SourceFingerprint(
                 actualKey,
                 aladdinFingerprintKey(env),
-                fileKey(AppPaths.resolveResultDispatchTableJsonPath(env), ""),
+                fileKey(dispatchJsonPath(env), ""),
                 fileKey(KonanDailyReportLookup.resolveNewestCsvPath(env).orElse(null), "daily-report"));
     }
 
@@ -194,7 +195,7 @@ public final class EquipmentStatusDashboardSourceLoader {
                 pathIdentityKey(r.actualDetailPath().orElse(null), sheet.isEmpty() ? "0" : sheet);
         String aladdin = aladdinPathIdentityKey(env);
         String dispatch =
-                pathIdentityKey(AppPaths.resolveResultDispatchTableJsonPath(env), "");
+                pathIdentityKey(dispatchJsonPath(env), "");
         String daily =
                 pathIdentityKey(
                         KonanDailyReportLookup.resolveNewestCsvPath(env).orElse(null), "daily-report");
@@ -337,8 +338,8 @@ public final class EquipmentStatusDashboardSourceLoader {
                 sizes.aladdinBytes = fileSize(shaped);
             }
         }
-        Path dispatch = AppPaths.resolveResultDispatchTableJsonPath(env);
-        if (Files.isRegularFile(dispatch)) {
+        Path dispatch = dispatchJsonPath(env);
+        if (dispatch != null && Files.isRegularFile(dispatch)) {
             sizes.dispatchBytes = fileSize(dispatch);
         }
         return sizes;
@@ -565,9 +566,13 @@ public final class EquipmentStatusDashboardSourceLoader {
         return EquipmentStatusDashboardBuilder.aladdinFrom(shaped);
     }
 
+    private static Path dispatchJsonPath(Map<String, String> ui) {
+        return DispatchResultPaths.dispatchJsonForLoader(ui);
+    }
+
     private static DispatchSnapshot loadDispatch(Map<String, String> ui) {
-        Path path = AppPaths.resolveResultDispatchTableJsonPath(ui);
-        if (!Files.isRegularFile(path)) {
+        Path path = dispatchJsonPath(ui);
+        if (path == null || !Files.isRegularFile(path)) {
             return new DispatchSnapshot(List.of(), List.of());
         }
         try {
@@ -607,8 +612,8 @@ public final class EquipmentStatusDashboardSourceLoader {
     }
 
     private static String dispatchLabel(Map<String, String> ui) {
-        Path p = AppPaths.resolveResultDispatchTableJsonPath(ui);
-        return Files.isRegularFile(p) ? p.getFileName().toString() : "(なし)";
+        Path p = dispatchJsonPath(ui);
+        return p != null && Files.isRegularFile(p) ? p.getFileName().toString() : "(なし)";
     }
 
     private static String dailyReportLabel(Map<String, String> ui) {
@@ -664,9 +669,9 @@ public final class EquipmentStatusDashboardSourceLoader {
                                     }
                                     return "(なし — PM_AI_TASK_INPUT_SOURCE_DIR 等を確認)";
                                 });
-        Path dispatch = AppPaths.resolveResultDispatchTableJsonPath(env);
+        Path dispatch = dispatchJsonPath(env);
         String dispatchPath =
-                Files.isRegularFile(dispatch)
+                dispatch != null && Files.isRegularFile(dispatch)
                         ? dispatch.toAbsolutePath().normalize().toString()
                         : "(なし — 結果_配台表.json を確認)";
         String dailyReport =
