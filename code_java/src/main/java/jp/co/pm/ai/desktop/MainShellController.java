@@ -6218,6 +6218,9 @@ public final class MainShellController
         try {
             Stage1DevMarkAllExcludeAfterRun.ApplySummary summary =
                     Stage1DevMarkAllExcludeAfterRun.applyToPlanInput(collectUiEnv());
+            // #region agent log
+            jp.co.pm.ai.desktop.debug.PlanInputConflictProbe.note("dev-exclude-write");
+            // #endregion
             appendLog(
                     "[dev] 段階1後: 配台計画_タスク入力の全行を配台不要 yes に更新しました（"
                             + summary.updatedRows()
@@ -10592,9 +10595,7 @@ public final class MainShellController
             return;
         }
         if (planInputTabController != null
-                && planInputTabController.isPlanInputTableDirtySinceSave()) {
-            appendLog(
-                    "[stage2] 配台計画_タスク入力タブの表に未保存の変更があります。「保存」または「再読み」で確定してから実行してください。");
+                && !planInputTabController.settleUnsavedForStageRun("stage2")) {
             return;
         }
         if (blockIfAttendanceNotReadyForStage2()) {
@@ -10759,12 +10760,7 @@ public final class MainShellController
             return;
         }
         if (planInputTabController != null
-                && planInputTabController.isPlanInputTableDirtySinceSave()) {
-            appendLog(
-                    "[stage2.1] 配台計画_タスク入力タブの表に未保存の変更があります。「保存」または「再読み」で確定してから実行してください。");
-            showErrorDialog(
-                    "段階2.1",
-                    "配台計画_タスク入力タブの変更を「保存」または「再読み」で確定してから段階2.1 を実行してください。");
+                && !planInputTabController.settleUnsavedForStageRun("stage2.1")) {
             return;
         }
         if (blockIfAttendanceNotReadyForStage2()) {
@@ -10822,9 +10818,7 @@ public final class MainShellController
             return;
         }
         if (planInputTabController != null
-                && planInputTabController.isPlanInputTableDirtySinceSave()) {
-            appendLog(
-                    "[stage2.1] 配台計画_タスク入力タブの表に未保存の変更があります。「保存」または「再読み」で確定してから実行してください。");
+                && !planInputTabController.settleUnsavedForStageRun("stage2.1")) {
             return;
         }
         if (!guardTodayDispatchSourceBundleBeforeStageRun(
@@ -11247,6 +11241,9 @@ public final class MainShellController
         if (planInputTabController != null) {
             planInputTabController.reloadQuietlyFromDisk();
         }
+        // #region agent log
+        jp.co.pm.ai.desktop.debug.PlanInputConflictProbe.note("stage2-unknown-combo");
+        // #endregion
     }
 
     /**
@@ -11452,6 +11449,9 @@ public final class MainShellController
             if (reloadAfterStage1PlanInput != null) {
                 reloadAfterStage1PlanInput.run();
             }
+            // #region agent log
+            jp.co.pm.ai.desktop.debug.PlanInputConflictProbe.note("ec-side-reloaded");
+            // #endregion
         } catch (IOException ex) {
             appendLog(
                     "[stage1] EC面区分選択ダイアログ失敗: "

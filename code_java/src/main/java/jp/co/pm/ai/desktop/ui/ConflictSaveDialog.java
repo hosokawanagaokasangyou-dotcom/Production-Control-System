@@ -23,20 +23,27 @@ public final class ConflictSaveDialog {
         if (owner != null) {
             dialog.initOwner(owner);
         }
-        dialog.setTitle("外部変更の検出");
+        dialog.setTitle("保存の確認");
         dialog.setHeaderText(
-                "⚠ 競合 — "
-                        + (screenTitle != null && !screenTitle.isBlank() ? screenTitle : "保存先")
-                        + " が他で変更されています");
+                (screenTitle != null && !screenTitle.isBlank() ? screenTitle : "保存先")
+                        + " を保存する前に、ファイルの違いを確認してください");
 
-        Label caption = new Label("変更の要約");
-        TextArea area = new TextArea(summary != null ? summary : "");
+        Label caption = new Label("いまの状態");
+        caption.setStyle("-fx-text-fill: #1f2937;");
+        String guide =
+                "\n\nボタンの意味\n"
+                        + "・再読込して更新 … 画面の未保存の編集を捨て、今のファイルを表示します。保存はしません。\n"
+                        + "・強制上書き … 今の画面の内容でファイルを上書きします。ファイル側の変更は残しません。\n"
+                        + "・キャンセル … 保存を中止します。画面もファイルもそのままです。";
+        TextArea area = new TextArea((summary != null ? summary : "") + guide);
         area.setEditable(false);
         area.setWrapText(true);
-        area.setPrefRowCount(12);
+        area.setPrefRowCount(14);
         area.setPrefWidth(560);
-        Label note = new Label("「再読込して更新」を選ぶと、いまの未保存編集は破棄されます。");
+        area.setStyle("-fx-control-inner-background: #ffffff; -fx-text-fill: #111827;");
+        Label note = new Label("迷ったときは「キャンセル」です。画面の編集を残したまま、保存だけ止めます。");
         note.setWrapText(true);
+        note.setStyle("-fx-text-fill: #1f2937;");
 
         VBox body = new VBox(8, caption, area, note);
         body.setPadding(new Insets(8));

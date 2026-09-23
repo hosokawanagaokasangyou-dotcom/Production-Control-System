@@ -10,6 +10,7 @@ import javafx.scene.control.Alert;
 import javafx.scene.control.ButtonType;
 import javafx.stage.Window;
 
+import jp.co.pm.ai.desktop.debug.PlanInputConflictProbe;
 import jp.co.pm.ai.desktop.ui.ConflictSaveDialog;
 
 /**
@@ -59,7 +60,27 @@ public final class SaveConflictUiGate {
         }
         String summary =
                 SaveConflictGate.summarizeOrFallback(summarizer, baseline, disk, check);
+        // #region agent log
+        PlanInputConflictProbe.event(
+                "D",
+                "SaveConflictUiGate.allowSave",
+                "dialog-open",
+                Map.of(
+                        "screen",
+                        screenTitle == null ? "" : screenTitle,
+                        "kind",
+                        String.valueOf(check.kind()),
+                        "files",
+                        String.valueOf(check.mismatchedPaths().size())));
+        // #endregion
         ConflictSaveChoice choice = ConflictSaveDialog.show(owner, screenTitle, summary);
+        // #region agent log
+        PlanInputConflictProbe.event(
+                "D",
+                "SaveConflictUiGate.allowSave",
+                "dialog-choice",
+                Map.of("choice", String.valueOf(choice), "screen", screenTitle == null ? "" : screenTitle));
+        // #endregion
         if (choice == ConflictSaveChoice.CANCEL) {
             return false;
         }

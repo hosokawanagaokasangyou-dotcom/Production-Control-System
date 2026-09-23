@@ -58,6 +58,8 @@ import jp.co.pm.ai.desktop.io.PlanInputTabularIo;
 import jp.co.pm.ai.desktop.io.conflict.ConflictDiffSummarizer;
 import jp.co.pm.ai.desktop.io.conflict.FingerprintBaseline;
 import jp.co.pm.ai.desktop.io.conflict.NamedFileConflictDiffSummarizer;
+import jp.co.pm.ai.desktop.debug.PlanInputConflictProbe;
+import jp.co.pm.ai.desktop.io.conflict.FileContentFingerprint;
 import jp.co.pm.ai.desktop.io.conflict.SaveConflictUiGate;
 import jp.co.pm.ai.desktop.ui.ColumnVisibilitySupport;
 import jp.co.pm.ai.desktop.ui.LimitedOperatorCellEditor;
@@ -119,7 +121,21 @@ public final class PlanInputTabController {
 
     private FingerprintBaseline conflictBaseline;
     private final ConflictDiffSummarizer conflictSummarizer =
-            new NamedFileConflictDiffSummarizer("配台計画（タスク入力）");
+            (baselineSnapshots, diskBytes, mismatched) -> {
+                String detail =
+                        new NamedFileConflictDiffSummarizer("配台計画（タスク入力）")
+                                .summarize(baselineSnapshots, diskBytes, mismatched);
+                String dirtyLine =
+                        isPlanInputTableDirtySinceSave()
+                                ? "画面の表には、まだ保存していない編集があります。"
+                                : "画面の表は、読み込んだあと編集していません。";
+                return "保存先のファイルが、この画面で最後に読み込んだ内容と違います。\n"
+                        + dirtyLine
+                        + "\n"
+                        + PlanInputConflictProbe.reasonText()
+                        + "\n\n"
+                        + detail;
+            };
 
     @FXML
     private TextField pathField;
@@ -366,6 +382,9 @@ public final class PlanInputTabController {
                     sheetField.setText(AppPaths.STAGE1_PLAN_OUTPUT_SHEET);
                     discardStaleEditMarksSidecarForStage1Reload();
                     loadFromCurrentPath(false);
+                    // #region agent log
+                    PlanInputConflictProbe.note("stage1-reload");
+                    // #endregion
                 });
 
         if (!planInputCellEditHooksInstalled) {
@@ -508,7 +527,6 @@ public final class PlanInputTabController {
         boolean disable =
                 stage2RunPipelineBusy
                         || deliveryCalendarReloadBlocking
-                        || stage2BlockedByUnsavedPlanInputTableEdit
                         || stage2BlockedByAttendanceNotReady
                         || stage2BlockedBySourceExtension;
         if (stage2RunButton != null) {
@@ -536,7 +554,7 @@ public final class PlanInputTabController {
         } else if (stage2BlockedByUnsavedPlanInputTableEdit) {
             Tooltip blockedTip =
                     new Tooltip(
-                            "配台計画_タスク入力タブの表に未保存の変更があります。「保存」または「再読み」で確定してから実行してください。");
+                            "未保存の画面は、段階2の実行時にファイルの内容へ戻します。確認ダイアログは出しません。");
             if (stage2RunButton != null) {
                 stage2RunButton.setTooltip(blockedTip);
             }
@@ -1253,6 +1271,87 @@ public final class PlanInputTabController {
     }
 
     /**
+     * 段階2開始前。未保存の画面は捨ててファイルを読み直す。
+     * 読み直し後に残るのは原反投入日の再同期だけなので、ファイルが読み込み時のままなら確認ダイアログなしで保存する。
+     *
+     * @return 段階2を始めてよいとき true
+     */
+    boolean settleUnsavedForStageRun(String stageLabel) {
+        if (!isPlanInputTableDirtySinceSave()) {
+            return true;
+        }
+        String label = stageLabel == null || stageLabel.isBlank() ? "stage2" : stageLabel;
+        reloadQuietlyFromDisk();
+        if (!isPlanInputTableDirtySinceSave()) {
+            if (shell != null) {
+                shell.appendLog("[" + label + "] 未保存の画面を捨て、計画ファイルを読み直して続行します。");
+            }
+            return true;
+        }
+        if (!writeCurrentTableIfDiskUnchanged(label)) {
+            if (shell != null) {
+                shell.appendLog(
+                        "["
+                                + label
+                                + "] 計画ファイルが読み込み直後と違うため、確認なしでは保存できません。再読込してから実行してください。");
+            }
+            return false;
+        }
+        return !isPlanInputTableDirtySinceSave();
+    }
+
+    private boolean writeCurrentTableIfDiskUnchanged(String stageLabel) {
+        if (pathField.getText().isBlank() || conflictBaseline == null) {
+            return false;
+        }
+        Path path = Path.of(pathField.getText().trim()).toAbsolutePath().normalize();
+        if (conflictBaseline.paths().isEmpty() || !conflictBaseline.paths().get(0).equals(path)) {
+            return false;
+        }
+        if (jp.co.pm.ai.desktop.io.conflict.SaveConflictChecker.check(conflictBaseline).kind()
+                != jp.co.pm.ai.desktop.io.conflict.ConflictCheckResult.Kind.OK) {
+            return false;
+        }
+        try {
+            List<List<String>> dataRows = new ArrayList<>();
+            for (ObservableList<String> r : rows) {
+                List<String> copy = new ArrayList<>(r);
+                while (copy.size() < headersRef.size()) {
+                    copy.add("");
+                }
+                while (copy.size() > headersRef.size()) {
+                    copy.remove(copy.size() - 1);
+                }
+                dataRows.add(copy);
+            }
+            PlanInputTabularIo.write(
+                    path,
+                    sheetField.getText().trim().isEmpty()
+                            ? DEFAULT_PLAN_INPUT_SHEET_NAME
+                            : sheetField.getText().trim(),
+                    new PlanInputTabularIo.TabularSheet(headersRef, dataRows));
+            PlanInputEditedCellMarks.save(path, editedCellMarks);
+            refreshConflictBaseline(path);
+            clearPlanInputTableDirtySinceSave();
+            embossClusterHighlight.markSaved();
+            refreshEmbossClusterButtonHighlight();
+            if (shell != null) {
+                shell.appendLog(
+                        "["
+                                + stageLabel
+                                + "] 原反投入日の再同期を確認なしで保存しました: "
+                                + path.getFileName());
+            }
+            return true;
+        } catch (Exception ex) {
+            if (shell != null) {
+                shell.appendLog("[" + stageLabel + "] 再同期の保存に失敗: " + ex.getMessage());
+            }
+            return false;
+        }
+    }
+
+    /**
      * 段階2 成功後: Python が Excel へ書き戻した AI 解析列を表に反映する。未保存の手編集があるときは上書きしない。
      */
     void reloadQuietlyFromDiskAfterStage2IfClean() {
@@ -1261,9 +1360,15 @@ public final class PlanInputTabController {
                 shell.appendLog(
                         "[plan-input] 段階2 後の再読込をスキップしました（表に未保存の編集があります）。");
             }
+            // #region agent log
+            PlanInputConflictProbe.note("stage2-reload-skipped-dirty");
+            // #endregion
             return;
         }
         reloadQuietlyFromDisk();
+        // #region agent log
+        PlanInputConflictProbe.note("stage2-reload");
+        // #endregion
     }
 
     /** 段階1「キャッシュをクリアして実行」等で、表表示を空にする（ディスク削除は {@link Stage1AiCacheClearer}）。 */
@@ -1360,6 +1465,13 @@ public final class PlanInputTabController {
                         : (pathField.getScene() != null
                                 ? pathField.getScene().getWindow()
                                 : shell.primaryStageForDialogs());
+        // #region agent log
+        PlanInputConflictProbe.event(
+                "A",
+                "PlanInputTabController.onSaveButtonAction",
+                "save-before-gate",
+                planInputConflictSnapshot(path));
+        // #endregion
         if (!SaveConflictUiGate.allowSave(
                 owner,
                 "配台計画（タスク入力）",
@@ -1389,6 +1501,9 @@ public final class PlanInputTabController {
                     new PlanInputTabularIo.TabularSheet(headersRef, dataRows));
             PlanInputEditedCellMarks.save(path, editedCellMarks);
             refreshConflictBaseline(path);
+            // #region agent log
+            PlanInputConflictProbe.note("user-save");
+            // #endregion
             shell.appendLog("[plan-input] saved " + path);
             clearPlanInputTableDirtySinceSave();
             embossClusterHighlight.markSaved();
@@ -1852,6 +1967,11 @@ public final class PlanInputTabController {
                             + " path="
                             + path);
             refreshConflictBaseline(path);
+            // #region agent log
+            if (showCompletionDialog) {
+                PlanInputConflictProbe.note("user-load");
+            }
+            // #endregion
             if (showCompletionDialog) {
                 shell.showInformationDialog(
                         "読込完了",
@@ -1884,6 +2004,40 @@ public final class PlanInputTabController {
             conflictBaseline = null;
         }
     }
+
+    // #region agent log
+    private Map<String, Object> planInputConflictSnapshot(Path path) {
+        Map<String, Object> data = new java.util.LinkedHashMap<>();
+        data.put("dirty", isPlanInputTableDirtySinceSave());
+        data.put("file", path.getFileName() == null ? "" : path.getFileName().toString());
+        String disk = "unreadable";
+        long mtime = -1L;
+        long size = -1L;
+        try {
+            disk = FileContentFingerprint.sha256Hex(path);
+            if (disk.length() > 12) {
+                disk = disk.substring(0, 12);
+            }
+            if (java.nio.file.Files.isRegularFile(path)) {
+                mtime = java.nio.file.Files.getLastModifiedTime(path).toMillis();
+                size = java.nio.file.Files.size(path);
+            }
+        } catch (Exception ex) {
+            disk = "error";
+        }
+        data.put("diskHash12", disk);
+        data.put("mtime", mtime);
+        data.put("size", size);
+        String base = "none";
+        if (conflictBaseline != null && !conflictBaseline.hashes().isEmpty()) {
+            String full = conflictBaseline.hashes().values().iterator().next();
+            base = full == null ? "null" : (full.length() > 12 ? full.substring(0, 12) : full);
+            data.put("sameHash", base.equals(disk));
+        }
+        data.put("baselineHash12", base);
+        return data;
+    }
+    // #endregion
 
     private static String trim(String s) {
         return s != null ? s.trim() : "";
