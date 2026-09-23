@@ -93,7 +93,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import jp.co.pm.ai.desktop.ui.SevenDigitChallenge;
 import jp.co.pm.ai.desktop.ui.SevenDigitChallengeDialog;
 import jp.co.pm.ai.desktop.ui.ThemedAlertContentSupport;
-import jp.co.pm.ai.desktop.ui.TodayDispatchSourceSelectionDialog;
 import jp.co.pm.ai.planning.stage2.source.Stage1SourceBundle;
 import jp.co.pm.ai.planning.stage2.source.Stage1SourceBundleCompletionGate;
 import jp.co.pm.ai.planning.stage2.source.Stage1SourceBundleIo;
@@ -10313,7 +10312,7 @@ public final class MainShellController
     }
 
     /**
-     * 当日配台 ON のとき段階1直前に加工計画取得時刻を選び、skip_today を自動設定する。
+     * 当日配台 ON のとき段階1直前に、取得時刻が最新の加工計画と同日最接近の加工日報を使う。
      *
      * @return false なら段階1を中止
      */
@@ -10327,19 +10326,14 @@ public final class MainShellController
                             + "PM_AI_TASK_INPUT_SOURCE_DIR を確認するか、「当日は配台しない」を選んでください。");
             return false;
         }
-        Optional<Stage1SourcePairMatcher.MatchedPair> chosen =
-                TodayDispatchSourceSelectionDialog.prompt(primaryStage, rows);
-        if (chosen.isEmpty()) {
-            appendLog("[stage1] 当日配台: ソース選択をキャンセルしました。");
-            return false;
-        }
-        Stage1SourcePairMatcher.MatchedPair pair = chosen.get();
+        Stage1SourcePairMatcher.MatchedPair pair = rows.get(0);
         if (pair.dailyReport() == null) {
-            appendLog("[stage1] 当日配台: 同日の加工日報が無いため実行できません。");
+            appendLog("[stage1] 当日配台: 最新の加工計画に同日の加工日報が無いため実行できません。");
             showErrorDialog(
                     "段階1",
-                    "選択した加工計画に対応する同日の加工日報がありません。\n"
-                            + "日報を取得するか、別の計画取得時刻を選んでください。");
+                    "最新の加工計画に対応する同日の加工日報がありません。\n"
+                            + pair.plan().fileName()
+                            + "\n日報を取得してから、もう一度実行してください。");
             return false;
         }
         stage1StartedWithTodayDispatch = true;
@@ -10355,7 +10349,7 @@ public final class MainShellController
                         pair.plan().extractionTime());
         mainRunTabController.applyStage2SkipTodayDispatchFromSession(skipToday);
         appendLog(
-                "[stage1] 当日配台: 計画="
+                "[stage1] 当日配台: 最新を使用 計画="
                         + pair.plan().fileName()
                         + " 日報="
                         + pair.dailyReport().fileName()
