@@ -1504,7 +1504,8 @@ public final class PlanInputTabController {
                 conflictBaseline,
                 conflictSummarizer,
                 () -> loadFromCurrentPath(false),
-                msg -> shell.appendLog("[plan-input] " + msg))) {
+                msg -> shell.appendLog("[plan-input] " + msg),
+                true)) {
             return;
         }
         try {

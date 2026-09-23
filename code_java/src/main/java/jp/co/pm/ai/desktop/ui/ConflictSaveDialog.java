@@ -19,6 +19,14 @@ public final class ConflictSaveDialog {
     private ConflictSaveDialog() {}
 
     public static ConflictSaveChoice show(Window owner, String screenTitle, String summary) {
+        return show(owner, screenTitle, summary, false);
+    }
+
+    /**
+     * @param overwriteOrCancelOnly true のとき「上書き保存」と「キャンセル」だけ出す
+     */
+    public static ConflictSaveChoice show(
+            Window owner, String screenTitle, String summary, boolean overwriteOrCancelOnly) {
         Dialog<ConflictSaveChoice> dialog = new Dialog<>();
         if (owner != null) {
             dialog.initOwner(owner);
@@ -31,10 +39,14 @@ public final class ConflictSaveDialog {
         Label caption = new Label("いまの状態");
         caption.setStyle("-fx-text-fill: #1f2937;");
         String guide =
-                "\n\nボタンの意味\n"
-                        + "・再読込して更新 … 画面の未保存の編集を捨て、今のファイルを表示します。保存はしません。\n"
-                        + "・強制上書き … 今の画面の内容でファイルを上書きします。ファイル側の変更は残しません。\n"
-                        + "・キャンセル … 保存を中止します。画面もファイルもそのままです。";
+                overwriteOrCancelOnly
+                        ? "\n\nボタンの意味\n"
+                                + "・上書き保存 … 今の画面の内容でファイルを上書きします。ファイル側の変更は残しません。\n"
+                                + "・キャンセル … 保存を中止します。画面もファイルもそのままです。"
+                        : "\n\nボタンの意味\n"
+                                + "・再読込して更新 … 画面の未保存の編集を捨て、今のファイルを表示します。保存はしません。\n"
+                                + "・強制上書き … 今の画面の内容でファイルを上書きします。ファイル側の変更は残しません。\n"
+                                + "・キャンセル … 保存を中止します。画面もファイルもそのままです。";
         TextArea area = new TextArea((summary != null ? summary : "") + guide);
         area.setEditable(false);
         area.setWrapText(true);
@@ -51,9 +63,18 @@ public final class ConflictSaveDialog {
         dialog.getDialogPane().setStyle("-fx-background-color: #fff8f8;");
 
         ButtonType reload = new ButtonType("再読込して更新", ButtonBar.ButtonData.LEFT);
-        ButtonType overwrite = new ButtonType("強制上書き", ButtonBar.ButtonData.OTHER);
+        ButtonType overwrite =
+                new ButtonType(
+                        overwriteOrCancelOnly ? "上書き保存" : "強制上書き",
+                        overwriteOrCancelOnly
+                                ? ButtonBar.ButtonData.OK_DONE
+                                : ButtonBar.ButtonData.OTHER);
         ButtonType cancel = new ButtonType("キャンセル", ButtonBar.ButtonData.CANCEL_CLOSE);
-        dialog.getDialogPane().getButtonTypes().setAll(reload, overwrite, cancel);
+        if (overwriteOrCancelOnly) {
+            dialog.getDialogPane().getButtonTypes().setAll(overwrite, cancel);
+        } else {
+            dialog.getDialogPane().getButtonTypes().setAll(reload, overwrite, cancel);
+        }
         dialog.setResultConverter(
                 bt -> {
                     if (bt == reload) {

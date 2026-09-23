@@ -29,6 +29,20 @@ public final class SaveConflictUiGate {
             ConflictDiffSummarizer summarizer,
             Runnable onReload,
             Consumer<String> onStatusError) {
+        return allowSave(owner, screenTitle, baseline, summarizer, onReload, onStatusError, false);
+    }
+
+    /**
+     * @param overwriteOrCancelOnly true のとき再読込は出さず、上書き保存とキャンセルだけにする
+     */
+    public static boolean allowSave(
+            Window owner,
+            String screenTitle,
+            FingerprintBaseline baseline,
+            ConflictDiffSummarizer summarizer,
+            Runnable onReload,
+            Consumer<String> onStatusError,
+            boolean overwriteOrCancelOnly) {
         if (baseline == null) {
             reportError(
                     onStatusError,
@@ -73,7 +87,8 @@ public final class SaveConflictUiGate {
                         "files",
                         String.valueOf(check.mismatchedPaths().size())));
         // #endregion
-        ConflictSaveChoice choice = ConflictSaveDialog.show(owner, screenTitle, summary);
+        ConflictSaveChoice choice =
+                ConflictSaveDialog.show(owner, screenTitle, summary, overwriteOrCancelOnly);
         // #region agent log
         PlanInputConflictProbe.event(
                 "D",
