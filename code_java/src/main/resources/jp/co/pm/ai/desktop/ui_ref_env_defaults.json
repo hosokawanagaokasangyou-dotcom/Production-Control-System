@@ -538,5 +538,9 @@
     "key" : "PM_AI_KOUCHIN_JUDGMENT_DIR",
     "value" : "\\\\192.168.0.101\\共有フォルダ\\国分工場\\国分管理\\後加工\\後加工工賃明細\\●自動検証",
     "description" : "手動判定.csv / 前月過不足.csv。既定は国分 ●自動検証。BASE に自動追従しない。"
+  }, {
+    "key" : "PM_AI_DISPATCH_SNAPSHOT_DIR",
+    "value" : "",
+    "description" : "配台結果スナップショットの共有フォルダ。空なら工場共有 DATA 直下 dispatch-snapshots。段階成果物の書き込み先はローカルのまま。"
   } ]
 }

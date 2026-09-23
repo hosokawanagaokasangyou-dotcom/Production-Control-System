@@ -2344,6 +2344,15 @@
     -fx-text-fill: #333333;
 }
 
+.label.pm-dispatch-result-badge {
+    -fx-padding: 2 10 2 10;
+    -fx-background-radius: 4;
+    -fx-font-size: 12px;
+    -fx-font-weight: bold;
+    -fx-background-color: #b45309;
+    -fx-text-fill: white;
+}
+
 /* Equipment status dashboard */
 
 /*

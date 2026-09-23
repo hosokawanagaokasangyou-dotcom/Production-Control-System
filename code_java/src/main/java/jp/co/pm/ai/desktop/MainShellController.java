@@ -26,7 +26,15 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
+
+import jp.co.pm.ai.desktop.dispatch.DispatchResultPaths;
+import jp.co.pm.ai.desktop.dispatch.DispatchResultSelection;
+import jp.co.pm.ai.desktop.dispatch.DispatchResultSelectorBar;
+import jp.co.pm.ai.desktop.dispatch.DispatchSnapshotStore;
 
 import javafx.animation.PauseTransition;
 import javafx.application.Platform;
@@ -492,6 +500,15 @@ public final class MainShellController
 
     @FXML
     private OperatorCardTabController operatorCardTabController;
+
+    private DispatchResultSelection dispatchResultSelection;
+    private final CopyOnWriteArrayList<DispatchResultSelectorBar> dispatchSelectorBars =
+            new CopyOnWriteArrayList<>();
+    private final CopyOnWriteArrayList<Runnable> dispatchSelectionReloads = new CopyOnWriteArrayList<>();
+    private volatile List<DispatchSnapshotStore.SnapshotRef> dispatchSnapshotCatalog = List.of();
+    private ExecutorService dispatchSnapshotExecutor;
+    private static final String DISPATCH_TAB_MARK_OTHER = " ［他者の結果］";
+    private static final String DISPATCH_TAB_MARK_PAST = " ［過去の結果］";
 
     @FXML
     private PlanWorkspaceHistoryTabController planWorkspaceHistoryTabController;
@@ -4782,6 +4799,7 @@ public final class MainShellController
             mainRunTabController.refreshOpenWorkbookHintLabels();
             factoryOperatorToolbar.refreshFactorySiteLogo();
         }
+        resetDispatchResultSelectionToLocal();
         if (globalSettingsTabController != null) {
             globalSettingsTabController.refreshInitSettingTargetComboFromStore();
         }
@@ -6627,6 +6645,7 @@ public final class MainShellController
                     mainRunTabController.updateStage2Progress(
                             MainRunStage2Progress.State.DISPATCH_RELOADING, "");
                     refreshStage2OutputArtifacts();
+                    publishDispatchSnapshotAfterSuccessfulRun("stage2");
                     final Integer stage2ExitCode = code;
                     final Throwable stage2Err = err;
                     Platform.runLater(
@@ -6744,6 +6763,7 @@ public final class MainShellController
                                                             .OvertimeSimulationOverridesReader
                                                             .summarize(overridesForMeta));
                                     refreshStage2OutputArtifacts();
+                                    publishDispatchSnapshotAfterSuccessfulRun("stage2.1");
                                     if (promoted.mainPlanJson() != null
                                             && equipmentGanttGraphicTabController != null) {
                                         equipmentGanttGraphicTabController.syncPlanJsonPathAndReload(
@@ -7598,6 +7618,7 @@ public final class MainShellController
     /** 配台試行 正常終了後: 完了音・配台タブへ切替・完了ダイアログ。 */
     void notifyDispatchTrialSuccess() {
         appendLog("[end] 配台試行 正常終了");
+        publishDispatchSnapshotAfterSuccessfulRun("dispatch-trial");
         refreshOperatorCardAfterPipelineRun();
         MacroCompleteChime.playIfAvailable(collectUiEnv());
         selectMainShellTab(MainShellTabId.DELIVERY_CALENDAR_VIEW);
@@ -11564,6 +11585,389 @@ public final class MainShellController
                             + ex.getMessage());
             return true;
         }
+    }
+
+    public DispatchResultSelection dispatchResultSelection() {
+        if (dispatchResultSelection == null) {
+            dispatchResultSelection = new DispatchResultSelection();
+            dispatchResultSelection.addListener(this::onDispatchResultSelectionChanged);
+        }
+        return dispatchResultSelection;
+    }
+
+    public boolean isViewingNonLocalDispatchResult() {
+        try {
+            return dispatchResultSelection != null && !dispatchResultSelection.isLocalLatest();
+        } catch (RuntimeException ex) {
+            return false;
+        }
+    }
+
+    public String currentDispatchBadgeText() {
+        try {
+            return dispatchResultSelection == null ? "" : dispatchResultSelection.badgeText();
+        } catch (RuntimeException ex) {
+            return "";
+        }
+    }
+
+    public void setDispatchResultChangeAllowed(BooleanSupplier gate) {
+        try {
+            dispatchResultSelection().setChangeAllowed(gate);
+        } catch (RuntimeException ex) {
+            appendLog("[dispatch-snapshot] 切替確認を設定できません: " + ex.getMessage());
+        }
+    }
+
+    public Path displayDispatchJsonPath() {
+        return displayPath(ui -> DispatchResultPaths.dispatchJson(ui, dispatchResultSelection()));
+    }
+
+    public Path displayPlanJsonPath() {
+        return displayPath(ui -> DispatchResultPaths.planJson(ui, dispatchResultSelection()));
+    }
+
+    public Path displayMemberJsonPath() {
+        return displayPath(ui -> DispatchResultPaths.memberJson(ui, dispatchResultSelection()));
+    }
+
+    public Path displayShapedAladdinJsonPath() {
+        return displayPath(ui -> DispatchResultPaths.shapedAladdin(ui, dispatchResultSelection()));
+    }
+
+    public Path displayShapedActualsJsonPath() {
+        return displayPath(ui -> DispatchResultPaths.shapedActuals(ui, dispatchResultSelection()));
+    }
+
+    private Path displayPath(java.util.function.Function<Map<String, String>, Path> resolver) {
+        try {
+            return resolver.apply(snapshotUiEnv());
+        } catch (Exception ex) {
+            appendLog(
+                    "[dispatch-snapshot] 表示パスを解決できません: "
+                            + (ex.getMessage() != null ? ex.getMessage() : ex));
+            return null;
+        }
+    }
+
+    public void installDispatchResultSelector(javafx.scene.layout.HBox host, Runnable reload) {
+        if (host == null) {
+            return;
+        }
+        try {
+            dispatchResultSelection();
+            DispatchResultSelectorBar bar = new DispatchResultSelectorBar(this);
+            host.getChildren().setAll(bar);
+            dispatchSelectorBars.add(bar);
+            if (reload != null) {
+                dispatchSelectionReloads.add(reload);
+            }
+            bar.setCatalog(dispatchSnapshotCatalog);
+        } catch (Exception ex) {
+            appendLog(
+                    "[dispatch-snapshot] 選択バーを置けません。従来の表示のままにします: "
+                            + (ex.getMessage() != null ? ex.getMessage() : ex));
+        }
+    }
+
+    public void useLocalLatestDispatchResult() {
+        try {
+            DispatchResultSelection selection = dispatchResultSelection();
+            if (selection.isLocalLatest()) {
+                runDispatchSelectionReloads();
+                return;
+            }
+            if (!selection.selectLocal()) {
+                syncDispatchSelectorBars();
+            }
+        } catch (Exception ex) {
+            appendLog("[dispatch-snapshot] ローカル最新へ戻せません: " + ex.getMessage());
+        }
+    }
+
+    public void selectDispatchSnapshot(DispatchSnapshotStore.SnapshotRef ref) {
+        try {
+            if (ref == null) {
+                return;
+            }
+            String me =
+                    jp.co.pm.ai.desktop.config.OperatorUserPaths.sanitizeOperatorDirName(
+                            jp.co.pm.ai.desktop.config.OperatorUserPaths.resolveOperatorUser(
+                                    snapshotUiEnv()));
+            boolean own = me.equals(ref.operatorDir());
+            String badge =
+                    DispatchResultSelection.badgeTextFor(own, ref.operatorDir(), ref.savedAt());
+            String detail = badge;
+            if (ref.stage() != null && !ref.stage().isBlank()) {
+                detail = detail + " " + ref.stage();
+            }
+            if (ref.host() != null && !ref.host().isBlank()) {
+                detail = detail + " " + ref.host();
+            }
+            boolean ok =
+                    dispatchResultSelection()
+                            .selectSnapshot(
+                                    ref.operatorDir(), ref.generationDir(), badge, detail, own);
+            if (!ok) {
+                syncDispatchSelectorBars();
+            }
+        } catch (Exception ex) {
+            appendLog(
+                    "[dispatch-snapshot] 結果を選べません。ローカル最新のままにします: "
+                            + (ex.getMessage() != null ? ex.getMessage() : ex));
+            try {
+                dispatchResultSelection().selectLocal();
+            } catch (Exception ignored) {
+                // 選択が壊れても既存のローカル読込は残す
+            }
+        }
+    }
+
+    public void adoptPickedDispatchFile(Path file) {
+        try {
+            if (file == null) {
+                return;
+            }
+            Path abs = file.toAbsolutePath().normalize();
+            Path root =
+                    AppPaths.resolveDispatchSnapshotRoot(snapshotUiEnv()).toAbsolutePath().normalize();
+            if (abs.startsWith(root) && root.relativize(abs).getNameCount() >= 2) {
+                Path rel = root.relativize(abs);
+                String operator = rel.getName(0).toString();
+                String generation = rel.getName(1).toString();
+                for (DispatchSnapshotStore.SnapshotRef ref : dispatchSnapshotCatalog) {
+                    if (operator.equals(ref.operatorDir()) && generation.equals(ref.generationDir())) {
+                        selectDispatchSnapshot(ref);
+                        return;
+                    }
+                }
+                selectDispatchSnapshot(
+                        new DispatchSnapshotStore.SnapshotRef(
+                                operator, generation, "", "", generation, List.of(), 0));
+                return;
+            }
+            useLocalLatestDispatchResult();
+        } catch (Exception ex) {
+            appendLog(
+                    "[dispatch-snapshot] 選んだファイルを共通の結果にできません: "
+                            + (ex.getMessage() != null ? ex.getMessage() : ex));
+        }
+    }
+
+    public void refreshDispatchSnapshotCatalogAsync() {
+        try {
+            Map<String, String> ui = new HashMap<>(snapshotUiEnv());
+            catalogExecutor()
+                    .execute(
+                            () -> {
+                                List<DispatchSnapshotStore.SnapshotRef> listed;
+                                String error = null;
+                                try {
+                                    listed =
+                                            DispatchSnapshotStore.list(
+                                                    AppPaths.resolveDispatchSnapshotRoot(ui));
+                                } catch (Exception ex) {
+                                    listed = dispatchSnapshotCatalog;
+                                    error =
+                                            ex.getMessage() != null ? ex.getMessage() : ex.toString();
+                                }
+                                List<DispatchSnapshotStore.SnapshotRef> found = listed;
+                                String err = error;
+                                Platform.runLater(
+                                        () -> {
+                                            dispatchSnapshotCatalog = found;
+                                            if (err != null) {
+                                                appendLog(
+                                                        "[dispatch-snapshot] 一覧を読めません。表示中の結果は維持します: "
+                                                                + err);
+                                            }
+                                            syncDispatchSelectorBars();
+                                        });
+                            });
+        } catch (Exception ex) {
+            appendLog("[dispatch-snapshot] 一覧の更新を開始できません: " + ex.getMessage());
+        }
+    }
+
+    public void deleteSelectedOwnDispatchSnapshotAsync() {
+        DispatchResultSelection selection;
+        try {
+            selection = dispatchResultSelection();
+        } catch (RuntimeException ex) {
+            return;
+        }
+        if (selection.isLocalLatest() || !selection.ownPast()) {
+            return;
+        }
+        String generation = selection.generationDir();
+        Map<String, String> ui;
+        try {
+            ui = new HashMap<>(snapshotUiEnv());
+        } catch (RuntimeException ex) {
+            return;
+        }
+        String operator =
+                jp.co.pm.ai.desktop.config.OperatorUserPaths.resolveOperatorUser(ui);
+        catalogExecutor()
+                .execute(
+                        () -> {
+                            boolean deleted;
+                            try {
+                                deleted =
+                                        DispatchSnapshotStore.deleteOwn(
+                                                AppPaths.resolveDispatchSnapshotRoot(ui),
+                                                operator,
+                                                generation);
+                            } catch (Exception ex) {
+                                deleted = false;
+                            }
+                            boolean ok = deleted;
+                            Platform.runLater(
+                                    () -> {
+                                        if (ok) {
+                                            appendLog("[dispatch-snapshot] 自分の世代を共有から外しました");
+                                            useLocalLatestDispatchResult();
+                                            refreshDispatchSnapshotCatalogAsync();
+                                        } else {
+                                            appendLog(
+                                                    "[dispatch-snapshot] 共有から外せませんでした。表示はそのままです");
+                                        }
+                                    });
+                        });
+    }
+
+    private void resetDispatchResultSelectionToLocal() {
+        try {
+            if (dispatchResultSelection != null && !dispatchResultSelection.isLocalLatest()) {
+                dispatchResultSelection.selectLocal();
+            }
+        } catch (Exception ex) {
+            appendLog("[dispatch-snapshot] 工場切替後にローカル最新へ戻せません: " + ex.getMessage());
+        }
+    }
+
+    private void publishDispatchSnapshotAfterSuccessfulRun(String stageId) {
+        Map<String, String> ui;
+        try {
+            ui = new HashMap<>(collectUiEnv());
+        } catch (Exception ex) {
+            appendLog("[dispatch-snapshot] 公開をスキップします: " + ex.getMessage());
+            return;
+        }
+        try {
+            catalogExecutor()
+                    .execute(
+                            () -> {
+                                try {
+                                    DispatchSnapshotStore.PublishResult result =
+                                            DispatchSnapshotStore.publishLocalOutput(ui, stageId);
+                                    Platform.runLater(
+                                            () ->
+                                                    appendLog(
+                                                            "[dispatch-snapshot] 共有へコピーしました: "
+                                                                    + result.generationDir()));
+                                } catch (Exception ex) {
+                                    Platform.runLater(
+                                            () ->
+                                                    appendLog(
+                                                            "[dispatch-snapshot] 共有へコピーできません。ローカル結果はそのままです: "
+                                                                    + (ex.getMessage() != null
+                                                                            ? ex.getMessage()
+                                                                            : ex.toString())));
+                                }
+                            });
+        } catch (Exception ex) {
+            appendLog("[dispatch-snapshot] 公開を開始できません。ローカル結果はそのままです: " + ex.getMessage());
+        }
+        Platform.runLater(
+                () -> {
+                    try {
+                        useLocalLatestDispatchResult();
+                    } catch (Exception ex) {
+                        appendLog("[dispatch-snapshot] 自分の最新表示へ戻せません: " + ex.getMessage());
+                    }
+                });
+    }
+
+    private void onDispatchResultSelectionChanged() {
+        try {
+            updateDispatchResultTabMarks();
+            syncDispatchSelectorBars();
+            DispatchResultSelection selection = dispatchResultSelection();
+            recordOperatorAction(
+                    "dispatch-snapshot",
+                    selection.isLocalLatest() ? "select-local" : "select",
+                    "ok",
+                    selection.detailText());
+        } catch (Exception ex) {
+            appendLog("[dispatch-snapshot] 選択の反映に失敗: " + ex.getMessage());
+        }
+        runDispatchSelectionReloads();
+    }
+
+    private void runDispatchSelectionReloads() {
+        for (Runnable reload : dispatchSelectionReloads) {
+            try {
+                reload.run();
+            } catch (Exception ex) {
+                appendLog(
+                        "[dispatch-snapshot] タブの再表示に失敗しました。他のタブは続行します: "
+                                + (ex.getMessage() != null ? ex.getMessage() : ex));
+            }
+        }
+    }
+
+    private void syncDispatchSelectorBars() {
+        for (DispatchResultSelectorBar bar : dispatchSelectorBars) {
+            try {
+                bar.setCatalog(dispatchSnapshotCatalog);
+            } catch (Exception ex) {
+                appendLog("[dispatch-snapshot] 選択バーの同期に失敗: " + ex.getMessage());
+            }
+        }
+    }
+
+    private void updateDispatchResultTabMarks() {
+        DispatchResultSelection selection = dispatchResultSelection();
+        String mark = DispatchResultSelection.tabMark(selection.isLocalLatest(), selection.ownPast());
+        String tip = selection.badgeText();
+        applyDispatchTabMark(mainShellTabEquipmentGanttGraphic, mark, tip);
+        applyDispatchTabMark(mainShellTabOperatorCard, mark, tip);
+        applyDispatchTabMark(mainShellTabResultDispatch, mark, tip);
+        applyDispatchTabMark(mainShellTabDeliveryCalendar, mark, tip);
+        applyDispatchTabMark(mainShellTabPlanResultViewer, mark, tip);
+        applyDispatchTabMark(mainShellTabProcessingTrend, mark, tip);
+    }
+
+    private static void applyDispatchTabMark(javafx.scene.control.Tab tab, String mark, String tip) {
+        if (tab == null) {
+            return;
+        }
+        String text = tab.getText() == null ? "" : tab.getText();
+        if (text.endsWith(DISPATCH_TAB_MARK_OTHER)) {
+            text = text.substring(0, text.length() - DISPATCH_TAB_MARK_OTHER.length());
+        } else if (text.endsWith(DISPATCH_TAB_MARK_PAST)) {
+            text = text.substring(0, text.length() - DISPATCH_TAB_MARK_PAST.length());
+        }
+        tab.setText(mark == null || mark.isEmpty() ? text : text + mark);
+        if (mark == null || mark.isEmpty()) {
+            tab.setTooltip(null);
+        } else {
+            tab.setTooltip(new javafx.scene.control.Tooltip(tip));
+        }
+    }
+
+    private ExecutorService catalogExecutor() {
+        if (dispatchSnapshotExecutor == null) {
+            dispatchSnapshotExecutor =
+                    Executors.newSingleThreadExecutor(
+                            runnable -> {
+                                Thread thread = new Thread(runnable, "dispatch-snapshot");
+                                thread.setDaemon(true);
+                                return thread;
+                            });
+        }
+        return dispatchSnapshotExecutor;
     }
 
     /**

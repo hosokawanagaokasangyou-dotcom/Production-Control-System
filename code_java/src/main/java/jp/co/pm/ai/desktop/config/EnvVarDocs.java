@@ -625,6 +625,12 @@ public final class EnvVarDocs {
                 "plan_compare_gantt_from_snapshot.py: 比較元の日時フォルダ"
                         + "（pdf 配下の最新を選択可）。");
         put(
+                AppPaths.KEY_PM_AI_DISPATCH_SNAPSHOT_DIR,
+                "配台結果スナップショットの共有フォルダ。"
+                        + "空なら現在工場の共有 DATA 直下 dispatch-snapshots。"
+                        + "段階2の書き込み先はローカル output のまま。"
+                        + "共有に書けなくても配台実行は成功のまま。");
+        put(
                 AppPaths.KEY_PM_AI_KOUCHIN_BASE_DIR,
                 "後加工工賃の国分 ●自動検証ルート。手動判定.csv の既定親ではない（PM_AI_KOUCHIN_JUDGMENT_DIR）。"
                         + " 工場切替では差し替えない。結果の二重保存先（国分・湖南固定 UNC）とは別。"

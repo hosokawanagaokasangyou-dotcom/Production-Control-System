@@ -139,6 +139,9 @@ public final class DeliveryCalendarViewTabController {
     private Button refreshButton;
 
     @FXML
+    private HBox dispatchResultSelectorHost;
+
+    @FXML
     private Label dataStageBadgeLabel;
 
     /**
@@ -559,10 +562,82 @@ public final class DeliveryCalendarViewTabController {
                 "（" + from + " 〜 " + to + " / 列数 " + (p + f + 1) + "）");
     }
 
+    private Path dispatchJsonForDisplay(Map<String, String> ui) {
+        if (shell != null) {
+            try {
+                Path path = shell.displayDispatchJsonPath();
+                if (path != null) {
+                    return path;
+                }
+            } catch (RuntimeException ex) {
+                // 従来解決へ
+            }
+        }
+        return AppPaths.resolveResultDispatchTableJsonPath(ui);
+    }
+
+    private Path shapedAladdinForDisplay(Map<String, String> ui) {
+        if (shell != null) {
+            try {
+                Path path = shell.displayShapedAladdinJsonPath();
+                if (path != null) {
+                    return path;
+                }
+            } catch (RuntimeException ex) {
+                // 従来解決へ
+            }
+        }
+        return AppPaths.resolveShapedAladdinPlanJsonPath(ui);
+    }
+
+    private Path shapedActualsForDisplay(Map<String, String> ui) {
+        if (shell != null) {
+            try {
+                Path path = shell.displayShapedActualsJsonPath();
+                if (path != null) {
+                    return path;
+                }
+            } catch (RuntimeException ex) {
+                // 従来解決へ
+            }
+        }
+        return AppPaths.resolveShapedProcessingActualsJsonPath(ui);
+    }
+
+    void applySharedDispatchSelection() {
+        try {
+            if (deliveryCalendarResultDispatchTableTabController != null) {
+                deliveryCalendarResultDispatchTableTabController.reloadResultDispatchTableFromDisk();
+            }
+            if (deliveryCalendarDispatchTaskSummaryTabController != null) {
+                deliveryCalendarDispatchTaskSummaryTabController.reloadFromDisk();
+            }
+            refreshPlanningStageBadgeFromDispatchJson();
+            if (!mainRows.isEmpty()) {
+                overlayDispatchValuesOnly();
+                rebuildMainSpreadsheet();
+            }
+        } catch (Exception ex) {
+            if (statusLabel != null) {
+                statusLabel.setText(
+                        "配台結果の切替に失敗: " + (ex.getMessage() != null ? ex.getMessage() : ex));
+            }
+            if (shell != null) {
+                shell.appendLog("[dispatch-snapshot] 納期ビューの切替に失敗: " + ex.getMessage());
+            }
+        }
+    }
+
     void bindShell(MainShellController shell) {
         this.shell = shell;
         this.requestFactory = shell::buildDeliveryCalendarRequest;
         this.ownerStage = shell.getPrimaryStage();
+        try {
+            shell.installDispatchResultSelector(
+                    dispatchResultSelectorHost, this::applySharedDispatchSelection);
+        } catch (Exception ex) {
+            // 選択バーなしでも納期ビュー自体は従来どおり
+        }
 
         TableColumnOrderPersistence.installSpreadsheetColumnLayoutWatcher(
                 mainSpreadsheet,
@@ -1729,7 +1804,7 @@ public final class DeliveryCalendarViewTabController {
     private AladdinShapedPlanQtyLookup.ShapedTable snapshotShapedAladdinPlanTable(
             Map<String, String> ui, boolean skipJson) {
         if (!skipJson) {
-            Path json = AppPaths.resolveShapedAladdinPlanJsonPath(ui);
+            Path json = shapedAladdinForDisplay(ui);
             AladdinShapedPlanQtyLookup.ShapedTable fromJson =
                     AladdinShapedPlanQtyLookup.loadShapedTable(json);
             if (!fromJson.headers().isEmpty()) {
@@ -1911,7 +1986,7 @@ public final class DeliveryCalendarViewTabController {
         // --- Aladdin plan: prefer shaped JSON cache, fall back to in-memory ---
         List<String> planHeaders;
         List<List<String>> planRows;
-        Path aladdinJsonPath = AppPaths.resolveShapedAladdinPlanJsonPath(ui);
+        Path aladdinJsonPath = shapedAladdinForDisplay(ui);
         if (Files.isRegularFile(aladdinJsonPath)) {
             try {
                 JsonTableIo.ArrayTable t = JsonTableIo.loadArrayTable(aladdinJsonPath);
@@ -1933,7 +2008,7 @@ public final class DeliveryCalendarViewTabController {
         // --- Processing actuals: prefer shaped JSON cache, fall back to in-memory ---
         List<String> actHeaders;
         List<List<String>> actRows;
-        Path actualsJsonPath = AppPaths.resolveShapedProcessingActualsJsonPath(ui);
+        Path actualsJsonPath = shapedActualsForDisplay(ui);
         if (Files.isRegularFile(actualsJsonPath)) {
             try {
                 JsonTableIo.ArrayTable t = JsonTableIo.loadArrayTable(actualsJsonPath);
@@ -2136,7 +2211,7 @@ public final class DeliveryCalendarViewTabController {
 
     private void refreshCompareStageFlagsFromDispatch(DispatchTableSnapshot dispatchSnap) {
         Map<String, String> ui = shell != null ? shell.snapshotUiEnv() : Map.of();
-        Path jsonPath = AppPaths.resolveResultDispatchTableJsonPath(ui);
+        Path jsonPath = dispatchJsonForDisplay(ui);
         ResultDispatchPlanningStageSupport.PlanningStage stage =
                 ResultDispatchPlanningStageSupport.detectPlanningStage(jsonPath);
         compareHideStage3PlanLine =
@@ -2151,7 +2226,7 @@ public final class DeliveryCalendarViewTabController {
     /** 配台 JSON の段階表示バッジを更新（子タブ再読込後にも呼ぶ）。 */
     void refreshPlanningStageBadgeFromDispatchJson() {
         Map<String, String> ui = shell != null ? shell.snapshotUiEnv() : Map.of();
-        Path jsonPath = AppPaths.resolveResultDispatchTableJsonPath(ui);
+        Path jsonPath = dispatchJsonForDisplay(ui);
         ResultDispatchPlanningStageSupport.PlanningStage stage =
                 ResultDispatchPlanningStageSupport.detectPlanningStage(jsonPath);
         compareHideStage3PlanLine =
@@ -2202,7 +2277,7 @@ public final class DeliveryCalendarViewTabController {
     private record DispatchTableSnapshot(List<String> headers, List<List<String>> rows) {}
 
     private DispatchTableSnapshot loadDispatchTableSnapshot(Map<String, String> ui) {
-        Path dispatchJsonPath = AppPaths.resolveResultDispatchTableJsonPath(ui);
+        Path dispatchJsonPath = dispatchJsonForDisplay(ui);
         List<String> disHeaders =
                 deliveryCalendarResultDispatchTableTabController != null
                         ? deliveryCalendarResultDispatchTableTabController.getShapedHeaders()

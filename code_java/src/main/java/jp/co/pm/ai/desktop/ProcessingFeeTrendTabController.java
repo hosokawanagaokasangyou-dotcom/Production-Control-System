@@ -140,6 +140,8 @@ public class ProcessingFeeTrendTabController {
     }
 
     @FXML private BorderPane tabRoot;
+
+    @FXML private HBox dispatchResultSelectorHost;
     @FXML private Button reloadButton;
     @FXML private ComboBox<PeriodPreset> periodPresetCombo;
     @FXML private Button prevPeriodButton;
@@ -737,6 +739,12 @@ public class ProcessingFeeTrendTabController {
 
     public void bindShell(MainShellController shell) {
         this.shell = shell;
+        try {
+            shell.installDispatchResultSelector(
+                    dispatchResultSelectorHost, this::updatePlanSourceMeta);
+        } catch (Exception ex) {
+            // 選択バーなしでもトレンド自体は従来どおり
+        }
     }
 
     public void onMainShellTabSelected() {
@@ -1096,7 +1104,10 @@ public class ProcessingFeeTrendTabController {
             return;
         }
         Map<String, String> ui = shell != null ? shell.snapshotUiEnv() : Map.of();
-        java.nio.file.Path path = AppPaths.resolveResultDispatchTableJsonPath(ui);
+        java.nio.file.Path path =
+                shell != null
+                        ? shell.displayDispatchJsonPath()
+                        : AppPaths.resolveResultDispatchTableJsonPath(ui);
         var info = ResultDispatchProvenance.read(path);
         if (info.isEmpty()) {
             planSourceMetaLabel.setText("配台JSON: （ファイルなし）");

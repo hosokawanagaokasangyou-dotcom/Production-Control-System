@@ -25,6 +25,7 @@ import javafx.scene.control.Spinner;
 import javafx.scene.control.SpinnerValueFactory;
 import javafx.scene.control.TextField;
 import javafx.scene.control.TextFormatter;
+import javafx.scene.layout.HBox;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.scene.text.Font;
@@ -62,6 +63,9 @@ public final class OperatorCardTabController {
 
     @FXML
     private TextField memberJsonField;
+
+    @FXML
+    private HBox dispatchResultSelectorHost;
 
     @FXML
     private TextField dispatchJsonField;
@@ -218,15 +222,45 @@ public final class OperatorCardTabController {
         this.shell = shell;
         this.ownerStage = shell.getPrimaryStage();
         populateFontCombo();
+        try {
+            shell.installDispatchResultSelector(
+                    dispatchResultSelectorHost, this::reloadForSharedDispatchSelection);
+        } catch (Exception ex) {
+            // 選択バーが無くても従来のパス欄で表示する
+        }
         Platform.runLater(this::applyDefaultPathsFromEnv);
+    }
+
+    void reloadForSharedDispatchSelection() {
+        if (shell == null) {
+            return;
+        }
+        try {
+            Path member = shell.displayMemberJsonPath();
+            Path dispatch = shell.displayDispatchJsonPath();
+            if (memberJsonField != null) {
+                memberJsonField.setText(member == null ? "" : member.toString());
+            }
+            if (dispatchJsonField != null) {
+                dispatchJsonField.setText(dispatch == null ? "" : dispatch.toString());
+            }
+            reloadMemberCachesAndOperators();
+            rebuildPreview();
+        } catch (Exception ex) {
+            if (statusLabel != null) {
+                statusLabel.setText(ex.getMessage() != null ? ex.getMessage() : ex.toString());
+            }
+        }
     }
 
     private void applyDefaultPathsFromEnv() {
         if (shell == null || dispatchJsonField == null) {
             return;
         }
-        Map<String, String> ui = shell.snapshotUiEnv();
-        Path disp = AppPaths.resolveResultDispatchTableJsonPath(ui);
+        Path disp = shell.displayDispatchJsonPath();
+        if (disp == null) {
+            return;
+        }
         dispatchJsonField.setPromptText(disp.toString());
         if (dispatchJsonField.getText() == null || dispatchJsonField.getText().isBlank()) {
             if (Files.isRegularFile(disp)) {
@@ -279,9 +313,10 @@ public final class OperatorCardTabController {
     private void browseJson(TextField target) {
         Path picked = chooseJsonFile("JSON を選択", target);
         if (picked != null) {
-            target.setText(picked.toAbsolutePath().normalize().toString());
-            if (target == memberJsonField) {
-                reloadMemberCachesAndOperators();
+            if (shell != null) {
+                shell.adoptPickedDispatchFile(picked);
+            } else {
+                target.setText(picked.toAbsolutePath().normalize().toString());
             }
         }
     }
@@ -312,9 +347,12 @@ public final class OperatorCardTabController {
             try {
                 Map<String, String> ui = shell.snapshotUiEnv();
                 if (seedField == dispatchJsonField) {
-                    seed = AppPaths.resolveResultDispatchTableJsonPath(ui);
+                    seed = shell.displayDispatchJsonPath();
                 } else {
-                    seed = AppPaths.defaultPlanningOutputDir(ui);
+                    seed =
+                            shell.displayMemberJsonPath() != null
+                                    ? shell.displayMemberJsonPath()
+                                    : AppPaths.defaultPlanningOutputDir(ui);
                 }
             } catch (Exception ignored) {
                 // ignore
@@ -362,44 +400,27 @@ public final class OperatorCardTabController {
         if (shell == null) {
             return;
         }
-        Map<String, String> ui = shell.snapshotUiEnv();
-        Path dir = AppPaths.defaultPlanningOutputDir(ui);
-        try {
-            Path mem = Stage2OutputNaming.newestPrimaryMemberJson(dir);
-            Path dispDirFile = AppPaths.resolveResultDispatchTableJsonPath(ui);
-            if (mem != null) {
-                memberJsonField.setText(mem.toString());
-            }
-            if (Files.isRegularFile(dispDirFile)) {
-                dispatchJsonField.setText(dispDirFile.toString());
-            }
-            if (mem == null && !Files.isRegularFile(dispDirFile)) {
-                statusLabel.setText(
-                        "最新 JSON が見つかりません: "
-                                + dir
-                                + " （参照… または「プレビュー更新」で指定）");
-                return;
-            }
-            statusLabel.setText(
-                    "sync: member="
-                            + (mem != null ? mem.getFileName() : "-")
-                            + ", dispatch="
-                            + (Files.isRegularFile(dispDirFile) ? dispDirFile.getFileName() : "-"));
-        } catch (Exception ex) {
-            statusLabel.setText(ex.getMessage() != null ? ex.getMessage() : ex.toString());
-            return;
-        }
-        reloadMemberCachesAndOperators();
+        shell.useLocalLatestDispatchResult();
     }
 
     @FXML
     private void onRefreshPreviewButtonAction() {
         Path memberPicked = chooseJsonFile("member_schedule*.json を選択", memberJsonField);
+        Path dispatchPicked = chooseJsonFile("結果_配台表.json を選択", dispatchJsonField);
+        if (shell != null) {
+            if (dispatchPicked != null) {
+                shell.adoptPickedDispatchFile(dispatchPicked);
+            } else if (memberPicked != null) {
+                shell.adoptPickedDispatchFile(memberPicked);
+            } else {
+                rebuildPreview();
+            }
+            return;
+        }
         if (memberPicked != null && memberJsonField != null) {
             memberJsonField.setText(memberPicked.toAbsolutePath().normalize().toString());
             reloadMemberCachesAndOperators();
         }
-        Path dispatchPicked = chooseJsonFile("結果_配台表.json を選択", dispatchJsonField);
         if (dispatchPicked != null && dispatchJsonField != null) {
             dispatchJsonField.setText(dispatchPicked.toAbsolutePath().normalize().toString());
         }
@@ -418,13 +439,7 @@ public final class OperatorCardTabController {
         if (shell == null) {
             return;
         }
-        Map<String, String> ui = shell.snapshotUiEnv();
-        Path disp = AppPaths.resolveResultDispatchTableJsonPath(ui);
-        if (dispatchJsonField != null && Files.isRegularFile(disp)) {
-            dispatchJsonField.setText(disp.toString());
-        }
-        reloadMemberCachesAndOperators();
-        rebuildPreview();
+        reloadForSharedDispatchSelection();
     }
 
     /** Mirrors stage-2 artifact refresh: fill {@code member_schedule*.json} sibling path when possible. */
@@ -511,7 +526,8 @@ public final class OperatorCardTabController {
         try {
             OperatorCardPage page = buildSelectedPage();
             String font = fontCombo != null ? fontCombo.getValue() : "SansSerif";
-            Parent root = OperatorCardPreviewFactory.buildRoot(page, font);
+            String source = shell == null ? "" : shell.currentDispatchBadgeText();
+            Parent root = OperatorCardPreviewFactory.buildRoot(page, font, source);
             ScrollPane sp = new ScrollPane(root);
             sp.setFitToWidth(true);
             sp.setPannable(true);
@@ -619,9 +635,10 @@ public final class OperatorCardTabController {
                 OperatorCardPage page =
                         OperatorCardDocumentBuilder.buildPage(
                                 opName, cachedMemberSheets, dispatchRows, start, dayCount);
+                String source = shell.currentDispatchBadgeText();
                 List<Parent> layoutPages =
                         OperatorCardPreviewFactory.buildPrintPages(
-                                page, font, printableWidth, printableHeight);
+                                page, font, printableWidth, printableHeight, source);
                 for (Parent layoutRoot : layoutPages) {
                     Parent printRoot =
                             OperatorCardPrintCompositor.wrapScaledPrintPage(

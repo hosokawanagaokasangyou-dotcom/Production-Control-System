@@ -32,6 +32,8 @@
                     <Insets bottom="4.0" left="4.0" right="8.0" top="4.0"/>
                 </padding>
 
+                <HBox fx:id="dispatchResultSelectorHost" alignment="CENTER_LEFT" spacing="8.0"/>
+
                 <HBox alignment="CENTER_LEFT" spacing="8.0">
                     <Button fx:id="syncLatestButton" mnemonicParsing="false"
                             text="最新JSONを検索"

@@ -44,6 +44,7 @@ import javafx.scene.control.TextField;
 import javafx.scene.control.TitledPane;
 import javafx.scene.control.ToggleGroup;
 import javafx.scene.layout.BorderPane;
+import javafx.scene.layout.HBox;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.scene.Parent;
@@ -178,6 +179,9 @@ public final class EquipmentGanttGraphicTabController {
 
     @FXML
     private TextField planJsonField;
+
+    @FXML
+    private HBox dispatchResultSelectorHost;
 
     @FXML
     private Button browsePlanButton;
@@ -1356,6 +1360,10 @@ public final class EquipmentGanttGraphicTabController {
                 || loadedAssignmentMetadata == null) {
             return;
         }
+        if (shell.isViewingNonLocalDispatchResult()) {
+            shell.showWarningDialog("担当割当の保存", "他者または過去の結果は参照のみです。");
+            return;
+        }
         String planPath = lastLoadedPlanPath != null ? lastLoadedPlanPath.strip() : "";
         if (planPath.isEmpty()) {
             shell.showWarningDialog("担当割当の保存", "計画 JSON が読み込まれていません。");
@@ -1768,7 +1776,10 @@ public final class EquipmentGanttGraphicTabController {
     private void refreshSaveAssignmentButtonState() {
         if (saveAssignmentButton != null) {
             saveAssignmentButton.setDisable(
-                    !assignmentDirty || assignmentSaveInProgress || assignmentEditModel == null);
+                    !assignmentDirty
+                            || assignmentSaveInProgress
+                            || assignmentEditModel == null
+                            || (shell != null && shell.isViewingNonLocalDispatchResult()));
         }
     }
 
@@ -1820,8 +1831,41 @@ public final class EquipmentGanttGraphicTabController {
     void bindShell(MainShellController shell) {
         this.shell = shell;
         this.ownerStage = shell.getPrimaryStage();
+        try {
+            shell.setDispatchResultChangeAllowed(this::confirmDiscardUnsavedAssignment);
+            shell.installDispatchResultSelector(
+                    dispatchResultSelectorHost, this::reloadForSharedDispatchSelection);
+        } catch (Exception ex) {
+            // 選択機能が失敗しても従来のガント読込は続ける
+        }
         refreshExistingGanttPdfPathFromEnv();
         Platform.runLater(() -> reloadFromFields(false));
+    }
+
+    void reloadForSharedDispatchSelection() {
+        if (shell == null || planJsonField == null) {
+            return;
+        }
+        try {
+            Path plan = shell.displayPlanJsonPath();
+            planJsonField.setText(plan == null ? "" : plan.toString());
+            reloadFromFields(false);
+        } catch (Exception ex) {
+            if (statusLabel != null) {
+                statusLabel.setText(ex.getMessage() != null ? ex.getMessage() : ex.toString());
+            }
+        }
+    }
+
+    private boolean confirmDiscardUnsavedAssignment() {
+        if (!assignmentDirty) {
+            return true;
+        }
+        Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+        alert.setTitle("担当割当");
+        alert.setHeaderText("未保存の担当編集を破棄します");
+        alert.setContentText("結果を切り替えると、保存していない担当編集は失われます。");
+        return alert.showAndWait().orElse(ButtonType.CANCEL) == ButtonType.OK;
     }
 
     void applyStage3UiVisibility(boolean visible) {
@@ -1907,6 +1951,10 @@ public final class EquipmentGanttGraphicTabController {
 
     @FXML
     private void onSyncLatestButtonAction() {
+        if (shell != null) {
+            shell.useLocalLatestDispatchResult();
+            return;
+        }
         syncLatestPlanJsonFromOutputDirAndReload(true);
     }
 
@@ -1975,7 +2023,9 @@ public final class EquipmentGanttGraphicTabController {
             }
         }
         java.io.File picked = ch.showOpenDialog(ownerStage);
-        if (picked != null) {
+        if (picked != null && shell != null) {
+            shell.adoptPickedDispatchFile(picked.toPath());
+        } else if (picked != null) {
             planJsonField.setText(picked.getAbsolutePath());
             reloadFromFields(true);
         }
@@ -2119,7 +2169,10 @@ public final class EquipmentGanttGraphicTabController {
 
     private void refreshPlanningStageBadgeFromDispatchJson() {
         Map<String, String> ui = shell != null ? shell.snapshotUiEnv() : Map.of();
-        Path jsonPath = AppPaths.resolveResultDispatchTableJsonPath(ui);
+        Path jsonPath =
+                shell != null
+                        ? shell.displayDispatchJsonPath()
+                        : AppPaths.resolveResultDispatchTableJsonPath(ui);
         ResultDispatchPlanningStageSupport.applyPlanningStageBadgeFromDispatchJson(
                 dataStageBadgeLabel, jsonPath);
         jp.co.pm.ai.desktop.ui.JavaFxNodeVisibility.applyPlanningStageBadgePolicyNoop(dataStageBadgeLabel, ui);

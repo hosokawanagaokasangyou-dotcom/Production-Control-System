@@ -25,6 +25,7 @@
     <padding>
         <Insets bottom="8.0" left="12.0" right="12.0" top="8.0"/>
     </padding>
+    <HBox fx:id="dispatchResultSelectorHost" alignment="CENTER_LEFT" spacing="8.0"/>
     <!-- 折りたたみ1つに JSON パス・説明・グラフィック調整スライダーを集約（見た目の段数を抑える） -->
     <Accordion fx:id="sourceAccordion" maxWidth="Infinity" VBox.vgrow="NEVER">
         <panes>

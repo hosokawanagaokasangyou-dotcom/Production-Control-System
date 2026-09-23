@@ -89,6 +89,9 @@ public final class PlanResultViewerTabController {
     private TextField planJsonField;
 
     @FXML
+    private HBox dispatchResultSelectorHost;
+
+    @FXML
     private TextField memberJsonField;
 
     @FXML
@@ -318,7 +321,34 @@ public final class PlanResultViewerTabController {
     void bindShell(MainShellController shell) {
         this.shell = shell;
         this.ownerStage = shell.getPrimaryStage();
+        try {
+            shell.installDispatchResultSelector(
+                    dispatchResultSelectorHost, this::reloadForSharedDispatchSelection);
+        } catch (Exception ex) {
+            // 選択バーなしでも従来の再読みは続ける
+        }
         Platform.runLater(() -> reloadFromFields(false));
+    }
+
+    void reloadForSharedDispatchSelection() {
+        if (shell == null) {
+            return;
+        }
+        try {
+            Path plan = shell.displayPlanJsonPath();
+            Path member = shell.displayMemberJsonPath();
+            if (planJsonField != null) {
+                planJsonField.setText(plan == null ? "" : plan.toString());
+            }
+            if (memberJsonField != null) {
+                memberJsonField.setText(member == null ? "" : member.toString());
+            }
+            reloadFromFields(false);
+        } catch (Exception ex) {
+            if (statusLabel != null) {
+                statusLabel.setText(ex.getMessage() != null ? ex.getMessage() : ex.toString());
+            }
+        }
     }
 
     /**
@@ -360,34 +390,7 @@ public final class PlanResultViewerTabController {
         if (shell == null) {
             return;
         }
-        Map<String, String> ui = shell.snapshotUiEnv();
-        Path dir = AppPaths.defaultPlanningOutputDir(ui);
-        try {
-            Path plan = Stage2OutputNaming.newestPrimaryPlanJson(dir);
-            Path mem = Stage2OutputNaming.newestPrimaryMemberJson(dir);
-            if (plan != null) {
-                planJsonField.setText(plan.toString());
-            }
-            if (mem != null) {
-                memberJsonField.setText(mem.toString());
-            }
-            if (plan == null && mem == null) {
-                statusLabel.setText(
-                        "このフォルダに JSON が見つかりません: "
-                                + dir);
-                expandSourcePaneForAttention();
-                shell.showWarningDialog("同期", "出力フォルダに計画／メンバー JSON がありません。\n" + dir);
-                return;
-            }
-        } catch (Exception ex) {
-            statusLabel.setText(ex.getMessage() != null ? ex.getMessage() : ex.toString());
-            expandSourcePaneForAttention();
-            shell.showErrorDialog(
-                    "同期エラー",
-                    ex.getMessage() != null ? ex.getMessage() : ex.toString());
-            return;
-        }
-        reloadFromFields(true);
+        shell.useLocalLatestDispatchResult();
     }
 
     @FXML
@@ -417,7 +420,9 @@ public final class PlanResultViewerTabController {
             }
         }
         java.io.File picked = ch.showOpenDialog(ownerStage);
-        if (picked != null) {
+        if (picked != null && shell != null) {
+            shell.adoptPickedDispatchFile(picked.toPath());
+        } else if (picked != null) {
             target.setText(picked.getAbsolutePath());
             reloadFromFields(true);
         }

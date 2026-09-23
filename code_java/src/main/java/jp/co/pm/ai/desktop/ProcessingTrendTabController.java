@@ -202,6 +202,8 @@ public class ProcessingTrendTabController {
     }
 
     @FXML private BorderPane tabRoot;
+
+    @FXML private HBox dispatchResultSelectorHost;
     @FXML private Button reloadButton;
     @FXML private Button exportExcelButton;
     @FXML private Button openExcelButton;
@@ -386,6 +388,12 @@ public class ProcessingTrendTabController {
 
     public void bindShell(MainShellController shell) {
         this.shell = shell;
+        try {
+            shell.installDispatchResultSelector(
+                    dispatchResultSelectorHost, this::updatePlanSourceMeta);
+        } catch (Exception ex) {
+            // 選択バーなしでもトレンド自体は従来どおり
+        }
     }
 
     /** メインシェルでこのタブが選択されたとき。初回は読込、以降は指紋が変わったときだけ再読込。 */
@@ -2508,7 +2516,10 @@ public class ProcessingTrendTabController {
             return;
         }
         Map<String, String> ui = shell != null ? shell.snapshotUiEnv() : Map.of();
-        java.nio.file.Path path = AppPaths.resolveResultDispatchTableJsonPath(ui);
+        java.nio.file.Path path =
+                shell != null
+                        ? shell.displayDispatchJsonPath()
+                        : AppPaths.resolveResultDispatchTableJsonPath(ui);
         var info = ResultDispatchProvenance.read(path);
         if (info.isEmpty()) {
             planSourceMetaLabel.setText("配台JSON: （ファイルなし）");

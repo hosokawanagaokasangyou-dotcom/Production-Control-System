@@ -51,13 +51,17 @@ public final class OperatorCardPreviewFactory {
         return buildRoot(page, fontFamily, A4_PREF_WIDTH);
     }
 
+    public static Parent buildRoot(OperatorCardPage page, String fontFamily, String sourceLine) {
+        return assembleRoot(page.operatorName(), page.days(), fontFamily, A4_PREF_WIDTH, sourceLine);
+    }
+
     /**
      * 印刷用に、用紙の可印刷幅（{@code javafx.print.PageLayout#getPrintableWidth()} 等）へ
      * ルート幅を合わせて組み立てる。画面プレビュー用。印刷は {@link #buildPrintPages} が
      * {@link #A4_PREF_WIDTH} で組み立て、{@link OperatorCardPrintCompositor} がスケールする。
      */
     public static Parent buildRoot(OperatorCardPage page, String fontFamily, double rootWidth) {
-        return assembleRoot(page.operatorName(), page.days(), fontFamily, rootWidth);
+        return assembleRoot(page.operatorName(), page.days(), fontFamily, rootWidth, "");
     }
 
     /**
@@ -69,27 +73,39 @@ public final class OperatorCardPreviewFactory {
      */
     public static List<Parent> buildPrintPages(
             OperatorCardPage page, String fontFamily, double printableWidth, double printableHeight) {
+        return buildPrintPages(page, fontFamily, printableWidth, printableHeight, "");
+    }
+
+    public static List<Parent> buildPrintPages(
+            OperatorCardPage page,
+            String fontFamily,
+            double printableWidth,
+            double printableHeight,
+            String sourceLine) {
         List<OperatorCardDaySection> days = page.days();
         if (days.isEmpty()) {
-            return List.of(assembleRoot(page.operatorName(), days, fontFamily, A4_PREF_WIDTH));
+            return List.of(
+                    assembleRoot(page.operatorName(), days, fontFamily, A4_PREF_WIDTH, sourceLine));
         }
         if (!Double.isFinite(printableWidth)
                 || printableWidth <= 0
                 || !Double.isFinite(printableHeight)
                 || printableHeight <= 0) {
-            return List.of(assembleRoot(page.operatorName(), days, fontFamily, A4_PREF_WIDTH));
+            return List.of(
+                    assembleRoot(page.operatorName(), days, fontFamily, A4_PREF_WIDTH, sourceLine));
         }
 
         double scale = OperatorCardPrintCompositor.printScaleForWidth(printableWidth);
         double layoutHeightBudget = printableHeight / scale;
         double pageHeaderHeight =
                 measuredLayoutHeight(
-                        assembleRoot(page.operatorName(), List.of(), fontFamily, A4_PREF_WIDTH),
+                        assembleRoot(page.operatorName(), List.of(), fontFamily, A4_PREF_WIDTH, sourceLine),
                         A4_PREF_WIDTH);
         String ff = cssFontFamily(fontFamily);
 
         List<Parent> pages = new ArrayList<>();
-        VBox current = assembleRoot(page.operatorName(), List.of(), fontFamily, A4_PREF_WIDTH);
+        VBox current =
+                assembleRoot(page.operatorName(), List.of(), fontFamily, A4_PREF_WIDTH, sourceLine);
 
         for (OperatorCardDaySection day : days) {
             for (VBox dayBox :
@@ -100,7 +116,9 @@ public final class OperatorCardPreviewFactory {
                 if (overflows) {
                     current.getChildren().remove(dayBox);
                     pages.add(current);
-                    current = assembleRoot(page.operatorName(), List.of(), fontFamily, A4_PREF_WIDTH);
+                    current =
+                            assembleRoot(
+                                    page.operatorName(), List.of(), fontFamily, A4_PREF_WIDTH, sourceLine);
                     current.getChildren().add(dayBox);
                 }
             }
@@ -205,7 +223,11 @@ public final class OperatorCardPreviewFactory {
     }
 
     private static VBox assembleRoot(
-            String operatorName, List<OperatorCardDaySection> days, String fontFamily, double rootWidth) {
+            String operatorName,
+            List<OperatorCardDaySection> days,
+            String fontFamily,
+            double rootWidth,
+            String sourceLine) {
         String ff = cssFontFamily(fontFamily);
         double width = rootWidth > 0 ? rootWidth : A4_PREF_WIDTH;
 
@@ -235,12 +257,19 @@ public final class OperatorCardPreviewFactory {
         headingRow.setSpacing(12);
         headingRow.getChildren().addAll(docHeading, issuedAt);
 
+        VBox heading = new VBox(4, headingRow);
+        if (sourceLine != null && !sourceLine.isBlank()) {
+            Label source = new Label(sourceLine);
+            source.getStyleClass().add("pm-dispatch-result-badge");
+            heading.getChildren().add(source);
+        }
+
         Label title = new Label(operatorName);
         title.getStyleClass().add("pm-operator-card-title");
         title.setMaxWidth(Double.MAX_VALUE);
         title.setAlignment(Pos.CENTER_LEFT);
 
-        root.getChildren().add(headingRow);
+        root.getChildren().add(heading);
         root.getChildren().add(new Separator());
         root.getChildren().add(title);
         root.getChildren().add(new Separator());

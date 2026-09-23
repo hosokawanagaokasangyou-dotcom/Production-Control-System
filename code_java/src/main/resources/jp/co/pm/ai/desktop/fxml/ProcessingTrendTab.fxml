@@ -32,6 +32,7 @@
             styleClass="pm-processing-trend-tab-root">
     <top>
         <VBox spacing="4.0">
+            <HBox fx:id="dispatchResultSelectorHost" alignment="CENTER_LEFT" spacing="8.0"/>
             <ToolBar>
                 <Button fx:id="reloadButton" mnemonicParsing="false" onAction="#onReloadAction" text="再読込">
                     <tooltip><Tooltip text="加工実績・アラジン加工計画・配台結果をディスクから再読込します（F5）"/></tooltip>

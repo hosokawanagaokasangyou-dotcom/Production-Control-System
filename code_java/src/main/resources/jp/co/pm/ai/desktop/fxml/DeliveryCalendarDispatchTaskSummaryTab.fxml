@@ -22,6 +22,7 @@
     <padding>
         <Insets bottom="12.0" left="12.0" right="12.0" top="12.0"/>
     </padding>
+    <HBox fx:id="dispatchResultSelectorHost" alignment="CENTER_LEFT" spacing="8.0"/>
     <TitledPane animated="true" expanded="true"
                 text="&#x64cd;&#x4f5c;&#x30fb;&#x30bd;&#x30fc;&#x30b9;">
         <content>

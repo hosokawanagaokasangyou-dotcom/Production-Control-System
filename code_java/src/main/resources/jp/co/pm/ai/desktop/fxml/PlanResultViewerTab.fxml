@@ -23,6 +23,7 @@
     <padding>
         <Insets bottom="8.0" left="12.0" right="12.0" top="8.0"/>
     </padding>
+    <HBox fx:id="dispatchResultSelectorHost" alignment="CENTER_LEFT" spacing="8.0"/>
     <!-- 常時表示：再読み・検索のみ -->
     <HBox alignment="CENTER_LEFT" spacing="8.0">
         <Button fx:id="reloadButton" mnemonicParsing="false" text="再読み"

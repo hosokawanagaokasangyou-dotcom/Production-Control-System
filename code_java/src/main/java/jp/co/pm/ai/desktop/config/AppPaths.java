@@ -342,6 +342,15 @@ public final class AppPaths {
     public static final String KEY_COMPARE_GANTT_SNAPSHOT_DIR = "COMPARE_GANTT_SNAPSHOT_DIR";
 
     /**
+     * 配台結果スナップショットの共有ルート。空なら工場共有 DATA 直下の {@link #DISPATCH_SNAPSHOT_DIR_NAME}。
+     * 未設定・共有不可でも段階成果物の書き込み先はローカルのまま。
+     */
+    public static final String KEY_PM_AI_DISPATCH_SNAPSHOT_DIR = "PM_AI_DISPATCH_SNAPSHOT_DIR";
+
+    /** 工場共有 DATA 配下の配台結果スナップショットフォルダ名。 */
+    public static final String DISPATCH_SNAPSHOT_DIR_NAME = "dispatch-snapshots";
+
+    /**
      * Encrypted Gemini credentials JSON path ({@code gemini_credentials.encrypted.json}); passed to Python
      * {@code GEMINI_CREDENTIALS_JSON}.
      */
@@ -789,6 +798,7 @@ public final class AppPaths {
             KEY_PM_AI_OUTPUT_DIR,
             KEY_PM_AI_RESULT_DISPATCH_TABLE_DIR,
             KEY_COMPARE_GANTT_SNAPSHOT_DIR,
+            KEY_PM_AI_DISPATCH_SNAPSHOT_DIR,
             KEY_PM_AI_RDP_LAUNCHER_DEPLOY_DIR,
             KEY_PM_AI_RDP_OPERATOR_USERS_STORE_DIR,
             KEY_PM_AI_RPA_LAUNCHER_DEPLOY_DIR,
@@ -823,7 +833,8 @@ public final class AppPaths {
                     KEY_PM_AI_REQUEST_FORM_TPI_PDF_DIR,
                     KEY_PM_AI_OUTPUT_DIR,
                     KEY_PM_AI_RESULT_DISPATCH_TABLE_DIR,
-                    KEY_COMPARE_GANTT_SNAPSHOT_DIR);
+                    KEY_COMPARE_GANTT_SNAPSHOT_DIR,
+                    KEY_PM_AI_DISPATCH_SNAPSHOT_DIR);
 
     /** Env keys whose value is a single file path (file chooser in the UI). */
     private static final Set<String> FILE_PATH_ENV_KEYS = createFilePathEnvKeys();
@@ -3598,6 +3609,30 @@ public final class AppPaths {
         Map<String, String> u = ui != null ? ui : Map.of();
         return siblingOfSummaryAiDispatchWorkbookForFactory(
                 u, resolveFactorySiteFromUi(u), REMOTE_LOG_DIR_NAME);
+    }
+
+    /**
+     * 配台結果スナップショットのルート。上書きが空なら工場共有 DATA の {@link #DISPATCH_SNAPSHOT_DIR_NAME}。
+     * 解決に失敗したときはリポジトリには書かず、共有既定パスの文字列だけを返す（存在しなくてもよい）。
+     */
+    public static Path resolveDispatchSnapshotRoot(Map<String, String> ui) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        String override = trim(u.get(KEY_PM_AI_DISPATCH_SNAPSHOT_DIR));
+        if (!override.isEmpty()) {
+            try {
+                return Path.of(override).toAbsolutePath().normalize();
+            } catch (RuntimeException ex) {
+                // 壊れた上書き値は無視し、工場既定へ落とす
+            }
+        }
+        try {
+            return summarySharedDataDirForFactory(u, resolveFactorySiteFromUi(u))
+                    .resolve(DISPATCH_SNAPSHOT_DIR_NAME)
+                    .toAbsolutePath()
+                    .normalize();
+        } catch (RuntimeException ex) {
+            return Path.of(DISPATCH_SNAPSHOT_DIR_NAME);
+        }
     }
 
     /**

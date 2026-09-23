@@ -33,6 +33,7 @@
             styleClass="pm-processing-trend-tab-root, pm-processing-fee-trend-tab-root">
     <top>
         <VBox spacing="4.0">
+            <HBox fx:id="dispatchResultSelectorHost" alignment="CENTER_LEFT" spacing="8.0"/>
             <ToolBar>
                 <Button fx:id="reloadButton" mnemonicParsing="false" onAction="#onReloadAction" text="再読込">
                     <tooltip><Tooltip text="受注・実績・予定ソースをディスクから再読込します（F5）"/></tooltip>

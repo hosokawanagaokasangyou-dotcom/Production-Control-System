@@ -138,6 +138,9 @@ public final class ResultDispatchTableTabController {
     private Label pathLabel;
 
     @FXML
+    private HBox dispatchResultSelectorHost;
+
+    @FXML
     private Label hintLabel;
 
     @FXML
@@ -235,6 +238,12 @@ public final class ResultDispatchTableTabController {
     void bindShell(MainShellController shell) {
         this.shell = shell;
         ownerStage = shell.getPrimaryStage();
+        try {
+            shell.installDispatchResultSelector(
+                    dispatchResultSelectorHost, () -> reloadFromDisk(false));
+        } catch (Exception ex) {
+            // 選択バーなしでも既定パスの再読込は続ける
+        }
 
         TableColumnOrderPersistence.installSpreadsheetColumnLayoutWatcher(
                 spreadsheetView,
@@ -267,7 +276,7 @@ public final class ResultDispatchTableTabController {
 
     void applyStage3UiVisibility(boolean visible) {
         if (shell != null) {
-            Path path = AppPaths.resolveResultDispatchTableJsonPath(shell.snapshotUiEnv());
+            Path path = shell.displayDispatchJsonPath();
             ResultDispatchPlanningStageSupport.applyPlanningStageBadgeFromDispatchJson(
                     dataStageBadgeLabel, path);
         }
@@ -561,6 +570,10 @@ public final class ResultDispatchTableTabController {
         if (picked == null) {
             return;
         }
+        if (shell != null) {
+            shell.adoptPickedDispatchFile(picked);
+            return;
+        }
         reloadFromPath(picked, true);
     }
 
@@ -569,8 +582,13 @@ public final class ResultDispatchTableTabController {
         if (shell == null) {
             return;
         }
-        Map<String, String> ui = shell.snapshotUiEnv();
-        Path path = AppPaths.resolveResultDispatchTableJsonPath(ui);
+        Path path = shell.displayDispatchJsonPath();
+        if (path == null) {
+            if (statusLabel != null) {
+                statusLabel.setText("結果_配台表のパスを解決できません");
+            }
+            return;
+        }
         reloadFromPath(path, userCompletionDialog);
     }
 
@@ -595,7 +613,7 @@ public final class ResultDispatchTableTabController {
             }
         }
         if (seed == null && shell != null) {
-            seed = AppPaths.resolveResultDispatchTableJsonPath(shell.snapshotUiEnv());
+            seed = shell.displayDispatchJsonPath();
         }
         applyFileChooserInitialLocation(ch, seed);
         java.io.File picked = ch.showOpenDialog(ownerStage);

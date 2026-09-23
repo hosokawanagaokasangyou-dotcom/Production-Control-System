@@ -81,6 +81,9 @@ public final class DeliveryCalendarDispatchTaskSummaryTabController {
     private Button refreshButton;
 
     @FXML
+    private HBox dispatchResultSelectorHost;
+
+    @FXML
     private Label dataStageBadgeLabel;
 
     @FXML
@@ -218,16 +221,35 @@ public final class DeliveryCalendarDispatchTaskSummaryTabController {
                                                 () -> new ArrayList<>(headersRef))));
     }
 
+    private Path dispatchJsonForDisplay(Map<String, String> ui) {
+        if (shell != null) {
+            try {
+                Path path = shell.displayDispatchJsonPath();
+                if (path != null) {
+                    return path;
+                }
+            } catch (RuntimeException ex) {
+                // 従来解決へ
+            }
+        }
+        return AppPaths.resolveResultDispatchTableJsonPath(ui);
+    }
+
     void bindShell(MainShellController shell) {
         this.shell = shell;
         this.ownerStage = shell.getPrimaryStage();
+        try {
+            shell.installDispatchResultSelector(dispatchResultSelectorHost, this::reloadFromDisk);
+        } catch (Exception ex) {
+            // 選択バーなしでも要約表は従来どおり
+        }
         initPresentationControlsOnce();
         reloadFromDisk();
     }
 
     void applyStage3UiVisibility(boolean visible) {
         if (shell != null) {
-            Path path = AppPaths.resolveResultDispatchTableJsonPath(shell.snapshotUiEnv());
+            Path path = dispatchJsonForDisplay(shell.snapshotUiEnv());
             ResultDispatchPlanningStageSupport.applyPlanningStageBadgeFromDispatchJson(
                     dataStageBadgeLabel, path);
         }
@@ -263,7 +285,7 @@ public final class DeliveryCalendarDispatchTaskSummaryTabController {
             refreshButton.setDisable(true);
         }
         Map<String, String> ui = shell.snapshotUiEnv();
-        Path path = AppPaths.resolveResultDispatchTableJsonPath(ui);
+        Path path = dispatchJsonForDisplay(ui);
         if (pathLabel != null) {
             pathLabel.setText(path.toString());
         }
