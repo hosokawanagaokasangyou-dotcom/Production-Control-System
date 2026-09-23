@@ -57,7 +57,6 @@ import jp.co.pm.ai.desktop.io.PlanInputAiSpecialParseSidecar;
 import jp.co.pm.ai.desktop.io.PlanInputTabularIo;
 import jp.co.pm.ai.desktop.io.conflict.ConflictDiffSummarizer;
 import jp.co.pm.ai.desktop.io.conflict.FingerprintBaseline;
-import jp.co.pm.ai.desktop.io.conflict.NamedFileConflictDiffSummarizer;
 import jp.co.pm.ai.desktop.debug.PlanInputConflictProbe;
 import jp.co.pm.ai.desktop.io.conflict.FileContentFingerprint;
 import jp.co.pm.ai.desktop.io.conflict.SaveConflictUiGate;
@@ -121,21 +120,7 @@ public final class PlanInputTabController {
 
     private FingerprintBaseline conflictBaseline;
     private final ConflictDiffSummarizer conflictSummarizer =
-            (baselineSnapshots, diskBytes, mismatched) -> {
-                String detail =
-                        new NamedFileConflictDiffSummarizer("配台計画（タスク入力）")
-                                .summarize(baselineSnapshots, diskBytes, mismatched);
-                String dirtyLine =
-                        isPlanInputTableDirtySinceSave()
-                                ? "画面の表には、まだ保存していない編集があります。"
-                                : "画面の表は、読み込んだあと編集していません。";
-                return "保存先のファイルが、この画面で最後に読み込んだ内容と違います。\n"
-                        + dirtyLine
-                        + "\n"
-                        + PlanInputConflictProbe.reasonText()
-                        + "\n\n"
-                        + detail;
-            };
+            (baselineSnapshots, diskBytes, mismatched) -> "";
 
     @FXML
     private TextField pathField;
