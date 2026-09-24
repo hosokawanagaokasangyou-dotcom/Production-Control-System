@@ -1,0 +1,2 @@
+{"ts":"2026-09-18T08:16:18.529875700+09:00","operator":"細川","action":"session_start","result":"ok","detail":"起動","appVersion":"17.70","factory":"KONAN","feature":"session","host":"20250401-02","osUser":"0585"}
+{"ts":"2026-09-18T08:38:09.245508600+09:00","operator":"細川","action":"session_start","result":"ok","detail":"前回選択を復元","appVersion":"17.72","factory":"KONAN","feature":"session","host":"20250401-02","osUser":"0585"}

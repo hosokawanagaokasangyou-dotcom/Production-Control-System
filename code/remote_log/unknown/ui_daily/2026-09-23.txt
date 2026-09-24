@@ -1,0 +1,18 @@
+# pm-ai-desktop ui_daily 2026-09-23
+# operator=unknown factory=KONAN host=20250401-02 os_user=0585 app_version=17.73 java_io_tmpdir=C:\Users\0585\AppData\Local\Temp\
+[env] 環境変数の値が初期値と異なるため、環境変数タブ以外は操作できません。環境変数タブの「環境変数を初期化」を実行してください。
+[code-lookup] 読込: C:\システム開発\工程管理AIプロジェクト_JAVA\code\使用原反,ロール単位の長さ.txt
+[equipment-gantt-graphic] ガントを更新: 計画2609101618383317.json（対象シート数=3, 表示=結果_設備ガント）
+[stage1-preview] loaded rows=34 cols=134 path=C:\システム開発\工程管理AIプロジェクト_JAVA\output\stage1_task_input_table.xlsx
+[env] 環境変数の値が初期値と異なるため、環境変数タブ以外は操作できません。環境変数タブの「環境変数を初期化」を実行してください。
+[code-lookup] 読込: C:\システム開発\工程管理AIプロジェクト_JAVA\code\使用原反,ロール単位の長さ.txt
+[equipment-gantt-graphic] ガントを更新: 計画2609101618383317.json（対象シート数=3, 表示=結果_設備ガント）
+[stage1-preview] loaded rows=34 cols=134 path=C:\システム開発\工程管理AIプロジェクト_JAVA\output\stage1_task_input_table.xlsx
+[env] 環境変数の値が初期値と異なるため、環境変数タブ以外は操作できません。環境変数タブの「環境変数を初期化」を実行してください。
+[code-lookup] 読込: C:\システム開発\工程管理AIプロジェクト_JAVA\code\使用原反,ロール単位の長さ.txt
+[equipment-gantt-graphic] ガントを更新: 計画2609101618383317.json（対象シート数=3, 表示=結果_設備ガント）
+[stage1-preview] loaded rows=34 cols=134 path=C:\システム開発\工程管理AIプロジェクト_JAVA\output\stage1_task_input_table.xlsx
+[env] 環境変数の値が初期値と異なるため、環境変数タブ以外は操作できません。環境変数タブの「環境変数を初期化」を実行してください。
+[code-lookup] 読込: C:\システム開発\工程管理AIプロジェクト_JAVA\code\使用原反,ロール単位の長さ.txt
+[equipment-gantt-graphic] ガントを更新: 計画2609101618383317.json（対象シート数=3, 表示=結果_設備ガント）
+[stage1-preview] loaded rows=34 cols=134 path=C:\システム開発\工程管理AIプロジェクト_JAVA\output\stage1_task_input_table.xlsx

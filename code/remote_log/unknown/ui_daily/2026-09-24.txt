@@ -1,0 +1,14 @@
+# pm-ai-desktop ui_daily 2026-09-24
+# operator=unknown factory=KONAN host=20250401-02 os_user=0585 app_version=17.79 java_io_tmpdir=C:\Users\0585\AppData\Local\Temp\
+[env] 環境変数の値が初期値と異なるため、環境変数タブ以外は操作できません。環境変数タブの「環境変数を初期化」を実行してください。
+[code-lookup] 読込: C:\システム開発\工程管理AIプロジェクト_JAVA\code\使用原反,ロール単位の長さ.txt
+[stage1-preview] loaded rows=33 cols=134 path=C:\システム開発\工程管理AIプロジェクト_JAVA\output\stage1_task_input_table.xlsx
+[env] 環境変数の値が初期値と異なるため、環境変数タブ以外は操作できません。環境変数タブの「環境変数を初期化」を実行してください。
+[code-lookup] 読込: C:\システム開発\工程管理AIプロジェクト_JAVA\code\使用原反,ロール単位の長さ.txt
+[stage1-preview] loaded rows=33 cols=134 path=C:\システム開発\工程管理AIプロジェクト_JAVA\output\stage1_task_input_table.xlsx
+[env] 環境変数の値が初期値と異なるため、環境変数タブ以外は操作できません。環境変数タブの「環境変数を初期化」を実行してください。
+[code-lookup] 読込: C:\システム開発\工程管理AIプロジェクト_JAVA\code\使用原反,ロール単位の長さ.txt
+[stage1-preview] loaded rows=40 cols=136 path=C:\システム開発\工程管理AIプロジェクト_JAVA\output\stage1_task_input_table.xlsx
+[env] 環境変数の値が初期値と異なるため、環境変数タブ以外は操作できません。環境変数タブの「環境変数を初期化」を実行してください。
+[code-lookup] 読込: C:\システム開発\工程管理AIプロジェクト_JAVA\code\使用原反,ロール単位の長さ.txt
+[stage1-preview] loaded rows=33 cols=134 path=C:\システム開発\工程管理AIプロジェクト_JAVA\output\stage1_task_input_table.xlsx

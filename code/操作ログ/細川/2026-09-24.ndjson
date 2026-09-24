@@ -1,0 +1,4 @@
+{"ts":"2026-09-24T08:04:28.554001200+09:00","operator":"細川","action":"session_start","result":"ok","detail":"前回選択を復元","appVersion":"17.79","factory":"KONAN","feature":"session","host":"20250401-02","osUser":"0585"}
+{"ts":"2026-09-24T08:35:35.160510500+09:00","operator":"細川","action":"session_start","result":"ok","detail":"前回選択を復元","appVersion":"17.80","factory":"KONAN","feature":"session","host":"20250401-02","osUser":"0585"}
+{"ts":"2026-09-24T08:42:02.096376600+09:00","operator":"細川","action":"session_start","result":"ok","detail":"前回選択を復元","appVersion":"17.82","factory":"KONAN","feature":"session","host":"20250401-02","osUser":"0585"}
+{"ts":"2026-09-24T08:48:49.302060300+09:00","operator":"細川","action":"session_start","result":"ok","detail":"前回選択を復元","appVersion":"17.84","factory":"KONAN","feature":"session","host":"20250401-02","osUser":"0585"}
