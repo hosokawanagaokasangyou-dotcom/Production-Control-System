@@ -18,11 +18,17 @@ class GeminiFreeTierModelSelectorTest {
                         model("models/gemini-3.1-flash-lite-preview", "generateContent"),
                         model("models/gemini-3.1-flash-lite", "generateContent"),
                         model("models/gemini-3.5-flash-lite", "generateContent"),
+                        model("models/gemini-3.8-flash", "generateContent"),
+                        model("models/gemini-3.7-flash", "generateContent"),
+                        model("models/gemini-3.8-flash-tts", "generateContent"),
+                        model("models/gemini-3.1-flash-lite-image", "generateContent"),
                         model("models/gemini-2.5-flash", "generateContent"),
                         model("models/text-embedding-004", "embedContent"));
         List<String> out = GeminiFreeTierModelSelector.selectFlashLiteGenerateContentModels(listed);
         assertEquals(
                 List.of(
+                        "gemini-3.8-flash",
+                        "gemini-3.7-flash",
                         "gemini-3.5-flash-lite",
                         "gemini-3.1-flash-lite",
                         "gemini-3.1-flash-lite-preview"),
@@ -42,10 +48,20 @@ class GeminiFreeTierModelSelectorTest {
     }
 
     @Test
-    void emptyWhenNoFlashLite() {
+    void keepsStableFlashWithoutLiteSuffix() {
         List<String> out =
                 GeminiFreeTierModelSelector.selectFlashLiteGenerateContentModels(
-                        List.of(model("models/gemini-3.5-flash", "generateContent")));
+                        List.of(model("models/gemini-3.8-flash", "generateContent")));
+        assertEquals(List.of("gemini-3.8-flash"), out);
+    }
+
+    @Test
+    void emptyWhenNoTextFlash() {
+        List<String> out =
+                GeminiFreeTierModelSelector.selectFlashLiteGenerateContentModels(
+                        List.of(
+                                model("models/gemini-3.5-pro", "generateContent"),
+                                model("models/gemini-3.8-flash-tts", "generateContent")));
         assertTrue(out.isEmpty());
     }
 

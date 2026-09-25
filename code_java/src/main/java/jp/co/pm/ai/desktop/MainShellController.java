@@ -10008,7 +10008,7 @@ public final class MainShellController
             tryRow = new EnvVarRow();
             tryRow.setName("GEMINI_MODEL_TRY_ORDER");
             tryRow.setDescription(
-                    "カンマ区切りで試行順。GEMINI_MODEL 未設定時のみ有効。日次更新で Flash-Lite 無料枠候補を自動反映。");
+                    "カンマ区切りで試行順。GEMINI_MODEL 未設定時のみ有効。日次更新で Flash 無料枠候補を自動反映。");
             envRows.add(tryRow);
         }
         tryRow.setValue(

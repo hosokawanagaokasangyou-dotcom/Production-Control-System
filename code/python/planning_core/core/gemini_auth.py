@@ -1,13 +1,16 @@
 # -*- coding: utf-8 -*-
 # planning_core.core.gemini_auth — body only (loaded via _core exec chain)
 GEMINI_MODEL_IDS_BY_QUALITY: tuple[str, ...] = (
+    "gemini-3.8-flash",
+    "gemini-3.7-flash",
+    "gemini-3.6-flash",
     "gemini-3.5-flash",
     "gemini-3.5-flash-lite",
     "gemini-3.1-flash-lite",
     "gemini-3.1-flash-lite-preview",
     "gemini-flash-latest",
 )
-GEMINI_MODEL_FLASH = "gemini-3.5-flash"
+GEMINI_MODEL_FLASH = "gemini-3.8-flash"
 # 無料枠の割り当ては世代ごとに打ち切られる。gemini-1.x / 2.x と pro 系は未使用のキーでも
 # 429 を返すため、待機付き再試行を誘発するだけの候補として試行列から除外する。
 GEMINI_EXHAUSTED_FREE_TIER_PREFIXES: tuple[str, ...] = ("gemini-1.", "gemini-2.")
@@ -1203,7 +1206,7 @@ def _gemini_generate_content_with_retry(
     """generate_content を再試行する（Gemini generateContent 共通）。
 
     - モデル列: 環境変数 **GEMINI_MODEL**（単一固定）→ **GEMINI_MODEL_TRY_ORDER**（カンマ区切り）→
-      **GEMINI_MODEL_IDS_BY_QUALITY**（コード既定: gemini-3.5-flash 最優先＋Flash-Lite 系を新→旧）。引数 ``model`` を渡したときはその1件のみ。
+      **GEMINI_MODEL_IDS_BY_QUALITY**（コード既定: gemini-3.8-flash 最優先＋Flash 系を新→旧）。引数 ``model`` を渡したときはその1件のみ。
     - 同一モデルあたり最大 _GEMINI_RETRY_MAX_ATTEMPTS 回（既定 3、GEMINI_RETRY_MAX_ATTEMPTS で変更）。
       そのモデルで試行を使い切ったら、列の次のモデルへ進む（試すモデルがなくなるまで）。
     - モデル未提供（404 等）は直ちに次モデルへ進む。

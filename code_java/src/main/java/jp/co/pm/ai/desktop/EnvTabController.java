@@ -117,7 +117,7 @@ public final class EnvTabController {
     private static final String KEY_GEMINI_MODEL = "GEMINI_MODEL";
 
     private static final String GEMINI_TRY_ORDER_ROW_DESCRIPTION =
-            "カンマ区切りで試行順（例: gemini-3.5-flash,gemini-3.1-flash-lite,gemini-2.5-flash-lite）。GEMINI_MODEL 未設定時のみ有効。両方空ならコード既定（gemini-3.5-flash 最優先＋Flash-Lite 系）";
+            "カンマ区切りで試行順（例: gemini-3.8-flash,gemini-3.5-flash,gemini-3.5-flash-lite）。GEMINI_MODEL 未設定時のみ有効。両方空ならコード既定（gemini-3.8-flash 最優先＋Flash 系）";
 
     @FXML
     private TabPane envMainTabPane;
@@ -723,7 +723,7 @@ public final class EnvTabController {
         if (dispatchGeminiHelpLabel != null) {
             dispatchGeminiHelpLabel.setText(
                     "配台（planning_core）は GEMINI_MODEL が空のとき、環境変数 GEMINI_MODEL_TRY_ORDER を上から順に試行します。"
-                            + " Flash-Lite 無料枠候補は 1 日 1 回 models.list で自動更新し、GEMINI_MODEL 未設定時は試行列へ反映します。"
+                            + " Flash / Flash-Lite 無料枠候補（gemini-3.8-flash など）は 1 日 1 回 models.list で自動更新し、GEMINI_MODEL 未設定時は新しい世代から試行列へ反映します。"
                             + " 一覧を空にして「環境変数へ書き込み」するとコード既定の順（Python と同じ既定列）が使われます。"
                             + " 環境変数一覧で GEMINI_MODEL_TRY_ORDER を直接編集した場合も、この子タブ表示中は自動で再読込します。");
         }
@@ -789,13 +789,13 @@ public final class EnvTabController {
                                             s.lastError() != null && !s.lastError().isBlank()
                                                     ? " 直近エラー: " + s.lastError()
                                                     : "";
-                                    return "無料枠 Flash-Lite キャッシュ: "
+                                    return "無料枠 Flash キャッシュ: "
                                             + s.modelIds().size()
                                             + " 件・最終 "
                                             + when
                                             + err;
                                 })
-                        .orElse("無料枠 Flash-Lite キャッシュ: 未取得（起動後に自動更新されます）");
+                        .orElse("無料枠 Flash キャッシュ: 未取得（起動後に自動更新されます）");
         dispatchGeminiFreeTierStatusLabel.setText(line);
     }
 

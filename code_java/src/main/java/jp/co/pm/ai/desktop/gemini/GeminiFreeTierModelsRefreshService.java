@@ -163,7 +163,7 @@ public final class GeminiFreeTierModelsRefreshService {
         }
         String msg =
                 (manual ? "手動更新" : "日次更新")
-                        + ": Flash-Lite "
+                        + ": Flash "
                         + modelIds.size()
                         + " 件（"
                         + STAMP.format(Instant.ofEpochMilli(now))

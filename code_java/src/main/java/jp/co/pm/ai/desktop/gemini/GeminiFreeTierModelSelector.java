@@ -12,7 +12,10 @@ import jp.co.pm.ai.desktop.benchmark.GeminiModelsListRestClient.ListedModel;
 import jp.co.pm.ai.desktop.config.GeminiDispatchModelTryOrderDefaults;
 
 /**
- * {@code models.list} 結果から、無料枠運用向けの Flash-Lite 系（{@code generateContent} 対応）を抽出・並べ替えする。
+ * {@code models.list} 結果から、無料枠運用向けのテキスト Flash / Flash-Lite（{@code generateContent} 対応）を抽出・並べ替えする。
+ *
+ * <p>最新の {@code gemini-3.8-flash} のように {@code -lite} を含まない Flash も対象にする。
+ * TTS・Live・画像・文字起こしは配台のテキスト生成に使わない。
  */
 public final class GeminiFreeTierModelSelector {
 
@@ -22,7 +25,8 @@ public final class GeminiFreeTierModelSelector {
     private GeminiFreeTierModelSelector() {}
 
     /**
-     * Flash-Lite かつ {@code generateContent} をサポートするモデル ID を、新しい世代→旧、同一世代は GA→preview の順で返す。
+     * テキスト用 Flash / Flash-Lite かつ {@code generateContent} をサポートするモデル ID を、
+     * 新しい世代→旧、同一世代は非 Lite → Lite、GA→preview の順で返す。
      */
     public static List<String> selectFlashLiteGenerateContentModels(List<ListedModel> listed) {
         if (listed == null || listed.isEmpty()) {
@@ -42,10 +46,7 @@ public final class GeminiFreeTierModelSelector {
                 continue;
             }
             String lower = id.toLowerCase(Locale.ROOT);
-            if (!lower.contains("flash-lite") && !lower.contains("flashlite")) {
-                continue;
-            }
-            if (isExcludedSuffix(lower)) {
+            if (!isDispatchTextFlash(lower) || isExcludedSuffix(lower)) {
                 continue;
             }
             if (!GeminiDispatchModelTryOrderDefaults.hasFreeTierAllocation(id)) {
@@ -71,19 +72,27 @@ public final class GeminiFreeTierModelSelector {
         return false;
     }
 
+    /** {@code gemini-3.8-flash} と {@code gemini-3.5-flash-lite} の両方を残す。 */
+    private static boolean isDispatchTextFlash(String lowerId) {
+        return lowerId.contains("flash");
+    }
+
     private static boolean isExcludedSuffix(String lowerId) {
         return lowerId.contains("embedding")
                 || lowerId.contains("embed")
                 || lowerId.contains("aqa")
                 || lowerId.contains("imagen")
+                || lowerId.contains("image")
                 || lowerId.contains("veo")
                 || lowerId.contains("live")
                 || lowerId.contains("tts")
+                || lowerId.contains("transcribe")
+                || lowerId.contains("omni")
                 || lowerId.contains("robotics");
     }
 
     /** 新しい gemini メジャー／マイナーを先に。同一系統は preview より非 preview を先。 */
-    static int compareModelIds(String a, String b) {
+    public static int compareModelIds(String a, String b) {
         VersionKey ka = versionKey(a);
         VersionKey kb = versionKey(b);
         int c = Integer.compare(kb.major, ka.major);
