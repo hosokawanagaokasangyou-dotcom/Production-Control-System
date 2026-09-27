@@ -72,7 +72,7 @@ public final class GeminiFreeTierModelsRefreshService {
         }
     }
 
-    /** 起動後1回だけ呼ぶ。24時間ごとに更新し、キャッシュが古ければ初回も即時更新する。 */
+    /** 起動後1回だけ呼ぶ。起動時はキャッシュの新旧に関係なく models.list を取り直す。以降は24時間ごとに、キャッシュが古ければ更新する。 */
     public void start() {
         if (!started.compareAndSet(false, true)) {
             return;
@@ -80,7 +80,7 @@ public final class GeminiFreeTierModelsRefreshService {
         long periodSec = Math.max(60L, REFRESH_INTERVAL.getSeconds());
         scheduler.scheduleAtFixedRate(
                 () -> refreshIfDue(false), periodSec, periodSec, TimeUnit.SECONDS);
-        scheduler.execute(() -> refreshIfDue(false));
+        scheduler.execute(() -> runRefresh(false, "起動時更新"));
     }
 
     public void shutdown() {
@@ -108,6 +108,10 @@ public final class GeminiFreeTierModelsRefreshService {
     private record OptionalSnapshot(GeminiFreeTierModelsCache.Snapshot snapshot, boolean stale) {}
 
     private void runRefresh(boolean manual) {
+        runRefresh(manual, manual ? "手動更新" : "日次更新");
+    }
+
+    private void runRefresh(boolean manual, String label) {
         if (!refreshInFlight.compareAndSet(false, true)) {
             listener.onRefreshFinished(
                     new RefreshResult(
@@ -122,14 +126,14 @@ public final class GeminiFreeTierModelsRefreshService {
         try {
             Map<String, String> ui = uiEnvSupplier.get();
             Path cachePath = GeminiFreeTierModelsCache.resolvePath(ui);
-            RefreshResult result = doRefresh(ui, cachePath, manual);
+            RefreshResult result = doRefresh(ui, cachePath, manual, label);
             listener.onRefreshFinished(result);
         } finally {
             refreshInFlight.set(false);
         }
     }
 
-    private RefreshResult doRefresh(Map<String, String> ui, Path cachePath, boolean manual) {
+    private RefreshResult doRefresh(Map<String, String> ui, Path cachePath, boolean manual, String label) {
         String apiKey;
         try {
             apiKey = loadApiKey(ui);
@@ -162,7 +166,7 @@ public final class GeminiFreeTierModelsRefreshService {
             return failure(cachePath, manual, "キャッシュ書き込み失敗: " + ex.getMessage());
         }
         String msg =
-                (manual ? "手動更新" : "日次更新")
+                label
                         + ": Flash "
                         + modelIds.size()
                         + " 件（"

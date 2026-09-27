@@ -723,7 +723,7 @@ public final class EnvTabController {
         if (dispatchGeminiHelpLabel != null) {
             dispatchGeminiHelpLabel.setText(
                     "配台（planning_core）は GEMINI_MODEL が空のとき、環境変数 GEMINI_MODEL_TRY_ORDER を上から順に試行します。"
-                            + " Flash / Flash-Lite 無料枠候補（gemini-3.8-flash など）は 1 日 1 回 models.list で自動更新し、GEMINI_MODEL 未設定時は新しい世代から試行列へ反映します。"
+                            + " Flash / Flash-Lite 無料枠候補（gemini-3.8-flash など）は起動のたびに models.list で更新し、GEMINI_MODEL 未設定時は新しい世代から試行列へ反映します。"
                             + " 一覧を空にして「環境変数へ書き込み」するとコード既定の順（Python と同じ既定列）が使われます。"
                             + " 環境変数一覧で GEMINI_MODEL_TRY_ORDER を直接編集した場合も、この子タブ表示中は自動で再読込します。");
         }
