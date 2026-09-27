@@ -247,6 +247,60 @@ class RemoteSupportLogArchiveTest {
     }
 
     @Test
+    void startupLinesBeforeOperator_areKeptOnThatOperatorsDailyLog(@TempDir Path temp)
+            throws Exception {
+        FactoryOperatorUserStore.clearSessionOperatorName();
+        Map<String, String> ui = archiveUi(temp);
+        Path pending = temp.resolve("startup-remote-log-pending.txt");
+        System.setProperty("pm.ai.test.startupRemoteLogPending", pending.toString());
+        RemoteSupportLogArchive.resetBuffersForTest();
+        String startup = "[startup] PM_AI_TASK_INPUT_SOURCE_DIR にアクセスできません（一覧不可）";
+        String boot = "[boot] prism.order=sw GPU テスト不合格";
+        String crash = "main: launch failed: java.lang.IllegalStateException: boom";
+        String previous = "[startup-crash] previous: launch failed before operator";
+        try {
+            Files.writeString(pending, previous + "\n", StandardCharsets.UTF_8);
+            RemoteSupportLogArchive.offerDailyUiLogLine(ui, startup);
+            RemoteSupportLogArchive.offerDailyUiLogLine(ui, boot);
+            StartupCrashLog.retainFailureForOperatorLog("main: begin user.dir=test");
+            StartupCrashLog.retainFailureForOperatorLog(crash);
+            RemoteSupportLogArchive.flushDailyUiLogNow();
+            Path unknown =
+                    RemoteSupportLogArchive.resolveDailyUiLogFile(
+                            ui, OperatorUserPaths.UNKNOWN_OPERATOR_DIR, LocalDate.now());
+            assertFalse(Files.exists(unknown), "操作者未確定の起動ログを unknown へ書かない");
+            String pendingText = Files.readString(pending, StandardCharsets.UTF_8);
+            assertTrue(pendingText.contains(previous), pendingText);
+            assertTrue(pendingText.contains(startup), pendingText);
+
+            ui.put(AppPaths.KEY_PM_AI_OPERATOR_USER, "古家");
+            RemoteSupportLogArchive.offerDailyUiLogLine(ui, "[startup] 操作者: 古家");
+            RemoteSupportLogArchive.flushDailyUiLogNow();
+
+            Path user =
+                    RemoteSupportLogArchive.resolveDailyUiLogFile(ui, "古家", LocalDate.now());
+            assertTrue(Files.isRegularFile(user));
+            String text = Files.readString(user, StandardCharsets.UTF_8);
+            assertTrue(text.contains(startup), text);
+            assertTrue(text.contains(boot), text);
+            assertTrue(text.contains("[startup-crash] " + crash), text);
+            assertTrue(text.contains(previous), text);
+            assertFalse(text.contains("main: begin user.dir=test"), text);
+            int operatorAt = text.indexOf("[startup] 操作者: 古家");
+            assertTrue(text.indexOf(previous) < text.indexOf(startup), text);
+            assertTrue(text.indexOf(startup) < operatorAt, text);
+            assertTrue(text.indexOf(boot) < operatorAt, text);
+            assertTrue(text.indexOf(crash) < operatorAt, text);
+            assertFalse(Files.exists(unknown));
+            assertFalse(Files.exists(pending), "操作者確定後は保留ファイルを残さない");
+        } finally {
+            RemoteSupportLogArchive.resetBuffersForTest();
+            System.clearProperty("pm.ai.test.startupRemoteLogPending");
+            FactoryOperatorUserStore.clearSessionOperatorName();
+        }
+    }
+
+    @Test
     void appendDailyUiLog_writesPerOperatorFileAndPrunes(@TempDir Path temp) throws Exception {
         Map<String, String> ui = archiveUi(temp);
         Path file =

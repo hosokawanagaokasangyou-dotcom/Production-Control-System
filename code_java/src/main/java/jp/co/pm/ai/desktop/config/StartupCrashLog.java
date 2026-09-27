@@ -12,6 +12,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 
 /**
@@ -65,6 +66,36 @@ public final class StartupCrashLog {
                 // try next path
             }
         }
+        retainFailureForOperatorLog(message);
+    }
+
+    /**
+     * Keep a startup failure for the operator remote_log. Informational lines are ignored.
+     * Text stays buffered until an operator is known, then joins that operator's daily log.
+     */
+    static void retainFailureForOperatorLog(String message) {
+        if (message == null || message.isBlank() || !isStartupFailureMessage(message)) {
+            return;
+        }
+        String line = message.strip();
+        if (!line.startsWith("[startup-crash]")) {
+            line = "[startup-crash] " + line;
+        }
+        RemoteSupportLogArchive.holdStartupLine(line);
+    }
+
+    static boolean isStartupFailureMessage(String message) {
+        if (message == null || message.isBlank()) {
+            return false;
+        }
+        String lower = message.toLowerCase(Locale.ROOT);
+        return lower.contains("failed")
+                || lower.contains("exception")
+                || lower.contains("headless")
+                || lower.contains("unavailable")
+                || message.contains("失敗")
+                || message.contains("エラー")
+                || message.contains("できません");
     }
 
     private static List<Path> distinctLogTargets() {

@@ -483,6 +483,8 @@ public final class EnvVarDocs {
                 "PM_AI_REMOTE_LOG",
                 "リモートサポート用ログ（現工場の共有 DATA 同階層 remote_log/操作者/）。"
                         + "日次 ui_daily/yyyy-MM-dd.txt と、段階1／2／2.1・東レ後加工賃検証・終了時の世代フォルダ。"
+                        + "操作者確定前の起動ログ（画面の [startup]/[boot] と起動失敗）は確定後にその操作者の日次へまとめる。"
+                        + "操作者選択前にプロセスが落ちた分は PC ローカルに保留し、次にログインした操作者の日次へ載せる。"
                         + "湖南は湖南共有DATA、国分は国分DATA。0/false/no/off/none で無効（空で有効）。"
                         + " 世代は3日。段階終了時のみ execution_log.txt も同梱。");
         put(

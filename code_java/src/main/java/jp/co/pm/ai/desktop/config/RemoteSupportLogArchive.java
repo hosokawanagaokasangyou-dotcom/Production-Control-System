@@ -82,8 +82,12 @@ public final class RemoteSupportLogArchive {
 
     private static final Object DAILY_LOCK = new Object();
     private static final StringBuilder DAILY_BUF = new StringBuilder();
+    /** 操作者未確定の起動ログ。確定後にその操作者の日次へ移す。 */
+    private static final StringBuilder STARTUP_BUF = new StringBuilder();
     private static Map<String, String> dailyUi = Map.of();
     private static String dailyOperator = "";
+    /** 起動バッファを操作者の日次へ移し終えたら true。 */
+    private static boolean startupAttached;
     private static ScheduledFuture<?> dailyFlushFuture;
 
     private static final Object EVENT_LOCK = new Object();
@@ -224,33 +228,72 @@ public final class RemoteSupportLogArchive {
         return OperatorUserPaths.resolveOperatorUser(ui);
     }
 
+    /** セッション操作者がまだ無い（空または {@code unknown}）。 */
+    static boolean isUnassignedOperator(String operator) {
+        if (operator == null || operator.isBlank()) {
+            return true;
+        }
+        return OperatorUserPaths.UNKNOWN_OPERATOR_DIR.equals(operator.strip());
+    }
+
+    /**
+     * 起動失敗行を日次バッファへ載せる。操作者未確定の間はメモリに留め、確定後の日次へまとめる。
+     */
+    static void holdStartupLine(String line) {
+        if (line == null || line.isEmpty()) {
+            return;
+        }
+        synchronized (DAILY_LOCK) {
+            if (startupAttached
+                    && !isUnassignedOperator(dailyOperator)
+                    && isEnabled(dailyUi)) {
+                appendRawLocked(DAILY_BUF, line);
+                scheduleDailyFlushLocked();
+                return;
+            }
+            appendRawLocked(STARTUP_BUF, line);
+            appendPendingStartupFileQuietly(line);
+        }
+    }
+
     /**
      * 実行・ログ1行を日次ファイルへバッファする。共有フォルダへの実書込は短遅延後。
+     *
+     * <p>操作者未確定の行は {@code unknown} へ書かず、次に操作者が決まった日次へ先行して残す。
      */
     public static void offerDailyUiLogLine(Map<String, String> ui, String line) {
         if (!isEnabled(ui) || line == null || line.isEmpty()) {
             return;
         }
         String operator = resolveOperatorName(ui);
-        if (operator == null || operator.isBlank()) {
-            return;
-        }
         Map<String, String> uiCopy = ui != null ? Map.copyOf(ui) : Map.of();
         synchronized (DAILY_LOCK) {
+            if (isUnassignedOperator(operator)) {
+                appendRawLocked(STARTUP_BUF, line);
+                appendPendingStartupFileQuietly(line);
+                return;
+            }
+            attachStartupLocked(uiCopy, operator);
             dailyUi = uiCopy;
             dailyOperator = operator;
-            DAILY_BUF.append(line);
-            if (!line.endsWith("\n")) {
-                DAILY_BUF.append('\n');
-            }
+            appendRawLocked(DAILY_BUF, line);
+            scheduleDailyFlushLocked();
+        }
+    }
+
+    /** テスト間で静的バッファと遅延書込を捨てる。 */
+    static void resetBuffersForTest() {
+        synchronized (DAILY_LOCK) {
             if (dailyFlushFuture != null) {
                 dailyFlushFuture.cancel(false);
+                dailyFlushFuture = null;
             }
-            dailyFlushFuture =
-                    SCHED.schedule(
-                            RemoteSupportLogArchive::flushDailyBufferQuietly,
-                            DAILY_FLUSH_DELAY_MS,
-                            TimeUnit.MILLISECONDS);
+            DAILY_BUF.setLength(0);
+            STARTUP_BUF.setLength(0);
+            dailyUi = Map.of();
+            dailyOperator = "";
+            startupAttached = false;
+            deletePendingStartupFileQuietly();
         }
     }
 
@@ -311,6 +354,18 @@ public final class RemoteSupportLogArchive {
      */
     public static void flushOnShutdown(
             Map<String, String> ui, String operatorName, String uiLogText) {
+        if (isEnabled(ui)) {
+            String operator =
+                    operatorName != null && !operatorName.isBlank()
+                            ? operatorName.strip()
+                            : resolveOperatorName(ui);
+            if (!isUnassignedOperator(operator)) {
+                Map<String, String> uiCopy = ui != null ? Map.copyOf(ui) : Map.of();
+                synchronized (DAILY_LOCK) {
+                    attachStartupLocked(uiCopy, operator);
+                }
+            }
+        }
         flushDailyUiLogNow();
         if (!isEnabled(ui)) {
             return;
@@ -354,6 +409,9 @@ public final class RemoteSupportLogArchive {
             if (logConsumer != null) {
                 logConsumer.accept("[remote_log] 操作者が未選択のためスキップしました。");
             }
+            return;
+        }
+        if (isUnassignedOperator(operator)) {
             return;
         }
         Map<String, String> uiCopy = ui != null ? Map.copyOf(ui) : Map.of();
@@ -576,10 +634,104 @@ public final class RemoteSupportLogArchive {
         return removed;
     }
 
+    private static void attachStartupLocked(Map<String, String> ui, String operator) {
+        if (startupAttached) {
+            return;
+        }
+        dailyUi = ui != null ? ui : Map.of();
+        dailyOperator = operator != null ? operator : "";
+        String fromFile = readPendingStartupFileQuietly();
+        String fromMemory = STARTUP_BUF.toString();
+        STARTUP_BUF.setLength(0);
+        if (fromFile != null && !fromFile.isEmpty()) {
+            DAILY_BUF.append(fromFile);
+            if (!fromFile.endsWith("\n")) {
+                DAILY_BUF.append('\n');
+            }
+            if (!fromMemory.isEmpty() && !fromFile.contains(fromMemory)) {
+                DAILY_BUF.append(fromMemory);
+            }
+        } else if (!fromMemory.isEmpty()) {
+            DAILY_BUF.append(fromMemory);
+        }
+        startupAttached = true;
+    }
+
+    private static void appendRawLocked(StringBuilder buf, String line) {
+        buf.append(line);
+        if (!line.endsWith("\n")) {
+            buf.append('\n');
+        }
+    }
+
+    private static void scheduleDailyFlushLocked() {
+        if (dailyFlushFuture != null) {
+            dailyFlushFuture.cancel(false);
+        }
+        dailyFlushFuture =
+                SCHED.schedule(
+                        RemoteSupportLogArchive::flushDailyBufferQuietly,
+                        DAILY_FLUSH_DELAY_MS,
+                        TimeUnit.MILLISECONDS);
+    }
+
+    /** 操作者未確定の起動行。プロセスが落ちても次のログインで日次へ載せる。 */
+    static Path pendingStartupFile() {
+        String override = System.getProperty("pm.ai.test.startupRemoteLogPending");
+        if (override != null && !override.isBlank()) {
+            return Path.of(override);
+        }
+        String home = System.getProperty("user.home", ".");
+        return Path.of(home, ".pm-ai-desktop", "startup-remote-log-pending.txt");
+    }
+
+    private static void appendPendingStartupFileQuietly(String line) {
+        if (line == null || line.isEmpty()) {
+            return;
+        }
+        try {
+            Path file = pendingStartupFile();
+            Path parent = file.getParent();
+            if (parent != null) {
+                Files.createDirectories(parent);
+            }
+            String body = line.endsWith("\n") ? line : line + "\n";
+            Files.writeString(
+                    file,
+                    body,
+                    StandardCharsets.UTF_8,
+                    StandardOpenOption.CREATE,
+                    StandardOpenOption.APPEND);
+        } catch (Exception ignored) {
+            // メモリ側の STARTUP_BUF が同じプロセス内の退避
+        }
+    }
+
+    private static String readPendingStartupFileQuietly() {
+        try {
+            Path file = pendingStartupFile();
+            if (!Files.isRegularFile(file)) {
+                return "";
+            }
+            return Files.readString(file, StandardCharsets.UTF_8);
+        } catch (Exception ignored) {
+            return "";
+        }
+    }
+
+    private static void deletePendingStartupFileQuietly() {
+        try {
+            Files.deleteIfExists(pendingStartupFile());
+        } catch (Exception ignored) {
+            // 次回起動で再取り込みする
+        }
+    }
+
     private static void flushDailyBufferQuietly() {
         String chunk;
         Map<String, String> ui;
         String operator;
+        boolean consumePending;
         synchronized (DAILY_LOCK) {
             if (DAILY_BUF.length() == 0) {
                 return;
@@ -588,9 +740,13 @@ public final class RemoteSupportLogArchive {
             DAILY_BUF.setLength(0);
             ui = dailyUi;
             operator = dailyOperator;
+            consumePending = startupAttached;
         }
         try {
             appendDailyUiLog(ui, operator, chunk, LocalDate.now(ZoneId.systemDefault()));
+            if (consumePending) {
+                deletePendingStartupFileQuietly();
+            }
         } catch (Exception ex) {
             LOG.log(Level.WARNING, "remote_log 日次保存失敗", ex);
         }

@@ -5931,10 +5931,12 @@ public final class MainShellController
     }
 
     void appendBootMessage() {
-        mainRunTabController.appendLog(
-                "[boot] " + PrismGpuBootstrapStatus.runTabSummary(), false);
-        mainRunTabController.appendLog(
-                "[boot] PYTHONUTF8=1 PYTHONIOENCODING=utf-8 for child process.", false);
+        String prism = "[boot] " + PrismGpuBootstrapStatus.runTabSummary();
+        String encoding = "[boot] PYTHONUTF8=1 PYTHONIOENCODING=utf-8 for child process.";
+        mainRunTabController.appendLog(prism, false);
+        mainRunTabController.appendLog(encoding, false);
+        offerRuntimeSupportLog(prism);
+        offerRuntimeSupportLog(encoding);
         Platform.runLater(
                 () -> {
                     mainRunTabController.flushPendingSessionLogScroll();
