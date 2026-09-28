@@ -3,30 +3,34 @@ package jp.co.pm.ai.desktop.reconciliation;
 /**
  * 依頼書入力の TPI PDF 再読込で、parse キャッシュを使うか再抽出するかを決める。
  *
- * <p>「データを再読込」はキャッシュを使わず再抽出する。画像スキャン PDF はそのとき再 OCR になる。
- * 起動時や工場切替などの自動再読込は、Excel 原本と重複する PDF を飛ばし、有効な parse キャッシュを使う。
+ * <p>再 OCR が必要なのは新規ファイルと、更新日時またはサイズが変わったファイルだけ。
+ * parse キャッシュの指紋が一致する未変更ファイルは再抽出しない。
+ * 未変更かつ依頼Ｎｏが Excel 原本にある PDF は、一覧へ足さず OCR もしない。
  */
 final class RequestFormTpiPdfReload {
 
     enum Action {
-        /** ファイル名の依頼Ｎｏが Excel 原本に既にある。抽出も OCR もしない。 */
+        /** 未変更で、ファイル名の依頼Ｎｏが Excel 原本に既にある。抽出も OCR もしない。 */
         SKIP_EXCEL_DUPLICATE,
-        /** parse キャッシュの entries を使う。 */
+        /** 未変更。parse キャッシュの entries を使う。 */
         USE_CACHE,
-        /** PDF を再抽出する。画像スキャンは OCR。 */
+        /** 新規、または更新日時・サイズが変わった PDF を再抽出する。画像スキャンは OCR。 */
         REEXTRACT
     }
 
     private RequestFormTpiPdfReload() {}
 
-    static Action decide(
-            boolean explicitDataReload, boolean excelOriginalHasIrai, boolean parseCacheHit) {
-        if (explicitDataReload) {
+    /**
+     * @param excelOriginalHasIrai ファイル名から読んだ依頼Ｎｏが Excel 原本にある
+     * @param parseCacheHit 更新日時とサイズが parse キャッシュの指紋と一致する
+     */
+    static Action decide(boolean excelOriginalHasIrai, boolean parseCacheHit) {
+        if (!parseCacheHit) {
             return Action.REEXTRACT;
         }
         if (excelOriginalHasIrai) {
             return Action.SKIP_EXCEL_DUPLICATE;
         }
-        return parseCacheHit ? Action.USE_CACHE : Action.REEXTRACT;
+        return Action.USE_CACHE;
     }
 }

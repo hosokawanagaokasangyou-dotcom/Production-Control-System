@@ -7,25 +7,26 @@ import org.junit.jupiter.api.Test;
 class RequestFormTpiPdfReloadTest {
 
     @Test
-    void explicitDataReload_reextractsEvenWhenParseCacheHits() {
+    void unchangedFile_usesParseCache() {
         assertEquals(
-                RequestFormTpiPdfReload.Action.REEXTRACT,
-                RequestFormTpiPdfReload.decide(true, false, true));
-        assertEquals(
-                RequestFormTpiPdfReload.Action.REEXTRACT,
-                RequestFormTpiPdfReload.decide(true, true, true));
+                RequestFormTpiPdfReload.Action.USE_CACHE,
+                RequestFormTpiPdfReload.decide(false, true));
     }
 
     @Test
-    void automaticReload_keepsExcelSkipAndParseCache() {
-        assertEquals(
-                RequestFormTpiPdfReload.Action.SKIP_EXCEL_DUPLICATE,
-                RequestFormTpiPdfReload.decide(false, true, true));
-        assertEquals(
-                RequestFormTpiPdfReload.Action.USE_CACHE,
-                RequestFormTpiPdfReload.decide(false, false, true));
+    void newOrChangedFile_reextracts() {
         assertEquals(
                 RequestFormTpiPdfReload.Action.REEXTRACT,
-                RequestFormTpiPdfReload.decide(false, false, false));
+                RequestFormTpiPdfReload.decide(false, false));
+        assertEquals(
+                RequestFormTpiPdfReload.Action.REEXTRACT,
+                RequestFormTpiPdfReload.decide(true, false));
+    }
+
+    @Test
+    void unchangedExcelDuplicate_skipsWithoutReocr() {
+        assertEquals(
+                RequestFormTpiPdfReload.Action.SKIP_EXCEL_DUPLICATE,
+                RequestFormTpiPdfReload.decide(true, true));
     }
 }

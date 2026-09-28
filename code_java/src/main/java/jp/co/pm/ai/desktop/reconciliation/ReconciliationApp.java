@@ -421,13 +421,12 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         Button btnReload = new Button("データを再読込");
         btnReload.setTooltip(
                 new Tooltip(
-                        "受注ファイルと原本を読み直します。TPI PDF は解析キャッシュを使わず再抽出します（画像スキャンは再OCR）。"));
+                        "受注ファイルと原本を読み直します。TPI PDF は新規ファイルと、更新日時またはサイズが変わったファイルだけ再OCRします。"));
         btnReload.setOnAction(
                 e ->
                         requestReloadData(
                                 "受注ファイルと原本データを再読込します。",
-                                this::loadMasterProductList,
-                                true));
+                                this::loadMasterProductList));
         btnReload.getStyleClass().add("btn-reload");
         
         Button btnSelectFolder = new Button("フォルダ選択");
@@ -2866,18 +2865,9 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
      * @param afterReload 読込開始後に実行する追加処理（{@code null} 可）
      */
     private void requestReloadData(String reason, Runnable afterReload) {
-        requestReloadData(reason, afterReload, false);
-    }
-
-    /**
-     * @param explicitTpiReextract {@code true} のとき TPI PDF の parse キャッシュを使わず再抽出する
-     *     （画像スキャンは再 OCR）。「データを再読込」ボタンだけ {@code true}。
-     */
-    private void requestReloadData(
-            String reason, Runnable afterReload, boolean explicitTpiReextract) {
         List<OrderRecord> pending = collectPendingLocalSaveRecords();
         if (pending.isEmpty()) {
-            reloadData(explicitTpiReextract);
+            reloadData();
             if (afterReload != null) {
                 afterReload.run();
             }
@@ -2918,7 +2908,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                     false,
                     success -> {
                         if (success) {
-                            reloadData(explicitTpiReextract);
+                            reloadData();
                             if (afterReload != null) {
                                 afterReload.run();
                             }
@@ -2926,7 +2916,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                     });
             return;
         }
-        reloadData(explicitTpiReextract);
+        reloadData();
         if (afterReload != null) {
             afterReload.run();
         }
@@ -3642,13 +3632,6 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
 
     // --- LOGIC: DATA RE-READING & PARSING ---
     private void reloadData() {
-        reloadData(false);
-    }
-
-    /**
-     * @param explicitTpiReextract 「データを再読込」ボタン。TPI PDF は parse キャッシュを使わず再抽出する。
-     */
-    private void reloadData(boolean explicitTpiReextract) {
         final long generation = dataReloadGeneration.incrementAndGet();
         beginDataReloadUiBlock();
         latestReloadProgressText = "受注ファイルを読み込んでいます…";
@@ -3816,11 +3799,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                                     }
                                 }
                                 appendTpiPdfRawRequests(
-                                        rawRequests,
-                                        excelRawKeys,
-                                        parseCacheRootFinal,
-                                        generation,
-                                        explicitTpiReextract);
+                                        rawRequests, excelRawKeys, parseCacheRootFinal, generation);
 
                                 if (isDataReloadObsolete(generation)) {
                                     return;
@@ -4465,8 +4444,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
             List<Map<String, String>> rawRequests,
             Set<String> excelRawKeys,
             File parseCacheRoot,
-            long reloadGeneration,
-            boolean explicitTpiReextract) {
+            long reloadGeneration) {
         if (!AppPaths.isRequestFormTpiPdfEnabled(uiEnvSnapshot)) {
             return;
         }
@@ -4501,13 +4479,10 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
             String normKey =
                     normalize_key(RequestFormTpiPdfFieldLayout.parseIraiNoFromFileName(pdfName));
             boolean excelHasIrai = !normKey.isEmpty() && excelRawKeys.contains(normKey);
-            Optional<List<Map<String, String>>> cached = Optional.empty();
-            if (!explicitTpiReextract && !excelHasIrai) {
-                cached = RequestFormSourceCache.loadParseEntries(parseCacheRoot, pdf);
-            }
+            Optional<List<Map<String, String>>> cached =
+                    RequestFormSourceCache.loadParseEntries(parseCacheRoot, pdf);
             RequestFormTpiPdfReload.Action reloadAction =
-                    RequestFormTpiPdfReload.decide(
-                            explicitTpiReextract, excelHasIrai, cached.isPresent());
+                    RequestFormTpiPdfReload.decide(excelHasIrai, cached.isPresent());
             if (reloadAction == RequestFormTpiPdfReload.Action.SKIP_EXCEL_DUPLICATE) {
                 updateReloadProgressTextForced(
                         String.format(
@@ -4548,9 +4523,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
             }
             updateReloadProgressTextForced(
                     String.format(
-                            explicitTpiReextract
-                                    ? "TPI PDF 再解析 (%d / %d)\n%s"
-                                    : "TPI PDF OCR 開始 (%d / %d)\n%s",
+                            "TPI PDF OCR 開始 (%d / %d)\n%s",
                             pdfIdx, totalPdf, pdfName));
             try {
                 List<Map<String, String>> parsed =
@@ -4581,29 +4554,6 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                                 pdfIdx, totalPdf, pdfName));
             } catch (Exception ex) {
                 System.err.println("Error reading TPI PDF " + pdf.getName() + ": " + ex.getMessage());
-                if (!explicitTpiReextract) {
-                    continue;
-                }
-                Optional<List<Map<String, String>>> fallback =
-                        RequestFormSourceCache.loadParseEntries(parseCacheRoot, pdf);
-                if (fallback.isEmpty()) {
-                    continue;
-                }
-                for (Map<String, String> entry : fallback.get()) {
-                    String k = normalize_key(entry.get("依頼Ｎｏ"));
-                    if (!k.isEmpty() && excelRawKeys.contains(k)) {
-                        continue;
-                    }
-                    if (!RequestFormTpiPdfCatalog.shouldAutoAddScannedEntry(
-                            tpiDir, pdf, fallback.get(), entry)) {
-                        continue;
-                    }
-                    rawRequests.add(entry);
-                }
-                updateReloadProgressTextForced(
-                        String.format(
-                                "TPI PDF 再解析失敗、キャッシュ使用 (%d / %d)\n%s",
-                                pdfIdx, totalPdf, pdfName));
             }
         }
     }
