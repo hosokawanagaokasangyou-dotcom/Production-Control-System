@@ -24,6 +24,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.config.OperatorUserPaths;
+import jp.co.pm.ai.desktop.io.Stage2EquipmentGanttContractPaths;
 import jp.co.pm.ai.desktop.io.Stage2OutputNaming;
 
 /**
@@ -112,6 +113,13 @@ public final class DispatchSnapshotStore {
             List<String> copied = new ArrayList<>();
             List<String> missing = new ArrayList<>();
             copyIfPresent(planJson, genDir, copied, missing);
+            if (planJson != null) {
+                copyIfPresent(
+                        Stage2EquipmentGanttContractPaths.preferredContractSiblingForCopy(planJson),
+                        genDir,
+                        copied,
+                        missing);
+            }
             Path memberSameRun = memberOnSameStamp(planJson, memberJson);
             if (memberSameRun == null) {
                 String expected = Stage2OutputNaming.expectedMemberFileName(planJson);

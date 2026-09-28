@@ -14,6 +14,46 @@ public final class Stage2EquipmentGanttContractPaths {
      * 計画 xlsx/json パスから兄弟の設備ガント契約 JSON を探す。見つからなければ null。
      */
     public static Path resolveEquipmentContractSibling(Path planArtifactPath) {
+        ContractCandidates c = candidates(planArtifactPath);
+        if (c == null) {
+            return null;
+        }
+        if (c.selfIfContract != null) {
+            return Files.isRegularFile(c.selfIfContract) ? c.selfIfContract : null;
+        }
+        if (c.modern != null && Files.isRegularFile(c.modern)) {
+            return c.modern;
+        }
+        if (c.legacy != null && Files.isRegularFile(c.legacy)) {
+            return c.legacy;
+        }
+        return null;
+    }
+
+    /**
+     * スナップショットへコピーする契約パス。ファイルが無いときは期待する {@code …設.json} を返す
+     * （呼び出し側が missing に記録できる）。計画以外は null。
+     */
+    public static Path preferredContractSiblingForCopy(Path planArtifactPath) {
+        ContractCandidates c = candidates(planArtifactPath);
+        if (c == null) {
+            return null;
+        }
+        if (c.selfIfContract != null) {
+            return Files.isRegularFile(c.selfIfContract) ? c.selfIfContract : null;
+        }
+        if (c.modern != null && Files.isRegularFile(c.modern)) {
+            return c.modern;
+        }
+        if (c.legacy != null && Files.isRegularFile(c.legacy)) {
+            return c.legacy;
+        }
+        return c.modern;
+    }
+
+    private record ContractCandidates(Path modern, Path legacy, Path selfIfContract) {}
+
+    private static ContractCandidates candidates(Path planArtifactPath) {
         if (planArtifactPath == null) {
             return null;
         }
@@ -22,31 +62,19 @@ public final class Stage2EquipmentGanttContractPaths {
             return null;
         }
         String name = fn.toString();
-        if (name.endsWith(".xlsx")) {
-            String stem = name.substring(0, name.length() - 5);
-            String baseStem = stripStage2PlanStemVariants(stem);
-            Path modern = planArtifactPath.resolveSibling(baseStem + "設.json");
-            if (Files.isRegularFile(modern)) {
-                return modern;
-            }
-            Path legacy =
-                    planArtifactPath.resolveSibling(baseStem + "_equipment_gantt_contract.json");
-            return Files.isRegularFile(legacy) ? legacy : null;
-        }
-        if (!name.endsWith(".json")) {
+        boolean xlsx = name.endsWith(".xlsx");
+        boolean json = name.endsWith(".json");
+        if (!xlsx && !json) {
             return null;
         }
         String stem = name.substring(0, name.length() - 5);
-        if (stem.endsWith("_equipment_gantt_contract") || stem.endsWith("設")) {
-            return Files.isRegularFile(planArtifactPath) ? planArtifactPath : null;
+        if (json && (stem.endsWith("_equipment_gantt_contract") || stem.endsWith("設"))) {
+            return new ContractCandidates(null, null, planArtifactPath);
         }
         String baseStem = stripStage2PlanStemVariants(stem);
         Path modern = planArtifactPath.resolveSibling(baseStem + "設.json");
-        if (Files.isRegularFile(modern)) {
-            return modern;
-        }
         Path legacy = planArtifactPath.resolveSibling(baseStem + "_equipment_gantt_contract.json");
-        return Files.isRegularFile(legacy) ? legacy : null;
+        return new ContractCandidates(modern, legacy, null);
     }
 
     /** {@code 結果_配台表.json} 近傍から設備ガント契約を解決する（shortages の production_plan を優先）。 */

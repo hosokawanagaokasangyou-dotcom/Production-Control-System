@@ -88,6 +88,7 @@ import jp.co.pm.ai.desktop.io.gantt.EquipmentGanttAssignmentPerson;
 import jp.co.pm.ai.desktop.io.gantt.EquipmentGanttAssignmentRole;
 import jp.co.pm.ai.desktop.io.gantt.EquipmentGanttContractSheetTableBuilder;
 import jp.co.pm.ai.desktop.io.gantt.EquipmentGanttSheetBundle;
+import jp.co.pm.ai.desktop.io.gantt.EquipmentScheduleGridPivot;
 import jp.co.pm.ai.desktop.io.gantt.GanttContractValueDecoder;
 import jp.co.pm.ai.desktop.io.gantt.PersonNameBadgeText;
 import jp.co.pm.ai.desktop.io.JsonTableIo;
@@ -3203,6 +3204,14 @@ public final class EquipmentGanttGraphicTabController {
             badgeRows = bundle.badgeSlotRows();
             assignmentMetadata = bundle.assignmentMetadata();
             desc = desc + " / " + contract.getFileName() + " (設備ガント帯)";
+        } else {
+            EquipmentScheduleGridPivot.Result pivoted =
+                    EquipmentScheduleGridPivot.pivot(sheets.get("結果_設備毎の時間割"));
+            if (pivoted != null) {
+                sheets.put(DEFAULT_SHEET, pivoted.table());
+                badgeRows = pivoted.badgeSlotRows();
+                desc = desc + " / 結果_設備毎の時間割 (時刻軸へ変換)";
+            }
         }
         return new SheetLoad(sheets, desc, badgeRows, assignmentMetadata);
     }

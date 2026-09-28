@@ -48,6 +48,24 @@ class DispatchSnapshotStoreTest {
         assertTrue(Files.isRegularFile(published.generationDir().resolve("計画2609230900000001.json")));
         assertTrue(Files.isRegularFile(published.generationDir().resolve("人員2609230900000001.json")));
         assertTrue(Files.isRegularFile(published.generationDir().resolve("結果_配台表.json")));
+        assertTrue(published.missing().contains("計画2609230900000001設.json"));
+
+        Path contract = temp.resolve("計画2609230900000001設.json");
+        Files.writeString(contract, "{\"kwargs_packed\":{}}", StandardCharsets.UTF_8);
+        DispatchSnapshotStore.PublishResult withContract =
+                DispatchSnapshotStore.publish(
+                        temp.resolve("share-contract"),
+                        "森岡",
+                        "stage2",
+                        LocalDateTime.of(2026, 9, 23, 9, 21),
+                        plan,
+                        member,
+                        dispatch,
+                        null,
+                        null);
+        assertTrue(
+                Files.isRegularFile(withContract.generationDir().resolve("計画2609230900000001設.json")));
+        assertFalse(withContract.missing().contains("計画2609230900000001設.json"));
         assertTrue(published.missing().contains("shaped_aladdin_plan.json"));
         assertTrue(published.missing().contains("shaped_processing_actuals.json"));
         assertTrue(Files.isRegularFile(published.generationDir().resolve("meta.json")));
