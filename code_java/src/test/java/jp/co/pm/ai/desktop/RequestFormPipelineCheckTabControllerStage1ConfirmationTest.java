@@ -274,6 +274,13 @@ class RequestFormPipelineCheckTabControllerStage1ConfirmationTest {
         assertTrue(row.isIssueConfirmed());
     }
 
+    @Test
+    void confirmAllProgressDetail_includesDoneAndTotal() {
+        assertEquals(
+                "確認を一括チェック中… 12/40 件",
+                RequestFormPipelineCheckTabController.confirmAllProgressDetail(12, 40));
+    }
+
     private static MainRow sampleRow(
             LocalDate parsedAdjustDelivery,
             String displayAdjustDelivery,

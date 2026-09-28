@@ -26,6 +26,7 @@ import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.collections.transformation.FilteredList;
 import javafx.fxml.FXML;
+import javafx.scene.Cursor;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonBar;
@@ -84,6 +85,8 @@ public final class RequestFormPipelineCheckTabController {
 
     private static final Duration ALADDIN_PLAN_WATCH_INTERVAL = Duration.minutes(1);
     private static final int APPLY_SCAN_RESULT_BATCH_SIZE = 50;
+    /** 確認一括チェックは UI を返してからこの件数ずつ進める。 */
+    private static final int CONFIRM_ALL_BATCH_SIZE = 40;
     private static final long PIPELINE_PROGRESS_UI_INTERVAL_MS = 300L;
 
     private static final String ORIGINAL_DIR_UNCONFIGURED_STATUS =
@@ -689,6 +692,11 @@ public final class RequestFormPipelineCheckTabController {
     /** 起動後に一度でも走査結果を反映したら true（手動「更新」は常に可）。 */
     private boolean scanApplied;
     private boolean refreshInProgress;
+    /** 「確認を一括チェック」の分割処理中。 */
+    private boolean confirmAllInProgress;
+    /** true の間は確認チェック変更のたびに段階1ゲートを更新しない。 */
+    private boolean suppressIssueConfirmationSideEffects;
+    private String confirmAllButtonIdleText;
     private volatile Consumer<Boolean> refreshCompleteCallback;
     private volatile long lastPipelineProgressUiAt;
     private volatile String latestPipelineProgressDetail = "";
@@ -1337,8 +1345,13 @@ public final class RequestFormPipelineCheckTabController {
     }
 
     private void resetAllIssueConfirmations() {
-        for (MainRow row : allRows) {
-            row.issueConfirmedProperty().set(false);
+        suppressIssueConfirmationSideEffects = true;
+        try {
+            for (MainRow row : allRows) {
+                row.issueConfirmedProperty().set(false);
+            }
+        } finally {
+            suppressIssueConfirmationSideEffects = false;
         }
         if (mainTable != null) {
             mainTable.refresh();
@@ -1504,6 +1517,9 @@ public final class RequestFormPipelineCheckTabController {
         ui.issueConfirmedProperty()
                 .addListener(
                         (obs, oldVal, newVal) -> {
+                            if (suppressIssueConfirmationSideEffects) {
+                                return;
+                            }
                             updateStage1GateLabel();
                             notifyStage1GateChanged();
                         });
@@ -1849,17 +1865,162 @@ public final class RequestFormPipelineCheckTabController {
 
     @FXML
     private void onConfirmAllVisibleIssuesButtonAction() {
-        if (!scanApplied || filteredRows == null) {
+        if (!scanApplied || filteredRows == null || confirmAllInProgress || refreshInProgress) {
             return;
         }
-        int confirmed = confirmAllRequiringConfirmation(filteredRows);
-        if (confirmed <= 0) {
+        confirmAllInProgress = true;
+        beginConfirmAllBusyUi();
+        Platform.runLater(this::confirmAllVisibleIssuesStart);
+    }
+
+    /** クリック直後に待ち状態を描画してから、対象行の収集へ進む。 */
+    private void beginConfirmAllBusyUi() {
+        if (confirmAllVisibleIssuesButton != null) {
+            if (confirmAllButtonIdleText == null || confirmAllButtonIdleText.isBlank()) {
+                confirmAllButtonIdleText = confirmAllVisibleIssuesButton.getText();
+            }
+            confirmAllVisibleIssuesButton.setDisable(true);
+            confirmAllVisibleIssuesButton.setText("確認中…");
+        }
+        if (refreshButton != null) {
+            refreshButton.setDisable(true);
+        }
+        setConfirmAllWaitCursor(true);
+        showConfirmAllProgress(Double.NaN, "確認を一括チェックしています…");
+    }
+
+    private void confirmAllVisibleIssuesStart() {
+        if (!confirmAllInProgress) {
             return;
         }
-        mainTable.refresh();
+        List<MainRow> targets = new ArrayList<>();
+        if (filteredRows != null) {
+            for (MainRow row : filteredRows) {
+                if (row != null && requiresStage1Confirmation(row) && !row.isIssueConfirmed()) {
+                    targets.add(row);
+                }
+            }
+        }
+        if (targets.isEmpty()) {
+            finishConfirmAllVisibleIssues(0);
+            return;
+        }
+        showConfirmAllProgress(0, confirmAllProgressDetail(0, targets.size()));
+        Platform.runLater(() -> confirmAllVisibleIssuesBatch(targets, 0, 0));
+    }
+
+    private void confirmAllVisibleIssuesBatch(List<MainRow> targets, int index, int confirmedSoFar) {
+        if (!confirmAllInProgress) {
+            return;
+        }
+        int end = Math.min(index + CONFIRM_ALL_BATCH_SIZE, targets.size());
+        int confirmed = confirmedSoFar;
+        suppressIssueConfirmationSideEffects = true;
+        try {
+            confirmed += confirmAllRequiringConfirmation(targets.subList(index, end));
+        } finally {
+            suppressIssueConfirmationSideEffects = false;
+        }
+        showConfirmAllProgress(
+                (double) end / targets.size(), confirmAllProgressDetail(end, targets.size()));
+        if (end < targets.size()) {
+            int confirmedNext = confirmed;
+            Platform.runLater(() -> confirmAllVisibleIssuesBatch(targets, end, confirmedNext));
+            return;
+        }
+        int confirmedTotal = confirmed;
+        showConfirmAllProgress(1, "確認結果を反映しています…");
+        Platform.runLater(() -> finishConfirmAllVisibleIssues(confirmedTotal));
+    }
+
+    private void finishConfirmAllVisibleIssues(int confirmed) {
+        try {
+            if (confirmed > 0 && mainTable != null) {
+                mainTable.refresh();
+            }
+            updateStage1GateLabel();
+            notifyStage1GateChanged();
+            if (confirmed > 0) {
+                updateStatusLabel();
+                if (statusLabel != null) {
+                    statusLabel.setText(
+                            "確認チェックを " + confirmed + " 件一括で付けました。 " + statusLabel.getText());
+                }
+                if (shell != null) {
+                    shell.appendLog("[pipeline-check] 確認チェックを " + confirmed + " 件一括で付けました");
+                }
+            } else if (statusLabel != null) {
+                updateStatusLabel();
+                statusLabel.setText("確認対象の未チェック行はありません。 " + statusLabel.getText());
+            }
+        } finally {
+            confirmAllInProgress = false;
+            restoreConfirmAllIdleChrome();
+        }
+    }
+
+    private void restoreConfirmAllIdleChrome() {
+        if (confirmAllVisibleIssuesButton != null) {
+            confirmAllVisibleIssuesButton.setText(
+                    confirmAllButtonIdleText != null && !confirmAllButtonIdleText.isBlank()
+                            ? confirmAllButtonIdleText
+                            : "確認を一括チェック");
+        }
+        if (refreshButton != null && !refreshInProgress) {
+            refreshButton.setDisable(false);
+        }
+        if (refreshProgressIndicator != null && !refreshInProgress) {
+            refreshProgressIndicator.setProgress(ProgressIndicator.INDETERMINATE_PROGRESS);
+            refreshProgressIndicator.setVisible(false);
+            refreshProgressIndicator.setManaged(false);
+        }
+        setConfirmAllWaitCursor(false);
+        clearPipelineCheckProgress();
+        refreshConfirmAllIssuesButtonState();
+    }
+
+    private void showConfirmAllProgress(double fraction, String detail) {
+        String message = detail != null ? detail : "";
+        if (statusLabel != null) {
+            statusLabel.setText(message);
+        }
+        if (stage1GateLabel != null) {
+            stage1GateLabel.setText("段階1: " + message);
+            stage1GateLabel.getStyleClass().setAll("pipeline-check-stage1-gate-label", "warn");
+        }
+        if (confirmAllVisibleIssuesButton != null) {
+            if (message.startsWith("確認を一括チェック中…")) {
+                confirmAllVisibleIssuesButton.setText(
+                        "確認中…" + message.substring("確認を一括チェック中…".length()));
+            } else if (message.startsWith("確認結果を反映")) {
+                confirmAllVisibleIssuesButton.setText("反映中…");
+            }
+        }
+        if (refreshProgressIndicator != null) {
+            refreshProgressIndicator.setVisible(true);
+            refreshProgressIndicator.setManaged(true);
+            refreshProgressIndicator.setProgress(
+                    Double.isNaN(fraction) ? ProgressIndicator.INDETERMINATE_PROGRESS : fraction);
+        }
         if (shell != null) {
-            shell.appendLog("[pipeline-check] 確認チェックを " + confirmed + " 件一括で付けました");
+            latestPipelineProgressFraction = fraction;
+            latestPipelineProgressDetail = message;
+            lastPipelineProgressUiAt = System.currentTimeMillis();
+            shell.setGlobalLongTaskProgress(fraction, message);
         }
+    }
+
+    private void setConfirmAllWaitCursor(boolean wait) {
+        if (confirmAllVisibleIssuesButton == null || confirmAllVisibleIssuesButton.getScene() == null) {
+            return;
+        }
+        confirmAllVisibleIssuesButton
+                .getScene()
+                .setCursor(wait ? Cursor.WAIT : Cursor.DEFAULT);
+    }
+
+    static String confirmAllProgressDetail(int done, int total) {
+        return "確認を一括チェック中… " + done + "/" + total + " 件";
     }
 
     @FXML
