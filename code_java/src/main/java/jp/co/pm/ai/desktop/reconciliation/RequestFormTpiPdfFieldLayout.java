@@ -43,6 +43,9 @@ public final class RequestFormTpiPdfFieldLayout {
             Pattern.compile(
                     "^([A-Za-zＡ-Ｚ][\\d０-９]{1,4}(?:[\\-－][\\d０-９]{1,4})?)$",
                     Pattern.CASE_INSENSITIVE);
+    /** ファイル名 stem が依頼Ｎｏそのもの（例: {@code JR260903-1.pdf}）。 */
+    private static final Pattern JR_FILE_STEM =
+            Pattern.compile("^(?:JR|ＪＲ)([\\d０-９]{6}(?:[\\-－][\\d０-９]{1,4})?)$");
     /**
      * TPI 系依頼Ｎｏ（例: ファイル名 {@code … TPI07-01.pdf}、本文 {@code TPI 07-01}）。
      * 数字の前後スペースを許容し {@code TPI07-01} に正規化する。
@@ -156,6 +159,10 @@ public final class RequestFormTpiPdfFieldLayout {
         Matcher gbStem = GB_FILE_STEM.matcher(stem);
         if (gbStem.find()) {
             return normalizeIraiNo(gbStem.group(1));
+        }
+        Matcher jrStem = JR_FILE_STEM.matcher(stem);
+        if (jrStem.find()) {
+            return normalizeIraiNo("JR" + jrStem.group(1));
         }
         Matcher simpleStem = SIMPLE_IRAI_FILE_STEM.matcher(stem);
         if (simpleStem.find()) {

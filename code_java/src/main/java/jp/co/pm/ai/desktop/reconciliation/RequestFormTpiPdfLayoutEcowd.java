@@ -87,34 +87,45 @@ final class RequestFormTpiPdfLayoutEcowd {
         return typeToken != null && typeToken.matches("A\\d{2}W");
     }
 
-    private static Matcher findProductHeader(String body) {
+    private static ProductHeaderMatch findProductHeader(String body) {
         Matcher header = PRODUCT_HEADER.matcher(body);
-        Matcher fallback = null;
+        ProductHeaderMatch fallback = null;
         while (header.find()) {
             String hinmei = header.group(1);
             String part = header.group(2);
+            if (isCircledRowIndex(hinmei)) {
+                continue;
+            }
+            ProductHeaderMatch found =
+                    new ProductHeaderMatch(
+                            header.start(), header.end(), hinmei, part, header.group(3));
             if (hinmei.length() >= 4 || part.startsWith("R") || part.startsWith("FEL")) {
-                return header;
+                return found;
             }
             if (fallback == null) {
-                fallback = header;
+                fallback = found;
             }
         }
         return fallback;
     }
 
+    /** {@code ①} が NFKC で {@code 1} になり、品番グループへ吸われた行番号。 */
+    private static boolean isCircledRowIndex(String hinmei) {
+        return hinmei != null && hinmei.length() == 1 && Character.isDigit(hinmei.charAt(0));
+    }
+
     private static void fillProduct(Map<String, String> raw, String body) {
-        Matcher header = findProductHeader(body);
+        ProductHeaderMatch header = findProductHeader(body);
         if (header == null) {
             return;
         }
-        String hinmeiToken = header.group(1);
-        String part = header.group(2);
+        String hinmeiToken = header.hinmei();
+        String part = header.part();
         // A05W 系は先頭数字が品番（30020）。R10W 系は先頭数字が品名コード（40040）。
         if (!hinmeiToken.matches("\\d+") || !looksLikeEcowdPartNumberType(part)) {
             raw.put("品名", hinmeiToken);
         }
-        String headerThird = header.group(3);
+        String headerThird = header.third();
 
         ProductDims dims = parseProductDims(body, header.start(), header.end(), headerThird);
 
@@ -374,6 +385,9 @@ final class RequestFormTpiPdfLayoutEcowd {
         String color = "";
         String grade = "";
     }
+
+    private record ProductHeaderMatch(
+            int start, int end, String hinmei, String part, String third) {}
 
     private record LengthColorQtyMatch(String length, String quantity, String snippet) {}
 

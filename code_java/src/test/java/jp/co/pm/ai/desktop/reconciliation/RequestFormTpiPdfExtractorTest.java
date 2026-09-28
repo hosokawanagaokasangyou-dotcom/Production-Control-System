@@ -178,6 +178,26 @@ class RequestFormTpiPdfExtractorTest {
     }
 
     @Test
+    void extractFromText_jr260903_1_rowNumberIsNotProductHeader() {
+        String text =
+                """
+                」R260903-1 2026   9   29
+                湖南
+                870 97 ライト
+                加工製品 ① a3脚 A05キ クレー 194m
+                加工製品 ② ラミ抜けのため熱融着必要
+                投入原反 ① FEL3002BY05 10WD 1000 レー 200m 9/24
+                入庫お願いします。『P000076402』
+                """;
+        Map<String, String> raw =
+                RequestFormTpiPdfExtractor.extractFromTextForTest("JR260903-1.pdf", text);
+
+        assertEquals("JR260903-1", raw.get("依頼Ｎｏ"));
+        assertEquals("P000076402", raw.get("契約Ｎｏ"));
+        assertFalse(raw.containsKey("品名"));
+    }
+
+    @Test
     void extractFromPdf_pn06_01_contractNoFromTableColumn() throws Exception {
         Path pdf = Path.of("src/test/resources/tpi-request-forms/PN06-01.pdf");
         assertTrue(Files.isRegularFile(pdf));
