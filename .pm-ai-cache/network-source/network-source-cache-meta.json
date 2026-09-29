@@ -10,11 +10,11 @@
   },
   "actual-detail-newest" : {
     "cacheFile" : "actual-detail-newest.xlsx",
-    "sourcePath" : "\\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\002  加工G\\●検査表作成\\加工実績明細DATA\\加工実績明細問合せ_20260928_081819.xlsx",
-    "updatedMillis" : 1790555209039,
-    "sourceLastModifiedMillis" : 1790551151446,
-    "sourceSize" : 11188062,
-    "cacheLastModifiedMillis" : 1790555209034,
-    "cacheSize" : 11187876
+    "sourcePath" : "\\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\002  加工G\\●検査表作成\\加工実績明細DATA\\NO(ロット)別問合せ_20260928_110938.xlsx",
+    "updatedMillis" : 1790574474609,
+    "sourceLastModifiedMillis" : 1790561383093,
+    "sourceSize" : 52453,
+    "cacheLastModifiedMillis" : 1790574474601,
+    "cacheSize" : 52258
   }
 }
