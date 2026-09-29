@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
+import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
@@ -94,6 +95,61 @@ class KouchinOutlookDropSupportTest {
         List<Path> found = KouchinOutlookDropSupport.tempFilesNamed(tmp, List.of("RVSHEET.csv"));
         assertEquals(1, found.size());
         assertEquals(csv.toAbsolutePath().normalize(), found.get(0).toAbsolutePath().normalize());
+    }
+
+    @Test
+    @DisplayName("Outlookのexternal-bodyバイト列を添付名のCSVにする")
+    void materializesExternalBodyBytesAsNamedCsv() throws Exception {
+        byte[] csv = "A010,x,191-352R,260821,1\n".getBytes(Charset.forName("windows-31j"));
+        List<Path> files = KouchinOutlookDropSupport.materializeExternalBody(
+                List.of("message/external-body;access-type=clipboard;index=0;name=\"RVSHEET202608.csv\""),
+                ByteBuffer.wrap(csv),
+                tmp);
+        assertEquals(1, files.size());
+        assertEquals("RVSHEET202608.csv", files.get(0).getFileName().toString());
+        assertEquals("A010,x,191-352R,260821,1\n", Files.readString(files.get(0), Charset.forName("windows-31j")));
+    }
+
+    @Test
+    @DisplayName("FileGroupDescriptorのバイト列はCSVとして保存しない")
+    void doesNotSaveDescriptorBytesAsCsv() {
+        byte[] descriptor = fileGroupDescriptorW("RVSHEET202608.csv");
+        List<Path> files = KouchinOutlookDropSupport.materializeExternalBody(
+                List.of("FileGroupDescriptorW"),
+                ByteBuffer.wrap(descriptor),
+                tmp);
+        assertTrue(files.isEmpty());
+    }
+
+    @Test
+    @DisplayName("空白を含む添付名もそのまま保存する")
+    void keepsSpacesInAttachmentName() throws Exception {
+        byte[] csv = "x".getBytes(StandardCharsets.US_ASCII);
+        List<Path> files = KouchinOutlookDropSupport.materializeExternalBody(
+                List.of("message/external-body;access-type=clipboard;index=0;name=\"RVSHEET (1).csv\""),
+                csv,
+                tmp);
+        assertEquals(1, files.size());
+        assertEquals("RVSHEET (1).csv", files.get(0).getFileName().toString());
+        assertEquals("x", Files.readString(files.get(0), StandardCharsets.US_ASCII));
+    }
+
+    @Test
+    @DisplayName("Content.Outlook配下の直近RVSHEET.csvを1件選ぶ")
+    void picksNewestRecentCsvUnderCacheDir() throws Exception {
+        Path olderDir = tmp.resolve("OLK1");
+        Path newerDir = tmp.resolve("OLK2");
+        Files.createDirectories(olderDir);
+        Files.createDirectories(newerDir);
+        Path older = olderDir.resolve("RVSHEET202608.csv");
+        Path newer = newerDir.resolve("RVSHEET202609.csv");
+        Files.writeString(older, "old", StandardCharsets.UTF_8);
+        Files.writeString(newer, "new", StandardCharsets.UTF_8);
+        Files.setLastModifiedTime(older, FileTime.from(Instant.parse("2026-09-17T01:58:00Z")));
+        Files.setLastModifiedTime(newer, FileTime.from(Instant.parse("2026-09-17T01:58:20Z")));
+        Path picked = KouchinOutlookDropSupport.newestRecentRvsheetUnder(
+                tmp, Instant.parse("2026-09-17T01:58:30Z"));
+        assertEquals(newer.toAbsolutePath().normalize(), picked.toAbsolutePath().normalize());
     }
 
     @Test

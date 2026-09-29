@@ -163,18 +163,16 @@ public class KouchinSourcesTabController {
             if (spec.key().equals(AppPaths.KEY_PM_AI_KOUCHIN_TORAY_CSV_DIR)
                     || spec.key().equals(AppPaths.KEY_PM_AI_KOUCHIN_KONAN_TORAY_CSV_DIR)) {
                 tf.setOnDragOver(ev -> {
-                    if (ev.getDragboard().hasFiles()) {
-                        ev.acceptTransferModes(javafx.scene.input.TransferMode.COPY);
-                    }
+                    ev.acceptTransferModes(javafx.scene.input.TransferMode.COPY);
                     ev.consume();
                 });
                 tf.setOnDragDropped(ev -> {
-                    if (host != null && host.verifyTab() != null && ev.getDragboard().hasFiles()) {
-                        host.verifyTab().importCsvPaths(
-                                ev.getDragboard().getFiles().stream().map(File::toPath).toList());
-                    }
+                    List<Path> files = KouchinOutlookDropSupport.resolveDroppedFiles(ev.getDragboard());
                     ev.setDropCompleted(true);
                     ev.consume();
+                    if (host != null && host.verifyTab() != null) {
+                        host.verifyTab().importCsvPaths(files);
+                    }
                 });
             }
             r++;

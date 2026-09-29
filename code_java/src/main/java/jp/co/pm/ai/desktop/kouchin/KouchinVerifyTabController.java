@@ -653,7 +653,7 @@ public class KouchinVerifyTabController {
     }
 
     void importCsvPaths(List<Path> files) {
-        copyDropped(files);
+        finishDroppedImport(files, null);
     }
 
     @FXML
@@ -1101,21 +1101,40 @@ public class KouchinVerifyTabController {
     }
 
     private void handleHintDialogDrop(DragEvent e, Alert alert) {
+        acceptDropped(e, alert);
+    }
+
+    private void acceptDropped(DragEvent e, Alert alert) {
+        Dragboard db = e == null ? null : e.getDragboard();
+        boolean first = takeDropEvent();
+        List<Path> files = first ? droppedFilePaths(db) : List.of();
         if (e != null) {
             e.setDropCompleted(true);
             e.consume();
         }
-        if (!takeDropEvent()) {
+        if (!first) {
             return;
         }
-        Dragboard db = e == null ? null : e.getDragboard();
-        List<Path> files = droppedFilePaths(db);
         if (files.isEmpty()) {
-            Platform.runLater(() -> finishDroppedImport(
-                    KouchinOutlookDropSupport.resolveAfterDropCompleted(db), alert));
+            scheduleDropRetry(db, alert);
             return;
         }
         finishDroppedImport(files, alert);
+    }
+
+    private void scheduleDropRetry(Dragboard db, Alert alert) {
+        Thread t = new Thread(() -> {
+            try {
+                Thread.sleep(500);
+            } catch (InterruptedException ex) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+            List<Path> later = KouchinOutlookDropSupport.resolveAfterDropCompleted(db);
+            Platform.runLater(() -> finishDroppedImport(later, alert));
+        }, "kouchin-outlook-drop-retry");
+        t.setDaemon(true);
+        t.start();
     }
 
     private void finishDroppedImport(List<Path> files, Alert alert) {
@@ -1207,21 +1226,7 @@ public class KouchinVerifyTabController {
     }
 
     private void onDragDropped(DragEvent e) {
-        if (e != null) {
-            e.setDropCompleted(true);
-            e.consume();
-        }
-        if (!takeDropEvent()) {
-            return;
-        }
-        Dragboard db = e == null ? null : e.getDragboard();
-        List<Path> files = droppedFilePaths(db);
-        if (files.isEmpty()) {
-            Platform.runLater(() -> finishDroppedImport(
-                    KouchinOutlookDropSupport.resolveAfterDropCompleted(db), null));
-            return;
-        }
-        finishDroppedImport(files, null);
+        acceptDropped(e, null);
     }
 
     private void refreshDropTargetLabel() {

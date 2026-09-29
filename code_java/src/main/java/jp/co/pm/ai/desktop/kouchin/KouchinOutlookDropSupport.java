@@ -24,8 +24,9 @@ import javafx.scene.input.DataFormat;
 import javafx.scene.input.Dragboard;
 
 /**
- * Outlook添付ドロップ。JavaFXの {@code hasFiles()} に載らず TEMP へ書くため、
- * 直近の {@code RVSHEET*.csv} と FileGroupDescriptor の元ファイル名を使う。
+ * Outlook添付ドロップ。JavaFXの {@code hasFiles()} には載らない。
+ * {@code message/external-body} のバイト列を一時CSVにし、
+ * 取れないときは TEMP と Content.Outlook の直近 {@code RVSHEET*.csv} を使う。
  */
 public final class KouchinOutlookDropSupport {
 
@@ -49,12 +50,21 @@ public final class KouchinOutlookDropSupport {
             files = existingPathFiles(pathsFromText(db));
         }
         if (files.isEmpty()) {
+            files = materializeExternalBody(mimeIds(db), externalBodyContent(db), systemTempDir());
+        }
+        if (files.isEmpty()) {
             files = recentTempCsvFiles(systemTempDir(), Instant.now());
         }
         if (files.isEmpty()) {
             files = tempFilesNamed(systemTempDir(), originals);
         }
-        if (!originals.isEmpty()) {
+        if (files.isEmpty()) {
+            Path cached = newestRecentRvsheetUnder(outlookContentCacheDir(), Instant.now());
+            if (cached != null) {
+                files = List.of(cached);
+            }
+        }
+        if (files.isEmpty() && !originals.isEmpty()) {
             Path newest = newestTempRvsheetCsv(systemTempDir());
             if (newest != null) {
                 files = List.of(newest);
@@ -118,6 +128,90 @@ public final class KouchinOutlookDropSupport {
         found.sort(Comparator.comparing((Path p) -> datedRvsheet(p.getFileName().toString()) ? 0 : 1)
                 .thenComparing(p -> p.getFileName().toString()));
         return List.copyOf(found);
+    }
+
+    /**
+     * Outlook の {@code message/external-body} バイト列を一時CSVにする。
+     * FileGroupDescriptor の構造体はそのままではCSVにしない。
+     */
+    public static List<Path> materializeExternalBody(Iterable<String> mimeIds, Object content, Path tempDir) {
+        byte[] raw = payloadBytes(content);
+        if (raw == null || tempDir == null || !fileNamesFromDescriptor(raw).isEmpty()) {
+            return List.of();
+        }
+        List<String> names = fileNamesFromContentTypeIds(mimeIds);
+        String name = sanitizeDropFileName(names.isEmpty() ? null : names.get(0));
+        try {
+            Path dir = tempDir.resolve("pm-ai-outlook-drop");
+            Files.createDirectories(dir);
+            Path dest = dir.resolve(name);
+            Files.write(dest, raw);
+            return List.of(dest.toAbsolutePath().normalize());
+        } catch (IOException e) {
+            return List.of();
+        }
+    }
+
+    /** Content.Outlook 直下の各フォルダから、更新が新しい {@code RVSHEET*.csv} を1件返す。 */
+    static Path newestRecentRvsheetUnder(Path root, Instant now) {
+        Path best = null;
+        Instant bestTime = Instant.EPOCH;
+        for (Path p : recentRvsheetUnder(root, now)) {
+            try {
+                Instant mt = Files.getLastModifiedTime(p).toInstant();
+                if (best == null || mt.isAfter(bestTime)) {
+                    best = p;
+                    bestTime = mt;
+                }
+            } catch (IOException ignored) {
+            }
+        }
+        return best == null ? null : best.toAbsolutePath().normalize();
+    }
+
+    static List<Path> recentRvsheetUnder(Path root, Instant now) {
+        if (root == null || now == null || !Files.isDirectory(root)) {
+            return List.of();
+        }
+        List<Path> found = new ArrayList<>();
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(root)) {
+            for (Path child : stream) {
+                if (Files.isDirectory(child)) {
+                    found.addAll(recentTempCsvFiles(child, now));
+                }
+            }
+        } catch (IOException e) {
+            return List.of();
+        }
+        return List.copyOf(found);
+    }
+
+    static Path outlookContentCacheDir() {
+        String local = System.getenv("LOCALAPPDATA");
+        if (local == null || local.isBlank()) {
+            return null;
+        }
+        try {
+            return Path.of(local, "Microsoft", "Windows", "INetCache", "Content.Outlook");
+        } catch (RuntimeException e) {
+            return null;
+        }
+    }
+
+    static String sanitizeDropFileName(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return "RVSHEET.csv";
+        }
+        String name = raw.trim();
+        int slash = Math.max(name.lastIndexOf('/'), name.lastIndexOf('\\'));
+        if (slash >= 0 && slash + 1 < name.length()) {
+            name = name.substring(slash + 1);
+        }
+        name = name.replaceAll("[\\\\/:*?\"<>|\\p{Cntrl}]", "_").trim();
+        if (name.isBlank() || ".".equals(name) || "..".equals(name)) {
+            return "RVSHEET.csv";
+        }
+        return name;
     }
 
     /** Outlook MIME の name= で指名された TEMP ファイル。更新時刻は問わない。 */
@@ -349,6 +443,99 @@ public final class KouchinOutlookDropSupport {
         } catch (RuntimeException ignored) {
         }
         return out;
+    }
+
+    private static List<String> mimeIds(Dragboard db) {
+        if (db == null) {
+            return List.of();
+        }
+        List<String> ids = new ArrayList<>();
+        try {
+            Set<DataFormat> types = db.getContentTypes();
+            if (types == null) {
+                return List.of();
+            }
+            for (DataFormat fmt : types) {
+                if (fmt.getIdentifiers() != null) {
+                    ids.addAll(fmt.getIdentifiers());
+                }
+            }
+        } catch (RuntimeException ignored) {
+        }
+        return ids;
+    }
+
+    /**
+     * ファイル本体は短い MIME {@code message/external-body} にある。
+     * パラメータ付きの DataFormat へ {@code getContent} しても null になる。
+     */
+    private static Object externalBodyContent(Dragboard db) {
+        Object viaShort = contentOf(db, "message/external-body");
+        if (isFilePayload(viaShort)) {
+            return viaShort;
+        }
+        try {
+            Set<DataFormat> types = db.getContentTypes();
+            if (types == null) {
+                return null;
+            }
+            for (DataFormat fmt : types) {
+                if (!isExternalBody(fmt)) {
+                    continue;
+                }
+                Object content = db.getContent(fmt);
+                if (isFilePayload(content)) {
+                    return content;
+                }
+            }
+        } catch (RuntimeException ignored) {
+        }
+        return null;
+    }
+
+    private static Object contentOf(Dragboard db, String mime) {
+        try {
+            DataFormat df = DataFormat.lookupMimeType(mime);
+            if (df == null) {
+                df = new DataFormat(mime);
+            }
+            return db.getContent(df);
+        } catch (RuntimeException e) {
+            return null;
+        }
+    }
+
+    private static boolean isExternalBody(DataFormat fmt) {
+        if (fmt == null || fmt.getIdentifiers() == null) {
+            return false;
+        }
+        for (String id : fmt.getIdentifiers()) {
+            if (id != null && id.toLowerCase(Locale.ROOT).contains("message/external-body")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean isFilePayload(Object content) {
+        byte[] raw = payloadBytes(content);
+        return raw != null && fileNamesFromDescriptor(raw).isEmpty();
+    }
+
+    static byte[] payloadBytes(Object content) {
+        if (content instanceof byte[] raw) {
+            return raw.length == 0 ? null : raw;
+        }
+        if (content instanceof ByteBuffer buf) {
+            ByteBuffer slice = buf.slice();
+            if (!slice.hasRemaining()) {
+                return null;
+            }
+            byte[] raw = new byte[slice.remaining()];
+            slice.get(raw);
+            return raw;
+        }
+        return null;
     }
 
     private static List<String> originalNamesFromDragboard(Dragboard db) {
