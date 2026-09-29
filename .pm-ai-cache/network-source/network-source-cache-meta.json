@@ -1,20 +1,20 @@
 {
   "task-input-newest" : {
     "cacheFile" : "task-input-newest.xlsx",
-    "sourcePath" : "\\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\生産管理システム\\管理システム\\●DATA\\生産計画問合せ\\工程別生産計画問合せ_20260928_081509.xlsx",
-    "updatedMillis" : 1790555207137,
-    "sourceLastModifiedMillis" : 1790550922392,
-    "sourceSize" : 32387,
-    "cacheLastModifiedMillis" : 1790555207134,
-    "cacheSize" : 32191
+    "sourcePath" : "\\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\生産管理システム\\管理システム\\●DATA\\生産計画問合せ\\工程別生産計画問合せ_20260929_150119.xlsx",
+    "updatedMillis" : 1790664055323,
+    "sourceLastModifiedMillis" : 1790661692672,
+    "sourceSize" : 50628,
+    "cacheLastModifiedMillis" : 1790664055313,
+    "cacheSize" : 50430
   },
   "actual-detail-newest" : {
     "cacheFile" : "actual-detail-newest.xlsx",
-    "sourcePath" : "\\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\002  加工G\\●検査表作成\\加工実績明細DATA\\NO(ロット)別問合せ_20260928_110938.xlsx",
-    "updatedMillis" : 1790574474609,
-    "sourceLastModifiedMillis" : 1790561383093,
-    "sourceSize" : 52453,
-    "cacheLastModifiedMillis" : 1790574474601,
-    "cacheSize" : 52258
+    "sourcePath" : "\\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\002  加工G\\●検査表作成\\加工実績明細DATA\\加工実績明細問合せ_20260929_124928.xlsx",
+    "updatedMillis" : 1790664058107,
+    "sourceLastModifiedMillis" : 1790653823303,
+    "sourceSize" : 11576004,
+    "cacheLastModifiedMillis" : 1790664058096,
+    "cacheSize" : 11575821
   }
 }
