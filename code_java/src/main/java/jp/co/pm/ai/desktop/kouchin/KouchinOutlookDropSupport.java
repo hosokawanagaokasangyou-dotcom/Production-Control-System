@@ -91,13 +91,11 @@ public final class KouchinOutlookDropSupport {
                 }
             }
             if (files.isEmpty()) {
-                OutlookOleFileContents.Result ole = OutlookOleFileContents.read();
-                trace.put("oleDetail", ole.detail());
-                if (ole.bytes() != null && ole.bytes().length > 0) {
-                    files = materializeExternalBody(mimeIds(db), ole.bytes(), systemTempDir());
-                    if (!files.isEmpty()) {
-                        branch = "ole";
-                    }
+                OutlookRunningAttachment.Result saved = OutlookRunningAttachment.saveMatch(originals, systemTempDir());
+                trace.put("outlookDetail", saved.detail());
+                if (saved.path() != null) {
+                    files = List.of(saved.path());
+                    branch = "outlook-com";
                 }
             }
             if (files.isEmpty()) {
