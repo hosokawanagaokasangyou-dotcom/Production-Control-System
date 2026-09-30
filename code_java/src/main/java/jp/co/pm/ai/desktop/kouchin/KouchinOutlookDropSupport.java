@@ -83,6 +83,24 @@ public final class KouchinOutlookDropSupport {
                 }
             }
             if (files.isEmpty()) {
+                Object clip = clipboardExternalBody();
+                notePayload("clipboard", clip);
+                files = materializeExternalBody(mimeIds(db), clip, systemTempDir());
+                if (!files.isEmpty()) {
+                    branch = "clipboard";
+                }
+            }
+            if (files.isEmpty()) {
+                OutlookOleFileContents.Result ole = OutlookOleFileContents.read();
+                trace.put("oleDetail", ole.detail());
+                if (ole.bytes() != null && ole.bytes().length > 0) {
+                    files = materializeExternalBody(mimeIds(db), ole.bytes(), systemTempDir());
+                    if (!files.isEmpty()) {
+                        branch = "ole";
+                    }
+                }
+            }
+            if (files.isEmpty()) {
                 files = recentTempCsvFiles(systemTempDir(), Instant.now());
                 if (!files.isEmpty()) {
                     branch = "recent-temp";
@@ -123,6 +141,7 @@ public final class KouchinOutlookDropSupport {
             trace.put("tempIsDir", Files.isDirectory(systemTempDir()));
             Path cache = outlookContentCacheDir();
             trace.put("cacheIsDir", cache != null && Files.isDirectory(cache));
+            trace.put("contents", contentSummary(db));
             debugDrop("A", "KouchinOutlookDropSupport.resolveDroppedFiles", "resolved", trace);
             return named;
         } finally {
@@ -572,6 +591,63 @@ public final class KouchinOutlookDropSupport {
      * ファイル本体は短い MIME {@code message/external-body} にある。
      * パラメータ付きの DataFormat へ {@code getContent} しても null になる。
      */
+    private static Object clipboardExternalBody() {
+        try {
+            DataFormat df = DataFormat.lookupMimeType("message/external-body");
+            if (df == null) {
+                df = new DataFormat("message/external-body");
+            }
+            return javafx.scene.input.Clipboard.getSystemClipboard().getContent(df);
+        } catch (RuntimeException ex) {
+            Map<String, Object> trace = DROP_TRACE.get();
+            if (trace != null) {
+                trace.put("clipboardError", ex.getClass().getSimpleName());
+            }
+            return null;
+        }
+    }
+
+    private static String contentSummary(Dragboard db) {
+        StringBuilder sb = new StringBuilder();
+        try {
+            Set<DataFormat> types = db.getContentTypes();
+            if (types == null) {
+                return "";
+            }
+            for (DataFormat fmt : types) {
+                String id = "";
+                if (fmt.getIdentifiers() != null && !fmt.getIdentifiers().isEmpty()) {
+                    id = fmt.getIdentifiers().iterator().next();
+                }
+                Object content = null;
+                String err = "";
+                try {
+                    content = db.getContent(fmt);
+                } catch (RuntimeException ex) {
+                    err = ex.getClass().getSimpleName();
+                }
+                byte[] raw = payloadBytes(content);
+                if (sb.length() > 0) {
+                    sb.append(';');
+                }
+                sb.append(id.length() > 48 ? id.substring(0, 48) : id);
+                sb.append('=');
+                sb.append(content == null ? "null" : content.getClass().getSimpleName());
+                sb.append(':');
+                sb.append(raw == null ? -1 : raw.length);
+                if (!err.isEmpty()) {
+                    sb.append('!').append(err);
+                }
+                if (sb.length() > 400) {
+                    break;
+                }
+            }
+        } catch (RuntimeException ex) {
+            return "ex:" + ex.getClass().getSimpleName();
+        }
+        return sb.toString();
+    }
+
     private static Object externalBodyContent(Dragboard db) {
         Object viaShort = contentOf(db, "message/external-body");
         notePayload("short", viaShort);
