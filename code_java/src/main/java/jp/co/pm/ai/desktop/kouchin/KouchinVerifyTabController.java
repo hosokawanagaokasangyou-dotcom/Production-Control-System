@@ -31,7 +31,6 @@ import javafx.scene.control.Button;
 import javafx.scene.control.ButtonBar;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.ComboBox;
-import javafx.scene.control.DialogPane;
 import javafx.scene.control.Label;
 import javafx.scene.control.OverrunStyle;
 import javafx.scene.control.TableCell;
@@ -44,10 +43,7 @@ import javafx.scene.control.Tooltip;
 import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.input.Clipboard;
 import javafx.scene.input.ClipboardContent;
-import javafx.scene.input.DragEvent;
-import javafx.scene.input.Dragboard;
 import javafx.scene.input.MouseButton;
-import javafx.scene.input.TransferMode;
 import javafx.scene.layout.BorderPane;
 import javafx.stage.FileChooser;
 import javafx.stage.Window;
@@ -84,9 +80,6 @@ import jp.co.pm.ai.kouchin.verify.VerifySourceAccess;
 public class KouchinVerifyTabController {
 
     static final int DISCOVERY_POLL_SECONDS = 3;
-    static final String FIRST_OPEN_DROP_HINT_STYLE = "pm-kouchin-drop-hint-dialog";
-    static final double FIRST_OPEN_DROP_HINT_WIDTH = 560;
-    static final double FIRST_OPEN_DROP_HINT_HEIGHT = 260;
 
     private static final DateTimeFormatter FILE_MODIFIED_AT =
             DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss", Locale.JAPAN);
@@ -124,8 +117,6 @@ public class KouchinVerifyTabController {
     private boolean discoveryLoaded;
     private boolean pendingSourceReload;
     private boolean pendingVerifyAfterImport;
-    private boolean firstOpenDropHintShown;
-    private long lastDropHandledNanos;
     private final AtomicInteger discoveryGeneration = new AtomicInteger();
     private final AtomicBoolean discoveryInFlight = new AtomicBoolean();
     private Timeline discoveryPoll;
@@ -414,7 +405,6 @@ public class KouchinVerifyTabController {
         if (searchField != null) {
             searchField.textProperty().addListener((o, a, b) -> applyResultFilter());
         }
-        installDropHandlers();
         if (runKokubuButton != null) {
             runKokubuGlow = new ButtonAttentionGlow(runKokubuButton);
         }
@@ -449,7 +439,6 @@ public class KouchinVerifyTabController {
         if (!discoveryLoaded || pendingSourceReload) {
             reloadDiscovery();
         }
-        maybeShowFirstOpenDropHint();
     }
 
     public void onMainShellTabDeselected() {
@@ -650,10 +639,6 @@ public class KouchinVerifyTabController {
     @FXML
     private void onRunBoth() {
         runVerify(null, true);
-    }
-
-    void importCsvPaths(List<Path> files) {
-        finishDroppedImport(files, null);
     }
 
     @FXML
@@ -1043,151 +1028,6 @@ public class KouchinVerifyTabController {
         return copiedAny;
     }
 
-    static boolean shouldShowFirstOpenDropHint(boolean alreadyShown) {
-        return !alreadyShown;
-    }
-
-    static String firstOpenDropHintHeader() {
-        return "東レCSVをドラッグ＆ドロップしてください";
-    }
-
-    static String firstOpenDropHintBody() {
-        return "Outlookの添付などから、①東レ提供CSV（RVSHEETyyyyMM.csv）を"
-                + "このダイアログへドロップしてください。"
-                + "\n取り込み後、自動でまとめて検証を開始します。";
-    }
-
-    private void maybeShowFirstOpenDropHint() {
-        if (!shouldShowFirstOpenDropHint(firstOpenDropHintShown)) {
-            return;
-        }
-        firstOpenDropHintShown = true;
-        Platform.runLater(this::showFirstOpenDropHint);
-    }
-
-    private void showFirstOpenDropHint() {
-        Alert alert = new Alert(Alert.AlertType.INFORMATION);
-        if (shell != null) {
-            alert.initOwner(shell.primaryStageForDialogs());
-            shell.applyAlertStylesheets(alert);
-        }
-        alert.setTitle("東レ後加工賃検証");
-        alert.setHeaderText(firstOpenDropHintHeader());
-        alert.setContentText(firstOpenDropHintBody());
-        DialogPane pane = alert.getDialogPane();
-        pane.getStyleClass().add(FIRST_OPEN_DROP_HINT_STYLE);
-        pane.setPrefWidth(FIRST_OPEN_DROP_HINT_WIDTH);
-        pane.setPrefHeight(FIRST_OPEN_DROP_HINT_HEIGHT);
-        pane.setMinWidth(480);
-        pane.setMinHeight(200);
-        installHintDialogDropHandlers(alert);
-        alert.showAndWait();
-    }
-
-    private void installHintDialogDropHandlers(Alert alert) {
-        if (alert == null) {
-            return;
-        }
-        DialogPane pane = alert.getDialogPane();
-        pane.setOnDragOver(this::onDragOver);
-        pane.setOnDragDropped(e -> handleHintDialogDrop(e, alert));
-        alert.setOnShown(ev -> {
-            if (pane.getScene() == null) {
-                return;
-            }
-            pane.getScene().setOnDragOver(this::onDragOver);
-            pane.getScene().setOnDragDropped(e -> handleHintDialogDrop(e, alert));
-        });
-    }
-
-    private void handleHintDialogDrop(DragEvent e, Alert alert) {
-        acceptDropped(e, alert);
-    }
-
-    private void acceptDropped(DragEvent e, Alert alert) {
-        Dragboard db = e == null ? null : e.getDragboard();
-        boolean first = takeDropEvent();
-        List<Path> files = first ? droppedFilePaths(db) : List.of();
-        // #region agent log
-        KouchinOutlookDropSupport.debugDrop("E", "KouchinVerifyTabController.acceptDropped", "drop", Map.of(
-                "first", first,
-                "resolved", files.size(),
-                "thread", Thread.currentThread().getName()));
-        // #endregion
-        if (e != null) {
-            e.setDropCompleted(true);
-            e.consume();
-        }
-        if (!first) {
-            return;
-        }
-        if (files.isEmpty()) {
-            scheduleDropRetry(db, alert);
-            return;
-        }
-        finishDroppedImport(files, alert);
-    }
-
-    private void scheduleDropRetry(Dragboard db, Alert alert) {
-        List<String> originals = KouchinOutlookDropSupport.originalNames(db);
-        Thread t = new Thread(() -> {
-            try {
-                Thread.sleep(500);
-            } catch (InterruptedException ex) {
-                Thread.currentThread().interrupt();
-                return;
-            }
-            List<Path> later = KouchinOutlookDropSupport.resolveLateTempFiles(originals);
-            // #region agent log
-            KouchinOutlookDropSupport.debugDrop("D", "KouchinVerifyTabController.scheduleDropRetry", "late", Map.of(
-                    "originals", originals.size(),
-                    "found", later.size(),
-                    "names", KouchinOutlookDropSupport.debugNames(later),
-                    "thread", Thread.currentThread().getName()));
-            // #endregion
-            Platform.runLater(() -> finishDroppedImport(later, alert));
-        }, "kouchin-outlook-drop-retry");
-        t.setDaemon(true);
-        t.start();
-    }
-
-    private void finishDroppedImport(List<Path> files, Alert alert) {
-        // #region agent log
-        KouchinOutlookDropSupport.debugDrop("C", "KouchinVerifyTabController.finishDroppedImport", "finish", Map.of(
-                "empty", files == null || files.isEmpty(),
-                "count", files == null ? 0 : files.size(),
-                "names", KouchinOutlookDropSupport.debugNames(files)));
-        // #endregion
-        if (files == null || files.isEmpty()) {
-            String msg = "ドロップされたファイルがありません（Outlookの添付はファイルとしてドロップしてください）";
-            appendLog(msg);
-            recordKouchinAction("kouchin_drop", operatorResultForDrop(true, false), msg);
-            return;
-        }
-        if (alert != null) {
-            alert.setResult(ButtonType.OK);
-            alert.close();
-        }
-        copyDropped(files);
-    }
-
-    private boolean takeDropEvent() {
-        long now = System.nanoTime();
-        if (shouldIgnoreDuplicateDrop(lastDropHandledNanos, now)) {
-            return false;
-        }
-        lastDropHandledNanos = now;
-        return true;
-    }
-
-    static boolean shouldIgnoreDuplicateDrop(long lastNanos, long nowNanos) {
-        return lastNanos > 0 && nowNanos - lastNanos >= 0 && nowNanos - lastNanos < 400_000_000L;
-    }
-
-    static List<Path> droppedFilePaths(Dragboard db) {
-        return KouchinOutlookDropSupport.resolveDroppedFiles(db);
-    }
-
     private void startCsvCopy(List<Path> files, Path dest, boolean overwrite) {
         Task<KouchinTorayCsvDropSupport.Outcome> task = new Task<>() {
             @Override
@@ -1221,32 +1061,6 @@ public class KouchinVerifyTabController {
         Thread t = new Thread(task, "kouchin-csv-drop");
         t.setDaemon(true);
         t.start();
-    }
-
-    private void installDropHandlers() {
-        if (root != null) {
-            root.setOnDragOver(this::onDragOver);
-            root.setOnDragDropped(this::onDragDropped);
-            return;
-        }
-        if (dropTargetLabel == null) {
-            return;
-        }
-        dropTargetLabel.setOnDragOver(this::onDragOver);
-        dropTargetLabel.setOnDragDropped(this::onDragDropped);
-        if (discoveryTable != null) {
-            discoveryTable.setOnDragOver(this::onDragOver);
-            discoveryTable.setOnDragDropped(this::onDragDropped);
-        }
-    }
-
-    private void onDragOver(DragEvent e) {
-        e.acceptTransferModes(TransferMode.COPY);
-        e.consume();
-    }
-
-    private void onDragDropped(DragEvent e) {
-        acceptDropped(e, null);
     }
 
     private void refreshDropTargetLabel() {

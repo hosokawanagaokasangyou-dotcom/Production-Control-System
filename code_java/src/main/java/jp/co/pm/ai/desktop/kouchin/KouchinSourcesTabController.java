@@ -160,21 +160,6 @@ public class KouchinSourcesTabController {
             folderGrid.add(browse, 2, r);
             folderGrid.add(def, 3, r);
             fields.put(spec.key(), tf);
-            if (spec.key().equals(AppPaths.KEY_PM_AI_KOUCHIN_TORAY_CSV_DIR)
-                    || spec.key().equals(AppPaths.KEY_PM_AI_KOUCHIN_KONAN_TORAY_CSV_DIR)) {
-                tf.setOnDragOver(ev -> {
-                    ev.acceptTransferModes(javafx.scene.input.TransferMode.COPY);
-                    ev.consume();
-                });
-                tf.setOnDragDropped(ev -> {
-                    List<Path> files = KouchinOutlookDropSupport.resolveDroppedFiles(ev.getDragboard());
-                    ev.setDropCompleted(true);
-                    ev.consume();
-                    if (host != null && host.verifyTab() != null) {
-                        host.verifyTab().importCsvPaths(files);
-                    }
-                });
-            }
             r++;
         }
         loadFromEnv();

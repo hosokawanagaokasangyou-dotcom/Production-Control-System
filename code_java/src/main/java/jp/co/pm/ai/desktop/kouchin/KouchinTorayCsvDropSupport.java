@@ -10,7 +10,7 @@ import java.util.Locale;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * ①東レCSVのドラッグ＆ドロップ取り込み。ディレクトリ指定は維持し、.csv だけコピーする。
+ * ①東レCSVのファイル選択取り込み。ディレクトリ指定は維持し、.csv だけコピーする。
  */
 public final class KouchinTorayCsvDropSupport {
 
