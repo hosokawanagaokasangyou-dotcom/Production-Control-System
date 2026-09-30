@@ -153,6 +153,21 @@ class KouchinOutlookDropSupportTest {
     }
 
     @Test
+    @DisplayName("遅延再取得はDragboardなしで直近のRVSHEET.csvを拾う")
+    void lateRetryReadsRecentTempWithoutDragboard() throws Exception {
+        Path csv = tmp.resolve("RVSHEET202609.csv");
+        Files.writeString(csv, "A010,x,191-352R,260821,1\n", Charset.forName("windows-31j"));
+        Files.setLastModifiedTime(csv, FileTime.from(Instant.parse("2026-09-30T09:00:00Z")));
+        List<Path> found = KouchinOutlookDropSupport.resolveLateTempFiles(
+                List.of("RVSHEET202609.csv"),
+                tmp,
+                tmp.resolve("no-cache"),
+                Instant.parse("2026-09-30T09:00:10Z"));
+        assertEquals(1, found.size());
+        assertEquals(csv.toAbsolutePath().normalize(), found.get(0).toAbsolutePath().normalize());
+    }
+
+    @Test
     @DisplayName("RVSHEET (1).csv があればより新しい方を使う")
     void prefersNewerWindowsCopyName() throws Exception {
         Path orig = tmp.resolve("RVSHEET.csv");

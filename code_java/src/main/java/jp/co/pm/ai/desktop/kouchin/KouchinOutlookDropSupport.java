@@ -73,6 +73,39 @@ public final class KouchinOutlookDropSupport {
         return applyOriginalName(files, originals);
     }
 
+    /** ドロップ完了後の再取得。Dragboard は触らないので FX スレッド以外から呼べる。 */
+    public static List<Path> resolveLateTempFiles(List<String> originals) {
+        return resolveLateTempFiles(originals, systemTempDir(), outlookContentCacheDir(), Instant.now());
+    }
+
+    static List<Path> resolveLateTempFiles(List<String> originals, Path tempDir, Path cacheDir, Instant now) {
+        List<String> names = originals == null ? List.of() : originals;
+        Instant at = now == null ? Instant.now() : now;
+        List<Path> named = tempFilesNamed(tempDir, names);
+        if (!named.isEmpty()) {
+            return applyOriginalName(named, names);
+        }
+        List<Path> recent = recentTempCsvFiles(tempDir, at);
+        if (!recent.isEmpty()) {
+            return applyOriginalName(recent, names);
+        }
+        Path cached = newestRecentRvsheetUnder(cacheDir, at);
+        if (cached != null) {
+            return applyOriginalName(List.of(cached), names);
+        }
+        if (!names.isEmpty()) {
+            Path newest = newestTempRvsheetCsv(tempDir);
+            if (newest != null) {
+                return applyOriginalName(List.of(newest), names);
+            }
+        }
+        return List.of();
+    }
+
+    public static List<String> originalNames(Dragboard db) {
+        return List.copyOf(originalNamesFromDragboard(db));
+    }
+
     /** ドロップ完了後に Outlook が TEMP へ書き終わる場合の再取得。 */
     public static List<Path> resolveAfterDropCompleted(Dragboard db) {
         List<Path> first = resolveDroppedFiles(db);

@@ -1123,6 +1123,7 @@ public class KouchinVerifyTabController {
     }
 
     private void scheduleDropRetry(Dragboard db, Alert alert) {
+        List<String> originals = KouchinOutlookDropSupport.originalNames(db);
         Thread t = new Thread(() -> {
             try {
                 Thread.sleep(500);
@@ -1130,7 +1131,7 @@ public class KouchinVerifyTabController {
                 Thread.currentThread().interrupt();
                 return;
             }
-            List<Path> later = KouchinOutlookDropSupport.resolveAfterDropCompleted(db);
+            List<Path> later = KouchinOutlookDropSupport.resolveLateTempFiles(originals);
             Platform.runLater(() -> finishDroppedImport(later, alert));
         }, "kouchin-outlook-drop-retry");
         t.setDaemon(true);
