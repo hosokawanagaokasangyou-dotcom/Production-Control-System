@@ -1108,6 +1108,12 @@ public class KouchinVerifyTabController {
         Dragboard db = e == null ? null : e.getDragboard();
         boolean first = takeDropEvent();
         List<Path> files = first ? droppedFilePaths(db) : List.of();
+        // #region agent log
+        KouchinOutlookDropSupport.debugDrop("E", "KouchinVerifyTabController.acceptDropped", "drop", Map.of(
+                "first", first,
+                "resolved", files.size(),
+                "thread", Thread.currentThread().getName()));
+        // #endregion
         if (e != null) {
             e.setDropCompleted(true);
             e.consume();
@@ -1132,6 +1138,13 @@ public class KouchinVerifyTabController {
                 return;
             }
             List<Path> later = KouchinOutlookDropSupport.resolveLateTempFiles(originals);
+            // #region agent log
+            KouchinOutlookDropSupport.debugDrop("D", "KouchinVerifyTabController.scheduleDropRetry", "late", Map.of(
+                    "originals", originals.size(),
+                    "found", later.size(),
+                    "names", KouchinOutlookDropSupport.debugNames(later),
+                    "thread", Thread.currentThread().getName()));
+            // #endregion
             Platform.runLater(() -> finishDroppedImport(later, alert));
         }, "kouchin-outlook-drop-retry");
         t.setDaemon(true);
@@ -1139,6 +1152,12 @@ public class KouchinVerifyTabController {
     }
 
     private void finishDroppedImport(List<Path> files, Alert alert) {
+        // #region agent log
+        KouchinOutlookDropSupport.debugDrop("C", "KouchinVerifyTabController.finishDroppedImport", "finish", Map.of(
+                "empty", files == null || files.isEmpty(),
+                "count", files == null ? 0 : files.size(),
+                "names", KouchinOutlookDropSupport.debugNames(files)));
+        // #endregion
         if (files == null || files.isEmpty()) {
             String msg = "ドロップされたファイルがありません（Outlookの添付はファイルとしてドロップしてください）";
             appendLog(msg);

@@ -10,18 +10,25 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import javafx.scene.input.DataFormat;
 import javafx.scene.input.Dragboard;
+
+import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 
 /**
  * Outlook添付ドロップ。JavaFXの {@code hasFiles()} には載らない。
@@ -37,40 +44,90 @@ public final class KouchinOutlookDropSupport {
             Pattern.compile("(?<![0-9])(\\d{2})(0[1-9]|1[0-2])(0[1-9]|[12]\\d|3[01])(?![0-9])");
     private static final Pattern MIME_FILENAME =
             Pattern.compile("name\\s*=\\s*\"([^\"]+)\"", Pattern.CASE_INSENSITIVE);
+    private static final ObjectMapper DEBUG_JSON = new ObjectMapper();
+    private static final ThreadLocal<Map<String, Object>> DROP_TRACE = new ThreadLocal<>();
 
     private KouchinOutlookDropSupport() {}
 
     public static List<Path> resolveDroppedFiles(Dragboard db) {
         if (db == null) {
+            debugDrop("E", "KouchinOutlookDropSupport.resolveDroppedFiles", "null dragboard", Map.of(
+                    "thread", Thread.currentThread().getName()));
             return List.of();
         }
-        List<String> originals = originalNamesFromDragboard(db);
-        List<Path> files = existingJavaFxFiles(db);
-        if (files.isEmpty()) {
-            files = existingPathFiles(pathsFromText(db));
-        }
-        if (files.isEmpty()) {
-            files = materializeExternalBody(mimeIds(db), externalBodyContent(db), systemTempDir());
-        }
-        if (files.isEmpty()) {
-            files = recentTempCsvFiles(systemTempDir(), Instant.now());
-        }
-        if (files.isEmpty()) {
-            files = tempFilesNamed(systemTempDir(), originals);
-        }
-        if (files.isEmpty()) {
-            Path cached = newestRecentRvsheetUnder(outlookContentCacheDir(), Instant.now());
-            if (cached != null) {
-                files = List.of(cached);
+        Map<String, Object> trace = new LinkedHashMap<>();
+        DROP_TRACE.set(trace);
+        try {
+            List<String> originals = originalNamesFromDragboard(db);
+            boolean hasFiles = false;
+            int javafxCount = -1;
+            String hasFilesError = "";
+            try {
+                hasFiles = db.hasFiles();
+                javafxCount = db.getFiles() == null ? 0 : db.getFiles().size();
+            } catch (RuntimeException ex) {
+                hasFilesError = ex.getClass().getSimpleName();
             }
-        }
-        if (files.isEmpty() && !originals.isEmpty()) {
-            Path newest = newestTempRvsheetCsv(systemTempDir());
-            if (newest != null) {
-                files = List.of(newest);
+            List<Path> files = existingJavaFxFiles(db);
+            String branch = files.isEmpty() ? "" : "javafx";
+            if (files.isEmpty()) {
+                files = existingPathFiles(pathsFromText(db));
+                if (!files.isEmpty()) {
+                    branch = "text";
+                }
             }
+            if (files.isEmpty()) {
+                files = materializeExternalBody(mimeIds(db), externalBodyContent(db), systemTempDir());
+                if (!files.isEmpty()) {
+                    branch = "external-body";
+                }
+            }
+            if (files.isEmpty()) {
+                files = recentTempCsvFiles(systemTempDir(), Instant.now());
+                if (!files.isEmpty()) {
+                    branch = "recent-temp";
+                }
+            }
+            if (files.isEmpty()) {
+                files = tempFilesNamed(systemTempDir(), originals);
+                if (!files.isEmpty()) {
+                    branch = "named-temp";
+                }
+            }
+            if (files.isEmpty()) {
+                Path cached = newestRecentRvsheetUnder(outlookContentCacheDir(), Instant.now());
+                if (cached != null) {
+                    files = List.of(cached);
+                    branch = "outlook-cache";
+                }
+            }
+            if (files.isEmpty() && !originals.isEmpty()) {
+                Path newest = newestTempRvsheetCsv(systemTempDir());
+                if (newest != null) {
+                    files = List.of(newest);
+                    branch = "newest-temp";
+                }
+            }
+            List<Path> named = applyOriginalName(files, originals);
+            trace.put("thread", Thread.currentThread().getName());
+            trace.put("hasFiles", hasFiles);
+            trace.put("javafxCount", javafxCount);
+            trace.put("hasFilesError", hasFilesError);
+            trace.put("mimeCount", mimeIds(db).size());
+            trace.put("mimes", clip(mimeIds(db), 6));
+            trace.put("originalCount", originals.size());
+            trace.put("originals", clip(originals, 6));
+            trace.put("branch", branch.isEmpty() ? "empty" : branch);
+            trace.put("resultCount", named.size());
+            trace.put("resultNames", debugNames(named));
+            trace.put("tempIsDir", Files.isDirectory(systemTempDir()));
+            Path cache = outlookContentCacheDir();
+            trace.put("cacheIsDir", cache != null && Files.isDirectory(cache));
+            debugDrop("A", "KouchinOutlookDropSupport.resolveDroppedFiles", "resolved", trace);
+            return named;
+        } finally {
+            DROP_TRACE.remove();
         }
-        return applyOriginalName(files, originals);
     }
 
     /** ドロップ完了後の再取得。Dragboard は触らないので FX スレッド以外から呼べる。 */
@@ -169,7 +226,14 @@ public final class KouchinOutlookDropSupport {
      */
     public static List<Path> materializeExternalBody(Iterable<String> mimeIds, Object content, Path tempDir) {
         byte[] raw = payloadBytes(content);
-        if (raw == null || tempDir == null || !fileNamesFromDescriptor(raw).isEmpty()) {
+        boolean descriptor = raw != null && !fileNamesFromDescriptor(raw).isEmpty();
+        Map<String, Object> trace = DROP_TRACE.get();
+        if (trace != null) {
+            trace.put("materializeLen", raw == null ? -1 : raw.length);
+            trace.put("materializeDescriptor", descriptor);
+            trace.put("materializeHead", headHex(raw));
+        }
+        if (raw == null || tempDir == null || descriptor) {
             return List.of();
         }
         List<String> names = fileNamesFromContentTypeIds(mimeIds);
@@ -179,8 +243,14 @@ public final class KouchinOutlookDropSupport {
             Files.createDirectories(dir);
             Path dest = dir.resolve(name);
             Files.write(dest, raw);
+            if (trace != null) {
+                trace.put("materializeName", name);
+            }
             return List.of(dest.toAbsolutePath().normalize());
         } catch (IOException e) {
+            if (trace != null) {
+                trace.put("materializeIo", e.getClass().getSimpleName());
+            }
             return List.of();
         }
     }
@@ -504,6 +574,7 @@ public final class KouchinOutlookDropSupport {
      */
     private static Object externalBodyContent(Dragboard db) {
         Object viaShort = contentOf(db, "message/external-body");
+        notePayload("short", viaShort);
         if (isFilePayload(viaShort)) {
             return viaShort;
         }
@@ -512,16 +583,31 @@ public final class KouchinOutlookDropSupport {
             if (types == null) {
                 return null;
             }
+            int formats = 0;
             for (DataFormat fmt : types) {
                 if (!isExternalBody(fmt)) {
                     continue;
                 }
+                formats++;
                 Object content = db.getContent(fmt);
+                notePayload("external", content);
                 if (isFilePayload(content)) {
+                    Map<String, Object> trace = DROP_TRACE.get();
+                    if (trace != null) {
+                        trace.put("externalFormats", formats);
+                    }
                     return content;
                 }
             }
-        } catch (RuntimeException ignored) {
+            Map<String, Object> trace = DROP_TRACE.get();
+            if (trace != null) {
+                trace.put("externalFormats", formats);
+            }
+        } catch (RuntimeException ex) {
+            Map<String, Object> trace = DROP_TRACE.get();
+            if (trace != null) {
+                trace.put("externalError", ex.getClass().getSimpleName());
+            }
         }
         return null;
     }
@@ -534,6 +620,10 @@ public final class KouchinOutlookDropSupport {
             }
             return db.getContent(df);
         } catch (RuntimeException e) {
+            Map<String, Object> trace = DROP_TRACE.get();
+            if (trace != null) {
+                trace.put("contentError", e.getClass().getSimpleName());
+            }
             return null;
         }
     }
@@ -631,5 +721,99 @@ public final class KouchinOutlookDropSupport {
             i++;
         }
         return new String(raw, start, i - start, StandardCharsets.US_ASCII).trim();
+    }
+
+    static List<String> debugNames(List<Path> files) {
+        if (files == null || files.isEmpty()) {
+            return List.of();
+        }
+        List<String> names = new ArrayList<>();
+        for (Path p : files) {
+            if (p != null && p.getFileName() != null && names.size() < 8) {
+                names.add(p.getFileName().toString());
+            }
+        }
+        return List.copyOf(names);
+    }
+
+    static void debugDrop(String hypothesisId, String location, String message, Map<String, ?> data) {
+        // #region agent log
+        try {
+            Map<String, Object> payload = new LinkedHashMap<>();
+            if (data != null) {
+                payload.putAll(data);
+            }
+            payload.put("runId", "pre-fix");
+            AgentDebugLog.appendStructured(Map.of(), "80da7d", hypothesisId, location, message, payload);
+            Map<String, Object> line = new LinkedHashMap<>();
+            line.put("sessionId", "80da7d");
+            line.put("hypothesisId", hypothesisId);
+            line.put("location", location);
+            line.put("message", message);
+            line.put("data", payload);
+            line.put("timestamp", System.currentTimeMillis());
+            line.put("runId", "pre-fix");
+            String json = DEBUG_JSON.writeValueAsString(line);
+            Path cwd = Path.of(System.getProperty("user.dir", ".")).toAbsolutePath().normalize();
+            writeDebugLine(cwd.resolve("debug-80da7d.log"), json);
+            if (cwd.getParent() != null) {
+                writeDebugLine(cwd.getParent().resolve("debug-80da7d.log"), json);
+            }
+            Path cursor = AgentDebugLog.resolveNdjsonPath(Map.of(), "80da7d");
+            if (cursor.getParent() != null && cursor.getParent().getParent() != null) {
+                writeDebugLine(cursor.getParent().getParent().resolve("debug-80da7d.log"), json);
+            }
+        } catch (Throwable ignored) {
+        }
+        // #endregion
+    }
+
+    private static void writeDebugLine(Path file, String json) {
+        try {
+            if (file.getParent() != null) {
+                Files.createDirectories(file.getParent());
+            }
+            Files.writeString(file, json + System.lineSeparator(), StandardCharsets.UTF_8,
+                    StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+        } catch (IOException ignored) {
+        }
+    }
+
+    private static void notePayload(String key, Object content) {
+        Map<String, Object> trace = DROP_TRACE.get();
+        if (trace == null) {
+            return;
+        }
+        byte[] raw = payloadBytes(content);
+        trace.put(key + "Class", content == null ? "null" : content.getClass().getName());
+        trace.put(key + "Len", raw == null ? -1 : raw.length);
+        trace.put(key + "Descriptor", raw != null && !fileNamesFromDescriptor(raw).isEmpty());
+        trace.put(key + "Head", headHex(raw));
+    }
+
+    private static String headHex(byte[] raw) {
+        if (raw == null || raw.length == 0) {
+            return "";
+        }
+        int n = Math.min(8, raw.length);
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < n; i++) {
+            sb.append(String.format(Locale.ROOT, "%02x", raw[i] & 0xff));
+        }
+        return sb.toString();
+    }
+
+    private static List<String> clip(List<String> values, int max) {
+        if (values == null || values.isEmpty()) {
+            return List.of();
+        }
+        List<String> out = new ArrayList<>();
+        for (String v : values) {
+            if (v == null || out.size() >= max) {
+                continue;
+            }
+            out.add(v.length() > 180 ? v.substring(0, 180) : v);
+        }
+        return List.copyOf(out);
     }
 }
