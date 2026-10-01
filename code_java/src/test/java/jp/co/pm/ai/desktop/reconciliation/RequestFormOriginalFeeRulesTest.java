@@ -29,5 +29,7 @@ class RequestFormOriginalFeeRulesTest {
         assertTrue(rules.contains("AG00"), rules);
         assertTrue(rules.contains("KG00"), rules);
         assertTrue(rules.contains("35.00"), rules);
+        assertTrue(rules.contains("契約NOごとに分ける"), rules);
+        assertTrue(rules.contains("各契約へコピーしない"), rules);
     }
 }

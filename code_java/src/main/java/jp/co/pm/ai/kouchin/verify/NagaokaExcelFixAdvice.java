@@ -2,14 +2,16 @@ package jp.co.pm.ai.kouchin.verify;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import jp.co.pm.ai.desktop.reconciliation.JuchuTransferValueNormalizer;
 import jp.co.pm.ai.desktop.reconciliation.RequestFormOriginalFee;
 
 /**
- * 依頼書原本の演算結果を見て、長岡産業側の②を直すかどうかを依頼NOごとに書く。
+ * 依頼書原本の演算結果を見て、長岡産業側の②を直すかどうかを契約NOごとに書く。
  */
 public final class NagaokaExcelFixAdvice {
 
@@ -34,32 +36,25 @@ public final class NagaokaExcelFixAdvice {
             return List.of();
         }
         double tol = tolerance(result);
-        Map<String, Bucket> buckets = new LinkedHashMap<>();
+        List<Line> out = new ArrayList<>();
+        Set<String> covered = new LinkedHashSet<>();
         if (result.recordsA() != null) {
             for (RecordA rec : result.recordsA()) {
                 if (rec == null) {
                     continue;
                 }
+                covered.add(Norm.keiyaku(rec.keiyaku()));
                 List<String> irais = RequestFormOriginalAttacher.splitIrai(rec.iraiNo());
-                String key = irais.size() == 1
-                        ? JuchuTransferValueNormalizer.normalizeKey(irais.get(0))
-                        : JuchuTransferValueNormalizer.normalizeKey(rec.iraiNo());
-                if (key.isEmpty()) {
-                    key = rec.keiyaku() == null ? "" : "契約:" + rec.keiyaku();
-                }
-                Bucket bucket = buckets.computeIfAbsent(key, k -> new Bucket(displayIrai(rec.iraiNo(), irais)));
+                Bucket bucket = new Bucket(displayIrai(rec.iraiNo(), irais));
                 bucket.add(rec);
+                bucket.fixes.addAll(fixesFor(result, rec.keiyaku(), rec.iraiNo()));
+                Line line = bucket.toLine(result.profile(), feeFor(result, originals, rec.iraiNo(), rec.keiyaku()), tol);
+                if (line != null) {
+                    out.add(line);
+                }
             }
         }
-        attachMatome(result, buckets);
-        List<Line> out = new ArrayList<>();
-        for (Bucket bucket : buckets.values()) {
-            RequestFormOriginalFee.Result fee = feeOf(originals, bucket);
-            Line line = bucket.toLine(result.profile(), fee, tol);
-            if (line != null) {
-                out.add(line);
-            }
-        }
+        out.addAll(linesOnlyD(result, originals, covered, tol));
         return List.copyOf(out);
     }
 
@@ -75,46 +70,151 @@ public final class NagaokaExcelFixAdvice {
                 + "正とする金額は依頼書原本の演算結果（配台の加工内容順。左が先。"
                 + "スライス単価は半額。原反と同じタイプで長さだけ半分の行は分割のみ。ECでタイプが変わった行はスライス半額・EC・分割。端部トリミングのスリットは数量据え置き、分割スリットは整数倍）。"
                 + "依頼書の加工1・加工2の並びは工程順ではない。"
+                + "比較と直し額は契約NOごと。同じ依頼NOの契約を合算しない。"
                 + "②が原本と違うときだけ長岡側を直す。"
                 + "②が原本と一致し①だけ違うときはExcelを直さず、差額を東レへ報告する。";
     }
 
-    private static void attachMatome(VerifyResult result, Map<String, Bucket> buckets) {
+    /** 同じ依頼NOにぶら下がる契約NOの数。検証Aと検証Dの両方を見る。 */
+    public static int contractCount(VerifyResult result, List<String> irais) {
+        if (result == null || irais == null || irais.isEmpty()) {
+            return 0;
+        }
+        Set<String> want = iraiKeys(irais);
+        Set<String> contracts = new LinkedHashSet<>();
+        if (result.recordsA() != null) {
+            for (RecordA rec : result.recordsA()) {
+                if (rec == null || !sharesIrai(rec.iraiNo(), want)) {
+                    continue;
+                }
+                String key = Norm.keiyaku(rec.keiyaku());
+                if (!key.isEmpty()) {
+                    contracts.add(key);
+                }
+            }
+        }
+        MatomeCheckResult d = result.checkD();
+        if (d != null && d.rows() != null) {
+            for (MatomeCheckResult.MatomeRow row : d.rows()) {
+                if (row == null || !sharesIrai(row.irai(), want)) {
+                    continue;
+                }
+                String key = Norm.keiyaku(row.keiyaku());
+                if (!key.isEmpty()) {
+                    contracts.add(key);
+                }
+            }
+        }
+        return contracts.size();
+    }
+
+    private static RequestFormOriginalFee.Result feeFor(
+            VerifyResult result,
+            RequestFormOriginalAttacher.Plan originals,
+            String iraiRaw,
+            String keiyaku) {
+        if (originals == null) {
+            return null;
+        }
+        List<String> irais = RequestFormOriginalAttacher.splitIrai(iraiRaw);
+        Double yen = originals.amountFor(irais, keiyaku, contractCount(result, irais));
+        if (yen == null) {
+            return null;
+        }
+        return new RequestFormOriginalFee.Result(0, 0, yen, originals.reasonFor(irais, keiyaku));
+    }
+
+    private static List<String> fixesFor(VerifyResult result, String keiyaku, String iraiRaw) {
         MatomeCheckResult d = result.checkD();
         if (d == null || d.isSkipped() || d.rows() == null) {
-            return;
+            return List.of();
         }
+        String want = Norm.keiyaku(keiyaku);
+        Set<String> irais = iraiKeys(RequestFormOriginalAttacher.splitIrai(iraiRaw));
+        List<String> fixes = new ArrayList<>();
+        for (MatomeCheckResult.MatomeRow row : d.rows()) {
+            if (row == null || !sharesIrai(row.irai(), irais)) {
+                continue;
+            }
+            String key = Norm.keiyaku(row.keiyaku());
+            if (!want.isEmpty() && !want.equals(key)) {
+                continue;
+            }
+            fixes.add(FileDiscovery.joinNonEmpty(" ", row.place(), row.judge(), row.detail()));
+        }
+        return fixes;
+    }
+
+    private static List<Line> linesOnlyD(
+            VerifyResult result,
+            RequestFormOriginalAttacher.Plan originals,
+            Set<String> covered,
+            double tol) {
+        MatomeCheckResult d = result.checkD();
+        if (d == null || d.isSkipped() || d.rows() == null) {
+            return List.of();
+        }
+        Map<String, Bucket> buckets = new LinkedHashMap<>();
         for (MatomeCheckResult.MatomeRow row : d.rows()) {
             if (row == null) {
                 continue;
             }
-            List<String> irais = RequestFormOriginalAttacher.splitIrai(row.irai());
-            if (irais.isEmpty()) {
+            String key = Norm.keiyaku(row.keiyaku());
+            if (!key.isEmpty() && covered.contains(key)) {
                 continue;
             }
+            List<String> irais = RequestFormOriginalAttacher.splitIrai(row.irai());
+            String id = key.isEmpty()
+                    ? "依頼:" + String.join(",", iraiKeys(irais))
+                    : key;
+            Bucket bucket = buckets.computeIfAbsent(id, k -> new Bucket(displayIrai(row.irai(), irais)));
+            if (row.keiyaku() != null && !row.keiyaku().isBlank() && !bucket.keiyaku.contains(row.keiyaku())) {
+                bucket.keiyaku.add(row.keiyaku());
+            }
+            bucket.fixes.add(FileDiscovery.joinNonEmpty(" ", row.place(), row.judge(), row.detail()));
             for (String irai : irais) {
-                String key = JuchuTransferValueNormalizer.normalizeKey(irai);
-                if (key.isEmpty()) {
-                    continue;
+                String iraiKey = JuchuTransferValueNormalizer.normalizeKey(irai);
+                if (!iraiKey.isEmpty() && !bucket.keys.contains(iraiKey)) {
+                    bucket.keys.add(iraiKey);
                 }
-                Bucket bucket = buckets.computeIfAbsent(key, k -> new Bucket(irai));
-                bucket.fixes.add(FileDiscovery.joinNonEmpty(" ", row.place(), row.judge(), row.detail()));
             }
         }
+        List<Line> out = new ArrayList<>();
+        for (Bucket bucket : buckets.values()) {
+            String keiyaku = bucket.keiyaku.isEmpty() ? "" : bucket.keiyaku.get(0);
+            Line line = bucket.toLine(
+                    result.profile(), feeFor(result, originals, bucket.irai, keiyaku), tol);
+            if (line != null) {
+                out.add(line);
+            }
+        }
+        return out;
     }
 
-    private static RequestFormOriginalFee.Result feeOf(
-            RequestFormOriginalAttacher.Plan originals, Bucket bucket) {
-        if (originals == null || bucket.keys.isEmpty()) {
-            return null;
+    private static Set<String> iraiKeys(List<String> irais) {
+        Set<String> want = new LinkedHashSet<>();
+        if (irais == null) {
+            return want;
         }
-        for (String key : bucket.keys) {
-            RequestFormOriginalAttacher.Item item = originals.byKey(key);
-            if (item != null && item.fee() != null) {
-                return item.fee();
+        for (String irai : irais) {
+            String key = JuchuTransferValueNormalizer.normalizeKey(irai);
+            if (!key.isEmpty()) {
+                want.add(key);
             }
         }
-        return null;
+        return want;
+    }
+
+    private static boolean sharesIrai(String raw, Set<String> want) {
+        if (want == null || want.isEmpty()) {
+            return false;
+        }
+        for (String irai : RequestFormOriginalAttacher.splitIrai(raw)) {
+            if (want.contains(JuchuTransferValueNormalizer.normalizeKey(irai))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static String displayIrai(String raw, List<String> irais) {
@@ -179,10 +279,17 @@ public final class NagaokaExcelFixAdvice {
             boolean nagaokaMissing = original != null && !has2 && has1;
             boolean torayDiffers = original != null && has1 && Math.abs(amount1 - original) > tol;
             boolean internal = !fixes.isEmpty();
-            if (original == null && !internal) {
+            boolean anomaly = false;
+            for (String judge : judges) {
+                if (RequestFormOriginalAttacher.anomalyA(judge)) {
+                    anomaly = true;
+                    break;
+                }
+            }
+            if (original == null && !internal && !anomaly) {
                 return null;
             }
-            if (original != null && !nagaokaDiffers && !nagaokaMissing && !torayDiffers && !internal) {
+            if (original != null && !nagaokaDiffers && !nagaokaMissing && !torayDiffers && !internal && !anomaly) {
                 return null;
             }
             String judge = judges.isEmpty() ? (internal ? "検証D" : "") : String.join("、", judges);
@@ -205,9 +312,10 @@ public final class NagaokaExcelFixAdvice {
                 boolean torayDiffers) {
             StringBuilder sb = new StringBuilder();
             if (fee == null) {
-                sb.append("依頼書の演算結果がないため、金額の合わせ先は出せない。");
+                sb.append("この契約NOの原本加工賃が無いため、金額の合わせ先は出せない。");
+                sb.append("同じ依頼NOの契約を合算した金額は使わない。");
             } else if (nagaokaMissing) {
-                sb.append("長岡側の②にこの依頼が無い。原本加工賃 ")
+                sb.append("長岡側の②にこの契約が無い。原本加工賃 ")
                         .append(Fmt.n0(fee.amountYen()))
                         .append(" 円を②へ追加する。");
             } else if (nagaokaDiffers) {

@@ -2,6 +2,8 @@ package jp.co.pm.ai.desktop.reconciliation;
 
 import java.io.IOException;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 
@@ -29,12 +31,41 @@ public final class RequestFormOriginalFee {
     private static final Duration TIMEOUT = Duration.ofSeconds(45);
 
     /**
+     * 契約NO 1件分の加工賃。
+     *
+     * @param keiyaku 契約NO
+     * @param meters その契約の数量（m）
+     * @param yenPerMeter その契約の単価（円/m）
+     * @param amountYen その契約の加工賃（円）
+     * @param reason その契約の計算説明
+     */
+    public record ContractFee(String keiyaku, double meters, double yenPerMeter, double amountYen, String reason) {}
+
+    /**
      * @param meters 加工賃の計算に使った加工後数量（m）。不明なら 0
      * @param yenPerMeter モデルが読んだ単価合計（円/m）。不明なら 0
-     * @param amountYen 加工賃（円）
+     * @param amountYen 依頼書全体の加工賃（円）。契約が複数なら {@code contracts} の合計
      * @param reason モデルが使った計算の説明
+     * @param contracts 契約NOごとの加工賃。モデルが分けなかったときは空
      */
-    public record Result(double meters, double yenPerMeter, double amountYen, String reason) {}
+    public record Result(
+            double meters,
+            double yenPerMeter,
+            double amountYen,
+            String reason,
+            List<ContractFee> contracts) {
+
+        public Result(double meters, double yenPerMeter, double amountYen, String reason) {
+            this(meters, yenPerMeter, amountYen, reason, List.of());
+        }
+
+        public Result {
+            if (reason == null) {
+                reason = "";
+            }
+            contracts = contracts == null ? List.of() : List.copyOf(contracts);
+        }
+    }
 
     private RequestFormOriginalFee() {}
 
@@ -55,7 +86,7 @@ public final class RequestFormOriginalFee {
         for (String modelId : GeminiDispatchModelTryOrderDefaults.PLANNING_CORE_FALLBACK_TRY_ORDER) {
             GeminiGenerateContentRestClient.FullBodyResult res =
                     GeminiGenerateContentRestClient.generateContentFullBody(
-                            apiKey, modelId, prompt, 512, TIMEOUT);
+                            apiKey, modelId, prompt, 1024, TIMEOUT);
             if (!res.errorSummary().isEmpty()) {
                 int status = res.httpStatus();
                 if (status == 404 || status == 429) {
@@ -138,23 +169,71 @@ public final class RequestFormOriginalFee {
         } catch (IOException ex) {
             return null;
         }
-        if (node == null || !node.has("amountYen") || node.get("amountYen").isNull()) {
+        if (node == null) {
             return null;
         }
-        double amount = node.get("amountYen").asDouble(Double.NaN);
+        List<ContractFee> contracts = contractFees(node.get("lines"));
+        double amount = node.path("amountYen").asDouble(Double.NaN);
+        if (Double.isNaN(amount) || amount <= 0.0) {
+            amount = sumContracts(contracts);
+        }
         if (Double.isNaN(amount) || amount <= 0.0) {
             return null;
         }
         double meters = node.path("meters").asDouble(0.0);
         double rate = node.path("yenPerMeter").asDouble(0.0);
         if (Double.isNaN(meters) || meters < 0.0) {
-            meters = 0.0;
+            meters = sumMeters(contracts);
         }
         if (Double.isNaN(rate) || rate < 0.0) {
             rate = 0.0;
         }
         String reason = node.path("reason").asText("").replace('\r', ' ').replace('\n', ' ').strip();
-        return new Result(meters, rate, amount, reason);
+        return new Result(meters, rate, amount, reason, contracts);
+    }
+
+    private static List<ContractFee> contractFees(JsonNode lines) {
+        if (lines == null || !lines.isArray()) {
+            return List.of();
+        }
+        List<ContractFee> out = new ArrayList<>();
+        for (JsonNode line : lines) {
+            if (line == null || !line.isObject()) {
+                continue;
+            }
+            String keiyaku = line.path("keiyaku").asText("").replace('\r', ' ').replace('\n', ' ').strip();
+            double yen = line.path("amountYen").asDouble(Double.NaN);
+            if (keiyaku.isEmpty() || Double.isNaN(yen) || yen <= 0.0) {
+                continue;
+            }
+            double meters = line.path("meters").asDouble(0.0);
+            double rate = line.path("yenPerMeter").asDouble(0.0);
+            if (Double.isNaN(meters) || meters < 0.0) {
+                meters = 0.0;
+            }
+            if (Double.isNaN(rate) || rate < 0.0) {
+                rate = 0.0;
+            }
+            String reason = line.path("reason").asText("").replace('\r', ' ').replace('\n', ' ').strip();
+            out.add(new ContractFee(keiyaku, meters, rate, yen, reason));
+        }
+        return List.copyOf(out);
+    }
+
+    private static double sumContracts(List<ContractFee> contracts) {
+        double sum = 0.0;
+        for (ContractFee line : contracts) {
+            sum += line.amountYen();
+        }
+        return sum;
+    }
+
+    private static double sumMeters(List<ContractFee> contracts) {
+        double sum = 0.0;
+        for (ContractFee line : contracts) {
+            sum += line.meters();
+        }
+        return sum;
     }
 
     /** 加工後数量の決め方。テストからも参照する。 */
@@ -176,7 +255,10 @@ public final class RequestFormOriginalFee {
                 + "配台システムの順番（受注ファイルの加工内容。カンマ区切りの左が先）で数量の変化を積み上げる。"
                 + "単価は依頼書の各工程の円/mを使い、掛ける順番だけ配台順に従う。"
                 + "注記で不要とされた工程の単価は掛けない。"
-                + "配台順が無いときは、原本の並びで代用せず金額は出さない。\n";
+                + "配台順が無いときは、原本の並びで代用せず金額は出さない。\n"
+                + "加工賃は契約NOごとに分ける。1枚の依頼書に契約NOが複数あるときは、"
+                + "製品行の契約Ｎｏごとに金額を出し、依頼NOの合計を各契約へコピーしない。\n"
+                + "例の10300円で200mの行と100mの行が別契約なら、lines は8800円と1500円の2件、amountYen は10300。\n";
     }
 
     private static String prompt(String sheetName, String grid, String dispatchProcessOrder) {
@@ -191,8 +273,10 @@ public final class RequestFormOriginalFee {
                 + orderLine
                 + "meters には加工賃の計算に使った加工後数量（m）を入れる。\n"
                 + "出力は JSON オブジェクト1つのみ。説明文やコードフェンスは禁止。\n"
-                + "{\"amountYen\":数値,\"meters\":数値またはnull,\"yenPerMeter\":数値またはnull,\"reason\":\"計算の短い説明\"}\n"
-                + "金額が判断できないときは {\"amountYen\":null,\"meters\":null,\"yenPerMeter\":null,\"reason\":\"理由\"}\n\n"
+                + "{\"amountYen\":数値,\"meters\":数値またはnull,\"yenPerMeter\":数値またはnull,\"reason\":\"計算の短い説明\","
+                + "\"lines\":[{\"keiyaku\":\"契約NO\",\"amountYen\":数値,\"meters\":数値またはnull,\"yenPerMeter\":数値またはnull,\"reason\":\"その契約の説明\"}]}\n"
+                + "lines はシートにある契約NOを1件ずつ入れる。契約が1件でも lines は1件。\n"
+                + "金額が判断できないときは {\"amountYen\":null,\"meters\":null,\"yenPerMeter\":null,\"reason\":\"理由\",\"lines\":[]}\n\n"
                 + "【シート名】" + (sheetName == null ? "" : sheetName) + "\n"
                 + "【セル】\n"
                 + grid

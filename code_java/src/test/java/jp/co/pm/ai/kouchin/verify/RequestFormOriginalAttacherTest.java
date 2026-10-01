@@ -37,6 +37,13 @@ class RequestFormOriginalAttacherTest {
         assertEquals(6300.0, fee.meters(), 0.001);
         assertEquals(33.0, fee.yenPerMeter(), 0.001);
         assertEquals("6300×33", fee.reason());
+        assertTrue(fee.contracts().isEmpty());
+        RequestFormOriginalFee.Result split = RequestFormOriginalFee.parseModelJson(
+                "{\"lines\":[{\"keiyaku\":\"192591B\",\"amountYen\":8800,\"meters\":200,\"reason\":\"44×200\"},"
+                        + "{\"keiyaku\":\"192592\",\"amountYen\":1500,\"meters\":100,\"reason\":\"15×100\"}]}");
+        assertEquals(10300.0, split.amountYen(), 0.001);
+        assertEquals(2, split.contracts().size());
+        assertEquals("192592", split.contracts().get(1).keiyaku());
         assertNull(RequestFormOriginalFee.parseModelJson("{\"amountYen\":null,\"reason\":\"不明\"}"));
     }
 

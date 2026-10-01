@@ -81,6 +81,75 @@ public final class RequestFormOriginalAttacher {
             return items.size() - attachedCount();
         }
 
+        /**
+         * 契約NOの原本加工賃。契約ごとの内訳があるときはその金額。
+         * 内訳が無く、同じ依頼に契約が2件以上あるときは合計を各契約へ使わない。
+         */
+        public Double amountFor(List<String> irais, String keiyaku, int contractsSharingIrai) {
+            if (irais == null || irais.isEmpty()) {
+                return null;
+            }
+            String want = Norm.keiyaku(keiyaku);
+            boolean split = false;
+            Double matched = null;
+            Double only = null;
+            for (String irai : irais) {
+                Item item = byKey(JuchuTransferValueNormalizer.normalizeKey(irai));
+                if (item == null || item.fee() == null) {
+                    continue;
+                }
+                List<RequestFormOriginalFee.ContractFee> lines = item.fee().contracts();
+                if (lines != null && !lines.isEmpty()) {
+                    split = true;
+                    if (want.isEmpty()) {
+                        continue;
+                    }
+                    for (RequestFormOriginalFee.ContractFee line : lines) {
+                        if (want.equals(Norm.keiyaku(line.keiyaku()))) {
+                            matched = matched == null ? line.amountYen() : matched + line.amountYen();
+                        }
+                    }
+                } else if (only == null) {
+                    only = item.fee().amountYen();
+                } else {
+                    only += item.fee().amountYen();
+                }
+            }
+            if (split) {
+                return matched;
+            }
+            if (contractsSharingIrai > 1) {
+                return null;
+            }
+            return only;
+        }
+
+        /** 契約NOに対応する演算説明。無ければ依頼書全体の説明。 */
+        public String reasonFor(List<String> irais, String keiyaku) {
+            if (irais == null) {
+                return "";
+            }
+            String want = Norm.keiyaku(keiyaku);
+            String fallback = "";
+            for (String irai : irais) {
+                Item item = byKey(JuchuTransferValueNormalizer.normalizeKey(irai));
+                if (item == null || item.fee() == null) {
+                    continue;
+                }
+                if (fallback.isEmpty() && item.fee().reason() != null) {
+                    fallback = item.fee().reason();
+                }
+                for (RequestFormOriginalFee.ContractFee line : item.fee().contracts()) {
+                    if (want.equals(Norm.keiyaku(line.keiyaku()))
+                            && line.reason() != null
+                            && !line.reason().isBlank()) {
+                        return line.reason();
+                    }
+                }
+            }
+            return fallback;
+        }
+
         /** 行に載っている依頼NOの原本加工賃（円）合計。1件も計算できなければ null。 */
         public Double amountOf(List<String> irais) {
             if (irais == null || irais.isEmpty()) {

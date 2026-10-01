@@ -1,6 +1,7 @@
 package jp.co.pm.ai.kouchin.verify;
 
 import jp.co.pm.ai.desktop.io.PoiWorkbookFileWriter;
+import jp.co.pm.ai.desktop.reconciliation.RequestFormOriginalFee;
 import org.apache.poi.common.usermodel.HyperlinkType;
 import org.apache.poi.ss.usermodel.BorderStyle;
 import org.apache.poi.ss.usermodel.Cell;
@@ -362,7 +363,7 @@ public final class ResultExcelExporter {
             judge(row, 6, rec.judge(), fill);
             note(row, 7, rec.note(), fill);
             List<String> irais = RequestFormOriginalAttacher.splitIrai(rec.iraiNo());
-            number(row, 8, originals.amountOf(irais), fill, false);
+            number(row, 8, originals.amountFor(irais, rec.keiyaku(), NagaokaExcelFixAdvice.contractCount(r, irais)), fill, false);
             writeOriginalLinks(row, 9, fill, irais, RequestFormOriginalAttacher.anomalyA(rec.judge()));
         }
         finishDetailSheet(ws, headers.size(), rowIndex);
@@ -430,7 +431,8 @@ public final class ResultExcelExporter {
                 judge(row, 7, mr.judge(), fill);
                 note(row, 8, mr.detail(), fill);
                 List<String> irais = RequestFormOriginalAttacher.splitIrai(mr.irai());
-                number(row, 9, originals.amountOf(irais), fill, false);
+                number(row, 9, originals.amountFor(
+                        irais, mr.keiyaku(), NagaokaExcelFixAdvice.contractCount(r, irais)), fill, false);
                 writeOriginalLinks(row, 10, fill, irais, true);
             }
         }
@@ -565,6 +567,18 @@ public final class ResultExcelExporter {
                     ? (item.fee() == null || item.fee().reason() == null ? "" : item.fee().reason())
                     : item.missing();
             text(row, 7, status, null);
+            if (item.fee() == null) {
+                continue;
+            }
+            for (RequestFormOriginalFee.ContractFee line : item.fee().contracts()) {
+                Row sub = ws.createRow(rowIndex++);
+                text(sub, 0, item.iraiLabel(), null);
+                text(sub, 1, "契約 " + line.keiyaku(), null);
+                number(sub, 2, line.meters(), null, false);
+                number(sub, 3, line.yenPerMeter(), null, false);
+                number(sub, 4, line.amountYen(), null, true);
+                text(sub, 7, line.reason() == null ? "" : line.reason(), null);
+            }
         }
         finishDetailSheet(ws, headers.size(), rowIndex);
         ws.setColumnWidth(2, 42 * 256);
@@ -705,9 +719,10 @@ public final class ResultExcelExporter {
                 {"形式不正 (灰)", "②のC列が契約NO形式でないのに金額がある行。記入漏れ疑い"},
                 {"検証D (国分)", "②「東レまとめ」の内部整合と①差額。要修正は金額差・参照ずれ・未取込。"
                         + "①差額は検証Aの不一致を、直す元シートの行付きで示す。①差額だけでは警告にしない"},
-                {"原本加工賃", "依頼書の単価を、配台の加工内容順（受注ファイル、左が先）で Gemini が積んだ加工賃（円）。"
+                {"原本加工賃", "依頼書の単価を、配台の加工内容順（受注ファイル、左が先）で Gemini が契約NOごとに積んだ加工賃（円）。"
+                        + "契約が複数の依頼は、合計を各契約へコピーしない。"
                         + "依頼書の加工1・加工2の並びは使わない。スライス単価は半額。同じタイプで長さだけ半分の行は分割のみ。ECでタイプが変わった行はスライス半額・EC・分割"},
-                {"長岡側の直し方", "原本加工賃と②の差から、長岡産業側のExcelを直すか、東レへ報告するだけかを依頼NOごとに書く"},
+                {"長岡側の直し方", "原本加工賃と②の差から、長岡産業側のExcelを直すか、東レへ報告するだけかを契約NOごとに書く"},
                 {"依頼書原本", "検証Aの不一致・翌月記載・前月過不足・片側のみ・形式不正と、検証Dの異常行について、"
                         + "依頼シートをこのブックへ添付する。依頼書添付は添付シート、原本リンクは原本xlsmを開く"},
                 {"報告する過不足", "当月差異 + 翌月記載 + ①のみ − ②のみ。検証Aの「報告計上額」列の合計と一致する"},
