@@ -902,8 +902,11 @@ public class KouchinVerifyTabController {
         }
         kpi.append(" 報告過不足").append(r.num("報告する過不足"))
                 .append(" 警告").append(r.warnings().size());
-        if (r.checkD() != null) {
+        if (r.checkD() != null && !r.checkD().isSkipped()) {
             kpi.append(" D要修正").append(r.checkD().errorCount());
+            kpi.append(" D①差額").append(r.checkD().torayDiffCount());
+        } else if (r.checkD() != null) {
+            kpi.append(" Dスキップ");
         }
         if (r.checkC() != null) {
             kpi.append(" C判定").append(r.checkC().isSkipped() ? "スキップ" : ("要確認" + r.checkC().needCheckCount()));

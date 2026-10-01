@@ -23,13 +23,14 @@ public final class Judge {
     public static final String BAD_FORMAT = "形式不正";
 
     /** 検証D */
+    public static final String TORAY_DIFF = "①差額";
     public static final String AMOUNT_DIFF = "金額差";
     public static final String REF_SHIFT = "参照ずれ";
     public static final String NOT_MAPPED = "未取込";
     public static final String BAD_FORMULA = "式異常";
     public static final String HARDCODED = "直接入力";
 
-    /** 検証Dの「要修正」判定。 */
+    /** 検証Dの「要修正」判定。①差額は検証Aの不一致と同じ契約なのでここには含めない。 */
     public static final Set<String> D_ERRORS = Set.of(AMOUNT_DIFF, REF_SHIFT, NOT_MAPPED);
 
     private Judge() {
@@ -44,7 +45,7 @@ public final class Judge {
             return 6;
         }
         return switch (judge) {
-            case MISMATCH, AMOUNT_DIFF -> 0;
+            case MISMATCH, AMOUNT_DIFF, TORAY_DIFF -> 0;
             case NEXT_MONTH, REF_SHIFT, NOT_MAPPED, BAD_FORMULA -> 1;
             case ONLY_1, ONLY_2, ONLY_3, HARDCODED -> 2;
             case PREV_ADJUST, PREV_GAP, MANUAL_1, MANUAL_2 -> 3;
@@ -60,7 +61,7 @@ public final class Judge {
             return null;
         }
         return switch (judge) {
-            case MISMATCH, AMOUNT_DIFF, REF_SHIFT, NOT_MAPPED -> "FFC7CE";
+            case MISMATCH, AMOUNT_DIFF, TORAY_DIFF, REF_SHIFT, NOT_MAPPED -> "FFC7CE";
             case NEXT_MONTH, BAD_FORMULA -> "F8CBAD";
             case ONLY_1, ONLY_2, ONLY_3, HARDCODED -> "FFEB9C";
             case PREV_ADJUST -> "BDD7EE";
@@ -78,7 +79,7 @@ public final class Judge {
             return null;
         }
         return switch (judge) {
-            case MISMATCH, AMOUNT_DIFF, REF_SHIFT, NOT_MAPPED -> "9C0006";
+            case MISMATCH, AMOUNT_DIFF, TORAY_DIFF, REF_SHIFT, NOT_MAPPED -> "9C0006";
             case NEXT_MONTH, BAD_FORMULA -> "833C00";
             case ONLY_1, ONLY_2, ONLY_3, HARDCODED -> "7F5F00";
             case PREV_ADJUST, PREV_GAP -> "1F4E79";

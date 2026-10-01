@@ -224,8 +224,14 @@ public final class ResultExcelExporter {
         MatomeCheckResult d = r.checkD();
         if (d != null && !d.isSkipped()) {
             rowIndex = section(ws, rowIndex, "検証D　②「" + FactoryProfile.MATOME_SHEET + "」の内部整合性");
-            rowIndex = kv(ws, rowIndex, "要修正 (金額差・参照ずれ・未取込)", d.errorCount() + " 件");
-            rowIndex = kv(ws, rowIndex, "注意 (式異常・直接入力)", d.noticeCount() + " 件");
+            rowIndex = kv(ws, rowIndex, "まとめ取込行数", d.mappedRows());
+            rowIndex = kv(ws, rowIndex, "①との差額 (①東レ vs まとめAA)", d.torayDiffCount() + " 件");
+            rowIndex = kv(ws, rowIndex, "要修正 (金額差 / 参照ずれ / 未取込)",
+                    d.errorCount() + "件 (" + d.countOf(Judge.AMOUNT_DIFF) + " / "
+                            + d.countOf(Judge.REF_SHIFT) + " / " + d.countOf(Judge.NOT_MAPPED) + ")");
+            rowIndex = kv(ws, rowIndex, "注意 (式異常 / 直接入力)",
+                    d.noticeCount() + "件 (" + d.countOf(Judge.BAD_FORMULA) + " / "
+                            + d.countOf(Judge.HARDCODED) + ")");
             for (MatomeCheckResult.SheetTotal t : d.totals()) {
                 rowIndex = kv(ws, rowIndex, "　" + t.sheet() + " まとめ計 / 元シート計 / 差",
                         Fmt.n0(t.matomeSum()) + " / " + Fmt.n0(t.srcSum()) + " / " + Fmt.s0(t.diff()));
@@ -361,19 +367,19 @@ public final class ResultExcelExporter {
         if (d == null) {
             return;
         }
-        List<String> headers = List.of("場所", "依頼NO", "契約NO", "まとめAA", "元シートAA",
-                "差額(まとめ-元)", "判定", "内容・対処");
+        List<String> headers = List.of("場所", "依頼NO", "契約NO", "①東レ金額", "まとめAA", "元シートAA",
+                "差額(①-まとめ)", "判定", "内容・対処");
         XSSFSheet ws = createDetailSheet(SHEET_D, headers, "7030A0");
         int rowIndex = 1;
         if (d.isSkipped()) {
             Row row = ws.createRow(rowIndex++);
             text(row, 0, "(スキップ)", null);
-            judge(row, 6, Judge.BAD_FORMULA, Judge.fillColor(Judge.BAD_FORMULA));
-            note(row, 7, d.skipped(), null);
+            judge(row, 7, Judge.BAD_FORMULA, Judge.fillColor(Judge.BAD_FORMULA));
+            note(row, 8, d.skipped(), null);
         } else if (d.rows().isEmpty()) {
             Row row = ws.createRow(rowIndex++);
             text(row, 0, "問題なし", null);
-            note(row, 7, "まとめの参照式・元シートの式・行別金額がすべて整合", null);
+            note(row, 8, "まとめ取込 " + d.mappedRows() + "行", null);
         } else {
             List<MatomeCheckResult.MatomeRow> sorted = new ArrayList<>(d.rows());
             sorted.sort((x, y) -> Integer.compare(Judge.rank(x.judge()), Judge.rank(y.judge())));
@@ -383,14 +389,16 @@ public final class ResultExcelExporter {
                 text(row, 0, mr.place(), fill);
                 text(row, 1, mr.irai(), fill);
                 text(row, 2, mr.keiyaku(), fill);
-                number(row, 3, mr.matomeAa(), fill, false);
-                number(row, 4, mr.srcAa(), fill, false);
-                number(row, 5, mr.diff(), fill, true);
-                judge(row, 6, mr.judge(), fill);
-                note(row, 7, mr.detail(), fill);
+                number(row, 3, mr.torayAmount(), fill, false);
+                number(row, 4, mr.matomeAa(), fill, false);
+                number(row, 5, mr.srcAa(), fill, false);
+                number(row, 6, mr.diff(), fill, Judge.TORAY_DIFF.equals(mr.judge()) || Judge.AMOUNT_DIFF.equals(mr.judge()));
+                judge(row, 7, mr.judge(), fill);
+                note(row, 8, mr.detail(), fill);
             }
         }
         finishDetailSheet(ws, headers.size(), rowIndex);
+        ws.setColumnWidth(0, 42 * 256);
     }
 
     private void writeSheetC(VerifyResult r) {
@@ -490,12 +498,17 @@ public final class ResultExcelExporter {
                 {"前月調整 (青)", "①のみだが過去月の②に存在。判明済みで参考確認のみ"},
                 {"月ずれ解消・枝番統合一致 (緑)", "複数月累計または③の枝番合算で一致。対応不要"},
                 {"形式不正 (灰)", "②のC列が契約NO形式でないのに金額がある行。記入漏れ疑い"},
+                {"検証D (国分)", "②「東レまとめ」の内部整合と①差額。要修正は金額差・参照ずれ・未取込。"
+                        + "①差額は検証Aの不一致を、直す元シートの行付きで示す。①差額だけでは警告にしない"},
                 {"報告する過不足", "当月差異 + 翌月記載 + ①のみ − ②のみ。検証Aの「報告計上額」列の合計と一致する"},
                 {"検算残差", "0であれば報告用内訳の内部整合が取れている"},
         };
         CellStyle labelStyle = style("guideLabel", null, null, true, 10, false, BorderStyle.THIN);
         CellStyle textStyle = style("guideText", null, null, false, 10, false, BorderStyle.THIN);
         for (String[] item : items) {
+            if ("検証D (国分)".equals(item[0]) && r.checkD() == null) {
+                continue;
+            }
             put(ws, rowIndex, 1, item[0], labelStyle);
             put(ws, rowIndex, 2, item[1], textStyle);
             rowIndex++;

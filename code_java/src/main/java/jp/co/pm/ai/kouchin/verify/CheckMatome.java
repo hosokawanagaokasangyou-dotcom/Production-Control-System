@@ -32,7 +32,10 @@ import java.util.regex.Pattern;
  *   <li>元シートのデータ行の取込漏れ</li>
  *   <li>元シート・まとめの G/AA の式崩れ（空欄・直接入力・別式）</li>
  *   <li>行別の まとめAA と 元シートAA の金額差</li>
+ *   <li>契約NOでまとめた AA 合算と ①東レ金額の差（①差額。要修正には含めない）</li>
  * </ol>
+ *
+ * <p>2026年8月度以降、まとめの G/Z/AA は {@code =東レT!G6} のように元シート同列同行の参照でも定型とする。</p>
  */
 public final class CheckMatome {
 
@@ -55,6 +58,13 @@ public final class CheckMatome {
     }
 
     public static MatomeCheckResult check(Path path, double tol) {
+        return check(path, tol, Map.of());
+    }
+
+    /**
+     * @param torayByKeiyaku ①の契約NO（ハイフン無し）→金額。空なら①差額は出さない
+     */
+    public static MatomeCheckResult check(Path path, double tol, Map<String, Double> torayByKeiyaku) {
         Workbook wb;
         try {
             wb = ExcelValues.open(path);
@@ -62,7 +72,7 @@ public final class CheckMatome {
             return MatomeCheckResult.skipped("数式を読めませんでした: " + e.getMessage());
         }
         try {
-            return check(wb, tol);
+            return check(wb, tol, torayByKeiyaku);
         } catch (RuntimeException e) {
             return MatomeCheckResult.skipped("検証中にエラーが発生しました: " + e);
         } finally {
@@ -74,7 +84,7 @@ public final class CheckMatome {
         }
     }
 
-    private static MatomeCheckResult check(Workbook wb, double tol) {
+    private static MatomeCheckResult check(Workbook wb, double tol, Map<String, Double> torayByKeiyaku) {
         Sheet matome = wb.getSheet(FactoryProfile.MATOME_SHEET);
         if (matome == null) {
             return MatomeCheckResult.skipped("シート構成が想定外です(必要: "
@@ -95,6 +105,7 @@ public final class CheckMatome {
 
         List<MatomeCheckResult.MatomeRow> out = new ArrayList<>();
         Map<Integer, String[]> mapping = new TreeMap<>();   // まとめ行 -> [元シート, 元行]
+        boolean sourceRefStyle = false;
 
         List<String> srcCols = new ArrayList<>();
         for (int c = 1; c <= 24; c++) {
@@ -154,7 +165,7 @@ public final class CheckMatome {
                 problems.add("参照列が自列と不一致: " + String.join(", ", colMix));
             }
             if (!problems.isEmpty()) {
-                out.add(new MatomeCheckResult.MatomeRow(
+                out.add(MatomeCheckResult.internal(
                         FactoryProfile.MATOME_SHEET + "!" + r, ident[0], ident[1], null, null, null,
                         Judge.REF_SHIFT, String.join(" / ", problems)));
             }
@@ -166,20 +177,32 @@ public final class CheckMatome {
                 String f = formula(matome, r, col);
                 String expected = expected(col, r);
                 Object raw = rawValue(matome, r, col);
-                if (f != null) {
+                String compact = f == null ? null : f.replace(" ", "");
+                Matcher sourceRef = compact == null ? null : REF_PATTERN.matcher(compact);
+                if (sourceRef != null && sourceRef.matches()) {
+                    sourceRefStyle = true;
+                    if (!sourceRef.group(1).equals(sheetName)
+                            || !sourceRef.group(2).equals(col)
+                            || !sourceRef.group(3).equals(srcRowText)) {
+                        out.add(MatomeCheckResult.internal(
+                                FactoryProfile.MATOME_SHEET + "!" + col + r, ident[0], ident[1], null, null, null,
+                                Judge.REF_SHIFT, "参照先が自行の元シート行(" + sheetName + "!" + col + srcRowText
+                                        + ")と不一致: =" + f));
+                    }
+                } else if (f != null) {
                     Set<Integer> otherRows = otherRows(f, r);
                     if (!otherRows.isEmpty()) {
-                        out.add(new MatomeCheckResult.MatomeRow(
+                        out.add(MatomeCheckResult.internal(
                                 FactoryProfile.MATOME_SHEET + "!" + col + r, ident[0], ident[1], null, null, null,
                                 Judge.REF_SHIFT, "自行式が他行を参照: =" + f + " (期待 =" + expected + ")"));
-                    } else if (!f.replace(" ", "").equals(expected.replace(" ", ""))) {
-                        out.add(new MatomeCheckResult.MatomeRow(
+                    } else if (!compact.equals(expected.replace(" ", ""))) {
+                        out.add(MatomeCheckResult.internal(
                                 FactoryProfile.MATOME_SHEET + "!" + col + r, ident[0], ident[1], null, null, null,
                                 Judge.BAD_FORMULA, "定型と異なる式: =" + f + " (期待 =" + expected + ")"));
                     }
                 } else if (raw != null && !Norm.isBlank(raw)
                         && (!ident[0].isEmpty() || !ident[1].isEmpty())) {
-                    out.add(new MatomeCheckResult.MatomeRow(
+                    out.add(MatomeCheckResult.internal(
                             FactoryProfile.MATOME_SHEET + "!" + col + r, ident[0], ident[1], null, null, null,
                             Judge.HARDCODED, "式ではなく値 " + Norm.text(raw) + " が入力されている (期待 ="
                             + expected + ")。元シートの単価欄と食い違う恐れ"));
@@ -199,6 +222,7 @@ public final class CheckMatome {
         }
 
         List<MatomeCheckResult.SheetTotal> totals = new ArrayList<>();
+        List<TorayEntry> torayEntries = new ArrayList<>();
         List<List<Object>> matomeValues = values.get(FactoryProfile.MATOME_SHEET);
         for (String s : FactoryProfile.MATOME_SRC_SHEETS) {
             Sheet src = wb.getSheet(s);
@@ -219,17 +243,20 @@ public final class CheckMatome {
                     Object raw = rawValue(src, i, col);
                     double aa = ExcelValues.num1(srcValues, i, COL_AA);
                     if (f == null && (raw == null || Norm.isBlank(raw))) {
-                        out.add(new MatomeCheckResult.MatomeRow(s + "!" + col + i, ident[0], ident[1], null, aa, null,
+                        out.add(MatomeCheckResult.internal(s + "!" + col + i, ident[0], ident[1], null, aa, null,
                                 Judge.BAD_FORMULA, col + "列が空欄 (期待 =" + expected + ")。加工賃が0になる"));
                     } else if (f != null) {
                         if (!f.replace(" ", "").equals(expected.replace(" ", ""))) {
-                            out.add(new MatomeCheckResult.MatomeRow(s + "!" + col + i, ident[0], ident[1], null, aa, null,
+                            out.add(MatomeCheckResult.internal(s + "!" + col + i, ident[0], ident[1], null, aa, null,
                                     Judge.BAD_FORMULA, "定型と異なる式: =" + f + " (期待 =" + expected + ")"));
                         }
                     } else {
-                        out.add(new MatomeCheckResult.MatomeRow(s + "!" + col + i, ident[0], ident[1], null, aa, null,
+                        String why = sourceRefStyle
+                                ? "まとめはこの値をそのまま参照するため金額は一致するが、単価欄(H〜X)の合計と食い違う"
+                                : "まとめは単価欄(H〜X)の合計で再計算するため食い違う恐れ";
+                        out.add(MatomeCheckResult.internal(s + "!" + col + i, ident[0], ident[1], null, aa, null,
                                 Judge.HARDCODED, "式ではなく値 " + Norm.text(raw) + " が入力されている (期待 ="
-                                + expected + ")。まとめは単価欄(H〜X)の合計で再計算するため食い違う恐れ"));
+                                + expected + ")。" + why));
                     }
                 }
             }
@@ -239,7 +266,7 @@ public final class CheckMatome {
                 if (!coveredRows.contains(i)) {
                     String[] ident = ident(srcValues, i);
                     double aa = ExcelValues.num1(srcValues, i, COL_AA);
-                    out.add(new MatomeCheckResult.MatomeRow(s + "!" + i, ident[0], ident[1], null, aa, null,
+                    out.add(MatomeCheckResult.internal(s + "!" + i, ident[0], ident[1], null, aa, null,
                             Judge.NOT_MAPPED, "元シートのデータ行がまとめに参照されていない (AA " + Fmt.n0(aa) + "円)"));
                 }
             }
@@ -257,13 +284,14 @@ public final class CheckMatome {
                 double srcAa = ExcelValues.num1(srcValues, srcRow, COL_AA);
                 sumMatome += matomeAa;
                 sumSrc += srcAa;
+                String[] ident = ident(srcValues, srcRow);
+                String place = FactoryProfile.MATOME_SHEET + "!" + r + " ↔ " + s + "!" + srcRow;
+                torayEntries.add(new TorayEntry(place, ident[0], ident[1], matomeAa, srcAa));
                 if (Math.abs(matomeAa - srcAa) > tol) {
-                    String[] ident = ident(srcValues, srcRow);
                     double gm = ExcelValues.num1(matomeValues, r, COL_G);
                     double gs = ExcelValues.num1(srcValues, srcRow, COL_G);
-                    out.add(new MatomeCheckResult.MatomeRow(
-                            FactoryProfile.MATOME_SHEET + "!" + r + " ↔ " + s + "!" + srcRow,
-                            ident[0], ident[1], matomeAa, srcAa, matomeAa - srcAa, Judge.AMOUNT_DIFF,
+                    out.add(MatomeCheckResult.internal(
+                            place, ident[0], ident[1], matomeAa, srcAa, matomeAa - srcAa, Judge.AMOUNT_DIFF,
                             "まとめAA " + Fmt.n0(matomeAa) + " ≠ 元シートAA " + Fmt.n0(srcAa)
                                     + " (単価合計G: まとめ " + trim(gm) + " / 元 " + trim(gs) + ")。"
                                     + "元シートの単価を丸めるか、まとめの直接入力を式に戻して両者を一致させる"));
@@ -272,7 +300,85 @@ public final class CheckMatome {
             totals.add(new MatomeCheckResult.SheetTotal(s, sumMatome, sumSrc, sumMatome - sumSrc));
         }
 
-        return new MatomeCheckResult(List.copyOf(out), List.copyOf(totals), mapping.size(), null);
+        List<MatomeCheckResult.MatomeRow> padded = new ArrayList<>(out.size());
+        for (MatomeCheckResult.MatomeRow row : out) {
+            padded.add(padTorayAmount(row, torayByKeiyaku));
+        }
+        padded.addAll(diffTorayMatome(torayEntries, torayByKeiyaku, tol));
+        return new MatomeCheckResult(List.copyOf(padded), List.copyOf(totals), mapping.size(), null);
+    }
+
+    /** まとめ行と①契約NO金額を突合し、差があれば①差額行を返す。同一契約NOはAAを合算する。 */
+    static List<MatomeCheckResult.MatomeRow> diffTorayMatome(
+            List<TorayEntry> entries, Map<String, Double> toray, double tol) {
+        if (toray == null || toray.isEmpty() || entries == null || entries.isEmpty()) {
+            return List.of();
+        }
+        Map<String, List<TorayEntry>> grouped = new LinkedHashMap<>();
+        for (TorayEntry entry : entries) {
+            String key = Norm.keiyaku(entry.keiyaku());
+            if (key.isEmpty()) {
+                continue;
+            }
+            grouped.computeIfAbsent(key, k -> new ArrayList<>()).add(entry);
+        }
+        List<MatomeCheckResult.MatomeRow> rows = new ArrayList<>();
+        for (Map.Entry<String, List<TorayEntry>> e : grouped.entrySet()) {
+            if (!toray.containsKey(e.getKey())) {
+                continue;
+            }
+            double torayAmount = toray.get(e.getKey());
+            double matomeSum = 0.0;
+            double srcSum = 0.0;
+            List<String> places = new ArrayList<>();
+            LinkedHashSet<String> irais = new LinkedHashSet<>();
+            for (TorayEntry item : e.getValue()) {
+                matomeSum += item.matomeAa();
+                srcSum += item.srcAa();
+                places.add(item.place());
+                if (item.irai() != null && !item.irai().isEmpty()) {
+                    irais.add(item.irai());
+                }
+            }
+            if (Math.abs(torayAmount - matomeSum) <= tol) {
+                continue;
+            }
+            String place = String.join(" / ", places);
+            rows.add(new MatomeCheckResult.MatomeRow(
+                    place,
+                    String.join(", ", irais),
+                    e.getValue().get(0).keiyaku(),
+                    torayAmount,
+                    matomeSum,
+                    srcSum,
+                    torayAmount - matomeSum,
+                    Judge.TORAY_DIFF,
+                    "①東レ " + Fmt.n0(torayAmount) + "円 ≠ まとめAA " + Fmt.n0(matomeSum) + "円。元シートは " + place));
+        }
+        return rows;
+    }
+
+    /** 内部行に①金額を入れる。まとめAAがあるときは差額列を ①−まとめ にする。 */
+    private static MatomeCheckResult.MatomeRow padTorayAmount(
+            MatomeCheckResult.MatomeRow row, Map<String, Double> toray) {
+        if (row == null || toray == null || toray.isEmpty() || row.keiyaku() == null || row.keiyaku().isBlank()) {
+            return row;
+        }
+        String key = Norm.keiyaku(row.keiyaku());
+        if (!toray.containsKey(key)) {
+            return row;
+        }
+        double amount = toray.get(key);
+        Double diff = row.diff();
+        if (row.matomeAa() != null) {
+            diff = amount - row.matomeAa();
+        }
+        return new MatomeCheckResult.MatomeRow(
+                row.place(), row.irai(), row.keiyaku(), amount, row.matomeAa(), row.srcAa(), diff,
+                row.judge(), row.detail());
+    }
+
+    record TorayEntry(String place, String irai, String keiyaku, double matomeAa, double srcAa) {
     }
 
     /** 元シート行の (依頼NO, 契約NO)。両方空ならデータ行ではない。 */

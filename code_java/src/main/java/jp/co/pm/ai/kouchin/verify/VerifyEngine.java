@@ -321,7 +321,7 @@ public final class VerifyEngine {
         if (!profile.hasCheckD()) {
             return;
         }
-        checkD = CheckMatome.check(source2File, tol);
+        checkD = CheckMatome.check(source2File, tol, toray == null ? Map.of() : toray.byKeiyaku());
         if (checkD.isSkipped()) {
             warnings.add("検証D(②まとめ整合性)をスキップしました: " + checkD.skipped());
             return;
