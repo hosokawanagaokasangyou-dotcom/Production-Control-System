@@ -32,8 +32,8 @@ import jp.co.pm.ai.desktop.reconciliation.RequestFormOriginalFee;
 import jp.co.pm.ai.desktop.reconciliation.RequestFormOriginalFileFinder;
 
 /**
- * 検証A・検証Dの異常行について、依頼書原本の依頼シートを結果ブックへコピーする。
- * 原本フォルダは読み取りのみ。
+ * 検証Aの異常と検証Dの行だけ、依頼書原本の加工賃を計算し、シートを結果ブックへコピーする。
+ * 一致は対象外。原本フォルダは読み取りのみ。
  */
 public final class RequestFormOriginalAttacher {
 
@@ -300,10 +300,10 @@ public final class RequestFormOriginalAttacher {
             return;
         }
         for (RecordA rec : result.recordsA()) {
-            if (rec == null) {
+            if (rec == null || !anomalyA(rec.judge())) {
                 continue;
             }
-            addAll(splitIrai(rec.iraiNo()), "検証A", anomalyA(rec.judge()), labels, sources, anomalyKeys);
+            addAll(splitIrai(rec.iraiNo()), "検証A", true, labels, sources, anomalyKeys);
         }
     }
 

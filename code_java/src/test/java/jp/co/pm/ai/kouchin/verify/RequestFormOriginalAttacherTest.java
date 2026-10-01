@@ -41,6 +41,29 @@ class RequestFormOriginalAttacherTest {
     }
 
     @Test
+    @DisplayName("一致だけの結果は依頼書の加工賃を計算しない")
+    void matchRowsAreNotPrepared() {
+        Map<String, Object> info = new HashMap<>();
+        info.put("許容差", 0.5);
+        VerifyResult result = new VerifyResult(
+                FactoryProfile.of(FactoryId.KOKUBU),
+                new YearMonthKey(2026, 9),
+                List.of(new RecordA("192265M", "V9-9", 100.0, 100.0, 0.0, null, Judge.MATCH, "")),
+                List.of(),
+                info,
+                List.of(),
+                null,
+                null,
+                null);
+        RequestFormOriginalAttacher.Plan plan = RequestFormOriginalAttacher.prepare(result, Map.of(
+                AppPaths.KEY_PM_AI_SKIP_GEMINI_API, "1",
+                AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR, tempDir.toString(),
+                AppPaths.KEY_PM_AI_REQUEST_FORM_JUCHU_FILE, tempDir.resolve("no-juchu.xlsx").toString()));
+        assertTrue(plan.items().isEmpty(), plan.items().toString());
+        assertTrue(plan.warnings().isEmpty(), plan.warnings().toString());
+    }
+
+    @Test
     @DisplayName("月ラベル付き依頼NOを分け、一致行は添付対象にしない")
     void splitsIraiAndSkipsMatch() {
         assertEquals(List.of("V9-9", "C8-1"), RequestFormOriginalAttacher.splitIrai("(9月)V9-9, C8-1"));
