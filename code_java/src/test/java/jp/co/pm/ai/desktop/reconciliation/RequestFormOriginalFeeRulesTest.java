@@ -19,5 +19,9 @@ class RequestFormOriginalFeeRulesTest {
         assertTrue(rules.contains("二つにスリット"), rules);
         assertTrue(rules.contains("三つにスリット"), rules);
         assertTrue(rules.contains("整数倍"), rules);
+        assertTrue(rules.contains("依頼書原本の加工1・加工2の並びではない"), rules);
+        assertTrue(rules.contains("配台システム"), rules);
+        assertTrue(rules.contains("加工内容"), rules);
+        assertTrue(rules.contains("原本の並びで代用せず"), rules);
     }
 }

@@ -25,6 +25,7 @@ import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.config.NetworkSourceDirResolver;
 import jp.co.pm.ai.desktop.crypto.GeminiCredentialsV2Crypto;
+import jp.co.pm.ai.desktop.io.actuals.JuchuProcessingFeeRateLoader;
 import jp.co.pm.ai.desktop.io.PoiWorkbookOpener;
 import jp.co.pm.ai.desktop.reconciliation.JuchuTransferValueNormalizer;
 import jp.co.pm.ai.desktop.reconciliation.RequestFormOriginalFee;
@@ -121,7 +122,8 @@ public final class RequestFormOriginalAttacher {
         if (!NetworkSourceDirResolver.isRequestFormOriginalDirReachable(env)) {
             warnings.add("依頼書原本フォルダにアクセスできません: " + dir);
         } else {
-            found = RequestFormOriginalFileFinder.find(dir, labels.keySet(), warnings, apiKey);
+            found = RequestFormOriginalFileFinder.find(
+                    dir, labels.keySet(), warnings, apiKey, dispatchProcessOrder(env, warnings));
         }
         List<Item> items = new ArrayList<>();
         Set<String> usedNames = new LinkedHashSet<>();
@@ -169,6 +171,30 @@ public final class RequestFormOriginalAttacher {
             } catch (Exception ex) {
                 // 原本が開けなくても検証結果自体は残す。行のリンク側は missing にできないのでシートを作らない。
             }
+        }
+    }
+
+    /** 受注ファイルの加工内容（カンマ区切り、左が先）。配台 §A-1 の工程順。 */
+    static Map<String, String> dispatchProcessOrder(Map<String, String> ui, List<String> warnings) {
+        Path file = AppPaths.resolveRequestFormJuchuFile(ui).orElse(null);
+        if (file == null || !Files.isRegularFile(file)) {
+            warn(warnings, "配台の工程順を読めません。受注ファイルがありません");
+            return Map.of();
+        }
+        try {
+            Map<String, String> out = new LinkedHashMap<>();
+            JuchuProcessingFeeRateLoader.loadFeeInfo(file).forEach((irai, info) -> {
+                String key = JuchuTransferValueNormalizer.normalizeKey(irai);
+                String content = info == null ? "" : info.processContent();
+                if (!key.isEmpty() && content != null && !content.isBlank()) {
+                    out.putIfAbsent(key, content.strip());
+                }
+            });
+            return Map.copyOf(out);
+        } catch (Exception ex) {
+            String msg = ex.getMessage() == null ? ex.toString() : ex.getMessage();
+            warn(warnings, "配台の工程順を読めません: " + msg);
+            return Map.of();
         }
     }
 

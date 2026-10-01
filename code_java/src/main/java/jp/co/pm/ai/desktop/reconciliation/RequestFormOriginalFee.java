@@ -41,7 +41,8 @@ public final class RequestFormOriginalFee {
     /**
      * シート内容を Gemini に解釈させる。キーが空、または金額が取れないときは null。
      */
-    public static Result fromSheet(Sheet sheet, String apiKey) throws IOException, InterruptedException {
+    public static Result fromSheet(Sheet sheet, String apiKey, String dispatchProcessOrder)
+            throws IOException, InterruptedException {
         if (sheet == null || apiKey == null || apiKey.isBlank()) {
             return null;
         }
@@ -49,7 +50,7 @@ public final class RequestFormOriginalFee {
         if (grid.isBlank()) {
             return null;
         }
-        String prompt = prompt(sheet.getSheetName(), grid);
+        String prompt = prompt(sheet.getSheetName(), grid, dispatchProcessOrder);
         IOException last = null;
         for (String modelId : GeminiDispatchModelTryOrderDefaults.PLANNING_CORE_FALLBACK_TRY_ORDER) {
             GeminiGenerateContentRestClient.FullBodyResult res =
@@ -163,15 +164,23 @@ public final class RequestFormOriginalFee {
                 + "・スライス: 厚みを1/2にする。加工後の数量は2倍。\n"
                 + "・スリットで端部をトリミングする場合: 加工後の数量は変わらない。\n"
                 + "・二つにスリット、三つにスリットなど分割する場合: 加工後の数量は分割数の整数倍（2倍、3倍）。\n"
-                + "工程が複数あるときは、シートの並びと注記に沿って数量の変化を積み上げる。"
-                + "注記で不要とされた工程の単価は掛けない。\n";
+                + "工程が複数あるときの順番は、依頼書原本の加工1・加工2の並びではない。"
+                + "配台システムの順番（受注ファイルの加工内容。カンマ区切りの左が先）で数量の変化を積み上げる。"
+                + "単価は依頼書の各工程の円/mを使い、掛ける順番だけ配台順に従う。"
+                + "注記で不要とされた工程の単価は掛けない。"
+                + "配台順が無いときは、原本の並びで代用せず金額は出さない。\n";
     }
 
-    private static String prompt(String sheetName, String grid) {
+    private static String prompt(String sheetName, String grid, String dispatchProcessOrder) {
+        String order = dispatchProcessOrder == null ? "" : dispatchProcessOrder.strip();
+        String orderLine = order.isEmpty()
+                ? "【配台の工程順】不明。依頼書原本の行順を工程順に使わず、amountYen は null。\n"
+                : "【配台の工程順】左が先。受注ファイルの加工内容。依頼書原本の並びは使わない。\n" + order + "\n";
         return "加工依頼書の1シートです。加工賃（円）の計算方法は帳票によって違います。"
                 + "見出し・注記・数値から、このシートが意図する加工賃の金額を求めてください。"
                 + "列位置を決め打ちせず、書かれている内容に従ってください。\n"
                 + quantityRules()
+                + orderLine
                 + "meters には加工賃の計算に使った加工後数量（m）を入れる。\n"
                 + "出力は JSON オブジェクト1つのみ。説明文やコードフェンスは禁止。\n"
                 + "{\"amountYen\":数値,\"meters\":数値またはnull,\"yenPerMeter\":数値またはnull,\"reason\":\"計算の短い説明\"}\n"

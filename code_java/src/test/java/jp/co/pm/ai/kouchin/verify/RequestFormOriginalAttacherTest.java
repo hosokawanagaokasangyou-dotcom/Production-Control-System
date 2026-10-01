@@ -89,6 +89,7 @@ class RequestFormOriginalAttacherTest {
                 null);
         Map<String, String> ui = Map.of(
                 AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR, tempDir.toString(),
+                AppPaths.KEY_PM_AI_REQUEST_FORM_JUCHU_FILE, tempDir.resolve("no-juchu.xlsx").toString(),
                 AppPaths.KEY_PM_AI_SKIP_GEMINI_API, "1");
 
         try (XSSFWorkbook wb = ResultExcelExporter.buildWorkbook(result, null, null, ui)) {

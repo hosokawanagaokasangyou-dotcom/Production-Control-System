@@ -19,7 +19,7 @@ public final class RequestFormOriginalFileFinder {
 
     /**
      * 見つかった原本。{@code sheetName} が空ならブック内に依頼シートが無い。
-     * {@code fee} は数量×工程単価。計算できないときは null。
+     * {@code fee} は配台の工程順で Gemini が計算した加工賃。計算できないときは null。
      */
     public record Found(String iraiNo, Path file, String sheetName, RequestFormOriginalFee.Result fee) {}
 
@@ -30,13 +30,14 @@ public final class RequestFormOriginalFileFinder {
      * @return キー → 原本。見つからなかったキーは含まれない
      */
     public static Map<String, Found> find(Path dir, Set<String> keys, List<String> warnings) {
-        return find(dir, keys, warnings, null);
+        return find(dir, keys, warnings, null, Map.of());
     }
 
     /**
      * @param apiKey 復号済み Gemini API キー。空なら加工賃は計算しない
      */
-    public static Map<String, Found> find(Path dir, Set<String> keys, List<String> warnings, String apiKey) {
+    public static Map<String, Found> find(
+            Path dir, Set<String> keys, List<String> warnings, String apiKey, Map<String, String> dispatchOrderByIrai) {
         if (dir == null || keys == null || keys.isEmpty() || !dir.toFile().isDirectory()) {
             return Map.of();
         }
@@ -66,7 +67,9 @@ public final class RequestFormOriginalFileFinder {
                         continue;
                     }
                     String sheetName = matchingSheet(wb, key);
-                    RequestFormOriginalFee.Result fee = feeOf(wb, sheetName, apiKey, entry.iraiNo(), warnings);
+                    String order = dispatchOrderByIrai == null ? "" : dispatchOrderByIrai.getOrDefault(key, "");
+                    RequestFormOriginalFee.Result fee =
+                            feeOf(wb, sheetName, apiKey, order, entry.iraiNo(), warnings);
                     found.put(key, new Found(entry.iraiNo(), path, sheetName, fee));
                 }
             } catch (Exception ex) {
@@ -77,12 +80,17 @@ public final class RequestFormOriginalFileFinder {
     }
 
     private static RequestFormOriginalFee.Result feeOf(
-            Workbook wb, String sheetName, String apiKey, String iraiNo, List<String> warnings) {
+            Workbook wb,
+            String sheetName,
+            String apiKey,
+            String dispatchProcessOrder,
+            String iraiNo,
+            List<String> warnings) {
         if (sheetName == null || sheetName.isBlank() || apiKey == null || apiKey.isBlank()) {
             return null;
         }
         try {
-            return RequestFormOriginalFee.fromSheet(wb.getSheet(sheetName), apiKey);
+            return RequestFormOriginalFee.fromSheet(wb.getSheet(sheetName), apiKey, dispatchProcessOrder);
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();
             warn(warnings, iraiNo + " の加工賃計算を中断しました");
