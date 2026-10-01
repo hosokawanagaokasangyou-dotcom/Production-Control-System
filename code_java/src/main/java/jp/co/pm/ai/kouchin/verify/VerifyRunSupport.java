@@ -12,8 +12,8 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
-import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.config.FactorySite;
 
 /**
@@ -49,32 +49,40 @@ public final class VerifyRunSupport {
         if (cancel != null && cancel.get()) {
             throw new VerifyException("中断されました");
         }
-        if (kokubu != null) {
-            String name = "検証結果_国分工場_" + stamp + ".xlsx";
-            MailSnapshot konanPeer = peerMail(konan, ui, FactoryId.KONAN);
-            Workbook wb = ResultExcelExporter.buildWorkbook(kokubu, kokubu.mail(), konanPeer, ui);
-            try {
-                xlsxOut = DualWriteFiles.writeWorkbook(wb, KouchinOutputDirs.withNames(dirs, name), ui);
+        XSSFWorkbook kokubuWb = null;
+        XSSFWorkbook konanWb = null;
+        try {
+            if (kokubu != null) {
+                String name = "検証結果_国分工場_" + stamp + ".xlsx";
+                MailSnapshot konanPeer = peerMail(konan, ui, FactoryId.KONAN);
+                kokubuWb = ResultExcelExporter.buildWorkbook(kokubu, kokubu.mail(), konanPeer, ui);
+                xlsxOut = DualWriteFiles.writeWorkbook(kokubuWb, KouchinOutputDirs.withNames(dirs, name), ui);
                 keepAll.addAll(xlsxOut.succeeded());
-            } finally {
-                wb.close();
             }
-        }
-        if (cancel != null && cancel.get()) {
-            throw new VerifyException("中断されました");
-        }
-        if (konan != null) {
-            String name = "検証結果_湖南工場_" + stamp + ".xlsx";
-            MailSnapshot kokubuPeer = peerMail(kokubu, ui, FactoryId.KOKUBU);
-            Workbook wb = ResultExcelExporter.buildWorkbook(konan, kokubuPeer, konan.mail(), ui);
-            try {
+            if (cancel != null && cancel.get()) {
+                throw new VerifyException("中断されました");
+            }
+            if (konan != null) {
+                String name = "検証結果_湖南工場_" + stamp + ".xlsx";
+                MailSnapshot kokubuPeer = peerMail(kokubu, ui, FactoryId.KOKUBU);
+                konanWb = ResultExcelExporter.buildWorkbook(konan, kokubuPeer, konan.mail(), ui);
                 DualWriteFiles.WriteOutcome more =
-                        DualWriteFiles.writeWorkbook(wb, KouchinOutputDirs.withNames(dirs, name), ui);
+                        DualWriteFiles.writeWorkbook(konanWb, KouchinOutputDirs.withNames(dirs, name), ui);
                 xlsxOut = merge(xlsxOut, more);
                 keepAll.addAll(more.succeeded());
-            } finally {
-                wb.close();
             }
+            if (CombinedVerifyWorkbook.bothVerifiable(kokubu, konan)) {
+                String name = CombinedVerifyWorkbook.FILE_PREFIX + stamp + ".xlsx";
+                try (XSSFWorkbook combined = CombinedVerifyWorkbook.merge(kokubuWb, konanWb)) {
+                    DualWriteFiles.WriteOutcome more =
+                            DualWriteFiles.writeWorkbook(combined, KouchinOutputDirs.withNames(dirs, name), ui);
+                    xlsxOut = merge(xlsxOut, more);
+                    keepAll.addAll(more.succeeded());
+                }
+            }
+        } finally {
+            closeQuietly(kokubuWb);
+            closeQuietly(konanWb);
         }
 
         MailSnapshot kMail = kokubu == null ? null : kokubu.mail();
@@ -177,6 +185,17 @@ public final class VerifyRunSupport {
             return dirs.get(0);
         }
         return dirs.size() > 1 ? dirs.get(1) : dirs.get(0);
+    }
+
+    private static void closeQuietly(Workbook workbook) {
+        if (workbook == null) {
+            return;
+        }
+        try {
+            workbook.close();
+        } catch (IOException ignored) {
+            // 出力済みのファイルは残す
+        }
     }
 
     private static MailSnapshot peerMail(VerifyResult peer, Map<String, String> ui, FactoryId want) {
