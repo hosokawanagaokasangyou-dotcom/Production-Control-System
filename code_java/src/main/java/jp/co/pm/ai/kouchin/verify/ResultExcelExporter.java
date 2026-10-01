@@ -117,13 +117,9 @@ public final class ResultExcelExporter {
     }
 
     public static XSSFWorkbook buildWorkbook(VerifyResult result, MailSnapshot peer) {
-        return buildWorkbook(result, peer, Map.of());
-    }
-
-    public static XSSFWorkbook buildWorkbook(VerifyResult result, MailSnapshot peer, Map<String, String> ui) {
         MailSnapshot kokubu = result.factory() == FactoryId.KOKUBU ? result.mail() : peer;
         MailSnapshot konan = result.factory() == FactoryId.KONAN ? result.mail() : peer;
-        return buildWorkbook(result, kokubu, konan, ui);
+        return buildWorkbook(result, kokubu, konan, Map.of());
     }
 
     public static XSSFWorkbook buildWorkbook(VerifyResult result, MailSnapshot kokubu, MailSnapshot konan) {
@@ -348,7 +344,7 @@ public final class ResultExcelExporter {
 
     private void writeSheetA(VerifyResult r) {
         List<String> headers = List.of("契約NO", "依頼NO", "①東レ金額", "②金額", "差額(①-②)",
-                "報告計上額", "判定", "備考", "依頼書添付", "原本リンク");
+                "報告計上額", "判定", "備考", "原本加工賃", "依頼書添付", "原本リンク");
         XSSFSheet ws = createDetailSheet(SHEET_A, headers, "C00000");
         int rowIndex = 1;
         for (RecordA rec : r.recordsA()) {
@@ -362,13 +358,15 @@ public final class ResultExcelExporter {
             number(row, 5, rec.reportAmount(), fill, true);
             judge(row, 6, rec.judge(), fill);
             note(row, 7, rec.note(), fill);
-            writeOriginalLinks(row, 8, fill, RequestFormOriginalAttacher.splitIrai(rec.iraiNo()),
-                    RequestFormOriginalAttacher.anomalyA(rec.judge()));
+            List<String> irais = RequestFormOriginalAttacher.splitIrai(rec.iraiNo());
+            number(row, 8, originals.amountOf(irais), fill, false);
+            writeOriginalLinks(row, 9, fill, irais, RequestFormOriginalAttacher.anomalyA(rec.judge()));
         }
         finishDetailSheet(ws, headers.size(), rowIndex);
         ws.setColumnWidth(7, 70 * 256);
-        ws.setColumnWidth(8, 24 * 256);
-        ws.setColumnWidth(9, 36 * 256);
+        ws.setColumnWidth(8, 16 * 256);
+        ws.setColumnWidth(9, 24 * 256);
+        ws.setColumnWidth(10, 36 * 256);
     }
 
     private void writeSheetB(VerifyResult r) {
@@ -401,7 +399,7 @@ public final class ResultExcelExporter {
             return;
         }
         List<String> headers = List.of("場所", "依頼NO", "契約NO", "①東レ金額", "まとめAA", "元シートAA",
-                "差額(①-まとめ)", "判定", "内容・対処", "依頼書添付", "原本リンク");
+                "差額(①-まとめ)", "判定", "内容・対処", "原本加工賃", "依頼書添付", "原本リンク");
         XSSFSheet ws = createDetailSheet(SHEET_D, headers, "7030A0");
         int rowIndex = 1;
         if (d.isSkipped()) {
@@ -428,14 +426,17 @@ public final class ResultExcelExporter {
                 number(row, 6, mr.diff(), fill, Judge.TORAY_DIFF.equals(mr.judge()) || Judge.AMOUNT_DIFF.equals(mr.judge()));
                 judge(row, 7, mr.judge(), fill);
                 note(row, 8, mr.detail(), fill);
-                writeOriginalLinks(row, 9, fill, RequestFormOriginalAttacher.splitIrai(mr.irai()), true);
+                List<String> irais = RequestFormOriginalAttacher.splitIrai(mr.irai());
+                number(row, 9, originals.amountOf(irais), fill, false);
+                writeOriginalLinks(row, 10, fill, irais, true);
             }
         }
         finishDetailSheet(ws, headers.size(), rowIndex);
         ws.setColumnWidth(0, 42 * 256);
         ws.setColumnWidth(8, 70 * 256);
-        ws.setColumnWidth(9, 24 * 256);
-        ws.setColumnWidth(10, 36 * 256);
+        ws.setColumnWidth(9, 16 * 256);
+        ws.setColumnWidth(10, 24 * 256);
+        ws.setColumnWidth(11, 36 * 256);
     }
 
     private void writeOriginalLinks(Row row, int col, String fill, List<String> irais, boolean anomaly) {
@@ -478,28 +479,38 @@ public final class ResultExcelExporter {
         if (originals == null || (originals.items().isEmpty() && originals.warnings().isEmpty())) {
             return;
         }
-        List<String> headers = List.of("依頼NO", "検出", "原本ファイル", "添付シート", "状態");
+        List<String> headers = List.of(
+                "依頼NO", "検出", "数量m", "単価円/m", "原本加工賃", "原本ファイル", "添付シート", "状態");
         XSSFSheet ws = createDetailSheet(RequestFormOriginalAttacher.INDEX_SHEET, headers, "548235");
         int rowIndex = 1;
         for (String warning : originals.warnings()) {
             Row row = ws.createRow(rowIndex++);
-            note(row, 4, warning, null);
+            note(row, 7, warning, null);
         }
         for (RequestFormOriginalAttacher.Item item : originals.items()) {
             Row row = ws.createRow(rowIndex++);
             text(row, 0, item.iraiLabel(), null);
             text(row, 1, item.source(), null);
-            if (item.file() != null) {
-                fileLink(row, 2, item.file().getFileName().toString(), item.file(), null);
+            if (item.fee() != null) {
+                number(row, 2, item.fee().meters(), null, false);
+                number(row, 3, item.fee().yenPerMeter(), null, false);
+                number(row, 4, item.fee().amountYen(), null, true);
             } else {
                 text(row, 2, "", null);
+                text(row, 3, "", null);
+                text(row, 4, "", null);
+            }
+            if (item.file() != null) {
+                fileLink(row, 5, item.file().getFileName().toString(), item.file(), null);
+            } else {
+                text(row, 5, "", null);
             }
             if (item.destSheet() != null && !item.destSheet().isEmpty()) {
-                documentLink(row, 3, item.destSheet(), item.destSheet(), null);
+                documentLink(row, 6, item.destSheet(), item.destSheet(), null);
             } else {
-                text(row, 3, "", null);
+                text(row, 6, "", null);
             }
-            text(row, 4, item.missing() == null ? "" : item.missing(), null);
+            text(row, 7, item.missing() == null ? "" : item.missing(), null);
         }
         finishDetailSheet(ws, headers.size(), rowIndex);
         ws.setColumnWidth(2, 42 * 256);
@@ -640,6 +651,7 @@ public final class ResultExcelExporter {
                 {"形式不正 (灰)", "②のC列が契約NO形式でないのに金額がある行。記入漏れ疑い"},
                 {"検証D (国分)", "②「東レまとめ」の内部整合と①差額。要修正は金額差・参照ずれ・未取込。"
                         + "①差額は検証Aの不一致を、直す元シートの行付きで示す。①差額だけでは警告にしない"},
+                {"原本加工賃", "依頼書の数量m（AE10–12）×工程単価の合計（P13–17の円/m）。検証A・検証Dの依頼NOに載せる"},
                 {"依頼書原本", "検証Aの不一致・翌月記載・前月過不足・片側のみ・形式不正と、検証Dの異常行について、"
                         + "依頼シートをこのブックへ添付する。依頼書添付は添付シート、原本リンクは原本xlsmを開く"},
                 {"報告する過不足", "当月差異 + 翌月記載 + ①のみ − ②のみ。検証Aの「報告計上額」列の合計と一致する"},

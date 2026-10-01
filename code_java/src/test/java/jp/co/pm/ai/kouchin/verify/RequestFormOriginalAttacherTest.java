@@ -47,6 +47,9 @@ class RequestFormOriginalAttacherTest {
             index.createRow(1).createCell(0).setCellValue("V9-9");
             Sheet form = book.createSheet("V9-9");
             form.createRow(0).createCell(0).setCellValue("依頼書本文");
+            form.createRow(9).createCell(30).setCellValue(100);
+            form.createRow(12).createCell(15).setCellValue(18);
+            form.createRow(13).createCell(15).setCellValue(15);
             try (var out = Files.newOutputStream(original)) {
                 book.write(out);
             }
@@ -79,8 +82,9 @@ class RequestFormOriginalAttacherTest {
 
             Sheet a = wb.getSheet("検証A_契約NO(①vs②)");
             Row data = a.getRow(1);
-            Cell attached = data.getCell(8);
-            Cell fileLink = data.getCell(9);
+            assertEquals(3300.0, data.getCell(8).getNumericCellValue(), 0.001);
+            Cell attached = data.getCell(9);
+            Cell fileLink = data.getCell(10);
             assertEquals("V9-9", attached.getStringCellValue());
             assertEquals(HyperlinkType.DOCUMENT, attached.getHyperlink().getType());
             assertTrue(attached.getHyperlink().getAddress().contains("原本_V9-9"), attached.getHyperlink().getAddress());
@@ -91,6 +95,7 @@ class RequestFormOriginalAttacherTest {
             Sheet index = wb.getSheet(RequestFormOriginalAttacher.INDEX_SHEET);
             assertNotNull(index);
             assertEquals("V9-9", index.getRow(1).getCell(0).getStringCellValue());
+            assertEquals(3300.0, index.getRow(1).getCell(4).getNumericCellValue(), 0.001);
         }
     }
 }

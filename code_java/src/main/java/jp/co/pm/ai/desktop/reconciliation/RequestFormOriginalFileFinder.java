@@ -17,8 +17,11 @@ import jp.co.pm.ai.desktop.io.PoiWorkbookOpener;
  */
 public final class RequestFormOriginalFileFinder {
 
-    /** 見つかった原本。{@code sheetName} が空ならブック内に依頼シートが無い。 */
-    public record Found(String iraiNo, Path file, String sheetName) {}
+    /**
+     * 見つかった原本。{@code sheetName} が空ならブック内に依頼シートが無い。
+     * {@code fee} は数量×工程単価。計算できないときは null。
+     */
+    public record Found(String iraiNo, Path file, String sheetName, RequestFormOriginalFee.Result fee) {}
 
     private RequestFormOriginalFileFinder() {}
 
@@ -55,7 +58,11 @@ public final class RequestFormOriginalFileFinder {
                     if (key.isEmpty() || !keys.contains(key) || found.containsKey(key)) {
                         continue;
                     }
-                    found.put(key, new Found(entry.iraiNo(), path, matchingSheet(wb, key)));
+                    String sheetName = matchingSheet(wb, key);
+                    RequestFormOriginalFee.Result fee = sheetName.isBlank()
+                            ? null
+                            : RequestFormOriginalFee.fromSheet(wb.getSheet(sheetName));
+                    found.put(key, new Found(entry.iraiNo(), path, sheetName, fee));
                 }
             } catch (Exception ex) {
                 warn(warnings, "原本目次読込エラー " + file.getName() + ": " + ex.getMessage());

@@ -23,6 +23,7 @@ import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.config.NetworkSourceDirResolver;
 import jp.co.pm.ai.desktop.io.PoiWorkbookOpener;
 import jp.co.pm.ai.desktop.reconciliation.JuchuTransferValueNormalizer;
+import jp.co.pm.ai.desktop.reconciliation.RequestFormOriginalFee;
 import jp.co.pm.ai.desktop.reconciliation.RequestFormOriginalFileFinder;
 
 /**
@@ -45,7 +46,8 @@ public final class RequestFormOriginalAttacher {
             Path file,
             String sourceSheet,
             String destSheet,
-            String missing) {}
+            String missing,
+            RequestFormOriginalFee.Result fee) {}
 
     public record Plan(List<Item> items, List<String> warnings) {
         public Item byKey(String key) {
@@ -73,6 +75,24 @@ public final class RequestFormOriginalAttacher {
         public int missingCount() {
             return items.size() - attachedCount();
         }
+
+        /** 行に載っている依頼NOの原本加工賃（円）合計。1件も計算できなければ null。 */
+        public Double amountOf(List<String> irais) {
+            if (irais == null || irais.isEmpty()) {
+                return null;
+            }
+            double sum = 0.0;
+            boolean any = false;
+            for (String irai : irais) {
+                Item item = byKey(JuchuTransferValueNormalizer.normalizeKey(irai));
+                if (item == null || item.fee() == null) {
+                    continue;
+                }
+                sum += item.fee().amountYen();
+                any = true;
+            }
+            return any ? sum : null;
+        }
     }
 
     private RequestFormOriginalAttacher() {}
@@ -83,8 +103,9 @@ public final class RequestFormOriginalAttacher {
         }
         Map<String, String> labels = new LinkedHashMap<>();
         Map<String, String> sources = new LinkedHashMap<>();
-        collectA(result, labels, sources);
-        collectD(result, labels, sources);
+        Set<String> anomalyKeys = new LinkedHashSet<>();
+        collectA(result, labels, sources, anomalyKeys);
+        collectD(result, labels, sources, anomalyKeys);
         if (labels.isEmpty()) {
             return new Plan(List.of(), List.of());
         }
@@ -102,17 +123,19 @@ public final class RequestFormOriginalAttacher {
         for (Map.Entry<String, String> e : labels.entrySet()) {
             RequestFormOriginalFileFinder.Found hit = found.get(e.getKey());
             if (hit == null) {
-                items.add(new Item(e.getKey(), e.getValue(), sources.get(e.getKey()), null, "", "", "原本なし"));
+                items.add(new Item(
+                        e.getKey(), e.getValue(), sources.get(e.getKey()), null, "", "", "原本なし", null));
                 continue;
             }
             if (hit.sheetName() == null || hit.sheetName().isBlank()) {
                 items.add(new Item(
-                        e.getKey(), e.getValue(), sources.get(e.getKey()), hit.file(), "", "", "依頼シートなし"));
+                        e.getKey(), e.getValue(), sources.get(e.getKey()), hit.file(), "", "", "依頼シートなし", null));
                 continue;
             }
-            String dest = destSheetName(e.getValue(), usedNames);
+            String dest = anomalyKeys.contains(e.getKey()) ? destSheetName(e.getValue(), usedNames) : "";
             items.add(new Item(
-                    e.getKey(), e.getValue(), sources.get(e.getKey()), hit.file(), hit.sheetName(), dest, ""));
+                    e.getKey(), e.getValue(), sources.get(e.getKey()), hit.file(), hit.sheetName(), dest, "",
+                    hit.fee()));
         }
         return new Plan(List.copyOf(items), List.copyOf(warnings));
     }
@@ -169,19 +192,27 @@ public final class RequestFormOriginalAttacher {
         return List.copyOf(out);
     }
 
-    private static void collectA(VerifyResult result, Map<String, String> labels, Map<String, String> sources) {
+    private static void collectA(
+            VerifyResult result,
+            Map<String, String> labels,
+            Map<String, String> sources,
+            Set<String> anomalyKeys) {
         if (result.recordsA() == null) {
             return;
         }
         for (RecordA rec : result.recordsA()) {
-            if (rec == null || !anomalyA(rec.judge())) {
+            if (rec == null) {
                 continue;
             }
-            addAll(splitIrai(rec.iraiNo()), "検証A", labels, sources);
+            addAll(splitIrai(rec.iraiNo()), "検証A", anomalyA(rec.judge()), labels, sources, anomalyKeys);
         }
     }
 
-    private static void collectD(VerifyResult result, Map<String, String> labels, Map<String, String> sources) {
+    private static void collectD(
+            VerifyResult result,
+            Map<String, String> labels,
+            Map<String, String> sources,
+            Set<String> anomalyKeys) {
         MatomeCheckResult d = result.checkD();
         if (d == null || d.isSkipped() || d.rows() == null) {
             return;
@@ -190,18 +221,26 @@ public final class RequestFormOriginalAttacher {
             if (row == null || row.judge() == null || row.judge().isBlank()) {
                 continue;
             }
-            addAll(splitIrai(row.irai()), "検証D", labels, sources);
+            addAll(splitIrai(row.irai()), "検証D", true, labels, sources, anomalyKeys);
         }
     }
 
     private static void addAll(
-            List<String> irais, String source, Map<String, String> labels, Map<String, String> sources) {
+            List<String> irais,
+            String source,
+            boolean anomaly,
+            Map<String, String> labels,
+            Map<String, String> sources,
+            Set<String> anomalyKeys) {
         for (String irai : irais) {
             String key = JuchuTransferValueNormalizer.normalizeKey(irai);
             if (key.isEmpty()) {
                 continue;
             }
             labels.putIfAbsent(key, irai);
+            if (anomaly) {
+                anomalyKeys.add(key);
+            }
             String prev = sources.get(key);
             if (prev == null) {
                 sources.put(key, source);
