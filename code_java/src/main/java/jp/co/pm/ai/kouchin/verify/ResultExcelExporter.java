@@ -1,11 +1,13 @@
 package jp.co.pm.ai.kouchin.verify;
 
 import jp.co.pm.ai.desktop.io.PoiWorkbookFileWriter;
+import org.apache.poi.common.usermodel.HyperlinkType;
 import org.apache.poi.ss.usermodel.BorderStyle;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellStyle;
 import org.apache.poi.ss.usermodel.FillPatternType;
 import org.apache.poi.ss.usermodel.HorizontalAlignment;
+import org.apache.poi.ss.usermodel.Hyperlink;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.VerticalAlignment;
 import org.apache.poi.ss.util.CellRangeAddress;
@@ -44,6 +46,7 @@ public final class ResultExcelExporter {
     private static final String SHEET_B = "検証B_依頼NO(②vs③)";
     private static final String SHEET_D = "検証D_②まとめ整合性";
     private static final String SHEET_MAIL = "報告メール下書き";
+    private static final String LINK_COLOR = "0563C1";
 
     private static final String HEADER_FILL = "4472C4";
     private static final String ACCENT = "1F4E79";
@@ -65,6 +68,7 @@ public final class ResultExcelExporter {
     private final Map<String, CellStyle> styles = new HashMap<>();
     private final short fmtInt;
     private final short fmtDec;
+    private RequestFormOriginalAttacher.Plan originals = new RequestFormOriginalAttacher.Plan(List.of(), List.of());
 
     private ResultExcelExporter(XSSFWorkbook wb) {
         this.wb = wb;
@@ -106,21 +110,36 @@ public final class ResultExcelExporter {
             MailSnapshot konan,
             Map<String, String> ui)
             throws IOException {
-        try (XSSFWorkbook wb = buildWorkbook(result, kokubu, konan)) {
+        try (XSSFWorkbook wb = buildWorkbook(result, kokubu, konan, ui)) {
             save(outFile, wb, ui);
         }
         return outFile;
     }
 
     public static XSSFWorkbook buildWorkbook(VerifyResult result, MailSnapshot peer) {
+        return buildWorkbook(result, peer, Map.of());
+    }
+
+    public static XSSFWorkbook buildWorkbook(VerifyResult result, MailSnapshot peer, Map<String, String> ui) {
         MailSnapshot kokubu = result.factory() == FactoryId.KOKUBU ? result.mail() : peer;
         MailSnapshot konan = result.factory() == FactoryId.KONAN ? result.mail() : peer;
-        return buildWorkbook(result, kokubu, konan);
+        return buildWorkbook(result, kokubu, konan, ui);
     }
 
     public static XSSFWorkbook buildWorkbook(VerifyResult result, MailSnapshot kokubu, MailSnapshot konan) {
+        return buildWorkbook(result, kokubu, konan, Map.of());
+    }
+
+    public static XSSFWorkbook buildWorkbook(
+            VerifyResult result, MailSnapshot kokubu, MailSnapshot konan, Map<String, String> ui) {
         XSSFWorkbook wb = new XSSFWorkbook();
         ResultExcelExporter exporter = new ResultExcelExporter(wb);
+        try {
+            exporter.originals = RequestFormOriginalAttacher.prepare(result, ui);
+        } catch (RuntimeException ex) {
+            exporter.originals = new RequestFormOriginalAttacher.Plan(
+                    List.of(), List.of("依頼書原本の検索に失敗: " + ex.getMessage()));
+        }
         exporter.writeSummary(result);
         exporter.writeGuide(result);
         exporter.writeSheetA(result);
@@ -129,6 +148,8 @@ public final class ResultExcelExporter {
         exporter.writeSheetC(result);
         exporter.writeMail(kokubu, konan);
         exporter.writeRawSheets(result);
+        exporter.writeOriginalIndex();
+        RequestFormOriginalAttacher.copyInto(wb, exporter.originals);
         return wb;
     }
 
@@ -262,6 +283,13 @@ public final class ResultExcelExporter {
             rowIndex++;
         }
 
+        if (originals != null && !originals.items().isEmpty()) {
+            rowIndex = section(ws, rowIndex, "依頼書原本（検証A・検証Dの異常）");
+            rowIndex = kv(ws, rowIndex, "添付（結果ブック内のシート）", originals.attachedCount() + " 件");
+            rowIndex = kv(ws, rowIndex, "未検出", originals.missingCount() + " 件");
+            rowIndex++;
+        }
+
         rowIndex = section(ws, rowIndex, "使用ファイル");
         rowIndex = kv(ws, rowIndex, "① 東レCSV", r.str("①ファイル") + " (入庫場所 " + r.str("入庫場所") + ")");
         rowIndex = kv(ws, rowIndex, "② " + r.str("②名称"), r.str("②ファイル"));
@@ -320,7 +348,7 @@ public final class ResultExcelExporter {
 
     private void writeSheetA(VerifyResult r) {
         List<String> headers = List.of("契約NO", "依頼NO", "①東レ金額", "②金額", "差額(①-②)",
-                "報告計上額", "判定", "備考");
+                "報告計上額", "判定", "備考", "依頼書添付", "原本リンク");
         XSSFSheet ws = createDetailSheet(SHEET_A, headers, "C00000");
         int rowIndex = 1;
         for (RecordA rec : r.recordsA()) {
@@ -334,8 +362,13 @@ public final class ResultExcelExporter {
             number(row, 5, rec.reportAmount(), fill, true);
             judge(row, 6, rec.judge(), fill);
             note(row, 7, rec.note(), fill);
+            writeOriginalLinks(row, 8, fill, RequestFormOriginalAttacher.splitIrai(rec.iraiNo()),
+                    RequestFormOriginalAttacher.anomalyA(rec.judge()));
         }
         finishDetailSheet(ws, headers.size(), rowIndex);
+        ws.setColumnWidth(7, 70 * 256);
+        ws.setColumnWidth(8, 24 * 256);
+        ws.setColumnWidth(9, 36 * 256);
     }
 
     private void writeSheetB(VerifyResult r) {
@@ -368,7 +401,7 @@ public final class ResultExcelExporter {
             return;
         }
         List<String> headers = List.of("場所", "依頼NO", "契約NO", "①東レ金額", "まとめAA", "元シートAA",
-                "差額(①-まとめ)", "判定", "内容・対処");
+                "差額(①-まとめ)", "判定", "内容・対処", "依頼書添付", "原本リンク");
         XSSFSheet ws = createDetailSheet(SHEET_D, headers, "7030A0");
         int rowIndex = 1;
         if (d.isSkipped()) {
@@ -395,10 +428,117 @@ public final class ResultExcelExporter {
                 number(row, 6, mr.diff(), fill, Judge.TORAY_DIFF.equals(mr.judge()) || Judge.AMOUNT_DIFF.equals(mr.judge()));
                 judge(row, 7, mr.judge(), fill);
                 note(row, 8, mr.detail(), fill);
+                writeOriginalLinks(row, 9, fill, RequestFormOriginalAttacher.splitIrai(mr.irai()), true);
             }
         }
         finishDetailSheet(ws, headers.size(), rowIndex);
         ws.setColumnWidth(0, 42 * 256);
+        ws.setColumnWidth(8, 70 * 256);
+        ws.setColumnWidth(9, 24 * 256);
+        ws.setColumnWidth(10, 36 * 256);
+    }
+
+    private void writeOriginalLinks(Row row, int col, String fill, List<String> irais, boolean anomaly) {
+        if (!anomaly || irais == null || irais.isEmpty()) {
+            text(row, col, "", fill);
+            text(row, col + 1, "", fill);
+            return;
+        }
+        RequestFormOriginalAttacher.Item firstAttached = null;
+        RequestFormOriginalAttacher.Item firstFile = null;
+        List<String> labels = new ArrayList<>();
+        for (String irai : irais) {
+            String key = jp.co.pm.ai.desktop.reconciliation.JuchuTransferValueNormalizer.normalizeKey(irai);
+            RequestFormOriginalAttacher.Item item = originals.byKey(key);
+            labels.add(irai);
+            if (item == null) {
+                continue;
+            }
+            if (firstFile == null && item.file() != null) {
+                firstFile = item;
+            }
+            if (firstAttached == null && item.destSheet() != null && !item.destSheet().isEmpty()) {
+                firstAttached = item;
+            }
+        }
+        String label = String.join(" / ", labels);
+        if (firstAttached != null) {
+            documentLink(row, col, label, firstAttached.destSheet(), fill);
+        } else {
+            text(row, col, "原本なし", fill);
+        }
+        if (firstFile != null && firstFile.file() != null) {
+            fileLink(row, col + 1, firstFile.file().getFileName().toString(), firstFile.file(), fill);
+        } else {
+            text(row, col + 1, "原本なし", fill);
+        }
+    }
+
+    private void writeOriginalIndex() {
+        if (originals == null || (originals.items().isEmpty() && originals.warnings().isEmpty())) {
+            return;
+        }
+        List<String> headers = List.of("依頼NO", "検出", "原本ファイル", "添付シート", "状態");
+        XSSFSheet ws = createDetailSheet(RequestFormOriginalAttacher.INDEX_SHEET, headers, "548235");
+        int rowIndex = 1;
+        for (String warning : originals.warnings()) {
+            Row row = ws.createRow(rowIndex++);
+            note(row, 4, warning, null);
+        }
+        for (RequestFormOriginalAttacher.Item item : originals.items()) {
+            Row row = ws.createRow(rowIndex++);
+            text(row, 0, item.iraiLabel(), null);
+            text(row, 1, item.source(), null);
+            if (item.file() != null) {
+                fileLink(row, 2, item.file().getFileName().toString(), item.file(), null);
+            } else {
+                text(row, 2, "", null);
+            }
+            if (item.destSheet() != null && !item.destSheet().isEmpty()) {
+                documentLink(row, 3, item.destSheet(), item.destSheet(), null);
+            } else {
+                text(row, 3, "", null);
+            }
+            text(row, 4, item.missing() == null ? "" : item.missing(), null);
+        }
+        finishDetailSheet(ws, headers.size(), rowIndex);
+        ws.setColumnWidth(2, 42 * 256);
+        ws.setColumnWidth(3, 24 * 256);
+        ws.setColumnWidth(4, 36 * 256);
+    }
+
+    private void documentLink(Row row, int col, String text, String sheetName, String fill) {
+        Cell cell = row.createCell(col);
+        cell.setCellValue(text == null ? "" : text);
+        Hyperlink link = wb.getCreationHelper().createHyperlink(HyperlinkType.DOCUMENT);
+        link.setAddress("'" + sheetName.replace("'", "''") + "'!A1");
+        cell.setHyperlink(link);
+        cell.setCellStyle(linkStyle(fill));
+    }
+
+    private void fileLink(Row row, int col, String text, Path file, String fill) {
+        Cell cell = row.createCell(col);
+        cell.setCellValue(text == null ? "" : text);
+        Hyperlink link = wb.getCreationHelper().createHyperlink(HyperlinkType.FILE);
+        link.setAddress(file.toAbsolutePath().normalize().toUri().toString());
+        cell.setHyperlink(link);
+        cell.setCellStyle(linkStyle(fill));
+    }
+
+    private CellStyle linkStyle(String fill) {
+        return styles.computeIfAbsent("origLink/" + fill, k -> {
+            XSSFCellStyle cs = wb.createCellStyle();
+            XSSFFont font = wb.createFont();
+            font.setFontName(baseFont);
+            font.setFontHeight((short) 210);
+            font.setUnderline(org.apache.poi.ss.usermodel.Font.U_SINGLE);
+            font.setColor(new XSSFColor(rgb(LINK_COLOR), null));
+            cs.setFont(font);
+            cs.setVerticalAlignment(VerticalAlignment.CENTER);
+            applyFill(cs, fill);
+            applyBorder(cs, BorderStyle.THIN);
+            return cs;
+        });
     }
 
     private void writeSheetC(VerifyResult r) {
@@ -500,6 +640,8 @@ public final class ResultExcelExporter {
                 {"形式不正 (灰)", "②のC列が契約NO形式でないのに金額がある行。記入漏れ疑い"},
                 {"検証D (国分)", "②「東レまとめ」の内部整合と①差額。要修正は金額差・参照ずれ・未取込。"
                         + "①差額は検証Aの不一致を、直す元シートの行付きで示す。①差額だけでは警告にしない"},
+                {"依頼書原本", "検証Aの不一致・翌月記載・前月過不足・片側のみ・形式不正と、検証Dの異常行について、"
+                        + "依頼シートをこのブックへ添付する。依頼書添付は添付シート、原本リンクは原本xlsmを開く"},
                 {"報告する過不足", "当月差異 + 翌月記載 + ①のみ − ②のみ。検証Aの「報告計上額」列の合計と一致する"},
                 {"検算残差", "0であれば報告用内訳の内部整合が取れている"},
         };

@@ -51,7 +51,8 @@ public final class VerifyRunSupport {
         }
         if (kokubu != null) {
             String name = "検証結果_国分工場_" + stamp + ".xlsx";
-            Workbook wb = ResultExcelExporter.buildWorkbook(kokubu, peerMail(konan, ui, FactoryId.KONAN));
+            Workbook wb = ResultExcelExporter.buildWorkbook(
+                    kokubu, peerMail(konan, ui, FactoryId.KONAN), ui);
             try {
                 xlsxOut = DualWriteFiles.writeWorkbook(wb, KouchinOutputDirs.withNames(dirs, name), ui);
                 keepAll.addAll(xlsxOut.succeeded());
@@ -64,7 +65,8 @@ public final class VerifyRunSupport {
         }
         if (konan != null) {
             String name = "検証結果_湖南工場_" + stamp + ".xlsx";
-            Workbook wb = ResultExcelExporter.buildWorkbook(konan, peerMail(kokubu, ui, FactoryId.KOKUBU));
+            Workbook wb = ResultExcelExporter.buildWorkbook(
+                    konan, peerMail(kokubu, ui, FactoryId.KOKUBU), ui);
             try {
                 DualWriteFiles.WriteOutcome more =
                         DualWriteFiles.writeWorkbook(wb, KouchinOutputDirs.withNames(dirs, name), ui);
