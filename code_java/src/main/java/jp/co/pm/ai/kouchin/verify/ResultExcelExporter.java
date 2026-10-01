@@ -159,6 +159,7 @@ public final class ResultExcelExporter {
             Files.createDirectories(parent);
         }
         PoiWorkbookFileWriter.writeReplacing(outFile, wb, ui != null ? ui : Map.of());
+        ExcelRowAutoFit.apply(List.of(outFile));
     }
 
     // ---------------------------------------------------------------- サマリ

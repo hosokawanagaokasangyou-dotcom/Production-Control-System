@@ -3,6 +3,8 @@ package jp.co.pm.ai.kouchin.verify;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 
 import org.apache.poi.ss.usermodel.Cell;
@@ -12,8 +14,13 @@ import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Assumptions;
+import org.junit.jupiter.api.io.TempDir;
 
 class ResultSheetAnchorsTest {
+
+    @TempDir
+    Path tempDir;
 
     @Test
     @DisplayName("長岡明細の行番号は東レまとめのその行へリンクする")
@@ -66,6 +73,41 @@ class ResultSheetAnchorsTest {
             assertEquals("'②東レまとめ(当月)'!C413", longCell.getHyperlink().getAddress());
         } catch (Exception ex) {
             throw new RuntimeException(ex);
+        }
+    }
+
+    @Test
+    @DisplayName("自動調整スクリプトは使用範囲の行だけを対象にする")
+    void autoFitScriptTargetsUsedRows() {
+        String script = ExcelRowAutoFit.scriptBody(List.of(Path.of("C:\\out\\検証結果_国分.xlsx")));
+        assertTrue(script.contains("EntireRow.AutoFit()"), script);
+        assertTrue(script.contains("MergeArea.Columns.Count -gt 1"), script);
+        assertTrue(script.contains("'C:\\out\\検証結果_国分.xlsx'"), script);
+        assertTrue(ExcelRowAutoFit.scriptBody(List.of(Path.of("C:\\a'b.xlsx"))).contains("'C:\\a''b.xlsx'"));
+    }
+
+    @Test
+    @DisplayName("Excelの自動調整で折り返し行が伸びる")
+    void excelAutoFitGrowsWrappedRow() throws Exception {
+        Assumptions.assumeTrue(ExcelRowAutoFit.isWindows());
+        Path file = tempDir.resolve("fit.xlsx");
+        try (XSSFWorkbook book = new XSSFWorkbook()) {
+            XSSFSheet sheet = book.createSheet("検証D");
+            sheet.setColumnWidth(0, 12 * 256);
+            Row row = sheet.createRow(1);
+            Cell cell = row.createCell(0);
+            cell.setCellValue("検証Dの内容が長く、1行では収まらないコメントです。場所と金額の差をここに書きます。");
+            CellStyle wrap = book.createCellStyle();
+            wrap.setWrapText(true);
+            cell.setCellStyle(wrap);
+            try (var out = Files.newOutputStream(file)) {
+                book.write(out);
+            }
+        }
+        Assumptions.assumeTrue(ExcelRowAutoFit.apply(List.of(file)));
+        try (XSSFWorkbook book = new XSSFWorkbook(file.toFile())) {
+            float height = book.getSheetAt(0).getRow(1).getHeightInPoints();
+            assertTrue(height > 30f, "height=" + height);
         }
     }
 

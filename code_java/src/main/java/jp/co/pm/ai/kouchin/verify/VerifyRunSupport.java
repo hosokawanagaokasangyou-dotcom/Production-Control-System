@@ -85,6 +85,9 @@ public final class VerifyRunSupport {
             closeQuietly(kokubuWb);
             closeQuietly(konanWb);
         }
+        if (cancel == null || !cancel.get()) {
+            ExcelRowAutoFit.apply(xlsxOut.succeeded());
+        }
 
         MailSnapshot kMail = kokubu == null ? null : kokubu.mail();
         MailSnapshot nMail = konan == null ? null : konan.mail();
