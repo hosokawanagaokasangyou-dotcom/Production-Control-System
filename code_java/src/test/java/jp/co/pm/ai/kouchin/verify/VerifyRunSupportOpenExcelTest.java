@@ -1,6 +1,7 @@
 package jp.co.pm.ai.kouchin.verify;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Path;
@@ -30,6 +31,24 @@ class VerifyRunSupportOpenExcelTest {
         assertEquals(2, open.size(), open.toString());
         assertTrue(open.stream().anyMatch(p -> p.getFileName().toString().contains("国分工場")), open.toString());
         assertTrue(open.stream().anyMatch(p -> p.getFileName().toString().contains("湖南工場")), open.toString());
+    }
+
+    @Test
+    @DisplayName("統合Excelは工場別の開く対象から外し、統合用だけ返す")
+    void combinedExcelIsSeparateFromFactoryFiles() {
+        DualWriteFiles.WriteOutcome xlsx = new DualWriteFiles.WriteOutcome(
+                List.of(
+                        Path.of("C:/out/検証結果_国分工場_1.xlsx"),
+                        Path.of("C:/out/検証結果_湖南工場_1.xlsx"),
+                        Path.of("C:/out/検証結果_統合_1.xlsx")),
+                List.of());
+        VerifyRunSupport.Written written = written(xlsx);
+        assertEquals("検証結果_国分工場_1.xlsx",
+                VerifyRunSupport.excelFileToOpen(written, FactorySite.KOKUBU).getFileName().toString());
+        assertEquals("検証結果_統合_1.xlsx",
+                VerifyRunSupport.combinedExcelToOpen(written).getFileName().toString());
+        assertNull(VerifyRunSupport.combinedExcelToOpen(written(new DualWriteFiles.WriteOutcome(
+                List.of(Path.of("C:/out/検証結果_国分工場_1.xlsx")), List.of()))));
     }
 
     @Test

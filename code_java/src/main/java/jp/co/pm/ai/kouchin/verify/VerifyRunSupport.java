@@ -154,6 +154,20 @@ public final class VerifyRunSupport {
     /**
      * 指定工場の検証Excel（同一ファイル名の二重書きは1つ）。無ければ null。他工場へはフォールバックしない。
      */
+    /** 両工場が検証できたときの統合Excel。無ければ null。 */
+    public static Path combinedExcelToOpen(Written written) {
+        if (written == null) {
+            return null;
+        }
+        String prefix = CombinedVerifyWorkbook.FILE_PREFIX;
+        for (Path p : excelFilesToOpen(written)) {
+            if (p.getFileName().toString().startsWith(prefix)) {
+                return p;
+            }
+        }
+        return null;
+    }
+
     public static Path excelFileToOpen(Written written, FactorySite site) {
         if (written == null || site == null) {
             return null;

@@ -38,6 +38,9 @@
                 <Button fx:id="openKonanExcelButton" mnemonicParsing="false" onAction="#onOpenKonanExcel" text="湖南のExcelを開く">
                     <tooltip><Tooltip text="検証結果Excelを読み取り専用で開く"/></tooltip>
                 </Button>
+                <Button fx:id="openCombinedExcelButton" mnemonicParsing="false" onAction="#onOpenCombinedExcel" text="統合Excelを開く" disable="true">
+                    <tooltip><Tooltip text="国分と湖南を1つにまとめた検証結果Excelを読み取り専用で開く。両方の検証が成功したときだけ使えます。"/></tooltip>
+                </Button>
                 <Button fx:id="openKokubuSource2Button" mnemonicParsing="false" onAction="#onOpenKokubuSource2" text="国分の②を開く" disable="true">
                     <tooltip><Tooltip text="対象月の②を読み書き可で開く"/></tooltip>
                 </Button>

@@ -94,6 +94,7 @@ public class KouchinVerifyTabController {
     @FXML private Label outputWriteBlockBadge;
     @FXML private Button importCsvButton;
     @FXML private Button openKokubuExcelButton;
+    @FXML private Button openCombinedExcelButton;
     @FXML private Button openKonanExcelButton;
     @FXML private Button openKokubuSource2Button;
     @FXML private Button openKonanSource2Button;
@@ -134,6 +135,7 @@ public class KouchinVerifyTabController {
     private ButtonAttentionGlow runKonanGlow;
     private ButtonAttentionGlow runBothGlow;
     private ButtonAttentionGlow openKokubuExcelGlow;
+    private ButtonAttentionGlow openCombinedExcelGlow;
     private ButtonAttentionGlow openKonanExcelGlow;
     private final List<ResultLine> allResultLines = new ArrayList<>();
 
@@ -418,6 +420,9 @@ public class KouchinVerifyTabController {
         if (openKokubuExcelButton != null) {
             openKokubuExcelGlow = new ButtonAttentionGlow(openKokubuExcelButton);
         }
+        if (openCombinedExcelButton != null) {
+            openCombinedExcelGlow = new ButtonAttentionGlow(openCombinedExcelButton);
+        }
         if (openKonanExcelButton != null) {
             openKonanExcelGlow = new ButtonAttentionGlow(openKonanExcelButton);
         }
@@ -692,6 +697,22 @@ public class KouchinVerifyTabController {
     @FXML
     private void onOpenKonanExcel() {
         openExcelFor(FactorySite.KONAN);
+    }
+
+    @FXML
+    private void onOpenCombinedExcel() {
+        Path p = VerifyRunSupport.combinedExcelToOpen(lastWritten);
+        if (p == null) {
+            appendLog("統合Excelがありません（国分と湖南の両方が検証できたときだけ出力されます）");
+            return;
+        }
+        try {
+            DesktopFileOpener.openFileReadOnly(p);
+            setStatus("読み取り専用で開いた: " + p.getFileName());
+            ButtonAttentionGlow.stopAll(openCombinedExcelGlow);
+        } catch (Exception e) {
+            appendLog("Excelを開けません: " + p.getFileName() + " " + e.getMessage());
+        }
     }
 
     private void openExcelFor(FactorySite site) {
@@ -1425,6 +1446,7 @@ public class KouchinVerifyTabController {
     private void refreshOpenExcelGlow() {
         applyOpenExcelGlow(FactorySite.KOKUBU, openKokubuExcelButton);
         applyOpenExcelGlow(FactorySite.KONAN, openKonanExcelButton);
+        applyCombinedExcelGlow();
     }
 
     private void applyOpenExcelGlow(FactorySite site, Button button) {
@@ -1449,8 +1471,24 @@ public class KouchinVerifyTabController {
         }
     }
 
+    private void applyCombinedExcelGlow() {
+        if (openCombinedExcelButton == null) {
+            return;
+        }
+        if (openCombinedExcelGlow == null) {
+            openCombinedExcelGlow = new ButtonAttentionGlow(openCombinedExcelButton);
+        }
+        boolean openable = VerifyRunSupport.combinedExcelToOpen(lastWritten) != null;
+        openCombinedExcelButton.setDisable(!openable);
+        if (openable) {
+            openCombinedExcelGlow.ensureActive();
+        } else {
+            openCombinedExcelGlow.stop();
+        }
+    }
+
     private void stopOpenExcelGlow() {
-        ButtonAttentionGlow.stopAll(openKokubuExcelGlow, openKonanExcelGlow);
+        ButtonAttentionGlow.stopAll(openKokubuExcelGlow, openKonanExcelGlow, openCombinedExcelGlow);
     }
 
     private void stopOpenExcelGlow(FactorySite site) {
