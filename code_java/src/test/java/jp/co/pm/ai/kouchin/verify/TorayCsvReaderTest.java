@@ -9,6 +9,7 @@ import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -191,6 +192,27 @@ class TorayCsvReaderTest {
         assertEquals(2, rows.size());
         assertEquals(List.of("a", "b,c", "d\ne"), rows.get(0));
         assertEquals(List.of("f", "g", "h"), rows.get(1));
+    }
+
+    @Test
+    @DisplayName("入庫日の最頻月を対象月にする。同数なら新しい月")
+    void dominantNyukoYmUsesMajorityAndBreaksTiesTowardLaterMonth() throws IOException {
+        String csv = String.join("\n",
+                "A010,x,191-352R,260821,a,b,1,c,1,100,d,e",
+                "A010,x,191-353R,260902,a,b,1,c,1,100,d,e",
+                "A010,x,191-354R,260909,a,b,1,c,1,100,d,e",
+                "A010,x,191-355R,260915,a,b,1,c,1,100,d,e",
+                "");
+        assertEquals(Optional.of(new YearMonthKey(2026, 9)),
+                TorayCsvReader.dominantNyukoYm(write("RVSHEET.csv", csv)));
+
+        String tied = String.join("\n",
+                "A010,x,191-352R,260821,a,b,1,c,1,100,d,e",
+                "A010,x,191-353R,260902,a,b,1,c,1,100,d,e",
+                "");
+        assertEquals(Optional.of(new YearMonthKey(2026, 9)),
+                TorayCsvReader.dominantNyukoYm(write("RVSHEET-tie.csv", tied)));
+        assertEquals(Optional.empty(), TorayCsvReader.dominantNyukoYm(write("empty.csv", "x\n")));
     }
 
     @Test

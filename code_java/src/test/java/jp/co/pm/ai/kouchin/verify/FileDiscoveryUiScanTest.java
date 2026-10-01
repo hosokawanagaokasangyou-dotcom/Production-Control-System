@@ -113,6 +113,42 @@ class FileDiscoveryUiScanTest {
     }
 
     @Test
+    @DisplayName("年月なしRVSHEET.csvは入庫日の最頻月で、ファイル名の古い月より新しい月を選ぶ")
+    void undatedRvsheetUsesNyukoMonthOverOlderNamedFile() throws Exception {
+        Path dir = tmp.resolve("csv");
+        Files.createDirectories(dir);
+        Files.writeString(dir.resolve("RVSHEET202608.csv"), "named");
+        String sept = String.join("\n",
+                "A010,x,191-352R,260902,a,b,1,c,1,100,d,e",
+                "A010,x,191-353R,260909,a,b,1,c,1,100,d,e",
+                "A010,x,191-354R,260821,a,b,1,c,1,100,d,e",
+                "");
+        Path undated = dir.resolve("RVSHEET.csv");
+        Files.write(undated, sept.getBytes(Charset.forName("windows-31j")));
+
+        assertEquals(undated, FileDiscovery.findTorayCsv(dir));
+        assertEquals(Optional.of(new YearMonthKey(2026, 9)), FileDiscovery.torayTargetYm(undated));
+        assertEquals(Optional.of(new YearMonthKey(2026, 8)),
+                FileDiscovery.torayTargetYm(dir.resolve("RVSHEET202608.csv")));
+    }
+
+    @Test
+    @DisplayName("同じ年月ならファイル名にyyyymmがある方を優先する")
+    void sameMonthPrefersNamedRvsheet() throws Exception {
+        Path dir = tmp.resolve("csv-tie");
+        Files.createDirectories(dir);
+        Path named = dir.resolve("RVSHEET202608.csv");
+        Files.writeString(named, "named");
+        String aug = String.join("\n",
+                "A010,x,191-352R,260821,a,b,1,c,1,100,d,e",
+                "A010,x,191-353R,260825,a,b,1,c,1,100,d,e",
+                "");
+        Files.write(dir.resolve("RVSHEET.csv"), aug.getBytes(Charset.forName("windows-31j")));
+
+        assertEquals(named, FileDiscovery.findTorayCsv(dir));
+    }
+
+    @Test
     @DisplayName("UIパスは参照フォルダからの相対で、区切りは /")
     void uiDisplayPathUsesRelativeSlash() {
         Path root = tmp.resolve("shisan");

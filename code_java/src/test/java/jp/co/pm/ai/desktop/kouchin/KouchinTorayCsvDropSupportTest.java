@@ -88,6 +88,43 @@ class KouchinTorayCsvDropSupportTest {
     }
 
     @Test
+    void undatedRvsheetIsCopiedAsDatedNameAndReplacesLeftover() throws Exception {
+        Path dest = tmp.resolve("toray");
+        Files.createDirectories(dest);
+        Files.writeString(dest.resolve("RVSHEET.csv"), "old", StandardCharsets.UTF_8);
+        Path src = tmp.resolve("RVSHEET.csv");
+        String sept = String.join("\n",
+                "A010,x,191-352R,260902,a,b,1,c,1,100,d,e",
+                "A010,x,191-353R,260909,a,b,1,c,1,100,d,e",
+                "A010,x,191-354R,260821,a,b,1,c,1,100,d,e",
+                "");
+        Files.writeString(src, sept, StandardCharsets.UTF_8);
+        List<String> conflicts = KouchinTorayCsvDropSupport.existingDestFileNames(List.of(src), dest);
+        assertTrue(conflicts.isEmpty(), conflicts.toString());
+        var o = KouchinTorayCsvDropSupport.copyCsvFiles(List.of(src), dest, null, true);
+        assertTrue(o.copiedAny());
+        assertEquals(dest.resolve("RVSHEET202609.csv"), o.copied().get(0));
+        assertTrue(Files.exists(dest.resolve("RVSHEET202609.csv")));
+        assertFalse(Files.exists(dest.resolve("RVSHEET.csv")));
+        assertTrue(o.warnings().stream().anyMatch(s -> s.contains("RVSHEET202609.csv")), o.warnings().toString());
+    }
+
+    @Test
+    void undatedRvsheetConflictsWithExistingDatedName() throws Exception {
+        Path dest = tmp.resolve("toray");
+        Files.createDirectories(dest);
+        Files.writeString(dest.resolve("RVSHEET202609.csv"), "old", StandardCharsets.UTF_8);
+        Path src = tmp.resolve("RVSHEET.csv");
+        String sept = "A010,x,191-352R,260902,a,b,1,c,1,100,d,e\n";
+        Files.writeString(src, sept, StandardCharsets.UTF_8);
+        assertEquals(List.of("RVSHEET202609.csv"),
+                KouchinTorayCsvDropSupport.existingDestFileNames(List.of(src), dest));
+        var skipped = KouchinTorayCsvDropSupport.copyCsvFiles(List.of(src), dest, null, false);
+        assertFalse(skipped.copiedAny());
+        assertEquals("old", Files.readString(dest.resolve("RVSHEET202609.csv")));
+    }
+
+    @Test
     void nonRvsheetNameWarnsButCopies() throws Exception {
         Path dest = tmp.resolve("toray");
         Path src = tmp.resolve("outlook-attach.csv");

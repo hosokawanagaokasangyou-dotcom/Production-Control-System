@@ -17,6 +17,7 @@ import java.util.regex.Pattern;
 /**
  * 各データソースの対象月ファイルを自動検出する。
  * 対象月は①のファイル名 {@code RVSHEETyyyymm} を基準とする。
+ * ファイル名に年月が無い {@code RVSHEET.csv} は、入庫日の最頻月をそのファイルの年月とする。
  */
 public final class FileDiscovery {
 
@@ -39,17 +40,22 @@ public final class FileDiscovery {
 
     // ---- ① 東レ送付CSV ----
 
-    /** ①をファイル名 RVSHEETyyyymm の年月最大で選択する。 */
+    /**
+     * ①を年月が最大の CSV で選択する。
+     * 年月はファイル名 {@code RVSHEETyyyymm}。無いときは入庫日の最頻月。
+     * 同じ年月ならファイル名に年月がある方を優先する。
+     */
     public static Path findTorayCsv(Path folder) {
         List<Path> files = list(folder, "RVSHEET*.csv");
         Path best = null;
         YearMonthKey bestYm = null;
         for (Path f : files) {
-            Optional<YearMonthKey> ym = YearMonthKey.parseRvsheet(f.getFileName().toString());
+            Optional<YearMonthKey> ym = torayTargetYm(f);
             if (ym.isEmpty()) {
                 continue;
             }
-            if (bestYm == null || ym.get().compareTo(bestYm) > 0) {
+            if (best == null || ym.get().compareTo(bestYm) > 0
+                    || (ym.get().equals(bestYm) && preferNamedRvsheet(f, best))) {
                 bestYm = ym.get();
                 best = f;
             }
@@ -60,9 +66,29 @@ public final class FileDiscovery {
         return best;
     }
 
-    /** ①ファイル名から対象年月を取得する。 */
+    /**
+     * ①の対象年月。ファイル名 {@code RVSHEETyyyymm} を優先し、
+     * 無いときは入庫日（D列 {@code yymmdd}）の最頻月。
+     */
     public static Optional<YearMonthKey> torayTargetYm(Path csv) {
-        return YearMonthKey.parseRvsheet(csv.getFileName().toString());
+        if (csv == null || csv.getFileName() == null) {
+            return Optional.empty();
+        }
+        Optional<YearMonthKey> fromName = YearMonthKey.parseRvsheet(csv.getFileName().toString());
+        if (fromName.isPresent()) {
+            return fromName;
+        }
+        return TorayCsvReader.dominantNyukoYm(csv);
+    }
+
+    /** 同じ年月なら、ファイル名に yyyymm がある方を年月なしファイルより優先する。 */
+    private static boolean preferNamedRvsheet(Path candidate, Path current) {
+        if (candidate == null || candidate.getFileName() == null || current == null || current.getFileName() == null) {
+            return false;
+        }
+        boolean candNamed = YearMonthKey.parseRvsheet(candidate.getFileName().toString()).isPresent();
+        boolean curNamed = YearMonthKey.parseRvsheet(current.getFileName().toString()).isPresent();
+        return candNamed && !curNamed;
     }
 
     // ---- ② 工場別 ----

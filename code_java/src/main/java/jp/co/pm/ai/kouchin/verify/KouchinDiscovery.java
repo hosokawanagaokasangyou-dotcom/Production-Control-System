@@ -29,7 +29,7 @@ public final class KouchinDiscovery {
             if (Files.isDirectory(dir1)) {
                 Path toray = FileDiscovery.findTorayCsv(dir1);
                 YearMonthKey fileYm = FileDiscovery.torayTargetYm(toray).orElse(ym);
-                rows.add(found(ROLE_1, dir1, toray, fileYm));
+                rows.add(found(ROLE_1, dir1, toray, fileYm, undatedTorayNote(toray, fileYm)));
             } else {
                 rows.add(missing(ROLE_1, dir1, "フォルダなし"));
             }
@@ -74,6 +74,17 @@ public final class KouchinDiscovery {
         } catch (RuntimeException ignored) {
         }
         return null;
+    }
+
+    /** ファイル名に年月が無い①は、入庫日から判定した旨を備考に残す。 */
+    private static String undatedTorayNote(Path toray, YearMonthKey fileYm) {
+        if (toray == null || toray.getFileName() == null || fileYm == null) {
+            return "";
+        }
+        if (YearMonthKey.parseRvsheet(toray.getFileName().toString()).isPresent()) {
+            return "";
+        }
+        return "ファイル名に年月が無いため入庫日の最頻月から " + fileYm.gatsudoLabel();
     }
 
     private static Row found(String role, Path dir, Path file, YearMonthKey ym) {

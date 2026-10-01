@@ -7,7 +7,11 @@ import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
+
+import jp.co.pm.ai.kouchin.verify.TorayCsvReader;
+import jp.co.pm.ai.kouchin.verify.YearMonthKey;
 
 /**
  * ①東レCSVのファイル選択取り込み。ディレクトリ指定は維持し、.csv だけコピーする。
@@ -46,16 +50,28 @@ public final class KouchinTorayCsvDropSupport {
             if (!Files.isRegularFile(src)) {
                 continue;
             }
-            Path dest = destDir.resolve(src.getFileName().toString());
+            String name = src.getFileName().toString();
+            String destName = destFileName(src);
+            Path dest = destDir.resolve(destName);
             if (Files.exists(dest) && !overwriteExisting) {
-                warnings.add("上書きせずスキップ: " + src.getFileName());
+                warnings.add("上書きせずスキップ: " + destName);
                 continue;
             }
             try {
                 Files.copy(src, dest, StandardCopyOption.REPLACE_EXISTING);
                 copied.add(dest);
-                String name = src.getFileName().toString();
-                if (!name.toUpperCase(Locale.ROOT).matches("RVSHEET\\d{6}\\.CSV")) {
+                if (!name.equalsIgnoreCase(destName)) {
+                    warnings.add(name + " はファイル名に年月が無いため、入庫日の最頻月から "
+                            + destName + " として取り込みました");
+                    Path leftover = destDir.resolve(name);
+                    if (!leftover.equals(dest) && Files.exists(leftover)) {
+                        try {
+                            Files.deleteIfExists(leftover);
+                        } catch (IOException e) {
+                            warnings.add("年月なしの旧ファイルを削除できません: " + name + " (" + e.getMessage() + ")");
+                        }
+                    }
+                } else if (!isDatedRvsheet(name)) {
                     warnings.add("ファイル名が RVSHEETyyyyMM.csv ではありません（コピーは実施）: " + name);
                 }
             } catch (IOException e) {
@@ -75,7 +91,7 @@ public final class KouchinTorayCsvDropSupport {
             if (src == null || src.getFileName() == null) {
                 continue;
             }
-            String name = src.getFileName().toString();
+            String name = destFileName(src);
             if (Files.exists(destDir.resolve(name))) {
                 names.add(name);
             }
@@ -111,6 +127,30 @@ public final class KouchinTorayCsvDropSupport {
             }
         }
         return csvs;
+    }
+
+    /**
+     * 取り込み先のファイル名。{@code RVSHEETyyyymm.csv} はそのまま。
+     * 年月が無い CSV は入庫日の最頻月から {@code RVSHEETyyyymm.csv} にする。
+     */
+    static String destFileName(Path src) {
+        if (src == null || src.getFileName() == null) {
+            return "";
+        }
+        String name = src.getFileName().toString();
+        if (isDatedRvsheet(name)) {
+            return name;
+        }
+        Optional<YearMonthKey> ym = TorayCsvReader.dominantNyukoYm(src);
+        return ym.map(KouchinTorayCsvDropSupport::rvsheetFileName).orElse(name);
+    }
+
+    static String rvsheetFileName(YearMonthKey ym) {
+        return String.format(Locale.ROOT, "RVSHEET%04d%02d.csv", ym.year(), ym.month());
+    }
+
+    static boolean isDatedRvsheet(String name) {
+        return name != null && name.toUpperCase(Locale.ROOT).matches("RVSHEET\\d{6}\\.CSV");
     }
 
     private static void errorsSafe(List<String> warnings, String msg) {

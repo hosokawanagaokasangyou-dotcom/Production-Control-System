@@ -8,10 +8,12 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -205,6 +207,64 @@ public final class TorayCsvReader {
         } catch (NumberFormatException e) {
             return null;
         }
+    }
+
+    /**
+     * データ行の入庫日（D列 {@code yymmdd}）で最も多い年月。
+     * 同数なら新しい月。ファイル名に {@code yyyymm} が無い {@code RVSHEET.csv} の対象月に使う。
+     * 読めない・データ行が無いときは空。
+     */
+    public static Optional<YearMonthKey> dominantNyukoYm(Path path) {
+        if (path == null) {
+            return Optional.empty();
+        }
+        try {
+            return dominantNyukoYm(parseCsv(decodeCp932(path)));
+        } catch (RuntimeException e) {
+            return Optional.empty();
+        }
+    }
+
+    static Optional<YearMonthKey> dominantNyukoYm(List<List<String>> rows) {
+        if (rows == null || rows.isEmpty()) {
+            return Optional.empty();
+        }
+        Map<YearMonthKey, Integer> counts = new HashMap<>();
+        for (List<String> cols : rows) {
+            if (cols.size() <= COL_DATE) {
+                continue;
+            }
+            String keiyaku = cols.get(COL_KEIYAKU).trim();
+            if (!KEIYAKU_CSV_PATTERN.matcher(keiyaku).matches()) {
+                continue;
+            }
+            parseNyukoYm(cols.get(COL_DATE).trim()).ifPresent(ym -> counts.merge(ym, 1, Integer::sum));
+        }
+        YearMonthKey best = null;
+        int bestCount = 0;
+        for (Map.Entry<YearMonthKey, Integer> e : counts.entrySet()) {
+            YearMonthKey ym = e.getKey();
+            int count = e.getValue();
+            if (best == null || count > bestCount || (count == bestCount && ym.compareTo(best) > 0)) {
+                best = ym;
+                bestCount = count;
+            }
+        }
+        return Optional.ofNullable(best);
+    }
+
+    /** 入庫日 {@code yymmdd}（例: {@code 260902}）から年月。年は 2000+yy。 */
+    static Optional<YearMonthKey> parseNyukoYm(String yymmdd) {
+        if (yymmdd == null || !yymmdd.matches("\\d{6}")) {
+            return Optional.empty();
+        }
+        int yy = Integer.parseInt(yymmdd.substring(0, 2));
+        int month = Integer.parseInt(yymmdd.substring(2, 4));
+        int day = Integer.parseInt(yymmdd.substring(4, 6));
+        if (month < 1 || month > 12 || day < 1 || day > 31) {
+            return Optional.empty();
+        }
+        return Optional.of(new YearMonthKey(2000 + yy, month));
     }
 
     /** cp932（Windows-31J）でデコードする。 */

@@ -1512,6 +1512,7 @@ public class KouchinVerifyTabController {
             toray = firstToray(konan);
         }
         String rule = "対象月はカレンダーではなく、①東レCSVのファイル名（RVSHEETyyyymm.csv）で決まります。"
+                + "ファイル名に年月が無いCSVは入庫日の最頻月を使います。"
                 + "フォルダ内で年月が最新のCSVを使い、②③もその月に合わせます。取り込みと検証は現工場の①フォルダを優先します。";
         if (toray == null || toray.missing()) {
             return rule + " いまは該当CSVが見つかりません。";
