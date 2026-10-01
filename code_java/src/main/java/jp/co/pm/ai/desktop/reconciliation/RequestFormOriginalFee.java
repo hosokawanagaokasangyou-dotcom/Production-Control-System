@@ -29,7 +29,7 @@ public final class RequestFormOriginalFee {
     private static final Duration TIMEOUT = Duration.ofSeconds(45);
 
     /**
-     * @param meters モデルが読んだ数量（m）。不明なら 0
+     * @param meters 加工賃の計算に使った加工後数量（m）。不明なら 0
      * @param yenPerMeter モデルが読んだ単価合計（円/m）。不明なら 0
      * @param amountYen 加工賃（円）
      * @param reason モデルが使った計算の説明
@@ -156,10 +156,23 @@ public final class RequestFormOriginalFee {
         return new Result(meters, rate, amount, reason);
     }
 
+    /** 加工後数量の決め方。テストからも参照する。 */
+    static String quantityRules() {
+        return "加工賃（円）は、加工後の数量（m）に単価（円/m）を掛けて求める。"
+                + "加工前の数量から加工後の数量へは、工程ごとに次を適用する。\n"
+                + "・スライス: 厚みを1/2にする。加工後の数量は2倍。\n"
+                + "・スリットで端部をトリミングする場合: 加工後の数量は変わらない。\n"
+                + "・二つにスリット、三つにスリットなど分割する場合: 加工後の数量は分割数の整数倍（2倍、3倍）。\n"
+                + "工程が複数あるときは、シートの並びと注記に沿って数量の変化を積み上げる。"
+                + "注記で不要とされた工程の単価は掛けない。\n";
+    }
+
     private static String prompt(String sheetName, String grid) {
         return "加工依頼書の1シートです。加工賃（円）の計算方法は帳票によって違います。"
                 + "見出し・注記・数値から、このシートが意図する加工賃の金額を求めてください。"
-                + "列位置を決め打ちせず、書かれている内容（数量と円/m、工程の除外注記、行ごとの違い）に従ってください。\n"
+                + "列位置を決め打ちせず、書かれている内容に従ってください。\n"
+                + quantityRules()
+                + "meters には加工賃の計算に使った加工後数量（m）を入れる。\n"
                 + "出力は JSON オブジェクト1つのみ。説明文やコードフェンスは禁止。\n"
                 + "{\"amountYen\":数値,\"meters\":数値またはnull,\"yenPerMeter\":数値またはnull,\"reason\":\"計算の短い説明\"}\n"
                 + "金額が判断できないときは {\"amountYen\":null,\"meters\":null,\"yenPerMeter\":null,\"reason\":\"理由\"}\n\n"
