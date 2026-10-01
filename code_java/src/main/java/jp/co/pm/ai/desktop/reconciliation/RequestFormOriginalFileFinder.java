@@ -30,6 +30,13 @@ public final class RequestFormOriginalFileFinder {
      * @return キー → 原本。見つからなかったキーは含まれない
      */
     public static Map<String, Found> find(Path dir, Set<String> keys, List<String> warnings) {
+        return find(dir, keys, warnings, null);
+    }
+
+    /**
+     * @param apiKey 復号済み Gemini API キー。空なら加工賃は計算しない
+     */
+    public static Map<String, Found> find(Path dir, Set<String> keys, List<String> warnings, String apiKey) {
         if (dir == null || keys == null || keys.isEmpty() || !dir.toFile().isDirectory()) {
             return Map.of();
         }
@@ -59,9 +66,7 @@ public final class RequestFormOriginalFileFinder {
                         continue;
                     }
                     String sheetName = matchingSheet(wb, key);
-                    RequestFormOriginalFee.Result fee = sheetName.isBlank()
-                            ? null
-                            : RequestFormOriginalFee.fromSheet(wb.getSheet(sheetName));
+                    RequestFormOriginalFee.Result fee = feeOf(wb, sheetName, apiKey, entry.iraiNo(), warnings);
                     found.put(key, new Found(entry.iraiNo(), path, sheetName, fee));
                 }
             } catch (Exception ex) {
@@ -69,6 +74,24 @@ public final class RequestFormOriginalFileFinder {
             }
         }
         return Map.copyOf(found);
+    }
+
+    private static RequestFormOriginalFee.Result feeOf(
+            Workbook wb, String sheetName, String apiKey, String iraiNo, List<String> warnings) {
+        if (sheetName == null || sheetName.isBlank() || apiKey == null || apiKey.isBlank()) {
+            return null;
+        }
+        try {
+            return RequestFormOriginalFee.fromSheet(wb.getSheet(sheetName), apiKey);
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            warn(warnings, iraiNo + " の加工賃計算を中断しました");
+            return null;
+        } catch (Exception ex) {
+            String msg = ex.getMessage() == null ? ex.toString() : ex.getMessage();
+            warn(warnings, iraiNo + " の加工賃を Gemini で計算できません: " + msg);
+            return null;
+        }
     }
 
     private static String matchingSheet(Workbook wb, String key) {

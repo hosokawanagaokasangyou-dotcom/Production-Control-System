@@ -1,85 +1,171 @@
 package jp.co.pm.ai.desktop.reconciliation;
 
+import java.io.IOException;
+import java.time.Duration;
 import java.util.Locale;
+import java.util.Optional;
 
 import org.apache.poi.ss.usermodel.Cell;
-import org.apache.poi.ss.usermodel.CellType;
 import org.apache.poi.ss.usermodel.DataFormatter;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import jp.co.pm.ai.desktop.benchmark.GeminiGenerateContentRestClient;
+import jp.co.pm.ai.desktop.config.GeminiDispatchModelTryOrderDefaults;
+
 /**
  * 依頼書原本シートの加工賃（円）。
- * 製品数量（AE10–AE12 の m）× 加工内容の単価合計（P13–P17 の円/m）。
+ * 計算式は帳票ごとに違うため、シートのセルを Gemini {@code generateContent} に渡して金額を決める。
  */
 public final class RequestFormOriginalFee {
 
+    private static final ObjectMapper JSON = new ObjectMapper();
     private static final DataFormatter FORMATTER = new DataFormatter(Locale.JAPAN);
-    /** 加工内容の単価列（円/m）。Excel P 列。 */
-    private static final int PRICE_COLUMN = RequestFormOriginalCellLayout.columnLetterToIndex("P");
+    private static final int MAX_ROWS = 40;
+    private static final int MAX_COLS = 50;
+    private static final Duration TIMEOUT = Duration.ofSeconds(45);
 
-    /** @param meters 数量合計（m） @param yenPerMeter 工程単価の合計（円/m） @param amountYen 加工賃（円） */
-    public record Result(double meters, double yenPerMeter, double amountYen) {}
+    /**
+     * @param meters モデルが読んだ数量（m）。不明なら 0
+     * @param yenPerMeter モデルが読んだ単価合計（円/m）。不明なら 0
+     * @param amountYen 加工賃（円）
+     * @param reason モデルが使った計算の説明
+     */
+    public record Result(double meters, double yenPerMeter, double amountYen, String reason) {}
 
     private RequestFormOriginalFee() {}
 
-    /** 数量も単価も無いときは empty。 */
-    public static Result fromSheet(Sheet sheet) {
-        if (sheet == null) {
+    /**
+     * シート内容を Gemini に解釈させる。キーが空、または金額が取れないときは null。
+     */
+    public static Result fromSheet(Sheet sheet, String apiKey) throws IOException, InterruptedException {
+        if (sheet == null || apiKey == null || apiKey.isBlank()) {
             return null;
         }
-        double meters = 0.0;
-        int qtyCol = RequestFormOriginalCellLayout.ProductColumn.QTY.columnIndex();
-        for (int rowIndex : RequestFormOriginalCellLayout.PRODUCT_ROW_INDICES) {
-            meters += cellNumber(sheet, rowIndex, qtyCol);
-        }
-        double rate = 0.0;
-        for (int rowIndex : RequestFormOriginalCellLayout.PROCESS_STEP_ROW_INDICES) {
-            rate += cellNumber(sheet, rowIndex, PRICE_COLUMN);
-        }
-        if (meters <= 0.0 || rate <= 0.0) {
+        String grid = sheetText(sheet);
+        if (grid.isBlank()) {
             return null;
         }
-        return new Result(meters, rate, meters * rate);
+        String prompt = prompt(sheet.getSheetName(), grid);
+        IOException last = null;
+        for (String modelId : GeminiDispatchModelTryOrderDefaults.PLANNING_CORE_FALLBACK_TRY_ORDER) {
+            GeminiGenerateContentRestClient.FullBodyResult res =
+                    GeminiGenerateContentRestClient.generateContentFullBody(
+                            apiKey, modelId, prompt, 512, TIMEOUT);
+            if (!res.errorSummary().isEmpty()) {
+                int status = res.httpStatus();
+                if (status == 404 || status == 429) {
+                    last = new IOException(res.errorSummary());
+                    continue;
+                }
+                throw new IOException(res.errorSummary());
+            }
+            Optional<String> text = GeminiGenerateContentRestClient.extractFirstCandidateText(res.body());
+            if (text.isEmpty()) {
+                last = new IOException("候補テキストが空です（model=" + modelId + "）");
+                continue;
+            }
+            Result parsed = parseModelJson(text.get());
+            if (parsed != null) {
+                return parsed;
+            }
+            last = new IOException("加工賃の金額を解釈できません（model=" + modelId + "）");
+        }
+        if (last != null) {
+            throw last;
+        }
+        return null;
     }
 
-    private static double cellNumber(Sheet sheet, int rowIndex, int columnIndex) {
-        Row row = sheet.getRow(rowIndex);
-        if (row == null) {
-            return 0.0;
+    /** 非空セルを「座標=値」で並べる。Gemini への入力。 */
+    static String sheetText(Sheet sheet) {
+        if (sheet == null) {
+            return "";
         }
-        Cell cell = row.getCell(columnIndex);
-        if (cell == null) {
-            return 0.0;
-        }
-        CellType type = cell.getCellType();
-        if (type == CellType.FORMULA) {
-            try {
-                type = cell.getCachedFormulaResultType();
-            } catch (RuntimeException ex) {
-                return 0.0;
+        StringBuilder sb = new StringBuilder();
+        int lastRow = Math.min(sheet.getLastRowNum(), MAX_ROWS - 1);
+        for (int r = 0; r <= lastRow; r++) {
+            Row row = sheet.getRow(r);
+            if (row == null) {
+                continue;
+            }
+            int lastCell = Math.min(Math.max(row.getLastCellNum(), 0), MAX_COLS);
+            for (int c = 0; c < lastCell; c++) {
+                Cell cell = row.getCell(c);
+                if (cell == null) {
+                    continue;
+                }
+                String text;
+                try {
+                    text = FORMATTER.formatCellValue(cell);
+                } catch (RuntimeException ex) {
+                    continue;
+                }
+                if (text == null) {
+                    continue;
+                }
+                text = text.replace('\r', ' ').replace('\n', ' ').strip();
+                if (text.isEmpty()) {
+                    continue;
+                }
+                if (sb.length() > 0) {
+                    sb.append('\n');
+                }
+                sb.append(cell.getAddress().formatAsString()).append('=').append(text);
             }
         }
-        if (type == CellType.NUMERIC) {
-            return cell.getNumericCellValue();
+        return sb.toString();
+    }
+
+    /** モデル応答の JSON から加工賃を読む。金額が無いときは null。 */
+    public static Result parseModelJson(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
         }
-        String text;
+        String s = raw.strip();
+        int fence = s.indexOf('{');
+        int end = s.lastIndexOf('}');
+        if (fence < 0 || end <= fence) {
+            return null;
+        }
+        JsonNode node;
         try {
-            text = FORMATTER.formatCellValue(cell);
-        } catch (RuntimeException ex) {
-            return 0.0;
+            node = JSON.readTree(s.substring(fence, end + 1));
+        } catch (IOException ex) {
+            return null;
         }
-        if (text == null) {
-            return 0.0;
+        if (node == null || !node.has("amountYen") || node.get("amountYen").isNull()) {
+            return null;
         }
-        text = text.replace(",", "").replace("，", "").strip();
-        if (text.isEmpty()) {
-            return 0.0;
+        double amount = node.get("amountYen").asDouble(Double.NaN);
+        if (Double.isNaN(amount) || amount <= 0.0) {
+            return null;
         }
-        try {
-            return Double.parseDouble(text);
-        } catch (NumberFormatException ex) {
-            return 0.0;
+        double meters = node.path("meters").asDouble(0.0);
+        double rate = node.path("yenPerMeter").asDouble(0.0);
+        if (Double.isNaN(meters) || meters < 0.0) {
+            meters = 0.0;
         }
+        if (Double.isNaN(rate) || rate < 0.0) {
+            rate = 0.0;
+        }
+        String reason = node.path("reason").asText("").replace('\r', ' ').replace('\n', ' ').strip();
+        return new Result(meters, rate, amount, reason);
+    }
+
+    private static String prompt(String sheetName, String grid) {
+        return "加工依頼書の1シートです。加工賃（円）の計算方法は帳票によって違います。"
+                + "見出し・注記・数値から、このシートが意図する加工賃の金額を求めてください。"
+                + "列位置を決め打ちせず、書かれている内容（数量と円/m、工程の除外注記、行ごとの違い）に従ってください。\n"
+                + "出力は JSON オブジェクト1つのみ。説明文やコードフェンスは禁止。\n"
+                + "{\"amountYen\":数値,\"meters\":数値またはnull,\"yenPerMeter\":数値またはnull,\"reason\":\"計算の短い説明\"}\n"
+                + "金額が判断できないときは {\"amountYen\":null,\"meters\":null,\"yenPerMeter\":null,\"reason\":\"理由\"}\n\n"
+                + "【シート名】" + (sheetName == null ? "" : sheetName) + "\n"
+                + "【セル】\n"
+                + grid
+                + "\n";
     }
 }

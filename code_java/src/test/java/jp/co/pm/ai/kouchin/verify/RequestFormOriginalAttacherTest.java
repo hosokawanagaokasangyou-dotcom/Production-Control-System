@@ -2,6 +2,7 @@ package jp.co.pm.ai.kouchin.verify;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
@@ -20,11 +21,24 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
+import jp.co.pm.ai.desktop.reconciliation.RequestFormOriginalFee;
 
 class RequestFormOriginalAttacherTest {
 
     @TempDir
     Path tempDir;
+
+    @Test
+    @DisplayName("Gemini応答のJSONから加工賃を読む")
+    void readsFeeFromModelJson() {
+        RequestFormOriginalFee.Result fee = RequestFormOriginalFee.parseModelJson(
+                "```json\n{\"amountYen\":207900,\"meters\":6300,\"yenPerMeter\":33,\"reason\":\"6300×33\"}\n```");
+        assertEquals(207900.0, fee.amountYen(), 0.001);
+        assertEquals(6300.0, fee.meters(), 0.001);
+        assertEquals(33.0, fee.yenPerMeter(), 0.001);
+        assertEquals("6300×33", fee.reason());
+        assertNull(RequestFormOriginalFee.parseModelJson("{\"amountYen\":null,\"reason\":\"不明\"}"));
+    }
 
     @Test
     @DisplayName("月ラベル付き依頼NOを分け、一致行は添付対象にしない")
@@ -73,7 +87,9 @@ class RequestFormOriginalAttacherTest {
                 null,
                 null,
                 null);
-        Map<String, String> ui = Map.of(AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR, tempDir.toString());
+        Map<String, String> ui = Map.of(
+                AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR, tempDir.toString(),
+                AppPaths.KEY_PM_AI_SKIP_GEMINI_API, "1");
 
         try (XSSFWorkbook wb = ResultExcelExporter.buildWorkbook(result, null, null, ui)) {
             Sheet copied = wb.getSheet("原本_V9-9");
@@ -82,7 +98,7 @@ class RequestFormOriginalAttacherTest {
 
             Sheet a = wb.getSheet("検証A_契約NO(①vs②)");
             Row data = a.getRow(1);
-            assertEquals(3300.0, data.getCell(8).getNumericCellValue(), 0.001);
+            assertEquals("", data.getCell(8).getStringCellValue());
             Cell attached = data.getCell(9);
             Cell fileLink = data.getCell(10);
             assertEquals("V9-9", attached.getStringCellValue());
@@ -94,8 +110,16 @@ class RequestFormOriginalAttacherTest {
 
             Sheet index = wb.getSheet(RequestFormOriginalAttacher.INDEX_SHEET);
             assertNotNull(index);
-            assertEquals("V9-9", index.getRow(1).getCell(0).getStringCellValue());
-            assertEquals(3300.0, index.getRow(1).getCell(4).getNumericCellValue(), 0.001);
+            Row iraiRow = null;
+            for (Row row : index) {
+                Cell c = row.getCell(0);
+                if (c != null && "V9-9".equals(c.getStringCellValue())) {
+                    iraiRow = row;
+                    break;
+                }
+            }
+            assertNotNull(iraiRow);
+            assertEquals("", iraiRow.getCell(4).getStringCellValue());
         }
     }
 }

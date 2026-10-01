@@ -510,7 +510,10 @@ public final class ResultExcelExporter {
             } else {
                 text(row, 6, "", null);
             }
-            text(row, 7, item.missing() == null ? "" : item.missing(), null);
+            String status = item.missing() == null || item.missing().isBlank()
+                    ? (item.fee() == null || item.fee().reason() == null ? "" : item.fee().reason())
+                    : item.missing();
+            text(row, 7, status, null);
         }
         finishDetailSheet(ws, headers.size(), rowIndex);
         ws.setColumnWidth(2, 42 * 256);
@@ -651,7 +654,7 @@ public final class ResultExcelExporter {
                 {"形式不正 (灰)", "②のC列が契約NO形式でないのに金額がある行。記入漏れ疑い"},
                 {"検証D (国分)", "②「東レまとめ」の内部整合と①差額。要修正は金額差・参照ずれ・未取込。"
                         + "①差額は検証Aの不一致を、直す元シートの行付きで示す。①差額だけでは警告にしない"},
-                {"原本加工賃", "依頼書の数量m（AE10–12）×工程単価の合計（P13–17の円/m）。検証A・検証Dの依頼NOに載せる"},
+                {"原本加工賃", "依頼書シートの内容を Gemini API に渡し、帳票ごとの計算方法で求めた加工賃（円）。検証A・検証Dの依頼NOに載せる"},
                 {"依頼書原本", "検証Aの不一致・翌月記載・前月過不足・片側のみ・形式不正と、検証Dの異常行について、"
                         + "依頼シートをこのブックへ添付する。依頼書添付は添付シート、原本リンクは原本xlsmを開く"},
                 {"報告する過不足", "当月差異 + 翌月記載 + ①のみ − ②のみ。検証Aの「報告計上額」列の合計と一致する"},

@@ -1,10 +1,13 @@
 package jp.co.pm.ai.kouchin.verify;
 
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
@@ -21,6 +24,7 @@ import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.config.NetworkSourceDirResolver;
+import jp.co.pm.ai.desktop.crypto.GeminiCredentialsV2Crypto;
 import jp.co.pm.ai.desktop.io.PoiWorkbookOpener;
 import jp.co.pm.ai.desktop.reconciliation.JuchuTransferValueNormalizer;
 import jp.co.pm.ai.desktop.reconciliation.RequestFormOriginalFee;
@@ -113,10 +117,11 @@ public final class RequestFormOriginalAttacher {
         Map<String, String> env = ui == null ? Map.of() : ui;
         Path dir = AppPaths.resolveRequestFormOriginalDir(env);
         Map<String, RequestFormOriginalFileFinder.Found> found = Map.of();
+        String apiKey = geminiApiKey(env, warnings);
         if (!NetworkSourceDirResolver.isRequestFormOriginalDirReachable(env)) {
             warnings.add("依頼書原本フォルダにアクセスできません: " + dir);
         } else {
-            found = RequestFormOriginalFileFinder.find(dir, labels.keySet(), warnings);
+            found = RequestFormOriginalFileFinder.find(dir, labels.keySet(), warnings, apiKey);
         }
         List<Item> items = new ArrayList<>();
         Set<String> usedNames = new LinkedHashSet<>();
@@ -165,6 +170,64 @@ public final class RequestFormOriginalAttacher {
                 // 原本が開けなくても検証結果自体は残す。行のリンク側は missing にできないのでシートを作らない。
             }
         }
+    }
+
+    /** 復号済みキー。スキップ指定やファイル欠落のときは null（警告は {@code warnings} へ）。 */
+    static String geminiApiKey(Map<String, String> ui, List<String> warnings) {
+        if (skipGemini(ui)) {
+            warn(warnings, "原本加工賃は Gemini API スキップ中のため計算していません");
+            return null;
+        }
+        Path cred = geminiCredentialsPath(ui);
+        if (!Files.isRegularFile(cred)) {
+            warn(warnings, "原本加工賃は Gemini 認証ファイルが無いため計算していません: " + cred);
+            return null;
+        }
+        try {
+            String json = Files.readString(cred, StandardCharsets.UTF_8);
+            String key = GeminiCredentialsV2Crypto.decryptGeminiApiKeyFromJsonString(
+                    json, GeminiCredentialsV2Crypto.DEFAULT_PASSPHRASE);
+            if (key == null || key.isBlank()) {
+                warn(warnings, "原本加工賃は Gemini API キーが空のため計算していません");
+                return null;
+            }
+            return key;
+        } catch (Exception ex) {
+            String msg = ex.getMessage() == null ? ex.toString() : ex.getMessage();
+            warn(warnings, "原本加工賃は Gemini 認証の復号に失敗したため計算していません: " + msg);
+            return null;
+        }
+    }
+
+    private static void warn(List<String> warnings, String message) {
+        if (warnings != null) {
+            warnings.add(message);
+        }
+    }
+
+    private static boolean skipGemini(Map<String, String> ui) {
+        if (ui == null) {
+            return false;
+        }
+        String raw = ui.get(AppPaths.KEY_PM_AI_SKIP_GEMINI_API);
+        if (raw == null) {
+            return false;
+        }
+        String s = raw.strip().toLowerCase(Locale.ROOT);
+        return s.equals("1") || s.equals("true") || s.equals("yes") || s.equals("on");
+    }
+
+    private static Path geminiCredentialsPath(Map<String, String> ui) {
+        Map<String, String> env = ui == null ? Map.of() : ui;
+        String raw = env.get(AppPaths.KEY_GEMINI_CREDENTIALS_JSON);
+        if (raw != null && !raw.isBlank()) {
+            return Path.of(raw.strip()).toAbsolutePath().normalize();
+        }
+        return AppPaths.resolveRepoRoot(env)
+                .resolve("code")
+                .resolve("gemini_credentials.encrypted.json")
+                .toAbsolutePath()
+                .normalize();
     }
 
     static boolean anomalyA(String judge) {
