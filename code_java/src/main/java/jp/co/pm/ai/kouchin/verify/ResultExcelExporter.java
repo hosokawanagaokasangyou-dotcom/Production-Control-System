@@ -45,6 +45,7 @@ public final class ResultExcelExporter {
     private static final String SHEET_A = "検証A_契約NO(①vs②)";
     private static final String SHEET_B = "検証B_依頼NO(②vs③)";
     private static final String SHEET_D = "検証D_②まとめ整合性";
+    private static final String SHEET_FIX = NagaokaExcelFixAdvice.SHEET;
     private static final String SHEET_MAIL = "報告メール下書き";
     private static final String LINK_COLOR = "0563C1";
 
@@ -141,6 +142,7 @@ public final class ResultExcelExporter {
         exporter.writeSheetA(result);
         exporter.writeSheetB(result);
         exporter.writeSheetD(result);
+        exporter.writeNagaokaFix(result);
         exporter.writeSheetC(result);
         exporter.writeMail(kokubu, konan);
         exporter.writeRawSheets(result);
@@ -439,6 +441,54 @@ public final class ResultExcelExporter {
         ws.setColumnWidth(11, 36 * 256);
     }
 
+    private void writeNagaokaFix(VerifyResult r) {
+        List<String> headers = List.of(
+                "依頼NO", "契約NO", "①東レ金額", "②長岡金額", "原本加工賃", "判定", "長岡側Excelの直し方");
+        XSSFSheet ws = wb.createSheet(SHEET_FIX);
+        ws.setTabColor(new XSSFColor(rgb("C65911"), null));
+        put(ws, 0, 0, NagaokaExcelFixAdvice.principle(r.profile()),
+                style("fixPrinciple", "7F1D1D", "FFEDD5", false, 10, false, BorderStyle.THIN, true));
+        merge(ws, 0, 0, headers.size() - 1);
+        row(ws, 0).setHeightInPoints(48f);
+        CellStyle headerStyle = style("header", "FFFFFF", HEADER_FILL, true, 10.5, true, BorderStyle.THIN);
+        Row header = ws.createRow(1);
+        for (int i = 0; i < headers.size(); i++) {
+            Cell cell = header.createCell(i);
+            cell.setCellValue(headers.get(i));
+            cell.setCellStyle(headerStyle);
+        }
+        int rowIndex = 2;
+        List<NagaokaExcelFixAdvice.Line> lines = NagaokaExcelFixAdvice.lines(r, originals);
+        if (lines.isEmpty()) {
+            Row row = ws.createRow(rowIndex++);
+            note(row, 6, "原本加工賃と②の差、検証Dの修正箇所はありません。", null);
+        } else {
+            for (NagaokaExcelFixAdvice.Line line : lines) {
+                Row row = ws.createRow(rowIndex++);
+                text(row, 0, line.irai(), null);
+                text(row, 1, line.keiyaku(), null);
+                number(row, 2, line.amount1(), null, false);
+                number(row, 3, line.amount2(), null, false);
+                number(row, 4, line.originalYen(), null, true);
+                text(row, 5, line.judge(), null);
+                note(row, 6, line.action(), null);
+            }
+        }
+        for (int i = 0; i < headers.size(); i++) {
+            int width = i == headers.size() - 1 ? 80 : 18;
+            ws.setColumnWidth(i, width * 256);
+        }
+        ws.createFreezePane(0, 2);
+        if (rowIndex > 2) {
+            ws.setAutoFilter(new CellRangeAddress(1, rowIndex - 1, 0, headers.size() - 1));
+        }
+        ws.setRepeatingRows(CellRangeAddress.valueOf("2:2"));
+        ws.getPrintSetup().setLandscape(true);
+        ws.setFitToPage(true);
+        ws.getPrintSetup().setFitWidth((short) 1);
+        ws.getPrintSetup().setFitHeight((short) 0);
+    }
+
     private void writeOriginalLinks(Row row, int col, String fill, List<String> irais, boolean anomaly) {
         if (!anomaly || irais == null || irais.isEmpty()) {
             text(row, col, "", fill);
@@ -656,6 +706,7 @@ public final class ResultExcelExporter {
                         + "①差額は検証Aの不一致を、直す元シートの行付きで示す。①差額だけでは警告にしない"},
                 {"原本加工賃", "依頼書の単価を、配台の加工内容順（受注ファイル、左が先）で Gemini が積んだ加工賃（円）。"
                         + "依頼書の加工1・加工2の並びは使わない。スライスは加工後数量2倍、端部トリミングのスリットは据え置き、分割スリットは整数倍"},
+                {"長岡側の直し方", "原本加工賃と②の差から、長岡産業側のExcelを直すか、東レへ報告するだけかを依頼NOごとに書く"},
                 {"依頼書原本", "検証Aの不一致・翌月記載・前月過不足・片側のみ・形式不正と、検証Dの異常行について、"
                         + "依頼シートをこのブックへ添付する。依頼書添付は添付シート、原本リンクは原本xlsmを開く"},
                 {"報告する過不足", "当月差異 + 翌月記載 + ①のみ − ②のみ。検証Aの「報告計上額」列の合計と一致する"},
