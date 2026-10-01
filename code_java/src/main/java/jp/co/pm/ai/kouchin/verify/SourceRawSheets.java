@@ -3,6 +3,7 @@ package jp.co.pm.ai.kouchin.verify;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.function.Function;
@@ -25,7 +26,16 @@ public final class SourceRawSheets {
             Judge.PREV_ADJUST, Judge.PREV_GAP, Judge.MANUAL_1, Judge.MANUAL_2);
     private static final Set<String> B_KEYS = Set.of(Judge.MISMATCH, Judge.ONLY_2, Judge.ONLY_3);
 
+    public static final String CSV_SHEET = "①東レCSV原本";
+    public static final String ACTUAL_SHEET = "③月次実績原本";
+
     private SourceRawSheets() {}
+
+    /** 結果ブックへコピーした②シート名。リンク先と揃える。 */
+    public static String copiedSheetName(String originalSheet) {
+        String title = "②" + (originalSheet == null ? "" : originalSheet) + "(当月)";
+        return title.length() > 31 ? title.substring(0, 31) : title;
+    }
 
     public static void append(XSSFWorkbook wb, VerifyResult result, Function<Boolean, CellStyle> style) {
         Set<String> attKeiyaku = new HashSet<>();
@@ -46,25 +56,40 @@ public final class SourceRawSheets {
         if (p1 != null && Files.isRegularFile(p1)) {
             try {
                 List<List<String>> csv = TorayCsvReader.parseCsv(TorayCsvReader.decodeCp932(p1));
-                write(wb, "①東レCSV原本", csv, attKeiyaku, attIrai, true, style);
+                write(wb, CSV_SHEET, csv, attKeiyaku, attIrai, true, style);
             } catch (RuntimeException ignored) {
             }
         }
         if (p2 != null && Files.isRegularFile(p2)) {
             try (Workbook src = ExcelValues.open(p2)) {
-                for (String sheet : result.profile().sheets2()) {
+                for (String sheet : sheetsToCopy(result)) {
                     List<List<Object>> rows = ExcelValues.readSheet(src, sheet);
-                    writeObjects(wb, "②" + sheet + "(当月)", rows, attKeiyaku, attIrai, style);
+                    if (rows.isEmpty()) {
+                        continue;
+                    }
+                    writeObjects(wb, copiedSheetName(sheet), rows, attKeiyaku, attIrai, style);
                 }
             } catch (Exception ignored) {
             }
         }
         if (p3 != null && Files.isRegularFile(p3)) {
             try (Workbook src = ExcelValues.open(p3)) {
-                writeObjects(wb, "③月次実績原本", ExcelValues.readFirstSheet(src), attKeiyaku, attIrai, style);
+                writeObjects(wb, ACTUAL_SHEET, ExcelValues.readFirstSheet(src), attKeiyaku, attIrai, style);
             } catch (Exception ignored) {
             }
         }
+    }
+
+    /** 読み取り対象に加え、検証Dが指す元シートもコピーする。 */
+    private static List<String> sheetsToCopy(VerifyResult result) {
+        LinkedHashSet<String> names = new LinkedHashSet<>();
+        if (result.profile() != null && result.profile().sheets2() != null) {
+            names.addAll(result.profile().sheets2());
+        }
+        if (result.profile() != null && result.profile().id() == FactoryId.KOKUBU) {
+            names.addAll(FactoryProfile.MATOME_SRC_SHEETS);
+        }
+        return List.copyOf(names);
     }
 
     private static Path path(VerifyResult r, String key) {

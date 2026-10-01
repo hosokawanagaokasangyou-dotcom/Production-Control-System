@@ -274,7 +274,7 @@ public final class ResultExcelExporter {
 
         if (!r.warnings().isEmpty()) {
             rowIndex = section(ws, rowIndex, "【警告】データ品質の注意 (" + r.warnings().size() + "件)");
-            CellStyle warnStyle = style("warn", "9C0006", "FDE9E9", false, 10, false, null);
+            CellStyle warnStyle = style("warn", "9C0006", "FDE9E9", false, 10, false, null, true);
             for (String warning : r.warnings()) {
                 put(ws, rowIndex, 1, "⚠ " + warning, warnStyle);
                 merge(ws, rowIndex, SUMMARY_FIRST, SUMMARY_LAST);
@@ -301,6 +301,7 @@ public final class ResultExcelExporter {
                 r.str("対象外入庫場所").isEmpty() ? "なし" : r.str("対象外入庫場所"));
         rowIndex = kv(ws, rowIndex, "①の取消行(H列「-」)", r.str("①取消行"));
         kv(ws, rowIndex, "金額0円の無効行(出力対象外)", r.str("0円除外"));
+        WrappedRowHeight.fit(ws);
     }
 
     private int writeSkipBBanner(XSSFSheet ws, int rowIndex, VerifyResult r) {
@@ -371,6 +372,7 @@ public final class ResultExcelExporter {
         ws.setColumnWidth(8, 16 * 256);
         ws.setColumnWidth(9, 24 * 256);
         ws.setColumnWidth(10, 36 * 256);
+        WrappedRowHeight.fit(ws);
     }
 
     private void writeSheetB(VerifyResult r) {
@@ -395,6 +397,7 @@ public final class ResultExcelExporter {
             }
         }
         finishDetailSheet(ws, headers.size(), rowIndex);
+        WrappedRowHeight.fit(ws);
     }
 
     private void writeSheetD(VerifyResult r) {
@@ -442,6 +445,7 @@ public final class ResultExcelExporter {
         ws.setColumnWidth(9, 16 * 256);
         ws.setColumnWidth(10, 24 * 256);
         ws.setColumnWidth(11, 36 * 256);
+        WrappedRowHeight.fit(ws);
     }
 
     private void writeNagaokaFix(VerifyResult r) {
@@ -490,6 +494,7 @@ public final class ResultExcelExporter {
         ws.setFitToPage(true);
         ws.getPrintSetup().setFitWidth((short) 1);
         ws.getPrintSetup().setFitHeight((short) 0);
+        WrappedRowHeight.fit(ws);
     }
 
     private void writeOriginalLinks(Row row, int col, String fill, List<String> irais, boolean anomaly) {
@@ -566,7 +571,7 @@ public final class ResultExcelExporter {
             String status = item.missing() == null || item.missing().isBlank()
                     ? (item.fee() == null || item.fee().reason() == null ? "" : item.fee().reason())
                     : item.missing();
-            text(row, 7, status, null);
+            note(row, 7, status, null);
             if (item.fee() == null) {
                 continue;
             }
@@ -577,13 +582,14 @@ public final class ResultExcelExporter {
                 number(sub, 2, line.meters(), null, false);
                 number(sub, 3, line.yenPerMeter(), null, false);
                 number(sub, 4, line.amountYen(), null, true);
-                text(sub, 7, line.reason() == null ? "" : line.reason(), null);
+                note(sub, 7, line.reason() == null ? "" : line.reason(), null);
             }
         }
         finishDetailSheet(ws, headers.size(), rowIndex);
         ws.setColumnWidth(2, 42 * 256);
         ws.setColumnWidth(3, 24 * 256);
         ws.setColumnWidth(4, 36 * 256);
+        WrappedRowHeight.fit(ws);
     }
 
     private void documentLink(Row row, int col, String text, String sheetName, String fill) {
@@ -653,6 +659,7 @@ public final class ResultExcelExporter {
             }
         }
         finishDetailSheet(ws, headers.size(), rowIndex);
+        WrappedRowHeight.fit(ws);
     }
 
     private void writeRawSheets(VerifyResult r) {
@@ -729,7 +736,7 @@ public final class ResultExcelExporter {
                 {"検算残差", "0であれば報告用内訳の内部整合が取れている"},
         };
         CellStyle labelStyle = style("guideLabel", null, null, true, 10, false, BorderStyle.THIN);
-        CellStyle textStyle = style("guideText", null, null, false, 10, false, BorderStyle.THIN);
+        CellStyle textStyle = style("guideText", null, null, false, 10, false, BorderStyle.THIN, true);
         for (String[] item : items) {
             if ("検証D (国分)".equals(item[0]) && r.checkD() == null) {
                 continue;
@@ -738,6 +745,7 @@ public final class ResultExcelExporter {
             put(ws, rowIndex, 2, item[1], textStyle);
             rowIndex++;
         }
+        WrappedRowHeight.fit(ws);
     }
 
     private void writeMail(MailSnapshot kokubu, MailSnapshot konan) {
@@ -748,15 +756,16 @@ public final class ResultExcelExporter {
 
         List<String> lines = UnifiedMailBuilder.buildLines(kokubu, konan);
         int noteLines = UnifiedMailBuilder.noteLineCount(lines);
-        CellStyle noteStyle = style("mailNote", "C00000", null, false, 10.5, false, null);
-        CellStyle markerStyle = style("mailMarker", "375623", "C6EFCE", true, 10.5, false, null);
-        CellStyle bodyStyle = style("mailBody", null, null, false, 10.5, false, null);
+        CellStyle noteStyle = style("mailNote", "C00000", null, false, 10.5, false, null, true);
+        CellStyle markerStyle = style("mailMarker", "375623", "C6EFCE", true, 10.5, false, null, true);
+        CellStyle bodyStyle = style("mailBody", null, null, false, 10.5, false, null, true);
 
         for (int i = 0; i < lines.size(); i++) {
             String line = lines.get(i);
             CellStyle style = i < noteLines - 1 ? noteStyle : (i == noteLines - 1 ? markerStyle : bodyStyle);
             put(ws, i, 0, line, style);
         }
+        WrappedRowHeight.fit(ws);
     }
 
     // ---------------------------------------------------------------- セル書式
@@ -765,6 +774,7 @@ public final class ResultExcelExporter {
         Cell cell = row.createCell(col);
         cell.setCellValue(value == null ? "" : value);
         cell.setCellStyle(style("cell" + fill, null, fill, false, 10.5, false, BorderStyle.THIN));
+        ResultSheetAnchors.link(cell);
     }
 
     private void number(Row row, int col, Double value, String fill, boolean bold) {
@@ -789,6 +799,7 @@ public final class ResultExcelExporter {
         Cell cell = row.createCell(col);
         cell.setCellValue(value == null ? "" : value);
         cell.setCellStyle(style("note" + fill, null, fill, false, 10.5, false, BorderStyle.THIN, true));
+        ResultSheetAnchors.link(cell);
     }
 
     private CellStyle numberStyle(String fill, boolean bold, boolean integral) {
@@ -926,6 +937,7 @@ public final class ResultExcelExporter {
         Cell cell = row(ws, rowIndex).createCell(col);
         cell.setCellValue(value);
         cell.setCellStyle(style);
+        ResultSheetAnchors.link(cell);
     }
 
     private static Row row(XSSFSheet ws, int rowIndex) {
