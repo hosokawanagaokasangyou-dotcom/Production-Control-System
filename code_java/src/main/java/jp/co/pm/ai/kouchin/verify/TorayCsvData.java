@@ -14,6 +14,7 @@ import java.util.Set;
  * @param subtotalErrors ブロック小計(T行)とデータ行合計の不一致
  * @param warnings       データ品質の警告
  * @param rawRows        原本コピー用の全行
+ * @param amountCells    契約NO→結果ブック内の金額セル（①東レCSV原本のJ列）
  */
 public record TorayCsvData(
         Map<String, Double> byKeiyaku,
@@ -22,7 +23,8 @@ public record TorayCsvData(
         Map<String, List<MinusRow>> minusRows,
         List<SubtotalError> subtotalErrors,
         List<String> warnings,
-        List<List<String>> rawRows) {
+        List<List<String>> rawRows,
+        Map<String, List<String>> amountCells) {
 
     /** 取消行（H列が「-」の行）。金額は符号反転後。 */
     public record MinusRow(int rowNo, String nyukoDate, double amount) {

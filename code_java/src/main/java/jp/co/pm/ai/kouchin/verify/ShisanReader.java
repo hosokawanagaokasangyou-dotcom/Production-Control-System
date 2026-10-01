@@ -105,15 +105,17 @@ public final class ShisanReader {
             if (!irai.isEmpty()) {
                 maps.addIrai(irai, amt);
             }
+            String cell = AmountCellRef.address(
+                    SourceRawSheets.copiedSheetName(sheetName), amtCol, rowNo);
             if (Norm.isKeiyaku(c)) {
-                maps.addKeiyaku(c, amt);
+                maps.addKeiyaku(c, amt, cell);
                 if (!irai.isEmpty()) {
                     maps.linkIrai(c, irai);
                 }
             } else if (!c.isEmpty() && !"0".equals(c)) {
-                maps.addBadKeiyaku("「" + sheetName + "」" + rowNo, c, amt);
+                maps.addBadKeiyaku("「" + sheetName + "」" + rowNo, c, amt, cell);
             } else if (c.isEmpty() && Math.abs(amt) > TOLERANCE) {
-                maps.addBadKeiyaku("「" + sheetName + "」" + rowNo, "(契約NO空欄)", amt);
+                maps.addBadKeiyaku("「" + sheetName + "」" + rowNo, "(契約NO空欄)", amt, cell);
             }
         }
 

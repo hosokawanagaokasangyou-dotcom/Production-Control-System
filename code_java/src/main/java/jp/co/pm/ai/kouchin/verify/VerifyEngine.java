@@ -1013,6 +1013,8 @@ public final class VerifyEngine {
         info.put("A手動①正額", manual1Total);
         info.put("A手動②正件数", manual2Count);
         info.put("A手動②正額", manual2Total);
+        info.put("①金額セル", AmountCellRef.freeze(toray.amountCells()));
+        info.put("②金額セル", AmountCellRef.freeze(source2.amountCells()));
         info.put("①パス", torayFile.toAbsolutePath().toString());
         info.put("②パス", source2File.toAbsolutePath().toString());
         info.put("③パス", aladdinFile == null ? "" : aladdinFile.toAbsolutePath().toString());

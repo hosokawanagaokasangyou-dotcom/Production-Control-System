@@ -67,6 +67,7 @@ public final class TorayCsvReader {
         }
 
         Map<String, Double> result = new LinkedHashMap<>();
+        Map<String, List<String>> amountCells = new LinkedHashMap<>();
         Map<String, Double> byBasho = new LinkedHashMap<>();
         Map<String, Set<String>> nyukoDates = new LinkedHashMap<>();
         Map<String, List<TorayCsvData.MinusRow>> minusRows = new LinkedHashMap<>();
@@ -115,6 +116,8 @@ public final class TorayCsvReader {
                 blockRows.add(new TorayCsvData.Candidate(key, bashoKey, amount));
                 if (bashoKey.equals(targetBasho)) {
                     result.merge(key, amount, Double::sum);
+                    amountCells.computeIfAbsent(key, k -> new ArrayList<>())
+                            .add(AmountCellRef.address(SourceRawSheets.CSV_SHEET, COL_AMOUNT, rowNo));
                     nyukoDates.computeIfAbsent(key, k -> new LinkedHashSet<>()).add(cols.get(COL_DATE).trim());
                     if ("-".equals(sign)) {
                         minusRows.computeIfAbsent(key, k -> new ArrayList<>())
@@ -139,7 +142,9 @@ public final class TorayCsvReader {
         }
 
         List<List<String>> rawRows = List.copyOf(rows);
-        return new TorayCsvData(result, byBasho, nyukoDates, minusRows, subtotalErrors, warnings, rawRows);
+        return new TorayCsvData(
+                result, byBasho, nyukoDates, minusRows, subtotalErrors, warnings, rawRows,
+                AmountCellRef.freeze(amountCells));
     }
 
     static boolean hasKingakuHeader(List<List<String>> rows) {

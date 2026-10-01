@@ -358,8 +358,8 @@ public final class ResultExcelExporter {
             String fill = Judge.fillColor(rec.judge());
             text(row, 0, rec.keiyaku(), fill);
             text(row, 1, rec.iraiNo(), fill);
-            number(row, 2, rec.amount1(), fill, false);
-            number(row, 3, rec.amount2(), fill, false);
+            number(row, 2, rec.amount1(), fill, false, amountCells(r, "①金額セル", rec.keiyaku()));
+            number(row, 3, rec.amount2(), fill, false, amountCells(r, "②金額セル", rec.keiyaku()));
             number(row, 4, rec.diff(), fill, Judge.MISMATCH.equals(rec.judge()));
             number(row, 5, rec.reportAmount(), fill, true);
             judge(row, 6, rec.judge(), fill);
@@ -779,6 +779,10 @@ public final class ResultExcelExporter {
     }
 
     private void number(Row row, int col, Double value, String fill, boolean bold) {
+        number(row, col, value, fill, bold, List.of());
+    }
+
+    private void number(Row row, int col, Double value, String fill, boolean bold, List<String> cells) {
         Cell cell = row.createCell(col);
         if (value == null) {
             cell.setCellValue("");
@@ -786,8 +790,43 @@ public final class ResultExcelExporter {
             return;
         }
         double rounded = Fmt.round2(value);
+        boolean integral = rounded == Math.rint(rounded);
+        List<String> links = cells == null ? List.of() : cells.stream().filter(s -> s != null && !s.isBlank()).toList();
         cell.setCellValue(rounded);
-        cell.setCellStyle(numberStyle(fill, bold, rounded == Math.rint(rounded)));
+        cell.setCellStyle(links.isEmpty() ? numberStyle(fill, bold, integral) : numberLinkStyle(fill, bold, integral));
+        if (!links.isEmpty()) {
+            Hyperlink link = wb.getCreationHelper().createHyperlink(HyperlinkType.DOCUMENT);
+            link.setAddress(links.get(0));
+            if (link instanceof org.apache.poi.xssf.usermodel.XSSFHyperlink xssfLink) {
+                String tip = String.join(" / ", links);
+                xssfLink.setTooltip(tip.length() > 250 ? tip.substring(0, 250) : tip);
+            }
+            cell.setHyperlink(link);
+        }
+    }
+
+    private static List<String> amountCells(VerifyResult result, String key, String keiyaku) {
+        if (result == null || result.info() == null || keiyaku == null || keiyaku.isBlank()) {
+            return List.of();
+        }
+        Object raw = result.info().get(key);
+        if (!(raw instanceof Map<?, ?> map)) {
+            return List.of();
+        }
+        Object hit = map.get(keiyaku);
+        if (!(hit instanceof List<?>)) {
+            hit = map.get(Norm.keiyaku(keiyaku));
+        }
+        if (!(hit instanceof List<?> list)) {
+            return List.of();
+        }
+        List<String> out = new ArrayList<>();
+        for (Object item : list) {
+            if (item != null && !item.toString().isBlank()) {
+                out.add(item.toString());
+            }
+        }
+        return out;
     }
 
     private void judge(Row row, int col, String value, String fill) {
@@ -801,6 +840,23 @@ public final class ResultExcelExporter {
         cell.setCellValue(value == null ? "" : value);
         cell.setCellStyle(style("note" + fill, null, fill, false, 10.5, false, BorderStyle.THIN, true));
         ResultSheetAnchors.link(cell);
+    }
+
+    private CellStyle numberLinkStyle(String fill, boolean bold, boolean integral) {
+        CellStyle base = numberStyle(fill, bold, integral);
+        String key = "numlink/" + fill + "/" + bold + "/" + integral;
+        return styles.computeIfAbsent(key, k -> {
+            XSSFCellStyle cs = wb.createCellStyle();
+            cs.cloneStyleFrom(base);
+            XSSFFont font = wb.createFont();
+            font.setFontName(numFont);
+            font.setFontHeight(10.5);
+            font.setBold(bold);
+            font.setUnderline(org.apache.poi.ss.usermodel.Font.U_SINGLE);
+            font.setColor(new XSSFColor(rgb(LINK_COLOR), null));
+            cs.setFont(font);
+            return cs;
+        });
     }
 
     private CellStyle numberStyle(String fill, boolean bold, boolean integral) {

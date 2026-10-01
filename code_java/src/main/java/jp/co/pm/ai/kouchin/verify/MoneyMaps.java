@@ -21,6 +21,7 @@ public final class MoneyMaps {
 
     private final Map<String, Double> byIrai = new LinkedHashMap<>();
     private final Map<String, Double> byKeiyaku = new LinkedHashMap<>();
+    private final Map<String, List<String>> amountCells = new LinkedHashMap<>();
     private final Map<String, Set<String>> keiyakuToIrai = new LinkedHashMap<>();
     private final List<BadKeiyaku> badKeiyaku = new ArrayList<>();
     private final List<String> warnings = new ArrayList<>();
@@ -32,7 +33,13 @@ public final class MoneyMaps {
 
     /** 契約NO別金額を加算する。 */
     public void addKeiyaku(String keiyaku, double amount) {
+        addKeiyaku(keiyaku, amount, null);
+    }
+
+    /** 契約NO別金額を加算し、結果ブック内の元セルを覚える。 */
+    public void addKeiyaku(String keiyaku, double amount, String cell) {
         byKeiyaku.merge(keiyaku, amount, Double::sum);
+        remember(keiyaku, cell);
     }
 
     /** 契約NO → 依頼NO の対応を記録する。 */
@@ -41,7 +48,24 @@ public final class MoneyMaps {
     }
 
     public void addBadKeiyaku(String place, String value, double amount) {
+        addBadKeiyaku(place, value, amount, null);
+    }
+
+    public void addBadKeiyaku(String place, String value, double amount, String cell) {
         badKeiyaku.add(new BadKeiyaku(place, value, amount));
+        remember(value, cell);
+    }
+
+    /** 契約NO（形式不正はその表示値）→ 金額セル番地。 */
+    public Map<String, List<String>> amountCells() {
+        return amountCells;
+    }
+
+    private void remember(String key, String cell) {
+        if (key == null || key.isBlank() || cell == null || cell.isBlank()) {
+            return;
+        }
+        amountCells.computeIfAbsent(key, k -> new ArrayList<>()).add(cell);
     }
 
     public void addWarning(String message) {

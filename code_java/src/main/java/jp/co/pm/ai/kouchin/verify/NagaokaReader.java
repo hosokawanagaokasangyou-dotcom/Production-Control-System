@@ -69,11 +69,13 @@ public final class NagaokaReader {
             }
             maps.addIrai(irai, aa);
             String c = Norm.keiyaku(ExcelValues.at(rows, i, 2));
+            String cell = AmountCellRef.address(
+                    SourceRawSheets.copiedSheetName(FactoryProfile.MATOME_SHEET), NagaokaReader.COL_AA, rowNo);
             if (Norm.isKeiyaku(c)) {
-                maps.addKeiyaku(c, aa);
+                maps.addKeiyaku(c, aa, cell);
                 maps.linkIrai(c, irai);
             } else if (!c.isEmpty() && !"0".equals(c)) {
-                maps.addBadKeiyaku(String.valueOf(rowNo), c, aa);
+                maps.addBadKeiyaku(String.valueOf(rowNo), c, aa, cell);
             }
         }
 
