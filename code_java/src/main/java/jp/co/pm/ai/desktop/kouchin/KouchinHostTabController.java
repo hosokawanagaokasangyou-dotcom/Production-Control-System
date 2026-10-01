@@ -117,6 +117,13 @@ public class KouchinHostTabController {
     /**
      * 検証／月次トレンド実行中のタブ中央モーダル。下部ステータスバーと併用する。
      */
+    /** 実行中メッセージだけ差し替える。経過タイマーは止めない。 */
+    public void updateRunMessage(String message) {
+        if (busyLabel != null && message != null && !message.isBlank()) {
+            busyLabel.setText(message);
+        }
+    }
+
     public void setRunBusy(boolean busy, String message) {
         if (busyOverlay == null) {
             return;

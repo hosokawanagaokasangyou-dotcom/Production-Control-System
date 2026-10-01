@@ -130,11 +130,18 @@ public final class VerifyEngine {
     }
 
     private VerifyResult execute() {
+        String factory = profile.label();
+        KouchinRunProgress.report(factory + "の①②③を読んでいます");
         loadSources();
+        KouchinRunProgress.report(factory + "の検証D（まとめの整合）");
         runCheckD();
+        KouchinRunProgress.report(factory + "の検証A（契約NO）");
         verifyA();
+        KouchinRunProgress.report(factory + "の検証B（依頼NO）");
         verifyB();
+        KouchinRunProgress.report(factory + "の検証C");
         runCheckC();
+        KouchinRunProgress.report(factory + "の結果をまとめています");
         return buildResult();
     }
 

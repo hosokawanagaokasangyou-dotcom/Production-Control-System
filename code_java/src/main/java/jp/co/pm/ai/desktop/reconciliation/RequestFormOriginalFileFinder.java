@@ -6,6 +6,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
 
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
@@ -30,14 +32,22 @@ public final class RequestFormOriginalFileFinder {
      * @return キー → 原本。見つからなかったキーは含まれない
      */
     public static Map<String, Found> find(Path dir, Set<String> keys, List<String> warnings) {
-        return find(dir, keys, warnings, null, Map.of());
+        return find(dir, keys, warnings, null, Map.of(), null, null);
     }
 
     /**
      * @param apiKey 復号済み Gemini API キー。空なら加工賃は計算しない
+     * @param progress いま計算している依頼。{@code null} 可
+     * @param cancelled 中断。{@code null} 可
      */
     public static Map<String, Found> find(
-            Path dir, Set<String> keys, List<String> warnings, String apiKey, Map<String, String> dispatchOrderByIrai) {
+            Path dir,
+            Set<String> keys,
+            List<String> warnings,
+            String apiKey,
+            Map<String, String> dispatchOrderByIrai,
+            Consumer<String> progress,
+            BooleanSupplier cancelled) {
         if (dir == null || keys == null || keys.isEmpty() || !dir.toFile().isDirectory()) {
             return Map.of();
         }
@@ -50,7 +60,13 @@ public final class RequestFormOriginalFileFinder {
             return Map.of();
         }
         Map<String, Found> found = new LinkedHashMap<>();
+        int feeDone = 0;
+        int feeTotal = keys.size();
         for (File file : files) {
+            if (cancelled != null && cancelled.getAsBoolean()) {
+                warn(warnings, "中断されました");
+                break;
+            }
             if (found.size() >= keys.size()) {
                 break;
             }
@@ -68,6 +84,16 @@ public final class RequestFormOriginalFileFinder {
                     }
                     String sheetName = matchingSheet(wb, key);
                     String order = dispatchOrderByIrai == null ? "" : dispatchOrderByIrai.getOrDefault(key, "");
+                    if (apiKey != null && !apiKey.isBlank() && sheetName != null && !sheetName.isBlank()) {
+                        feeDone++;
+                        if (progress != null) {
+                            progress.accept("依頼書の加工賃 " + feeDone + "/" + feeTotal + " " + entry.iraiNo());
+                        }
+                    }
+                    if (cancelled != null && cancelled.getAsBoolean()) {
+                        warn(warnings, "中断されました");
+                        break;
+                    }
                     RequestFormOriginalFee.Result fee =
                             feeOf(wb, sheetName, apiKey, order, entry.iraiNo(), warnings);
                     found.put(key, new Found(entry.iraiNo(), path, sheetName, fee));

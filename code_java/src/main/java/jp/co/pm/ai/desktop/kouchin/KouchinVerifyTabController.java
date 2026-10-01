@@ -69,6 +69,7 @@ import jp.co.pm.ai.kouchin.verify.Source3TargetMonthCheck;
 import jp.co.pm.ai.kouchin.verify.UnifiedMailBuilder;
 import jp.co.pm.ai.kouchin.verify.VerifyOutputAccess;
 import jp.co.pm.ai.kouchin.verify.VerifyResult;
+import jp.co.pm.ai.kouchin.verify.KouchinRunProgress;
 import jp.co.pm.ai.kouchin.verify.VerifyRunSupport;
 import jp.co.pm.ai.kouchin.verify.VerifyService;
 import jp.co.pm.ai.kouchin.verify.VerifySourceAccess;
@@ -780,9 +781,11 @@ public class KouchinVerifyTabController {
         Map<String, String> ui = shell.snapshotUiEnv();
         KouchinPaths paths = KouchinPaths.fromEnv(ui);
         AtomicBoolean cancel = shell.kouchinCancelRequested();
+        KouchinRunProgress.bind(msg -> Platform.runLater(() -> shell.updateKouchinRunDetail(msg)), cancel);
         Task<VerifyTaskOutcome> task = new Task<>() {
             @Override
             protected VerifyTaskOutcome call() throws Exception {
+                try {
                 FileDiscovery.invalidateListingCache();
                 BothResult bothResult;
                 if (both) {
@@ -802,6 +805,9 @@ public class KouchinVerifyTabController {
                 VerifyRunSupport.Written written = VerifyRunSupport.writeBoth(
                         bothResult.kokubu(), bothResult.konan(), bothResult, ui, cancel);
                 return new VerifyTaskOutcome(bothResult, written);
+                } finally {
+                    KouchinRunProgress.clear();
+                }
             }
         };
         task.setOnSucceeded(e -> {

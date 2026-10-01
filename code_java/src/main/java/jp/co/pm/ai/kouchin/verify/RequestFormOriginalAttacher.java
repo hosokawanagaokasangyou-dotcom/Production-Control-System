@@ -122,8 +122,18 @@ public final class RequestFormOriginalAttacher {
         if (!NetworkSourceDirResolver.isRequestFormOriginalDirReachable(env)) {
             warnings.add("依頼書原本フォルダにアクセスできません: " + dir);
         } else {
+            String factory = result.profile() == null ? "" : result.profile().label();
             found = RequestFormOriginalFileFinder.find(
-                    dir, labels.keySet(), warnings, apiKey, dispatchProcessOrder(env, warnings));
+                    dir,
+                    labels.keySet(),
+                    warnings,
+                    apiKey,
+                    dispatchProcessOrder(env, warnings),
+                    message -> KouchinRunProgress.report(factory + " " + message),
+                    KouchinRunProgress::cancelled);
+            if (KouchinRunProgress.cancelled()) {
+                throw new VerifyException("中断されました");
+            }
         }
         List<Item> items = new ArrayList<>();
         Set<String> usedNames = new LinkedHashSet<>();

@@ -72,6 +72,7 @@ public final class VerifyRunSupport {
                 keepAll.addAll(more.succeeded());
             }
             if (CombinedVerifyWorkbook.bothVerifiable(kokubu, konan)) {
+                KouchinRunProgress.report("統合Excelを作っています");
                 String name = CombinedVerifyWorkbook.FILE_PREFIX + stamp + ".xlsx";
                 try (XSSFWorkbook combined = CombinedVerifyWorkbook.merge(kokubuWb, konanWb)) {
                     DualWriteFiles.WriteOutcome more =

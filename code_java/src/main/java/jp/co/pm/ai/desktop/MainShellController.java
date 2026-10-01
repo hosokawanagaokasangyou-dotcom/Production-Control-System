@@ -1959,6 +1959,19 @@ public final class MainShellController
         return true;
     }
 
+    /** 実行中の表示文言だけを更新する。経過時間はリセットしない。 */
+    public void updateKouchinRunDetail(String message) {
+        if (!kouchinRunBusy || message == null || message.isBlank() || message.equals(kouchinBusyLabel)) {
+            return;
+        }
+        kouchinBusyLabel = message;
+        appendLog("[kouchin] " + message);
+        setGlobalLongTaskProgress(-1, message);
+        if (kouchinHostTabController != null) {
+            kouchinHostTabController.updateRunMessage(message);
+        }
+    }
+
     public void endKouchinRun() {
         kouchinRunBusy = false;
         kouchinBusyLabel = "";

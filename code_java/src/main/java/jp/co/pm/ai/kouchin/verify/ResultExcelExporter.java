@@ -131,6 +131,7 @@ public final class ResultExcelExporter {
             VerifyResult result, MailSnapshot kokubu, MailSnapshot konan, Map<String, String> ui) {
         XSSFWorkbook wb = new XSSFWorkbook();
         ResultExcelExporter exporter = new ResultExcelExporter(wb);
+        KouchinRunProgress.report(result.profile().label() + "の結果Excelを作っています");
         try {
             exporter.originals = RequestFormOriginalAttacher.prepare(result, ui);
         } catch (RuntimeException ex) {
