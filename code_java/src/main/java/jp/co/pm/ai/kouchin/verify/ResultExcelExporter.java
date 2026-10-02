@@ -150,6 +150,11 @@ public final class ResultExcelExporter {
         exporter.writeRawSheets(result);
         exporter.writeOriginalIndex();
         RequestFormOriginalAttacher.copyInto(wb, exporter.originals);
+        AttachedSheetNav.apply(wb, List.of(
+                new AttachedSheetNav.Target("検証A", SHEET_A),
+                new AttachedSheetNav.Target("検証B", SHEET_B),
+                new AttachedSheetNav.Target("検証C", "検証C_月次処理"),
+                new AttachedSheetNav.Target("検証D", SHEET_D)));
         return wb;
     }
 
@@ -428,9 +433,9 @@ public final class ResultExcelExporter {
                 text(row, 0, mr.place(), fill);
                 text(row, 1, mr.irai(), fill);
                 text(row, 2, mr.keiyaku(), fill);
-                number(row, 3, mr.torayAmount(), fill, false);
-                number(row, 4, mr.matomeAa(), fill, false);
-                number(row, 5, mr.srcAa(), fill, false);
+                number(row, 3, mr.torayAmount(), fill, false, amountCells(r, "①金額セル", mr.keiyaku()));
+                number(row, 4, mr.matomeAa(), fill, false, MatomeAmountLinks.matomeAa(mr.place()));
+                number(row, 5, mr.srcAa(), fill, false, MatomeAmountLinks.sourceAa(mr.place()));
                 number(row, 6, mr.diff(), fill, Judge.TORAY_DIFF.equals(mr.judge()) || Judge.AMOUNT_DIFF.equals(mr.judge()));
                 judge(row, 7, mr.judge(), fill);
                 note(row, 8, mr.detail(), fill);
