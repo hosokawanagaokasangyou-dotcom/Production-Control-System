@@ -26,6 +26,20 @@ code_java/dist/
 **/__pycache__/
 **/.pytest_cache/
 code_java/factory-operator-users-backups/
+tools/**/bin/
+tools/**/obj/
+
+# 一時展開・作業ダンプ・バックアップ（再生成可能）
+code/_xlsm_unpack_temp/
+/_tmp_check/
+/_*.txt
+*.docx.bak
+*.docx.new
+*.rdp.unsigned-*.bak
+.superpowers/
+
+# アプリが出力するアラジン入力用配台計画（ローカル格納先）
+code/アラジン入力用配台計画/
 # fast_package_app.ps1: release output (PMD_* bundles under repo root). Download cache: code_java/Cash_PMD/
 pm-ai-package-release/
 rpa_luncher_release/
