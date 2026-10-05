@@ -57,6 +57,12 @@ public final class IdentityCheckHistoryStore {
 
     public record SnapshotRef(Path dir, Meta meta) {}
 
+    /** 保存先にコピーした配台計画 Excel を加工する。 */
+    @FunctionalInterface
+    public interface ExcelRewriter {
+        void rewrite(Path copiedExcel) throws IOException;
+    }
+
     public static Path resolveRoot(Map<String, String> ui) {
         return AppPaths.resolveIdentityCheckHistoryRoot(ui);
     }
@@ -86,6 +92,31 @@ public final class IdentityCheckHistoryStore {
             int diffCount,
             Optional<Path> excelSourcePath,
             Optional<Path> planSourcePath) {
+        return save(
+                ui,
+                excelPath,
+                planTab,
+                result,
+                badgeText,
+                diffCount,
+                excelSourcePath,
+                planSourcePath,
+                null);
+    }
+
+    /**
+     * @param excelRewriter コピー後の Excel を加工する（null 可）。失敗時は未加工のコピーを残す。
+     */
+    public static Optional<Path> save(
+            Map<String, String> ui,
+            Path excelPath,
+            PlanInputTabularIo.TabularSheet planTab,
+            String result,
+            String badgeText,
+            int diffCount,
+            Optional<Path> excelSourcePath,
+            Optional<Path> planSourcePath,
+            ExcelRewriter excelRewriter) {
         if (excelPath == null || !Files.isRegularFile(excelPath) || planTab == null) {
             return Optional.empty();
         }
@@ -100,6 +131,16 @@ public final class IdentityCheckHistoryStore {
                     excelPath,
                     dest.resolve(EXCEL_FILE),
                     StandardCopyOption.REPLACE_EXISTING);
+            if (excelRewriter != null) {
+                try {
+                    excelRewriter.rewrite(dest.resolve(EXCEL_FILE));
+                } catch (IOException | RuntimeException ex) {
+                    Files.copy(
+                            excelPath,
+                            dest.resolve(EXCEL_FILE),
+                            StandardCopyOption.REPLACE_EXISTING);
+                }
+            }
             JsonTableIo.saveArrayTable(
                     dest.resolve(PLAN_JSON_FILE),
                     planTab.headers() != null ? planTab.headers() : List.of(),

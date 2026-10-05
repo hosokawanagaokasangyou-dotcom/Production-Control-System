@@ -35,7 +35,8 @@ import jp.co.pm.ai.desktop.reconciliation.PostProcessingPlanMachineLookup;
  * （完了済みで配台表から落ちた行など）は NG にしない。完了済み行（未加工=0 かつ全数未加工でない）
  * は加工計画ルックアップから除外する。
  *
- * <p>Excel の再出力と shaped JSON の上書きは行わない。
+ * <p>Excel の再出力と shaped JSON の上書きは行わない。履歴に保存するコピーだけは、上段（現アラ計）を
+ * チェックに使った加工計画の値で書き直し、差異セルを塗る（{@link IdentityCheckHistoryWorkbookAnnotator}）。
  */
 public final class AladdinEntryDispatchPlanIdentityCheck {
 
@@ -196,10 +197,11 @@ public final class AladdinEntryDispatchPlanIdentityCheck {
             Map<String, Map<String, Map<String, Map<String, Double>>>> lookup =
                     AladdinShapedPlanQtyLookup.buildLookup(activePlan.headers(), activePlan.rows());
             LocalDate ref = referenceDateForExcel(excel.get());
+            PostProcessingPlanMachineLookup.Snapshot machines = loadMachineSnapshot(u);
             List<SystemQty> system =
                     remapSheetMachines(
                             AladdinEntryDispatchPlanWorkbookReader.readSystemQtys(excel.get(), ref),
-                            loadMachineSnapshot(u));
+                            machines);
             Result compared = compare(system, lookup);
             if (persistHistory) {
                 String resultKey = compared.identical() ? "ok" : "mismatch";
@@ -213,7 +215,13 @@ public final class AladdinEntryDispatchPlanIdentityCheck {
                         compared.badgeText(),
                         diffCount,
                         excel,
-                        planSource);
+                        planSource,
+                        copied ->
+                                IdentityCheckHistoryWorkbookAnnotator.rewriteAladdinLine(
+                                        copied,
+                                        lookup,
+                                        ref,
+                                        sheet -> resolveMachineNameFromSheet(sheet, machines)));
             }
             return new Result(
                     compared.identical(),

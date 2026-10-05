@@ -23,8 +23,8 @@ import jp.co.pm.ai.desktop.reconciliation.JuchuTransferValueNormalizer;
  */
 public final class AladdinEntryDispatchPlanWorkbookReader {
 
-    private static final String COL_TID = "依頼NO";
-    private static final String COL_PROCESS = "工程名";
+    static final String COL_TID = "依頼NO";
+    static final String COL_PROCESS = "工程名";
 
     private AladdinEntryDispatchPlanWorkbookReader() {}
 
@@ -115,7 +115,7 @@ public final class AladdinEntryDispatchPlanWorkbookReader {
         return JuchuTransferValueNormalizer.normalizeNumeric(rest);
     }
 
-    private static Map<Integer, LocalDate> dateColumns(Row header, LocalDate ref) {
+    static Map<Integer, LocalDate> dateColumns(Row header, LocalDate ref) {
         Map<Integer, LocalDate> out = new LinkedHashMap<>();
         short last = header.getLastCellNum();
         for (int c = 0; c < last; c++) {
@@ -128,7 +128,7 @@ public final class AladdinEntryDispatchPlanWorkbookReader {
         return out;
     }
 
-    private static int findHeaderCol(Row header, String title) {
+    static int findHeaderCol(Row header, String title) {
         short last = header.getLastCellNum();
         for (int c = 0; c < last; c++) {
             String text = ExcelCellReadSupport.cellToDisplayString(header.getCell(c)).strip();
