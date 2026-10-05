@@ -30,15 +30,27 @@ public final class UnifiedMailBuilder {
         lines.add("トーレペフ事業部 御中");
         lines.add("");
         lines.add("いつも大変お世話になっております。");
+        lines.add("長岡産業の難波です。");
         lines.add("");
         lines.add("掲題の件、下記にご報告申し上げます。");
+        lines.add("拠点\t東レ支払いデータ\t実売上\t前月調整分\t当月調整分\t合計\t差異 ※");
+        lines.add("\tA\t①\t②\t③\tB=①+②+③\tA-B");
+        lines.add(tableRow(kokubu, "国分（A010）"));
+        lines.add(tableRow(konan, "湖南（A010P）"));
+        lines.add(totalRow(kokubu, konan));
         lines.add("");
-        lines.add(kokubu != null ? kokubu.amountLine() : "国分工場　" + NOT_VERIFIED);
-        lines.add(konan != null ? konan.amountLine() : "湖南工場　" + NOT_VERIFIED);
-        lines.add("");
-        lines.add("上記お支払いデータに対し");
-        lines.add(kokubu != null ? kokubu.diffLine() : "国分工場　" + NOT_VERIFIED);
-        lines.add(konan != null ? konan.diffLine() : "湖南工場　" + NOT_VERIFIED);
+        lines.add("合計（税抜き） " + Fmt.n0(sumTotal1(kokubu, konan)) + "円の御社お支払いデータに対し");
+        if (kokubu != null) {
+            lines.add("　国分工場　　" + countLine(kokubu));
+        } else {
+            lines.add("　国分工場　　" + NOT_VERIFIED);
+        }
+        if (konan != null) {
+            lines.add("　湖南工場　　" + countLine(konan));
+        } else {
+            lines.add("　湖南工場　　" + NOT_VERIFIED);
+        }
+        lines.add(shortageLine(kokubu, konan));
         lines.add("");
         lines.add("添付ファイルをご確認いただき、次月（" + nextLabel(kokubu, konan) + "）での");
         lines.add("ご調整をよろしくお願い申し上げます。");
@@ -46,6 +58,59 @@ public final class UnifiedMailBuilder {
         lines.add("");
         lines.add("以上");
         return lines;
+    }
+
+    private static String tableRow(MailSnapshot s, String site) {
+        if (s == null) {
+            return site + "\t" + NOT_VERIFIED;
+        }
+        long b = s.uriage2() + s.adjustPrev() + s.tougetsu();
+        long diff = s.total1() - b;
+        return site + "\t" + Fmt.n0(s.total1())
+                + "\t" + Fmt.n0(s.uriage2())
+                + "\t" + Fmt.n0(s.adjustPrev())
+                + "\t" + Fmt.n0(s.tougetsu())
+                + "\t" + Fmt.n0(b)
+                + "\t" + Fmt.n0(diff);
+    }
+
+    private static String totalRow(MailSnapshot kokubu, MailSnapshot konan) {
+        long a = sumTotal1(kokubu, konan);
+        long sales = sum(kokubu, konan, MailSnapshot::uriage2);
+        long prev = sum(kokubu, konan, MailSnapshot::adjustPrev);
+        long cur = sum(kokubu, konan, MailSnapshot::tougetsu);
+        long b = sales + prev + cur;
+        return "合計\t" + Fmt.n0(a) + "\t" + Fmt.n0(sales) + "\t" + Fmt.n0(prev)
+                + "\t" + Fmt.n0(cur) + "\t" + Fmt.n0(b) + "\t" + Fmt.n0(a - b);
+    }
+
+    private static String countLine(MailSnapshot s) {
+        return s.tougetsuCount() + "件（" + Fmt.n0(s.tougetsu()) + "）";
+    }
+
+    private static String shortageLine(MailSnapshot kokubu, MailSnapshot konan) {
+        int n = (kokubu == null ? 0 : kokubu.tougetsuCount()) + (konan == null ? 0 : konan.tougetsuCount());
+        long signed = (kokubu == null ? 0 : kokubu.tougetsu()) + (konan == null ? 0 : konan.tougetsu());
+        String word = signed < 0 ? "不足" : signed > 0 ? "過剰" : "差異";
+        if (signed == 0) {
+            return "合計　" + n + "件の差異（" + Fmt.n0(signed) + "円）がありました。";
+        }
+        return "合計　" + n + "件の差異（" + Fmt.n0(signed) + "円）" + word + "がありました。";
+    }
+
+    private static long sumTotal1(MailSnapshot kokubu, MailSnapshot konan) {
+        return sum(kokubu, konan, MailSnapshot::total1);
+    }
+
+    private static long sum(MailSnapshot kokubu, MailSnapshot konan, java.util.function.ToLongFunction<MailSnapshot> pick) {
+        long v = 0;
+        if (kokubu != null) {
+            v += pick.applyAsLong(kokubu);
+        }
+        if (konan != null) {
+            v += pick.applyAsLong(konan);
+        }
+        return v;
     }
 
     /** メール下書きのテキスト。 */

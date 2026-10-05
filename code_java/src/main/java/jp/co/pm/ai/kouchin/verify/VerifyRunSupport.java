@@ -88,6 +88,8 @@ public final class VerifyRunSupport {
         if (cancel == null || !cancel.get()) {
             ExcelRowAutoFit.apply(xlsxOut.succeeded());
         }
+        carryForward(kokubu, ui);
+        carryForward(konan, ui);
 
         MailSnapshot kMail = kokubu == null ? null : kokubu.mail();
         MailSnapshot nMail = konan == null ? null : konan.mail();
@@ -230,5 +232,19 @@ public final class VerifyRunSupport {
         List<String> fail = new ArrayList<>(a.failures());
         fail.addAll(b.failures());
         return new DualWriteFiles.WriteOutcome(List.copyOf(ok), List.copyOf(fail));
+    }
+
+    /** 当月差異の契約NOを前月過不足.csvへ足し、次月の検証で読む。 */
+    private static void carryForward(VerifyResult result, Map<String, String> ui) {
+        if (result == null || result.targetYm() == null) {
+            return;
+        }
+        try {
+            Path file = JudgmentCsv.priorFile(KouchinPaths.fromEnv(ui == null ? Map.of() : ui));
+            int added = JudgmentCsv.appendCarryForward(file, result);
+            KouchinRunProgress.report(result.profile().label() + "の差異契約を次月へ" + added + "件蓄積しました");
+        } catch (IOException ex) {
+            KouchinRunProgress.report("前月過不足.csvへ蓄積できません: " + ex.getMessage());
+        }
     }
 }

@@ -60,4 +60,42 @@ class JudgmentCsvTest {
         assertEquals(1, load.rows().size());
         assertEquals(-1000.0, load.rows().get(0).diff(), 0.001);
     }
+
+    @Test
+    void olderPriorCarriesForwardUntilTargetMonth() throws Exception {
+        Path p = tmp.resolve("前月過不足.csv");
+        Files.writeString(
+                p,
+                "工場,対象月,契約NO,依頼NO,①東レ金額,②長岡金額,理由\n"
+                        + "国分工場,2026年8月度,188763B,Y7-35,1980,10879,7月未処理\n"
+                        + "国分工場,2026年11月度,199999A,Y9-1,1,2,未来月\n",
+                StandardCharsets.UTF_8);
+        JudgmentCsv.PriorLoad october =
+                JudgmentCsv.loadPrior(p, "国分工場", new YearMonthKey(2026, 10));
+        assertEquals(1, october.rows().size());
+        assertEquals("188763B", october.rows().get(0).keiyaku());
+        assertTrue(JudgmentCsv.loadPrior(p, "国分工場", new YearMonthKey(2026, 7)).rows().isEmpty());
+    }
+
+    @Test
+    void appendsCurrentDifferencesForNextMonthOnce() throws Exception {
+        Path p = tmp.resolve("前月過不足.csv");
+        VerifyResult result = new VerifyResult(
+                FactoryProfile.of(FactoryId.KOKUBU),
+                new YearMonthKey(2026, 9),
+                java.util.List.of(new RecordA(
+                        "192671S", "C9-1", 31948.0, 31950.0, -2.0, -2.0, Judge.MISMATCH, "")),
+                java.util.List.of(),
+                java.util.Map.of(),
+                java.util.List.of(),
+                null,
+                null,
+                null);
+        assertEquals(1, JudgmentCsv.appendCarryForward(p, result));
+        assertEquals(0, JudgmentCsv.appendCarryForward(p, result));
+        JudgmentCsv.PriorLoad load = JudgmentCsv.loadPrior(p, "国分工場", new YearMonthKey(2026, 10));
+        assertEquals(1, load.rows().size());
+        assertEquals("192671S", load.rows().get(0).keiyaku());
+        assertEquals(-2.0, load.rows().get(0).diff(), 0.001);
+    }
 }

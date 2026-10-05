@@ -7,9 +7,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * {@code 手動判定.csv} / {@code 前月過不足.csv} の読込。
@@ -126,7 +129,7 @@ public final class JudgmentCsv {
                         + "」を読めないため無視しました (例: 2026年8月度)");
                 continue;
             }
-            if (targetYm != null && !ym.get().equals(targetYm)) {
+            if (targetYm != null && ym.get().compareTo(targetYm) > 0) {
                 continue;
             }
             String k = Norm.keiyaku(cell(r, col, "契約NO"));
@@ -147,6 +150,115 @@ public final class JudgmentCsv {
             result.add(new PriorRow(k, irai, a1, a2, a1 - a2, cell(r, col, "理由")));
         }
         return new PriorLoad(List.copyOf(result), List.copyOf(warnings));
+    }
+
+    /**
+     * 当月差異の契約NOを、次月の検証で読む {@code 前月過不足.csv} へ足す。
+     * 同じ工場・次月・契約NOが既にあれば足さない。
+     *
+     * @return 追加した件数
+     */
+    public static int appendCarryForward(Path path, VerifyResult result) throws IOException {
+        if (path == null || result == null || result.targetYm() == null || result.recordsA() == null) {
+            return 0;
+        }
+        YearMonthKey next = result.targetYm().plusMonths(1);
+        String nextLabel = next.gatsudoLabel();
+        String factory = result.profile() == null ? "" : result.profile().label();
+        List<List<String>> existing = Files.isRegularFile(path) ? readCsvRows(path) : new ArrayList<>();
+        Set<String> seen = new LinkedHashSet<>();
+        for (int i = 1; i < existing.size(); i++) {
+            List<String> row = existing.get(i);
+            if (row.size() < 3) {
+                continue;
+            }
+            seen.add(keyOf(row.get(0), row.get(1), row.get(2)));
+        }
+        List<String> added = new ArrayList<>();
+        for (RecordA rec : result.recordsA()) {
+            if (rec == null || !carryJudge(rec.judge()) || rec.keiyaku() == null || rec.keiyaku().isBlank()) {
+                continue;
+            }
+            String key = keyOf(factory, nextLabel, rec.keiyaku());
+            if (!seen.add(key)) {
+                continue;
+            }
+            double a1 = rec.amount1() == null ? 0 : rec.amount1();
+            double a2 = rec.amount2() == null ? 0 : rec.amount2();
+            String reason = result.targetYm().gatsudoLabel() + "の当月差異（" + rec.judge()
+                    + "）。次月（" + nextLabel + "）の検証へ繰越";
+            added.add(String.join(",",
+                    csv(factory),
+                    csv(nextLabel),
+                    csv(rec.keiyaku()),
+                    csv(rec.iraiNo() == null ? "" : rec.iraiNo()),
+                    csv(money(a1)),
+                    csv(money(a2)),
+                    csv(reason)));
+        }
+        if (added.isEmpty()) {
+            return 0;
+        }
+        Path parent = path.getParent();
+        if (parent != null) {
+            Files.createDirectories(parent);
+        }
+        StringBuilder body = new StringBuilder();
+        if (existing.isEmpty()) {
+            body.append("工場,対象月,契約NO,依頼NO,①東レ金額,②長岡金額,理由\n");
+        } else {
+            byte[] raw = Files.readAllBytes(path);
+            String text = decodeCsv(raw);
+            body.append(text);
+            if (!text.endsWith("\n")) {
+                body.append('\n');
+            }
+        }
+        for (String line : added) {
+            body.append(line).append('\n');
+        }
+        byte[] out = body.toString().getBytes(StandardCharsets.UTF_8);
+        byte[] withBom = new byte[out.length + 3];
+        withBom[0] = (byte) 0xEF;
+        withBom[1] = (byte) 0xBB;
+        withBom[2] = (byte) 0xBF;
+        System.arraycopy(out, 0, withBom, 3, out.length);
+        Files.write(path, withBom);
+        return added.size();
+    }
+
+    private static boolean carryJudge(String judge) {
+        return Judge.MISMATCH.equals(judge)
+                || Judge.MANUAL_2.equals(judge)
+                || Judge.NEXT_MONTH.equals(judge)
+                || Judge.ONLY_1.equals(judge)
+                || Judge.ONLY_2.equals(judge);
+    }
+
+    private static String keyOf(String factory, String ym, String keiyaku) {
+        return Norm.norm(factory) + "|" + Norm.norm(ym) + "|" + Norm.keiyaku(keiyaku);
+    }
+
+    private static String money(double value) {
+        return String.format(Locale.US, "%.0f", value);
+    }
+
+    private static String csv(String value) {
+        String text = value == null ? "" : value;
+        if (text.contains(",") || text.contains("\"") || text.contains("\n")) {
+            return "\"" + text.replace("\"", "\"\"") + "\"";
+        }
+        return text;
+    }
+
+    private static String decodeCsv(byte[] raw) {
+        if (raw.length >= 3 && (raw[0] & 0xFF) == 0xEF && (raw[1] & 0xFF) == 0xBB && (raw[2] & 0xFF) == 0xBF) {
+            return new String(raw, 3, raw.length - 3, StandardCharsets.UTF_8);
+        }
+        if (looksLikeUtf8(raw)) {
+            return new String(raw, StandardCharsets.UTF_8);
+        }
+        return new String(raw, Charset.forName("MS932"));
     }
 
     static boolean factoryMatch(String facCell, String factoryLabel) {
