@@ -121,6 +121,29 @@ class ReconciliationAppJuchuFormulaTest {
         }
     }
 
+    @Test
+    void repairJuchuNumericTextCells_convertsOnlySingleNumberStringsInRange() throws Exception {
+        int v = JuchuSheetColumnLayout.columnLetterToIndex("V");
+        try (XSSFWorkbook wb = new XSSFWorkbook()) {
+            XSSFSheet sheet = wb.createSheet("受注ﾌｧｲﾙ");
+            sheet.createRow(510).createCell(v).setCellValue("1,200");
+            sheet.createRow(511).createCell(v).setCellValue("10,000");
+            sheet.createRow(512).createCell(v).setCellValue("1200\n800");
+            sheet.createRow(513).createCell(v).setCellValue(1600);
+            sheet.createRow(514).createCell(v).setCellValue("4,000");
+
+            int repaired = ReconciliationApp.repairJuchuNumericTextCells(sheet, 3, 513, v);
+
+            assertEquals(2, repaired);
+            assertEquals(CellType.NUMERIC, sheet.getRow(510).getCell(v).getCellType());
+            assertEquals(1200, sheet.getRow(510).getCell(v).getNumericCellValue(), 0);
+            assertEquals(10000, sheet.getRow(511).getCell(v).getNumericCellValue(), 0);
+            assertEquals(CellType.STRING, sheet.getRow(512).getCell(v).getCellType());
+            assertEquals(1600, sheet.getRow(513).getCell(v).getNumericCellValue(), 0);
+            assertEquals(CellType.STRING, sheet.getRow(514).getCell(v).getCellType());
+        }
+    }
+
     /** 保存後の XML に {@code _xlfn.TEXTSPLIT} が配列数式として残ることを確認する。 */
     @Test
     void writtenWorkbook_keepsXlfnPrefixedArrayFormulaAfterRoundTrip() throws Exception {

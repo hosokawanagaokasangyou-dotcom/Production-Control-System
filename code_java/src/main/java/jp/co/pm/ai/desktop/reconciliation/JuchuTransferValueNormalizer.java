@@ -22,6 +22,8 @@ public final class JuchuTransferValueNormalizer {
 
     private static final Pattern NUMERIC_PATTERN = Pattern.compile("[-+]?\\d*\\.\\d+|\\d+");
 
+    private static final Pattern STRICT_NUMBER = Pattern.compile("^[-+]?(?:\\d+(?:\\.\\d*)?|\\.\\d+)$");
+
     /** 原本の短い日付（例: {@code 7/15}、{@code 6/10（水）}）。年省略時は参照日から補完。 */
     private static final Pattern MONTH_DAY =
             Pattern.compile(
@@ -106,6 +108,25 @@ public final class JuchuTransferValueNormalizer {
             return Double.parseDouble(m.group());
         }
         return 0.0;
+    }
+
+    /**
+     * セル全体が 1 つの数値として解釈できるときだけ数値を返す（桁区切りカンマ・全角数字・前後空白は許容）。
+     * 改行区切りの複数値や単位付き文字列など、数値以外を含む場合は {@code null}。
+     */
+    public static Double parseNumberOrNull(String val) {
+        if (val == null) {
+            return null;
+        }
+        String cleaned = toHalfWidthAscii(val.strip()).replace(",", "").replace(" ", "");
+        if (!STRICT_NUMBER.matcher(cleaned).matches()) {
+            return null;
+        }
+        try {
+            return Double.parseDouble(cleaned);
+        } catch (NumberFormatException ex) {
+            return null;
+        }
     }
 
     public static String normalizeDateVal(String val) {

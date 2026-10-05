@@ -3175,6 +3175,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
             writeJuchuAoTextsSplitSumArrayFormula(targetRow, targetRowIndex);
         }
         repairJuchuAoFormulasMissingXlfnPrefix(sheet, juchuFirstDataRowIndex0(), lastDataRowIndex);
+        repairJuchuQuantityColumnsStoredAsText(sheet, lastDataRowIndex);
 
         setJuchuSheetReqNoIfIncluded(wb, sheet, targetRow, reqNo);
 
@@ -3592,6 +3593,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                 applyDefaultJuchuFormulasIfMissing(targetRow, colMap, destRowIdx + 1);
                 repairJuchuAoFormulasMissingXlfnPrefix(
                         sheet, juchuFirstDataRowIndex0(), lastDataRowIndex);
+                repairJuchuQuantityColumnsStoredAsText(sheet, lastDataRowIndex);
 
                 setJuchuSheetReqNoIfIncluded(wb, sheet, targetRow, reqNo);
 
@@ -5923,6 +5925,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
             }
             repairJuchuAoFormulasMissingXlfnPrefix(
                     sheet, juchuFirstDataRowIndex0(), lastDataRowIndex);
+            repairJuchuQuantityColumnsStoredAsText(sheet, lastDataRowIndex);
 
             progress.accept(
                     "受注ファイルへ転記しています…\n(3/5) セルへ転記しています…\n依頼No: "
@@ -6433,20 +6436,20 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
             setJuchuSheetString(row, colMap, header, "");
             return;
         }
-        try {
-            Integer col = colMap.get(header);
-            if (col == null) {
-                return;
-            }
-            Cell cell = writableJuchuCell(row, col);
-            if (cell == null) {
-                return;
-            }
-            cell.setCellValue(
-                    Double.parseDouble(JuchuTransferValueNormalizer.toHalfWidthAscii(text.trim())));
-        } catch (Exception e) {
+        Double number = JuchuTransferValueNormalizer.parseNumberOrNull(text);
+        if (number == null) {
             setJuchuSheetString(row, colMap, header, text);
+            return;
         }
+        Integer col = colMap.get(header);
+        if (col == null) {
+            return;
+        }
+        Cell cell = writableJuchuCell(row, col);
+        if (cell == null) {
+            return;
+        }
+        cell.setCellValue(number);
     }
 
     private static void setJuchuSheetDate(
@@ -6788,16 +6791,60 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
             setJuchuCellByLayout(row, col, "");
             return;
         }
-        try {
-            Cell cell = writableJuchuCell(row, juchuTransferColumnIndex(col));
-            if (cell == null) {
-                return;
-            }
-            cell.setCellValue(
-                    Double.parseDouble(JuchuTransferValueNormalizer.toHalfWidthAscii(text.trim())));
-        } catch (Exception e) {
+        Double number = JuchuTransferValueNormalizer.parseNumberOrNull(text);
+        if (number == null) {
             setJuchuCellByLayout(row, col, text);
+            return;
         }
+        Cell cell = writableJuchuCell(row, juchuTransferColumnIndex(col));
+        if (cell == null) {
+            return;
+        }
+        cell.setCellValue(number);
+    }
+
+    /** 数量列（M・V）のデータ行で、数値文字列として入っているセルを数値セルへ置き換える。 */
+    private void repairJuchuQuantityColumnsStoredAsText(Sheet sheet, int lastDataRowIndex0) {
+        int[] cols = {
+            juchuTransferColumnIndex(JuchuSheetColumnLayout.Col.SURYO),
+            juchuTransferColumnIndex(JuchuSheetColumnLayout.Col.SURYO_1)
+        };
+        repairJuchuNumericTextCells(sheet, juchuFirstDataRowIndex0(), lastDataRowIndex0, cols);
+    }
+
+    /**
+     * 指定列の文字列セルのうち、全体が 1 つの数値として解釈できるものを数値セルへ置き換える。
+     * 改行区切りの複数値など数値として解釈できない文字列は触らない。戻り値は置き換えたセル数。
+     */
+    static int repairJuchuNumericTextCells(
+            Sheet sheet, int firstDataRowIndex0, int lastDataRowIndex0, int... colIndexes) {
+        if (sheet == null || colIndexes == null || lastDataRowIndex0 < firstDataRowIndex0) {
+            return 0;
+        }
+        int repaired = 0;
+        for (int r = Math.max(0, firstDataRowIndex0); r <= lastDataRowIndex0; r++) {
+            Row row = sheet.getRow(r);
+            if (row == null) {
+                continue;
+            }
+            for (int col : colIndexes) {
+                if (col < 0) {
+                    continue;
+                }
+                Cell cell = row.getCell(col);
+                if (cell == null || cell.getCellType() != CellType.STRING) {
+                    continue;
+                }
+                Double number =
+                        JuchuTransferValueNormalizer.parseNumberOrNull(cell.getStringCellValue());
+                if (number == null) {
+                    continue;
+                }
+                cell.setCellValue(number);
+                repaired++;
+            }
+        }
+        return repaired;
     }
 
     /** 受注ファイルの「入力日」列。転記時は db の値で上書き（空のときのみ新規行で本日）。 */

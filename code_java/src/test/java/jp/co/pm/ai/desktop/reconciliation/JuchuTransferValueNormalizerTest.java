@@ -89,4 +89,23 @@ class JuchuTransferValueNormalizerTest {
         assertEquals(1230.0, JuchuTransferValueNormalizer.normalizeNumeric("１,２３０"));
         assertEquals(250.0, JuchuTransferValueNormalizer.normalizeNumeric("２５０"));
     }
+
+    @Test
+    void parseNumberOrNull_acceptsThousandsSeparatorsAndFullwidth() {
+        assertEquals(1200.0, JuchuTransferValueNormalizer.parseNumberOrNull("1,200"));
+        assertEquals(10000.0, JuchuTransferValueNormalizer.parseNumberOrNull(" 10,000 "));
+        assertEquals(4000.0, JuchuTransferValueNormalizer.parseNumberOrNull("４，０００"));
+        assertEquals(1600.0, JuchuTransferValueNormalizer.parseNumberOrNull("1600"));
+        assertEquals(12.5, JuchuTransferValueNormalizer.parseNumberOrNull("12.5"));
+    }
+
+    @Test
+    void parseNumberOrNull_rejectsNonSingleNumbers() {
+        assertNull(JuchuTransferValueNormalizer.parseNumberOrNull(null));
+        assertNull(JuchuTransferValueNormalizer.parseNumberOrNull(""));
+        assertNull(JuchuTransferValueNormalizer.parseNumberOrNull("1200\n800"));
+        assertNull(JuchuTransferValueNormalizer.parseNumberOrNull("1200m"));
+        assertNull(JuchuTransferValueNormalizer.parseNumberOrNull("1e5"));
+        assertNull(JuchuTransferValueNormalizer.parseNumberOrNull("NaN"));
+    }
 }
