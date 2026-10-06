@@ -10,6 +10,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
@@ -43,6 +46,7 @@ import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.config.FactorySite;
 import jp.co.pm.ai.desktop.config.GlobalInitSettingTarget;
 import jp.co.pm.ai.desktop.dispatch.AttendanceOvertimePreview;
+import jp.co.pm.ai.desktop.io.FileChangeStamp;
 import jp.co.pm.ai.desktop.io.conflict.AttendanceConflictDiffSummarizer;
 import jp.co.pm.ai.desktop.io.conflict.ConflictDiffSummarizer;
 import jp.co.pm.ai.desktop.io.conflict.FingerprintBaseline;
@@ -65,6 +69,14 @@ public class MemberAttendanceTabController {
     private static final ObjectMapper JSON = new ObjectMapper();
     private static final int MEMBER_GRID_CACHE_MAX_MONTHS = 12;
     private static final Duration MEMBER_GRID_IDLE_PREFETCH_DELAY = Duration.millis(650);
+    private static final Duration ATTENDANCE_JSON_POLL_INTERVAL = Duration.seconds(5);
+    private static final ExecutorService ATTENDANCE_JSON_POLL_EXECUTOR =
+            Executors.newSingleThreadExecutor(
+                    r -> {
+                        Thread t = new Thread(r, "member-attendance-json-poll");
+                        t.setDaemon(true);
+                        return t;
+                    });
 
     private FingerprintBaseline conflictBaseline;
     private final ConflictDiffSummarizer conflictSummarizer = new AttendanceConflictDiffSummarizer();
@@ -144,6 +156,13 @@ public class MemberAttendanceTabController {
     private ProgressIndicator statusProgress;
     private Timeline statusActivityTick;
     private long statusActivityStartMs = 0L;
+    private Timeline attendanceJsonPoll;
+    private boolean attendanceJsonPollInFlight = false;
+    /** グリッドへ読み込んだ時点の attendance-data.json 指紋。null は不明（次回ポーリングで再読込）。 */
+    private FileChangeStamp loadedJsonStamp;
+    /** 未保存編集中に検知し、自動反映を保留した外部更新の指紋（同一更新の通知を繰り返さない）。 */
+    private FileChangeStamp deferredExternalJsonStamp;
+    private boolean autoReloadStatusPending = false;
 
     public enum UnsavedPromptResult {
         SAVED,
@@ -199,10 +218,93 @@ public class MemberAttendanceTabController {
         installStatusActivityRow();
         installMonthCalendar(today);
         installMemberGridIdlePrefetch();
+        installAttendanceJsonPoll();
     }
 
     private void installMemberGridIdlePrefetch() {
         memberGridIdlePrefetch.setOnFinished(e -> runMemberGridIdlePrefetchStep());
+    }
+
+    private void installAttendanceJsonPoll() {
+        if (attendanceJsonPoll != null) {
+            return;
+        }
+        attendanceJsonPoll =
+                new Timeline(
+                        new KeyFrame(ATTENDANCE_JSON_POLL_INTERVAL, e -> pollAttendanceJson()));
+        attendanceJsonPoll.setCycleCount(Timeline.INDEFINITE);
+        attendanceJsonPoll.play();
+    }
+
+    private boolean attendanceJsonPollBlocked() {
+        return !attendanceLoadEnabled
+                || shell == null
+                || tabProcessingDepth > 0
+                || setupWizardGridOverlayDepth > 0;
+    }
+
+    private void pollAttendanceJson() {
+        if (attendanceJsonPollInFlight || attendanceJsonPollBlocked()) {
+            return;
+        }
+        Path json;
+        try {
+            json = AppPaths.attendanceDataJsonPath(shell.snapshotUiEnv());
+        } catch (Exception e) {
+            return;
+        }
+        attendanceJsonPollInFlight = true;
+        CompletableFuture.supplyAsync(() -> FileChangeStamp.read(json), ATTENDANCE_JSON_POLL_EXECUTOR)
+                .whenComplete(
+                        (stamp, err) ->
+                                Platform.runLater(
+                                        () -> {
+                                            attendanceJsonPollInFlight = false;
+                                            if (err == null) {
+                                                onAttendanceJsonPolled(stamp);
+                                            }
+                                        }));
+    }
+
+    private void onAttendanceJsonPolled(FileChangeStamp stamp) {
+        if (stamp == null || stamp.equals(loadedJsonStamp) || attendanceJsonPollBlocked()) {
+            return;
+        }
+        if (hasUnsavedEdits()) {
+            if (!stamp.equals(deferredExternalJsonStamp)) {
+                deferredExternalJsonStamp = stamp;
+                String msg =
+                        "attendance-data.json が外部で更新されました。未保存の変更があるため自動反映を保留しています"
+                                + "（保存時に競合確認、または「再読込」で反映）";
+                statusLabel.setText(msg);
+                shell.appendLog("[member-attendance] " + msg);
+            }
+            return;
+        }
+        deferredExternalJsonStamp = null;
+        shell.appendLog("[member-attendance] attendance-data.json の更新を検知し自動反映します: " + stamp.path());
+        autoReloadStatusPending = true;
+        clearMemberGridCache();
+        loadGridFromPython(ok -> autoReloadStatusPending = false);
+        refreshLocalReadiness();
+        shell.refreshAttendanceReadiness();
+    }
+
+    private FileChangeStamp readAttendanceJsonStamp() {
+        if (shell == null) {
+            return null;
+        }
+        try {
+            return FileChangeStamp.read(AppPaths.attendanceDataJsonPath(shell.snapshotUiEnv()));
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /** 自アプリが JSON を読込・書込した時点を基準指紋にする（自分の保存を外部更新と誤検知しない）。 */
+    private void markAttendanceJsonStampAsLoaded() {
+        loadedJsonStamp = readAttendanceJsonStamp();
+        deferredExternalJsonStamp = null;
     }
 
     private void installStatusActivityRow() {
@@ -423,6 +525,7 @@ public class MemberAttendanceTabController {
                         applyGridDirtyState(false);
                         clearMemberGridCache();
                         refreshConflictBaseline();
+                        markAttendanceJsonStampAsLoaded();
                         statusLabel.setText(
                                 "保存・勤怠カレンダー.xlsx 出力完了: "
                                         + mergeNode.path("applied").asInt(0)
@@ -642,8 +745,11 @@ public class MemberAttendanceTabController {
         if (refreshDiskFingerprint) {
             refreshConflictBaseline();
         }
+        String prefix = autoReloadStatusPending ? "外部更新を自動反映: " : "";
+        autoReloadStatusPending = false;
         statusLabel.setText(
-                "読込 "
+                prefix
+                        + "読込 "
                         + year
                         + "/"
                         + month
@@ -1045,6 +1151,7 @@ public class MemberAttendanceTabController {
             }
             return;
         }
+        markAttendanceJsonStampAsLoaded();
         runAsync(
                 shell.buildAttendanceDataIoRequest(
                         "member_grid", Integer.toString(year), Integer.toString(month)),
