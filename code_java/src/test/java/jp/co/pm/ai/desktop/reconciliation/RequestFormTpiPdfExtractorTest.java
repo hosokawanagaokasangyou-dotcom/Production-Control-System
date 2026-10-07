@@ -207,6 +207,28 @@ class RequestFormTpiPdfExtractorTest {
     }
 
     @Test
+    void extractFromPdf_pn10_01_canonScanTextLayer() throws Exception {
+        Path pdf = Path.of("src/test/resources/tpi-request-forms/PN10-01.pdf");
+        assertTrue(Files.isRegularFile(pdf));
+        Map<String, String> raw = RequestFormTpiPdfExtractor.extractEntries(pdf.toFile()).get(0);
+        assertEquals("PN10-01", raw.get("依頼Ｎｏ"), "raw=" + raw);
+        assertEquals("PN", raw.get(RequestFormTpiPdfFieldLayout.META_TPI_LAYOUT));
+        assertEquals("P000076595", raw.get("契約Ｎｏ"));
+    }
+
+    @Test
+    void parseIraiNoFromFileName_pnStem() {
+        assertEquals("PN10-01", RequestFormTpiPdfFieldLayout.parseIraiNoFromFileName("PN10-01.pdf"));
+        assertEquals("PN09-01", RequestFormTpiPdfFieldLayout.parseIraiNoFromFileName("pn09-01.pdf"));
+    }
+
+    @Test
+    void parseIraiNoFromText_pnWithoutFollowingYear() {
+        assertEquals(
+                "PN10-01", RequestFormTpiPdfFieldLayout.parseIraiNoFromText("PN10-01 湘 南\nHFNl120"));
+    }
+
+    @Test
     void extractFromText_pnSample() throws IOException {
         String text =
                 Files.readString(

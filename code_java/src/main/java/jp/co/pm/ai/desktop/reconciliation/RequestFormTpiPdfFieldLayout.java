@@ -30,6 +30,12 @@ public final class RequestFormTpiPdfFieldLayout {
     private static final Pattern JR_BODY =
             Pattern.compile("[ＪJ][ＲR]([\\d０-９]{6}(?:-[\\d０-９]+)?)");
     private static final Pattern PN_BODY = Pattern.compile("(PN\\d{2}-\\d{2})\\s+202[\\d０-９]");
+    /** 複合機スキャンの OCR 層では依頼Ｎｏの直後に年が来ない（例: {@code PN10-01 湘 南}）。 */
+    private static final Pattern PN_BODY_LOOSE =
+            Pattern.compile("(?<![A-Za-z])PN\\s*(\\d{2})\\s*-\\s*(\\d{2})(?!\\d)");
+    /** ファイル名 stem が依頼Ｎｏそのもの（例: {@code PN10-01.pdf}）。 */
+    private static final Pattern PN_FILE_STEM =
+            Pattern.compile("^(PN[\\d０-９]{2}[\\-－][\\d０-９]{2})$", Pattern.CASE_INSENSITIVE);
     /** 古河原反スライス依頼書（例: 依頼No. GB 6064 / GB60604）。 */
     private static final Pattern GB_BODY =
             Pattern.compile("(?:依頼No[,.]?\\s*|No\\.)(G\\s*B\\s*[\\d０-９]{4,6})", Pattern.CASE_INSENSITIVE);
@@ -164,6 +170,10 @@ public final class RequestFormTpiPdfFieldLayout {
         if (jrStem.find()) {
             return normalizeIraiNo("JR" + jrStem.group(1));
         }
+        Matcher pnStem = PN_FILE_STEM.matcher(stem);
+        if (pnStem.find()) {
+            return normalizeIraiNo(pnStem.group(1));
+        }
         Matcher simpleStem = SIMPLE_IRAI_FILE_STEM.matcher(stem);
         if (simpleStem.find()) {
             return normalizeIraiNo(simpleStem.group(1));
@@ -188,6 +198,10 @@ public final class RequestFormTpiPdfFieldLayout {
         Matcher tpi = TPI_IRAI.matcher(body);
         if (tpi.find()) {
             return normalizeTpiIrai(tpi.group(1), tpi.group(2));
+        }
+        Matcher pnLoose = PN_BODY_LOOSE.matcher(body);
+        if (pnLoose.find()) {
+            return normalizeIraiNo("PN" + pnLoose.group(1) + "-" + pnLoose.group(2));
         }
         return "";
     }
