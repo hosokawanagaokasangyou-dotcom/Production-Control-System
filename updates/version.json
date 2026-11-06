@@ -1,0 +1,7 @@
+{
+    "version":  "18.80",
+    "released_at":  "2026-11-06T17:14:38+09:00",
+    "download_url":  "https://raw.githubusercontent.com/hosokawanagaokasangyou-dotcom/Production-Control-System/main/updates/PMD_version_upgrade.zip",
+    "sha256":  "2EF1F0850C7D03AB7B105A166E1E53365D89E2066918E3CCA67892FBDE1DBE07",
+    "notes":  "Version 18.80 differential update (excludes main body runtime/launcher)."
+}

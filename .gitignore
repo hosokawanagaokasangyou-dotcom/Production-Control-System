@@ -1,0 +1,11 @@
+# Only allow README.md, .gitignore, and updates/ differential files
+*
+!.gitignore
+!README.md
+!updates/
+!updates/version.txt
+!updates/build-manifest.json
+!updates/version.json
+!updates/PMD_version_upgrade.zip
+PMD_initial_install*
+*.exe
